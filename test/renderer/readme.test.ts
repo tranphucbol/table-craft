@@ -10,6 +10,7 @@ import {
   EXPORT_STALL_SECONDS_RANGE,
   FETCH_ALL_CAP_RANGE,
   FONT_SIZE_RANGE,
+  FORMAT_STYLES,
   INDENT_WIDTH_RANGE,
   KEYWORD_CASES,
   LINES_BETWEEN_STATEMENTS_RANGE,
@@ -160,6 +161,7 @@ describe("README", () => {
     expect(choices("appearance.theme")).toEqual(["system", ...BUILT_IN_THEME_IDS, USER_THEME_CHOICE]);
     expect(choices("appearance.density")).toEqual(Object.keys(DENSITIES));
     expect(choices("editor.format.keywordCase")).toEqual(KEYWORD_CASES);
+    expect(choices("editor.format.style")).toEqual(FORMAT_STYLES);
   });
 
   it("givenPluginsSection_whenCapabilitiesListed_thenTheyEqualCapabilities", () => {

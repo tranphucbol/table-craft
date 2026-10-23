@@ -1,5 +1,12 @@
 import { EXPORT_FORMATS, EXTRACTOR_KINDS, IMPORT_ENCODINGS, IMPORT_ESCAPES } from "@table-craft/core";
-import { GENERATED_STATEMENTS, KEYWORD_CASES, OBJECT_KINDS, TRANSACTION_MODES, z } from "@table-craft/plugin-api";
+import {
+  FORMAT_STYLES,
+  GENERATED_STATEMENTS,
+  KEYWORD_CASES,
+  OBJECT_KINDS,
+  TRANSACTION_MODES,
+  z,
+} from "@table-craft/plugin-api";
 import type { EngineRequest } from "@table-craft/desktop/engine/protocol.js";
 import {
   EXPORT_STALL_SECONDS_RANGE,
@@ -167,6 +174,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     type: z.literal("sql.format"),
     text: z.string(),
     options: z.strictObject({
+      style: z.enum(FORMAT_STYLES),
       keywordCase: z.enum(KEYWORD_CASES),
       indentWidth: z.number().int().min(INDENT_WIDTH_RANGE.min).max(INDENT_WIDTH_RANGE.max),
       linesBetweenStatements: z
@@ -174,6 +182,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
         .int()
         .min(LINES_BETWEEN_STATEMENTS_RANGE.min)
         .max(LINES_BETWEEN_STATEMENTS_RANGE.max),
+      alignAliases: z.boolean(),
     }),
   }),
   z.strictObject({ id: requestId, type: z.literal("sql.explainable"), sql: z.string(), analyze: z.boolean() }),

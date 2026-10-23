@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
+  FORMAT_STYLES as SETTINGS_FORMAT_STYLES,
   KEYWORD_CASES as SETTINGS_KEYWORD_CASES,
   type FormatSettings,
 } from "@table-craft/desktop/settings/settings.js";
@@ -63,6 +64,7 @@ import {
   type PlanNode,
   type PlanProperty,
   type FormatOptions,
+  FORMAT_STYLES,
   KEYWORD_CASES,
   type ParameterValue,
   type PluginErrorCode,
@@ -153,6 +155,8 @@ describe("engine protocol", () => {
     expectTypeOf<FormatSettings>().toEqualTypeOf<FormatOptions>();
     expect(protocol.KEYWORD_CASES).toEqual(KEYWORD_CASES);
     expect(SETTINGS_KEYWORD_CASES).toEqual(KEYWORD_CASES);
+    expect(protocol.FORMAT_STYLES).toEqual(FORMAT_STYLES);
+    expect(SETTINGS_FORMAT_STYLES).toEqual(FORMAT_STYLES);
     expectTypeOf<protocol.TransactionMode>().toEqualTypeOf<TransactionMode>();
   });
 

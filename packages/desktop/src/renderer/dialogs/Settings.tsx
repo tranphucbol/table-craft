@@ -46,6 +46,8 @@ import {
   fetchAllCapError,
   fontFamilyError,
   fontSizeError,
+  FORMAT_STYLES,
+  type FormatStyle,
   nullTextError,
   PAGE_ROWS_RANGE,
   pageRowsError,
@@ -75,6 +77,11 @@ const KEYWORD_CASE_LABELS: Readonly<Record<KeywordCase, string>> = {
   upper: "UPPER",
   lower: "lower",
   preserve: "As typed",
+};
+
+const FORMAT_STYLE_LABELS: Readonly<Record<FormatStyle, string>> = {
+  aligned: "Aligned",
+  standard: "Standard",
 };
 
 const FONT_LABELS: Readonly<Record<FontRole, string>> = {
@@ -477,7 +484,9 @@ function chordText(actionId: string): string {
 
 function FormattingFields() {
   const format = useSettings((state) => state.settings.editor.format);
+  const styleId = useId();
   const caseId = useId();
+  const aliasesId = useId();
   const setFormat = (patch: Partial<Settings["editor"]["format"]>) =>
     update((current) => ({
       ...current,
@@ -485,6 +494,23 @@ function FormattingFields() {
     }));
   return (
     <>
+      <FieldRow label="Style" htmlFor={styleId}>
+        <select
+          id={styleId}
+          className={cn(INPUT_CLASS, "w-28")}
+          value={format.style}
+          onChange={(event) => {
+            const chosen = FORMAT_STYLES.find((style) => style === event.target.value);
+            if (chosen !== undefined) setFormat({ style: chosen });
+          }}
+        >
+          {FORMAT_STYLES.map((style) => (
+            <option key={style} value={style}>
+              {FORMAT_STYLE_LABELS[style]}
+            </option>
+          ))}
+        </select>
+      </FieldRow>
       <FieldRow label="Keyword case" htmlFor={caseId}>
         <select
           id={caseId}
@@ -516,6 +542,18 @@ function FormattingFields() {
         check={linesBetweenStatementsError}
         onValid={(linesBetweenStatements) => setFormat({ linesBetweenStatements })}
       />
+      <FieldRow label="Align aliases" htmlFor={aliasesId}>
+        <label className="flex items-center gap-cell">
+          <input
+            id={aliasesId}
+            type="checkbox"
+            checked={format.alignAliases}
+            disabled={format.style !== "aligned"}
+            onChange={(event) => setFormat({ alignAliases: event.target.checked })}
+          />
+          Line up AS in a select list
+        </label>
+      </FieldRow>
       <p className="col-start-2 text-ink-muted">
         {chordText(ACTION_IDS.reformat)} reformats the selection, or the whole console without one.
       </p>

@@ -26,7 +26,9 @@ const CHOSEN: Settings = {
     },
     systemTitleBar: true,
   },
-  editor: { format: { keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0 } },
+  editor: {
+    format: { style: "standard", keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0, alignAliases: false },
+  },
   console: { parameters: false, statementTimeoutSeconds: 45 },
   data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
   log: { level: "debug" },
@@ -126,6 +128,16 @@ describe("settings document", () => {
       fetchAllCap: 100_000,
       exportStallSeconds: 120,
     });
+  });
+
+  it("givenFormatStyleUnknownOrAlignAliasesNotBoolean_whenRead_thenEachFallsBackAlone", () => {
+    const read = readSettings({
+      ...CHOSEN,
+      editor: { format: { ...CHOSEN.editor.format, style: "tabular", alignAliases: "yes" } },
+    });
+
+    expect(read.editor.format).toEqual({ ...CHOSEN.editor.format, style: "aligned", alignAliases: true });
+    expect(readSettings({ ...CHOSEN, editor: {} }).editor.format).toEqual(DEFAULT_SETTINGS.editor.format);
   });
 
   it("givenNoSystemTitleBarField_whenRead_thenFalse", () => {

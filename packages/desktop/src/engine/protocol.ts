@@ -107,11 +107,18 @@ export const KEYWORD_CASES = ["upper", "lower", "preserve"] as const;
 
 export type KeywordCase = (typeof KEYWORD_CASES)[number];
 
-/** Mirrors `FormatOptions` in plugin-api (decision 042). */
+/** Mirrors `FORMAT_STYLES` in plugin-api. */
+export const FORMAT_STYLES = ["aligned", "standard"] as const;
+
+export type FormatStyle = (typeof FORMAT_STYLES)[number];
+
+/** Mirrors `FormatOptions` in plugin-api (decisions 042, 061). */
 export interface FormatOptions {
+  readonly style: FormatStyle;
   readonly keywordCase: KeywordCase;
   readonly indentWidth: number;
   readonly linesBetweenStatements: number;
+  readonly alignAliases: boolean;
 }
 
 /** A session's transaction after a transaction request. */

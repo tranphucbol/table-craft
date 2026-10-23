@@ -52,12 +52,20 @@ export const KEYWORD_CASES = ["upper", "lower", "preserve"] as const;
 
 export type KeywordCase = (typeof KEYWORD_CASES)[number];
 
-/** How Reformat Code lays SQL out (decision 042); sent as the plugin's `FormatOptions`. */
+/** Mirrors `FORMAT_STYLES` in plugin-api (decision 061). */
+export const FORMAT_STYLES = ["aligned", "standard"] as const;
+
+export type FormatStyle = (typeof FORMAT_STYLES)[number];
+
+/** How Reformat Code lays SQL out (decisions 042, 061); sent as the plugin's `FormatOptions`. */
 export interface FormatSettings {
+  readonly style: FormatStyle;
   readonly keywordCase: KeywordCase;
   readonly indentWidth: number;
   /** Blank lines between two statements. */
   readonly linesBetweenStatements: number;
+  /** Pad aliased select items so `AS` lines up; the aligned style only. */
+  readonly alignAliases: boolean;
 }
 
 export interface EditorSettings {
@@ -133,7 +141,7 @@ export const DEFAULT_SETTINGS: Settings = {
     systemTitleBar: false,
   },
   editor: {
-    format: { keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1 },
+    format: { style: "aligned", keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1, alignAliases: true },
   },
   console: {
     parameters: true,
@@ -240,6 +248,7 @@ function readFont(value: unknown, fallback: FontSetting): FontSetting {
 function readFormat(value: unknown, fallback: FormatSettings): FormatSettings {
   const format = record(value);
   return {
+    style: FORMAT_STYLES.includes(format.style as FormatStyle) ? (format.style as FormatStyle) : fallback.style,
     keywordCase: KEYWORD_CASES.includes(format.keywordCase as KeywordCase)
       ? (format.keywordCase as KeywordCase)
       : fallback.keywordCase,
@@ -247,6 +256,7 @@ function readFormat(value: unknown, fallback: FormatSettings): FormatSettings {
     linesBetweenStatements: inRange(format.linesBetweenStatements, LINES_BETWEEN_STATEMENTS_RANGE)
       ? format.linesBetweenStatements
       : fallback.linesBetweenStatements,
+    alignAliases: typeof format.alignAliases === "boolean" ? format.alignAliases : fallback.alignAliases,
   };
 }
 

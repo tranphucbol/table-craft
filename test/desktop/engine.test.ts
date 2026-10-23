@@ -11,6 +11,7 @@ import type {
   ExecutedStatement,
   Explainability,
   ExplainedStatement,
+  FormatOptions,
   FoundMatch,
   Namespace,
   ResultState,
@@ -41,6 +42,13 @@ const ROWS_1200 = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM 
 
 const CANCELLABLE_ID = "cancellable";
 const VERSION = /^\d+\.\d+/;
+const FORMAT_OPTIONS: FormatOptions = {
+  style: "aligned",
+  keywordCase: "upper",
+  indentWidth: 2,
+  linesBetweenStatements: 1,
+  alignAliases: true,
+};
 
 /** Its one statement runs until cancelled; enough to drive `statement.cancel` without a database. */
 function cancellablePlugin(): { plugin: DatasourcePlugin; cancels: () => number } {
@@ -661,8 +669,19 @@ describe("engine scripts and transactions", () => {
     const response = await connected().handle({
       id: 1,
       type: "sql.format",
+      text: "select a, b from t",
+      options: FORMAT_OPTIONS,
+    });
+
+    expect(resultOf<string>(response)).toBe("SELECT a,\n       b\nFROM t");
+  });
+
+  it("givenStandardStyle_whenFormatRequested_thenSqlFormatterLayout", async () => {
+    const response = await connected().handle({
+      id: 1,
+      type: "sql.format",
       text: "select a from t",
-      options: { keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1 },
+      options: { ...FORMAT_OPTIONS, style: "standard" },
     });
 
     expect(resultOf<string>(response)).toBe("SELECT\n  a\nFROM\n  t");
@@ -673,7 +692,7 @@ describe("engine scripts and transactions", () => {
       id: 1,
       type: "sql.format",
       text: "select ((",
-      options: { keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1 },
+      options: FORMAT_OPTIONS,
     });
 
     expect(response).toMatchObject({ type: "engine.error", error: { code: "formatFailed" } });

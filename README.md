@@ -198,7 +198,8 @@ anything runs. Switch
 are saved as files as you type.
 
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
-back. A statement with `:name`, `?` or (on PostgreSQL) `$1` placeholders asks for their values
+back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
+under it, `AS` lined up, `AND`/`OR` under `WHERE`; other statements keep the standard layout. A statement with `:name`, `?` or (on PostgreSQL) `$1` placeholders asks for their values
 before it runs; they are bound by the driver, never pasted into the SQL, and the next run starts
 from them.
 
@@ -400,9 +401,11 @@ back to its default without affecting the others.
 | `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32  | `null`, 13    |
 | `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32  | `null`, 13    |
 | `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32  | `null`, 12    |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out              | `aligned`     |
 | `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords     | `upper`       |
 | `editor.format.indentWidth`            | 1–8 spaces                                                         | 2             |
 | `editor.format.linesBetweenStatements` | 0–5 blank lines                                                    | 1             |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)     | `true`        |
 | `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits | 0             |
 | `data.nullText`                        | 1–16 characters                                                    | `<null>`      |
@@ -461,7 +464,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "0.19.0",
+  "apiVersion": "0.20.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
