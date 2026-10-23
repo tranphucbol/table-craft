@@ -11,7 +11,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
 import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
-import { tenThousandRows } from "../support/manyRows.js";
+import { hundredThousandRows, tenThousandRows } from "../support/manyRows.js";
 import {
   activeEditorTab,
   cancelButton,
@@ -219,8 +219,8 @@ describe.runIf(DATABASES_ENABLED)("closing result live test", () => {
       `given${datasource.id}ResultWhoseLinkVanished_whenRunAgain_thenReconnectsWithinTheGrace`,
       async () => {
         proxy = await chaosProxy({ host: config.host, port: config.port });
-        const page = await launch({ ...datasource, config: { ...config, port: proxy.port } });
-        await runFor(page, tenThousandRows(), "pad");
+        const page = await launch({ ...datasource, config: { ...config, host: proxy.host, port: proxy.port } });
+        await runFor(page, hundredThousandRows(), "pad");
 
         proxy.strand();
         const started = Date.now();

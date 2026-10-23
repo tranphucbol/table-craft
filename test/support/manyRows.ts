@@ -8,3 +8,11 @@ const DIGITS =
 export function tenThousandRows(): string {
   return `SELECT a.n * 1000 + b.n * 100 + c.n * 10 + d.n AS n, REPEAT('x', 200) AS pad FROM ${DIGITS} a, ${DIGITS} b, ${DIGITS} c, ${DIGITS} d`;
 }
+
+/**
+ * 100,000 rows, about 21 MB: more than Linux's autotuned socket buffers hold, which swallow all of
+ * `tenThousandRows`, so the server is still writing when a test strands the link mid-result.
+ */
+export function hundredThousandRows(): string {
+  return `SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n AS n, REPEAT('x', 200) AS pad FROM ${DIGITS} a, ${DIGITS} b, ${DIGITS} c, ${DIGITS} d, ${DIGITS} e`;
+}
