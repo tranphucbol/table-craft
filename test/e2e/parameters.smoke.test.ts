@@ -130,9 +130,9 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
 
         await pressChord(page, "Alt+L");
 
-        await expect.poll(() => editorText(page)).toMatch(/^SELECT\n/);
+        await expect.poll(() => editorText(page)).toMatch(/^SELECT c\.id,\n/);
         const formatted = await editorText(page);
-        expect(formatted.split("\n")).toContain("FROM");
+        expect(formatted.split("\n")).toContain("FROM customers c");
         expect(formatted).toContain("-- the first");
         await captureWindow(page, `reformat-${dialect.label}`);
 
@@ -232,7 +232,10 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
     "givenSelectionAndLowerKeywordCase_onPostgres_whenModAltL_thenOnlySelectionFormattedInLowerCase",
     async () => {
       const profile = newProfile();
-      seedSettings(profile, { version: 1, editor: { format: { keywordCase: "lower", indentWidth: 4 } } });
+      seedSettings(profile, {
+        version: 1,
+        editor: { format: { style: "standard", keywordCase: "lower", indentWidth: 4 } },
+      });
       const page = await launch(POSTGRES, profile);
       const first = "SELECT 1 AS untouched;";
       await typeStatement(page, `${first}\nSELECT id, name FROM customers WHERE id = 1;`);
