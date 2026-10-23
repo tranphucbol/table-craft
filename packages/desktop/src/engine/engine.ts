@@ -19,6 +19,7 @@ import {
   ResultStore,
   RowsRefused,
   rowWriter,
+  cellClipboardText,
   submitConsoleEdits,
   submitEdits,
   applyDdl,
@@ -249,6 +250,11 @@ interface OpenSession {
    * resolve names a fresh session would resolve elsewhere, so an export must not re-run them.
    */
   moved: boolean;
+  /**
+   * The last statement that switched the namespace, replayed on a reconnect so a console that ran
+   * `USE db` stays in it; null when the session is where it opened.
+   */
+  switchedBy: string | null;
   /**
    * The session's last result still closing (decision 058): the next statement waits for it, so
    * the plugin never sees two at once. Null when nothing is closing.
@@ -1426,25 +1432,44 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       return { transaction };
     }
 
-    /** A fresh session in place of the lost one, in the same transaction mode; its namespace is read afresh. */
+    /** Runs the switch on a fresh session; false when there is none or it failed, so the switch is lost. */
+    async function replaySwitch(session: Session, sql: string | null): Promise<boolean> {
+      if (sql === null) return false;
+      try {
+        await drained(await session.execute(sql));
+        return true;
+      } catch (cause) {
+        sessionLog?.warn("namespace not restored", { message: messageOf(cause) });
+        return false;
+      }
+    }
+
+    /**
+     * A fresh session in place of the lost one, in the same transaction mode and back in the
+     * namespace the last switch chose.
+     */
     async function reconnect(sessionId: string, open: OpenSession): Promise<Reconnection> {
       const mode = open.session.transactions?.mode;
       const session = await connectDatasource(options);
+      const opening = await namespaceOf({ session, capabilities: open.capabilities });
+      // Before manual mode, so the replayed switch does not open a transaction.
+      const restored = open.moved && (await replaySwitch(session, open.switchedBy));
+      const namespace = restored ? await namespaceOf({ session, capabilities: open.capabilities }) : opening;
       try {
         if (mode === "manual") await session.transactions?.setMode("manual");
       } catch (cause) {
         await session.close().catch(() => undefined);
         throw new EngineFailure({ code: "connectionFailed", message: messageOf(cause), hint: RECONNECT_HINT }, cause);
       }
-      const namespace = await namespaceOf({ session, capabilities: open.capabilities });
       if (sessions.get(sessionId) !== open) {
         await session.close().catch(() => undefined);
         sessionFor(sessionId);
       }
-      const namespaceLost = open.moved;
+      const namespaceLost = open.moved && !restored;
       open.session = session;
-      open.opening = namespace;
-      open.moved = false;
+      open.opening = opening;
+      open.moved = restored;
+      if (!restored) open.switchedBy = null;
       open.lost = null;
       open.closing = null;
       open.lastUsed = now();
@@ -1589,6 +1614,8 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
         const moves = !summary.cursorOpen && (switches || statement.kind === "transaction");
         const namespace = moves ? await namespaceOf(open) : undefined;
         if (moves) noteNamespace(open, namespace, switches);
+        if (switches) open.switchedBy = bound.params.length === 0 ? bound.sql : null;
+        if (!open.moved) open.switchedBy = null;
         return {
           ...summary,
           firstWindow: results.window(summary.handle, 0),
@@ -1840,6 +1867,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
           running: 0,
           opening,
           moved: false,
+          switchedBy: null,
           lastUsed: now(),
           lost: null,
           closing: null,
@@ -1930,8 +1958,13 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
         Promise.resolve(results.findMatch(ownedHandle(handle), from, backward)),
       "result.extract": ({ handle, extractor, rows, columns }) => {
         const chosen = chosenColumns(ownedHandle(handle), columns);
-        const writer = rowWriter(extractor, chosen, { dialect: sqlLanguage() });
         const picked = rowsIn(results.shownRows(handle), rows);
+        const [only] = picked;
+        // One cell is a value to paste elsewhere, not a table: no header, no quoting (as DataGrip copies it).
+        if (picked.length === 1 && only !== undefined && columns.length === 1) {
+          return Promise.resolve(cellClipboardText(project(only, columns)[0] ?? null));
+        }
+        const writer = rowWriter(extractor, chosen, { dialect: sqlLanguage() });
         const body = picked.map((row, index) => writer.row(project(row, columns), index)).join("");
         return Promise.resolve(writer.start() + body + writer.end(picked.length));
       },

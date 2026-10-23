@@ -199,11 +199,26 @@ describe("engine session health", () => {
     expect(connects).toHaveLength(1);
   });
 
-  it("givenSwitchedNamespace_whenReconnected_thenNamespaceLostAndOpeningReset", async () => {
-    const { connection, controls } = healthyPlugin();
+  it("givenSwitchedNamespace_whenReconnected_thenSwitchReplayedOnEveryReconnect", async () => {
+    const { connection, controls, executed } = healthyPlugin();
     const sessionId = await open(connection);
     resultOf<ExecutedStatement>(await execute(connection, sessionId, "USE archive"));
     controls.lostExecutes = 1;
+
+    const result = resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1"));
+    expect(result.reconnected).toEqual({ namespace: ["archive"], namespaceLost: false });
+
+    controls.lostExecutes = 1;
+    const again = resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1"));
+    expect(again.reconnected).toEqual({ namespace: ["archive"], namespaceLost: false });
+    expect(executed).toEqual(["USE archive", "USE archive", "SELECT 1", "USE archive", "SELECT 1"]);
+  });
+
+  it("givenSwitchReplayFails_whenReconnected_thenNamespaceLostAndOpeningReset", async () => {
+    const { connection, controls } = healthyPlugin();
+    const sessionId = await open(connection);
+    resultOf<ExecutedStatement>(await execute(connection, sessionId, "USE archive"));
+    controls.lostExecutes = 2;
 
     const result = resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1"));
     expect(result.reconnected).toEqual({ namespace: ["main"], namespaceLost: true });

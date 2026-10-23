@@ -88,6 +88,7 @@ export { applyDdl, type AppliedScript } from "./objects/apply.js";
 export {
   EXTRACTOR_KINDS,
   SQL_INSERT_TABLE,
+  cellClipboardText,
   extract,
   project,
   rowWriter,

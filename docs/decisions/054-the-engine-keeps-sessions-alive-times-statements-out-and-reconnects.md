@@ -27,9 +27,10 @@ The engine keeps a console's session healthy:
 - While a statement runs, it opens a probe connection once per keepalive interval. A probe that
   neither connects nor fails within 5 s means the route to the server is gone: the statement fails
   `connectionLost`, saying it may have completed, and the next Run reconnects.
-- A reconnect restores manual transaction mode and reads the namespace again. The response carries
-  `reconnected` with the new namespace and whether the one set by `USE` or a search path was lost;
-  the console says so in Output.
+- A reconnect restores manual transaction mode and replays the session's last namespace switch
+  (`USE db`, `SET search_path`), before manual mode so it opens no transaction, then reads the
+  namespace again. The response carries `reconnected` with the new namespace and whether the switch
+  was lost because it could not be replayed; the console says so in Output.
 - A session lost with a transaction open is never replaced silently: the statement fails
   `connectionLost` naming the lost changes, and the next Run reconnects.
 

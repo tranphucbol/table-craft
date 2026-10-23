@@ -1,5 +1,6 @@
-import type { Column, Row } from "@table-craft/plugin-api";
+import type { Column, Row, WireValue } from "@table-craft/plugin-api";
 import { CoreError } from "@table-craft/core/errors.js";
+import { cellText } from "@table-craft/core/results/extract/text.js";
 import { csvWriter } from "@table-craft/core/results/extract/csv.js";
 import { jsonWriter } from "@table-craft/core/results/extract/json.js";
 import { markdownWriter } from "@table-craft/core/results/extract/markdown.js";
@@ -59,6 +60,11 @@ export function extract(
   let count = 0;
   for (const row of rows) text += writer.row(row, count++);
   return text + writer.end(count);
+}
+
+/** One cell as Copy puts it on the clipboard: the bare value, no header or quoting; NULL is empty. */
+export function cellClipboardText(value: WireValue): string {
+  return value === null ? "" : cellText(value);
 }
 
 export { SQL_INSERT_TABLE, type SqlDialect } from "@table-craft/core/results/extract/sqlInsert.js";

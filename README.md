@@ -228,8 +228,9 @@ See [Completion and navigation](docs/design/specification.md#completion-and-navi
 
 The grid shows the first page (500 rows by default) and keeps the cursor open: **Fetch Next Page**
 and **Fetch All** read more. Clicking a header sorts ascending, descending, then not at all; `⌥`-click
-adds a second key. `⇧↩` opens the value panel for long text and JSON. **Copy** uses the
-chosen extractor: CSV, TSV, JSON, SQL Inserts or Markdown. **Export Data…**, on a result or on a
+adds a second key. `⇧↩`, or double-clicking a cell, opens the value panel for long text and JSON. **Copy** on one
+cell copies its bare value; on more it uses the chosen extractor: CSV, TSV, JSON, SQL Inserts or
+Markdown. **Export Data…**, on a result or on a
 table in the Database pane, writes any of those or Excel (XLSX) in the background: it streams
 straight to disk, so a multi-gigabyte export uses flat memory, shows its progress under **Exports**
 in Services, and never leaves a half-written file behind when the network drops, the disk fills or

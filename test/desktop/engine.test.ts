@@ -928,6 +928,27 @@ describe("engine results", () => {
     expect(resultOf<ViewState>(view)).toEqual({ shown: 1, filtered: true, sources: [2], matches: 1, error: null });
     expect(resultOf<ResultWindow>(window)).toEqual({ offset: 0, rows: [[3, "apricot"]], matches: [0, 1] });
     expect(resultOf<FoundMatch>(found)).toEqual({ index: 0, row: 0, column: 1 });
-    expect(resultOf<string>(text)).toBe("name\napricot\n");
+    expect(resultOf<string>(text)).toBe("apricot");
+  });
+
+  it("givenOneCell_whenExtracted_thenBareValueWithoutHeaderOrQuotes", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(connection, sessionId, "SELECT 261023000002437 AS refund_id, 'a,\"b\"' AS note");
+
+    const extracted = async (id: number, column: number) =>
+      resultOf<string>(
+        await connection.handle({
+          id,
+          type: "result.extract",
+          handle,
+          extractor: "csv",
+          rows: [{ from: 0, to: 1 }],
+          columns: [column],
+        }),
+      );
+
+    expect(await extracted(5, 0)).toBe("261023000002437");
+    expect(await extracted(6, 1)).toBe('a,"b"');
   });
 });

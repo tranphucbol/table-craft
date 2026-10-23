@@ -432,7 +432,9 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
           onMouseOver={onMouseOver}
           onContextMenu={onContextMenu}
           onDoubleClick={(event) => {
-            if (edits !== undefined && cellOf(event.target) !== null) edits.begin();
+            if (cellOf(event.target) === null) return;
+            if (edits !== undefined) edits.begin();
+            else if (!useLayout.getState().layout.valuePanel) invoke(GRID_ACTION_IDS.toggleValuePanel);
           }}
         >
           {items.map((item) => {
