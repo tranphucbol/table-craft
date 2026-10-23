@@ -139,7 +139,7 @@ interface SqlLanguage {
   updateDefault(defaultExpression: string | null): string; // SET col = <this>: DEFAULT, or SQLite's expression
   generate(statement: GeneratedStatement, relation: Relation, qualifiedName: string): string; // sqlGenerator
   explainable?(sql: string, options: ExplainOptions): Explainability; // present exactly when `explain` is declared
-  format(text: string, options: FormatOptions): string; // { keywordCase, indentWidth, linesBetweenStatements }; throws when it cannot
+  format(text: string, options: FormatOptions): string; // { style, keywordCase, indentWidth, linesBetweenStatements, alignAliases }; throws when it cannot
   parameters(statement: string): readonly SqlParameter[]; // { name, from, to, style }, outside literals and comments
   bind(statement: string, values: Readonly<Record<string, ParameterValue>>): BoundStatement; // { sql, params }
   importType?(column: InferredColumn): string; // { kind, integerDigits, scale } to a column type; with `bulkInsert`
@@ -286,11 +286,17 @@ mode `transactionEffect` tracks an explicit `BEGIN`, `START TRANSACTION`, `COMMI
 and on MySQL a DDL statement's implicit commit closes the transaction. Closing a session with a
 transaction open rolls it back.
 
-`sqlFormatter(options)` gives `format` over `sql-formatter`, bundled into each plugin (decision
-042). It formats statement by statement as the plugin's dialect, cases keywords and data types as
-`keywordCase` says (`upper`, `lower`, `preserve`), indents by `indentWidth` (1–8) and puts
-`linesBetweenStatements` (0–5) blank lines between statements. A multi-line block comment is kept
-byte for byte; a MySQL script with `DELIMITER` is refused rather than reflowed.
+`sqlFormatter(options)` gives `format`, bundled into each plugin. It formats statement by statement
+as the plugin's dialect, cases keywords as `keywordCase` says (`upper`, `lower`, `preserve`), indents
+by `indentWidth` (1–8) and puts `linesBetweenStatements` (0–5) blank lines between statements. A
+multi-line block comment is kept byte for byte; a MySQL script with `DELIMITER` is refused rather
+than reflowed. `style` picks the layout. `aligned` (decision 061, `sql/layout.ts`) parses the
+dialect lexer's tokens: the first item on the clause keyword's line, the rest lined up under it,
+`AS` in a select list in one column when `alignAliases` is on, `AND`/`OR` right-aligned to the end
+of `WHERE`/`HAVING`/`ON`, calls and lists kept whole, subqueries at the column after `(`. It covers
+`SELECT`, set operators, `WITH`, `INSERT`, `UPDATE`, `DELETE` and `EXPLAIN` before them; any other
+statement, or one whose tokens the layout would change, gets the `standard` layout (decision 062),
+which is `sql-formatter` (decision 042).
 
 `sqlParameters(options)` gives `parameters` and `bind` over the same tokenizer (decision 043), so a
 marker inside a string, a quoted identifier, a comment, a dollar quote or a `::cast` is never one:
@@ -1531,7 +1537,15 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
       "grid": { "family": null, "sizePx": 12 }
     }
   },
-  "editor": { "format": { "keywordCase": "upper", "indentWidth": 2, "linesBetweenStatements": 1 } },
+  "editor": {
+    "format": {
+      "style": "aligned",
+      "keywordCase": "upper",
+      "indentWidth": 2,
+      "linesBetweenStatements": 1,
+      "alignAliases": true
+    }
+  },
   "console": { "parameters": true, "statementTimeoutSeconds": 0 },
   "data": { "nullText": "<null>", "groupDigits": false, "pageRows": 500, "fetchAllCap": 100000 }
 }
@@ -1543,9 +1557,11 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
 | `appearance.systemTitleBar`            | boolean; read once when the window is created                                                 | `false`       |
 | `appearance.fonts.*`                   | `{ family: string \| null, sizePx: 8–32 }`; `null` is the built-in stack                      | 13, 13, 12    |
+| `editor.format.style`                  | `aligned`, `standard`                                                                         | `aligned`     |
 | `editor.format.keywordCase`            | `upper`, `lower`, `preserve`                                                                  | `upper`       |
 | `editor.format.indentWidth`            | 1–8 spaces                                                                                    | 2             |
 | `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                               | 1             |
+| `editor.format.alignAliases`           | boolean; line up `AS` in a select list (aligned style)                                        | `true`        |
 | `console.parameters`                   | boolean; ask for `:name`, `?` and `$1` values before a run                                    | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override | 0             |
 | `data.nullText`                        | 1–16 characters                                                                               | `<null>`      |

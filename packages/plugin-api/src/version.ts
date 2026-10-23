@@ -2,7 +2,7 @@
  * The plugin contract's version. Unstable while the major is 0: a minor bump is a breaking change,
  * so a plugin is compatible only with the exact minor it was built against.
  */
-export const API_VERSION = "0.19.0";
+export const API_VERSION = "0.20.0";
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const UNSTABLE_MAJOR = 0;

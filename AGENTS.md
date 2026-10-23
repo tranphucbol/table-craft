@@ -74,7 +74,8 @@ packages/plugin-api/       @table-craft/plugin-api: the plugin contract and noth
                            contract test suite under `testing/`. `sql/` (subpath
                            `@table-craft/plugin-api/sql`) is the shared splitter,
                            classifier, literal helpers, `sqlCompleter` (scope analysis,
-                           completion, resolve) and `sqlExplainable` plugins build
+                           completion, resolve), `sqlExplainable` and `sqlFormatter`
+                           (its aligned layout in `layout*.ts`) plugins build
                            `language` from.
                            Depends only on zod
 packages/core/             @table-craft/core: plugin loader, session manager, result-set

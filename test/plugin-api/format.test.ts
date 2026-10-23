@@ -12,9 +12,15 @@ function languageOf(plugin: { readonly language?: SqlLanguage }): SqlLanguage {
 const postgres = languageOf(postgresPlugin);
 const mysql = languageOf(mysqlPlugin);
 const sqlite = languageOf(sqlitePlugin);
-const DEFAULTS: FormatOptions = { keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1 };
+const DEFAULTS: FormatOptions = {
+  style: "standard",
+  keywordCase: "upper",
+  indentWidth: 2,
+  linesBetweenStatements: 1,
+  alignAliases: true,
+};
 
-describe("format", () => {
+describe("format (standard style)", () => {
   it("givenOneLineSelect_whenFormatted_thenOneClausePerLine", () => {
     for (const language of [postgres, mysql, sqlite]) {
       expect(language.format("select id, name from customers where id = 1", DEFAULTS)).toBe(
@@ -44,7 +50,7 @@ describe("format", () => {
   });
 
   it("givenOptions_whenFormatted_thenKeywordCaseIndentAndBlankLinesFollow", () => {
-    const options: FormatOptions = { keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 2 };
+    const options: FormatOptions = { ...DEFAULTS, keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 2 };
     expect(sqlite.format("SELECT a FROM t; SELECT b FROM u;", options)).toBe(
       "select\n    a\nfrom\n    t;\n\n\nselect\n    b\nfrom\n    u;",
     );

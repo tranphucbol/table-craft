@@ -1,5 +1,6 @@
 import type { FormatOptions, ParameterStyle, SqlLanguage } from "@table-craft/plugin-api";
 import { formatDialect, mysql, postgresql, sqlite, type DialectOptions, type ParamTypes } from "sql-formatter";
+import { formatAligned } from "./layout.js";
 import { Lexer, wordOf, type SqlDialectOptions } from "./tokens.js";
 
 /** The `sql-formatter` dialects the built-in plugins use (decision 042). */
@@ -88,32 +89,38 @@ function reasonOf(cause: unknown): string {
 }
 
 /**
- * `SqlLanguage.format` on `sql-formatter` (decision 042). Throws an `Error` with a one-line reason
- * rather than returning half-formatted text; comments and literals pass through as written.
+ * `SqlLanguage.format`: the aligned layout (decision 061) or `sql-formatter`'s (decision 042), which
+ * also takes every statement the aligned one does not read (decision 062). Throws an `Error` with a
+ * one-line reason rather than returning half-formatted text; comments and literals pass through as
+ * written.
  */
 export function sqlFormatter(options: FormatterOptions): Pick<SqlLanguage, "format"> {
   const dialect = FORMAT_DIALECTS[options.dialect];
   const params = paramTypes(options.parameters);
+  const standard = (text: string, format: FormatOptions): string => {
+    const shielded = shieldBlockComments(text, options.lexer);
+    try {
+      return shielded.restore(
+        formatDialect(shielded.text, {
+          dialect,
+          keywordCase: format.keywordCase,
+          dataTypeCase: format.keywordCase,
+          tabWidth: format.indentWidth,
+          linesBetweenQueries: format.linesBetweenStatements,
+          paramTypes: params,
+        }),
+      );
+    } catch (cause) {
+      throw new Error(reasonOf(cause), { cause });
+    }
+  };
   return {
     format(text, format: FormatOptions) {
       if (options.lexer.delimiterCommand === true && hasDelimiterCommand(text, options.lexer)) {
         throw new Error(DELIMITER_REFUSAL);
       }
-      const shielded = shieldBlockComments(text, options.lexer);
-      try {
-        return shielded.restore(
-          formatDialect(shielded.text, {
-            dialect,
-            keywordCase: format.keywordCase,
-            dataTypeCase: format.keywordCase,
-            tabWidth: format.indentWidth,
-            linesBetweenQueries: format.linesBetweenStatements,
-            paramTypes: params,
-          }),
-        );
-      } catch (cause) {
-        throw new Error(reasonOf(cause), { cause });
-      }
+      if (format.style === "standard") return standard(text, format);
+      return formatAligned(text, format, options.lexer, (statement) => standard(statement, format));
     },
   };
 }

@@ -91,6 +91,8 @@ export {
   type ExecuteOptions,
   type ExecuteResult,
   type FormatOptions,
+  FORMAT_STYLES,
+  type FormatStyle,
   GENERATED_STATEMENTS,
   type GeneratedStatement,
   IMPORT_KINDS,

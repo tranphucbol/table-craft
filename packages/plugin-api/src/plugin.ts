@@ -208,12 +208,20 @@ export const KEYWORD_CASES = ["upper", "lower", "preserve"] as const;
 
 export type KeywordCase = (typeof KEYWORD_CASES)[number];
 
-/** How `SqlLanguage.format` lays text out (decision 042). */
+/** `aligned` is the DataGrip-like layout (decision 061); `standard` is `sql-formatter`'s own (decision 042). */
+export const FORMAT_STYLES = ["aligned", "standard"] as const;
+
+export type FormatStyle = (typeof FORMAT_STYLES)[number];
+
+/** How `SqlLanguage.format` lays text out (decisions 042, 061). */
 export interface FormatOptions {
+  readonly style: FormatStyle;
   readonly keywordCase: KeywordCase;
   readonly indentWidth: number;
   /** Blank lines between two statements. */
   readonly linesBetweenStatements: number;
+  /** In the aligned style, `AS` in a select list and `=` in a `SET` line up in a column. */
+  readonly alignAliases: boolean;
 }
 
 export const PARAMETER_STYLES = ["named", "numbered", "positional"] as const;

@@ -69,3 +69,5 @@ started, not when it is merged.
 | 058 | [A closing result holds the session](058-a-closing-result-holds-the-session.md)                                                                                        |
 | 059 | [Tab replaces and Enter inserts a completion](059-tab-replaces-and-enter-inserts-a-completion.md)                                                                      |
 | 060 | [The plugin writes the console's namespace switch](060-the-plugin-writes-the-console-namespace-switch.md)                                                              |
+| 061 | [An aligned layout of our own is the default format](061-an-aligned-layout-of-our-own-is-the-default-format.md)                                                        |
+| 062 | [The aligned layout never half-formats](062-the-aligned-layout-never-half-formats.md)                                                                                  |

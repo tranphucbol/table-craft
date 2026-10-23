@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   BYTES_PREVIEW_LENGTH,
   CAPABILITIES,
+  FORMAT_STYLES,
   IMPORT_KINDS,
   DefinitionNotFoundError,
   isPluginError,
@@ -633,20 +634,19 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           });
         });
 
-        it("givenLanguage_whenFormatAndBind_thenRoundTripsThroughExecute", async () => {
+        it.each(FORMAT_STYLES)("givenLanguage_whenFormatAndBind_thenRoundTripsThroughExecute (%s)", async (style) => {
           const language = plugin.language;
           if (language === undefined) throw new Error("A plugin that declares sql needs language.");
-          const formatted = language.format("select name from customers where id = :id -- the second", {
-            keywordCase: "upper",
-            indentWidth: 2,
-            linesBetweenStatements: 1,
-          });
+          const formatted = language.format(
+            "select c.name as who, c.id from customers c where c.id = :id and (c.id > 0 or c.id < 0) -- the second",
+            { style, keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1, alignAliases: true },
+          );
           expect(formatted).toContain("-- the second");
           expect(language.parameters(formatted).map((parameter) => parameter.name)).toEqual([":id"]);
           const statement = language.bind(formatted, { ":id": "2" });
           await withSession(plugin, fixture, async (session) => {
             expect(await collect((await session.execute(statement.sql, statement.params)).rows)).toEqual([
-              ["Grace Hopper"],
+              ["Grace Hopper", 2],
             ]);
           });
         });
