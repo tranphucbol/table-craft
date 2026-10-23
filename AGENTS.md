@@ -25,6 +25,12 @@ Run from the repository root.
   `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/NNN` to save a window PNG per scenario for plan NNN's
   live test (each suite captures only for its own plan, via `evidenceFor("NNN")`).
   `test/e2e/harness.ts` holds the launch, run, dialog and capture helpers
+- `bun run test:smoke:headless` / `bun run test:smoke:db:headless` - the same two suites in the
+  headless box (decision 063): a Linux container under Xvfb with its own keyring, so nothing takes
+  the screen, keyboard or clipboard. Agents and plan sessions run live tests here, with the same
+  compose variables and `TABLE_CRAFT_EVIDENCE_DIR`; extra arguments narrow the run like `vitest run`
+  (`bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts`). Evidence is Linux evidence;
+  macOS-only checks (`titleBar.smoke`, `update.live`, the packaged app) still run on the host
 - `bun run typecheck` - `tsc --noEmit`, every program: the root one, the renderer
   (`packages/desktop/src/renderer/tsconfig.json`) and the renderer tests (`test/renderer/tsconfig.json`)
 - `bun run lint` / `bun run lint:fix` - ESLint, including the architecture fences
@@ -134,7 +140,8 @@ plugins/<id>/              built-in plugins (@table-craft/plugin-<id>): postgres
 test/                      Vitest suites, `givenX_whenY_thenZ`
   db/                      compose.yml, the fixture schema per dialect, contract runs per database
   e2e/                     Playwright `_electron` suites and the shared harness;
-                           `workflows.ts` is the daily loop the dev and packaged suites run
+                           `workflows.ts` is the daily loop the dev and packaged suites run;
+                           `docker/` the headless box (image, entrypoint, `headless.ts`)
   renderer/                renderer unit tests, typechecked with the DOM lib; no jsdom
   support/                 fixtures shared across suites (type_probe rows, seeded SQLite, configs);
                            `plans/` holds real EXPLAIN outputs, byte-exact (prettier skips it)

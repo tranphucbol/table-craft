@@ -71,3 +71,4 @@ started, not when it is merged.
 | 060 | [The plugin writes the console's namespace switch](060-the-plugin-writes-the-console-namespace-switch.md)                                                              |
 | 061 | [An aligned layout of our own is the default format](061-an-aligned-layout-of-our-own-is-the-default-format.md)                                                        |
 | 062 | [The aligned layout never half-formats](062-the-aligned-layout-never-half-formats.md)                                                                                  |
+| 063 | [Live tests run in a headless Linux box](063-live-tests-run-in-a-headless-linux-box.md)                                                                                |

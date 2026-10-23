@@ -24,6 +24,8 @@
     "test:smoke:db": "docker compose -f test/db/compose.yml up -d --wait && bun run --filter '@table-craft/desktop' build && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_SMOKE_DATABASES=1 vitest run test/e2e --no-file-parallelism",
     "test:smoke:packaged": "bun run desktop:package:dir && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_APP_EXECUTABLE=$(bun packages/desktop/scripts/packaged-executable.ts) vitest run test/e2e/packaged.smoke.test.ts",
     "test:smoke:packaged:db": "docker compose -f test/db/compose.yml up -d --wait && bun run desktop:package:dir && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_SMOKE_DATABASES=1 TABLE_CRAFT_APP_EXECUTABLE=$(bun packages/desktop/scripts/packaged-executable.ts) vitest run test/e2e/packaged.smoke.test.ts",
+    "test:smoke:headless": "bun test/e2e/docker/headless.ts",
+    "test:smoke:db:headless": "bun test/e2e/docker/headless.ts --databases",
     "test:db": "docker compose -f test/db/compose.yml up -d --wait && vitest run --config vitest.db.config.ts",
     "readme:media": "docker compose -f test/db/compose.yml up -d --wait && bun run --filter '@table-craft/desktop' build && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_README_MEDIA=1 vitest run test/readme --no-file-parallelism",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/desktop/src/renderer && tsc --noEmit -p test/renderer",

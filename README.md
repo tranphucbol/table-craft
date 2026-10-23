@@ -545,6 +545,8 @@ bun run test                   # unit tests and the plugin contract against SQLi
 bun run test:db                # the contract against PostgreSQL and MySQL in Docker
 bun run test:smoke             # drive the built app with Playwright
 bun run test:smoke:db          # the same against PostgreSQL, MySQL and SQLite
+bun run test:smoke:headless    # test:smoke in a Linux container, off your screen
+bun run test:smoke:db:headless # test:smoke:db in the same container
 bun run test:smoke:packaged    # drive the packaged app
 bun run lint                   # ESLint, including the architecture fences
 bun run typecheck              # every TypeScript program

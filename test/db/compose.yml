@@ -49,6 +49,36 @@ services:
       timeout: 5s
       retries: 120
 
+  # The headless box the smoke and live tests run in (plan 031), on this project's network so it
+  # reaches the databases by service name. Only `--profile e2e` starts it.
+  e2e:
+    profiles: ["e2e"]
+    build: ../e2e/docker
+    image: table-craft-e2e:local
+    working_dir: /work
+    shm_size: 1gb
+    init: true
+    environment:
+      TABLE_CRAFT_HEADLESS: "1"
+      TABLE_CRAFT_PG_HOST: postgres
+      TABLE_CRAFT_PG_PORT: "5432"
+      TABLE_CRAFT_MYSQL_HOST: mysql
+      TABLE_CRAFT_MYSQL_PORT: "3306"
+      TABLE_CRAFT_TIDB_HOST: tidb
+      TABLE_CRAFT_TIDB_PORT: "4000"
+      TABLE_CRAFT_EVIDENCE_DIR: ${TABLE_CRAFT_EVIDENCE_DIR:-}
+    volumes:
+      - ../..:/work
+      - node-modules:/work/node_modules
+      - node-modules-plugin-api:/work/packages/plugin-api/node_modules
+      - node-modules-core:/work/packages/core/node_modules
+      - node-modules-desktop:/work/packages/desktop/node_modules
+      - node-modules-postgres:/work/plugins/postgres/node_modules
+      - node-modules-mysql:/work/plugins/mysql/node_modules
+      - node-modules-sqlite:/work/plugins/sqlite/node_modules
+      - bun-cache:/root/.bun/install/cache
+      - electron-cache:/root/.cache/electron
+
   # TiDB 4.0, the oldest MySQL-compatible server users run against (plan 027): no plain KILL
   # QUERY, no recursive CTE. One process on its embedded store; root has no password and the
   # tests create what they need.
@@ -62,3 +92,17 @@ services:
       interval: 1s
       timeout: 5s
       retries: 120
+
+volumes:
+  node-modules:
+  node-modules-plugin-api:
+  node-modules-core:
+  node-modules-desktop:
+  node-modules-postgres:
+  node-modules-mysql:
+  node-modules-sqlite:
+  # Downloads only, shared by every checkout; node_modules stay per checkout.
+  bun-cache:
+    name: table-craft-e2e-bun-cache
+  electron-cache:
+    name: table-craft-e2e-electron-cache

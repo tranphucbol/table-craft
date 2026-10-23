@@ -15,6 +15,13 @@ export const SMOKE_ENABLED = process.env["TABLE_CRAFT_SMOKE"] === "1";
 export const DATABASES_ENABLED = SMOKE_ENABLED && process.env["TABLE_CRAFT_SMOKE_DATABASES"] === "1";
 /** When set, `captureWindow` saves PNGs there; otherwise it does nothing. */
 const EVIDENCE_DIR = process.env["TABLE_CRAFT_EVIDENCE_DIR"];
+/** Set inside the headless box (plan 031): Linux under Xvfb, as root. */
+const HEADLESS = process.env["TABLE_CRAFT_HEADLESS"] === "1";
+/**
+ * Chromium refuses to run as root with its sandbox, and with no desktop session it would pick the
+ * plain-text password store, where `safeStorage` reports no encryption; the box runs gnome-keyring.
+ */
+const HEADLESS_FLAGS = ["--no-sandbox", "--password-store=gnome-libsecret"] as const;
 
 /**
  * The packaged app's executable to drive instead of `dist/main/main.js` (plan 014), set by
@@ -159,7 +166,8 @@ export async function launchApp(
   const executable = options.executable ?? APP_EXECUTABLE;
   const entry = executable === undefined ? [MAIN_ENTRY] : [];
   const mockKeychain = process.platform === "darwin" && options.systemKeychain !== true;
-  const args = mockKeychain ? [MOCK_KEYCHAIN_FLAG, ...entry] : entry;
+  const flags = [...(mockKeychain ? [MOCK_KEYCHAIN_FLAG] : []), ...(HEADLESS ? HEADLESS_FLAGS : [])];
+  const args = [...flags, ...entry];
   const app = await _electron.launch({ executablePath: executable ?? electronBinary(), args, env });
   const page = await app.firstWindow();
   return { app, page, userDataDir };
