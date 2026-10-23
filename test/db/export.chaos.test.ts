@@ -105,7 +105,7 @@ for (const target of TARGETS) {
         {
           id: target.name,
           pluginId: target.name,
-          config: { ...target.config, port: proxy.port },
+          config: { ...target.config, host: proxy.host, port: proxy.port },
           readOnly: false,
           keepAliveSeconds: 10,
         },

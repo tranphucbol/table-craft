@@ -294,7 +294,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
         const page = await launch({
           id: "pg",
           pluginId: "postgres",
-          config: { ...POSTGRES_CONFIG, host: "127.0.0.1", port: proxy.port },
+          config: { ...POSTGRES_CONFIG, host: proxy.host, port: proxy.port },
         });
         const path = file("live.csv", liveCsv(LIVE_ROWS));
 
@@ -353,7 +353,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
         const page = await launch({
           id: "mysql",
           pluginId: "mysql",
-          config: { ...MYSQL_CONFIG, host: "127.0.0.1", port: proxy.port },
+          config: { ...MYSQL_CONFIG, host: proxy.host, port: proxy.port },
         });
         const small = file("first.csv", liveCsv(1_000));
         await importInto(page, LIVE_TABLE);

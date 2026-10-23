@@ -64,7 +64,7 @@ for (const target of TARGETS) {
     async function proxied(): Promise<{ proxy: ChaosProxy; config: Target["config"] }> {
       const proxy = await chaosProxy(target.config);
       cleanup.push(() => proxy.close());
-      return { proxy, config: { ...target.config, port: proxy.port } };
+      return { proxy, config: { ...target.config, host: proxy.host, port: proxy.port } };
     }
 
     async function session(config: Target["config"]): Promise<Session> {

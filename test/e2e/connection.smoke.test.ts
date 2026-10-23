@@ -151,7 +151,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
         const page = await launch({
           id: dialect.name,
           pluginId: dialect.pluginId,
-          config: { ...dialect.config, port: proxy.port },
+          config: { ...dialect.config, host: proxy.host, port: proxy.port },
         });
         await runStatement(page, "SELECT 1 AS before_drop");
 
@@ -178,7 +178,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
           name: dialect.name,
           pluginId: dialect.pluginId,
           keepAliveSeconds: KEEPALIVE_SECONDS,
-          config: { ...plain, port: proxy.port },
+          config: { ...plain, host: proxy.host, port: proxy.port },
           secretModes: { password: "never" },
         };
         seedDatasources(profile, [saved]);

@@ -203,7 +203,7 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
       scratch.push(userDataDir);
       seedSettings(userDataDir, { version: 1, data: { exportStallSeconds: STALL_SECONDS } });
       const page = await launch(
-        { id: "pg", pluginId: "postgres", config: { ...POSTGRES_CONFIG, host: "127.0.0.1", port: proxy.port } },
+        { id: "pg", pluginId: "postgres", config: { ...POSTGRES_CONFIG, host: proxy.host, port: proxy.port } },
         userDataDir,
       );
       const directory = folder();

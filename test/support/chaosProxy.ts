@@ -7,6 +7,8 @@ const THROTTLE_TICK_MS = 20;
 
 /** The link between a client and a database, shaped by a test (plan 018's chaos harness). */
 export interface ChaosProxy {
+  /** Loopback, whatever host the target is on; a test points its datasource here. */
+  readonly host: string;
   readonly port: number;
   /** Sockets currently open from clients through the proxy. */
   readonly openLinks: number;
@@ -105,6 +107,7 @@ export async function chaosProxy(target: { readonly host: string; readonly port:
   if (address === null || typeof address === "string") throw new Error("The chaos proxy has no TCP port.");
 
   const proxy: ChaosProxy = {
+    host: LOOPBACK,
     port: address.port,
     get openLinks() {
       return clients.size;
