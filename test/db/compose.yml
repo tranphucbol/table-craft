@@ -1,7 +1,7 @@
 # The databases `bun run test:db` runs the plugin contract against, seeded from ./schema.
 # Ports sit far from the defaults so a developer's own server keeps 5432 and 3306. Parallel
 # worktrees each set COMPOSE_PROJECT_NAME, TABLE_CRAFT_PG_PORT, TABLE_CRAFT_MYSQL_PORT,
-# TABLE_CRAFT_TIDB_PORT and TABLE_CRAFT_SSH_PORT so one
+# TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT, TABLE_CRAFT_PG_TLS_PORT and TABLE_CRAFT_MYSQL_TLS_PORT so one
 # checkout's `up` never recreates the containers another checkout is testing against.
 name: table-craft-test-db
 
@@ -50,6 +50,67 @@ services:
       timeout: 5s
       retries: 120
 
+  # TLS-only servers for plan 037, signed by the test CA in ./tls (every key there is test-only).
+  # The image refuses a key file the postgres user does not own, so the entrypoint copies it first.
+  postgres-tls:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: table_craft
+      POSTGRES_PASSWORD: table_craft
+      POSTGRES_DB: table_craft
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        install -o postgres -g postgres -m 600 /tls/server.key /tmp/server.key &&
+        exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tls/server.crt
+        -c ssl_key_file=/tmp/server.key -c ssl_ca_file=/tls/ca.crt -c hba_file=/tls/pg_hba.conf
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_PG_TLS_PORT:-55433}:5432"
+    volumes:
+      - ./tls:/tls:ro
+      - ./tls/postgres.sql:/docker-entrypoint-initdb.d/tls.sql:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=table_craft psql 'host=127.0.0.1 sslmode=require user=table_craft dbname=table_craft' -c 'SELECT 1 FROM tls_probe'",
+        ]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  mysql-tls:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: table_craft
+      MYSQL_USER: table_craft
+      MYSQL_PASSWORD: table_craft
+      MYSQL_DATABASE: table_craft
+    command:
+      - --require-secure-transport=ON
+      - --ssl-ca=/tls/ca.crt
+      - --ssl-cert=/tls/server.crt
+      - --ssl-key=/tls/server.key
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_MYSQL_TLS_PORT:-53307}:3306"
+    volumes:
+      - ./tls:/tls:ro
+      - ./tls/mysql.sql:/docker-entrypoint-initdb.d/tls.sql:ro
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysql -h 127.0.0.1 --ssl-mode=REQUIRED -u table_craft -ptable_craft table_craft -e 'SELECT 1 FROM tls_probe'",
+        ]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
   # The bastion plan 036 tunnels through: it reaches the databases by service name, so a tunnel
   # targets postgres:5432 and mysql:3306 wherever the test runs. Keys in ./ssh are test-only.
   ssh:
@@ -78,6 +139,10 @@ services:
       TABLE_CRAFT_PG_PORT: "5432"
       TABLE_CRAFT_MYSQL_HOST: mysql
       TABLE_CRAFT_MYSQL_PORT: "3306"
+      TABLE_CRAFT_PG_TLS_HOST: postgres-tls
+      TABLE_CRAFT_PG_TLS_PORT: "5432"
+      TABLE_CRAFT_MYSQL_TLS_HOST: mysql-tls
+      TABLE_CRAFT_MYSQL_TLS_PORT: "3306"
       # A remote TiDB replaces the container when it answers (../db/tidbTarget.ts).
       TABLE_CRAFT_TIDB_HOST: ${TABLE_CRAFT_TIDB_E2E_HOST:-tidb}
       TABLE_CRAFT_TIDB_PORT: ${TABLE_CRAFT_TIDB_E2E_PORT:-4000}

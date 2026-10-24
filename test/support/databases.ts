@@ -102,6 +102,46 @@ export const SSH_BASTION = {
 export const POSTGRES_BEHIND_BASTION = { host: "postgres", port: 5432 } as const;
 export const MYSQL_BEHIND_BASTION = { host: "mysql", port: 3306 } as const;
 
+const DEFAULT_POSTGRES_TLS_PORT = 55433;
+const DEFAULT_MYSQL_TLS_PORT = 53307;
+/** On the host the TLS servers are reached by a name their certificate carries, not 127.0.0.1. */
+const TLS_HOST_NAME = "localhost";
+const TLS_DIRECTORY = join(import.meta.dirname, "..", "db", "tls");
+
+function tlsHostFromEnv(name: string): string {
+  const value = process.env[name];
+  return value === undefined || value === "" ? TLS_HOST_NAME : value;
+}
+
+/**
+ * The test-only certificates in `test/db/tls/` for the `postgres-tls` and `mysql-tls` services.
+ * The server certificate names `localhost` and both service names but no IP address.
+ */
+export const TLS_FILES = {
+  ca: join(TLS_DIRECTORY, "ca.crt"),
+  wrongCa: join(TLS_DIRECTORY, "wrong-ca.crt"),
+  clientCert: join(TLS_DIRECTORY, "client.crt"),
+  clientKey: join(TLS_DIRECTORY, "client.key"),
+  encryptedClientKey: join(TLS_DIRECTORY, "client-encrypted.key"),
+  keyPassphrase: "tls-key",
+  certUser: "tc_cert",
+} as const;
+
+export const POSTGRES_TLS_CONFIG = {
+  ...POSTGRES_CONFIG,
+  host: tlsHostFromEnv("TABLE_CRAFT_PG_TLS_HOST"),
+  port: portFromEnv("TABLE_CRAFT_PG_TLS_PORT", DEFAULT_POSTGRES_TLS_PORT),
+} as const;
+
+export const MYSQL_TLS_CONFIG = {
+  ...MYSQL_CONFIG,
+  host: tlsHostFromEnv("TABLE_CRAFT_MYSQL_TLS_HOST"),
+  port: portFromEnv("TABLE_CRAFT_MYSQL_TLS_PORT", DEFAULT_MYSQL_TLS_PORT),
+} as const;
+
+export const POSTGRES_TLS_BEHIND_BASTION = { host: "postgres-tls", port: 5432 } as const;
+export const MYSQL_TLS_BEHIND_BASTION = { host: "mysql-tls", port: 3306 } as const;
+
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };
 }
