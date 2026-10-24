@@ -94,7 +94,13 @@ const SHARED_PURITY_GLOBALS = [
 const SHARED_PURITY_RULE =
   "Shared appearance and settings modules are pure data for main and the renderer: no Node, electron, zod or DOM.";
 
-/** @param {...{ group: string[], message: string }} groups */
+/** The protocol areas load in the engine and the renderer alike, so they may only name each other. */
+const PROTOCOL_FILES = ["packages/desktop/src/engine/protocol/**/*.ts"];
+const PROTOCOL_PURITY_IMPORTS = "^(?!\\./[^/]+\\.js$)";
+const PROTOCOL_PURITY_RULE =
+  "A protocol area imports nothing but its sibling areas (./<area>.js); the engine and the renderer both load it.";
+
+/** @param {...({ group: string[], message: string } | { regex: string, message: string })} groups */
 function restrictImports(...groups) {
   return [
     "error",
@@ -172,6 +178,12 @@ export default tseslint.config(
         "error",
         ...SHARED_PURITY_GLOBALS.map((name) => ({ name, message: SHARED_PURITY_RULE })),
       ],
+    },
+  },
+  {
+    files: PROTOCOL_FILES,
+    rules: {
+      "no-restricted-imports": restrictImports({ regex: PROTOCOL_PURITY_IMPORTS, message: PROTOCOL_PURITY_RULE }),
     },
   },
   {

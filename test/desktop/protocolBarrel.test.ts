@@ -1,0 +1,116 @@
+import { fileURLToPath } from "node:url";
+import { ESLint } from "eslint";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import * as barrel from "@table-craft/desktop/engine/protocol.js";
+import type { EngineMethod, RequestOf, ResultOf } from "@table-craft/desktop/engine/protocol.js";
+import * as calls from "@table-craft/desktop/engine/protocol/calls.js";
+import * as catalog from "@table-craft/desktop/engine/protocol/catalog.js";
+import * as datasource from "@table-craft/desktop/engine/protocol/datasource.js";
+import * as objects from "@table-craft/desktop/engine/protocol/objects.js";
+import * as results from "@table-craft/desktop/engine/protocol/results.js";
+import * as sessions from "@table-craft/desktop/engine/protocol/sessions.js";
+import * as sql from "@table-craft/desktop/engine/protocol/sql.js";
+import * as tables from "@table-craft/desktop/engine/protocol/tables.js";
+import * as transfer from "@table-craft/desktop/engine/protocol/transfer.js";
+import * as wire from "@table-craft/desktop/engine/protocol/wire.js";
+
+const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const PROTOCOL_FIXTURE = "packages/desktop/src/engine/protocol/fixture.ts";
+const AREAS = { calls, catalog, datasource, objects, results, sessions, sql, tables, transfer, wire };
+
+const METHODS = [
+  "session.open",
+  "session.close",
+  "statement.execute",
+  "statement.cancel",
+  "statement.explain",
+  "script.split",
+  "script.run",
+  "script.answer",
+  "script.cancel",
+  "script.list",
+  "sql.format",
+  "sql.explainable",
+  "sql.generate",
+  "transaction.setMode",
+  "transaction.commit",
+  "transaction.rollback",
+  "result.window",
+  "result.release",
+  "result.fetchMore",
+  "result.stopFetch",
+  "result.sort",
+  "result.view",
+  "result.viewState",
+  "result.findMatch",
+  "result.editable",
+  "result.extract",
+  "export.start",
+  "export.cancel",
+  "export.retry",
+  "export.list",
+  "import.preview",
+  "import.ddl",
+  "import.start",
+  "import.cancel",
+  "import.resume",
+  "import.list",
+  "objects.features",
+  "objects.design",
+  "objects.script",
+  "objects.apply",
+  "catalog.namespaces",
+  "catalog.describe",
+  "catalog.qualifiedName",
+  "catalog.definition",
+  "namespace.targets",
+  "namespace.switchStatement",
+  "routine.call",
+  "table.query",
+  "table.count",
+  "table.condition",
+  "table.orderBy",
+  "completion.complete",
+  "navigation.resolve",
+  "edits.preview",
+  "edits.submit",
+  "sessions.list",
+  "sessions.cancel",
+  "sessions.terminate",
+] as const;
+
+async function lintProtocolModule(source: string): Promise<string[]> {
+  const eslint = new ESLint({
+    cwd: REPOSITORY_ROOT,
+    overrideConfig: { languageOptions: { parserOptions: { projectService: false } } },
+    ruleFilter: ({ ruleId }) => ruleId === "no-restricted-imports",
+  });
+  const [result] = await eslint.lintText(source, { filePath: PROTOCOL_FIXTURE });
+  return (result?.messages ?? []).map((message) => message.message);
+}
+
+describe("the protocol barrel", () => {
+  it("givenProtocolBarrel_whenImported_thenEveryEngineMethodHasARequestAndResult", () => {
+    expectTypeOf<EngineMethod>().toEqualTypeOf<(typeof METHODS)[number]>();
+    expectTypeOf<RequestOf<"routine.call">>().not.toBeNever();
+    expectTypeOf<ResultOf<"session.open">>().not.toBeNever();
+    expect(new Set(METHODS).size).toBe(METHODS.length);
+
+    const exported = Object.keys(barrel).sort();
+    const fromAreas = Object.values(AREAS)
+      .flatMap((area) => Object.keys(area))
+      .sort();
+    expect(fromAreas.length).toBeGreaterThan(0);
+    expect(exported).toEqual(fromAreas);
+  });
+
+  it("givenProtocolModule_whenItImportsOutsideProtocol_thenLintFails", async () => {
+    const outside = await lintProtocolModule('import { z } from "zod";\n\nexport const schema = z.string();\n');
+    const sibling = await lintProtocolModule(
+      'import type { Row } from "./wire.js";\n\nexport type Rows = readonly Row[];\n',
+    );
+
+    expect(outside).toEqual([expect.stringContaining("imports nothing but its sibling areas")]);
+    expect(sibling).toEqual([]);
+  });
+});
