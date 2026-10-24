@@ -52,6 +52,32 @@ describe("console files", () => {
     expect(await store.list("none")).toEqual([]);
   });
 
+  it("givenScratchConsole_whenRenamed_thenFileMovesAndTakenNamesRefused", async () => {
+    const { consoles: store } = consoles();
+    await store.write(DATASOURCE, "console", "a");
+    await store.write(DATASOURCE, "taken", "b");
+
+    await store.rename(DATASOURCE, "console", "report");
+
+    expect(await store.list(DATASOURCE)).toEqual(["report", "taken"]);
+    expect(await store.read(DATASOURCE, "report")).toBe("a");
+    await expect(store.rename(DATASOURCE, "report", "taken")).rejects.toThrow(
+      'A console named "taken" already exists.',
+    );
+  });
+
+  it("givenRenamedScratch_whenNameInvalid_thenRejectedWithPattern", async () => {
+    const { consoles: store } = consoles();
+    await store.write(DATASOURCE, "console", "a");
+
+    for (const name of ["has space", "a/b", "..", "x".repeat(65)]) {
+      const error = await store.rename(DATASOURCE, "console", name).catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(ConsoleFileError);
+      expect((error as ConsoleFileError).hint).toBe("Use up to 64 letters, digits, underscores, dots or dashes.");
+    }
+    expect(await store.list(DATASOURCE)).toEqual(["console"]);
+  });
+
   it("givenConsole_whenDeleted_thenGoneAndOthersKept", async () => {
     const { consoles: store } = consoles();
     await store.write(DATASOURCE, "console", "a");

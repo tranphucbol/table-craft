@@ -1,4 +1,3 @@
-import type { SqlFileOpened } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import type { ParameterValues } from "@table-craft/desktop/renderer/model/parameters.js";
 import {
@@ -104,52 +103,33 @@ export async function restoreConsoles(): Promise<void> {
   const remembered = useLayout
     .getState()
     .layout.openConsoles.filter((entry) => entry.path !== undefined || persists(entry.datasourceId));
-  const restored = await Promise.all(remembered.map((entry) => restoredText(entry)));
+  const paths = remembered.flatMap((entry) => (entry.path === undefined ? [] : [entry.path]));
+  const [scratch, opened] = await Promise.all([
+    Promise.all(
+      remembered.map((entry) =>
+        entry.path === undefined ? files.read(entry.datasourceId, entry.name).catch(() => null) : Promise.resolve(null),
+      ),
+    ),
+    fileConsoles.reopen(paths),
+  ]);
+  const byPath = new Map(paths.map((path, index) => [path, opened[index] ?? null]));
   let active: string | null = null;
-  const missing: string[] = [];
   for (const [index, entry] of remembered.entries()) {
-    const text = restored[index];
-    if (text === undefined) continue;
     let tabId: string;
-    if (text.kind === "scratch") {
+    if (entry.path === undefined) {
       const tab = newTab(entry.name);
       useTabs.getState().open(tab);
-      void useConsoles.getState().open(tab.id, entry.datasourceId, { name: entry.name, sql: text.sql, connect: false });
+      const sql = scratch[index] ?? "";
+      void useConsoles.getState().open(tab.id, entry.datasourceId, { name: entry.name, sql, connect: false });
       tabId = tab.id;
-    } else if (text.kind === "file") {
-      tabId = fileConsoles.openTab(text.file, entry.datasourceId);
     } else {
-      missing.push(text.reason);
-      continue;
+      const file = byPath.get(entry.path) ?? null;
+      if (file === null) continue;
+      tabId = fileConsoles.openTab(file, entry.datasourceId);
     }
     if (entry.active) active = tabId;
   }
   if (active !== null) useTabs.getState().activate(active);
-  if (missing.length > 0) {
-    void useModal.getState().ask({
-      kind: "notice",
-      title: missing.length === 1 ? "A file did not reopen" : "Some files did not reopen",
-      message: missing.join("\n"),
-      hint: "Its tab was skipped. Open the file with Open File… once it is back.",
-    });
-  }
-}
-
-type RestoredText =
-  | { readonly kind: "scratch"; readonly sql: string }
-  | { readonly kind: "file"; readonly file: SqlFileOpened }
-  | { readonly kind: "missing"; readonly reason: string };
-
-async function restoredText(entry: OpenConsole): Promise<RestoredText> {
-  if (entry.path === undefined) {
-    const sql = await files.read(entry.datasourceId, entry.name).catch(() => null);
-    return { kind: "scratch", sql: sql ?? "" };
-  }
-  try {
-    return { kind: "file", file: await unwrap(bridge().readSqlFile(entry.path)) };
-  } catch (cause) {
-    return { kind: "missing", reason: cause instanceof Error ? cause.message : String(cause) };
-  }
 }
 
 /** Keeps the layout's list of open console tabs in step with the tab strip. */

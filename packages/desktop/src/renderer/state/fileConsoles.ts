@@ -38,6 +38,11 @@ export interface FileConsoles {
    * source it was last used with, else on `datasourceId`, else detached.
    */
   readonly open: (paths: readonly string[], datasourceId: string | null) => Promise<void>;
+  /**
+   * Reads the files the layout had open; one notice names those gone or unreadable, which come
+   * back null so their tabs are skipped (decision 5).
+   */
+  readonly reopen: (paths: readonly string[]) => Promise<readonly (SqlFileOpened | null)[]>;
   /** A tab for a file already read, on `datasourceId` (or detached when that is gone); its tab id. */
   readonly openTab: (file: SqlFileOpened, datasourceId: string) => string;
   readonly save: (id: string) => Promise<boolean>;
@@ -165,6 +170,27 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
             : (datasourceId ?? DETACHED);
         openTab(file, target);
       }
+    },
+
+    async reopen(paths) {
+      const missing: string[] = [];
+      const read = await Promise.all(
+        paths.map((path) =>
+          files.read(path).catch((cause: unknown) => {
+            missing.push(cause instanceof Error ? cause.message : String(cause));
+            return null;
+          }),
+        ),
+      );
+      if (missing.length > 0) {
+        void ask({
+          kind: "notice",
+          title: missing.length === 1 ? "A file did not reopen" : "Some files did not reopen",
+          message: missing.join("\n"),
+          hint: `${missing.length === 1 ? "Its tab was" : "Their tabs were"} skipped. Open the file with Open File… once it is back.`,
+        });
+      }
+      return read;
     },
 
     async saveAs(id) {
