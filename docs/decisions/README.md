@@ -84,4 +84,6 @@ started, not when it is merged.
 | 073 | [A tunneled connection checks the configured host's name](073-a-tunneled-connection-checks-the-configured-host-name.md)                                                |
 | 080 | [File consoles save explicitly, scratch consoles autosave](080-file-consoles-save-explicitly-scratch-consoles-autosave.md)                                             |
 | 081 | [SQL scripts stream through the plugin splitter](081-sql-scripts-stream-through-the-plugin-splitter.md)                                                                |
+| 082 | [Error positions travel from the plugin to the editor](082-error-positions-travel-from-the-plugin-to-the-editor.md)                                                    |
+| 083 | [A multi-statement run asks before it continues past an error](083-a-multi-statement-run-asks-before-it-continues-past-an-error.md)                                    |
 | 088 | [Server sessions are a plugin capability](088-server-sessions-are-a-plugin-capability.md)                                                                              |

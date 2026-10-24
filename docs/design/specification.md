@@ -457,7 +457,8 @@ handles belong to the port that created them and are released when it closes.
 | `import.cancel`         | `taskId`                                                                                          | `null`; the task rolls back what it has not committed and ends `cancelled`                                                               |
 | `import.resume`         | `taskId`, `stallSeconds`                                                                          | a new `ImportTask` from the first uncommitted row, or from row 1 when nothing was committed                                              |
 | `import.list`           | none                                                                                              | `ImportTask[]`, every import of the engine                                                                                               |
-| `script.run`            | `files`, `namespace`                                                                              | `ScriptTask`; runs absolute `.sql` paths in order on a session of its own, after switching to `namespace` when not null (decision 081)   |
+| `script.run`            | `files`, `namespace`, `onError`                                                                   | `ScriptTask`; runs absolute `.sql` paths in order on a session of its own, after switching to `namespace` when not null (decision 081)   |
+| `script.answer`         | `taskId`, `answer`                                                                                | `null`; answers a task's `question` with `skip`, `skipAll`, `stop` or `retry` (decision 083)                                             |
 | `script.cancel`         | `taskId`                                                                                          | `null`; cancels the running statement and ends the task `cancelled`                                                                      |
 | `script.list`           | none                                                                                              | `ScriptTask[]`, every script run of the engine                                                                                           |
 | `session.close`         | `sessionId`                                                                                       | `null`; releases the session's handles, then closes it                                                                                   |
@@ -491,8 +492,11 @@ each a message with `id: null` carrying the whole `ExportTask`. See Export. An i
 kind of task: `import.progress`, `import.done`, `import.failed` and `import.cancelled` carry the
 whole `ImportTask`. See Import. A script run too: `script.progress` (at most every 200 ms),
 `script.done`, `script.failed` and `script.cancelled` carry the whole `ScriptTask` `{ taskId, files,
-file, namespace, state, statements, bytes, size, elapsedMs, error }`; a failure's `ScriptError`
-adds the `file`, `line`, `column` and the start of the `statement`. See Console files.
+file, namespace, state, statements, bytes, size, elapsedMs, error, failed, failures, question }`; a
+failure's `ScriptError` adds the `file`, the statement's `line` and `column`, the start of the
+`statement`, and `at`, the error's own `{ line, column }` in the file or `null`. `failed` counts the
+failures the run went past, `failures` keeps the first 100 and `question` is the failure waiting on
+`script.answer`. See Run SQL Script.
 A statement still running when its session closes is answered with `unknownSession`.
 `script.split` needs no session; it runs the plugin's `language` in the engine, so the renderer
 never parses SQL (decision 008). `transactionOpen` is `false` on a plugin without `transactions`,
@@ -539,8 +543,11 @@ Transfer stall timeout ends one (decisions 040, 046).
 
 ### engine.error
 
-`{ id, type: "engine.error", error: { code, message, hint } }`. `id` is `null` only when the request
-was unreadable. `hint` says what to do next.
+`{ id, type: "engine.error", error: { code, message, hint, position? } }`. `id` is `null` only when
+the request was unreadable. `hint` says what to do next. `position`, on `statementFailed` only, is
+the UTF-16 offset in the request's SQL where the database says the statement failed, read by the
+plugin from its driver's error (`PluginError.position`); a statement run with bound parameters
+carries none, since binding rewrote the text (decision 082).
 
 | Code                  | Raised when                                                              |
 | --------------------- | ------------------------------------------------------------------------ |
@@ -596,6 +603,11 @@ run either.
 | `console.run`                            | Run                                   | `⌘↩`     | `Ctrl+Enter`           |
 | `console.runAll`                         | Run All                               | `⇧⌘↩`    | `Ctrl+Shift+Enter`     |
 | `console.cancel`                         | Cancel                                |          |                        |
+| `console.gotoError`                      | Next Error                            | `F2`     | `F2`                   |
+| `console.gotoPreviousError`              | Previous Error                        | `⇧F2`    | `Shift+F2`             |
+| `console.showError`                      | Go to Error                           |          |                        |
+| `console.errorSkip`, `…SkipAll`          | Skip, Skip All Failed Statements      |          |                        |
+| `console.errorStop`, `…Retry`            | Stop at, Retry Failed Statement       |          |                        |
 | `console.explain`                        | Explain Plan                          | `⇧⌘E`    | `Ctrl+Shift+E`         |
 | `console.explainAnalyze`                 | Explain Analyse                       |          |                        |
 | `plan.rerun`, `plan.copy`                | Explain Again, Copy Raw Plan          |          |                        |
@@ -611,6 +623,8 @@ run either.
 | `script.cancel`                          | Cancel SQL Script                     |          |                        |
 | `script.goTo`                            | Go to Failed Script Statement         |          |                        |
 | `script.dismiss`                         | Remove Finished SQL Script            |          |                        |
+| `script.skip`, `script.skipAll`          | Skip, Skip All Failed Script Stmts    |          |                        |
+| `script.stop`, `script.retry`            | Stop at, Retry Failed Script Stmt     |          |                        |
 | `transaction.commit`                     | Commit                                | `⌥⇧⌘↩`   | `Ctrl+Alt+Shift+Enter` |
 | `transaction.rollback`                   | Rollback                              |          |                        |
 | `transaction.toggleMode`                 | Toggle Transaction Mode (Auto/Manual) |          |                        |
@@ -816,8 +830,8 @@ with `renderer/model/statementAt.ts`:
 | either             | no statements                                 | nothing; Output says `Nothing to run` |
 
 The statement about to run flashes in the editor. Statements run one after another on the
-console's session; the first error or cancel stops the batch, and Output says how many were
-skipped. Before anything runs, every destructive statement in the batch is listed in one dialog
+console's session; a cancel stops the batch, and Output says how many were skipped. Before
+anything runs, every destructive statement in the batch is listed in one dialog
 with its reason, Execute or Cancel; Cancel runs nothing and logs `Cancelled; nothing ran.`.
 
 When `console.parameters` is on and the batch has parameters, the Parameters dialog asks next: one
@@ -828,6 +842,33 @@ the plugin's `bind` and the driver's placeholders, never into the text. Cancel r
 logs `Cancelled; nothing ran.`. The console remembers the values for the next prompt, the history
 records them with the statement, and restoring it from Query History seeds them. With the setting
 off the text runs verbatim. Explain sends its statement verbatim. Rerun asks again.
+
+#### Errors in a run
+
+A failed statement is underlined where the database says it failed (decision 082): the engine's
+`position` plus the statement's offset in the console, widened to the whole word, drawn as a wavy
+`--tc-danger` underline with a gutter dot and a hover showing the message and hint. The marks live
+in the console's state, move with edits, and go when an edit touches their statement or a run
+runs it again; a mark is set only while the text still equals what ran. **Go to Error**
+(`console.showError`) beside Show in Log puts the caret on the toolbar error's mark; **Next Error**
+(`console.gotoError`, F2) and **Previous Error** (`console.gotoPreviousError`, ⇧F2) step through
+the marks after or before the caret, wrapping.
+
+A run of more than one statement follows `console.runAllOnError` when a statement fails with
+`statementFailed` or `statementTimedOut` (decision 083); any other error, and a cancel, stops it:
+
+| Setting    | On a failed statement                                                                     |
+| ---------- | ----------------------------------------------------------------------------------------- |
+| `ask`      | the run pauses; a banner above the result tabs asks Skip, Skip All, Stop or Retry         |
+| `stop`     | the run stops; Output says how many statements were skipped                               |
+| `continue` | Output logs the failure and the run goes on; it ends with the warning `12 run, 2 failed.` |
+
+The banner reads `Statement 3 of 12 failed: <message>`; the console's status reads `Waiting on
+the failed statement…`. Skip goes on, Skip All goes on without asking again, Stop is the `stop`
+row, and Retry runs the statement again. `console.cancel` and closing the console answer Stop. The
+last statement's failure asks nothing. A run that went past a failure ends with the summary
+warning and shows Output. Continuing inside an open transaction logs once that some databases,
+PostgreSQL among them, refuse every later statement until it is rolled back.
 
 `console.reformat` (Reformat Code, ⌥⌘L) sends the selection, or the whole text when there is none,
 to `sql.format` with the `editor.format` settings and replaces it in one undoable edit; the caret
@@ -1144,8 +1185,16 @@ chunks through a strict UTF-8 decoder and the plugin's `splitStream`, on a sessi
 auto-commit, after the namespace switch statement when run on a namespace. A read-only data source
 refuses writes as consoles do. Services shows the run under **SQL Scripts** with the file, the
 statements done and the bytes read of the total, and **Cancel**, which cancels the running
-statement. The run stops at the first failing statement; the task's error names the file, line
-and column, and **Go to statement** opens the file as a file console with that statement selected.
+statement. A failing statement follows `console.runAllOnError`, sent as `script.run`'s `onError`
+(decision 083): `ask` sets the task's `question` and the Services line offers **Skip**, **Skip
+All**, **Stop** and **Retry** (`script.answer`); `continue` counts it in `failed` and goes on;
+`stop`, and any error but `statementFailed` or `statementTimedOut`, ends the task `failed`. A run
+that went past failures ends `done, 2 failed`. A failure names the file, the statement's line and
+column and `at`, where in it the database says it failed. **Go to statement** opens the file as a
+file console, underlines every failure kept for that file whose statement is still where it ran,
+and puts the caret on the chosen one's mark, or selects its statement when it has none. A failure
+inside an open transaction says in its hint that PostgreSQL refuses every later statement until
+the transaction ends.
 
 ## Table data editor
 
@@ -1808,7 +1857,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
       "alignAliases": true
     }
   },
-  "console": { "parameters": true, "statementTimeoutSeconds": 0 },
+  "console": { "parameters": true, "statementTimeoutSeconds": 0, "runAllOnError": "ask" },
   "data": { "nullText": "<null>", "groupDigits": false, "pageRows": 500, "fetchAllCap": 100000 }
 }
 ```
@@ -1826,6 +1875,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `editor.format.alignAliases`           | boolean; line up `AS` in a select list (aligned style)                                        | `true`        |
 | `console.parameters`                   | boolean; ask for `:name`, `?` and `$1` values before a run                                    | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override | 0             |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements, or a script, does on a failure   | `ask`         |
 | `data.nullText`                        | 1–16 characters                                                                               | `<null>`      |
 | `data.groupDigits`                     | boolean                                                                                       | `false`       |
 | `data.pageRows`                        | 10–10,000                                                                                     | 500           |
