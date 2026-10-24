@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./explain": "./src/explain.ts",
-    "./bulk": "./src/bulk.ts"
+    "./bulk": "./src/bulk.ts",
+    "./notices": "./src/notices.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*",

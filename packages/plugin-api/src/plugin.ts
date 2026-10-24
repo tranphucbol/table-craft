@@ -27,6 +27,7 @@ export const CAPABILITIES = [
   "keepAlive",
   "bulkInsert",
   "objects",
+  "serverMessages",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -66,6 +67,39 @@ export interface ExecuteResult {
   readonly rows: AsyncIterable<Row>;
   /** Null when the database does not report it, or the statement returns rows. */
   readonly rowsAffected: number | null;
+  /**
+   * What the server said about the statement besides its rows, such as MySQL's warnings or
+   * PostgreSQL's notices (decision 066), in the order it said them, at most `SERVER_MESSAGE_LIMIT`
+   * of them and one more saying how many were left out. Complete once `rows` is exhausted; empty
+   * before that, and when the statement was cancelled or its rows abandoned. Present exactly when
+   * the plugin declares `serverMessages`.
+   */
+  readonly messages?: readonly ServerMessage[];
+}
+
+/** How serious a `ServerMessage` is, from the server's own word for it. */
+export const SERVER_MESSAGE_LEVELS = ["error", "warning", "notice", "info"] as const;
+
+export type ServerMessageLevel = (typeof SERVER_MESSAGE_LEVELS)[number];
+
+/** One thing the server said about a statement that succeeded (decision 066). */
+export interface ServerMessage {
+  readonly level: ServerMessageLevel;
+  /** The server's code for it, such as `1815` or `01000`; null when it gives none. */
+  readonly code: string | null;
+  readonly text: string;
+}
+
+/** The most messages a plugin reports for one statement; past it, one more message says how many it left out. */
+export const SERVER_MESSAGE_LIMIT = 100;
+
+/** The message that stands for the ones past `SERVER_MESSAGE_LIMIT`. */
+export function omittedMessages(count: number): ServerMessage {
+  return {
+    level: "info",
+    code: null,
+    text: `${String(count)} more server ${count === 1 ? "message is" : "messages are"} not shown.`,
+  };
 }
 
 /** A value bound to a placeholder: text the server casts, or SQL NULL (decision 043). */

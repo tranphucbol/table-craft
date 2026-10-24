@@ -22,6 +22,7 @@ import {
   type Introspector,
   type ParameterValue,
   type Row,
+  type ServerMessage,
   type Session,
   type SqlLanguage,
   type TransactionMode,
@@ -55,6 +56,7 @@ import {
 import { copyLine, POSTGRES_IMPORT_TYPES, postgresDecimal } from "./bulk.js";
 import { EXPLAIN_VERBS, explainStatement, readPlan } from "./explain.js";
 import { postgresIntrospector } from "./introspect.js";
+import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
 
 const PLUGIN_ID = "postgres";
@@ -70,6 +72,7 @@ const CAPABILITIES: readonly Capability[] = [
   "keepAlive",
   "bulkInsert",
   "objects",
+  "serverMessages",
 ];
 
 /** Function bodies live in dollar quotes; `BEGIN ATOMIC … END` holds a SQL-standard body. */
@@ -339,6 +342,8 @@ class PostgresSession implements Session {
   /** Set by the client's `error` event; a broken connection is reported, not thrown at random. */
   #broken: Error | null = null;
   #running: Running | null = null;
+  /** Set while a user's statement runs: notices from the engine's own statements are not the user's news. */
+  #notices: NoticeCollector | null = null;
   #cancelling: Promise<void> = Promise.resolve();
   readonly #transaction: TransactionState = { mode: "auto", open: false };
 
@@ -374,6 +379,9 @@ class PostgresSession implements Session {
     });
     client.on("end", () => {
       this.#broken ??= new Error(CLOSED_MESSAGE);
+    });
+    client.on("notice", (notice: Notice) => {
+      this.#notices?.add(notice);
     });
   }
 
@@ -418,6 +426,8 @@ class PostgresSession implements Session {
       this.#running = null;
       throw this.#failure(cause, running);
     }
+    const notices = new NoticeCollector();
+    this.#notices = notices;
     const cursor = this.#client.query(
       new Cursor<unknown[]>(sql, params.length === 0 ? undefined : [...params], {
         rowMode: "array",
@@ -433,8 +443,9 @@ class PostgresSession implements Session {
       if (effect !== null) state.open = effect === "begin";
       const fields = first.result.fields;
       if (fields.length === 0) {
+        this.#notices = null;
         this.#running = null;
-        return { columns: [], rows: NO_ROWS, rowsAffected: first.result.rowCount };
+        return { columns: [], rows: NO_ROWS, rowsAffected: first.result.rowCount, messages: notices.messages() };
       }
       const columns: Column[] = fields.map((field) => ({
         name: field.name,
@@ -443,8 +454,10 @@ class PostgresSession implements Session {
       }));
       const cellMap = options.fullBytes === true ? FULL_BYTES_CELLS : CELLS;
       const cells = fields.map((field) => cellMap.get(field.dataTypeID) ?? asText);
-      return { columns, rows: this.#rows(cursor, running, first.rows, cells), rowsAffected: null };
+      const messages: ServerMessage[] = [];
+      return { columns, rows: this.#rows(cursor, running, first.rows, cells, messages), rowsAffected: null, messages };
     } catch (cause) {
+      this.#notices = null;
       this.#running = null;
       throw this.#failure(cause, running);
     }
@@ -531,8 +544,9 @@ class PostgresSession implements Session {
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     const statement = explainStatement(sql, options.analyze);
     const rows: Row[] = [];
-    for await (const row of (await this.execute(statement)).rows) rows.push(row);
-    return readPlan(planText(rows), statement, options.analyze);
+    const result = await this.execute(statement);
+    for await (const row of result.rows) rows.push(row);
+    return { ...readPlan(planText(rows), statement, options.analyze), messages: result.messages ?? [] };
   }
 
   async *#rows(
@@ -540,9 +554,11 @@ class PostgresSession implements Session {
     running: Running,
     first: unknown[][],
     cells: readonly Cell[],
+    messages: ServerMessage[],
   ): AsyncGenerator<Row, void, undefined> {
     let batch = first;
     let exhausted = false;
+    let completed = false;
     try {
       while (batch.length > 0) {
         for (const values of batch) {
@@ -556,8 +572,11 @@ class PostgresSession implements Session {
         }
       }
       exhausted = true;
+      completed = true;
     } finally {
       if (!exhausted) await cursor.close();
+      if (completed) messages.push(...(this.#notices?.messages() ?? []));
+      this.#notices = null;
       this.#running = null;
     }
   }

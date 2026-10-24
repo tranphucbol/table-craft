@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
+import type { Session } from "@table-craft/plugin-api";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type {
   DatasourceConfig,
@@ -60,6 +61,23 @@ function spySql(): string[] {
     return connection;
   });
   return sent;
+}
+
+/** The user's table from plan 033, a few rows so the plans stay fast on the emulated image. */
+const SAGA_TABLE = "order_events_202601";
+const SAGA_INDEX = "order_events_app_id";
+
+async function withSagaContext(session: Session): Promise<void> {
+  const run = async (sql: string) => {
+    for await (const _row of (await session.execute(sql)).rows) {
+      // Drained so the session is free for the next statement.
+    }
+  };
+  await run(`DROP TABLE IF EXISTS ${SAGA_TABLE}`);
+  await run(
+    `CREATE TABLE ${SAGA_TABLE} (id BIGINT PRIMARY KEY, app_id INT NOT NULL, state VARCHAR(16), KEY ${SAGA_INDEX} (app_id))`,
+  );
+  await run(`INSERT INTO ${SAGA_TABLE} VALUES (1, 10, 'new'), (2, 20, 'done'), (3, 10, 'done')`);
 }
 
 describe("tidb 4", () => {
@@ -132,6 +150,25 @@ describe("tidb 4", () => {
     const next = await connection.handle({ id: 7, type: "statement.execute", ...PAGING, sessionId, sql: "SELECT 1" });
 
     expect(resultOf<ExecutedStatement>(next).firstWindow.rows).toHaveLength(1);
+  });
+
+  it("givenUnknownHintTable_whenExecuted_then1815", async () => {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+    await withSagaContext(session);
+
+    const result = await session.execute(`SELECT /*+ USE_INDEX(${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`);
+    for await (const _row of result.rows) {
+      // Messages are complete once the rows are.
+    }
+
+    expect(result.messages).toEqual([
+      {
+        level: "warning",
+        code: "1815",
+        text: `use_index(test.${SAGA_INDEX}) is inapplicable, check whether the table(test.${SAGA_INDEX}) exists`,
+      },
+    ]);
   });
 
   it("givenLongNamedDatabase_whenSwitchedThroughEngine_thenNamespaceIsIt", async () => {

@@ -20,6 +20,7 @@ import {
   type ParameterValue,
   type Row,
   type PluginErrorCode,
+  type ServerMessage,
   type Session,
   type SqlLanguage,
   type TransactionMode,
@@ -55,6 +56,7 @@ import { ANALYZE_VERBS, EXPLAIN_VERBS, explainStatement, planFormat, readJson, r
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { killStatementFor } from "./server.js";
+import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
 const CAPABILITIES: readonly Capability[] = [
@@ -69,6 +71,7 @@ const CAPABILITIES: readonly Capability[] = [
   "keepAlive",
   "bulkInsert",
   "objects",
+  "serverMessages",
 ];
 
 /** What the mysql client accepts: `'\''`, `# comments`, `DELIMITER //` and `BEGIN … END` routine bodies. */
@@ -384,6 +387,9 @@ async function closeWithin(connection: mysql.Connection): Promise<void> {
   if (!ended) connection.destroy();
 }
 
+/** Note 1003: EXPLAIN echoes the statement as the optimizer rewrote it, every time; it is not news. */
+const REWRITTEN_QUERY_NOTE = "1003";
+
 const NO_ROWS: AsyncIterable<Row> = {
   [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve({ done: true, value: undefined }) }),
 };
@@ -407,6 +413,25 @@ interface InFlight {
   /** Settles when the driver is done with the statement, whatever its outcome. */
   readonly ended: Promise<void>;
   readonly fields: Promise<mysql.FieldPacket[] | undefined>;
+  /** The warning count of the last EOF packet: mysql2 reads it off the wire but never reports it for rows. */
+  readonly warnings: { count: number };
+}
+
+interface ProtocolPacket {
+  isError(): boolean;
+  isEOF(): boolean;
+  eofWarningCount(): number;
+}
+
+/** mysql2 hands each packet to the command's `execute`; watching there is the one place the row EOF is seen. */
+function watchWarnings(command: object, warnings: { count: number }): void {
+  const target = command as { execute: (packet: ProtocolPacket | null | undefined, connection: unknown) => boolean };
+  const execute = target.execute.bind(target);
+  target.execute = (packet, connection) => {
+    // A prepared statement's first step runs with no packet.
+    if (packet != null && !packet.isError() && packet.isEOF()) warnings.count = warningCount(packet.eofWarningCount());
+    return execute(packet, connection);
+  };
 }
 
 /**
@@ -424,6 +449,8 @@ function start(
   const typeCast = executeOptions.fullBytes === true ? fullBytesCast : cast;
   const options = { sql, rowsAsArray: true, typeCast };
   const query = prepared ? connection.execute({ ...options, values: [...params] }) : connection.query(options);
+  const warnings = { count: 0 };
+  watchWarnings(query, warnings);
   // The stream reports the error; this listener stops the query's own emit from throwing.
   query.on("error", () => undefined);
   const stream = query.stream({ highWaterMark: FETCH_ROWS });
@@ -447,7 +474,7 @@ function start(
   });
   // `fields` may never be awaited when the first row read reports the same error.
   fields.catch(() => undefined);
-  return { rows: stream[Symbol.asyncIterator](), stream, ended, fields };
+  return { rows: stream[Symbol.asyncIterator](), stream, ended, fields, warnings };
 }
 
 /** mysql2 marks an error that ended the connection, as opposed to one the server answered with. */
@@ -525,15 +552,17 @@ class MysqlSession implements Session {
       if (fields === undefined) {
         const header = first.value as mysql.ResultSetHeader;
         await this.#finish(inFlight, false);
+        const messages = await this.#warnings(warningCount(header.warningStatus));
         this.#running = null;
-        return { columns: [], rows: NO_ROWS, rowsAffected: header.affectedRows };
+        return { columns: [], rows: NO_ROWS, rowsAffected: header.affectedRows, messages };
       }
       const columns: Column[] = fields.map((field) => ({
         name: field.name,
         type: typeName(field),
         origin: originOf(field),
       }));
-      return { columns, rows: this.#rows(inFlight, running, first), rowsAffected: null };
+      const messages: ServerMessage[] = [];
+      return { columns, rows: this.#rows(inFlight, running, first, messages), rowsAffected: null, messages };
     } catch (cause) {
       this.#running = null;
       throw this.#failure(cause, running);
@@ -626,18 +655,23 @@ class MysqlSession implements Session {
     const format = planFormat(explainedVerb(sql, DIALECT));
     const statement = explainStatement(sql, options.analyze, format);
     const rows: Row[] = [];
-    for await (const row of (await this.execute(statement)).rows) rows.push(row);
+    const result = await this.execute(statement);
+    for await (const row of result.rows) rows.push(row);
     const raw = planText(rows);
-    return format === "json" ? readJson(raw, statement) : readTree(raw, statement, options.analyze);
+    const plan = format === "json" ? readJson(raw, statement) : readTree(raw, statement, options.analyze);
+    const messages = (result.messages ?? []).filter((message) => message.code !== REWRITTEN_QUERY_NOTE);
+    return { ...plan, messages };
   }
 
   async *#rows(
     inFlight: InFlight,
     running: Running,
     first: IteratorResult<unknown>,
+    messages: ServerMessage[],
   ): AsyncGenerator<Row, void, undefined> {
     let next = first;
     let exhausted = false;
+    let completed = false;
     try {
       while (next.done !== true) {
         yield next.value as Row;
@@ -650,9 +684,25 @@ class MysqlSession implements Session {
       }
       exhausted = true;
       if (running.cancelRequested) throw this.#cancelled(running);
+      completed = true;
     } finally {
       await this.#finish(inFlight, !exhausted);
+      if (completed) messages.push(...(await this.#warnings(inFlight.warnings.count)));
       this.#running = null;
+    }
+  }
+
+  /**
+   * Asked only when the statement reported warnings, while the session is still busy, so nothing
+   * else can run in between and clear them. Failing to read them never fails the statement.
+   */
+  async #warnings(count: number): Promise<ServerMessage[]> {
+    if (count === 0 || this.#broken !== null) return [];
+    try {
+      const rows = (await query(this.#connection, SHOW_WARNINGS_SQL, "statementFailed")) as readonly unknown[];
+      return warningMessages(rows, count);
+    } catch {
+      return [];
     }
   }
 

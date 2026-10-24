@@ -520,13 +520,15 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   one; requires `transactions`.
 - `objects`: writes the DDL that creates, modifies, renames, truncates and drops tables and other
   objects from the database tree; requires `sql` and `schemaTree`.
+- `serverMessages`: returns the warnings and notices the server left about a statement, which
+  Output lists under it and the result tab counts.
 
 ```json
 {
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "0.20.0",
+  "apiVersion": "0.21.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -539,7 +541,8 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
     "currentNamespace",
     "keepAlive",
     "bulkInsert",
-    "objects"
+    "objects",
+    "serverMessages"
   ],
   "highlight": "postgresql",
   "connection": {

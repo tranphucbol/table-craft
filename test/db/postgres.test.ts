@@ -12,6 +12,7 @@ runPluginContract(postgres, {
   statements: {
     write: TYPE_PROBE_WRITE,
     sleep: (seconds) => `SELECT pg_sleep(${String(seconds)})`,
+    message: { sql: "DO $$ BEGIN RAISE NOTICE 'probe'; END $$", level: "notice", code: "00000" },
   },
   typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_AS },
   scripts: [
@@ -50,6 +51,28 @@ describe("postgres current namespace", () => {
       expect(await session.currentNamespace?.()).toEqual(["table_craft", "archive"]);
       await session.transactions?.rollback();
       expect(await session.currentNamespace?.()).toEqual(["table_craft", "public"]);
+    } finally {
+      await session.close();
+    }
+  });
+});
+
+describe("postgres server messages", () => {
+  const NOISY =
+    "CREATE FUNCTION pg_temp.noisy(n int) RETURNS int AS $$ BEGIN RAISE WARNING 'row %', n; RETURN n; END $$ LANGUAGE plpgsql";
+
+  it("givenRowsRaisingWarnings_whenDrained_thenEachWarningInOrder", async () => {
+    const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
+    try {
+      await session.execute(NOISY);
+      const result = await session.execute("SELECT pg_temp.noisy(n) AS n FROM generate_series(1, 2) AS n");
+      for await (const _row of result.rows) {
+        // Messages are complete once the rows are.
+      }
+      expect(result.messages).toEqual([
+        { level: "warning", code: "01000", text: "row 1" },
+        { level: "warning", code: "01000", text: "row 2" },
+      ]);
     } finally {
       await session.close();
     }

@@ -1,3 +1,5 @@
+import type { ServerMessage } from "./plugin.js";
+
 /** A name and its value as the database printed it, such as `Filter` and `(total > 10)`. */
 export interface PlanProperty {
   readonly name: string;
@@ -39,6 +41,8 @@ export interface ExplainedPlan {
   readonly summary: readonly PlanProperty[];
   /** The plan as the database printed it. */
   readonly raw: string;
+  /** What the server said while explaining, as `ExecuteResult.messages`; present exactly when the plugin declares `serverMessages`. */
+  readonly messages?: readonly ServerMessage[];
 }
 
 export interface ExplainOptions {

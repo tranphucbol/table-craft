@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./explain": "./src/explain.ts",
     "./bulk": "./src/bulk.ts",
-    "./server": "./src/server.ts"
+    "./server": "./src/server.ts",
+    "./warnings": "./src/warnings.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*",

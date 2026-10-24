@@ -24,10 +24,14 @@ export default defineConfig({
         find: /^@table-craft\/plugin-(postgres|mysql)\/bulk$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/$1/src/bulk.ts"),
       },
-      // Which kill statement a MySQL-protocol server takes (decision 058).
+      // Which kill statement a MySQL-protocol server takes (decision 058), and how its warnings read (decision 066).
       {
-        find: /^@table-craft\/plugin-mysql\/server$/,
-        replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/server.ts"),
+        find: /^@table-craft\/plugin-mysql\/(server|warnings)$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/$1.ts"),
+      },
+      {
+        find: /^@table-craft\/plugin-postgres\/notices$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/notices.ts"),
       },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },

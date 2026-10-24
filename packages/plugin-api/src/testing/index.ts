@@ -31,6 +31,7 @@ import {
   type ObjectEditor,
   type Relation,
   type Row,
+  type ServerMessage,
   type Session,
   type SqlLanguage,
   type TableDesign,
@@ -53,6 +54,15 @@ export interface ContractFixture {
      * update setting a column to itself; the read-only case is skipped without one.
      */
     readonly write?: string;
+    /**
+     * A statement the server answers with a warning or notice, and the level and code of the
+     * first one; required when the plugin declares `serverMessages`.
+     */
+    readonly message?: {
+      readonly sql: string;
+      readonly level: ServerMessage["level"];
+      readonly code: string | null;
+    };
   };
   readonly typeProbe: {
     /** The rows of `SELECT * FROM type_probe ORDER BY id`, as wire values. */
@@ -1831,6 +1841,41 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             await transactions.setMode("auto");
           }
           expect(await total()).toEqual(before);
+        });
+      });
+    });
+
+    describe.runIf(plugin.capabilities.includes("serverMessages"))("serverMessages", () => {
+      function messageCase(): NonNullable<NonNullable<ContractFixture["statements"]>["message"]> {
+        const message = fixture.statements?.message;
+        if (message === undefined) throw new Error("A serverMessages fixture needs statements.message.");
+        return message;
+      }
+
+      it("givenStatementWithWarnings_whenExecuted_thenMessagesReturned", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { sql, level, code } = messageCase();
+          const result = await session.execute(sql);
+          await collect(result.rows);
+          expect(result.messages?.[0]).toMatchObject({ level, code });
+          expect(result.messages?.[0]?.text).not.toBe("");
+        });
+      });
+
+      it("givenQuietStatement_whenExecuted_thenNoMessages", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const result = await session.execute("SELECT 1 AS n");
+          await collect(result.rows);
+          expect(result.messages).toEqual([]);
+        });
+      });
+
+      it("givenStatementWithWarnings_whenNextStatementRuns_thenItsMessagesAreItsOwn", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          await collect((await session.execute(messageCase().sql)).rows);
+          const quiet = await session.execute("SELECT 1 AS n");
+          await collect(quiet.rows);
+          expect(quiet.messages).toEqual([]);
         });
       });
     });
