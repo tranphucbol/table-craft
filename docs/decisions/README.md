@@ -72,3 +72,5 @@ started, not when it is merged.
 | 061 | [An aligned layout of our own is the default format](061-an-aligned-layout-of-our-own-is-the-default-format.md)                                                        |
 | 062 | [The aligned layout never half-formats](062-the-aligned-layout-never-half-formats.md)                                                                                  |
 | 063 | [Live tests run in a headless Linux box](063-live-tests-run-in-a-headless-linux-box.md)                                                                                |
+| 064 | [Ported themes are generated, audited data](064-ported-themes-are-generated-audited-data.md)                                                                           |
+| 065 | [The theme is chosen from a previewing dropdown](065-the-theme-is-chosen-from-a-previewing-dropdown.md)                                                                |

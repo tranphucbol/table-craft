@@ -5,7 +5,8 @@ by `renderer/appearance/apply.ts` from the active theme, font settings and densi
 Components reference tokens, never literals.
 
 The token types, the three built-in themes, both densities and the contrast pairs are pure data in
-`packages/desktop/src/appearance/themes.ts`, imported by main (the window's first paint) and by the
+`packages/desktop/src/appearance/themes.ts` (the pairs in `contrast.ts`, the 43 ported themes
+generated into `themes/`), imported by main (the window's first paint) and by the
 renderer (`renderer/appearance/tokens.ts` re-exports it). The sections after this one name the
 tokens each feature draws from; this one lists them all.
 
@@ -13,13 +14,22 @@ tokens each feature draws from; this one lists them all.
 
 Plan 013. Settings → Appearance chooses one of:
 
-| Choice        | `settings.json` `theme` | Colours                                                                                                              | `color-scheme` |
-| ------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------- |
-| Follow system | `"system"` (default)    | High contrast when `prefers-contrast: more`, else Dark or Light from `prefers-color-scheme`, followed live           | as resolved    |
-| Dark          | `"dark"`                | Darcula-like                                                                                                         | dark           |
-| Light         | `"light"`               | IntelliJ Light-like                                                                                                  | light          |
-| High contrast | `"highContrast"`        | Black, white ink, saturated accents                                                                                  | dark           |
-| A user theme  | `"user:<file stem>"`    | `<userData>/themes/<stem>.json`: `{ name, base, colors }`, colour tokens over a built-in base; fonts and density not | its base's     |
+| Choice         | `settings.json` `theme`       | Colours                                                                                                               | `color-scheme` |
+| -------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Follow system  | `"system"` (default)          | High contrast when `prefers-contrast: more`, else Dark or Light from `prefers-color-scheme`, followed live            | as resolved    |
+| Dark           | `"dark"`                      | Darcula-like                                                                                                          | dark           |
+| Light          | `"light"`                     | IntelliJ Light-like                                                                                                   | light          |
+| High contrast  | `"highContrast"`              | Black, white ink, saturated accents                                                                                   | dark           |
+| A ported theme | its id, e.g. `"gruvbox-dark"` | Generated from a vendored palette (plan 032, decision 064); README lists them                                         | the palette's  |
+| A user theme   | `"user:<file stem>"`          | `<userData>/themes/<stem>.json`: `{ name, base, colors }`, colour tokens over any bundled base; fonts and density not | its base's     |
+
+Plan 032 ported 43 themes from preman (decision 064): `scripts/generate-themes.ts` reads each
+palette in `packages/desktop/scripts/palettes/`, maps it onto the tokens below, solves the colours a
+palette does not have (`gridNull`, the edit and match tints behind `ink`, the six datasource tints),
+raises any colour short of its contrast pair, and refuses to write a theme that fails the audit
+below or whose datasource tints sit closer than 0.08 OKLab apart or under 3:1 on `panel`. The
+output is committed, one module per theme with its `source` and `licence`; a test reruns the
+generator and expects the same bytes. `palettes/overrides.json` pins a token by hand and is empty.
 
 A user theme's colours are `#rgb`, `#rrggbb` or `#rrggbbaa`; `colors` may hold any token below,
 with `syntax` and `datasource` partial objects. Main validates each file (at most 64 files of at
@@ -74,10 +84,11 @@ white text on itself at once.
 
 ## Contrast
 
-`test/appearance/themes.test.ts` measures every pair below in every built-in theme with the WCAG
-2.1 ratio (`contrastRatio`), against `requiredContrast`: in Dark and Light 4.5:1 for text and
-3:1 for a glyph or bar (WCAG 1.4.3, 1.4.11); in High contrast 7:1 for `ink` (1.4.6) and 4.5:1 for
-everything else.
+`test/appearance/themes.test.ts` measures every pair below in every bundled theme with the WCAG
+2.1 ratio (`contrastRatio`), against `requiredContrast` for the theme's `contrast` level: at `aa`
+(Dark, Light and every ported theme) 4.5:1 for text and 3:1 for a glyph or bar (WCAG 1.4.3,
+1.4.11); at `aaa` (High contrast) 7:1 for `ink` (1.4.6) and 4.5:1 for everything else. The
+figures below are the three built-in themes.
 
 | Foreground          | Background            | Kind     | Dark  | Light | High contrast |
 | ------------------- | --------------------- | -------- | ----- | ----- | ------------- |
@@ -158,11 +169,15 @@ on the left, the chosen page `bg-selection`, the rest `hover:bg-raised`, and the
 as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink-muted` over a
 `border-line` rule. Pages:
 
-- **Appearance**: Theme, a radio list, each row a `border-line` swatch of four 10 px squares
-  (canvas, panel, ink, accent) and the name, the chosen one `bg-selection`, the rest
-  `hover:bg-raised`; a broken user theme is named by its file in `text-ink-muted` with
-  `cursor-not-allowed`, its errors listed under it in `text-danger`. Reload Themes and Open Themes
-  Folder sit under the list. Density as two native radios; UI font.
+- **Appearance**: Theme, a dropdown (plan 032, decision 065, `dialogs/ThemePicker.tsx`): the
+  trigger, `max-w-popover` wide, shows a `border-line` swatch of four 10 px squares (canvas, panel,
+  ink, accent), the name and a Dark or Light badge. It opens a `ui/Popover` as wide as the trigger:
+  a filter field over a listbox grouped Follow system, TableCraft, Dark, Light and Your themes under
+  semibold `text-ink-muted` headers, each row the swatch, the name and its source in
+  `text-ink-muted`, the chosen one checked, the highlighted one `bg-selection` and previewed live.
+  A broken user theme is named by its file with its error count in `text-danger` and
+  `aria-disabled`; highlighting it lists its errors under the list behind a `border-line` rule.
+  Reload Themes and Open Themes Folder sit under the trigger. Density as two native radios; UI font.
 - **Editor**: Editor font and a muted line naming the zoom chords.
 - **Data Editor**: Grid font, NULL text, Group digits, page size and Fetch All limit, with a muted
   note that formats are display only and paging applies to the next statement.

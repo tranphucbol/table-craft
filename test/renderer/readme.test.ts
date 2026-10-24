@@ -4,7 +4,13 @@ import { describe, expect, it } from "vitest";
 import { API_VERSION, CAPABILITIES } from "@table-craft/plugin-api";
 import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js";
 import { formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
-import { BUILT_IN_THEME_IDS, DENSITIES } from "@table-craft/desktop/appearance/themes.js";
+import {
+  BUILT_IN_THEME_IDS,
+  BUNDLED_THEME_IDS,
+  BUNDLED_THEMES,
+  DENSITIES,
+  PORTED_THEME_IDS,
+} from "@table-craft/desktop/appearance/themes.js";
 import {
   DEFAULT_SETTINGS,
   EXPORT_STALL_SECONDS_RANGE,
@@ -162,6 +168,23 @@ describe("README", () => {
     expect(choices("appearance.density")).toEqual(Object.keys(DENSITIES));
     expect(choices("editor.format.keywordCase")).toEqual(KEYWORD_CASES);
     expect(choices("editor.format.style")).toEqual(FORMAT_STYLES);
+  });
+
+  it("givenThemesTable_whenComparedWithBundledThemes_thenEveryThemeIsListedWithItsSource", () => {
+    const themes = section("Themes");
+    const rows = tableRows(themes);
+
+    expect(rows.map(([, id = ""]) => codeSpans(id)[0])).toEqual([...BUNDLED_THEME_IDS]);
+    for (const [name, id = "", scheme, source, licence] of rows) {
+      const theme = BUNDLED_THEMES[codeSpans(id)[0] as (typeof BUNDLED_THEME_IDS)[number]];
+      expect([name, scheme, source, licence], `Themes row ${id}`).toEqual([
+        theme.name,
+        theme.colorScheme === "dark" ? "Dark" : "Light",
+        theme.source ?? "TableCraft",
+        theme.licence ?? "—",
+      ]);
+    }
+    expect(themes).toContain(`${String(PORTED_THEME_IDS.length)} more ported`);
   });
 
   it("givenPluginsSection_whenCapabilitiesListed_thenTheyEqualCapabilities", () => {

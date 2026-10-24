@@ -1,6 +1,6 @@
 # 012: Appearance is data
 
-Status: Accepted
+Status: Accepted. Amended by 064.
 
 ## Decision
 

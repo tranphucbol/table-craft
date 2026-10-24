@@ -1553,7 +1553,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 
 | Field                                  | Values                                                                                        | Default       |
 | -------------------------------------- | --------------------------------------------------------------------------------------------- | ------------- |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, `user:<file stem>`                                 | `system`      |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, a ported theme id, `user:<file stem>`              | `system`      |
 | `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
 | `appearance.systemTitleBar`            | boolean; read once when the window is created                                                 | `false`       |
 | `appearance.fonts.*`                   | `{ family: string \| null, sizePx: 8–32 }`; `null` is the built-in stack                      | 13, 13, 12    |
@@ -1582,13 +1582,20 @@ sets `nativeTheme.themeSource` and the window's background to the theme's canvas
 and says why in the dialog.
 
 Themes are colour token sets (`packages/desktop/src/appearance/themes.ts`, design-system.md): Dark,
-Light, High contrast, and Follow system, which picks High contrast when `prefers-contrast: more`
+Light, High contrast, 43 themes ported from preman's vendored openchamber palettes, generated and
+contrast-audited at build time (decision 064, ids such as `gruvbox-dark`), and Follow system, which picks High contrast when `prefers-contrast: more`
 matches, else Dark or Light from `prefers-color-scheme`, and follows both live. A user theme is
-`<userData>/themes/<stem>.json`, `{ name, base, colors }` with `base` a built-in theme and
+`<userData>/themes/<stem>.json`, `{ name, base, colors }` with `base` any bundled theme id and
 `colors` any colour tokens, `syntax` and `datasource` as partial objects. Main reads at most 64
 files of at most 64 KiB, validates them, and lists each resolved over its base or with its errors;
-a broken one cannot be chosen, and a chosen one that is gone or broken falls back to Dark with a
-notice. Reload Themes rereads the folder; nothing watches it.
+a broken one (including one whose base is not a bundled theme, named in its error) cannot be
+chosen, and a chosen one that is gone or broken falls back to Dark with a notice. Reload Themes
+rereads the folder; nothing watches it.
+
+The theme is chosen from a dropdown (decision 065): a filter by name or source over the groups
+Follow system, TableCraft, Dark, Light and Your themes. The highlighted theme previews at once in
+the renderer only (`previewTheme` in `state/settings.ts`, never written); Enter or a click saves
+it, Escape, a click outside or closing the dialog puts the saved one back.
 
 The UI, editor and grid fonts each have a family and a size; the family list comes from
 `queryLocalFonts()`, monospace families first for the editor and grid, with a free-text field when

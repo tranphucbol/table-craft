@@ -23,8 +23,9 @@ are reached through datasource plugins loaded at runtime.
   data source, with its outcome, row count and duration.
 - [Large results stay responsive](#result-grid): rows stay in the engine process and the grid reads
   windows of them, so a million-row result does not freeze the window.
-- [Themes, fonts and density](#settings-and-appearance): Dark, Light, High contrast or your own
-  theme file, three font roles, and a compact layout.
+- [Themes, fonts and density](#settings-and-appearance): Dark, Light, High contrast, 43
+  [ported themes](#themes) such as Gruvbox, Nord and Solarized, or your own theme file, three font
+  roles, and a compact layout.
 - [Plugins for any database](#plugins): PostgreSQL, MySQL and SQLite are plugins, loaded the same
   way yours would be.
 
@@ -325,8 +326,10 @@ See [Shell and actions](docs/design/specification.md#shell-and-actions).
 
 ### Settings and appearance
 
-**Settings…** (`⌘,`) has pages for Appearance, Editor, Data Editor and Advanced. Themes and density change
-live; Follow system picks Dark, Light or High contrast from the operating system. `⌘=`, `⌘-` and
+**Settings…** (`⌘,`) has pages for Appearance, Editor, Data Editor and Advanced. The theme is a
+dropdown: type to filter by name or source, and the theme under the arrow keys or the mouse
+previews live; Enter or a click keeps it, Escape puts the previous one back. Themes and density
+change live; Follow system picks Dark, Light or High contrast from the operating system. `⌘=`, `⌘-` and
 `⌘0` zoom the editor font.
 
 ![Settings and appearance](docs/media/settings.gif)
@@ -393,32 +396,32 @@ Settings live in `settings.json` in your [profile folder](#where-your-data-lives
 dialog writes it; you can also edit it by hand, and a field that is missing or out of range falls
 back to its default without affecting the others.
 
-| Field                                  | Values                                                             | Default       |
-| :------------------------------------- | :----------------------------------------------------------------- | :------------ |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, `user:<file stem>`      | `system`      |
-| `appearance.density`                   | `comfortable`, `compact`                                           | `comfortable` |
-| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                        | `false`       |
-| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32  | `null`, 13    |
-| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32  | `null`, 13    |
-| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32  | `null`, 12    |
-| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out              | `aligned`     |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords     | `upper`       |
-| `editor.format.indentWidth`            | 1–8 spaces                                                         | 2             |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                    | 1             |
-| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)     | `true`        |
-| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run | `true`        |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits | 0             |
-| `data.nullText`                        | 1–16 characters                                                    | `<null>`      |
-| `data.groupDigits`                     | `true`, `false`                                                    | `false`       |
-| `data.pageRows`                        | 10–10,000                                                          | 500           |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                               | 100,000       |
-| `log.level`                            | `info`, `debug`                                                    | `info`        |
-| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails  | 120           |
-| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily     | `true`        |
+| Field                                  | Values                                                                                      | Default       |
+| :------------------------------------- | :------------------------------------------------------------------------------------------ | :------------ |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>` | `system`      |
+| `appearance.density`                   | `comfortable`, `compact`                                                                    | `comfortable` |
+| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                 | `false`       |
+| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                           | `null`, 13    |
+| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                           | `null`, 13    |
+| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                           | `null`, 12    |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                       | `aligned`     |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                              | `upper`       |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                  | 2             |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                             | 1             |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                              | `true`        |
+| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                          | `true`        |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                          | 0             |
+| `data.nullText`                        | 1–16 characters                                                                             | `<null>`      |
+| `data.groupDigits`                     | `true`, `false`                                                                             | `false`       |
+| `data.pageRows`                        | 10–10,000                                                                                   | 500           |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                        | 100,000       |
+| `log.level`                            | `info`, `debug`                                                                             | `info`        |
+| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                           | 120           |
+| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                              | `true`        |
 
-A theme of your own is a JSON file in `themes/` in the profile folder. It names a built-in theme as
-its base and overrides any of its colour tokens; it then appears as `user:<file stem>`, here
-`user:solarized`:
+A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
+by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then
+appears as `user:<file stem>`, here `user:solarized`:
 
 ```json
 {
@@ -431,7 +434,66 @@ its base and overrides any of its colour tokens; it then appears as `user:<file 
 }
 ```
 
-**Reload Themes** in the Settings dialog picks up new or changed files.
+A file that does not parse, or whose base is not a bundled theme, is listed under Your themes,
+disabled, with its errors. **Reload Themes** in the Settings dialog picks up new or changed files.
+
+## Themes
+
+TableCraft ships its own Dark, Light and High contrast themes and 43 more ported from the
+[openchamber](https://github.com/openchamber/openchamber) palettes by way of preman. Each one is
+generated from its palette and checked: text, syntax and grid colours meet WCAG AA contrast on every
+surface they sit on (High contrast meets AAA for text), and the six data source colours stay apart
+from each other. The palettes and their licences are listed in
+[`packages/desktop/scripts/palettes/NOTICE`](packages/desktop/scripts/palettes/NOTICE).
+
+| Theme                     | Id                          | Scheme | Source                             | Licence    |
+| :------------------------ | :-------------------------- | :----- | :--------------------------------- | :--------- |
+| Dark                      | `dark`                      | Dark   | TableCraft                         | —          |
+| Light                     | `light`                     | Light  | TableCraft                         | —          |
+| High contrast             | `highContrast`              | Dark   | TableCraft                         | —          |
+| Aura Dark                 | `aura-dark`                 | Dark   | Aura Theme, daltonmenezes          | MIT        |
+| Aura Light                | `aura-light`                | Light  | Aura Theme, daltonmenezes          | MIT        |
+| Ayu Dark                  | `ayu-dark`                  | Dark   | Ayu, dempfi                        | MIT        |
+| Ayu Light                 | `ayu-light`                 | Light  | Ayu, dempfi                        | MIT        |
+| Carbonfox Dark            | `carbonfox-dark`            | Dark   | Nightfox, EdenEast                 | MIT        |
+| Carbonfox Light           | `carbonfox-light`           | Light  | Nightfox, EdenEast                 | MIT        |
+| Catppuccin Dark           | `catppuccin-dark`           | Dark   | Catppuccin                         | MIT        |
+| Catppuccin Light          | `catppuccin-light`          | Light  | Catppuccin                         | MIT        |
+| Dracula Dark              | `dracula-dark`              | Dark   | Dracula, Zeno Rocha                | MIT        |
+| Dracula Light             | `dracula-light`             | Light  | Dracula, Zeno Rocha                | MIT        |
+| Fields of the Shire Dark  | `fields-of-the-shire-dark`  | Dark   | Fields of the Shire, openchamber   | MIT        |
+| Fields of the Shire Light | `fields-of-the-shire-light` | Light  | Fields of the Shire, openchamber   | MIT        |
+| Flexoki Dark              | `flexoki-dark`              | Dark   | Flexoki, Steph Ango                | MIT        |
+| Flexoki Light             | `flexoki-light`             | Light  | Flexoki, Steph Ango                | MIT        |
+| Gruvbox Dark              | `gruvbox-dark`              | Dark   | gruvbox, morhetz                   | MIT        |
+| Gruvbox Light             | `gruvbox-light`             | Light  | gruvbox, morhetz                   | MIT        |
+| JetBrains Dark            | `jetbrains-dark`            | Dark   | JetBrains Darcula / IntelliJ Light | Apache-2.0 |
+| JetBrains Light           | `jetbrains-light`           | Light  | JetBrains Darcula / IntelliJ Light | Apache-2.0 |
+| Kanagawa Dark             | `kanagawa-dark`             | Dark   | Kanagawa, rebelot                  | MIT        |
+| Kanagawa Light            | `kanagawa-light`            | Light  | Kanagawa, rebelot                  | MIT        |
+| Mono Dark                 | `mono-dark`                 | Dark   | Mono, openchamber                  | MIT        |
+| Mono Light                | `mono-light`                | Light  | Mono, openchamber                  | MIT        |
+| Mono Plus Dark            | `mono-plus-dark`            | Dark   | Mono+, openchamber                 | MIT        |
+| Mono Plus Light           | `mono-plus-light`           | Light  | Mono+, openchamber                 | MIT        |
+| Monokai Dark              | `monokai-dark`              | Dark   | Monokai, Wimer Hazenberg           | MIT        |
+| Monokai Light             | `monokai-light`             | Light  | Monokai, Wimer Hazenberg           | MIT        |
+| Night Owl Dark            | `nightowl-dark`             | Dark   | Night Owl, Sarah Drasner           | MIT        |
+| Night Owl Light           | `nightowl-light`            | Light  | Night Owl, Sarah Drasner           | MIT        |
+| Nord Dark                 | `nord-dark`                 | Dark   | Nord, Arctic Ice Studio            | MIT        |
+| Nord Light                | `nord-light`                | Light  | Nord, Arctic Ice Studio            | MIT        |
+| One Dark Pro Dark         | `onedarkpro-dark`           | Dark   | One Dark Pro, binaryify            | MIT        |
+| One Dark Pro Light        | `onedarkpro-light`          | Light  | One Dark Pro, binaryify            | MIT        |
+| OpenChamber Dark          | `openchamber-dark`          | Dark   | openchamber                        | MIT        |
+| OpenChamber Light         | `openchamber-light`         | Light  | openchamber                        | MIT        |
+| preman Dark               | `preman-dark`               | Dark   | preman                             | MIT        |
+| Solarized Dark            | `solarized-dark`            | Dark   | Solarized, Ethan Schoonover        | MIT        |
+| Solarized Light           | `solarized-light`           | Light  | Solarized, Ethan Schoonover        | MIT        |
+| Tokyonight Dark           | `tokyonight-dark`           | Dark   | Tokyo Night, enkia                 | MIT        |
+| Tokyonight Light          | `tokyonight-light`          | Light  | Tokyo Night, enkia                 | MIT        |
+| Vesper Dark               | `vesper-dark`               | Dark   | Vesper, Rauno Freiberg             | MIT        |
+| Vesper Light              | `vesper-light`              | Light  | Vesper, Rauno Freiberg             | MIT        |
+| Vitesse Dark              | `vitesse-dark-dark`         | Dark   | Vitesse, Anthony Fu                | MIT        |
+| Vitesse Light             | `vitesse-light-light`       | Light  | Vitesse, Anthony Fu                | MIT        |
 
 ## Plugins
 
