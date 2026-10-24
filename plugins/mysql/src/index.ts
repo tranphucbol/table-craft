@@ -1,3 +1,4 @@
+import { connect, type Socket } from "node:net";
 import type { Readable } from "node:stream";
 import mysql from "mysql2";
 import {
@@ -24,6 +25,7 @@ import {
   type Session,
   type SessionMonitor,
   type SqlLanguage,
+  type TlsInfo,
   type TransactionMode,
   type Transactions,
   type WireValue,
@@ -69,6 +71,7 @@ import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { isTidb, killStatementFor, tidbGlobalKill } from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
+import { SSL_MODES, tlsConnectMessage, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
@@ -192,16 +195,22 @@ const BINARY_CHARSET = 63;
 /** A `TINYINT(1)` is how MySQL spells `BOOLEAN`. */
 const BOOLEAN_DISPLAY_WIDTH = 1;
 
-const SSL_MODES = ["disable", "require", "verify-full"] as const;
-
 const connectionSchema = z.strictObject({
   host: z.string().min(1),
   port: z.number().int().min(1).max(MAX_PORT).default(DEFAULT_PORT),
   database: z.string().min(1).optional(),
   user: z.string().min(1),
   password: z.string().default(""),
-  /** `require` encrypts without checking the certificate; `verify-full` checks it and the host name. */
+  /**
+   * `require` encrypts without checking the certificate; `verify-ca` checks it is signed by the CA;
+   * `verify-full` checks that and the host name.
+   */
   sslMode: z.enum(SSL_MODES).default("disable"),
+  /** Paths, read at connect (decision 072); empty: none. */
+  sslRootCert: z.string().default(""),
+  sslCert: z.string().default(""),
+  sslKey: z.string().default(""),
+  sslKeyPassphrase: z.string().default(""),
   connectTimeout: z.number().int().min(1).max(MAX_CONNECT_TIMEOUT_SECONDS).default(DEFAULT_CONNECT_TIMEOUT_SECONDS),
 });
 
@@ -297,41 +306,61 @@ const CONNECTION_OPTIONS = {
   bigNumberStrings: true,
 } as const satisfies mysql.ConnectionOptions;
 
-function sslOption(mode: MysqlConfig["sslMode"]): mysql.ConnectionOptions["ssl"] {
-  switch (mode) {
-    case "disable":
-      return undefined;
-    case "require":
-      return { rejectUnauthorized: false };
-    case "verify-full":
-      return { rejectUnauthorized: true };
-  }
-}
-
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-function openConnection(config: MysqlConfig, keepAliveInitialDelayMs?: number): Promise<mysql.Connection> {
+interface OpenOptions {
+  readonly keepAliveInitialDelayMs?: number | undefined;
+  readonly serverName?: string | undefined;
+}
+
+/**
+ * mysql2 checks the certificate against the `host` it dials (`lib/base/connection.js`, `startTLS`),
+ * so to check another name it is given that name as `host` and a socket already aimed elsewhere.
+ * The socket gets what mysql2 gives its own (`lib/base/connection.js`, constructor).
+ */
+function redirectedStream(config: MysqlConfig, options: OpenOptions): { host: string; stream?: Socket } {
+  const { serverName } = options;
+  if (serverName === undefined || serverName === config.host) return { host: config.host };
+  const stream = connect(config.port, config.host);
+  stream.setNoDelay(true);
+  const delay = options.keepAliveInitialDelayMs;
+  if (delay !== undefined) stream.on("connect", () => stream.setKeepAlive(true, delay));
+  return { host: serverName, stream };
+}
+
+async function openConnection(config: MysqlConfig, options: OpenOptions): Promise<mysql.Connection> {
+  const { keepAliveInitialDelayMs } = options;
+  const ssl = await tlsOptions(config);
   const connection = mysql.createConnection({
     ...CONNECTION_OPTIONS,
     ...(keepAliveInitialDelayMs === undefined
       ? {}
       : { enableKeepAlive: true, keepAliveInitialDelay: keepAliveInitialDelayMs }),
     connectTimeout: config.connectTimeout * MS_PER_SECOND,
-    host: config.host,
+    ...(ssl === undefined ? { host: config.host } : redirectedStream(config, options)),
     port: config.port,
     user: config.user,
     password: config.password,
     ...(config.database === undefined ? {} : { database: config.database }),
-    ssl: sslOption(config.sslMode),
+    ssl,
   });
   return new Promise((resolve, reject) => {
     connection.connect((error) => {
-      if (error === null) resolve(connection);
-      else reject(new PluginError("connectionFailed", messageOf(error), { cause: error }));
+      if (error === null) {
+        resolve(connection);
+        return;
+      }
+      const message = tlsConnectMessage(config, options.serverName, error) ?? messageOf(error);
+      reject(new PluginError("connectionFailed", message, { cause: error }));
     });
   });
+}
+
+/** mysql2 keeps the socket, after any TLS upgrade, on the connection; its typings omit it. */
+interface WithStream {
+  readonly stream: unknown;
 }
 
 const READ_ONLY_SQL = "SET SESSION TRANSACTION READ ONLY";
@@ -530,6 +559,7 @@ function isFatal(cause: unknown): boolean {
 
 class MysqlSession implements Session {
   readonly #config: MysqlConfig;
+  readonly #serverName: string | undefined;
   readonly #connection: mysql.Connection;
   readonly #kill: string | null;
   /** Set by the connection's `error` event; a broken connection is reported, not thrown at random. */
@@ -539,19 +569,22 @@ class MysqlSession implements Session {
   readonly #transaction: TransactionState = { mode: "auto", open: false };
 
   readonly serverVersion: string | null;
+  readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
   readonly sessions: SessionMonitor;
   readonly serverSessionId: string;
   readonly serverInstance?: string;
 
-  constructor(config: MysqlConfig, connection: mysql.Connection, identity: Identity) {
+  constructor(config: MysqlConfig, serverName: string | undefined, connection: mysql.Connection, identity: Identity) {
     this.#config = config;
+    this.#serverName = serverName;
     this.#connection = connection;
     this.#kill = identity.kill;
     this.serverVersion = identity.serverVersion;
+    this.tls = tlsInfoOf((connection as unknown as WithStream).stream);
     this.introspector = mysqlIntrospector(connection);
-    this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config));
+    this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));
     this.serverSessionId = identity.serverSessionId;
     if (identity.serverInstance !== null) this.serverInstance = identity.serverInstance;
     const state = this.#transaction;
@@ -845,7 +878,7 @@ class MysqlSession implements Session {
 
   /** On a second connection, because the session's own is busy with the statement it kills. */
   async #killQuery(statement: string): Promise<void> {
-    const killer = await openConnection(this.#config);
+    const killer = await openConnection(this.#config, { serverName: this.#serverName });
     try {
       await new Promise<void>((resolve, reject) => {
         killer.query(statement, (error) => {
@@ -871,9 +904,9 @@ const plugin: DatasourcePlugin = {
   connectionSchema,
   connect: async (config, options) => {
     const parsed = connectionSchema.parse(config);
-    const connection = await openConnection(parsed, options.keepAliveInitialDelayMs);
+    const connection = await openConnection(parsed, options);
     try {
-      return new MysqlSession(parsed, connection, await prepareConnection(connection, options));
+      return new MysqlSession(parsed, options.serverName, connection, await prepareConnection(connection, options));
     } catch (cause) {
       await closeConnection(connection);
       throw cause;

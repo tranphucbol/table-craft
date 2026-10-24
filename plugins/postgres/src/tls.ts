@@ -1,0 +1,111 @@
+import { createPrivateKey, X509Certificate } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { isIP } from "node:net";
+import { homedir } from "node:os";
+import { checkServerIdentity, createSecureContext, TLSSocket, type ConnectionOptions } from "node:tls";
+import {
+  homeExpanded,
+  PluginError,
+  tlsFailureMessage,
+  tlsFileMessage,
+  tlsKeyMessage,
+  type TlsInfo,
+} from "@table-craft/plugin-api";
+
+export const SSL_MODES = ["disable", "require", "verify-ca", "verify-full"] as const;
+
+export type SslMode = (typeof SSL_MODES)[number];
+
+/** The manifest's labels, so a message names the field the user filled in. */
+const LABELS = {
+  sslRootCert: "SSL root certificate",
+  sslCert: "Client certificate",
+  sslKey: "Client key",
+} as const;
+
+export interface TlsConfig {
+  readonly host: string;
+  readonly sslMode: SslMode;
+  readonly sslRootCert: string;
+  readonly sslCert: string;
+  readonly sslKey: string;
+  readonly sslKeyPassphrase: string;
+}
+
+type FileKey = keyof typeof LABELS;
+
+async function readTlsFile(config: TlsConfig, key: FileKey): Promise<string | undefined> {
+  const path = config[key];
+  if (path === "") return undefined;
+  try {
+    return await readFile(homeExpanded(path, homedir()), "utf8");
+  } catch (cause) {
+    throw new PluginError("connectionFailed", tlsFileMessage(LABELS[key], path, cause), { cause });
+  }
+}
+
+/** Parses each file before the driver sees it, so a bad one is named instead of failing the handshake. */
+function checked(config: TlsConfig, key: FileKey, use: () => unknown): void {
+  try {
+    use();
+  } catch (cause) {
+    throw new PluginError("connectionFailed", tlsKeyMessage(LABELS[key], config[key], cause), { cause });
+  }
+}
+
+/** The TLS options for `tls.connect`, the files read now so a rotated certificate is picked up. */
+export async function tlsOptions(
+  config: TlsConfig,
+  serverName: string | undefined,
+): Promise<ConnectionOptions | false> {
+  if (config.sslMode === "disable") return false;
+  const [ca, cert, key] = await Promise.all([
+    readTlsFile(config, "sslRootCert"),
+    readTlsFile(config, "sslCert"),
+    readTlsFile(config, "sslKey"),
+  ]);
+  const passphrase = config.sslKeyPassphrase === "" ? undefined : config.sslKeyPassphrase;
+  if (cert !== undefined) checked(config, "sslCert", () => new X509Certificate(cert));
+  if (key !== undefined) checked(config, "sslKey", () => createPrivateKey({ key, passphrase }));
+  const files = {
+    ...(ca === undefined ? {} : { ca }),
+    ...(cert === undefined ? {} : { cert }),
+    ...(key === undefined ? {} : { key }),
+    ...(passphrase === undefined ? {} : { passphrase }),
+  };
+  checked(config, cert === undefined ? "sslKey" : "sslCert", () => createSecureContext(files));
+  switch (config.sslMode) {
+    case "require":
+      return { ...files, rejectUnauthorized: false };
+    case "verify-ca":
+      return { ...files, rejectUnauthorized: true, checkServerIdentity: () => undefined };
+    case "verify-full": {
+      const name = serverName ?? config.host;
+      return {
+        ...files,
+        rejectUnauthorized: true,
+        ...(isIP(name) === 0 ? { servername: name } : {}),
+        checkServerIdentity: (_dialled, certificate) => checkServerIdentity(name, certificate),
+      };
+    }
+  }
+}
+
+/** Says what a verifying handshake did not match, or null when `cause` is no such failure. */
+export function tlsConnectMessage(config: TlsConfig, serverName: string | undefined, cause: unknown): string | null {
+  if (config.sslMode !== "verify-ca" && config.sslMode !== "verify-full") return null;
+  return tlsFailureMessage(cause, {
+    caLabel: LABELS.sslRootCert,
+    caPath: config.sslRootCert === "" ? null : config.sslRootCert,
+    host: serverName ?? config.host,
+  });
+}
+
+/** What the handshake agreed on `socket`, or null when it is not TLS. */
+export function tlsInfoOf(socket: unknown): TlsInfo | null {
+  if (!(socket instanceof TLSSocket)) return null;
+  const protocol = socket.getProtocol();
+  if (protocol === null) return null;
+  const cipher = socket.getCipher();
+  return { protocol, cipher: cipher.standardName || cipher.name };
+}

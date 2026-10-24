@@ -26,6 +26,7 @@ import {
   type Session,
   type SessionMonitor,
   type SqlLanguage,
+  type TlsInfo,
   type TransactionMode,
   type Transactions,
   type WireValue,
@@ -61,6 +62,7 @@ import { postgresIntrospector } from "./introspect.js";
 import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
 import { postgresSessions } from "./sessions.js";
+import { SSL_MODES, tlsConnectMessage, tlsInfoOf, tlsOptions } from "./tls.js";
 
 const PLUGIN_ID = "postgres";
 const CAPABILITIES: readonly Capability[] = [
@@ -169,16 +171,22 @@ const APPLICATION_NAME = "TableCraft";
 const PING_SQL = "SELECT 1";
 const CLOSED_MESSAGE = "the server closed the connection";
 
-const SSL_MODES = ["disable", "require", "verify-full"] as const;
-
 const connectionSchema = z.strictObject({
   host: z.string().min(1),
   port: z.number().int().min(1).max(MAX_PORT).default(DEFAULT_PORT),
   database: z.string().min(1),
   user: z.string().min(1),
   password: z.string().default(""),
-  /** `require` encrypts without checking the certificate; `verify-full` checks it and the host name. */
+  /**
+   * `require` encrypts without checking the certificate; `verify-ca` checks it is signed by the CA;
+   * `verify-full` checks that and the host name.
+   */
   sslMode: z.enum(SSL_MODES).default("disable"),
+  /** Paths, read at connect (decision 072); empty: none. */
+  sslRootCert: z.string().default(""),
+  sslCert: z.string().default(""),
+  sslKey: z.string().default(""),
+  sslKeyPassphrase: z.string().default(""),
   connectTimeout: z.number().int().min(1).max(MAX_CONNECT_TIMEOUT_SECONDS).default(DEFAULT_CONNECT_TIMEOUT_SECONDS),
   applicationName: z.string().default(APPLICATION_NAME),
 });
@@ -256,18 +264,13 @@ interface WithBackendPid {
 
 const TEXT_TYPES: pg.CustomTypesConfig = { getTypeParser: () => (text: string) => text };
 
-function sslOption(mode: PostgresConfig["sslMode"]): pg.ClientConfig["ssl"] {
-  switch (mode) {
-    case "disable":
-      return false;
-    case "require":
-      return { rejectUnauthorized: false };
-    case "verify-full":
-      return true;
-  }
+interface OpenOptions {
+  readonly keepAliveInitialDelayMs?: number | undefined;
+  readonly serverName?: string | undefined;
 }
 
-function clientConfig(config: PostgresConfig, keepAliveInitialDelayMs?: number): pg.ClientConfig {
+async function clientConfig(config: PostgresConfig, options: OpenOptions): Promise<pg.ClientConfig> {
+  const { keepAliveInitialDelayMs } = options;
   return {
     ...(keepAliveInitialDelayMs === undefined
       ? {}
@@ -277,7 +280,7 @@ function clientConfig(config: PostgresConfig, keepAliveInitialDelayMs?: number):
     database: config.database,
     user: config.user,
     password: config.password,
-    ssl: sslOption(config.sslMode),
+    ssl: await tlsOptions(config, options.serverName),
     connectionTimeoutMillis: config.connectTimeout * MS_PER_SECOND,
     ...(config.applicationName === "" ? {} : { application_name: config.applicationName }),
   };
@@ -287,14 +290,20 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-async function openClient(config: PostgresConfig, keepAliveInitialDelayMs?: number): Promise<pg.Client> {
-  const client = new pg.Client(clientConfig(config, keepAliveInitialDelayMs));
+async function openClient(config: PostgresConfig, options: OpenOptions): Promise<pg.Client> {
+  const client = new pg.Client(await clientConfig(config, options));
   try {
     await client.connect();
   } catch (cause) {
-    throw new PluginError("connectionFailed", messageOf(cause), { cause });
+    const message = tlsConnectMessage(config, options.serverName, cause) ?? messageOf(cause);
+    throw new PluginError("connectionFailed", message, { cause });
   }
   return client;
+}
+
+/** pg keeps the socket, after any TLS upgrade, on its connection; its typings omit both. */
+interface WithConnection {
+  readonly connection: { readonly stream: unknown };
 }
 
 interface Running {
@@ -342,6 +351,7 @@ function isServerError(cause: unknown): boolean {
 
 class PostgresSession implements Session {
   readonly #config: PostgresConfig;
+  readonly #serverName: string | undefined;
   readonly #client: pg.Client;
   readonly #typeNames: ReadonlyMap<number, string>;
   /** Set by the client's `error` event; a broken connection is reported, not thrown at random. */
@@ -353,6 +363,7 @@ class PostgresSession implements Session {
   readonly #transaction: TransactionState = { mode: "auto", open: false };
 
   readonly serverVersion: string | null;
+  readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
   readonly sessions: SessionMonitor;
@@ -360,16 +371,19 @@ class PostgresSession implements Session {
 
   constructor(
     config: PostgresConfig,
+    serverName: string | undefined,
     client: pg.Client,
     typeNames: ReadonlyMap<number, string>,
     serverVersion: string | null,
   ) {
     this.#config = config;
+    this.#serverName = serverName;
     this.#client = client;
     this.#typeNames = typeNames;
     this.serverVersion = serverVersion;
+    this.tls = tlsInfoOf((client as unknown as WithConnection).connection.stream);
     this.introspector = postgresIntrospector(client);
-    this.sessions = postgresSessions(client, () => openClient(config));
+    this.sessions = postgresSessions(client, () => openClient(config, { serverName }));
     this.serverSessionId = String((client as pg.Client & WithBackendPid).processID);
     const state = this.#transaction;
     this.transactions = {
@@ -395,13 +409,14 @@ class PostgresSession implements Session {
   }
 
   static async open(config: PostgresConfig, options: ConnectOptions): Promise<PostgresSession> {
-    const client = await openClient(config, options.keepAliveInitialDelayMs);
+    const client = await openClient(config, options);
     try {
       if (options.readOnly) await client.query(READ_ONLY_SQL);
       const types = await client.query<{ oid: number; typname: string }>("SELECT oid, typname FROM pg_type");
       const version = await client.query<{ server_version: string }>(VERSION_SQL);
       return new PostgresSession(
         config,
+        options.serverName,
         client,
         new Map(types.rows.map((type) => [type.oid, type.typname])),
         shortVersion(version.rows[0]?.server_version),
@@ -609,7 +624,7 @@ class PostgresSession implements Session {
   /** On a second connection, because the session's own is busy with the statement it cancels. */
   async #cancelBackend(): Promise<void> {
     const backendPid = (this.#client as pg.Client & WithBackendPid).processID;
-    const canceller = await openClient(this.#config);
+    const canceller = await openClient(this.#config, { serverName: this.#serverName });
     try {
       await canceller.query("SELECT pg_cancel_backend($1)", [backendPid]);
     } finally {

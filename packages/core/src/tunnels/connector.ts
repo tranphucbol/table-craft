@@ -92,7 +92,7 @@ export function createConnector(options: ConnectorOptions): Connector {
       const rewritten = { ...values, [network.host]: LOOPBACK, [network.port]: lease.localPort };
       let session: Session;
       try {
-        session = await openSession(plugins, pluginId, rewritten, connect);
+        session = await openSession(plugins, pluginId, rewritten, { ...connect, serverName: target.host });
       } catch (cause) {
         lease.release();
         const forwardError = lease.tunnel.forwardError;

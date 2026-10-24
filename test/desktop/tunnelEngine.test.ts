@@ -22,6 +22,7 @@ const LOOPBACK = "127.0.0.1";
 interface Reached {
   readonly host: string;
   readonly port: number;
+  readonly serverName: string | undefined;
 }
 
 /** Proves the route end to end: the database here is an echo server that must answer before SQLite opens. */
@@ -52,7 +53,7 @@ function networkedPlugin(reached: Reached[]): PluginLoadResult {
     connect: async (config, options) => {
       const { host, port, path } = connectionSchema.parse(config);
       const socket = await reach(host, port);
-      reached.push({ host, port });
+      reached.push({ host, port, serverName: options.serverName });
       const session = await sqlite.connect({ path }, options);
       return {
         execute: (sql, params) => session.execute(sql, params),
@@ -155,6 +156,7 @@ describe("engine through an SSH tunnel", () => {
     expect(reached).toHaveLength(1);
     expect(reached[0]?.host).toBe(LOOPBACK);
     expect(reached[0]?.port).not.toBe(database.port);
+    expect(reached[0]?.serverName).toBe(LOOPBACK);
     await connection.close();
     await engine.close();
   });

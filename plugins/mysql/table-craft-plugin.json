@@ -70,10 +70,39 @@
             "label": "Require"
           },
           {
+            "value": "verify-ca",
+            "label": "Verify CA"
+          },
+          {
             "value": "verify-full",
             "label": "Verify full"
           }
         ]
+      },
+      {
+        "key": "sslRootCert",
+        "label": "SSL root certificate",
+        "kind": "file",
+        "group": "advanced"
+      },
+      {
+        "key": "sslCert",
+        "label": "Client certificate",
+        "kind": "file",
+        "group": "advanced"
+      },
+      {
+        "key": "sslKey",
+        "label": "Client key",
+        "kind": "file",
+        "group": "advanced"
+      },
+      {
+        "key": "sslKeyPassphrase",
+        "label": "Client key passphrase",
+        "kind": "password",
+        "secret": true,
+        "group": "advanced"
       },
       {
         "key": "connectTimeout",
@@ -100,11 +129,23 @@
           "values": {
             "DISABLED": "disable",
             "REQUIRED": "require",
+            "VERIFY_CA": "verify-ca",
             "VERIFY_IDENTITY": "verify-full"
           }
-        }
+        },
+        { "name": "ssl-ca", "key": "sslRootCert" },
+        { "name": "ssl-cert", "key": "sslCert" },
+        { "name": "ssl-key", "key": "sslKey" }
       ]
     },
-    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" }
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" },
+    "tls": {
+      "mode": "sslMode",
+      "verifyModes": ["verify-ca", "verify-full"],
+      "caFile": "sslRootCert",
+      "certFile": "sslCert",
+      "keyFile": "sslKey",
+      "keyPassphrase": "sslKeyPassphrase"
+    }
   }
 }

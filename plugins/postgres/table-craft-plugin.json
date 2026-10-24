@@ -36,8 +36,19 @@
         "options": [
           { "value": "disable", "label": "Disable" },
           { "value": "require", "label": "Require" },
+          { "value": "verify-ca", "label": "Verify CA" },
           { "value": "verify-full", "label": "Verify full" }
         ]
+      },
+      { "key": "sslRootCert", "label": "SSL root certificate", "kind": "file", "group": "advanced" },
+      { "key": "sslCert", "label": "Client certificate", "kind": "file", "group": "advanced" },
+      { "key": "sslKey", "label": "Client key", "kind": "file", "group": "advanced" },
+      {
+        "key": "sslKeyPassphrase",
+        "label": "Client key passphrase",
+        "kind": "password",
+        "secret": true,
+        "group": "advanced"
       },
       {
         "key": "connectTimeout",
@@ -62,12 +73,28 @@
         {
           "name": "sslmode",
           "key": "sslMode",
-          "values": { "disable": "disable", "require": "require", "verify-full": "verify-full" }
+          "values": {
+            "disable": "disable",
+            "require": "require",
+            "verify-ca": "verify-ca",
+            "verify-full": "verify-full"
+          }
         },
+        { "name": "sslrootcert", "key": "sslRootCert" },
+        { "name": "sslcert", "key": "sslCert" },
+        { "name": "sslkey", "key": "sslKey" },
         { "name": "connect_timeout", "key": "connectTimeout" },
         { "name": "application_name", "key": "applicationName" }
       ]
     },
-    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" }
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" },
+    "tls": {
+      "mode": "sslMode",
+      "verifyModes": ["verify-ca", "verify-full"],
+      "caFile": "sslRootCert",
+      "certFile": "sslCert",
+      "keyFile": "sslKey",
+      "keyPassphrase": "sslKeyPassphrase"
+    }
   }
 }
