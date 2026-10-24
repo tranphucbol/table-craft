@@ -1,6 +1,10 @@
 import type { SqlFileOpened } from "@table-craft/desktop/preload/bridge.js";
 import { fileNameOf } from "@table-craft/desktop/renderer/model/exportText.js";
-import { ConsoleFileFailure } from "@table-craft/desktop/renderer/state/consoleFiles.js";
+import {
+  AUTOSAVE_DELAY_MS,
+  ConsoleFileFailure,
+  type Timers,
+} from "@table-craft/desktop/renderer/state/consoleFiles.js";
 import {
   DETACHED,
   fileSourceOf,
@@ -16,8 +20,6 @@ import type { Tab, TabsStore } from "@table-craft/desktop/renderer/state/tabs.js
 export const UNSAVED_CHOICES = { save: "save", discard: "discard" } as const;
 export const SAVE_AS_TITLE = "Save Console As";
 export const SQL_EXTENSION = ".sql";
-/** A kept file's modification time once it is gone from disk, so Keep Mine stops asking about it. */
-const GONE_MODIFIED_AT = -1;
 const FILE_HINT = "Check that the file exists and that you may read and write it.";
 
 export interface FileConsoleDependencies {
@@ -27,9 +29,17 @@ export interface FileConsoleDependencies {
   readonly ask: (request: ModalRequest) => Promise<string | null>;
   readonly newTab: (title: string) => Tab;
   readonly datasourceExists: (id: string) => boolean;
+  /** Absent, the global timers. */
+  readonly timers?: Timers;
+  readonly autosaveDelayMs?: number;
 }
 
-/** File consoles (plan 041): consoles whose text is a `.sql` file the user chose, saved explicitly. */
+const GLOBAL_TIMERS: Timers = {
+  set: (run, ms) => globalThis.setTimeout(run, ms),
+  clear: (timer) => globalThis.clearTimeout(timer as number),
+};
+
+/** File consoles (plan 041): consoles whose text is a `.sql` file the user chose, autosaved (decision 089). */
 export interface FileConsoles {
   /** The console holding `path`, or null. */
   readonly consoleOf: (path: string) => string | null;
@@ -45,6 +55,7 @@ export interface FileConsoles {
   readonly reopen: (paths: readonly string[]) => Promise<readonly (SqlFileOpened | null)[]>;
   /** A tab for a file already read, on `datasourceId` (or detached when that is gone); its tab id. */
   readonly openTab: (file: SqlFileOpened, datasourceId: string) => string;
+  /** Writes the file now, over any change made on disk. */
   readonly save: (id: string) => Promise<boolean>;
   /** Writes the console to a path the user picks; a scratch console becomes a file console. */
   readonly saveAs: (id: string) => Promise<boolean>;
@@ -52,12 +63,22 @@ export interface FileConsoles {
   readonly rename: (id: string, name: string) => Promise<boolean>;
   /** Replaces the text with the file's: Reload on the changed-on-disk banner. */
   readonly reload: (id: string) => Promise<void>;
-  /** Keeps the editor's text over a change on disk until the next one. */
+  /** Writes the editor's text over the change made on disk. */
   readonly keepMine: (id: string) => Promise<void>;
   /** Reloads clean consoles whose file changed and flags the dirty ones: run on window focus. */
   readonly checkDisk: () => Promise<void>;
-  /** Asks Save / Don't Save / Cancel for the dirty file consoles among `ids`; false on Cancel or a failed save. */
+  /**
+   * Writes the unsaved file consoles among `ids`, then asks Save / Don't Save / Cancel for those
+   * that could not be written or changed on disk; false on Cancel or a failed save.
+   */
   readonly settleDirty: (ids: readonly string[], verb: string) => Promise<boolean>;
+  /**
+   * Writes each file console once typing pauses, unless its file changed on disk since it was
+   * read, which raises the changed-on-disk banner instead; the unsubscribe.
+   */
+  readonly autosave: () => () => void;
+  /** Writes every pending autosave now: the window lost focus or a tab is closing. */
+  readonly flush: () => Promise<void>;
   /** Remembers each file console's data source and namespace as they change; the unsubscribe. */
   readonly rememberAttachments: () => () => void;
 }
@@ -76,6 +97,13 @@ const namespaceKey = (namespace: readonly string[] | null) => (namespace === nul
 
 export function createFileConsoles(dependencies: FileConsoleDependencies): FileConsoles {
   const { files, consoles, tabs, ask } = dependencies;
+  const timers = dependencies.timers ?? GLOBAL_TIMERS;
+  const delayMs = dependencies.autosaveDelayMs ?? AUTOSAVE_DELAY_MS;
+  const pending = new Map<string, unknown>();
+  /** Each console's write in flight, so two never race and the older text never lands last. */
+  const writing = new Map<string, Promise<unknown>>();
+  /** Consoles whose last autosave failed: the notice shows once per run of failures. */
+  const failing = new Set<string>();
 
   async function fail(title: string, cause: unknown): Promise<void> {
     await ask({
@@ -117,19 +145,87 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
     void files.attach(source.path, { datasourceId: session.datasourceId, namespace }).catch(() => undefined);
   }
 
-  async function save(id: string): Promise<boolean> {
+  function serially<T>(id: string, task: () => Promise<T>): Promise<T> {
+    const run = (writing.get(id) ?? Promise.resolve()).then(task, task);
+    writing.set(id, run);
+    void run
+      .finally(() => {
+        if (writing.get(id) === run) writing.delete(id);
+      })
+      .catch(() => undefined);
+    return run;
+  }
+
+  function cancelPending(id: string): boolean {
+    if (!pending.has(id)) return false;
+    timers.clear(pending.get(id));
+    pending.delete(id);
+    return true;
+  }
+
+  async function write(id: string): Promise<void> {
     const session = consoles.getState().consoles[id];
     const source = session === undefined ? null : fileSourceOf(session);
-    if (session === undefined || source === null) return false;
+    if (session === undefined || source === null) return;
     const sql = session.sql;
-    try {
-      const modifiedAt = await files.write(source.path, sql, source.lineEnding);
-      consoles.getState().saved(id, { ...source, savedSql: sql, modifiedAt });
-      return true;
-    } catch (cause) {
-      await fail(`Could not save ${fileNameOf(source.path)}`, cause);
-      return false;
-    }
+    const modifiedAt = await files.write(source.path, sql, source.lineEnding);
+    const current = fileSourceOf(consoles.getState().consoles[id]) ?? source;
+    consoles.getState().saved(id, { ...current, savedSql: sql, modifiedAt });
+    failing.delete(id);
+  }
+
+  function save(id: string): Promise<boolean> {
+    cancelPending(id);
+    return serially(id, async () => {
+      try {
+        await write(id);
+        return true;
+      } catch (cause) {
+        const path = fileSourceOf(consoles.getState().consoles[id])?.path ?? "";
+        await fail(`Could not save ${fileNameOf(path)}`, cause);
+        return false;
+      }
+    });
+  }
+
+  /** The quiet save: skipped for a clean console or one whose file changed on disk, which it flags. */
+  function autosaveNow(id: string): Promise<void> {
+    cancelPending(id);
+    return serially(id, async () => {
+      const session = consoles.getState().consoles[id];
+      const source = session === undefined ? null : fileSourceOf(session);
+      if (session === undefined || source === null || !isDirty(session) || session.diskChanged !== null) return;
+      const [time] = await files.stat([source.path]).catch(() => [undefined]);
+      if (time === null) {
+        consoles.getState().setDiskChanged(id, "deleted");
+        return;
+      }
+      if (time !== undefined && time !== source.modifiedAt) {
+        consoles.getState().setDiskChanged(id, "changed");
+        return;
+      }
+      try {
+        await write(id);
+      } catch (cause) {
+        if (failing.has(id)) return;
+        failing.add(id);
+        await fail(`Could not save ${fileNameOf(source.path)}`, cause);
+      }
+    });
+  }
+
+  function schedule(id: string): void {
+    cancelPending(id);
+    const timer = timers.set(() => {
+      if (pending.get(id) !== timer) return;
+      pending.delete(id);
+      void autosaveNow(id);
+    }, delayMs);
+    pending.set(id, timer);
+  }
+
+  async function flush(): Promise<void> {
+    await Promise.all([...pending.keys()].map((id) => autosaveNow(id)));
   }
 
   async function reload(id: string): Promise<void> {
@@ -148,6 +244,7 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
     openTab,
     save,
     reload,
+    flush,
 
     async open(paths, datasourceId) {
       for (const path of paths) {
@@ -206,6 +303,7 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
         return false;
       }
       if (path === null) return false;
+      cancelPending(id);
       const holder = consoleOf(path);
       if (holder !== null && holder !== id) {
         await ask({
@@ -248,10 +346,8 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
     },
 
     async keepMine(id) {
-      const source = fileSourceOf(consoles.getState().consoles[id]);
-      if (source === null) return;
-      const [modifiedAt] = await files.stat([source.path]).catch(() => [null]);
-      consoles.getState().saved(id, { ...source, modifiedAt: modifiedAt ?? GONE_MODIFIED_AT });
+      if (fileSourceOf(consoles.getState().consoles[id]) === null) return;
+      await save(id);
     },
 
     async checkDisk() {
@@ -268,7 +364,7 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
         const time = times[index] ?? null;
         if (session === undefined || source?.path !== entry.path) continue;
         if (time === null) {
-          if (source.modifiedAt !== GONE_MODIFIED_AT) consoles.getState().setDiskChanged(entry.id, "deleted");
+          consoles.getState().setDiskChanged(entry.id, "deleted");
         } else if (time !== source.modifiedAt) {
           if (isDirty(session)) consoles.getState().setDiskChanged(entry.id, "changed");
           else await reload(entry.id);
@@ -277,6 +373,8 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
     },
 
     async settleDirty(ids, verb) {
+      await flush();
+      await Promise.all(ids.map((id) => autosaveNow(id)));
       const dirty = ids.flatMap((id) => {
         const session = consoles.getState().consoles[id];
         const source = session === undefined ? null : fileSourceOf(session);
@@ -298,6 +396,20 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
       if (answer === UNSAVED_CHOICES.discard) return true;
       for (const { id } of dirty) if (!(await save(id))) return false;
       return true;
+    },
+
+    autosave() {
+      const stop = consoles.subscribe((state, previous) => {
+        for (const [id, session] of Object.entries(state.consoles)) {
+          const before = previous.consoles[id];
+          if (before === undefined || before.sql === session.sql) continue;
+          if (fileSourceOf(session) !== null && isDirty(session)) schedule(id);
+        }
+      });
+      return () => {
+        stop();
+        for (const id of [...pending.keys()]) cancelPending(id);
+      };
     },
 
     rememberAttachments() {

@@ -82,9 +82,10 @@ started, not when it is merged.
 | 071 | [SSH host keys are trusted on first use, after asking](071-ssh-host-keys-are-trusted-on-first-use-after-asking.md)                                                     |
 | 072 | [Certificate files are paths the plugin reads on connect](072-certificate-files-are-paths-the-plugin-reads-on-connect.md)                                              |
 | 073 | [A tunneled connection checks the configured host's name](073-a-tunneled-connection-checks-the-configured-host-name.md)                                                |
-| 080 | [File consoles save explicitly, scratch consoles autosave](080-file-consoles-save-explicitly-scratch-consoles-autosave.md)                                             |
+| 080 | [File consoles save explicitly, scratch consoles autosave](080-file-consoles-save-explicitly-scratch-consoles-autosave.md) (saving superseded by 089)                  |
 | 081 | [SQL scripts stream through the plugin splitter](081-sql-scripts-stream-through-the-plugin-splitter.md)                                                                |
 | 082 | [Error positions travel from the plugin to the editor](082-error-positions-travel-from-the-plugin-to-the-editor.md)                                                    |
 | 083 | [A multi-statement run asks before it continues past an error](083-a-multi-statement-run-asks-before-it-continues-past-an-error.md)                                    |
 | 088 | [Server sessions are a plugin capability](088-server-sessions-are-a-plugin-capability.md)                                                                              |
+| 089 | [File consoles autosave, and Save on a scratch console asks for a file](089-file-consoles-autosave-and-save-asks-for-a-file.md)                                        |
 | 090 | [Routine calls are written by the plugin](090-routine-calls-are-written-by-the-plugin.md)                                                                              |

@@ -1,7 +1,8 @@
 /**
- * Plan 041's live test: SQL files on disk. Open a file into a console and run it, edit and save
- * it, Save As from a scratch console, rename it, reopen the app onto the same file console, see an
- * external edit, and Run SQL Script on a 100 MB file with progress and cancel, and on a script that
+ * Plan 041's live test: SQL files on disk. Open a file into a console and run it, edit it and see
+ * it autosave (decision 089), press the save chords in a scratch console, Save As from a scratch
+ * console, rename it, reopen the app onto the same file console, see an external edit, and Run SQL
+ * Script on a 100 MB file with progress and cancel, and on a script that
  * stops at its error. SQLite always runs; PostgreSQL and MySQL need the `test/db/compose.yml`
  * containers:
  *
@@ -195,7 +196,7 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     await expect.poll(() => activeEditorTab(current.page).getAttribute("title")).toContain(activeTitle);
   }
 
-  /** Opens `report.sql`, runs it, edits and saves it: the daily loop on one database. */
+  /** Opens `report.sql`, runs it and edits it, which autosaves it: the daily loop on one database. */
   async function openRunEditSave(datasource: Datasource, label: string): Promise<void> {
     const current = await launch(datasource);
     const { page } = current;
@@ -212,12 +213,12 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     await captureWindow(page, `open-and-run-${label}`);
 
     await sqlEditor(page).fill("SELECT 42 AS answer;\n");
-    await dirtyDot(page).waitFor();
-    await captureWindow(page, `dirty-${label}`);
-    await pressChord(page, "S");
+    await expect.poll(() => readFileSync(path, "utf8")).toBe("SELECT 42 AS answer;\n");
     await dirtyDot(page).waitFor({ state: "detached" });
-    expect(readFileSync(path, "utf8")).toBe("SELECT 42 AS answer;\n");
-    await captureWindow(page, `saved-${label}`);
+    await captureWindow(page, `autosaved-${label}`);
+    await sqlEditor(page).fill("SELECT 43 AS answer;\n");
+    await pressChord(page, "S");
+    await expect.poll(() => readFileSync(path, "utf8")).toBe("SELECT 43 AS answer;\n");
   }
 
   it(
@@ -244,6 +245,32 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
+  /** Both chords from inside the editor of a scratch console reach the native save dialog. */
+  it(
+    "givenTypingInScratchConsole_whenSaveChordsPressed_thenSaveDialogOpens",
+    async () => {
+      const { app, page } = await launch(sqlite());
+      await app.evaluate(({ dialog }) => {
+        const record = globalThis as { saveDialogTitles?: string[] };
+        record.saveDialogTitles = [];
+        dialog.showSaveDialog = (...args: unknown[]) => {
+          const options = args.at(-1) as { title?: string };
+          record.saveDialogTitles?.push(options.title ?? "");
+          return Promise.resolve({ canceled: true, filePath: "" });
+        };
+      });
+      const titles = () =>
+        app.evaluate(() => (globalThis as { saveDialogTitles?: string[] }).saveDialogTitles?.length ?? 0);
+      await sqlEditor(page).click();
+      await page.keyboard.type("SELECT 1;");
+      await pressChord(page, "Shift+S");
+      await expect.poll(titles).toBe(1);
+      await pressChord(page, "S");
+      await expect.poll(titles).toBe(2);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
   it(
     "givenScratchConsole_whenSavedAsRenamedAndAppReopened_thenFileConsoleComesBackOnItsDatasource",
     async () => {
@@ -260,7 +287,7 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
       expect(readFileSync(saved, "utf8")).toBe("SELECT count(*) AS orders FROM orders;\n");
       await captureWindow(first.page, "save-as-from-scratch");
 
-      await findAction(first.page, "Rename Console");
+      await findAction(first.page, "Rename File");
       const prompt = first.page.getByRole("dialog", { name: "Rename File" });
       await prompt.getByLabel("File name", { exact: true }).fill("order-count.sql");
       await captureWindow(first.page, "rename-prompt");
@@ -296,7 +323,7 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
   );
 
   it(
-    "givenFileChangedOnDisk_whenFocus_thenCleanReloadsDirtyBannersAndCloseAsks",
+    "givenFileChangedOnDisk_whenFocus_thenCleanReloadsDirtyBannersAndKeepMineWrites",
     async () => {
       const current = await launch(sqlite());
       const { page } = current;
@@ -312,28 +339,29 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
       expect(await dirtyDot(page).count()).toBe(0);
       await captureWindow(page, "external-edit-reloaded");
 
-      await sqlEditor(page).fill("SELECT 3; -- mine\n");
+      // The edit lands on disk before the autosave reads the file's time, so it banners, not overwrites.
       writeFileSync(path, "SELECT 4; -- theirs\n");
       utimesSync(path, later + LATER_SECONDS, later + LATER_SECONDS);
-      await refocus(page);
+      await sqlEditor(page).fill("SELECT 3; -- mine\n");
       const banner = page.getByTestId("disk-changed");
       await banner.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      expect(readFileSync(path, "utf8")).toBe("SELECT 4; -- theirs\n");
       await captureWindow(page, "external-edit-banner");
-      await banner.getByRole("button", { name: "Keep mine", exact: true }).click();
-      await banner.waitFor({ state: "detached" });
-      expect(await editorText(page)).toBe("SELECT 3; -- mine\n");
 
       await pressChord(page, "W");
       const ask = page.getByRole("dialog", { name: "Unsaved file" });
       await ask.waitFor();
-      await captureWindow(page, "close-dirty-asks");
+      await captureWindow(page, "close-conflict-asks");
       await ask.getByRole("button", { name: "Cancel", exact: true }).click();
       await ask.waitFor({ state: "detached" });
       await expect.poll(() => activeEditorTab(page).getAttribute("title")).toBe(path);
-      await pressChord(page, "W");
-      await ask.getByRole("button", { name: "Save", exact: true }).click();
-      await expect.poll(() => editorTabs(page).filter({ hasText: "watched.sql" }).count()).toBe(0);
+
+      await banner.getByRole("button", { name: "Keep mine", exact: true }).click();
+      await banner.waitFor({ state: "detached" });
       expect(readFileSync(path, "utf8")).toBe("SELECT 3; -- mine\n");
+      await pressChord(page, "W");
+      await expect.poll(() => editorTabs(page).filter({ hasText: "watched.sql" }).count()).toBe(0);
+      expect(await ask.count()).toBe(0);
     },
     SCENARIO_TIMEOUT_MS,
   );
