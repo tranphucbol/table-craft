@@ -173,9 +173,10 @@ describe("openTunnel", () => {
   });
 
   it("givenVerifierPending_whenTimeoutPasses_thenHandshakeWaits", async () => {
+    // The timeout re-arms after the verifier answers, so it must still cover the login on a slow CI runner.
     const tunnel = await open({
-      timeoutMs: 100,
-      verifyHostKey: () => new Promise((resolve) => setTimeout(resolve, 400)),
+      timeoutMs: 1_000,
+      verifyHostKey: () => new Promise((resolve) => setTimeout(resolve, 1_500)),
     });
 
     expect(await roundTrip(tunnel.localPort, "waited")).toBe("waited");

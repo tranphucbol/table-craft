@@ -31,10 +31,27 @@ function same(a: Buffer, b: Buffer): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * ssh2 drops a leading zero byte of an ed25519 public key when it writes it, so about one key in
+ * 128 comes back "Malformed OpenSSH public key" from its own `parseKey`; draw again until it reads.
+ */
+function readableKeyPair(encryption?: { passphrase: string; cipher: string; rounds: number }): {
+  private: string;
+  public: string;
+} {
+  for (;;) {
+    const pair = ssh2.utils.generateKeyPairSync("ed25519", encryption);
+    const readable =
+      !(ssh2.utils.parseKey(pair.public) instanceof Error) &&
+      !(ssh2.utils.parseKey(pair.private, encryption?.passphrase) instanceof Error);
+    if (readable) return pair;
+  }
+}
+
 export async function startSshServer(): Promise<TestSshServer> {
-  const host = ssh2.utils.generateKeyPairSync("ed25519");
-  const plain = ssh2.utils.generateKeyPairSync("ed25519");
-  const encrypted = ssh2.utils.generateKeyPairSync("ed25519", {
+  const host = readableKeyPair();
+  const plain = readableKeyPair();
+  const encrypted = readableKeyPair({
     passphrase: KEY_PASSPHRASE,
     cipher: "aes256-ctr",
     rounds: KEY_ROUNDS,
