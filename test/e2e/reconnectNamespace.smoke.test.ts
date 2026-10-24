@@ -10,7 +10,7 @@
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import { TIDB_CONFIG } from "../support/databases.js";
+import { TIDB_CONFIG, tidbScratchDatabase } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -30,7 +30,7 @@ import {
 
 const captureWindow = evidenceFor("027");
 
-const PROBE_DATABASE = "tc_ns_probe";
+const PROBE_DATABASE = tidbScratchDatabase("ns_probe");
 const PROBE_TABLE = "big_rows";
 const SEED_TABLE = "seed_rows";
 const PAD_LENGTH = 100;

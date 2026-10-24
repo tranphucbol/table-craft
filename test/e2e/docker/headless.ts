@@ -8,6 +8,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
+import { composeProfiles, resolveTidbTarget } from "../../db/tidbTarget.js";
 
 const DATABASES_FLAG = "--databases";
 const COMPOSE_FILE = join(import.meta.dirname, "..", "..", "db", "compose.yml");
@@ -15,8 +16,8 @@ const SERVICE = "e2e";
 const PROFILE = "e2e";
 const DEFAULT_TESTS = "test/e2e";
 
-function run(command: string, args: readonly string[]): void {
-  const { status, error } = spawnSync(command, args, { stdio: "inherit" });
+function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv): void {
+  const { status, error } = spawnSync(command, args, { stdio: "inherit", env });
   if (error !== undefined) throw error;
   if (status !== 0) process.exit(status ?? 1);
 }
@@ -28,24 +29,33 @@ function quote(argument: string): string {
 const argv = process.argv.slice(2);
 const databases = argv.includes(DATABASES_FLAG);
 const tests = argv.filter((argument) => argument !== DATABASES_FLAG);
-const compose = ["compose", "-f", COMPOSE_FILE];
+const target = databases ? await resolveTidbTarget() : null;
+const env = { ...process.env, ...target?.env };
+const compose = ["compose", "-f", COMPOSE_FILE, ...(target === null ? [] : composeProfiles(target))];
 
-if (databases) run("docker", [...compose, "up", "-d", "--wait"]);
+if (target !== null) {
+  console.log(target.description);
+  run("docker", [...compose, "up", "-d", "--wait"], env);
+}
 
 const smokeEnv = ["TABLE_CRAFT_SMOKE=1", ...(databases ? ["TABLE_CRAFT_SMOKE_DATABASES=1"] : [])];
 const vitest = ["bunx", "vitest", "run", ...(tests.length > 0 ? tests : [DEFAULT_TESTS]), "--no-file-parallelism"];
 const inside = `bun run --filter '@table-craft/desktop' build && ${[...smokeEnv, ...vitest.map(quote)].join(" ")}`;
 
-run("docker", [
-  ...compose,
-  "--profile",
-  PROFILE,
-  "run",
-  "--rm",
-  "--build",
-  ...(databases ? [] : ["--no-deps"]),
-  SERVICE,
-  "bash",
-  "-c",
-  inside,
-]);
+run(
+  "docker",
+  [
+    ...compose,
+    "--profile",
+    PROFILE,
+    "run",
+    "--rm",
+    "--build",
+    ...(databases ? [] : ["--no-deps"]),
+    SERVICE,
+    "bash",
+    "-c",
+    inside,
+  ],
+  env,
+);

@@ -16,7 +16,14 @@ Run from the repository root.
 - `bun run test` - Vitest, unit tests plus the plugin contract suite against SQLite
 - `bun run test:db` - the contract suite against PostgreSQL (port 55432) and MySQL (port 53306)
   in `docker compose`, seeded from `test/db/schema/`, plus the TiDB 4 suite (`test/db/tidb.test.ts`,
-  port 54000, root with no password, database `test`; an amd64 image, emulated on Apple silicon).
+  port 54000, root with no password; an amd64 image, emulated on Apple silicon, and heavy).
+  `test/db/up.ts` starts the containers; when a git-ignored `.env` names a remote TiDB
+  (`TABLE_CRAFT_TIDB_REMOTE_HOST`, `_PORT`, `_USER`, `_PASSWORD`, see `.env.example`) and it
+  answers, the TiDB container is left out and every suite, on the host and in the headless box,
+  uses that server instead (`test/db/tidbTarget.ts`). Either way a run works only in its own
+  `tc_run_*` database (`test/support/tidbScratch.ts`, read through `TIDB_DATABASE` and
+  `tidbScratchDatabase` in `test/support/databases.ts`) and drops it after: never write to,
+  create users in, or kill sessions outside what the run made, since the remote server is shared.
   A second checkout (a parallel worktree) sets `COMPOSE_PROJECT_NAME`, `TABLE_CRAFT_PG_PORT`,
   `TABLE_CRAFT_MYSQL_PORT` and `TABLE_CRAFT_TIDB_PORT` for every `test:db`,
   `test:smoke:db` and `docker compose` command so it gets its own containers

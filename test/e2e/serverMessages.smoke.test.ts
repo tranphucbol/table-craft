@@ -10,7 +10,7 @@
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, TIDB_DATABASE } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -41,7 +41,7 @@ const SAGA_INDEX = "order_events_app_id";
 const FIXED_STATEMENT = `EXPLAIN SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10;`;
 const HINT_WITHOUT_TABLE = `SELECT /*+ USE_INDEX(${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`;
 const FIXED_SELECT = `SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`;
-const WARNING_1815 = `Warning 1815: use_index(test.${SAGA_INDEX}) is inapplicable, check whether the table(test.${SAGA_INDEX}) exists`;
+const WARNING_1815 = `Warning 1815: use_index(${TIDB_DATABASE}.${SAGA_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${SAGA_INDEX}) exists`;
 const MYSQL_WARNING = "SELECT CAST('1x' AS SIGNED) AS n";
 const PG_NOTICE = "DO $$ BEGIN RAISE NOTICE 'server messages live test'; END $$";
 

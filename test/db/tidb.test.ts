@@ -11,7 +11,7 @@ import type {
   SwitchStatement,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
-import { TIDB_CONFIG } from "../support/databases.js";
+import { TIDB_CONFIG, TIDB_DATABASE, tidbScratchDatabase } from "../support/databases.js";
 import { MYSQL_MANIFEST } from "../support/manifests.js";
 import { tenThousandRows } from "../support/manyRows.js";
 
@@ -28,7 +28,11 @@ const STARTED_MS = 500;
 /** Cancel must stop the sleep by dropping the session, not wait it out. */
 const CANCEL_WITHIN_MS = 5_000;
 /** Plan 029: a database name near MySQL's 64-character limit, which the switcher label shows whole. */
-const LONG_DATABASE = "plan_029_a_database_whose_name_runs_long_enough_to_test_labels";
+const LONG_DATABASE_LENGTH = 62;
+const LONG_DATABASE = tidbScratchDatabase(
+  "a_database_whose_name_runs_long_enough_to_test_labels",
+  LONG_DATABASE_LENGTH,
+);
 
 const LOADED = { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql } as const;
 
@@ -166,7 +170,7 @@ describe("tidb 4", () => {
       {
         level: "warning",
         code: "1815",
-        text: `use_index(test.${SAGA_INDEX}) is inapplicable, check whether the table(test.${SAGA_INDEX}) exists`,
+        text: `use_index(${TIDB_DATABASE}.${SAGA_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${SAGA_INDEX}) exists`,
       },
     ]);
   });

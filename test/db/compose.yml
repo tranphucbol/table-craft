@@ -64,8 +64,11 @@ services:
       TABLE_CRAFT_PG_PORT: "5432"
       TABLE_CRAFT_MYSQL_HOST: mysql
       TABLE_CRAFT_MYSQL_PORT: "3306"
-      TABLE_CRAFT_TIDB_HOST: tidb
-      TABLE_CRAFT_TIDB_PORT: "4000"
+      # A remote TiDB replaces the container when it answers (../db/tidbTarget.ts).
+      TABLE_CRAFT_TIDB_HOST: ${TABLE_CRAFT_TIDB_E2E_HOST:-tidb}
+      TABLE_CRAFT_TIDB_PORT: ${TABLE_CRAFT_TIDB_E2E_PORT:-4000}
+      TABLE_CRAFT_TIDB_USER: ${TABLE_CRAFT_TIDB_USER:-root}
+      TABLE_CRAFT_TIDB_PASSWORD: ${TABLE_CRAFT_TIDB_PASSWORD:-}
       TABLE_CRAFT_EVIDENCE_DIR: ${TABLE_CRAFT_EVIDENCE_DIR:-}
     volumes:
       - ../..:/work
@@ -81,8 +84,10 @@ services:
 
   # TiDB 4.0, the oldest MySQL-compatible server users run against (plan 027): no plain KILL
   # QUERY, no recursive CTE. One process on its embedded store; root has no password and the
-  # tests create what they need.
+  # tests create what they need. Only `--profile tidb` starts it, which test/db/up.ts and the
+  # headless runner pass unless a remote TiDB answers (test/db/tidbTarget.ts).
   tidb:
+    profiles: ["tidb"]
     image: pingcap/tidb:v4.0.14
     platform: linux/amd64
     ports:

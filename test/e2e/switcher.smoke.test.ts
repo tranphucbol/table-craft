@@ -11,7 +11,13 @@
 import { createRequire } from "node:module";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  POSTGRES_CONFIG,
+  TIDB_CONFIG,
+  TIDB_DATABASE,
+  tidbScratchDatabase,
+} from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   cancelButton,
@@ -51,7 +57,12 @@ const MYSQL_ROOT = { ...MYSQL_CONFIG, user: "root", password: "table_craft" };
 const GONE_DATABASE = "plan_029_gone";
 /** Wide enough for the TiDB scenario's whole database name beside the console toolbar's buttons. */
 const WIDE_WINDOW = { width: 1700, height: EVIDENCE_WINDOW.height };
-const LONG_DATABASE = "plan_029_a_database_whose_name_runs_long_enough_to_test_labels";
+/** Plan 029: near MySQL's 64-character limit for a database name. */
+const LONG_DATABASE_LENGTH = 62;
+const LONG_DATABASE = tidbScratchDatabase(
+  "a_database_whose_name_runs_long_enough_to_test_labels",
+  LONG_DATABASE_LENGTH,
+);
 
 /** CodeMirror's `interactionDelay`, in which Enter does not accept. */
 const INTERACTION_DELAY_MS = 75;
@@ -364,7 +375,7 @@ describe.runIf(DATABASES_ENABLED)("namespace switcher and USE completion live te
     async () => {
       await admin(TIDB_CONFIG, [`CREATE DATABASE IF NOT EXISTS ${LONG_DATABASE}`]);
       cleanup.push(() => admin(TIDB_CONFIG, [`DROP DATABASE IF EXISTS ${LONG_DATABASE}`]));
-      const page = await launch(TIDB, "test");
+      const page = await launch(TIDB, TIDB_DATABASE);
       await openDropdown(page);
       await page.getByTestId("namespace-switcher-refresh").click();
 

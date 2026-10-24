@@ -5,6 +5,8 @@ const WORKSPACE_ROOT = import.meta.dirname;
 const TEST_FILES = ["test/**/*.test.ts"];
 const DB_TEST_FILES = ["test/db/**"];
 const TEST_TIMEOUT_MS = 20_000;
+/** The smoke suites with databases get their own TiDB database, as `test:db` does (vitest.db.config.ts). */
+const TIDB_SCRATCH_SETUP = process.env.TABLE_CRAFT_SMOKE_DATABASES === "1" ? ["test/support/tidbScratch.ts"] : [];
 const CODEMIRROR = resolve(WORKSPACE_ROOT, "packages/desktop/node_modules/@codemirror");
 
 /** One Vitest project over `test/`; the packages only carry build config. */
@@ -44,6 +46,7 @@ export default defineConfig({
     include: TEST_FILES,
     // Needs Docker; `bun run test:db` runs these with their own config (decision 013).
     exclude: DB_TEST_FILES,
+    globalSetup: TIDB_SCRATCH_SETUP,
     environment: "node",
     testTimeout: TEST_TIMEOUT_MS,
   },
