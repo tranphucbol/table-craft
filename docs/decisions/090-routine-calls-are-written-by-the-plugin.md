@@ -1,6 +1,6 @@
 # 090: Routine calls are written by the plugin
 
-Status: Accepted. Plugin API 0.26.0.
+Status: Accepted. Plugin API 0.27.0.
 
 ## Decision
 
@@ -47,7 +47,7 @@ routine keyed by name alone could not tell PostgreSQL overloads apart.
 
 ## Consequences
 
-- The plugin contract changes; API 0.26.0. A plugin declaring `routineCall` needs the contract
+- The plugin contract changes; API 0.27.0. A plugin declaring `routineCall` needs the contract
   fixture's `routines` (the described routines and four calls).
 - PostgreSQL overloads list once each under Routines, and MySQL lists a procedure that shares a
   function's name. Rename and Drop of an overloaded PostgreSQL function still name it without its
