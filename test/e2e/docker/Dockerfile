@@ -3,8 +3,6 @@
 # native arch, so Apple silicon runs arm64 Electron without emulation.
 FROM node:22-bookworm
 
-ARG BUN_VERSION=1.4.4
-
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8 \
@@ -28,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY fonts.conf /etc/fonts/local.conf
 RUN fc-cache -f
 
+# Declared here, not at the top: a build arg's value is part of the cache key of every RUN after
+# it, so another Bun version rebuilds only this layer. The runner passes .bun-version's value.
+ARG BUN_VERSION=1.4.4
 RUN npm install -g "bun@${BUN_VERSION}"
 
 WORKDIR /work
