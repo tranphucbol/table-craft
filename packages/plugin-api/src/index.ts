@@ -132,6 +132,14 @@ export {
   type Transactions,
 } from "./plugin.js";
 export {
+  SERVER_SESSION_STATES,
+  type ServerSession,
+  type ServerSessionState,
+  type SessionListing,
+  type SessionMonitor,
+  type SessionTarget,
+} from "./sessions.js";
+export {
   BYTES_PREVIEW_LENGTH,
   toBytesValue,
   toWireInteger,

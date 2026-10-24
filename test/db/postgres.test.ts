@@ -30,6 +30,7 @@ runPluginContract(postgres, {
     customersComment: "People who place orders",
   },
   namespaceSwitch: { statement: "SET search_path TO archive, public", path: ["table_craft", "archive"] },
+  sessions: { monitorConfig: POSTGRES_CONFIG },
 });
 
 describe("postgres current namespace", () => {

@@ -357,6 +357,21 @@ duration and start time.
 
 See [Query history and Services](docs/design/specification.md#query-history-and-services).
 
+### Sessions
+
+**Show Sessions…** on a data source opens a tab that lists every session on the server: its PID,
+state, user, database, client, how long its query and transaction have run, what it waits on, and
+the sessions blocking it. Sessions idle in a transaction are tinted amber and blocked ones red; yours
+are tagged. Filter by Hide idle, Hide system or Blocked only, or search; Refresh reads the list
+again, and Auto-refresh does so every few seconds. Select a session to see its full query, open it
+in a console or explain it, cancel its query, or terminate it after confirming the exact statement.
+On a data source coloured red you type the PID to confirm, and a read-only data source cannot stop
+anything. **Show in Sessions** on an execution in Services selects the console's own session.
+PostgreSQL, MySQL and TiDB support it; when your account cannot see everything, the tab says which
+grant to ask for.
+
+See [Sessions](docs/design/specification.md#sessions).
+
 ### Explain
 
 **Explain Plan** (`⇧⌘E`) shows the plan of the statement at the caret as a tree with estimated rows
@@ -580,13 +595,15 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   objects from the database tree; requires `sql` and `schemaTree`.
 - `serverMessages`: returns the warnings and notices the server left about a statement, which
   Output lists under it and the result tab counts.
+- `sessions`: lists the server's sessions with who blocks whom, and cancels or terminates one, for
+  the [Sessions](#sessions) view; requires `sql`.
 
 ```json
 {
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "0.23.0",
+  "apiVersion": "0.24.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -600,7 +617,8 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
     "keepAlive",
     "bulkInsert",
     "objects",
-    "serverMessages"
+    "serverMessages",
+    "sessions"
   ],
   "highlight": "postgresql",
   "connection": {

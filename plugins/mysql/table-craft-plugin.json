@@ -2,7 +2,7 @@
   "id": "mysql",
   "name": "MySQL",
   "version": "0.0.0",
-  "apiVersion": "0.23.0",
+  "apiVersion": "0.24.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -16,7 +16,8 @@
     "keepAlive",
     "bulkInsert",
     "objects",
-    "serverMessages"
+    "serverMessages",
+    "sessions"
   ],
   "highlight": "mysql",
   "connection": {

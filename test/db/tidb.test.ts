@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import type { PlanNode, Session } from "@table-craft/plugin-api";
+import type { PlanNode, ServerSession, Session, SessionMonitor } from "@table-craft/plugin-api";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type {
   DatasourceConfig,
@@ -33,6 +33,25 @@ const LONG_DATABASE = tidbScratchDatabase(
   "a_database_whose_name_runs_long_enough_to_test_labels",
   LONG_DATABASE_LENGTH,
 );
+
+/** How long a listing may take to show what another connection just did. */
+const LISTED_WITHIN_MS = 10_000;
+const LISTING_POLL_MS = 200;
+
+async function listedUntil(
+  monitor: SessionMonitor,
+  id: string | undefined,
+  ready: (row: ServerSession | undefined) => boolean,
+): Promise<ServerSession | undefined> {
+  const deadline = Date.now() + LISTED_WITHIN_MS;
+  for (;;) {
+    const row = (await monitor.list()).sessions.find((listed) => listed.id === id);
+    if (ready(row)) return row;
+    if (Date.now() > deadline)
+      throw new Error(`Session ${String(id)} never got there; last seen ${JSON.stringify(row)}.`);
+    await new Promise((resolve) => setTimeout(resolve, LISTING_POLL_MS));
+  }
+}
 
 const LOADED = { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql } as const;
 
@@ -247,5 +266,79 @@ describe("tidb 4", () => {
 
     expect(targets.map((target) => target.path)).toContainEqual([LONG_DATABASE]);
     expect(switched.namespace).toEqual([LONG_DATABASE]);
+  });
+
+  async function connected(): Promise<Session & { sessions: SessionMonitor }> {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+    if (session.sessions === undefined) throw new Error("The mysql plugin declares sessions.");
+    return session as Session & { sessions: SessionMonitor };
+  }
+
+  it("givenSleepOnTidb4_whenList_thenActiveWithoutCancel", async () => {
+    const monitor = (await connected()).sessions;
+    const sleeper = await connected();
+    const sleeping = sleeper.execute(SLEEP_SQL).catch(() => undefined);
+    cleanup.push(() => sleeping);
+    cleanup.push(() => sleeper.cancel?.() ?? Promise.resolve());
+
+    const row = await listedUntil(monitor, sleeper.serverSessionId, (listed) => listed?.state === "active");
+    const { notes } = await monitor.list();
+
+    expect(row).toMatchObject({
+      query: SLEEP_SQL,
+      blockedBy: null,
+      cancel: null,
+      terminate: `KILL TIDB ${row?.id ?? ""}`,
+    });
+    expect(row?.instance).toEqual(expect.any(String));
+    expect(notes.join("\n")).toMatch(/cannot cancel/);
+    expect(notes.join("\n")).toMatch(/Blocked by is empty/);
+    await expect(monitor.cancelSession({ id: row?.id ?? "", instance: row?.instance ?? null })).rejects.toMatchObject({
+      code: "statementFailed",
+    });
+  });
+
+  it("givenOpenTransactionOnTidb4_whenList_thenIdleInTransactionWithAge", async () => {
+    const monitor = (await connected()).sessions;
+    const holder = await connected();
+    await holder.transactions?.setMode("manual");
+    // With autocommit off TiDB opens the transaction at the first read of a stored table.
+    for await (const _row of (await holder.execute("SELECT COUNT(*) FROM mysql.tidb")).rows) {
+      // Drained, so the session sits idle in its transaction.
+    }
+    cleanup.push(() => holder.transactions?.rollback() ?? Promise.resolve());
+
+    const row = await listedUntil(monitor, holder.serverSessionId, (listed) => listed?.state === "idleInTransaction");
+
+    expect(row?.transactionMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it("givenSessionOnTidb4_whenTerminate_thenGoneAfterInstanceCheck", async () => {
+    const sent = spySql();
+    const monitor = (await connected()).sessions;
+    const victim = await connected();
+    const row = await listedUntil(monitor, victim.serverSessionId, (listed) => listed !== undefined);
+
+    await monitor.terminateSession({ id: row?.id ?? "", instance: row?.instance ?? null });
+    // TiDB 4 ends an idle connection it was told to kill only when the connection next speaks.
+    await expect(victim.execute("SELECT 1")).rejects.toThrow();
+    await listedUntil(monitor, row?.id, (listed) => listed === undefined);
+
+    const check = sent.findIndex((sql) => /CLUSTER_PROCESSLIST WHERE ID = CONNECTION_ID\(\)/.test(sql));
+    expect(check).toBeGreaterThanOrEqual(0);
+    expect(sent.indexOf(`KILL TIDB ${row?.id ?? ""}`)).toBeGreaterThan(check);
+  });
+
+  it("givenUnknownInstance_whenTerminateOnTidb4_thenRejectsWithoutKill", async () => {
+    const sent = spySql();
+    const monitor = (await connected()).sessions;
+    const victim = await connected();
+
+    const refused = monitor.terminateSession({ id: victim.serverSessionId ?? "", instance: "elsewhere:10080" });
+
+    await expect(refused).rejects.toMatchObject({ code: "statementFailed" });
+    await expect(refused).rejects.toThrow(/nothing was killed/);
+    expect(sent.filter((sql) => /\bKILL\b/i.test(sql))).toEqual([]);
   });
 });

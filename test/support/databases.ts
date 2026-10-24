@@ -65,6 +65,9 @@ export function tidbConfigFromEnv() {
   } as const;
 }
 
+/** MySQL's `root`, which holds `PROCESS` and may kill any thread; `table_craft` holds neither. */
+export const MYSQL_ROOT_CONFIG = { ...MYSQL_CONFIG, user: "root", password: CREDENTIAL } as const;
+
 /** A TiDB 4 server: no Global Kill, and `KILL QUERY` only warns (decision 058). */
 export const TIDB_CONFIG = tidbConfigFromEnv();
 

@@ -32,7 +32,9 @@ import {
   type Relation,
   type Row,
   type ServerMessage,
+  type ServerSession,
   type Session,
+  type SessionMonitor,
   type SqlLanguage,
   type TableDesign,
   type Transactions,
@@ -96,6 +98,13 @@ export interface ContractFixture {
     readonly path: readonly string[];
     /** A switch to a namespace that does not exist, where the dialect rejects one. */
     readonly missing?: string;
+  };
+  /** Required when the plugin declares `sessions`, which also needs `statements.sleep` and `write`. */
+  readonly sessions?: {
+    /** Connects as an account that sees every session and may stop any, such as a superuser. */
+    readonly monitorConfig: unknown;
+    /** An account that sees only its own sessions, and what the listing's note must say about it. */
+    readonly limited?: { readonly config: unknown; readonly note: RegExp };
   };
 }
 
@@ -269,6 +278,9 @@ const CANCEL_DELAY_MS = 500;
 /** Well under `SLEEP_SECONDS`, so a cancel that did nothing fails the test instead of passing late. */
 const CANCEL_DEADLINE_MS = 10_000;
 const KEEPALIVE_DELAY_MS = 1000;
+/** How long a listing may take to show what another connection just did. */
+const LISTING_DEADLINE_MS = 10_000;
+const LISTING_POLL_MS = 200;
 
 async function collect(rows: AsyncIterable<Row>): Promise<Row[]> {
   const collected: Row[] = [];
@@ -508,6 +520,16 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       expect(plugin.language?.createTable !== undefined).toBe(bulk);
       await withSession(plugin, fixture, (session) => {
         expect(session.insertRows !== undefined).toBe(bulk);
+        return Promise.resolve();
+      });
+    });
+
+    it("givenSession_whenInspected_thenHasSessionMonitorExactlyWhenSessionsDeclared", async () => {
+      const declared = plugin.capabilities.includes("sessions");
+      if (declared) expect(plugin.capabilities).toContain("sql");
+      await withSession(plugin, fixture, (session) => {
+        expect(session.sessions !== undefined).toBe(declared);
+        expect(typeof session.serverSessionId === "string").toBe(declared);
         return Promise.resolve();
       });
     });
@@ -2040,6 +2062,172 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await session.close();
         expect(await rejectionCode(session.ping?.() ?? Promise.resolve())).toBe("connectionLost");
       });
+    });
+
+    describe.runIf(plugin.capabilities.includes("sessions"))("sessions", () => {
+      function sessionsFixture(): NonNullable<ContractFixture["sessions"]> {
+        if (fixture.sessions === undefined) throw new Error("A plugin that declares sessions needs fixture.sessions.");
+        return fixture.sessions;
+      }
+
+      function sleepSql(): string {
+        const sleep = fixture.statements?.sleep;
+        if (sleep === undefined) throw new Error("A plugin that declares sessions needs fixture.statements.sleep.");
+        return sleep(SLEEP_SECONDS);
+      }
+
+      async function withMonitor(work: (monitor: SessionMonitor) => Promise<void>): Promise<void> {
+        const session = await connect(plugin, sessionsFixture().monitorConfig);
+        try {
+          if (session.sessions === undefined) throw new Error("A session of a sessions plugin has no monitor.");
+          await work(session.sessions);
+        } finally {
+          await session.close();
+        }
+      }
+
+      function idOf(session: Session): string {
+        if (session.serverSessionId === undefined)
+          throw new Error("A session of a sessions plugin has no serverSessionId.");
+        return session.serverSessionId;
+      }
+
+      async function listedUntil(
+        monitor: SessionMonitor,
+        id: string,
+        ready: (row: ServerSession | undefined) => boolean,
+      ): Promise<ServerSession | undefined> {
+        const deadline = Date.now() + LISTING_DEADLINE_MS;
+        for (;;) {
+          const row = (await monitor.list()).sessions.find((listed) => listed.id === id);
+          if (ready(row)) return row;
+          if (Date.now() > deadline)
+            throw new Error(`Session ${id} never got there; last seen ${JSON.stringify(row)}.`);
+          await delay(LISTING_POLL_MS);
+        }
+      }
+
+      async function present(monitor: SessionMonitor, id: string, ready = (_: ServerSession) => true) {
+        const row = await listedUntil(monitor, id, (listed) => listed !== undefined && ready(listed));
+        if (row === undefined) throw new Error(`Session ${id} is not listed.`);
+        return row;
+      }
+
+      async function withSleeper(work: (sleeper: Session, running: Promise<string>) => Promise<void>): Promise<void> {
+        const sleeper = await connect(plugin, fixture.config);
+        const running = rejectionCode(sleeper.execute(sleepSql()).then((result) => collect(result.rows)));
+        try {
+          await work(sleeper, running);
+        } finally {
+          await sleeper.cancel?.();
+          await running;
+          await sleeper.close();
+        }
+      }
+
+      it("givenOwnSession_whenList_thenServerSessionIdListed", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          await withMonitor(async (monitor) => {
+            const row = await present(monitor, idOf(session));
+            expect(row.system).toBe(false);
+            expect(row.terminate).not.toBeNull();
+          });
+        });
+      });
+
+      it("givenSleepingSession_whenList_thenActiveWithQueryText", async () => {
+        await withMonitor(async (monitor) => {
+          await withSleeper(async (sleeper) => {
+            const row = await present(monitor, idOf(sleeper), (listed) => listed.state === "active");
+            expect(row.query).toContain(sleepSql());
+            expect(row.queryMs).not.toBeNull();
+          });
+        });
+      });
+
+      it("givenActiveQuery_whenCancel_thenQueryCancelled", async () => {
+        await withMonitor(async (monitor) => {
+          await withSleeper(async (sleeper, running) => {
+            const row = await present(monitor, idOf(sleeper), (listed) => listed.state === "active");
+            expect(row.cancel).not.toBeNull();
+            const started = Date.now();
+            await monitor.cancelSession({ id: row.id, instance: row.instance });
+            // MySQL's SLEEP answers 1 when killed rather than failing; either way it stops early.
+            expect(["cancelled", "resolved"]).toContain(await running);
+            expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
+            expect(await collect((await sleeper.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          });
+        });
+      });
+
+      it("givenSession_whenTerminate_thenGone", async () => {
+        const victim = await connect(plugin, fixture.config);
+        try {
+          await withMonitor(async (monitor) => {
+            const row = await present(monitor, idOf(victim));
+            await monitor.terminateSession({ id: row.id, instance: row.instance });
+            await listedUntil(monitor, row.id, (listed) => listed === undefined);
+          });
+        } finally {
+          await victim.close();
+        }
+      });
+
+      it("givenMissingSession_whenTerminate_thenRejects", async () => {
+        const victim = await connect(plugin, fixture.config);
+        const id = idOf(victim);
+        await victim.close();
+        await withMonitor(async (monitor) => {
+          await listedUntil(monitor, id, (listed) => listed === undefined);
+          expect(await rejectionCode(monitor.terminateSession({ id, instance: null }))).toBe("statementFailed");
+        });
+      });
+
+      it("givenLockWait_whenList_thenBlockedByFilled", async () => {
+        const write = fixture.statements?.write;
+        if (write === undefined) throw new Error("A plugin that declares sessions needs fixture.statements.write.");
+        const holder = await connect(plugin, fixture.config);
+        const waiter = await connect(plugin, fixture.config);
+        let waiting: Promise<unknown> = Promise.resolve();
+        try {
+          await holder.transactions?.setMode("manual");
+          await waiter.transactions?.setMode("manual");
+          await collect((await holder.execute(write)).rows);
+          waiting = waiter.execute(write).then((result) => collect(result.rows));
+          await withMonitor(async (monitor) => {
+            const row = await present(monitor, idOf(waiter), (listed) => listed.state === "blocked");
+            expect(row.blockedBy).toContain(idOf(holder));
+          });
+        } finally {
+          await holder.transactions?.rollback();
+          await waiting.catch(() => undefined);
+          await waiter.transactions?.rollback();
+          await holder.close();
+          await waiter.close();
+        }
+      });
+
+      it.runIf(fixture.sessions?.limited !== undefined)(
+        "givenNoProcessPrivilege_whenList_thenOwnOnlyWithExplanation",
+        async () => {
+          const limited = sessionsFixture().limited;
+          if (limited === undefined) return;
+          const session = await connect(plugin, limited.config);
+          try {
+            await withMonitor(async (monitor) => {
+              const own = await present(monitor, idOf(session));
+              const listing = await session.sessions?.list();
+              expect(listing?.notes.some((note) => limited.note.test(note))).toBe(true);
+              expect(listing?.sessions.map((row) => row.id)).toContain(own.id);
+              const monitorIds = (await monitor.list()).sessions.map((row) => row.id);
+              const foreign = monitorIds.filter((id) => !listing?.sessions.some((row) => row.id === id));
+              expect(foreign.length).toBeGreaterThan(0);
+            });
+          } finally {
+            await session.close();
+          }
+        },
+      );
     });
   });
 }

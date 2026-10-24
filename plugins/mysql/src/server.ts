@@ -20,11 +20,16 @@ export function isTidb(serverVersion: string | null): boolean {
  * belongs to someone else's session. TiDB 4 also ignores `KILL QUERY`, answering with a warning.
  */
 export function killStatementFor(serverVersion: string | null, connectionId: number): string | null {
+  const globalKill = tidbGlobalKill(serverVersion);
+  if (globalKill === null) return `KILL QUERY ${String(connectionId)}`;
+  return globalKill ? `KILL TIDB QUERY ${String(connectionId)}` : null;
+}
+
+/** Whether a TiDB server's connection ids are cluster-wide; null when the server is not TiDB. */
+export function tidbGlobalKill(serverVersion: string | null): boolean | null {
   const tidb = serverVersion === null ? null : TIDB_VERSION.exec(serverVersion);
-  if (tidb === null) return `KILL QUERY ${String(connectionId)}`;
+  if (tidb === null) return null;
   const major = Number(tidb[1]);
   const minor = Number(tidb[2]);
-  const globalKill =
-    major > TIDB_GLOBAL_KILL.major || (major === TIDB_GLOBAL_KILL.major && minor >= TIDB_GLOBAL_KILL.minor);
-  return globalKill ? `KILL TIDB QUERY ${String(connectionId)}` : null;
+  return major > TIDB_GLOBAL_KILL.major || (major === TIDB_GLOBAL_KILL.major && minor >= TIDB_GLOBAL_KILL.minor);
 }

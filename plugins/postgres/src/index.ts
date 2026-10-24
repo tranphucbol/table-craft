@@ -24,6 +24,7 @@ import {
   type Row,
   type ServerMessage,
   type Session,
+  type SessionMonitor,
   type SqlLanguage,
   type TransactionMode,
   type Transactions,
@@ -59,6 +60,7 @@ import { EXPLAIN_VERBS, explainStatement, readPlan } from "./explain.js";
 import { postgresIntrospector } from "./introspect.js";
 import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
+import { postgresSessions } from "./sessions.js";
 
 const PLUGIN_ID = "postgres";
 const CAPABILITIES: readonly Capability[] = [
@@ -74,6 +76,7 @@ const CAPABILITIES: readonly Capability[] = [
   "bulkInsert",
   "objects",
   "serverMessages",
+  "sessions",
 ];
 
 /** Function bodies live in dollar quotes; `BEGIN ATOMIC … END` holds a SQL-standard body. */
@@ -352,6 +355,8 @@ class PostgresSession implements Session {
   readonly serverVersion: string | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
+  readonly sessions: SessionMonitor;
+  readonly serverSessionId: string;
 
   constructor(
     config: PostgresConfig,
@@ -364,6 +369,8 @@ class PostgresSession implements Session {
     this.#typeNames = typeNames;
     this.serverVersion = serverVersion;
     this.introspector = postgresIntrospector(client);
+    this.sessions = postgresSessions(client, () => openClient(config));
+    this.serverSessionId = String((client as pg.Client & WithBackendPid).processID);
     const state = this.#transaction;
     this.transactions = {
       setMode: (mode) => this.#setMode(mode),

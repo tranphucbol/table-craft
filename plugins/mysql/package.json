@@ -10,6 +10,7 @@
     "./explain": "./src/explain.ts",
     "./bulk": "./src/bulk.ts",
     "./server": "./src/server.ts",
+    "./sessions": "./src/sessions.ts",
     "./warnings": "./src/warnings.ts"
   },
   "dependencies": {

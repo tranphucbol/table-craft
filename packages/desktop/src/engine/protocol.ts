@@ -66,7 +66,8 @@ export type Capability =
   | "keepAlive"
   | "bulkInsert"
   | "objects"
-  | "serverMessages";
+  | "serverMessages"
+  | "sessions";
 
 /** Mirrors `ServerMessageLevel` in plugin-api. */
 export type ServerMessageLevel = "error" | "warning" | "notice" | "info";
@@ -76,6 +77,48 @@ export interface ServerMessage {
   readonly level: ServerMessageLevel;
   readonly code: string | null;
   readonly text: string;
+}
+
+/** Mirrors `ServerSessionState` in plugin-api. */
+export type ServerSessionState = "active" | "idle" | "idleInTransaction" | "blocked" | "other";
+
+/** Mirrors `ServerSession` in plugin-api: one session on the server (decision 088). */
+export interface ServerSession {
+  readonly id: string;
+  readonly instance: string | null;
+  readonly state: ServerSessionState;
+  readonly rawState: string | null;
+  readonly user: string | null;
+  readonly database: string | null;
+  readonly client: string | null;
+  readonly application: string | null;
+  readonly queryMs: number | null;
+  readonly transactionMs: number | null;
+  readonly waitEvent: string | null;
+  readonly blockedBy: readonly string[] | null;
+  readonly query: string | null;
+  readonly system: boolean;
+  readonly cancel: string | null;
+  readonly terminate: string | null;
+}
+
+/** Mirrors `SessionTarget` in plugin-api. */
+export interface SessionTarget {
+  readonly id: string;
+  readonly instance: string | null;
+}
+
+/** A listed server session, and whether it is one of this engine's own connections. */
+export interface ListedSession extends ServerSession {
+  /** This engine's session id for it, as `session.open` returned it; null for the catalog's connection and everyone else's. */
+  readonly ownSessionId: string | null;
+  readonly own: boolean;
+}
+
+/** What `sessions.list` answers: the server's sessions, and what the listing leaves out and why. */
+export interface SessionsListing {
+  readonly sessions: readonly ListedSession[];
+  readonly notes: readonly string[];
 }
 
 /** What the SQL Generator writes: `create` is the relation's definition, the rest mirror `GeneratedStatement` in plugin-api. */

@@ -9,6 +9,7 @@ import type {
 } from "./completion.js";
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { ObjectEditor } from "./objects.js";
+import type { SessionMonitor } from "./sessions.js";
 import type { WireValue } from "./values.js";
 
 /**
@@ -28,6 +29,7 @@ export const CAPABILITIES = [
   "bulkInsert",
   "objects",
   "serverMessages",
+  "sessions",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -187,6 +189,13 @@ export interface Session {
    * hex into a binary column, `true`/`false` into a boolean stored as a number.
    */
   insertRows?(target: InsertTarget, rows: readonly InsertRow[]): Promise<void>;
+  /** Present exactly when the plugin declares `sessions` (decision 088). */
+  readonly sessions?: SessionMonitor;
+  /**
+   * Present exactly when the plugin declares `sessions`: the server's id for this connection, as
+   * `ServerSession.id` lists it, so the host can tell its own sessions apart.
+   */
+  readonly serverSessionId?: string;
   /**
    * Settles in bounded time even when the network is gone: a graceful goodbye that does not
    * answer within a few seconds gives way to dropping the socket (decision 040).

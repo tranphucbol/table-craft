@@ -2,7 +2,7 @@ import mysql from "@table-craft/plugin-mysql";
 import { isPluginError, omittedMessages, SERVER_MESSAGE_LIMIT, type Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, withWrongPassword } from "../support/databases.js";
+import { MYSQL_CONFIG, MYSQL_ROOT_CONFIG, withWrongPassword } from "../support/databases.js";
 import { MYSQL_MANIFEST } from "../support/manifests.js";
 import { TYPE_PROBE_COPY_AS, TYPE_PROBE_EXPECTED, TYPE_PROBE_WRITE } from "../support/typeProbe.js";
 
@@ -31,6 +31,7 @@ runPluginContract(mysql, {
     customersComment: "People who place orders",
   },
   namespaceSwitch: { statement: "USE archive", path: ["archive"], missing: "USE no_such_database" },
+  sessions: { monitorConfig: MYSQL_ROOT_CONFIG, limited: { config: MYSQL_CONFIG, note: /GRANT PROCESS/ } },
 });
 
 /** More rows than `SERVER_MESSAGE_LIMIT`, each truncating `'<n>x'` to an integer with a warning. */

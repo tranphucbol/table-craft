@@ -22,6 +22,7 @@ import {
   type PluginErrorCode,
   type ServerMessage,
   type Session,
+  type SessionMonitor,
   type SqlLanguage,
   type TransactionMode,
   type Transactions,
@@ -67,6 +68,7 @@ import {
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { isTidb, killStatementFor } from "./server.js";
+import { mysqlSessions } from "./sessions.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
@@ -83,6 +85,7 @@ const CAPABILITIES: readonly Capability[] = [
   "bulkInsert",
   "objects",
   "serverMessages",
+  "sessions",
 ];
 
 /** What the mysql client accepts: `'\''`, `# comments`, `DELIMITER //` and `BEGIN … END` routine bodies. */
@@ -352,6 +355,7 @@ interface Identity {
   readonly serverVersion: string | null;
   /** What stops this connection's running statement from another connection; `null` when nothing safely does. */
   readonly kill: string | null;
+  readonly serverSessionId: string;
 }
 
 /**
@@ -363,8 +367,16 @@ async function prepareConnection(connection: mysql.Connection, options: ConnectO
   const rows = (await query(connection, IDENTITY_SQL)) as readonly { version?: unknown; id?: unknown }[];
   const version = rows[0]?.version;
   const serverVersion = typeof version === "string" && version !== "" ? version : null;
-  const id = Number(rows[0]?.id ?? connection.threadId);
-  return { serverVersion, kill: Number.isSafeInteger(id) ? killStatementFor(serverVersion, id) : null };
+  const reported = rows[0]?.id;
+  // bigNumberStrings hands a TiDB Global Kill id over as text.
+  const serverSessionId =
+    typeof reported === "string" || typeof reported === "number" ? String(reported) : String(connection.threadId);
+  const id = Number(serverSessionId);
+  return {
+    serverVersion,
+    kill: Number.isSafeInteger(id) ? killStatementFor(serverVersion, id) : null,
+    serverSessionId,
+  };
 }
 
 /** Whether `work` settled within `ms`. */
@@ -527,6 +539,8 @@ class MysqlSession implements Session {
   readonly serverVersion: string | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
+  readonly sessions: SessionMonitor;
+  readonly serverSessionId: string;
 
   constructor(config: MysqlConfig, connection: mysql.Connection, identity: Identity) {
     this.#config = config;
@@ -534,6 +548,8 @@ class MysqlSession implements Session {
     this.#kill = identity.kill;
     this.serverVersion = identity.serverVersion;
     this.introspector = mysqlIntrospector(connection);
+    this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config));
+    this.serverSessionId = identity.serverSessionId;
     const state = this.#transaction;
     this.transactions = {
       setMode: (mode) => this.#setMode(mode),

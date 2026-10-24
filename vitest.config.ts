@@ -35,6 +35,11 @@ export default defineConfig({
         find: /^@table-craft\/plugin-postgres\/notices$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/notices.ts"),
       },
+      // The session-list readers, which the row tests feed captured server rows (plan 045).
+      {
+        find: /^@table-craft\/plugin-(postgres|mysql)\/sessions$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/$1/src/sessions.ts"),
+      },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },
       { find: "@table-craft/plugin-mysql", replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/index.ts") },
