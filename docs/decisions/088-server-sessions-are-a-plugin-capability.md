@@ -1,6 +1,6 @@
 # 088: Server sessions are a plugin capability
 
-Status: Accepted. Plugin API 0.22.0.
+Status: Accepted. Plugin API 0.24.0.
 
 ## Decision
 
@@ -45,8 +45,8 @@ asking for it in a second call, keeps what the confirmation shows and what runs 
 
 ## Consequences
 
-- `API_VERSION` is 0.22.0. While the major is 0 a plugin must match the minor, so plugins built for
-  0.21 are unavailable until rebuilt.
+- `API_VERSION` is 0.24.0. While the major is 0 a plugin must match the minor, so plugins built for
+  0.23 are unavailable until rebuilt.
 - Engine messages `sessions.list`, `sessions.cancel` and `sessions.terminate`; the listing reuses the
   introspection session and its retry on a broken connection, the kills never retry.
 - A plugin that cannot see lock waits leaves `blockedBy` `null` and says why in `notes`.
