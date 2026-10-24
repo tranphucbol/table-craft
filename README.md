@@ -109,7 +109,7 @@ current from then on.
 
 ### Build from source
 
-You need [Bun](https://bun.sh) 1.3.4 (the version in `.bun-version`) and Node 22 or later.
+You need [Bun](https://bun.sh) 1.4.4 (the version in `.bun-version`) and Node 22 or later.
 
 ```sh
 bun install
