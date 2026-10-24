@@ -33,6 +33,7 @@ import {
   runAllButton,
   SCENARIO_TIMEOUT_MS,
   seedDatasources,
+  seedSettings,
   setWindowSize,
   sqlEditor,
   toolWindow,
@@ -266,7 +267,9 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
   it(
     "givenSecondStatementFails_whenRunAll_thenOutputShowsErrorAndThirdSkipped",
     async () => {
-      const page = await launch(MYSQL);
+      const userDataDir = newProfile();
+      seedSettings(userDataDir, { version: 1, console: { runAllOnError: "stop" } });
+      const page = await launch(MYSQL, { userDataDir });
       await typeScript(page, "SELECT 1 AS one;\nSELECT * FROM no_such_table;\nSELECT 3 AS three;");
 
       await runAll(page);

@@ -28,9 +28,11 @@ import {
   findAction,
   LAUNCH_TIMEOUT_MS,
   launchApp,
+  newProfile,
   pressChord,
   runAllButton,
   SCENARIO_TIMEOUT_MS,
+  seedSettings,
   setWindowSize,
   SMOKE_ENABLED,
   sqlEditor,
@@ -383,7 +385,12 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
 
   /** Run SQL Script… from Find Action on a script that fails at line 3, then Go to statement. */
   async function runBroken(datasource: Datasource, label: string): Promise<void> {
-    const current = await launch(datasource);
+    const userDataDir = newProfile();
+    seedSettings(userDataDir, { version: 1, console: { runAllOnError: "stop" } });
+    running = await launchApp(datasource, { userDataDir });
+    await setWindowSize(running.app, EVIDENCE_WINDOW);
+    await waitUntilReady(running.page);
+    const current = running;
     const { page } = current;
     const path = file(folder(), "broken.sql", BROKEN_SCRIPT);
 
@@ -402,7 +409,8 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     await captureWindow(page, `script-failed-${label}`);
     await failed.locator('[data-action="script.goTo"]').click();
     await expect.poll(() => activeEditorTab(page).getAttribute("title")).toBe(path);
-    await expect.poll(() => page.locator(".tc-statement-flash").allTextContents()).toEqual(["SELEC broken;"]);
+    await expect.poll(() => page.locator(".tc-statement-flash").allTextContents()).toEqual(["SELEC"]);
+    await expect.poll(() => page.locator(".tc-error-mark").allTextContents()).toEqual(["SELEC"]);
     await captureWindow(page, `script-go-to-statement-${label}`);
   }
 
