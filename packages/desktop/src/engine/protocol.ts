@@ -1189,6 +1189,11 @@ export type EngineErrorCode =
   | "exportFailed"
   | "importFailed"
   | "objectBusy"
+  | "sshAuthFailed"
+  | "sshHostUnreachable"
+  | "sshHostKeyChanged"
+  | "sshHostKeyUnknown"
+  | "sshTunnelLost"
   | "internal";
 
 export interface EngineError {

@@ -4,7 +4,7 @@ export {
   completionCatalog,
   type CompletionCatalogOptions,
 } from "./catalog/completionCatalog.js";
-export { CoreError, EditRejectedError, type CoreErrorCode } from "./errors.js";
+export { CoreError, EditRejectedError, TunnelError, type CoreErrorCode, type TunnelErrorCode } from "./errors.js";
 export {
   READ_ONLY_REASONS,
   editableIdentity,
@@ -182,3 +182,29 @@ export {
   type RejectedSink,
   type RunImportOptions,
 } from "./import/index.js";
+export {
+  KNOWN_HOSTS_VERSION,
+  SSH_AUTH_METHODS,
+  algorithmOf,
+  createKnownHosts,
+  createTunnelPool,
+  fingerprintOf,
+  hostKeyOffer,
+  keyNeedsPassphrase,
+  knownHostName,
+  openTunnel,
+  tunneledSession,
+  type HostKeyCheck,
+  type HostKeyOffer,
+  type HostKeyVerifier,
+  type KnownHosts,
+  type KnownHostsFiles,
+  type KnownHostsOptions,
+  type SshAuthMethod,
+  type SshEndpoint,
+  type Tunnel,
+  type TunnelLease,
+  type TunnelOptions,
+  type TunnelPool,
+  type TunnelTarget,
+} from "./tunnels/index.js";

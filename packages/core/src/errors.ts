@@ -5,7 +5,12 @@ export type CoreErrorCode =
   | "invalidConfig"
   | "invalidRequest"
   | "editRejected"
-  | "statementFailed";
+  | "statementFailed"
+  | TunnelErrorCode;
+
+/** Why an SSH tunnel (plan 036) could not open or stopped; each says which hop failed. */
+export type TunnelErrorCode =
+  "sshAuthFailed" | "sshHostUnreachable" | "sshHostKeyChanged" | "sshHostKeyUnknown" | "sshTunnelLost";
 
 /** A failure the user can act on: `hint` says what to do next. */
 export class CoreError extends Error {
@@ -17,6 +22,19 @@ export class CoreError extends Error {
     readonly hint: string,
   ) {
     super(message);
+  }
+}
+
+/** An SSH tunnel failure (plan 036); `instanceof` holds because only core raises it. */
+export class TunnelError extends CoreError {
+  override readonly name = "TunnelError";
+
+  constructor(
+    override readonly code: TunnelErrorCode,
+    message: string,
+    hint: string,
+  ) {
+    super(code, message, hint);
   }
 }
 
