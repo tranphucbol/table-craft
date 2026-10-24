@@ -47,6 +47,7 @@ export async function discoverInstalled(roots: readonly string[]): Promise<Insta
       highlight: manifest?.highlight ?? null,
       url: manifest?.connection.url ?? null,
       network: manifest?.connection.network ?? null,
+      tls: manifest?.connection.tls ?? null,
     };
   });
   return { plugins, report };

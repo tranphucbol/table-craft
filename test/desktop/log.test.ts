@@ -334,6 +334,7 @@ describe("diagnostics", () => {
     highlight: "postgresql",
     url: null,
     network: null,
+    tls: null,
     fields: [
       { key: "host", label: "Host", kind: "text" },
       { key: "password", label: "Password", kind: "password", secret: true },

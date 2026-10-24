@@ -166,6 +166,15 @@ export interface PluginInfo {
     readonly port: string;
     readonly connectTimeout?: string | undefined;
   } | null;
+  /** Mirrors `TlsSpec` in plugin-api; null when the plugin has no certificate fields (decision 072). */
+  readonly tls: {
+    readonly mode: string;
+    readonly verifyModes: readonly string[];
+    readonly caFile?: string | undefined;
+    readonly certFile?: string | undefined;
+    readonly keyFile?: string | undefined;
+    readonly keyPassphrase?: string | undefined;
+  } | null;
 }
 
 /** The SSH tunnel's settings as `datasources.json` holds them (decision 070); its secrets are in `secretModes`. */

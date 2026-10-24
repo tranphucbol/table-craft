@@ -454,3 +454,70 @@ describe("datasource service SSH tunnel", () => {
     expect(bootedConfig(dependencies)).toMatchObject({ ssh: { password: SSH_PASSWORD }, config: { password: SECRET } });
   });
 });
+
+describe("datasource service client key", () => {
+  const CLIENT_KEY = "/home/me/certs/client.key";
+  const PASSPHRASE = "open sesame";
+  const WITH_KEY: DatasourceDraft = {
+    ...PG_DRAFT,
+    config: { ...PG_DRAFT.config, sslMode: "verify-full", sslCert: "/home/me/certs/client.crt", sslKey: CLIENT_KEY },
+  };
+  const ENCRYPTED_PKCS8 = "-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----\n";
+  const PLAIN_PKCS8 = "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n";
+
+  it("givenEncryptedClientKey_whenConnect_thenAsksForPassphrase", async () => {
+    const { service: datasources } = await service({ keyFiles: { [CLIENT_KEY]: ENCRYPTED_PKCS8 } });
+    const saved = await datasources.save(saving({ ...WITH_KEY, secretModes: { password: "forever" } }, SECRET));
+
+    expect(saved.secretModes).toEqual({ password: "forever", sslKeyPassphrase: "forever" });
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({
+      status: "needsSecrets",
+      keys: ["sslKeyPassphrase"],
+    });
+  });
+
+  it("givenEncryptedClientKeyAndTypedPassphrase_whenConnect_thenBootedWithIt", async () => {
+    const { dependencies, service: datasources } = await service({ keyFiles: { [CLIENT_KEY]: ENCRYPTED_PKCS8 } });
+    const saved = await datasources.save(saving(WITH_KEY, SECRET));
+
+    expect(await datasources.connect(saved.id, { sslKeyPassphrase: PASSPHRASE }, WINDOW)).toEqual({
+      status: "connected",
+    });
+    expect(bootedConfig(dependencies)).toMatchObject({ config: { sslKey: CLIENT_KEY, sslKeyPassphrase: PASSPHRASE } });
+  });
+
+  it("givenUnencryptedClientKey_whenConnect_thenNoPassphraseAsked", async () => {
+    const { dependencies, service: datasources } = await service({ keyFiles: { [CLIENT_KEY]: PLAIN_PKCS8 } });
+    const saved = await datasources.save(saving(WITH_KEY, SECRET));
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
+    expect(bootedConfig(dependencies)).toMatchObject({ config: { sslKey: CLIENT_KEY } });
+    expect(bootedConfig(dependencies)).not.toHaveProperty("config.sslKeyPassphrase");
+  });
+
+  it("givenNoClientKey_whenSaved_thenNoPassphraseKept", async () => {
+    const { service: datasources } = await service();
+
+    const saved = await datasources.save(saving(PG_DRAFT, SECRET));
+
+    expect(saved.secretModes).toEqual({ password: "forever" });
+  });
+
+  it("givenClientKeyCleared_whenSaved_thenPassphraseForgotten", async () => {
+    const { service: datasources } = await service({ keyFiles: { [CLIENT_KEY]: ENCRYPTED_PKCS8 } });
+    const saved = await datasources.save({
+      datasource: WITH_KEY,
+      secrets: { password: { action: "set", value: SECRET }, sslKeyPassphrase: { action: "set", value: PASSPHRASE } },
+    });
+
+    const cleared = await datasources.save({
+      datasource: { ...WITH_KEY, id: saved.id, config: { ...WITH_KEY.config, sslKey: "" } },
+      secrets: {},
+    });
+    const restored = await datasources.save({ datasource: { ...WITH_KEY, id: saved.id }, secrets: {} });
+
+    expect(saved.storedSecrets).toEqual(["password", "sslKeyPassphrase"]);
+    expect(cleared.storedSecrets).toEqual(["password"]);
+    expect(restored.storedSecrets).toEqual(["password"]);
+  });
+});

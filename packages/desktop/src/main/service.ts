@@ -92,9 +92,27 @@ function tunnelOf(plugin: PluginInfo | undefined, ssh: SshSettings | undefined):
   return plugin?.network !== null && plugin?.network !== undefined && ssh?.enabled === true ? ssh : undefined;
 }
 
-/** Every secret kept for the data source: the plugin's, and both SSH secrets once it has SSH settings. */
-function storedKeysOf(plugin: PluginInfo, ssh: SshSettings | undefined): string[] {
-  const own = secretFields(plugin).map((field) => field.key);
+/** The client key passphrase's key once the data source names a client key file, which is all it unlocks. */
+function keyPassphraseOf(plugin: PluginInfo, config: Readonly<Record<string, ConfigValue>>): string | undefined {
+  const tls = plugin.tls;
+  if (tls?.keyPassphrase === undefined || tls.keyFile === undefined) return undefined;
+  const keyFile = config[tls.keyFile];
+  return typeof keyFile === "string" && keyFile !== "" ? tls.keyPassphrase : undefined;
+}
+
+/**
+ * Every secret kept for the data source: the plugin's, the client key passphrase once there is a
+ * client key, and both SSH secrets once it has SSH settings.
+ */
+function storedKeysOf(
+  plugin: PluginInfo,
+  ssh: SshSettings | undefined,
+  config: Readonly<Record<string, ConfigValue>>,
+): string[] {
+  const passphrase = plugin.tls?.keyPassphrase;
+  const own = secretFields(plugin)
+    .map((field) => field.key)
+    .filter((key) => key !== passphrase || keyPassphraseOf(plugin, config) !== undefined);
   return plugin.network !== null && ssh !== undefined ? [...own, ...SSH_KEYS] : own;
 }
 
@@ -204,10 +222,11 @@ export async function createDatasourceService<Target>(
   function modesFor(
     plugin: PluginInfo,
     ssh: SshSettings | undefined,
+    config: Readonly<Record<string, ConfigValue>>,
     requested: Readonly<Record<string, SecretMode>>,
   ): Record<string, SecretMode> {
     const modes: Record<string, SecretMode> = {};
-    for (const key of storedKeysOf(plugin, ssh)) modes[key] = requested[key] ?? defaultMode();
+    for (const key of storedKeysOf(plugin, ssh, config)) modes[key] = requested[key] ?? defaultMode();
     return modes;
   }
 
@@ -223,6 +242,20 @@ export async function createDatasourceService<Target>(
     return [];
   }
 
+  /** The plugin's secrets connecting needs: all but the client key passphrase, which only an encrypted key needs. */
+  async function pluginKeysNeeded(
+    plugin: PluginInfo,
+    config: Readonly<Record<string, ConfigValue>>,
+  ): Promise<string[]> {
+    const passphrase = keyPassphraseOf(plugin, config);
+    const own = secretFields(plugin)
+      .map((field) => field.key)
+      .filter((key) => key !== plugin.tls?.keyPassphrase);
+    if (passphrase === undefined || plugin.tls?.keyFile === undefined) return own;
+    const encrypted = await keyIsEncrypted(String(config[plugin.tls.keyFile]));
+    return encrypted ? [...own, passphrase] : own;
+  }
+
   async function save(request: SaveDatasourceRequest): Promise<DatasourceView> {
     const draft = request.datasource;
     if (ephemeral !== null && draft.id === ephemeral.id) {
@@ -234,7 +267,7 @@ export async function createDatasourceService<Target>(
     const plugin = availablePlugin(draft.pluginId);
     const previous = datasources.find((datasource) => datasource.id === draft.id);
     const id = previous?.id ?? options.newId();
-    const modes = modesFor(plugin, draft.ssh, draft.secretModes);
+    const modes = modesFor(plugin, draft.ssh, draft.config, draft.secretModes);
     const origin = draft.origin ?? previous?.origin;
     const next = toDatasource({ ...draft, secretModes: modes, origin }, id, plugin.fields, plugin.network !== null);
     checkRequired(plugin, next.config);
@@ -252,6 +285,14 @@ export async function createDatasourceService<Target>(
     if (previous?.ssh !== undefined && next.ssh === undefined) {
       for (const key of SSH_KEYS) await secrets.clear(id, key);
     }
+    const passphrase = plugin.tls?.keyPassphrase;
+    if (
+      passphrase !== undefined &&
+      previous?.secretModes[passphrase] !== undefined &&
+      modes[passphrase] === undefined
+    ) {
+      await secrets.clear(id, passphrase);
+    }
     datasources = previous === undefined ? [...datasources, next] : datasources.map((d) => (d.id === id ? next : d));
     await store.save(datasources);
     changed();
@@ -263,7 +304,7 @@ export async function createDatasourceService<Target>(
     for (const item of items) {
       const plugin = availablePlugin(item.draft.pluginId);
       const id = options.newId();
-      const modes = modesFor(plugin, undefined, {});
+      const modes = modesFor(plugin, undefined, item.draft.config, {});
       const next = toDatasource({ ...item.draft, secretModes: modes }, id, plugin.fields);
       for (const [key, value] of Object.entries(item.secrets)) {
         const mode = modes[key];
@@ -364,7 +405,7 @@ export async function createDatasourceService<Target>(
     const plugin = availablePlugin(draft.pluginId);
     const previous = draft.id === undefined ? undefined : datasources.find((datasource) => datasource.id === draft.id);
     const values: Record<string, string> = {};
-    for (const key of storedKeysOf(plugin, draft.ssh)) {
+    for (const key of storedKeysOf(plugin, draft.ssh, draft.config)) {
       const change = request.secrets[key] ?? { action: "keep" };
       if (change.action === "set") values[key] = change.value;
       if (change.action !== "keep" || previous === undefined) continue;
@@ -394,7 +435,7 @@ export async function createDatasourceService<Target>(
     const missing: string[] = [];
     const isEphemeral = ephemeral?.id === datasourceId;
     const needed = [
-      ...secretFields(plugin).map((field) => field.key),
+      ...(await pluginKeysNeeded(plugin, datasource.config)),
       ...(await sshKeysNeeded(tunnelOf(plugin, datasource.ssh))),
     ];
     for (const key of needed) {
