@@ -73,11 +73,11 @@ describe("format (standard style)", () => {
 
 describe("format: optimizer hints", () => {
   const HINTED =
-    "select /*+ USE_INDEX(order_events_202601, order_events_app_id) */ * from order_events_202601 limit 10";
+    "select /*+ USE_INDEX(order_events_202601, order_events_shop_id) */ * from order_events_202601 limit 10";
 
   it.each(FORMAT_STYLES)("given%sStyle_whenHintedSelectFormatted_thenHintStaysRightAfterTheVerb", (style) => {
     expect(mysql.format(HINTED, { ...DEFAULTS, style })).toMatch(
-      /^SELECT\s+\/\*\+ USE_INDEX\(order_events_202601, order_events_app_id\) \*\//,
+      /^SELECT\s+\/\*\+ USE_INDEX\(order_events_202601, order_events_shop_id\) \*\//,
     );
   });
 });

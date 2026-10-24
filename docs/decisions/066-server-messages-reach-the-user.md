@@ -30,7 +30,7 @@ records the count and the codes, never the text (decision 020's rule for stateme
 
 ## Rationale
 
-TiDB answered `/*+ USE_INDEX(order_events_app_id) */` with warning 1815, "use_index is
+TiDB answered `/*+ USE_INDEX(order_events_shop_id) */` with warning 1815, "use_index is
 inapplicable", and a full table scan. The console showed only "10 rows", so the user saw the hint
 fail without the reason the server gave. Every client the user knows (the `mysql` CLI's
 "1 warning", DataGrip's Output) shows these.

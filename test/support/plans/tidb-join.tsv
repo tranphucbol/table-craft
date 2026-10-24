@@ -2,6 +2,6 @@ id	estRows	task	access object	operator info
 Sort_8	12.50	root		test.order_events_202601.state:asc
 └─IndexJoin_15	12.50	root		inner join, inner:TableReader_14, outer key:test.order_events_202601.id, inner key:test.order_events_202601.id, equal cond:eq(test.order_events_202601.id, test.order_events_202601.id)
   ├─IndexReader_31(Build)	10.00	root		index:IndexRangeScan_30
-  │ └─IndexRangeScan_30	10.00	cop[tikv]	table:a, index:order_events_app_id(app_id)	range:[7,7], keep order:false, stats:pseudo
+  │ └─IndexRangeScan_30	10.00	cop[tikv]	table:a, index:order_events_shop_id(shop_id)	range:[7,7], keep order:false, stats:pseudo
   └─TableReader_14(Probe)	1.00	root		data:TableRangeScan_13
     └─TableRangeScan_13	1.00	cop[tikv]	table:b	range: decided by [test.order_events_202601.id], keep order:false, stats:pseudo

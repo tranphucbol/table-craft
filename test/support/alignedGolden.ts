@@ -3,80 +3,80 @@ const lines = (...rows: string[]): string => rows.join("\n");
 /** The reference layout from plan 030, as DataGrip writes it. */
 export const GOLDEN = lines(
   "EXPLAIN",
-  "SELECT trans_id,",
-  "       app_id,",
-  "       event_code,",
-  "       product_code,",
-  "       JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.sources[0].asset_type'))      AS source_asset,",
-  "       JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.destinations[0].asset_type')) AS dest_asset,",
-  "       JSON_EXTRACT(extra_data, '$.order.order_amount')                       AS amount,",
-  "       JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.order.order_ref_id'))         AS order_ref_id,",
+  "SELECT event_id,",
+  "       shop_id,",
+  "       event_type,",
+  "       sku_code,",
+  "       JSON_UNQUOTE(JSON_EXTRACT(payload, '$.items[0].category'))    AS first_category,",
+  "       JSON_UNQUOTE(JSON_EXTRACT(payload, '$.shipments[0].carrier')) AS carrier,",
+  "       JSON_EXTRACT(payload, '$.order.total_amount')                 AS amount,",
+  "       JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order.external_ref'))   AS external_ref,",
   "       status,",
-  "       trans_status,",
-  "       reason_status,",
-  "       JSON_EXTRACT(reason_status, '$.metadata.sv_code')                      AS sv_code,",
-  "       JSON_EXTRACT(reason_status, '$.metadata.gw_code')                      AS gw_code,",
-  "       JSON_EXTRACT(reason_status, '$.metadata.gw_trans_status')              AS gw_trans_status,",
-  "       JSON_EXTRACT(reason_status, '$.metadata.gw_trans_id')                  AS gw_trans_id,",
-  "       JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.initiator.account_id'))       AS account_id,",
+  "       payment_status,",
+  "       failure_detail,",
+  "       JSON_EXTRACT(failure_detail, '$.gateway.error_code')          AS error_code,",
+  "       JSON_EXTRACT(failure_detail, '$.gateway.decline_code')        AS decline_code,",
+  "       JSON_EXTRACT(failure_detail, '$.gateway.attempt_status')      AS attempt_status,",
+  "       JSON_EXTRACT(failure_detail, '$.gateway.attempt_id')          AS attempt_id,",
+  "       JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.account_id'))  AS account_id,",
   "       created_at,",
   "       updated_at",
   "FROM order_events_202607 USE INDEX (order_events_created_at_idx)",
   "WHERE created_at > '2026-07-09 03:00:00'",
   "  AND created_at < '2026-07-09 03:45:00'",
-  "  AND status NOT IN ('SUCCESS')",
+  "  AND status NOT IN ('DELIVERED')",
   "  AND (",
-  "    JSON_EXTRACT(extra_data, '$.sources[0].asset_type') IN ('BDA', 'BDC', 'BIC', 'BID', 'BCO', 'BNP', 'FDA', 'MDA') OR",
-  "    JSON_EXTRACT(extra_data, '$.destinations[0].asset_type') IN ('BDA', 'BDC', 'BIC', 'BID', 'NMCA', 'MDA', 'FDA'));",
+  "    JSON_EXTRACT(payload, '$.items[0].category') IN ('BOOK', 'TOY', 'GAME', 'FOOD', 'HOME', 'BABY', 'PETS', 'TECH') OR",
+  "    JSON_EXTRACT(payload, '$.shipments[0].carrier') IN ('DHL', 'UPS', 'USPS', 'FEDEX', 'TNT', 'GLS', 'DPD'));",
 );
 
 /** The golden squashed onto one line with lower-case keywords; function names stay as written. */
 export const GOLDEN_ONE_LINE =
-  "explain select trans_id, app_id, event_code, product_code, " +
-  "JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.sources[0].asset_type')) as source_asset, " +
-  "JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.destinations[0].asset_type')) as dest_asset, " +
-  "JSON_EXTRACT(extra_data, '$.order.order_amount') as amount, " +
-  "JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.order.order_ref_id')) as order_ref_id, " +
-  "status, trans_status, reason_status, " +
-  "JSON_EXTRACT(reason_status, '$.metadata.sv_code') as sv_code, " +
-  "JSON_EXTRACT(reason_status, '$.metadata.gw_code') as gw_code, " +
-  "JSON_EXTRACT(reason_status, '$.metadata.gw_trans_status') as gw_trans_status, " +
-  "JSON_EXTRACT(reason_status, '$.metadata.gw_trans_id') as gw_trans_id, " +
-  "JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.initiator.account_id')) as account_id, " +
+  "explain select event_id, shop_id, event_type, sku_code, " +
+  "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.items[0].category')) as first_category, " +
+  "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.shipments[0].carrier')) as carrier, " +
+  "JSON_EXTRACT(payload, '$.order.total_amount') as amount, " +
+  "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order.external_ref')) as external_ref, " +
+  "status, payment_status, failure_detail, " +
+  "JSON_EXTRACT(failure_detail, '$.gateway.error_code') as error_code, " +
+  "JSON_EXTRACT(failure_detail, '$.gateway.decline_code') as decline_code, " +
+  "JSON_EXTRACT(failure_detail, '$.gateway.attempt_status') as attempt_status, " +
+  "JSON_EXTRACT(failure_detail, '$.gateway.attempt_id') as attempt_id, " +
+  "JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.account_id')) as account_id, " +
   "created_at, updated_at from order_events_202607 use index (order_events_created_at_idx) " +
   "where created_at > '2026-07-09 03:00:00' and created_at < '2026-07-09 03:45:00' " +
-  "and status not in ('SUCCESS') and (JSON_EXTRACT(extra_data, '$.sources[0].asset_type') in " +
-  "('BDA', 'BDC', 'BIC', 'BID', 'BCO', 'BNP', 'FDA', 'MDA') or " +
-  "JSON_EXTRACT(extra_data, '$.destinations[0].asset_type') in ('BDA', 'BDC', 'BIC', 'BID', 'NMCA', 'MDA', 'FDA'));";
+  "and status not in ('DELIVERED') and (JSON_EXTRACT(payload, '$.items[0].category') in " +
+  "('BOOK', 'TOY', 'GAME', 'FOOD', 'HOME', 'BABY', 'PETS', 'TECH') or " +
+  "JSON_EXTRACT(payload, '$.shipments[0].carrier') in ('DHL', 'UPS', 'USPS', 'FEDEX', 'TNT', 'GLS', 'DPD'));";
 
 export const GOLDEN_MESSY = lines(
-  "explain   select trans_id ,app_id,event_code ,  product_code,",
-  "JSON_UNQUOTE( JSON_EXTRACT( extra_data,'$.sources[0].asset_type' ) ) as source_asset,",
-  "  JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.destinations[0].asset_type'))   as   dest_asset,",
-  "JSON_EXTRACT(extra_data, '$.order.order_amount') as amount, JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.order.order_ref_id')) as order_ref_id,",
-  "status, trans_status, reason_status, JSON_EXTRACT(reason_status, '$.metadata.sv_code') as sv_code,",
-  "JSON_EXTRACT(reason_status, '$.metadata.gw_code') as gw_code, JSON_EXTRACT(reason_status, '$.metadata.gw_trans_status') as gw_trans_status,",
-  "JSON_EXTRACT(reason_status, '$.metadata.gw_trans_id') as gw_trans_id, JSON_UNQUOTE(JSON_EXTRACT(extra_data, '$.initiator.account_id')) as account_id,",
+  "explain   select event_id ,shop_id,event_type ,  sku_code,",
+  "JSON_UNQUOTE( JSON_EXTRACT( payload,'$.items[0].category' ) ) as first_category,",
+  "  JSON_UNQUOTE(JSON_EXTRACT(payload, '$.shipments[0].carrier'))   as   carrier,",
+  "JSON_EXTRACT(payload, '$.order.total_amount') as amount, JSON_UNQUOTE(JSON_EXTRACT(payload, '$.order.external_ref')) as external_ref,",
+  "status, payment_status, failure_detail, JSON_EXTRACT(failure_detail, '$.gateway.error_code') as error_code,",
+  "JSON_EXTRACT(failure_detail, '$.gateway.decline_code') as decline_code, JSON_EXTRACT(failure_detail, '$.gateway.attempt_status') as attempt_status,",
+  "JSON_EXTRACT(failure_detail, '$.gateway.attempt_id') as attempt_id, JSON_UNQUOTE(JSON_EXTRACT(payload, '$.customer.account_id')) as account_id,",
   "created_at, updated_at",
   "from order_events_202607 use index(order_events_created_at_idx)",
   "where created_at > '2026-07-09 03:00:00'",
-  "\tand created_at < '2026-07-09 03:45:00' and status not in ( 'SUCCESS' )",
-  "and ( JSON_EXTRACT(extra_data, '$.sources[0].asset_type') in ('BDA','BDC','BIC','BID','BCO','BNP','FDA','MDA')",
-  "     or JSON_EXTRACT(extra_data, '$.destinations[0].asset_type') in ('BDA', 'BDC', 'BIC', 'BID', 'NMCA', 'MDA', 'FDA') ) ;",
+  "\tand created_at < '2026-07-09 03:45:00' and status not in ( 'DELIVERED' )",
+  "and ( JSON_EXTRACT(payload, '$.items[0].category') in ('BOOK','TOY','GAME','FOOD','HOME','BABY','PETS','TECH')",
+  "     or JSON_EXTRACT(payload, '$.shipments[0].carrier') in ('DHL', 'UPS', 'USPS', 'FEDEX', 'TNT', 'GLS', 'DPD') ) ;",
 );
 
 /** The table the golden explains, so MySQL can plan it; columns as the golden reads them. */
 export const GOLDEN_TABLE = "order_events_202607";
 
 export const GOLDEN_TABLE_DDL = `CREATE TABLE IF NOT EXISTS ${GOLDEN_TABLE} (
-  trans_id BIGINT PRIMARY KEY,
-  app_id INT,
-  event_code VARCHAR(32),
-  product_code VARCHAR(32),
-  extra_data JSON,
+  event_id BIGINT PRIMARY KEY,
+  shop_id INT,
+  event_type VARCHAR(32),
+  sku_code VARCHAR(32),
+  payload JSON,
   status VARCHAR(16),
-  trans_status VARCHAR(16),
-  reason_status JSON,
+  payment_status VARCHAR(16),
+  failure_detail JSON,
   created_at DATETIME,
   updated_at DATETIME,
   INDEX order_events_created_at_idx (created_at)

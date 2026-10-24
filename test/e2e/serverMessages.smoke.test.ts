@@ -36,12 +36,12 @@ const TIDB: Datasource = { id: "tidb", pluginId: "mysql", config: TIDB_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 
-const SAGA_TABLE = "order_events_202601";
-const SAGA_INDEX = "order_events_app_id";
-const FIXED_STATEMENT = `EXPLAIN SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10;`;
-const HINT_WITHOUT_TABLE = `SELECT /*+ USE_INDEX(${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`;
-const FIXED_SELECT = `SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`;
-const WARNING_1815 = `Warning 1815: use_index(${TIDB_DATABASE}.${SAGA_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${SAGA_INDEX}) exists`;
+const EVENTS_TABLE = "order_events_202601";
+const EVENTS_INDEX = "order_events_shop_id";
+const FIXED_STATEMENT = `EXPLAIN SELECT /*+ USE_INDEX(${EVENTS_TABLE}, ${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} LIMIT 10;`;
+const HINT_WITHOUT_TABLE = `SELECT /*+ USE_INDEX(${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} LIMIT 10`;
+const FIXED_SELECT = `SELECT /*+ USE_INDEX(${EVENTS_TABLE}, ${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} LIMIT 10`;
+const WARNING_1815 = `Warning 1815: use_index(${TIDB_DATABASE}.${EVENTS_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${EVENTS_INDEX}) exists`;
 const MYSQL_WARNING = "SELECT CAST('1x' AS SIGNED) AS n";
 const PG_NOTICE = "DO $$ BEGIN RAISE NOTICE 'server messages live test'; END $$";
 
@@ -89,14 +89,14 @@ describe.runIf(DATABASES_ENABLED)("server warnings and TiDB Explain live test", 
 
   beforeAll(async () => {
     await onTidb([
-      `DROP TABLE IF EXISTS ${SAGA_TABLE}`,
-      `CREATE TABLE ${SAGA_TABLE} (id BIGINT PRIMARY KEY, app_id INT NOT NULL, state VARCHAR(16), KEY ${SAGA_INDEX} (app_id))`,
-      `INSERT INTO ${SAGA_TABLE} VALUES (1, 10, 'new'), (2, 20, 'done'), (3, 10, 'done')`,
+      `DROP TABLE IF EXISTS ${EVENTS_TABLE}`,
+      `CREATE TABLE ${EVENTS_TABLE} (id BIGINT PRIMARY KEY, shop_id INT NOT NULL, state VARCHAR(16), KEY ${EVENTS_INDEX} (shop_id))`,
+      `INSERT INTO ${EVENTS_TABLE} VALUES (1, 10, 'new'), (2, 20, 'done'), (3, 10, 'done')`,
     ]);
   }, SCENARIO_TIMEOUT_MS);
 
   afterAll(async () => {
-    await onTidb([`DROP TABLE IF EXISTS ${SAGA_TABLE}`]);
+    await onTidb([`DROP TABLE IF EXISTS ${EVENTS_TABLE}`]);
   }, SCENARIO_TIMEOUT_MS);
 
   afterEach(async () => {
@@ -140,7 +140,7 @@ describe.runIf(DATABASES_ENABLED)("server warnings and TiDB Explain live test", 
 
       const { cells } = await gridText(page);
       expect(cells.join("\n")).toMatch(/IndexLookUp/);
-      expect(cells.join("\n")).toContain(`index:${SAGA_INDEX}(app_id)`);
+      expect(cells.join("\n")).toContain(`index:${EVENTS_INDEX}(shop_id)`);
       expect(cells.join("\n")).not.toMatch(/TableFullScan/);
       expect(await warningBadge(page).count()).toBe(0);
       await captureWindow(page, "hint-index-used");
@@ -162,7 +162,7 @@ describe.runIf(DATABASES_ENABLED)("server warnings and TiDB Explain live test", 
       const rows = tree.locator("tbody").getByRole("row");
       expect(await rows.first().textContent()).toContain("IndexLookUp");
       expect(await rows.nth(1).getAttribute("aria-level")).toBe("2");
-      expect(await tree.textContent()).toContain(SAGA_INDEX);
+      expect(await tree.textContent()).toContain(EVENTS_INDEX);
       await captureWindow(page, "tidb-explain-tree");
     },
     SCENARIO_TIMEOUT_MS,

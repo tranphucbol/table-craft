@@ -100,20 +100,20 @@ function spySql(): string[] {
 }
 
 /** The user's table from plan 033, a few rows so the plans stay fast on the emulated image. */
-const SAGA_TABLE = "order_events_202601";
-const SAGA_INDEX = "order_events_app_id";
+const EVENTS_TABLE = "order_events_202601";
+const EVENTS_INDEX = "order_events_shop_id";
 
-async function withSagaContext(session: Session): Promise<void> {
+async function withOrderEvents(session: Session): Promise<void> {
   const run = async (sql: string) => {
     for await (const _row of (await session.execute(sql)).rows) {
       // Drained so the session is free for the next statement.
     }
   };
-  await run(`DROP TABLE IF EXISTS ${SAGA_TABLE}`);
+  await run(`DROP TABLE IF EXISTS ${EVENTS_TABLE}`);
   await run(
-    `CREATE TABLE ${SAGA_TABLE} (id BIGINT PRIMARY KEY, app_id INT NOT NULL, state VARCHAR(16), KEY ${SAGA_INDEX} (app_id))`,
+    `CREATE TABLE ${EVENTS_TABLE} (id BIGINT PRIMARY KEY, shop_id INT NOT NULL, state VARCHAR(16), KEY ${EVENTS_INDEX} (shop_id))`,
   );
-  await run(`INSERT INTO ${SAGA_TABLE} VALUES (1, 10, 'new'), (2, 20, 'done'), (3, 10, 'done')`);
+  await run(`INSERT INTO ${EVENTS_TABLE} VALUES (1, 10, 'new'), (2, 20, 'done'), (3, 10, 'done')`);
 }
 
 describe("tidb 4", () => {
@@ -191,9 +191,9 @@ describe("tidb 4", () => {
   it("givenUnknownHintTable_whenExecuted_then1815", async () => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
-    await withSagaContext(session);
+    await withOrderEvents(session);
 
-    const result = await session.execute(`SELECT /*+ USE_INDEX(${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`);
+    const result = await session.execute(`SELECT /*+ USE_INDEX(${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} LIMIT 10`);
     for await (const _row of result.rows) {
       // Messages are complete once the rows are.
     }
@@ -202,7 +202,7 @@ describe("tidb 4", () => {
       {
         level: "warning",
         code: "1815",
-        text: `use_index(${TIDB_DATABASE}.${SAGA_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${SAGA_INDEX}) exists`,
+        text: `use_index(${TIDB_DATABASE}.${EVENTS_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${EVENTS_INDEX}) exists`,
       },
     ]);
   });
@@ -223,24 +223,29 @@ describe("tidb 4", () => {
   });
 
   it.each([
-    ["a plain comment", `SELECT /*USE_INDEX(${SAGA_INDEX})*/ * FROM ${SAGA_TABLE} LIMIT 10`, "TableFullScan", false],
+    [
+      "a plain comment",
+      `SELECT /*USE_INDEX(${EVENTS_INDEX})*/ * FROM ${EVENTS_TABLE} LIMIT 10`,
+      "TableFullScan",
+      false,
+    ],
     [
       "a hint without its table",
-      `SELECT /*+ USE_INDEX(${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`,
+      `SELECT /*+ USE_INDEX(${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} LIMIT 10`,
       "TableFullScan",
       true,
     ],
     [
       "a hint naming its table",
-      `SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`,
+      `SELECT /*+ USE_INDEX(${EVENTS_TABLE}, ${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} LIMIT 10`,
       "IndexFullScan",
       false,
     ],
-    ["an index clause", `SELECT * FROM ${SAGA_TABLE} USE INDEX (${SAGA_INDEX}) LIMIT 10`, "IndexFullScan", false],
+    ["an index clause", `SELECT * FROM ${EVENTS_TABLE} USE INDEX (${EVENTS_INDEX}) LIMIT 10`, "IndexFullScan", false],
   ])("givenIndexChosenBy %s_whenExplained_thenTreeShowsTheScan", async (_how, sql, scan, warned) => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
-    await withSagaContext(session);
+    await withOrderEvents(session);
 
     const plan = await session.explain?.(sql, { analyze: false });
 
@@ -260,17 +265,17 @@ describe("tidb 4", () => {
   it("givenHintedSelect_whenExplainAnalysed_thenActualRows", async () => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
-    await withSagaContext(session);
+    await withOrderEvents(session);
 
     const plan = await session.explain?.(
-      `SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} WHERE app_id = 10`,
+      `SELECT /*+ USE_INDEX(${EVENTS_TABLE}, ${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} WHERE shop_id = 10`,
       { analyze: true },
     );
 
     expect(plan?.analyzed).toBe(true);
     expect(plan?.roots[0]?.operation).toMatch(/^IndexLookUp_/);
     expect(plan?.roots[0]?.actualRows).toBe(2);
-    expect(plan?.roots[0]?.children[0]?.target).toBe(`table:${SAGA_TABLE}, index:${SAGA_INDEX}(app_id)`);
+    expect(plan?.roots[0]?.children[0]?.target).toBe(`table:${EVENTS_TABLE}, index:${EVENTS_INDEX}(shop_id)`);
   });
 
   it("givenLongNamedDatabase_whenSwitchedThroughEngine_thenNamespaceIsIt", async () => {
@@ -299,11 +304,11 @@ describe("tidb 4", () => {
   it("givenTidb4WithoutStoredRoutines_whenDescribed_thenNoRoutines", async () => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
-    await withSagaContext(session);
+    await withOrderEvents(session);
 
     const described = await session.introspector?.describe([TIDB_DATABASE]);
 
-    expect(described?.relations.map((relation) => relation.name)).toContain(SAGA_TABLE);
+    expect(described?.relations.map((relation) => relation.name)).toContain(EVENTS_TABLE);
     expect(described?.routines).toEqual([]);
   });
 
@@ -343,7 +348,7 @@ describe("tidb 4", () => {
     const holder = await connected();
     await holder.transactions?.setMode("manual");
     // With autocommit off TiDB opens the transaction at the first read of a stored table.
-    for await (const _row of (await holder.execute(`SELECT COUNT(*) FROM ${SAGA_TABLE}`)).rows) {
+    for await (const _row of (await holder.execute(`SELECT COUNT(*) FROM ${EVENTS_TABLE}`)).rows) {
       // Drained, so the session sits idle in its transaction.
     }
     cleanup.push(() => holder.transactions?.rollback() ?? Promise.resolve());

@@ -113,7 +113,7 @@ describe("plan readers", () => {
     expect(root?.properties).toEqual([{ name: "task", value: "root" }]);
     const scan = root?.children[0]?.children[0];
     expect(scan).toMatchObject({
-      target: "table:order_events_202601, index:order_events_app_id(app_id)",
+      target: "table:order_events_202601, index:order_events_shop_id(shop_id)",
       detail: "keep order:false, stats:pseudo",
       actualRows: null,
     });

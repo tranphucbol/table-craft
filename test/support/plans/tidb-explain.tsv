@@ -1,5 +1,5 @@
 id	estRows	task	access object	operator info
 IndexLookUp_13	10.00	root		limit embedded(offset:0, count:10)
 ├─Limit_12(Build)	10.00	cop[tikv]		offset:0, count:10
-│ └─IndexFullScan_10	10.00	cop[tikv]	table:order_events_202601, index:order_events_app_id(app_id)	keep order:false, stats:pseudo
+│ └─IndexFullScan_10	10.00	cop[tikv]	table:order_events_202601, index:order_events_shop_id(shop_id)	keep order:false, stats:pseudo
 └─TableRowIDScan_11(Probe)	10.00	cop[tikv]	table:order_events_202601	keep order:false, stats:pseudo
