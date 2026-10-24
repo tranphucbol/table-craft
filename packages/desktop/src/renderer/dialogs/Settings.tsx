@@ -522,9 +522,9 @@ function SessionsRefreshField() {
 }
 
 const RUN_ALL_ON_ERROR_LABELS: Readonly<Record<RunAllOnError, string>> = {
-  ask: "Ask",
-  stop: "Stop",
-  continue: "Continue",
+  ask: "Ask what to do",
+  stop: "Stop the run",
+  continue: "Skip it and go on",
 };
 
 function RunAllOnErrorField() {
@@ -532,10 +532,10 @@ function RunAllOnErrorField() {
   const id = useId();
   return (
     <>
-      <FieldRow label="On error" htmlFor={id}>
+      <FieldRow label="When a statement fails" htmlFor={id}>
         <select
           id={id}
-          className={cn(INPUT_CLASS, "w-28")}
+          className={cn(INPUT_CLASS, "w-40")}
           value={onError}
           onChange={(event) => {
             const runAllOnError = RUN_ALL_ON_ERROR_CHOICES.find((choice) => choice === event.target.value);
@@ -551,7 +551,7 @@ function RunAllOnErrorField() {
         </select>
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
-        What a run of several statements, or a SQL script, does when one fails: ask, stop there, or skip it and go on.
+        For Run All, a run of several selected statements and Run SQL Script. A lost connection always stops.
       </p>
     </>
   );
@@ -572,7 +572,6 @@ function EditorPage() {
       <SectionTitle>Running</SectionTitle>
       <ParametersField />
       <StatementTimeoutField />
-      <RunAllOnErrorField />
     </>
   );
 }
@@ -694,6 +693,8 @@ function AdvancedPage() {
         <ActionButton actionId={LOG_ACTION_IDS.reveal} />
         <ActionButton actionId={LOG_ACTION_IDS.exportDiagnostics} />
       </FieldRow>
+      <SectionTitle>Running</SectionTitle>
+      <RunAllOnErrorField />
       <SectionTitle>Sessions</SectionTitle>
       <SessionsRefreshField />
       <SectionTitle>Updates</SectionTitle>

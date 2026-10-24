@@ -1925,7 +1925,8 @@ Use system title bar with "Takes effect after restart." and a Restart Now button
 shown while the choice differs from the running window; it asks to close dirty tabs first, as Quit
 does, then relaunches), Editor (editor
 font, the zoom chords, and under Running, query parameters and the statement timeout) and Data Editor (grid font, NULL text, Group digits, page size, Fetch All
-limit) and Advanced (Debug logging, `log.level`, see App log and diagnostics). Each page has
+limit) and Advanced (Debug logging, `log.level`, see App log and diagnostics; under Running, When a
+statement fails, `console.runAllOnError`; the Sessions refresh). Each page has
 Restore Defaults; a value outside its range is refused inline and not saved.
 Keymap editing and date and time formats are not settings in v1.
 

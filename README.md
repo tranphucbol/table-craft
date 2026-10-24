@@ -268,7 +268,7 @@ When a statement fails, the console underlines where the database says it went w
 the gutter and the message on hover; **Go to Error** beside the error jumps there, and `F2` / `⇧F2`
 step through the marks. Editing the statement drops its mark. When one of several statements fails,
 the run asks above the results: **Skip** it, **Skip All** failures from now on, **Stop**, or
-**Retry**. Settings → Editor → Running → _On error_ can stop or continue without asking; a run that
+**Retry**. Settings → Advanced → Running → _When a statement fails_ can stop or continue without asking; a run that
 went on ends with `12 run, 2 failed.` in Output. In an open transaction PostgreSQL refuses every
 later statement until it is rolled back, and Output says so.
 
