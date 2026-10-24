@@ -6,8 +6,12 @@
 export const WORKERS_ENV = "TABLE_CRAFT_SMOKE_WORKERS";
 /** Three Electron apps, their engines and the databases fit in 8 GiB without swapping (plan 051). */
 export const SMOKE_WORKERS_DEFAULT = 3;
-export const SMOKE_WORKERS_MIN_VM_BYTES = 8 * 1024 ** 3;
 const GIB = 1024 ** 3;
+/**
+ * Below 8 GiB on purpose: Docker reports the memory the VM's kernel can use, so an 8192 MiB OrbStack
+ * VM says 7.8 GiB (8393289728 bytes) and Docker Desktop's 8 GB a little less.
+ */
+export const SMOKE_WORKERS_MIN_VM_BYTES = 7 * GIB;
 
 export interface WorkerChoice {
   readonly workers: number;
@@ -39,7 +43,7 @@ export function resolveWorkers(given: string | undefined, vmBytes: number | unde
   return {
     workers: 1,
     reason:
-      `1 smoke worker: the Docker VM has ${size}, under 8 GiB. For ${String(SMOKE_WORKERS_DEFAULT)}, give it 8 GiB ` +
+      `1 smoke worker: the Docker VM has ${size}. For ${String(SMOKE_WORKERS_DEFAULT)}, give it 8 GiB ` +
       "(OrbStack: `orb config set memory_mib 8192`; Docker Desktop: Settings > Resources > Memory) " +
       `or set ${WORKERS_ENV}.`,
   };

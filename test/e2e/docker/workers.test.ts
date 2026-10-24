@@ -12,6 +12,8 @@ import {
 
 const REPOSITORY_ROOT = resolve(import.meta.dirname, "../../..");
 const FOUR_GIB = 4 * 1024 ** 3;
+/** `docker info --format '{{.MemTotal}}'` after `orb config set memory_mib 8192`. */
+const ORBSTACK_8192_MIB_MEM_TOTAL = 8_393_289_728;
 
 describe("smoke workers (workers.ts)", () => {
   it("givenWorkersEnv_whenResolved_thenUsedAsIs", () => {
@@ -36,6 +38,10 @@ describe("smoke workers (workers.ts)", () => {
   it("givenVmAtEightGib_whenResolved_thenThreeWorkers", () => {
     expect(resolveWorkers(undefined, SMOKE_WORKERS_MIN_VM_BYTES).workers).toBe(SMOKE_WORKERS_DEFAULT);
     expect(SMOKE_WORKERS_DEFAULT).toBe(3);
+  });
+
+  it("givenOrbStackSetToEightGib_whenResolved_thenThreeWorkers", () => {
+    expect(resolveWorkers(undefined, ORBSTACK_8192_MIB_MEM_TOTAL).workers).toBe(SMOKE_WORKERS_DEFAULT);
   });
 
   it("givenVmSizeUnknown_whenResolved_thenOneWorker", () => {
