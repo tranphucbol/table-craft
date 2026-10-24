@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 import {
   ALIASES,
   BUILD_TARGET,
+  COMMONJS_GLOBALS,
   DIST_ROOT,
   NODE_CONDITIONS,
   NODE_EXTERNALS,
@@ -16,6 +17,7 @@ const OUT_FILE = "main.js";
 export default defineConfig({
   plugins: [nativeAddonStubs],
   resolve: { alias: ALIASES, mainFields: NODE_MAIN_FIELDS, conditions: NODE_CONDITIONS },
+  define: COMMONJS_GLOBALS,
   build: {
     target: BUILD_TARGET,
     outDir: resolve(DIST_ROOT, "engine"),
@@ -27,6 +29,8 @@ export default defineConfig({
     },
     sourcemap: true,
     minify: false,
-    rolldownOptions: { external: NODE_EXTERNALS },
+    // ssh2 is CommonJS and `require`s Node built-ins; only the node platform gives the ES module
+    // output a `require` (see vite.plugins.config.ts).
+    rolldownOptions: { platform: "node", external: NODE_EXTERNALS },
   },
 });

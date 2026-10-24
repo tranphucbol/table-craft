@@ -93,7 +93,7 @@
       "dependencies": {
         "@table-craft/plugin-api": "workspace:*",
         "pg": "^8.23.1",
-        "pg-copy-streams": "^7",
+        "pg-copy-streams": "^7.0.0",
         "pg-cursor": "^2.22.1",
       },
       "devDependencies": {
@@ -110,6 +110,9 @@
       },
     },
   },
+  "trustedDependencies": [
+    "electron-winstaller",
+  ],
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 

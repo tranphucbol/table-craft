@@ -36,6 +36,12 @@ const NODE_SCHEME = /^node:/;
 export const NODE_EXTERNALS = [...NODE_BUILTINS, NODE_SCHEME, "electron"];
 
 /**
+ * CommonJS dependencies inlined into an ES module bundle still read `__dirname` at load (ssh2's
+ * agent module does), which an ES module does not define.
+ */
+export const COMMONJS_GLOBALS = { __dirname: "import.meta.dirname", __filename: "import.meta.filename" };
+
+/**
  * ssh2's optional native addons: the packaged app ships no `.node` files (decision 033), and ssh2
  * requires each inside a `try`, falling back to its JavaScript crypto (decision 070).
  */
