@@ -69,7 +69,7 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
   };
 }
 
-/** Writes every variable, and `color-scheme` so native scrollbars and controls match the theme. */
+/** Writes every variable, and `color-scheme` so native controls match the theme; `app.css` colours the scrollbars. */
 export function applyAppearance(
   appearance: Appearance,
   colorScheme: ColorScheme,

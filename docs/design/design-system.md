@@ -35,8 +35,10 @@ A user theme's colours are `#rgb`, `#rrggbb` or `#rrggbbaa`; `colors` may hold a
 with `syntax` and `datasource` partial objects. Main validates each file (at most 64 files of at
 most 64 KiB) and lists a broken one with its errors; it cannot be chosen. A chosen theme that is
 gone or broken falls back to Dark with a notice in the Database pane. Contrast is not enforced on
-user themes. `color-scheme` drives native scrollbars and form controls, and main sets
-`nativeTheme.themeSource` and the window's `backgroundColor` to match.
+user themes. `color-scheme` drives native form controls, and main sets
+`nativeTheme.themeSource` and the window's `backgroundColor` to match. Scrollbars take the theme
+too: `app.css` sets `scrollbar-color` on the root to `inkMuted` at 45% over a transparent track,
+so every scroller, the editor's included, follows a theme switch with no token of its own.
 
 | Token (`appearance/themes.ts`) | CSS variable                | Dark      | Light     | High contrast |
 | ------------------------------ | --------------------------- | --------- | --------- | ------------- |

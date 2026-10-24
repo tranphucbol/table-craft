@@ -63,6 +63,14 @@
   --spacing-plan-bar: var(--tc-plan-bar-height);
 }
 
+/* `color-scheme` alone gives every theme the same grey native scrollbar. `scrollbar-color` is
+   inherited, so this one rule reaches every scroller, CodeMirror's included; the transparent track
+   lets each surface's own background show through the gutter. */
+:root {
+  --tc-scrollbar-thumb: color-mix(in oklab, var(--tc-ink-muted) 45%, transparent);
+  scrollbar-color: var(--tc-scrollbar-thumb) transparent;
+}
+
 html,
 body,
 #app {
