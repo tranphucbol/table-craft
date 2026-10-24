@@ -3,6 +3,7 @@ import type {
   ClassifiedStatement,
   CurrentNamespace,
   ExecutedStatement,
+  OnErrorChoice,
   OpenedSession,
   ServerMessage,
   StatementParameter,
@@ -79,6 +80,7 @@ function fakeEngine() {
   const released: string[] = [];
   let mode: TransactionMode = "auto";
   let open = false;
+  const flaked = new Set<string>();
   let handles = 0;
   let namespace: CurrentNamespace = ["shop"];
   const state = (): TransactionState => ({ mode, transactionOpen: open, namespace });
@@ -112,9 +114,20 @@ function fakeEngine() {
             new EngineRequestError({ code: "sshTunnelLost", message: "The SSH tunnel closed.", hint: "Run again." }),
           );
         }
+        if (sql.includes("FLAKY") && !flaked.has(sql)) {
+          flaked.add(sql);
+          return Promise.reject(
+            new EngineRequestError({ code: "statementTimedOut", message: "timed out", hint: "Run it again." }),
+          );
+        }
         if (sql.includes("FAIL")) {
           return Promise.reject(
-            new EngineRequestError({ code: "statementFailed", message: "syntax error", hint: "Fix the SQL." }),
+            new EngineRequestError({
+              code: "statementFailed",
+              message: "syntax error",
+              hint: "Fix the SQL.",
+              position: sql.indexOf("FAIL"),
+            }),
           );
         }
         const verb = sql.split(/\s+/)[0]?.toUpperCase();
@@ -174,6 +187,7 @@ function harness(
     record?: (entry: HistoryEntry) => void;
     values?: Readonly<Record<string, string | null>> | null;
     statementTimeout?: number;
+    onError?: OnErrorChoice;
   } = {},
 ) {
   const engine = fakeEngine();
@@ -197,6 +211,7 @@ function harness(
     executions: executions.getState(),
     record: options.record ?? ((entry) => recorded.push(entry)),
     statementTimeout: () => options.statementTimeout ?? 0,
+    onError: () => options.onError ?? "stop",
   });
   const session = () => {
     const current = store.getState().consoles.c1;
@@ -861,5 +876,196 @@ describe("reformat", () => {
     store.getState().replaced("c1", seq);
 
     expect(store.getState().consoles.c1?.replacement).toBeNull();
+  });
+});
+
+describe("errors in a run", () => {
+  async function questioned(context: Awaited<ReturnType<typeof opened>>) {
+    await vi.waitFor(() => {
+      expect(context.session().question).not.toBeNull();
+    });
+    return context.session();
+  }
+
+  it("givenFailingStatement_whenRun_thenMarkCoversTheTokenAtThePosition", async () => {
+    const sql = "SELECT 1;\nSELECT FAIL;";
+    const { store, session } = await opened(sql);
+
+    await store.getState().run("c1", "all");
+
+    const statementFrom = sql.indexOf("SELECT FAIL");
+    expect(session().errorMarks).toEqual([
+      {
+        from: sql.indexOf("FAIL"),
+        to: sql.indexOf("FAIL") + "FAIL".length,
+        statementFrom,
+        statementTo: statementFrom + "SELECT FAIL".length,
+        message: "syntax error",
+        hint: "Fix the SQL.",
+      },
+    ]);
+  });
+
+  it("givenMarkedStatement_whenRunAgain_thenOneMarkNotTwo", async () => {
+    const { store, session } = await opened("SELECT FAIL;");
+
+    await store.getState().run("c1", "all");
+    await store.getState().run("c1", "all");
+
+    expect(session().errorMarks).toHaveLength(1);
+  });
+
+  it("givenContinue_whenTwoFail_thenEveryStatementRunsAndTheSummaryCountsThem", async () => {
+    const { store, executed, session, messages } = await opened("SELECT FAIL;\nSELECT 2;\nSELECT FAIL 3;\nSELECT 4;", {
+      onError: "continue",
+    });
+
+    await store.getState().run("c1", "all");
+
+    expect(executed).toEqual(["SELECT FAIL", "SELECT 2", "SELECT FAIL 3", "SELECT 4"]);
+    expect(messages().at(-1)).toBe("4 run, 2 failed.");
+    expect(session().errorMarks).toHaveLength(2);
+    expect(session().lastRun?.outcome).toBe("failed");
+    expect(session().activeResult).toBe(OUTPUT_TAB);
+  });
+
+  it("givenStop_whenFirstFails_thenTheOldBehaviour", async () => {
+    const { store, executed, messages } = await opened("SELECT FAIL;\nSELECT 2;", { onError: "stop" });
+
+    await store.getState().run("c1", "all");
+
+    expect(executed).toEqual(["SELECT FAIL"]);
+    expect(messages()).toEqual(["syntax error", "1 statement skipped after the error."]);
+  });
+
+  it("givenAsk_whenSkip_thenTheRunGoesOn", async () => {
+    const context = await opened("SELECT FAIL;\nSELECT 2;\nSELECT 3;", { onError: "ask" });
+    const running = context.store.getState().run("c1", "all");
+
+    const asking = await questioned(context);
+    context.store.getState().answerError("c1", "skip");
+    await running;
+
+    expect(asking.status).toBe("confirming");
+    expect(asking.question).toMatchObject({
+      number: 1,
+      total: 3,
+      sql: "SELECT FAIL",
+      error: { code: "statementFailed" },
+    });
+    expect(context.executed).toEqual(["SELECT FAIL", "SELECT 2", "SELECT 3"]);
+    expect(context.session()).toMatchObject({ question: null, status: "ready" });
+    expect(context.messages().at(-1)).toBe("3 run, 1 failed.");
+  });
+
+  it("givenAsk_whenSkipAll_thenAsksOnceForTwoFailures", async () => {
+    const context = await opened("SELECT FAIL;\nSELECT FAIL 2;\nSELECT 3;", { onError: "ask" });
+    const running = context.store.getState().run("c1", "all");
+
+    await questioned(context);
+    context.store.getState().answerError("c1", "skipAll");
+    await running;
+
+    expect(context.executed).toEqual(["SELECT FAIL", "SELECT FAIL 2", "SELECT 3"]);
+    expect(context.messages().at(-1)).toBe("3 run, 2 failed.");
+  });
+
+  it("givenAsk_whenStop_thenTheRestIsSkipped", async () => {
+    const context = await opened("SELECT FAIL;\nSELECT 2;\nSELECT 3;", { onError: "ask" });
+    const running = context.store.getState().run("c1", "all");
+
+    await questioned(context);
+    context.store.getState().answerError("c1", "stop");
+    await running;
+
+    expect(context.executed).toEqual(["SELECT FAIL"]);
+    expect(context.messages().at(-1)).toBe("2 statements skipped after the error.");
+    expect(context.session().lastRun?.outcome).toBe("failed");
+  });
+
+  it("givenAsk_whenRetrySucceeds_thenTheRunSucceeds", async () => {
+    const context = await opened("SELECT FLAKY;\nSELECT 2;", { onError: "ask" });
+    const running = context.store.getState().run("c1", "all");
+
+    await questioned(context);
+    context.store.getState().answerError("c1", "retry");
+    await running;
+
+    expect(context.executed).toEqual(["SELECT FLAKY", "SELECT FLAKY", "SELECT 2"]);
+    expect(context.session().lastRun?.outcome).toBe("succeeded");
+  });
+
+  it("givenAsking_whenCancelled_thenStops", async () => {
+    const context = await opened("SELECT FAIL;\nSELECT 2;", { onError: "ask" });
+    const running = context.store.getState().run("c1", "all");
+
+    await questioned(context);
+    await context.store.getState().cancel("c1");
+    await running;
+
+    expect(context.executed).toEqual(["SELECT FAIL"]);
+    expect(context.session().question).toBeNull();
+  });
+
+  it("givenAsk_whenOnlyTheLastStatementFails_thenNothingIsAsked", async () => {
+    const context = await opened("SELECT 1;\nSELECT FAIL;", { onError: "ask" });
+
+    await context.store.getState().run("c1", "all");
+
+    expect(context.session()).toMatchObject({ question: null, lastRun: { outcome: "failed" } });
+    expect(context.messages().at(-1)).toBe("syntax error");
+  });
+
+  it("givenContinue_whenTheConnectionIsLost_thenTheRunStopsAnyway", async () => {
+    const { store, executed } = await opened("SELECT LOST;\nSELECT 2;", { onError: "continue" });
+
+    await store.getState().run("c1", "all");
+
+    expect(executed).toEqual(["SELECT LOST"]);
+  });
+
+  it("givenOpenTransaction_whenContinuingPastFailures_thenWarnsOnce", async () => {
+    const { store, messages } = await opened("BEGIN;\nSELECT FAIL;\nSELECT FAIL 2;\nSELECT 4;", {
+      onError: "continue",
+    });
+
+    await store.getState().run("c1", "all");
+
+    expect(messages().filter((message) => message.includes("inside a transaction"))).toHaveLength(1);
+  });
+
+  it("givenMarks_whenGotoError_thenCaretVisitsEachAndWraps", async () => {
+    const sql = "SELECT FAIL;\nSELECT 2;\nSELECT FAIL 3;";
+    const { store, session } = await opened(sql, { onError: "continue" });
+    await store.getState().run("c1", "all");
+    const first = sql.indexOf("FAIL");
+    const second = sql.lastIndexOf("FAIL");
+    store.getState().setSelection("c1", { from: 0, to: 0 });
+
+    const landed = [true, true, true].map(() => {
+      store.getState().gotoError("c1", false);
+      return session().selection.from;
+    });
+    store.getState().gotoError("c1", true);
+
+    expect(landed).toEqual([first, second, first]);
+    expect(session().selection.from).toBe(second);
+    expect(session().jump).toMatchObject({ from: second, to: second + "FAIL".length });
+  });
+
+  it("givenNoMarks_whenGotoError_thenFalse", async () => {
+    const { store } = await opened("SELECT 1;");
+
+    expect(store.getState().gotoError("c1", false)).toBe(false);
+    expect(store.getState().showError("c1")).toBe(false);
+  });
+
+  it("givenShownErrorHasAMark_whenShowError_thenCaretOnIt", async () => {
+    const sql = "SELECT 1;\nSELECT FAIL;";
+    const { store, session } = await opened(sql);
+    await store.getState().run("c1", "all");
+
+    expect(store.getState().showError("c1")).toBe(true);
+    expect(session().selection.from).toBe(sql.indexOf("FAIL"));
   });
 });

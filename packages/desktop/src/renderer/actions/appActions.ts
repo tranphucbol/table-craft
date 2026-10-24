@@ -203,7 +203,9 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     category: "Console",
     icon: "cancel",
     available: (context) => context.capabilities.includes("cancel"),
-    when: (context) => context.console?.status === "running" && context.capabilities.includes("cancel"),
+    when: (context) =>
+      (context.console?.status === "running" || context.console?.question != null) &&
+      context.capabilities.includes("cancel"),
     run: (context) => {
       if (context.activeTab !== null) void useConsoles.getState().cancel(context.activeTab.id);
     },

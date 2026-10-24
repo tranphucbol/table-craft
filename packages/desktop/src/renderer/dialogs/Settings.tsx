@@ -51,6 +51,8 @@ import {
   type FontRole,
   type FontSetting,
   type NumberRange,
+  RUN_ALL_ON_ERROR_CHOICES,
+  type RunAllOnError,
   type Settings,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
   statementTimeoutSecondsError,
@@ -519,6 +521,42 @@ function SessionsRefreshField() {
   );
 }
 
+const RUN_ALL_ON_ERROR_LABELS: Readonly<Record<RunAllOnError, string>> = {
+  ask: "Ask",
+  stop: "Stop",
+  continue: "Continue",
+};
+
+function RunAllOnErrorField() {
+  const onError = useSettings((state) => state.settings.console.runAllOnError);
+  const id = useId();
+  return (
+    <>
+      <FieldRow label="On error" htmlFor={id}>
+        <select
+          id={id}
+          className={cn(INPUT_CLASS, "w-28")}
+          value={onError}
+          onChange={(event) => {
+            const runAllOnError = RUN_ALL_ON_ERROR_CHOICES.find((choice) => choice === event.target.value);
+            if (runAllOnError === undefined) return;
+            update((current) => ({ ...current, console: { ...current.console, runAllOnError } }));
+          }}
+        >
+          {RUN_ALL_ON_ERROR_CHOICES.map((choice) => (
+            <option key={choice} value={choice}>
+              {RUN_ALL_ON_ERROR_LABELS[choice]}
+            </option>
+          ))}
+        </select>
+      </FieldRow>
+      <p className="col-start-2 text-ink-muted">
+        What a run of several statements, or a SQL script, does when one fails: ask, stop there, or skip it and go on.
+      </p>
+    </>
+  );
+}
+
 function EditorPage() {
   return (
     <>
@@ -534,6 +572,7 @@ function EditorPage() {
       <SectionTitle>Running</SectionTitle>
       <ParametersField />
       <StatementTimeoutField />
+      <RunAllOnErrorField />
     </>
   );
 }

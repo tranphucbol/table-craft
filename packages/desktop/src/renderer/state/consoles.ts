@@ -4,9 +4,11 @@ import {
   type Column,
   type CurrentNamespace,
   type EngineError,
+  type ErrorAnswer,
   type ExecutedStatement,
   type ExportFormat,
   type ExtractorKind,
+  type OnErrorChoice,
   type Reconnection,
   type RowRange,
   type ServerMessage,
@@ -17,6 +19,14 @@ import {
 import type { HistoryEntry, LineEnding } from "@table-craft/desktop/preload/bridge.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { carriedLayout, type ColumnLayout } from "@table-craft/desktop/renderer/model/columnLayout.js";
+import {
+  errorMarkOf,
+  markOfError,
+  marksOutside,
+  nextMark,
+  withMark,
+  type ErrorMark,
+} from "@table-craft/desktop/renderer/model/errorLocation.js";
 import {
   cancelledText,
   executedText,
@@ -77,6 +87,7 @@ import {
   currentFormats,
   currentPaging,
   detectsParameters,
+  runAllOnError,
   statementTimeoutOf,
 } from "@table-craft/desktop/renderer/state/settings.js";
 
@@ -103,7 +114,10 @@ export { canFetch, toError } from "@table-craft/desktop/renderer/state/resultWin
  * One console's session. `failed` when it could not open and `disconnected` when its engine went
  * away or it was restored at launch; Run opens a new session from either.
  */
-/** `confirming`: a run waits on its destructive or Analyse question, and its time has not started. */
+/**
+ * `confirming`: a run waits on its destructive or Analyse question, and its time has not started,
+ * or on what to do about a failed statement (decision 083).
+ */
 export type ConsoleStatus = "connecting" | "ready" | "running" | "confirming" | "failed" | "disconnected";
 
 export type OutputTone = "info" | "success" | "warning" | "error";
@@ -120,6 +134,15 @@ export interface OutputEntry {
 }
 
 export type RunOutcome = "succeeded" | "failed" | "cancelled";
+
+/** A run of several statements waiting to hear what to do about one that failed (decision 083). */
+export interface ErrorQuestion {
+  /** From 1, as the banner counts. */
+  readonly number: number;
+  readonly total: number;
+  readonly sql: string;
+  readonly error: EngineError;
+}
 
 export interface LastRun {
   readonly durationMs: number;
@@ -198,6 +221,9 @@ export interface ConsoleSession {
   readonly parameterValues: ParameterValues;
   /** Each editable result's pending edits, by result id (plan 026). */
   readonly edits: Readonly<Record<string, ConsoleResultEdits>>;
+  /** Where failed statements went wrong, in the text as it now stands (decision 082); never written to disk. */
+  readonly errorMarks: readonly ErrorMark[];
+  readonly question: ErrorQuestion | null;
 }
 
 export interface Insertion {
@@ -266,6 +292,16 @@ export interface ConsolesState extends ConsoleEdits {
   readonly reloaded: (id: string, sql: string, source: FileConsoleSource) => void;
   readonly setDiskChanged: (id: string, change: DiskChange | null) => void;
   readonly setSelection: (id: string, selection: TextSpan) => void;
+  /** The editor moved or dropped the error marks as the text was edited. */
+  readonly marksMoved: (id: string, marks: readonly ErrorMark[]) => void;
+  /** Adds marks made elsewhere, as a script's failures in its file, over those of the same statements. */
+  readonly markErrors: (id: string, marks: readonly ErrorMark[]) => void;
+  /** Puts the caret on the next error mark after it, or the previous one; false when there is none. */
+  readonly gotoError: (id: string, backward: boolean) => boolean;
+  /** Puts the caret on the mark of the error the console shows; false when it has none. */
+  readonly showError: (id: string) => boolean;
+  /** Answers the run's question about a failed statement; nothing when it is not asking. */
+  readonly answerError: (id: string, answer: ErrorAnswer) => void;
   /** Puts the editor's caret at `span.from` and flashes `span`, as Go to Declaration lands. */
   readonly jumpTo: (id: string, span: TextSpan) => void;
   /** Asks the editor to replace its selection with `text`, or insert it at the caret, as one undo step. */
@@ -427,6 +463,8 @@ export interface ConsolesDependencies {
   readonly askPendingEdits?: (request: PendingEditsRequest) => Promise<PendingEditsAnswer | null>;
   /** Asks which datasource a detached file console runs on (plan 041 decision 2); null runs nothing. */
   readonly chooseDatasource?: () => Promise<string | null>;
+  /** What a run of several statements does when one fails (decision 083); defaults to stopping. */
+  readonly onError?: () => OnErrorChoice;
 }
 
 export interface PendingEditsRequest {
@@ -461,6 +499,8 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
     replacement: null,
     parameterValues: {},
     edits: {},
+    errorMarks: [],
+    question: null,
   };
 }
 
@@ -478,6 +518,15 @@ function namespaceAfter(reply: { readonly namespace?: CurrentNamespace; readonly
 
 function statementCount(count: number): string {
   return `${count} ${count === 1 ? "statement" : "statements"}`;
+}
+
+/** What a run may go on past; a lost connection or a cancel ends it whatever the setting says. */
+const CONTINUABLE: ReadonlySet<EngineError["code"]> = new Set(["statementFailed", "statementTimedOut"]);
+const FAILED_IN_TRANSACTION =
+  "It failed inside a transaction: some databases, PostgreSQL among them, refuse every later statement until it is rolled back.";
+
+function failedText(total: number, failed: number): string {
+  return `${total} run, ${failed} failed.`;
 }
 
 /** A run's prompt and the values the user gave it. */
@@ -509,6 +558,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
   const exports = dependencies.exports ?? NO_EXPORTS;
   const statementTimeout = dependencies.statementTimeout ?? (() => 0);
   const askPendingEdits = dependencies.askPendingEdits ?? (() => Promise.resolve<PendingEditsAnswer>("discard"));
+  const onError = dependencies.onError ?? ((): OnErrorChoice => "stop");
+  /** The answer each console's run waits for, by console id. */
+  const answers = new Map<string, (answer: ErrorAnswer) => void>();
   /** The execution each result tab came from, by result id, so fetching more updates its row count. */
   const producedBy = new Map<string, number>();
   /** When each console's current run started; a confirmation restarts it once answered. */
@@ -801,7 +853,74 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       if (committed) dependencies.onDdl?.(datasourceId);
     }
 
-    /** Runs `statements` in order; the first failure skips the rest. */
+    /** Ends any question the console's run waits on, as Stop does. */
+    function stopAsking(id: string): void {
+      const resolve = answers.get(id);
+      answers.delete(id);
+      resolve?.("stop");
+    }
+
+    async function askAboutError(id: string, question: ErrorQuestion): Promise<ErrorAnswer> {
+      try {
+        return await asked(
+          id,
+          () =>
+            new Promise<ErrorAnswer>((resolve) => {
+              answers.set(id, resolve);
+              patch(id, { question });
+            }),
+        );
+      } finally {
+        answers.delete(id);
+        patch(id, { question: null });
+      }
+    }
+
+    /** Marks where `statement` failed, unless the text moved under the run. */
+    function markFailure(id: string, statement: ClassifiedStatement, error: EngineError): void {
+      const current = get().consoles[id];
+      const mark = errorMarkOf(statement, error);
+      if (current === undefined || mark === null) return;
+      if (current.sql.slice(statement.from, statement.to) !== statement.sql) return;
+      patch(id, { errorMarks: withMark(current.errorMarks, mark) });
+    }
+
+    function clearMarks(id: string, ran: readonly ClassifiedStatement[]): void {
+      const current = get().consoles[id];
+      if (current === undefined) return;
+      const errorMarks = marksOutside(current.errorMarks, ran);
+      if (errorMarks !== current.errorMarks) patch(id, { errorMarks });
+    }
+
+    /**
+     * What the run does about a failed statement (decision 083): the setting, or the user's answer,
+     * for a failure the run can go on past with statements left; anything else stops it.
+     */
+    async function decide(
+      id: string,
+      policy: OnErrorChoice,
+      error: EngineError,
+      statements: readonly ClassifiedStatement[],
+      index: number,
+      failedBefore: number,
+    ): Promise<ErrorAnswer> {
+      const last = index === statements.length - 1;
+      if (!CONTINUABLE.has(error.code)) return "stop";
+      if (last) return failedBefore > 0 ? "skip" : "stop";
+      if (policy !== "ask") return policy === "continue" ? "skip" : "stop";
+      const statement = statements[index];
+      return askAboutError(id, {
+        number: index + 1,
+        total: statements.length,
+        sql: firstLine(statement?.sql ?? ""),
+        error,
+      });
+    }
+
+    /**
+     * Runs `statements` in order. A failure stops the rest, or, in a run of several, the console's
+     * setting or the user's answer skips it or runs it again (decision 083).
+     */
     async function execute(
       id: string,
       client: EngineClient,
@@ -810,7 +929,13 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       bound: Bound | null,
       fromEditor = true,
     ): Promise<RunOutcome> {
-      for (const [index, statement] of statements.entries()) {
+      let policy: OnErrorChoice = statements.length > 1 ? onError() : "stop";
+      let failed = 0;
+      let warnedTransaction = false;
+      if (fromEditor) clearMarks(id, statements);
+      for (let index = 0; index < statements.length;) {
+        const statement = statements[index];
+        if (statement === undefined) break;
         const sql = firstLine(statement.sql);
         const parameters = boundAt(bound, index);
         if (fromEditor) patch(id, { flash: { from: statement.from, to: statement.to, seq: ++flashes } });
@@ -863,25 +988,48 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             // rollback costs a describe and shows the same tree.
             afterTransactionChange(id, datasourceId, transactionOpen, true);
           }
+          index++;
         } catch (cause) {
           const error = toError(cause);
           ended(failureEnd(error, dependencies.now() - startedAt));
           const cancelled = error.code === "cancelled";
           if (cancelled) log(id, { sql, message: cancelledText(error), tone: "warning" });
           else logError(id, sql, error);
-          const skipped = statements.length - index - 1;
-          if (skipped > 0) {
-            log(id, {
-              sql: "",
-              message: `${statementCount(skipped)} skipped after the ${cancelled ? "cancel" : "error"}.`,
-              tone: "warning",
-            });
+          if (fromEditor) markFailure(id, statement, error);
+          patch(id, { error });
+          const answer = await decide(id, policy, error, statements, index, failed);
+          if (get().consoles[id] === undefined) return "cancelled";
+          if (answer === "retry") {
+            if (fromEditor) clearMarks(id, [statement]);
+            continue;
           }
-          patch(id, { error, activeResult: OUTPUT_TAB });
-          return cancelled ? "cancelled" : "failed";
+          if (answer === "stop") {
+            const skipped = statements.length - index - 1;
+            if (skipped > 0) {
+              log(id, {
+                sql: "",
+                message: `${statementCount(skipped)} skipped after the ${cancelled ? "cancel" : "error"}.`,
+                tone: "warning",
+              });
+            }
+            if (failed > 0) log(id, { sql: "", message: failedText(index + 1, failed + 1), tone: "warning" });
+            patch(id, { activeResult: OUTPUT_TAB });
+            return cancelled ? "cancelled" : "failed";
+          }
+          if (answer === "skipAll") policy = "continue";
+          failed++;
+          const current = get().consoles[id];
+          if (!warnedTransaction && (current?.transactionOpen === true || current?.txMode === "manual")) {
+            warnedTransaction = true;
+            log(id, { sql: "", message: FAILED_IN_TRANSACTION, tone: "warning" });
+          }
+          index++;
         }
       }
-      return "succeeded";
+      if (failed === 0) return "succeeded";
+      log(id, { sql: "", message: failedText(statements.length, failed), tone: "warning" });
+      patch(id, { activeResult: OUTPUT_TAB });
+      return "failed";
     }
 
     async function endTransaction(id: string, method: "transaction.commit" | "transaction.rollback") {
@@ -1190,7 +1338,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       },
 
       reloaded(id, sql, source) {
-        patch(id, { sql, source, diskChanged: null });
+        patch(id, { sql, source, diskChanged: null, errorMarks: [] });
       },
 
       setDiskChanged(id, diskChanged) {
@@ -1203,6 +1351,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         if (closing === undefined) return;
         const { [id]: _closed, ...rest } = get().consoles;
         set({ consoles: rest });
+        stopAsking(id);
         for (const result of closing.results) forget(result.id);
         pendingDdl.delete(id);
         const client = clients.get(id);
@@ -1214,6 +1363,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       detach(datasourceId, error) {
         for (const [id, session] of Object.entries(get().consoles)) {
           if (session.datasourceId !== datasourceId) continue;
+          stopAsking(id);
           clients.delete(id);
           pendingDdl.delete(id);
           for (const result of session.results) invalidateWindows(result.id);
@@ -1328,6 +1478,41 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         patch(id, { insertion: null });
       },
 
+      marksMoved(id, errorMarks) {
+        if (get().consoles[id]?.errorMarks === errorMarks) return;
+        patch(id, { errorMarks });
+      },
+
+      markErrors(id, marks) {
+        const current = get().consoles[id];
+        if (current === undefined || marks.length === 0) return;
+        patch(id, { errorMarks: marks.reduce(withMark, current.errorMarks) });
+      },
+
+      gotoError(id, backward) {
+        const current = get().consoles[id];
+        if (current === undefined) return false;
+        const { from, to } = current.selection;
+        const mark = nextMark(current.errorMarks, backward ? Math.min(from, to) : Math.max(from, to), backward);
+        if (mark === null) return false;
+        get().jumpTo(id, mark);
+        return true;
+      },
+
+      showError(id) {
+        const current = get().consoles[id];
+        const mark = current === undefined ? null : markOfError(current.errorMarks, current.error);
+        if (mark === null) return false;
+        get().jumpTo(id, mark);
+        return true;
+      },
+
+      answerError(id, answer) {
+        const resolve = answers.get(id);
+        answers.delete(id);
+        resolve?.(answer);
+      },
+
       jumpTo(id, span) {
         if (get().consoles[id] === undefined) return;
         flashes += 1;
@@ -1392,6 +1577,10 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       },
 
       async cancel(id) {
+        if (answers.has(id)) {
+          stopAsking(id);
+          return;
+        }
         const current = get().consoles[id];
         const client = clients.get(id);
         if (current?.sessionId == null || current.status !== "running" || client === undefined) return;
@@ -1747,6 +1936,7 @@ export const useConsoles = createConsolesStore({
   confirmAnalyse: askAnalyse,
   askParameters: askParametersInDialog,
   askPendingEdits: askPendingEditsInDialog,
+  onError: runAllOnError,
   onDdl: (datasourceId) => void useCatalog.getState().refreshCached(datasourceId),
   executions: {
     start: (tabId, start) => useExecutions.getState().start(tabId, start),

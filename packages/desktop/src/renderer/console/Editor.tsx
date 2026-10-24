@@ -24,6 +24,12 @@ import { registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import {
+  errorMarks,
+  errorMarksOf,
+  marksChanged,
+  setErrorMarks,
+} from "@table-craft/desktop/renderer/console/errorMarks.js";
 import { insertionAt, replacementAt } from "@table-craft/desktop/renderer/console/insertion.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import {
@@ -31,6 +37,7 @@ import {
   parseDraggedObject,
   type DraggedObject,
 } from "@table-craft/desktop/renderer/model/dragObject.js";
+import type { ErrorMark } from "@table-craft/desktop/renderer/model/errorLocation.js";
 import type { TextSpan } from "@table-craft/desktop/renderer/model/statementAt.js";
 import { AUTOFOCUS_ATTRIBUTE } from "@table-craft/desktop/renderer/shell/focus.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
@@ -47,6 +54,8 @@ export const EDITOR_LABEL = "SQL console";
 const FLASH_MS = 900;
 /** CodeMirror's `Mod-Enter` inserts a blank line; here it is Run, which the registry owns. */
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
+
+const NO_MARKS: readonly ErrorMark[] = [];
 
 const setFlash = StateEffect.define<TextSpan | null>();
 const FLASH_MARK = Decoration.mark({ class: FLASH_CLASS });
@@ -109,6 +118,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const jump = useConsoles((state) => state.consoles[consoleId]?.jump ?? null);
   const insertion = useConsoles((state) => state.consoles[consoleId]?.insertion ?? null);
   const replacement = useConsoles((state) => state.consoles[consoleId]?.replacement ?? null);
+  const marks = useConsoles((state) => state.consoles[consoleId]?.errorMarks ?? NO_MARKS);
   const dialectRef = useRef(dialectOf(highlight));
 
   useEffect(() => {
@@ -142,6 +152,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           placeholder(placeholderText()),
           languageRef.current.of(sql({ dialect: dialectOf(highlight), upperCaseKeywords: true })),
           flashField,
+          errorMarks,
           EDITOR_THEME,
           keymap.of([
             ...completionKeymap,
@@ -155,6 +166,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           EditorView.updateListener.of((update) => {
             const consoles = useConsoles.getState();
             if (update.docChanged) consoles.setSql(consoleId, update.state.doc.toString());
+            if (marksChanged(update)) consoles.marksMoved(consoleId, errorMarksOf(update.view));
             if (update.docChanged || update.selectionSet) {
               const { from, to } = update.state.selection.main;
               consoles.setSelection(consoleId, { from, to });
@@ -199,6 +211,12 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     const current = view.state.doc.toString();
     if (current !== text) view.dispatch({ changes: { from: 0, to: current.length, insert: text } });
   }, [text]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null || errorMarksOf(view) === marks) return;
+    view.dispatch({ effects: setErrorMarks.of(marks) });
+  }, [marks]);
 
   useEffect(() => {
     const view = viewRef.current;

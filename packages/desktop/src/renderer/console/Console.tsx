@@ -1,4 +1,5 @@
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
+import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { EXPLAIN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/explainActions.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions.js";
@@ -9,7 +10,13 @@ import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js"
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
-import { DETACHED, useConsoles, type DiskChange } from "@table-craft/desktop/renderer/state/consoles.js";
+import { markOfError } from "@table-craft/desktop/renderer/model/errorLocation.js";
+import {
+  DETACHED,
+  useConsoles,
+  type DiskChange,
+  type ErrorQuestion,
+} from "@table-craft/desktop/renderer/state/consoles.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -23,6 +30,8 @@ const STATUS_TEXT = {
   failed: "",
   disconnected: "Disconnected; Run reconnects.",
 } as const;
+
+const ASKING_TEXT = "Waiting on the failed statement…";
 
 const DISK_CHANGE_TEXT = {
   changed: "The file changed on disk.",
@@ -60,6 +69,40 @@ function DiskChangedBanner({ change }: { readonly change: DiskChange }) {
   );
 }
 
+const ERROR_ANSWER_BUTTONS = [
+  { actionId: ERROR_ACTION_IDS.skip, label: "Skip" },
+  { actionId: ERROR_ACTION_IDS.skipAll, label: "Skip All" },
+  { actionId: ERROR_ACTION_IDS.stop, label: "Stop" },
+  { actionId: ERROR_ACTION_IDS.retry, label: "Retry" },
+] as const;
+
+/** A run of several statements waits here on the one that failed (decision 083). */
+function ErrorQuestionBanner({ question }: { readonly question: ErrorQuestion }) {
+  return (
+    <div
+      role="alert"
+      data-testid="error-question"
+      className="flex items-center gap-gap border-b border-line bg-panel px-gap py-1"
+    >
+      <WarningIcon aria-hidden weight="fill" className="size-icon shrink-0 text-danger" />
+      <span className="min-w-0 flex-1 truncate" title={`${question.sql}\n${question.error.message}`}>
+        {`Statement ${question.number} of ${question.total} failed: `}
+        <span className="text-danger">{question.error.message}</span>
+      </span>
+      {ERROR_ANSWER_BUTTONS.map(({ actionId, label }) => (
+        <button
+          key={actionId}
+          type="button"
+          className="shrink-0 text-accent hover:underline"
+          onClick={() => void invoke(actionId)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** One console tab: its toolbar, its SQL editor, and its Output and result tabs. */
 export function Console({ consoleId }: { readonly consoleId: string }) {
   const session = useConsoles((state) => state.consoles[consoleId]);
@@ -85,7 +128,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         ) : null}
         {capabilities.includes("cancel") ? <ActionButton actionId={ACTION_IDS.cancel} /> : null}
         {capabilities.includes("transactions") ? <TxControls session={session} /> : null}
-        <span className="shrink-0 text-ink-muted">{STATUS_TEXT[status]}</span>
+        <span className="shrink-0 text-ink-muted">{session.question === null ? STATUS_TEXT[status] : ASKING_TEXT}</span>
         {error === null ? null : (
           // The room the datasource label leaves, but never none; Output holds the whole error.
           <span
@@ -103,6 +146,15 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
             onClick={() => void invoke(LOG_ACTION_IDS.showFor, { requestId: null, message: error.message })}
           >
             Show in Log
+          </button>
+        )}
+        {markOfError(session.errorMarks, error) === null ? null : (
+          <button
+            type="button"
+            className="shrink-0 text-accent hover:underline"
+            onClick={() => void invoke(ERROR_ACTION_IDS.show)}
+          >
+            Go to Error
           </button>
         )}
         {datasource === undefined && session.datasourceId === DETACHED ? (
@@ -144,6 +196,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
       >
         <Editor consoleId={consoleId} />
       </div>
+      {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
       <ResultTabs consoleId={consoleId} session={session} />
     </div>
   );

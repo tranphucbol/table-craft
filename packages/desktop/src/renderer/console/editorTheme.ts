@@ -12,6 +12,17 @@ import { COMPLETION_GLYPH_CLASS } from "@table-craft/desktop/renderer/console/co
 /** The flashed statement's mark; `Editor.tsx` adds and removes it. */
 export const FLASH_CLASS = "tc-statement-flash";
 const FLASH_FADE = "background-color 600ms ease-out";
+/** Where a failed statement went wrong (decision 082); `errorMarks.ts` draws them. */
+export const ERROR_MARK_CLASS = "tc-error-mark";
+export const ERROR_GUTTER_CLASS = "tc-error-gutter";
+export const ERROR_GUTTER_MARKER_CLASS = "tc-error-gutter-marker";
+export const ERROR_TOOLTIP_CLASS = "tc-error-tooltip";
+export const ERROR_HINT_CLASS = "tc-error-hint";
+const ERROR_UNDERLINE = "underline wavy var(--tc-danger)";
+const ERROR_UNDERLINE_OFFSET = "3px";
+const ERROR_DOT_SIZE = "7px";
+const ERROR_GUTTER_PADDING = "0 2px 0 4px";
+const ERROR_TOOLTIP_WIDTH = "480px";
 const SELECTION_FILL = "color-mix(in oklab, var(--tc-accent) 35%, transparent)";
 const SELECTION_MATCH_FILL = "color-mix(in oklab, var(--tc-accent) 15%, transparent)";
 const LINE_HEIGHT = "1.5";
@@ -54,6 +65,27 @@ export const EDITOR_THEME_SPEC = {
   "&.cm-focused .cm-matchingBracket": { backgroundColor: "var(--tc-syntax-bracket-match)", color: "inherit" },
   "&.cm-focused .cm-nonmatchingBracket": { color: "var(--tc-danger)" },
   [`.${FLASH_CLASS}`]: { backgroundColor: "var(--tc-statement-flash)", transition: FLASH_FADE },
+  [`.${ERROR_MARK_CLASS}`]: {
+    textDecoration: ERROR_UNDERLINE,
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: ERROR_UNDERLINE_OFFSET,
+  },
+  [`.${ERROR_GUTTER_CLASS} .cm-gutterElement`]: { padding: ERROR_GUTTER_PADDING },
+  [`.${ERROR_GUTTER_MARKER_CLASS}`]: {
+    display: "inline-block",
+    width: ERROR_DOT_SIZE,
+    height: ERROR_DOT_SIZE,
+    borderRadius: "50%",
+    backgroundColor: "var(--tc-danger)",
+  },
+  [`.${ERROR_TOOLTIP_CLASS}`]: {
+    maxWidth: ERROR_TOOLTIP_WIDTH,
+    padding: PANEL_PADDING,
+    fontFamily: "var(--tc-font-ui)",
+    fontSize: "var(--tc-font-ui-size)",
+    whiteSpace: "pre-wrap",
+  },
+  [`.${ERROR_HINT_CLASS}`]: { color: "var(--tc-ink-muted)" },
   ".cm-panels": { backgroundColor: "var(--tc-panel)", color: "var(--tc-ink)" },
   ".cm-panels.cm-panels-bottom": { borderTop: "1px solid var(--tc-border)" },
   ".cm-search": { padding: PANEL_PADDING, fontFamily: "var(--tc-font-ui)", fontSize: "var(--tc-font-ui-size)" },

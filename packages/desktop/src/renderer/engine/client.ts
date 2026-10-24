@@ -21,12 +21,15 @@ export class EngineRequestError extends Error {
   readonly hint: string;
   /** The id the engine logged the request under (plan 017 decision 6); null when it never reached one. */
   readonly requestId: number | null;
+  /** Where in the sent SQL the database said the statement went wrong (decision 082). */
+  readonly position: number | undefined;
 
   constructor(error: EngineError, requestId: number | null = null) {
     super(error.message);
     this.code = error.code;
     this.hint = error.hint;
     this.requestId = requestId;
+    this.position = error.position;
   }
 }
 

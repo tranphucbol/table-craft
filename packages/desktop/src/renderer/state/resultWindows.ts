@@ -28,7 +28,10 @@ import { currentFormats } from "@table-craft/desktop/renderer/state/settings.js"
 const UNEXPECTED_HINT = "Restart the app; if it happens again, report it.";
 
 export function toError(cause: unknown): EngineError {
-  if (cause instanceof EngineRequestError) return { code: cause.code, message: cause.message, hint: cause.hint };
+  if (cause instanceof EngineRequestError) {
+    const { code, message, hint, position } = cause;
+    return position === undefined ? { code, message, hint } : { code, message, hint, position };
+  }
   return { code: "internal", message: cause instanceof Error ? cause.message : String(cause), hint: UNEXPECTED_HINT };
 }
 
