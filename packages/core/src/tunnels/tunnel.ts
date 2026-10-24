@@ -35,7 +35,7 @@ export interface TunnelOptions {
   /** SSH keepalive interval; 0 or absent turns it off. */
   readonly keepAliveMs?: number;
   readonly readFile?: (path: string) => Promise<Buffer>;
-  /** The agent socket, or `pageant`; defaults to `SSH_AUTH_SOCK`, Pageant on Windows. */
+  /** The agent socket or pipe; defaults to `agentSocket()`. */
   readonly agent?: string;
 }
 
@@ -50,7 +50,11 @@ export interface Tunnel {
 }
 
 const LOOPBACK = "127.0.0.1";
-const PAGEANT = "pageant";
+/**
+ * The agent Windows 10 and later ship. Pageant is not offered: ssh2 reaches it through a helper
+ * `pagent.exe` beside its sources, which the bundled app does not have (decision 070).
+ */
+const WINDOWS_OPENSSH_AGENT = "\\\\.\\pipe\\openssh-ssh-agent";
 const WINDOWS = "win32";
 const MS_PER_SECOND = 1_000;
 const AUTH_LEVEL = "client-authentication";
@@ -128,7 +132,7 @@ async function authConfig(options: TunnelOptions): Promise<Partial<ConnectConfig
     return { password: ssh.password };
   }
   if (ssh.auth === "key") return keyConfig(ssh, options.readFile ?? readFileFromDisk);
-  const agent = options.agent ?? (process.platform === WINDOWS ? PAGEANT : process.env["SSH_AUTH_SOCK"]);
+  const agent = options.agent ?? agentSocket();
   if (agent === undefined || agent === "") {
     throw authFailed(
       "No SSH agent is running: SSH_AUTH_SOCK is not set.",
@@ -162,6 +166,16 @@ function listen(server: Server): Promise<number> {
       resolve((server.address() as AddressInfo).port);
     });
   });
+}
+
+/** `SSH_AUTH_SOCK` when set; on Windows otherwise the OpenSSH agent's pipe. */
+export function agentSocket(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const socket = env["SSH_AUTH_SOCK"];
+  if (socket !== undefined && socket !== "") return socket;
+  return platform === WINDOWS ? WINDOWS_OPENSSH_AGENT : undefined;
 }
 
 /** Logs in to the bastion, then forwards a loopback port to `target` through it (plan 036). */

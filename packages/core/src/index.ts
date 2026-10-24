@@ -187,6 +187,7 @@ export {
   SSH_AUTH_METHODS,
   algorithmOf,
   createConnector,
+  agentSocket,
   createKnownHosts,
   createTunnelPool,
   fingerprintOf,

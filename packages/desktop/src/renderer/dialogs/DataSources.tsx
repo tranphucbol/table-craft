@@ -718,7 +718,7 @@ function TestResult({ state }: { readonly state: TestState | undefined }) {
       <span
         data-testid="test-result"
         data-ok="false"
-        className={cn("min-w-0 text-danger", hop === null ? "line-clamp-2" : "truncate")}
+        className={cn("min-w-0 text-danger", hop === null ? "line-clamp-4" : "line-clamp-3")}
         title={`${result.error.message} ${result.error.hint}`}
       >
         {result.error.message} <span className="text-ink-muted">{result.error.hint}</span>

@@ -5,6 +5,16 @@ import type { SecretRequest } from "@table-craft/desktop/renderer/state/datasour
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
+const ACRONYM = /^[A-Z]{2,}$/;
+
+/** A field label inside a sentence: lower case, except words such as SSH that are acronyms. */
+export function inSentence(label: string): string {
+  return label
+    .split(" ")
+    .map((word) => (ACRONYM.test(word) ? word : word.toLowerCase()))
+    .join(" ");
+}
+
 function Body({ request }: { readonly request: SecretRequest }) {
   const answer = useSecretPrompt((state) => state.answer);
   const [values, setValues] = useState<Readonly<Record<string, string>>>({});
@@ -22,7 +32,7 @@ function Body({ request }: { readonly request: SecretRequest }) {
       <Dialog.Title className="font-semibold">Connect to {request.datasource.name}</Dialog.Title>
       <Dialog.Description className="text-ink-muted">
         {request.datasource.name} does not keep its{" "}
-        {request.fields.map((field) => field.label.toLowerCase()).join(" or ")}. It is used for this connection only.
+        {request.fields.map((field) => inSentence(field.label)).join(" or ")}. It is used for this connection only.
       </Dialog.Description>
       {request.fields.map((field, index) => (
         <label key={field.key} className="flex flex-col gap-1">

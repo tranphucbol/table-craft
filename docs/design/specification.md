@@ -1453,7 +1453,7 @@ A datasource whose plugin declares `connection.network` may carry, beside `confi
 ```
 
 `auth` is `password`, `key` (an OpenSSH or PEM private key; a leading `~` is the home folder) or
-`agent` (`SSH_AUTH_SOCK`, Pageant on Windows). The SSH password and the key passphrase are secrets
+`agent` (`SSH_AUTH_SOCK`; on Windows otherwise the OpenSSH agent's pipe `\\.\pipe\openssh-ssh-agent`, not Pageant, whose ssh2 helper `pagent.exe` the bundle cannot carry). The SSH password and the key passphrase are secrets
 under `ssh.password` and `ssh.passphrase`, with save modes like any other. Connect asks for
 `ssh.password` with password auth and for `ssh.passphrase` only when the key file is encrypted. A
 save without `ssh` clears both, and `ssh` is dropped for a plugin without `network`. `enabled:

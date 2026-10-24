@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { HostKeyPrompt } from "@table-craft/desktop/preload/bridge.js";
 import { sshServerName } from "@table-craft/desktop/renderer/dialogs/HostKeyPrompt.js";
+import { inSentence } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
 import { createHostKeyPromptStore } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 
 function prompt(requestId: number, host: string): HostKeyPrompt {
@@ -32,5 +33,11 @@ describe("host key prompt", () => {
   it("givenPort_whenServerNamed_thenBareOn22", () => {
     expect(sshServerName("bastion", 22)).toBe("bastion");
     expect(sshServerName("bastion", 2204)).toBe("bastion:2204");
+  });
+
+  it("givenSshLabel_whenPutInSentence_thenAcronymKeptAndRestLowered", () => {
+    expect(inSentence("SSH password")).toBe("SSH password");
+    expect(inSentence("Key passphrase")).toBe("key passphrase");
+    expect(inSentence("Password")).toBe("password");
   });
 });

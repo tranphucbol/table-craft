@@ -13,7 +13,7 @@ const AUTH_LABEL: Readonly<Record<SshAuthMethod, string>> = {
 };
 const AUTH_METHODS = Object.keys(AUTH_LABEL) as readonly SshAuthMethod[];
 const KEY_FILE_TITLE = "Private key";
-const AGENT_NOTE = "Uses the keys of the running SSH agent (SSH_AUTH_SOCK; Pageant on Windows).";
+const AGENT_NOTE = "Uses the keys of the running SSH agent (SSH_AUTH_SOCK; on Windows the OpenSSH agent).";
 
 interface SshSectionProps {
   readonly draft: FormDraft;

@@ -19,6 +19,7 @@ export {
 export { createTunnelPool, tunneledSession, type TunnelLease, type TunnelPool } from "./pool.js";
 export {
   SSH_AUTH_METHODS,
+  agentSocket,
   expandHome,
   openTunnel,
   type SshAuthMethod,

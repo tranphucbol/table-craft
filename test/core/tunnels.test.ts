@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   TunnelError,
+  agentSocket,
   expandHome,
   fingerprintOf,
   keyNeedsPassphrase,
@@ -208,6 +209,15 @@ describe("openTunnel", () => {
     ssh.dropClients();
 
     expect(await closed).toEqual(expect.any(String));
+  });
+});
+
+describe("agentSocket", () => {
+  it("givenPlatformAndEnvironment_whenAgentChosen_thenAuthSockElseWindowsOpenSshPipe", () => {
+    expect(agentSocket("linux", { SSH_AUTH_SOCK: "/tmp/agent.sock" })).toBe("/tmp/agent.sock");
+    expect(agentSocket("darwin", {})).toBeUndefined();
+    expect(agentSocket("win32", {})).toBe("\\\\.\\pipe\\openssh-ssh-agent");
+    expect(agentSocket("win32", { SSH_AUTH_SOCK: "C:/agent" })).toBe("C:/agent");
   });
 });
 
