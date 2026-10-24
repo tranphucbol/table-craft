@@ -44,6 +44,7 @@
     "packages/*/vite.*.ts",
     "packages/*/scripts/**/*.ts",
     "plugins/*/src/**/*.ts",
+    "scripts/**/*.ts",
     "test/**/*.ts",
     "vitest.config.ts",
     "vitest.db.config.ts"
