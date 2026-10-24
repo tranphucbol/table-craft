@@ -52,7 +52,12 @@ export async function setup(): Promise<() => Promise<void>> {
   // In the headless box the remote settings are not passed in; compose already points it.
   const target = await resolveTidbTarget();
   Object.assign(process.env, target.env);
-  console.log(target.description);
+  const given = process.env.TABLE_CRAFT_TIDB_HOST;
+  console.log(
+    !target.remote && given !== undefined
+      ? `TiDB: ${given}:${process.env.TABLE_CRAFT_TIDB_PORT ?? ""}, as the caller set it`
+      : target.description,
+  );
   const now = Date.now();
   const name = `${TIDB_SCRATCH_PREFIX}${now.toString(RADIX)}_${randomBytes(RANDOM_BYTES).toString("hex")}`;
   await withServer(async (connection) => {
