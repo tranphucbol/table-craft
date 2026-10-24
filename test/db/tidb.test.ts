@@ -296,6 +296,17 @@ describe("tidb 4", () => {
     expect(switched.namespace).toEqual([LONG_DATABASE]);
   });
 
+  it("givenTidb4WithoutStoredRoutines_whenDescribed_thenNoRoutines", async () => {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+    await withSagaContext(session);
+
+    const described = await session.introspector?.describe([TIDB_DATABASE]);
+
+    expect(described?.relations.map((relation) => relation.name)).toContain(SAGA_TABLE);
+    expect(described?.routines).toEqual([]);
+  });
+
   async function connected(): Promise<Session & { sessions: SessionMonitor }> {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
