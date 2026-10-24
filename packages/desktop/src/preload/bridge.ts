@@ -31,6 +31,8 @@ export const CHANNELS = {
   importProgress: "table-craft:import.progress",
   /** Main to a window: an SSH server offered an unknown host key; the payload is a `HostKeyPrompt`. */
   hostKeyPrompt: "table-craft:ssh.host-key-prompt",
+  /** Main to a window: a File → Recent Files item was picked; the payload is its absolute path (plan 041). */
+  openRecentFile: "table-craft:sql-files.open-recent",
 } as const;
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
@@ -52,6 +54,15 @@ export const INVOKE_CHANNELS = {
   readConsole: "table-craft:consoles.read",
   writeConsole: "table-craft:consoles.write",
   deleteConsole: "table-craft:consoles.delete",
+  renameConsole: "table-craft:consoles.rename",
+  chooseSqlFiles: "table-craft:sql-files.choose",
+  openSqlFile: "table-craft:sql-files.open",
+  readSqlFile: "table-craft:sql-files.read",
+  writeSqlFile: "table-craft:sql-files.write",
+  renameSqlFile: "table-craft:sql-files.rename",
+  statSqlFiles: "table-craft:sql-files.stat",
+  attachSqlFile: "table-craft:sql-files.attach",
+  recentSqlFiles: "table-craft:sql-files.recent",
   historyRecord: "table-craft:history.record",
   historySearch: "table-craft:history.search",
   historyClear: "table-craft:history.clear",
@@ -464,6 +475,28 @@ export interface WindowState {
   readonly customTitleBar: boolean;
 }
 
+/** The line break a SQL file uses, kept on save: the editor holds LF only (plan 041). */
+export type LineEnding = "lf" | "crlf";
+
+/** A SQL file's text as the editor holds it: BOM dropped, line breaks normalised to LF. */
+export interface SqlFileText {
+  readonly path: string;
+  readonly sql: string;
+  readonly lineEnding: LineEnding;
+  /** The file's modification time in epoch milliseconds, to notice a change made elsewhere. */
+  readonly modifiedAt: number;
+}
+
+/** The data source and namespace a SQL file was last used with (plan 041, decision 5). */
+export interface FileAttachment {
+  readonly datasourceId: string;
+  readonly namespace: readonly string[] | null;
+}
+
+export interface SqlFileOpened extends SqlFileText {
+  readonly attachment: FileAttachment | null;
+}
+
 /** A point in the window's content, in CSS pixels. */
 export interface MenuPoint {
   readonly x: number;
@@ -503,6 +536,28 @@ export interface TableCraftBridge {
   readConsole(datasourceId: string, name: string): Promise<InvokeResult<string | null>>;
   writeConsole(datasourceId: string, name: string, text: string): Promise<InvokeResult<null>>;
   deleteConsole(datasourceId: string, name: string): Promise<InvokeResult<null>>;
+  /** Renames a saved console; fails naming the pattern a name must match, or when the name is taken. */
+  renameConsole(datasourceId: string, from: string, to: string): Promise<InvokeResult<null>>;
+  /** The native open dialog for `.sql` files, several at once; empty when cancelled. */
+  chooseSqlFiles(title: string): Promise<InvokeResult<readonly string[]>>;
+  /** Reads a SQL file for a file console, with its remembered attachment, and makes it the most recent. */
+  openSqlFile(path: string): Promise<InvokeResult<SqlFileOpened>>;
+  /** Rereads a file console's file, after a change on disk or at launch; the recent list stays as it is. */
+  readSqlFile(path: string): Promise<InvokeResult<SqlFileOpened>>;
+  writeSqlFile(
+    path: string,
+    sql: string,
+    lineEnding: LineEnding,
+  ): Promise<InvokeResult<{ readonly modifiedAt: number }>>;
+  /** Renames the file in its folder; the new absolute path. */
+  renameSqlFile(path: string, name: string): Promise<InvokeResult<{ readonly path: string }>>;
+  /** Each file's modification time, or null when it is gone. */
+  statSqlFiles(paths: readonly string[]): Promise<InvokeResult<readonly (number | null)[]>>;
+  attachSqlFile(path: string, attachment: FileAttachment): Promise<InvokeResult<null>>;
+  /** The recent SQL files, most recent first. */
+  recentSqlFiles(): Promise<InvokeResult<readonly string[]>>;
+  /** Calls `listener` with the path of each File → Recent Files item picked. */
+  onOpenRecentFile(listener: (path: string) => void): () => void;
   /** Appends one run to the datasource's query history (decision 030). */
   historyRecord(entry: HistoryEntry): Promise<InvokeResult<null>>;
   /** The datasource's distinct statements containing `query`, case-insensitively, newest first. */

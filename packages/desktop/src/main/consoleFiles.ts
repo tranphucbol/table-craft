@@ -39,6 +39,8 @@ export interface ConsoleFiles {
   read(datasourceId: string, name: string): Promise<string | null>;
   write(datasourceId: string, name: string, text: string): Promise<void>;
   delete(datasourceId: string, name: string): Promise<void>;
+  /** Renames a saved console; refuses a name another console has. Nothing saved yet is nothing to move. */
+  rename(datasourceId: string, from: string, to: string): Promise<void>;
   /** Removes every console saved for the datasource, when the datasource is deleted. */
   deleteAll(datasourceId: string): Promise<void>;
 }
@@ -87,6 +89,17 @@ export function createConsoleFiles(options: ConsoleFilesOptions): ConsoleFiles {
       await writeAtomically(files, path, text);
     },
     delete: async (datasourceId, name) => files.remove(pathOf(datasourceId, name)),
+    async rename(datasourceId, from, to) {
+      const source = pathOf(datasourceId, from);
+      const target = pathOf(datasourceId, to);
+      if (from === to) return;
+      // A case-only rename finds its own file as the target on a case-insensitive disk.
+      if (from.toLowerCase() !== to.toLowerCase() && (await files.readText(target)) !== null) {
+        throw new ConsoleFileError(`A console named "${to}" already exists.`, "Choose another name.");
+      }
+      if ((await files.readText(source)) === null) return;
+      await files.rename(source, target);
+    },
     deleteAll: async (datasourceId) => files.removeDirectory(directoryOf(datasourceId)),
   };
 }

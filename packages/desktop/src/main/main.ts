@@ -48,6 +48,8 @@ import { readLogRecord } from "@table-craft/desktop/main/log/schema.js";
 import { createLogWriter, LOG_DIRECTORY, nodeLogFiles } from "@table-craft/desktop/main/log/writer.js";
 import { zip } from "@table-craft/desktop/main/log/zip.js";
 import { installApplicationMenu } from "@table-craft/desktop/main/menu.js";
+import { FILE_ATTACHMENTS_FILE, createFileAttachments } from "@table-craft/desktop/main/fileAttachments.js";
+import { createSqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { createLoneAlt, menuButtonAnchor, popupApplicationMenu } from "@table-craft/desktop/main/menuPopup.js";
 import { appPaths } from "@table-craft/desktop/main/paths.js";
 import { discoverInstalled, type PluginReport } from "@table-craft/desktop/main/plugins.js";
@@ -123,6 +125,10 @@ const MIRROR_LEVEL = "warn";
 const DIAGNOSTICS_TITLE = "Export Diagnostics";
 const IMPORT_FILE_FILTERS = [
   { name: "Delimited text", extensions: ["csv", "tsv", "txt"] },
+  { name: "All files", extensions: ["*"] },
+];
+const SQL_FILE_FILTERS = [
+  { name: "SQL files", extensions: ["sql"] },
   { name: "All files", extensions: ["*"] },
 ];
 const UTF8 = "utf8";
@@ -472,6 +478,17 @@ async function openFile(contents: WebContents, title: string): Promise<string | 
   return picked.canceled ? null : (picked.filePaths[0] ?? null);
 }
 
+async function chooseSqlFiles(contents: WebContents, title: string): Promise<readonly string[]> {
+  const parent = BrowserWindow.fromWebContents(contents);
+  const options: OpenDialogOptions = { title, properties: ["openFile", "multiSelections"], filters: SQL_FILE_FILTERS };
+  const picked = parent === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
+  return picked.canceled ? [] : picked.filePaths;
+}
+
+function menuTarget(): BrowserWindow | null {
+  return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+}
+
 function logPlugins(report: readonly PluginReport[]): void {
   const plugins = mainLog.child("plugins");
   for (const plugin of report) {
@@ -645,6 +662,7 @@ void app.whenReady().then(async () => {
   if (process.platform === MAC_PLATFORM && !app.isPackaged) app.dock?.setIcon(paths.icon);
   const directory = app.getPath(USER_DATA);
   const consoles = createConsoleFiles({ directory, files });
+  const attachments = createFileAttachments({ path: join(directory, FILE_ATTACHMENTS_FILE), files });
   await mkdir(directory, { recursive: true });
   mainLog.info("TableCraft started", {
     version: appVersion,
@@ -722,6 +740,11 @@ void app.whenReady().then(async () => {
   registerIpc<WebContents>(ipcMain, {
     service,
     consoles,
+    sqlFiles: createSqlFileChannels<WebContents>({
+      attachments,
+      choose: chooseSqlFiles,
+      recentChanged: (recent) => installApplicationMenu(menuTarget, recent),
+    }),
     history,
     settings,
     async openThemesFolder() {
@@ -805,7 +828,7 @@ void app.whenReady().then(async () => {
       },
     },
   });
-  installApplicationMenu(() => BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null);
+  installApplicationMenu(menuTarget, await attachments.recent());
   createWindow(settings);
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(settings);

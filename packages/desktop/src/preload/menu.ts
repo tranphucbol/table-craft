@@ -38,7 +38,13 @@ export interface SeparatorItem extends PlatformEntry {
   readonly kind: "separator";
 }
 
-export type MenuEntry = ActionMenuItem | RoleMenuItem | SubmenuItem | SeparatorItem;
+/** The recent SQL files (plan 041), filled in by main each time the list moves; a click opens the file. */
+export interface RecentFilesItem extends PlatformEntry {
+  readonly kind: "recentFiles";
+  readonly label: string;
+}
+
+export type MenuEntry = ActionMenuItem | RoleMenuItem | SubmenuItem | SeparatorItem | RecentFilesItem;
 
 const SEPARATOR: SeparatorItem = { kind: "separator" };
 const SETTINGS_ACCELERATOR = "CmdOrCtrl+,";
@@ -75,6 +81,12 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
       { kind: "action", label: "New Data Source…", actionId: "datasource.new" },
       { kind: "action", label: "Import Data Sources…", actionId: "datasource.import" },
       { kind: "action", label: "New Console", actionId: "console.new", accelerator: "CmdOrCtrl+Shift+L" },
+      { kind: "action", label: "Open File…", actionId: "file.open", accelerator: "CmdOrCtrl+O" },
+      { kind: "recentFiles", label: "Recent Files" },
+      SEPARATOR,
+      { kind: "action", label: "Save", actionId: "file.save", accelerator: "CmdOrCtrl+S" },
+      { kind: "action", label: "Save As…", actionId: "file.saveAs", accelerator: "CmdOrCtrl+Shift+S" },
+      { kind: "action", label: "Rename Console…", actionId: "console.rename" },
       SEPARATOR,
       {
         kind: "action",

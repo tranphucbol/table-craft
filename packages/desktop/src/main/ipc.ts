@@ -4,6 +4,7 @@ import { ConsoleFileError, type ConsoleFiles } from "@table-craft/desktop/main/c
 import { draftSchema } from "@table-craft/desktop/main/datasources.js";
 import { logWriteRequest } from "@table-craft/desktop/main/log/schema.js";
 import { SecretStoreError } from "@table-craft/desktop/main/secrets.js";
+import { SqlFileError, type SqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { settingsSchema, type SettingsService } from "@table-craft/desktop/main/settings.js";
 import { DatasourceError, type DatasourceService } from "@table-craft/desktop/main/service.js";
 import {
@@ -59,6 +60,24 @@ const consoleWriteRequest = z.strictObject({
   name: z.string().min(1),
   text: z.string(),
 });
+const consoleRenameRequest = z.strictObject({
+  datasourceId: z.string().min(1),
+  from: z.string().min(1),
+  to: z.string(),
+});
+const sqlFileRequest = z.strictObject({ path: z.string().min(1) });
+const sqlFileWriteRequest = z.strictObject({
+  path: z.string().min(1),
+  sql: z.string(),
+  lineEnding: z.enum(["lf", "crlf"]),
+});
+const sqlFileRenameRequest = z.strictObject({ path: z.string().min(1), name: z.string() });
+const sqlFileStatRequest = z.strictObject({ paths: z.array(z.string().min(1)) });
+const sqlFileAttachRequest = z.strictObject({
+  path: z.string().min(1),
+  datasourceId: z.string().min(1),
+  namespace: z.array(z.string()).nullable(),
+});
 const historyEntry = z.strictObject({
   datasourceId: z.string().min(1),
   sql: z.string(),
@@ -99,6 +118,7 @@ export interface InvokeRegistrar<Sender> {
 export interface IpcOptions<Sender> {
   readonly service: DatasourceService<Sender>;
   readonly consoles: ConsoleFiles;
+  readonly sqlFiles: SqlFileChannels<Sender>;
   readonly history: Pick<QueryHistory, "record" | "search" | "clear">;
   readonly chooseFile: (sender: Sender, title: string) => Promise<string | null>;
   readonly openFile: (sender: Sender, title: string) => Promise<string | null>;
@@ -154,7 +174,12 @@ export interface LogChannels<Sender> {
 }
 
 function failureOf(cause: unknown): BridgeFailure | null {
-  if (cause instanceof DatasourceError || cause instanceof SecretStoreError || cause instanceof ConsoleFileError) {
+  if (
+    cause instanceof DatasourceError ||
+    cause instanceof SecretStoreError ||
+    cause instanceof ConsoleFileError ||
+    cause instanceof SqlFileError
+  ) {
     return { message: cause.message, hint: cause.hint };
   }
   return null;
@@ -247,6 +272,25 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
     await consoles.delete(datasourceId, name);
     return null;
   });
+  handle(INVOKE_CHANNELS.renameConsole, consoleRenameRequest, async ({ datasourceId, from, to }) => {
+    await consoles.rename(datasourceId, from, to);
+    return null;
+  });
+
+  const { sqlFiles } = options;
+  handle(INVOKE_CHANNELS.chooseSqlFiles, chooseFileRequest, ({ title }, sender) => sqlFiles.choose(sender, title));
+  handle(INVOKE_CHANNELS.openSqlFile, sqlFileRequest, ({ path }) => sqlFiles.open(path));
+  handle(INVOKE_CHANNELS.readSqlFile, sqlFileRequest, ({ path }) => sqlFiles.read(path));
+  handle(INVOKE_CHANNELS.writeSqlFile, sqlFileWriteRequest, ({ path, sql, lineEnding }) =>
+    sqlFiles.write(path, sql, lineEnding),
+  );
+  handle(INVOKE_CHANNELS.renameSqlFile, sqlFileRenameRequest, ({ path, name }) => sqlFiles.rename(path, name));
+  handle(INVOKE_CHANNELS.statSqlFiles, sqlFileStatRequest, ({ paths }) => sqlFiles.stat(paths));
+  handle(INVOKE_CHANNELS.attachSqlFile, sqlFileAttachRequest, async ({ path, datasourceId, namespace }) => {
+    await sqlFiles.attach(path, { datasourceId, namespace });
+    return null;
+  });
+  handle(INVOKE_CHANNELS.recentSqlFiles, noRequest, () => sqlFiles.recent());
 
   const { settings } = options;
   handle(INVOKE_CHANNELS.readSettings, noRequest, () => settings.snapshot());

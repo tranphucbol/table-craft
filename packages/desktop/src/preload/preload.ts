@@ -63,6 +63,20 @@ const bridge: TableCraftBridge = {
   readConsole: (datasourceId, name) => invoke(INVOKE_CHANNELS.readConsole, { datasourceId, name }),
   writeConsole: (datasourceId, name, text) => invoke(INVOKE_CHANNELS.writeConsole, { datasourceId, name, text }),
   deleteConsole: (datasourceId, name) => invoke(INVOKE_CHANNELS.deleteConsole, { datasourceId, name }),
+  renameConsole: (datasourceId, from, to) => invoke(INVOKE_CHANNELS.renameConsole, { datasourceId, from, to }),
+  chooseSqlFiles: (title) => invoke(INVOKE_CHANNELS.chooseSqlFiles, { title }),
+  openSqlFile: (path) => invoke(INVOKE_CHANNELS.openSqlFile, { path }),
+  readSqlFile: (path) => invoke(INVOKE_CHANNELS.readSqlFile, { path }),
+  writeSqlFile: (path, sql, lineEnding) => invoke(INVOKE_CHANNELS.writeSqlFile, { path, sql, lineEnding }),
+  renameSqlFile: (path, name) => invoke(INVOKE_CHANNELS.renameSqlFile, { path, name }),
+  statSqlFiles: (paths) => invoke(INVOKE_CHANNELS.statSqlFiles, { paths }),
+  attachSqlFile: (path, attachment) => invoke(INVOKE_CHANNELS.attachSqlFile, { path, ...attachment }),
+  recentSqlFiles: () => invoke(INVOKE_CHANNELS.recentSqlFiles),
+  onOpenRecentFile(listener) {
+    return subscribe<unknown>(CHANNELS.openRecentFile, (path) => {
+      if (typeof path === "string") listener(path);
+    });
+  },
   historyRecord: (entry) => invoke(INVOKE_CHANNELS.historyRecord, entry),
   historySearch: (datasourceId, query) => invoke(INVOKE_CHANNELS.historySearch, { datasourceId, query }),
   historyClear: (datasourceId) => invoke(INVOKE_CHANNELS.historyClear, { datasourceId }),
