@@ -809,6 +809,40 @@ describe("query parameters", () => {
     }
   });
 
+  it("givenPresetValues_whenRun_thenNoPromptAndBound", async () => {
+    const { store, askParameters, bound, recorded } = await opened("SELECT f(:amount, :rate);");
+
+    await store.getState().run("c1", "all", { ":amount": "100", ":rate": null });
+
+    expect(askParameters).not.toHaveBeenCalled();
+    expect(bound).toEqual([{ ":amount": "100", ":rate": null }]);
+    expect(recorded.map((entry) => entry.parameters)).toEqual(bound);
+    expect(store.getState().consoles.c1?.parameterValues).toEqual({ ":amount": "100", ":rate": null });
+  });
+
+  it("givenPresetValuesWithDetectionOff_whenRun_thenBound", async () => {
+    const settings = useSettings.getState().settings;
+    useSettings.setState({ settings: { ...settings, console: { ...settings.console, parameters: false } } });
+    try {
+      const { store, askParameters, bound } = await opened("SELECT f(:amount);");
+
+      await store.getState().run("c1", "all", { ":amount": "100" });
+
+      expect(askParameters).not.toHaveBeenCalled();
+      expect(bound).toEqual([{ ":amount": "100" }]);
+    } finally {
+      useSettings.setState({ settings });
+    }
+  });
+
+  it("givenPresetMissingAName_whenRun_thenPromptPrefilled", async () => {
+    const { store, askParameters } = await opened("SELECT :a, :b", { values: { ":a": "1", ":b": "2" } });
+
+    await store.getState().run("c1", "all", { ":a": "1" });
+
+    expect(askParameters.mock.calls[0]?.[0].initial).toEqual({ ":a": "1" });
+  });
+
   it("givenResultWithParameters_whenRerun_thenPromptsAndSendsValues", async () => {
     const { store, bound, askParameters, session } = await opened("SELECT :id", { values: { ":id": "7" } });
     await store.getState().run("c1", "all");

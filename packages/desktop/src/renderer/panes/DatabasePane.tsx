@@ -10,6 +10,7 @@ import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptA
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
+import { ROUTINE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/routineActions.js";
 import { SESSIONS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
 import { TABLE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/tableActions.js";
@@ -94,6 +95,18 @@ const DATASOURCE_MENU = [
 const FOLDER_MENU = [ACTION_IDS.newDatasource, ACTION_IDS.newFolder] as const;
 const CATALOG_MENU = [
   TABLE_ACTION_IDS.openData,
+  ACTION_IDS.newConsole,
+  null,
+  OBJECT_ACTION_IDS.rename,
+  OBJECT_ACTION_IDS.drop,
+  null,
+  ACTION_IDS.synchronize,
+  ACTION_IDS.copyName,
+  null,
+  ACTION_IDS.toggleSystemSchemas,
+] as const;
+const ROUTINE_MENU = [
+  ROUTINE_ACTION_IDS.execute,
   ACTION_IDS.newConsole,
   null,
   OBJECT_ACTION_IDS.rename,
@@ -191,6 +204,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   OBJECT_ACTION_IDS.truncate,
   OBJECT_ACTION_IDS.drop,
   SESSIONS_ACTION_IDS.show,
+  ROUTINE_ACTION_IDS.execute,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {
@@ -272,6 +286,7 @@ function menuOf(node: ExplorerNode): readonly (string | null)[] {
   if (node.kind === "datasource") return DATASOURCE_MENU;
   if (node.kind === "relation") return RELATION_MENU;
   if (node.kind === "column") return COLUMN_MENU;
+  if (node.kind === "routine") return ROUTINE_MENU;
   if (node.kind === "namespace" || node.kind === "objectGroup") return NAMESPACE_MENU;
   return CATALOG_MENU;
 }

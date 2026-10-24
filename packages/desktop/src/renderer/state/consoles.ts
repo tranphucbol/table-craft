@@ -312,8 +312,11 @@ export interface ConsolesState extends ConsoleEdits {
   readonly reformat: (id: string) => Promise<void>;
   /** The editor applied, or skipped as stale, the replacement numbered `seq`. */
   readonly replaced: (id: string, seq: number) => void;
-  /** Runs what `scope` picks, one statement after another, opening a session first when it has none. */
-  readonly run: (id: string, scope: RunScope) => Promise<void>;
+  /**
+   * Runs what `scope` picks, one statement after another, opening a session first when it has none.
+   * `preset` answers the Parameters dialog and binds even with detection off (plan 046 decision 6).
+   */
+  readonly run: (id: string, scope: RunScope, preset?: ParameterValues) => Promise<void>;
   /** Asks the engine to cancel the running statement; `run` then reports it as cancelled. */
   readonly cancel: (id: string) => Promise<void>;
   /** Loads the window at `offset` unless it is loaded or on its way; evicts the furthest past the limit. */
@@ -1185,12 +1188,21 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
     /**
      * The values `statements` bind, asking for them when any has a parameter; null when the user
      * cancelled. Detection off, or no parameters, binds nothing and the statements run verbatim.
+     * `preset` values answer without asking when they cover every name, detection on or off.
      */
-    async function bindValues(id: string, statements: readonly ClassifiedStatement[]): Promise<Bound | null | false> {
-      if (!detectsParameters()) return null;
+    async function bindValues(
+      id: string,
+      statements: readonly ClassifiedStatement[],
+      preset?: ParameterValues,
+    ): Promise<Bound | null | false> {
+      if (preset === undefined && !detectsParameters()) return null;
       const prompt = parameterPrompt(statements);
       if (prompt.names.length === 0) return null;
-      const initial = get().consoles[id]?.parameterValues ?? {};
+      const initial = { ...get().consoles[id]?.parameterValues, ...preset };
+      if (preset !== undefined && prompt.names.every((name) => preset[name] !== undefined)) {
+        patch(id, { parameterValues: initial });
+        return { prompt, values: initial };
+      }
       const values = await asked(id, () => askParameters({ prompt, initial }));
       if (values === null) return false;
       const current = get().consoles[id];
@@ -1532,7 +1544,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         );
       },
 
-      async run(id, scope) {
+      async run(id, scope, preset) {
         const before = get().consoles[id];
         if (before === undefined || !canRun(before.status)) return;
         if (!(await settleEdits(id, "run", unpinned(id)))) return;
@@ -1553,7 +1565,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           } else {
             const destructive = statements.filter((statement) => statement.destructive !== null);
             const declined = destructive.length > 0 && !(await confirmed(id, () => confirmDestructive(destructive)));
-            const bound = declined ? false : await bindValues(id, statements);
+            const bound = declined ? false : await bindValues(id, statements, preset);
             if (bound === false) {
               log(id, { sql: "", message: DECLINED, tone: "warning" });
               patch(id, { activeResult: OUTPUT_TAB });

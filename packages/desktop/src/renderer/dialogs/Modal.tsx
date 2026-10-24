@@ -4,6 +4,7 @@ import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { Button, CONTENT_CLASS, OVERLAY_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { useModal, type ModalItem, type ModalRequest } from "@table-craft/desktop/renderer/state/modal.js";
+import { ExecuteRoutine } from "@table-craft/desktop/renderer/dialogs/ExecuteRoutine.js";
 import { ExportData } from "@table-craft/desktop/renderer/dialogs/ExportData.js";
 import { ImportData } from "@table-craft/desktop/renderer/dialogs/ImportData.js";
 import { ObjectChange } from "@table-craft/desktop/renderer/dialogs/ObjectChange.js";
@@ -31,6 +32,7 @@ const MODAL_WIDTHS: Readonly<Record<ModalRequest["kind"], string>> = {
   import: "w-dialog",
   tableDesign: "w-dialog",
   objectChange: "w-[40rem]",
+  routine: "w-[40rem]",
 };
 
 type PickerKind =
@@ -42,7 +44,8 @@ type PickerKind =
   | "export"
   | "import"
   | "tableDesign"
-  | "objectChange";
+  | "objectChange"
+  | "routine";
 
 function Items({ items }: { readonly items: readonly ModalItem[] }) {
   return (
@@ -188,6 +191,8 @@ export function Modal() {
             <TableDesigner request={pending.request} />
           ) : pending.request.kind === "objectChange" ? (
             <ObjectChange request={pending.request} />
+          ) : pending.request.kind === "routine" ? (
+            <ExecuteRoutine request={pending.request} />
           ) : (
             <Body request={pending.request} />
           )}

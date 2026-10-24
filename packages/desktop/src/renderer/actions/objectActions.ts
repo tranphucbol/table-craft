@@ -124,9 +124,8 @@ function selectedObject(context: ActionContext): SelectedObject | null {
   if (key === relationKey(id, path, name)) {
     return found(described.relations.find((relation) => relation.name === name)?.kind);
   }
-  if (key === routineKey(id, path, name)) {
-    return found(described.routines.find((routine) => routine.name === name)?.kind);
-  }
+  const routine = described.routines.find((candidate) => key === routineKey(id, path, candidate));
+  if (routine !== undefined) return found(routine.kind);
   if (key === sequenceKey(id, path, name) && described.sequences.some((sequence) => sequence.name === name)) {
     return found("sequence");
   }

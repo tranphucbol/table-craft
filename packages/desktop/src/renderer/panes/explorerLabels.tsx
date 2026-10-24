@@ -125,6 +125,8 @@ export function NodeDetail({ node }: { readonly node: ExplorerNode }) {
       );
     case "index":
       return <Detail>{`${columnList(node.index.columns)}${node.index.unique ? " unique" : ""}`}</Detail>;
+    case "routine":
+      return <Detail>{routineArguments(node.routine.signature)}</Detail>;
     case "error":
       return <Detail>{node.error.hint}</Detail>;
     default:
@@ -153,17 +155,25 @@ export function nodeAriaLabel(row: ExplorerRow): string {
       return `${text} ${String(node.count)}`;
     case "column":
       return `${text} ${node.column.type}${node.primary ? ", primary key" : ""}${node.foreign ? ", foreign key" : ""}${node.column.nullable ? "" : ", not null"}`;
+    case "routine":
+      return `${text} ${routineArguments(node.routine.signature)}`;
     default:
       return text;
   }
 }
 
-/** A tooltip for rows that carry an error: the message, then what to do. */
+/** A tooltip: an error's message then what to do, a comment, or what a routine returns. */
 export function nodeTitle(node: ExplorerNode): string | undefined {
   if (node.kind === "error") return `${node.error.message} ${node.error.hint}`;
   if (node.kind === "namespace" && node.state?.error != null)
     return `${node.state.error.message} ${node.state.error.hint}`;
   if (node.kind === "relation") return node.relation.comment ?? undefined;
   if (node.kind === "column") return node.column.comment ?? undefined;
+  if (node.kind === "routine") return node.routine.returns === null ? "procedure" : `returns ${node.routine.returns}`;
   return undefined;
+}
+
+/** A routine's arguments as its row shows them, so overloads read apart. */
+export function routineArguments(signature: string): string {
+  return `(${signature})`;
 }

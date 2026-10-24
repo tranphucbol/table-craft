@@ -206,8 +206,13 @@ export function relationKey(datasourceId: string, path: readonly string[], relat
   return catalogKey(datasourceId, "relation", path, relation);
 }
 
-export function routineKey(datasourceId: string, path: readonly string[], routine: string): string {
-  return catalogKey(datasourceId, "routine", path, routine);
+/** Name, kind and signature, since a PostgreSQL overload shares its name (decision 090). */
+export function routineKey(
+  datasourceId: string,
+  path: readonly string[],
+  routine: Pick<Routine, "name" | "kind" | "signature">,
+): string {
+  return catalogKey(datasourceId, "routine", path, routine.name, routine.kind, routine.signature);
 }
 
 export function sequenceKey(datasourceId: string, path: readonly string[], sequence: string): string {
@@ -379,7 +384,7 @@ function catalogRows(builder: Builder, datasourceId: string, described: Describe
       count: routines.length,
       rows: () => {
         for (const routine of routines) {
-          const key = routineKey(datasourceId, path, routine.name);
+          const key = routineKey(datasourceId, path, routine);
           push(builder, { ...base, kind: "routine", routine }, depth + 1, key, routine.name, false);
         }
       },

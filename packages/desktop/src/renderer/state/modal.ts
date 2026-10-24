@@ -8,6 +8,9 @@ import type {
   ImportTransaction,
   NewImportColumn,
   ObjectFeatures,
+  Routine,
+  RoutineArgument,
+  RoutineCall,
   TableDesign,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { HistoryStatement } from "@table-craft/desktop/preload/bridge.js";
@@ -207,6 +210,21 @@ export type ModalRequest =
       /** Cascade's initial state; null when the change has no such choice. */
       readonly cascade: boolean | null;
       readonly preview: (cascade: boolean) => Promise<DdlScript>;
+      readonly highlight: string | null | undefined;
+    }
+  | {
+      /**
+       * Execute Routine (plan 046): a value, NULL or DEFAULT per argument, previewed as the plugin
+       * writes the call; resolves `routineAnswer`.
+       */
+      readonly kind: "routine";
+      readonly title: string;
+      /** Where the routine is and what it returns, said under the title. */
+      readonly note: string;
+      readonly routine: Routine;
+      /** Said above the buttons, such as a read-only data source's; empty for none. */
+      readonly warnings: readonly string[];
+      readonly preview: (args: readonly RoutineArgument[]) => Promise<RoutineCall>;
       readonly highlight: string | null | undefined;
     };
 

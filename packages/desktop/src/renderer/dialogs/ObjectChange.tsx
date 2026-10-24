@@ -16,9 +16,9 @@ import { SqlView } from "@table-craft/desktop/renderer/ui/SqlView.js";
 type ObjectChangeRequest = Extract<ModalRequest, { kind: "objectChange" }>;
 
 /** A script as the plugin wrote it for one input, or why it could not. */
-export interface ScriptPreview<K> {
+export interface ScriptPreview<K, S = DdlScript> {
   readonly key: K;
-  readonly script: DdlScript | null;
+  readonly script: S | null;
   readonly error: string | null;
 }
 
@@ -26,12 +26,12 @@ export interface ScriptPreview<K> {
  * Asks for the script whenever `key` changes, `delayMs` after it last did; stale answers are
  * dropped. A modified table's script re-reads the table, so typing waits for a pause.
  */
-export function useScriptPreview<K>(
+export function useScriptPreview<K, S = DdlScript>(
   key: K | null,
-  preview: (key: K) => Promise<DdlScript>,
+  preview: (key: K) => Promise<S>,
   delayMs = 0,
-): ScriptPreview<K> | null {
-  const [shown, setShown] = useState<ScriptPreview<K> | null>(null);
+): ScriptPreview<K, S> | null {
+  const [shown, setShown] = useState<ScriptPreview<K, S> | null>(null);
   useEffect(() => {
     if (key === null) return;
     let current = true;

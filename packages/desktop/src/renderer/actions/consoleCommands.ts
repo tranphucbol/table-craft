@@ -57,13 +57,35 @@ export function persists(datasourceId: string): boolean {
 
 /** Opens a console tab on the datasource, named with the first free `console`, `console_1`… (decision 16); answers its tab id. */
 export function openConsole(datasourceId: string, sql?: string, parameterValues?: ParameterValues): Promise<string> {
+  return allocateConsole(datasourceId, (id, name) => {
+    void useConsoles.getState().open(id, datasourceId, { name, sql, parameterValues });
+  });
+}
+
+/**
+ * Opens a console tab like `openConsole`, in `namespace`, and answers its tab id once its session
+ * is open (or failed to open), so a caller can run it straight away.
+ */
+export async function openConsoleOn(
+  datasourceId: string,
+  options: { readonly sql: string; readonly parameterValues: ParameterValues; readonly namespace: readonly string[] },
+): Promise<string> {
+  let session: Promise<void> = Promise.resolve();
+  const id = await allocateConsole(datasourceId, (tabId, name) => {
+    session = useConsoles.getState().open(tabId, datasourceId, { name, ...options });
+  });
+  await session;
+  return id;
+}
+
+function allocateConsole(datasourceId: string, open: (id: string, name: string) => void): Promise<string> {
   const previous = allocating.get(datasourceId) ?? Promise.resolve();
   const opened = previous.then(async () => {
     const saved = persists(datasourceId) ? await files.list(datasourceId).catch(() => []) : [];
     const name = firstFreeName([...saved, ...openNames(datasourceId)]);
     const tab = newTab(name);
     useTabs.getState().open(tab);
-    void useConsoles.getState().open(tab.id, datasourceId, { name, sql, parameterValues });
+    open(tab.id, name);
     return tab.id;
   });
   allocating.set(datasourceId, opened);

@@ -6,9 +6,10 @@ import {
   pathKey,
   relationKey,
   revealKeys,
+  routineKey,
   type ExplorerRow,
 } from "@table-craft/desktop/renderer/model/explorerTree.js";
-import { AUDIT_PATH, LOADED_PG, outline, PUBLIC_PATH, rowsOf } from "./catalogFixtures.js";
+import { AUDIT_PATH, LOADED_PG, outline, PUBLIC_CATALOG, PUBLIC_PATH, rowsOf } from "./catalogFixtures.js";
 
 const DATABASE_KEY = namespaceKey("pg", ["table_craft"]);
 const PUBLIC_KEY = namespaceKey("pg", PUBLIC_PATH);
@@ -130,5 +131,34 @@ describe("explorer tree", () => {
 
     expect(keys[keys.length - 1]).toBe(ORDERS_KEY);
     expect(rows.some((candidate) => candidate.key === ORDERS_KEY)).toBe(true);
+  });
+
+  it("givenOverloads_whenTreeBuilt_thenOneRowEach", () => {
+    const parameter = (name: string, type: string) => ({ name, type, mode: "in" as const, hasDefault: false });
+    const calcFee = (signature: string, parameters: readonly ReturnType<typeof parameter>[]) => ({
+      name: "calc_fee",
+      kind: "function" as const,
+      signature,
+      parameters,
+      returns: "numeric",
+    });
+    const routines = [
+      calcFee("amount numeric, currency text", [parameter("amount", "numeric"), parameter("currency", "text")]),
+      calcFee("amount numeric", [parameter("amount", "numeric")]),
+    ];
+    const described = { ...PUBLIC_CATALOG, catalog: { ...PUBLIC_CATALOG.catalog, routines } };
+    const catalogs = {
+      pg: { ...LOADED_PG, namespaceStates: { [pathKey(PUBLIC_PATH)]: { described, loading: false, error: null } } },
+    };
+    const routinesKey = objectGroupKey("pg", PUBLIC_PATH, "routines");
+
+    const rows = rowsOf({ catalogs, expanded: expanded(DATABASE_KEY, PUBLIC_KEY, routinesKey) });
+    const routineRows = rows.filter((candidate) => candidate.node.kind === "routine");
+
+    expect(routineRows.map((candidate) => candidate.label)).toEqual(["calc_fee", "calc_fee"]);
+    expect(new Set(routineRows.map((candidate) => candidate.key)).size).toBe(2);
+    expect(routineRows.map((candidate) => candidate.key)).toEqual(
+      routines.map((routine) => routineKey("pg", PUBLIC_PATH, routine)),
+    );
   });
 });
