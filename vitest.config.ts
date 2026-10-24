@@ -1,15 +1,57 @@
 import { resolve } from "node:path";
-import { defineConfig } from "vitest/config";
+import { defineConfig, type TestProjectConfiguration } from "vitest/config";
+import { WORKERS_ENV } from "./test/e2e/docker/workers.js";
+import { SERIAL_SMOKE_FILES } from "./test/e2e/serialFiles.js";
 
 const WORKSPACE_ROOT = import.meta.dirname;
 const TEST_FILES = ["test/**/*.test.ts"];
 const DB_TEST_FILES = ["test/db/**"];
+const DISPLAY_SETUP = "test/e2e/docker/display.ts";
 const TEST_TIMEOUT_MS = 20_000;
-/** The smoke suites with databases get their own TiDB database, as `test:db` does (vitest.db.config.ts). */
-const TIDB_SCRATCH_SETUP = process.env.TABLE_CRAFT_SMOKE_DATABASES === "1" ? ["test/support/tidbScratch.ts"] : [];
+/**
+ * The smoke suites with databases first check that every seeded server holds its current seed,
+ * then get their own TiDB database, as `test:db` does (vitest.db.config.ts).
+ */
+const SMOKE_DATABASE_SETUP =
+  process.env.TABLE_CRAFT_SMOKE_DATABASES === "1"
+    ? ["test/support/smokeFixtures.ts", "test/support/tidbScratch.ts"]
+    : [];
 const CODEMIRROR = resolve(WORKSPACE_ROOT, "packages/desktop/node_modules/@codemirror");
+const SERIAL_FILES = Object.keys(SERIAL_SMOKE_FILES);
+const SMOKE_WORKERS = Number(process.env[WORKERS_ENV] ?? "1");
+/**
+ * In the headless box each worker has its own display, so the smoke files run `SMOKE_WORKERS` at a
+ * time, then the files that share fixtures run one by one (decision 096). Elsewhere one project.
+ */
+const SMOKE_PROJECTS: TestProjectConfiguration[] | undefined =
+  process.env.TABLE_CRAFT_SMOKE === "1" && process.env.TABLE_CRAFT_HEADLESS === "1"
+    ? [
+        {
+          extends: true,
+          test: {
+            name: "smoke-parallel",
+            include: TEST_FILES,
+            exclude: SERIAL_FILES,
+            setupFiles: [DISPLAY_SETUP],
+            maxWorkers: SMOKE_WORKERS,
+            sequence: { groupOrder: 0 },
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: "smoke-serial",
+            include: SERIAL_FILES,
+            setupFiles: [DISPLAY_SETUP],
+            maxWorkers: 1,
+            fileParallelism: false,
+            sequence: { groupOrder: 1 },
+          },
+        },
+      ]
+    : undefined;
 
-/** One Vitest project over `test/`; the packages only carry build config. */
+/** One Vitest project over `test/`, two in the headless box; the packages only carry build config. */
 export default defineConfig({
   resolve: {
     alias: [
@@ -53,11 +95,13 @@ export default defineConfig({
     ],
   },
   test: {
-    include: TEST_FILES,
+    // A project's include adds to this one, so with projects each names its own.
+    include: SMOKE_PROJECTS === undefined ? TEST_FILES : [],
     // Needs Docker; `bun run test:db` runs these with their own config (decision 013).
     exclude: DB_TEST_FILES,
-    globalSetup: TIDB_SCRATCH_SETUP,
+    globalSetup: SMOKE_DATABASE_SETUP,
     environment: "node",
     testTimeout: TEST_TIMEOUT_MS,
+    projects: SMOKE_PROJECTS,
   },
 });

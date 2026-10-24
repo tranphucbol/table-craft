@@ -50,8 +50,9 @@ const WRONG_PASSWORD = withWrongPassword(POSTGRES_CONFIG).password;
 const MISSING_TABLE_SQL = "SELECT * FROM no_such_table";
 const ROW_VALUE = "row-value-never-logged";
 const VALUE_SQL = `SELECT '${ROW_VALUE}' AS secret_looking_value`;
-const LONG_QUERY_SQL = "SELECT pg_sleep(30) AS slept";
-const LONG_QUERY_MARKER = "pg_sleep(30)";
+/** Its own alias, so the kill below spares the sleeps other files run on the same server at once. */
+const LONG_QUERY_MARKER = "log_smoke_slept";
+const LONG_QUERY_SQL = `SELECT pg_sleep(30) AS ${LONG_QUERY_MARKER}`;
 
 /** Five files of 5 MB: enough records of the 16 KB cap to pass 25 MB and rotate four times. */
 const FILL_RECORD_CHARS = 15_000;
