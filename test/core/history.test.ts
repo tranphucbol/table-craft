@@ -52,8 +52,24 @@ describe("query history", () => {
     const runs = history.recentRuns(2);
 
     expect(runs).toEqual([
-      { datasourceId: MYSQL, startedAt: 3_000, durationMs: 5, outcome: "error", rowCount: null, source: "console" },
-      { datasourceId: PG, startedAt: 2_000, durationMs: 5, outcome: "success", rowCount: 1, source: "console" },
+      {
+        datasourceId: MYSQL,
+        startedAt: 3_000,
+        durationMs: 5,
+        outcome: "error",
+        rowCount: null,
+        source: "console",
+        warnings: null,
+      },
+      {
+        datasourceId: PG,
+        startedAt: 2_000,
+        durationMs: 5,
+        outcome: "success",
+        rowCount: 1,
+        source: "console",
+        warnings: null,
+      },
     ]);
   });
 
@@ -205,5 +221,32 @@ describe("query history", () => {
       ["SELECT :x", { ":x": "y" }],
       ["SELECT 1", null],
     ]);
+  });
+
+  it("givenWarnings_whenRecorded_thenRecentRunsCountThem", () => {
+    const history = open();
+    history.record(entry({ warnings: 2 }));
+
+    expect(history.recentRuns(1).map((run) => run.warnings)).toEqual([2]);
+  });
+
+  it("givenVersionTwoFile_whenOpened_thenMigratedKeepingRows", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const path = join(await temporaryDirectory(), "history.sqlite");
+    const old = new DatabaseSync(path);
+    old.exec(`CREATE TABLE entries (
+      id INTEGER PRIMARY KEY, datasource_id TEXT NOT NULL, sql TEXT NOT NULL, started_at INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL, outcome TEXT NOT NULL, row_count INTEGER NULL, message TEXT NULL,
+      source TEXT NOT NULL, parameters TEXT NULL);
+    INSERT INTO entries (datasource_id, sql, started_at, duration_ms, outcome, row_count, message, source, parameters)
+      VALUES ('pg', 'SELECT 1', 1, 2, 'success', 1, NULL, 'console', NULL);
+    PRAGMA user_version = 2;`);
+    old.close();
+
+    const history = open(path);
+    history.record(entry({ sql: "SELECT 2", startedAt: 5, warnings: 1 }));
+
+    expect(history.recoveredFrom).toBeNull();
+    expect(history.recentRuns(2).map((run) => run.warnings)).toEqual([1, null]);
   });
 });

@@ -399,6 +399,7 @@ describe("tables store", () => {
         sql: `SELECT * FROM "public"."edit_probe"`,
         rowCount: 2,
         message: null,
+        messages: [],
       },
     ]);
   });

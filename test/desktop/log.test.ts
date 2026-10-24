@@ -359,7 +359,17 @@ describe("diagnostics", () => {
       settings: '{"version":1}',
       datasources: [datasource],
       plugins: [plugin],
-      runs: [{ datasourceId: "pg", startedAt: 0, durationMs: 3, outcome: "error", rowCount: null, source: "console" }],
+      runs: [
+        {
+          datasourceId: "pg",
+          startedAt: 0,
+          durationMs: 3,
+          outcome: "error",
+          rowCount: null,
+          source: "console",
+          warnings: null,
+        },
+      ],
       redactor,
     });
 
@@ -384,6 +394,7 @@ describe("diagnostics", () => {
           outcome: "error",
           rowCount: null,
           source: "console",
+          warnings: null,
         },
       ],
     });

@@ -7,6 +7,7 @@ import {
   type FoundMatch,
   type ResultState,
   type RowRange,
+  type ServerMessage,
 } from "@table-craft/desktop/engine/protocol.js";
 import { EngineRequestError, type EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { widerChars } from "@table-craft/desktop/renderer/grid/widths.js";
@@ -38,8 +39,16 @@ export interface ResultOwner {
   readonly update: (ownerId: string, resultId: string, change: (result: ResultTab) => ResultTab) => void;
   /** A request about `result` failed; `window` when it was a scroll's window load. */
   readonly failed: (ownerId: string, result: ResultTab, error: EngineError, window: boolean) => void;
-  /** Fetching grew the result to `rowCount` rows, so Services can say so. */
-  readonly fetched: (ownerId: string, resultId: string, rowCount: number) => void;
+  /**
+   * Fetching grew the result to `rowCount` rows, so Services can say so; `arrived` holds the
+   * server's messages when this fetch read the last row and the statement left some.
+   */
+  readonly fetched: (
+    ownerId: string,
+    resultId: string,
+    rowCount: number,
+    arrived: readonly ServerMessage[] | undefined,
+  ) => void;
   /** The datasource an owner's session is on, for an export of its result. */
   readonly datasourceOf: (ownerId: string) => string | undefined;
   readonly exports: ExportStarter;
@@ -129,8 +138,9 @@ export function createResultWindows(owner: ResultOwner) {
     owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: all ? "all" : "page" }));
     try {
       const state = await client.call("result.fetchMore", { handle: result.handle, all, ...result.paging });
+      const arrived = owner.result(ownerId, resultId)?.messages === undefined ? state.messages : undefined;
       owner.update(ownerId, resultId, (latest) => withState(latest, state));
-      owner.fetched(ownerId, resultId, state.rowCount);
+      owner.fetched(ownerId, resultId, state.rowCount, arrived);
       await refreshView(ownerId, resultId);
     } catch (cause) {
       owner.failed(ownerId, result, toError(cause), false);

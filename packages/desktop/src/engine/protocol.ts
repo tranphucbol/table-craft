@@ -65,7 +65,18 @@ export type Capability =
   | "currentNamespace"
   | "keepAlive"
   | "bulkInsert"
-  | "objects";
+  | "objects"
+  | "serverMessages";
+
+/** Mirrors `ServerMessageLevel` in plugin-api. */
+export type ServerMessageLevel = "error" | "warning" | "notice" | "info";
+
+/** Mirrors `ServerMessage` in plugin-api: a warning or notice the server raised running a statement (decision 066). */
+export interface ServerMessage {
+  readonly level: ServerMessageLevel;
+  readonly code: string | null;
+  readonly text: string;
+}
 
 /** What the SQL Generator writes: `create` is the relation's definition, the rest mirror `GeneratedStatement` in plugin-api. */
 export type GeneratorStatement = "create" | "drop" | "select" | "insert" | "update";
@@ -410,6 +421,8 @@ export interface ResultState {
   readonly rowCount: number;
   readonly complete: boolean;
   readonly cursorOpen: boolean;
+  /** What the server said running the statement; present once the result is complete and it said anything. */
+  readonly messages?: readonly ServerMessage[];
 }
 
 /** Mirrors `SortDirection` in core. */
@@ -829,6 +842,7 @@ export interface ExplainedPlan {
   readonly summary: readonly PlanProperty[];
   /** What the database printed, for the Raw view. */
   readonly raw: string;
+  readonly messages?: readonly ServerMessage[];
 }
 
 export interface ExplainedStatement {

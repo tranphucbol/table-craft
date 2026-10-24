@@ -26,6 +26,11 @@ export interface HistoryEntry {
   readonly source: HistorySource;
   /** The values it was bound with, by parameter name (plan 019 decision 9); absent or null when none. */
   readonly parameters?: HistoryParameters | null;
+  /**
+   * How many warnings the server left (decision 066), never their text; absent or null when it
+   * left none or had not said yet.
+   */
+  readonly warnings?: number | null;
 }
 
 export type HistoryParameters = Readonly<Record<string, string | null>>;
@@ -51,6 +56,7 @@ export interface HistoryRun {
   readonly outcome: HistoryOutcome;
   readonly rowCount: number | null;
   readonly source: HistorySource;
+  readonly warnings: number | null;
 }
 
 export interface QueryHistory {
@@ -70,7 +76,7 @@ export interface QueryHistoryOptions {
   readonly now?: () => number;
 }
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const MEMORY_PATH = ":memory:";
 const CORRUPT_SUFFIX = ".corrupt-";
 /** SQLite keeps these beside a WAL database; they move with it so they never pair with a fresh file. */
@@ -86,10 +92,20 @@ const COLUMNS = [
   "message",
   "source",
   "parameters",
+  "warnings",
 ] as const;
-/** Version 1 lacked `parameters`; it is added in place, keeping every row. */
-const MIGRATIONS: Readonly<Record<number, string>> = {
-  1: `ALTER TABLE entries ADD COLUMN parameters TEXT NULL; PRAGMA user_version = 2;`,
+const PARAMETERS_COLUMN = "parameters";
+const WARNINGS_MIGRATION = `ALTER TABLE entries ADD COLUMN warnings INTEGER NULL; PRAGMA user_version = 3;`;
+/**
+ * Version 1 lacked `parameters` and `warnings`, version 2 `warnings`; each is added in place,
+ * keeping every row. Each entry is the columns the version had and the script that brings it up.
+ */
+const MIGRATIONS: Readonly<Record<number, { readonly columns: readonly string[]; readonly script: string }>> = {
+  1: {
+    columns: COLUMNS.slice(0, COLUMNS.indexOf(PARAMETERS_COLUMN)),
+    script: `ALTER TABLE entries ADD COLUMN parameters TEXT NULL; ${WARNINGS_MIGRATION}`,
+  },
+  2: { columns: COLUMNS.slice(0, -1), script: WARNINGS_MIGRATION },
 };
 
 const CREATE_SCHEMA = `
@@ -103,14 +119,15 @@ CREATE TABLE entries (
   row_count INTEGER NULL,
   message TEXT NULL,
   source TEXT NOT NULL,
-  parameters TEXT NULL
+  parameters TEXT NULL,
+  warnings INTEGER NULL
 );
 CREATE INDEX entries_datasource_started ON entries (datasource_id, started_at);
 PRAGMA user_version = ${String(SCHEMA_VERSION)};
 `;
 
-const INSERT = `INSERT INTO entries (datasource_id, sql, started_at, duration_ms, outcome, row_count, message, source, parameters)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const INSERT = `INSERT INTO entries (datasource_id, sql, started_at, duration_ms, outcome, row_count, message, source, parameters, warnings)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 const COUNT = "SELECT count(*) AS n FROM entries WHERE datasource_id = ?";
 const PRUNE = `DELETE FROM entries WHERE id IN (
   SELECT id FROM entries WHERE datasource_id = ? ORDER BY started_at, id LIMIT ?
@@ -129,7 +146,7 @@ FROM matching WHERE recency = 1
 ORDER BY started_at DESC, id DESC
 LIMIT ?`;
 
-const RECENT_RUNS = `SELECT datasource_id, started_at, duration_ms, outcome, row_count, source
+const RECENT_RUNS = `SELECT datasource_id, started_at, duration_ms, outcome, row_count, source, warnings
 FROM entries ORDER BY started_at DESC, id DESC LIMIT ?`;
 
 interface RunRow {
@@ -139,6 +156,7 @@ interface RunRow {
   readonly outcome: HistoryOutcome;
   readonly row_count: number | null;
   readonly source: HistorySource;
+  readonly warnings: number | null;
 }
 
 interface SearchRow {
@@ -179,7 +197,7 @@ function openAsSchema(path: string): DatabaseSync {
       return database;
     }
     const migration = MIGRATIONS[version];
-    if (migration !== undefined && tablesMatch(database, COLUMNS.slice(0, -1))) database.exec(migration);
+    if (migration !== undefined && tablesMatch(database, migration.columns)) database.exec(migration.script);
     else if (version !== SCHEMA_VERSION) throw new Error(`history schema version ${String(version)}`);
     if (!tablesMatch(database, COLUMNS)) throw new Error("history columns differ from this schema");
     return database;
@@ -243,6 +261,7 @@ export function openQueryHistory(path: string, options: QueryHistoryOptions = {}
           entry.message,
           entry.source,
           entry.parameters == null ? null : JSON.stringify(entry.parameters),
+          entry.warnings ?? null,
         );
         const { n } = count.get(entry.datasourceId) as { n: number };
         if (n > limit) prune.run(entry.datasourceId, n - limit);
@@ -277,6 +296,7 @@ export function openQueryHistory(path: string, options: QueryHistoryOptions = {}
         outcome: row.outcome,
         rowCount: row.row_count,
         source: row.source,
+        warnings: row.warnings,
       }));
     },
     close() {

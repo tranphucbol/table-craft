@@ -1,4 +1,4 @@
-import type { Column, ExecuteResult, Row } from "@table-craft/plugin-api";
+import type { Column, ExecuteResult, Row, ServerMessage } from "@table-craft/plugin-api";
 import { CoreError } from "@table-craft/core/errors.js";
 import { compareValues, inferredTypeClass, typeClass, type TypeClass } from "@table-craft/core/results/compare.js";
 import {
@@ -30,6 +30,8 @@ export interface ResultState {
   readonly complete: boolean;
   /** Fetch Next Page and Fetch All can still read more. */
   readonly cursorOpen: boolean;
+  /** What the server said running the statement (decision 066); present once complete, when it said anything. */
+  readonly messages?: readonly ServerMessage[];
 }
 
 export interface ResultSummary extends ResultState {
@@ -70,6 +72,8 @@ const DEFAULT_LIMITS: ResultLimits = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: 
 
 interface StoredResult {
   readonly columns: readonly Column[];
+  /** The plugin's own array, filled once its rows run out. */
+  readonly messages: readonly ServerMessage[];
   classes: readonly TypeClass[];
   readonly rows: Row[];
   /** Open until the rows run out, the cap is reached, or the session moves on. */
@@ -108,7 +112,8 @@ function unknownHandle(handle: ResultHandle): CoreError {
 }
 
 function stateOf(stored: StoredResult): ResultState {
-  return { rowCount: stored.rows.length, complete: stored.complete, cursorOpen: stored.iterator !== null };
+  const state = { rowCount: stored.rows.length, complete: stored.complete, cursorOpen: stored.iterator !== null };
+  return stored.complete && stored.messages.length > 0 ? { ...state, messages: stored.messages } : state;
 }
 
 /**
@@ -129,6 +134,7 @@ export class ResultStore {
     const { pageRows, fetchAllCap } = { ...this.#limits, ...definedLimits(limits) };
     const stored: StoredResult = {
       columns: result.columns,
+      messages: result.messages ?? [],
       classes: [],
       rows: [],
       iterator: result.rows[Symbol.asyncIterator](),

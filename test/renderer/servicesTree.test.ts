@@ -29,6 +29,7 @@ function execution(id: number, overrides: Partial<Execution> = {}): Execution {
     sql: `SELECT ${String(id)}`,
     rowCount: 1,
     message: null,
+    messages: [],
     ...overrides,
   };
 }

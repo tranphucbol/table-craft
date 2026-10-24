@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import type { ServerMessage } from "@table-craft/desktop/engine/protocol.js";
 import { ConsoleResult } from "@table-craft/desktop/renderer/console/ConsoleResult.js";
 import { OutputLog } from "@table-craft/desktop/renderer/console/OutputLog.js";
 import { PlanView } from "@table-craft/desktop/renderer/console/PlanView.js";
@@ -11,8 +12,13 @@ import {
   type ConsoleSession,
   type ConsoleTab,
 } from "@table-craft/desktop/renderer/state/consoles.js";
+import {
+  serverMessagesTooltip,
+  warningCount,
+  warningsText,
+} from "@table-craft/desktop/renderer/model/serverMessages.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
+import { ACTION_ICONS, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 
 const OUTPUT_TITLE = "Output";
 const PinIcon = ACTION_ICONS.pin;
@@ -54,6 +60,24 @@ function TabButton({
   );
 }
 
+/** How many warnings the server left on the tab's statement, with each one in the tooltip (decision 066). */
+function WarningBadge({ messages }: { readonly messages: readonly ServerMessage[] | undefined }) {
+  const count = warningCount(messages);
+  if (messages === undefined || count === 0) return null;
+  return (
+    <span
+      role="status"
+      aria-label={warningsText(count)}
+      title={serverMessagesTooltip(messages)}
+      data-testid="warning-badge"
+      className="flex items-center gap-px text-warning tabular-nums"
+    >
+      <WarningIcon aria-hidden weight="fill" className="size-icon" />
+      {count}
+    </span>
+  );
+}
+
 /**
  * The console's lower half (plan 006 decision 10): `Output`, then a tab per row-returning
  * statement of the last run, or the plan of the last explain, plus any pinned ones, each with its
@@ -79,6 +103,7 @@ export function ResultTabs({ consoleId, session }: { readonly consoleId: string;
             tooltip={result.sql}
             onSelect={() => showResult(consoleId, result.id)}
           >
+            <WarningBadge messages={result.kind === "rows" ? result.messages : result.plan.messages} />
             <button
               type="button"
               tabIndex={-1}

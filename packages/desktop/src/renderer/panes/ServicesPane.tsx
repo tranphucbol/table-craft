@@ -28,6 +28,11 @@ import {
   servicesTree,
   type ServiceRow,
 } from "@table-craft/desktop/renderer/model/servicesTree.js";
+import {
+  serverMessagesTooltip,
+  warningCount,
+  warningsText,
+} from "@table-craft/desktop/renderer/model/serverMessages.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { connectionOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import {
@@ -55,6 +60,7 @@ import {
   ImportIcon,
   SpinnerIcon,
   TableIcon,
+  WarningIcon,
 } from "@table-craft/desktop/renderer/ui/icons.js";
 import { OutcomeGlyph } from "@table-craft/desktop/renderer/ui/Outcome.js";
 
@@ -199,6 +205,7 @@ function SessionLine({ row }: { readonly row: Extract<ServiceRow, { kind: "sessi
 
 function ExecutionLine({ execution, now }: { readonly execution: Execution; readonly now: number }) {
   const duration = execution.durationMs ?? Math.max(0, now - execution.startedAt);
+  const warnings = warningCount(execution.messages);
   return (
     <>
       <OutcomeGlyph outcome={execution.outcome} />
@@ -206,6 +213,12 @@ function ExecutionLine({ execution, now }: { readonly execution: Execution; read
         {execution.label}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-cell text-ink-muted tabular-nums">
+        {warnings === 0 ? null : (
+          <span className="flex items-center gap-px text-warning" title={serverMessagesTooltip(execution.messages)}>
+            <WarningIcon aria-hidden weight="fill" className="size-icon" />
+            {warningsText(warnings)}
+          </span>
+        )}
         {execution.rowCount === null ? null : <span>{rowsText(execution.rowCount)}</span>}
         <span data-testid="execution-duration">{formatDuration(duration)}</span>
         <span>{clockTime(execution.startedAt)}</span>

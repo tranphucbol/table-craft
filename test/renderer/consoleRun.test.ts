@@ -4,6 +4,7 @@ import type {
   CurrentNamespace,
   ExecutedStatement,
   OpenedSession,
+  ServerMessage,
   StatementParameter,
   TransactionMode,
   TransactionState,
@@ -66,6 +67,12 @@ function fakeParameters(sql: string): StatementParameter[] {
 }
 
 /** An engine with one session: `FAIL` in a statement fails it; BEGIN, COMMIT, ROLLBACK and manual mode move its transaction. */
+/** What the fake server says about any statement containing `WARN`. */
+const WARNINGS: readonly ServerMessage[] = [
+  { level: "warning", code: "1815", text: "use_index(test.i) is inapplicable" },
+  { level: "notice", code: "1003", text: "rewritten" },
+];
+
 function fakeEngine() {
   const executed: string[] = [];
   const bound: unknown[] = [];
@@ -122,6 +129,7 @@ function fakeEngine() {
           firstWindow: { offset: 0, rows: reads ? [[sql]] : [] },
           transactionOpen: open,
           ...(uses ? { namespace } : {}),
+          ...(sql.includes("WARN") ? { messages: WARNINGS } : {}),
           ...(sql.includes("RECONNECT") ? { reconnected: { namespace: ["public"], namespaceLost: true } } : {}),
         };
         return Promise.resolve(result);
@@ -604,6 +612,30 @@ describe("console history and executions", () => {
       ["SELECT FAIL", "error"],
       ["SELECT 1", "success"],
     ]);
+  });
+
+  it("givenStatementWithWarnings_whenRun_thenOutputLinesExecutionAndHistoryCount", async () => {
+    const { store, recorded, executions, session } = await opened("SELECT 'WARN';");
+
+    await store.getState().run("c1", "all");
+
+    expect(session().output.map((entry) => [entry.message, entry.tone])).toEqual([
+      ["1 row retrieved in 5 ms", "success"],
+      ["Warning 1815: use_index(test.i) is inapplicable", "warning"],
+      ["Note 1003: rewritten", "info"],
+    ]);
+    expect(recorded.map((entry) => [entry.outcome, entry.warnings])).toEqual([["success", 1]]);
+    expect(executions.getState().byTab.c1?.[0]?.messages).toEqual(WARNINGS);
+    const [tab] = session().results;
+    expect(tab?.kind === "rows" ? tab.messages : undefined).toEqual(WARNINGS);
+  });
+
+  it("givenQuietStatement_whenRun_thenNoWarningsRecorded", async () => {
+    const { store, recorded } = await opened("SELECT 1;");
+
+    await store.getState().run("c1", "all");
+
+    expect(recorded[0]).not.toHaveProperty("warnings");
   });
 
   it("givenWrite_whenRun_thenRowsAffectedRecorded", async () => {

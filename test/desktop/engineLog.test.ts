@@ -6,7 +6,7 @@ import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS, type EngineEvent } from "@table-craft/desktop/engine/protocol.js";
-import { connectionTarget } from "@table-craft/desktop/engine/requestLog.js";
+import { connectionTarget, messageFields } from "@table-craft/desktop/engine/requestLog.js";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { SQLITE_MANIFEST } from "../support/manifests.js";
 
@@ -40,6 +40,17 @@ async function loggedSession(emit: (event: EngineEvent) => void = () => undefine
 }
 
 describe("engine request log", () => {
+  it("givenServerMessages_whenLogged_thenCountAndCodesWithoutText", () => {
+    const fields = messageFields([
+      { level: "warning", code: "1292", text: "Truncated incorrect INTEGER value: 'secret'" },
+      { level: "warning", code: "1292", text: "Truncated incorrect INTEGER value: 'other'" },
+      { level: "info", code: null, text: "1 more server message is not shown." },
+    ]);
+
+    expect(fields).toEqual({ messageCount: 3, messageCodes: ["1292"] });
+    expect(messageFields([])).toEqual({});
+  });
+
   it("givenStatement_whenExecuted_thenLoggedWithoutText", async () => {
     const { connection, records, sessionId } = await loggedSession();
 

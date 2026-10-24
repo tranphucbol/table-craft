@@ -9,6 +9,7 @@ import {
   type ExtractorKind,
   type Reconnection,
   type RowRange,
+  type ServerMessage,
   type SortKey,
   type TransactionMode,
   type TransactionState,
@@ -33,6 +34,11 @@ import {
   type ParameterValues,
 } from "@table-craft/desktop/renderer/model/parameters.js";
 import { caretAfterReformat } from "@table-craft/desktop/renderer/model/reformat.js";
+import {
+  serverMessageText,
+  serverMessageTone,
+  warningCount,
+} from "@table-craft/desktop/renderer/model/serverMessages.js";
 import { statementsToRun, type RunScope, type TextSpan } from "@table-craft/desktop/renderer/model/statementAt.js";
 import { EMPTY_BUFFER, pendingCount, pendingText, toEdits } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { submitLabel, submittedScript, submittedText } from "@table-craft/desktop/renderer/model/resultEdits.js";
@@ -467,9 +473,10 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         if (window) patch(id, { error });
         else logError(id, firstLine(result.sql), error);
       },
-      fetched: (id, resultId, rowCount) => {
+      fetched: (id, resultId, rowCount, arrived) => {
         const executionId = producedBy.get(resultId);
-        if (executionId !== undefined) executions.recount(id, executionId, rowCount);
+        if (executionId !== undefined) executions.recount(id, executionId, rowCount, arrived);
+        if (arrived !== undefined) logMessages(id, arrived);
       },
       datasourceOf: (id) => get().consoles[id]?.datasourceId,
       exports,
@@ -493,6 +500,17 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       log(id, { sql, message: error.message, hint: error.hint, tone: "error" });
       // The engine dropped the session; the next Run opens a new one with no transaction (decision 054).
       if (error.code === "connectionLost") patch(id, { transactionOpen: false });
+    }
+
+    function messagesOf(said: { readonly messages?: readonly ServerMessage[] }): Pick<ExecutionEnd, "messages"> {
+      return said.messages === undefined ? {} : { messages: said.messages };
+    }
+
+    /** A line per message the server left about the statement logged just before (decision 066). */
+    function logMessages(id: string, messages: readonly ServerMessage[] | undefined): void {
+      for (const message of messages ?? []) {
+        log(id, { sql: "", message: serverMessageText(message), tone: serverMessageTone(message) });
+      }
     }
 
     /** Says the engine replaced a lost session before the statement ran, ahead of the statement's own line. */
@@ -522,6 +540,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         executions.finish(id, executionId, { ...end, durationMs });
         if (datasourceId === undefined) return;
         const { outcome, rowCount, message } = end;
+        const warnings = warningCount(end.messages);
         dependencies.record?.({
           datasourceId,
           sql: end.sql ?? sql,
@@ -532,6 +551,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           message,
           source: "console",
           ...(parameters === null ? {} : { parameters }),
+          ...(warnings === 0 ? {} : { warnings }),
         });
       };
       return Object.assign(ended, { executionId });
@@ -708,8 +728,15 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           const moved = namespaceAfter({ namespace, ...(reconnected === undefined ? {} : { reconnected }) });
           logReconnected(id, reconnected);
           const elapsed = dependencies.now() - startedAt;
-          ended({ durationMs: elapsed, outcome: "success", rowCount: rowsOf(executed), message: null });
+          ended({
+            durationMs: elapsed,
+            outcome: "success",
+            rowCount: rowsOf(executed),
+            message: null,
+            ...messagesOf(executed),
+          });
           log(id, { sql, message: executedText(executed, elapsed, statement.kind), tone: "success" });
+          logMessages(id, executed.messages);
           const current = get().consoles[id];
           if (current === undefined) return "cancelled";
           const datasourceId = current.datasourceId;
@@ -988,8 +1015,16 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         logReconnected(id, reconnected);
         const moved = reconnected === undefined ? {} : namespaceOf(reconnected);
         const elapsed = dependencies.now() - startedAt;
-        ended({ durationMs: elapsed, outcome: "success", rowCount: null, message: null, sql: plan.statement });
+        ended({
+          durationMs: elapsed,
+          outcome: "success",
+          rowCount: null,
+          message: null,
+          sql: plan.statement,
+          ...messagesOf(plan),
+        });
         log(id, { sql, message: explainedText(analyze, elapsed), tone: "success" });
+        logMessages(id, plan.messages);
         const current = get().consoles[id];
         if (current === undefined) return "cancelled";
         const effect: AnalysedEffect =
@@ -1380,9 +1415,16 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             logReconnected(id, reconnected);
             const kind = statement?.kind ?? "read";
             const elapsed = dependencies.now() - statementStartedAt;
-            ended({ durationMs: elapsed, outcome: "success", rowCount: rowsOf(executed), message: null });
+            ended({
+              durationMs: elapsed,
+              outcome: "success",
+              rowCount: rowsOf(executed),
+              message: null,
+              ...messagesOf(executed),
+            });
             ended = null;
             log(id, { sql, message: executedText(executed, elapsed, kind), tone: "success" });
+            logMessages(id, executed.messages);
             const latest = resultOf(id, resultId);
             if (latest === undefined) {
               void client.call("result.release", { handle: executed.handle }).catch(() => undefined);

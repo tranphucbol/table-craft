@@ -63,6 +63,7 @@ const historyEntry = z.strictObject({
   message: z.string().nullable(),
   source: z.enum(HISTORY_SOURCES),
   parameters: z.record(z.string(), z.string().nullable()).nullable().optional(),
+  warnings: z.number().int().positive().nullable().optional(),
 }) satisfies z.ZodType<HistoryEntry>;
 const historySearchRequest = z.strictObject({ datasourceId: z.string().min(1), query: z.string() });
 const historyClearRequest = z.strictObject({ datasourceId: z.string().min(1) });

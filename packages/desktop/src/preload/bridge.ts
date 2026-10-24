@@ -224,6 +224,8 @@ export interface HistoryEntry {
   readonly source: HistorySource;
   /** The values it was bound with, by parameter name; absent or null when none. */
   readonly parameters?: Readonly<Record<string, string | null>> | null;
+  /** How many warnings the server left, never their text; absent or null when none. */
+  readonly warnings?: number | null;
 }
 
 /** Mirrors core's `HistoryStatement`: every run of one exact text, described by its newest. */

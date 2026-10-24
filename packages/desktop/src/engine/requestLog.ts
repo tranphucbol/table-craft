@@ -78,6 +78,14 @@ function changedObject(change: unknown): LogFields {
   return { change: kind, objectKind: "namespace", object: value.name };
 }
 
+/** How many messages the server raised and their codes; their text may quote the user's data, so it never is (decision 066). */
+/** How many messages the server left and their codes, never their text, which can quote data (decision 066). */
+export function messageFields(messages: unknown): LogFields {
+  if (!Array.isArray(messages) || messages.length === 0) return {};
+  const codes = messages.map((message) => record(message).code).filter((code) => typeof code === "string");
+  return { messageCount: messages.length, messageCodes: [...new Set(codes)] };
+}
+
 function summary(request: LoggedRequest, result: unknown, context: RequestContext): [string, LogFields] | null {
   const value = record(result);
   const base = { requestId: request.id, elapsedMs: context.elapsedMs };
@@ -100,6 +108,7 @@ function summary(request: LoggedRequest, result: unknown, context: RequestContex
           rowsAffected: value.rowsAffected,
           complete: value.complete,
           transactionOpen: value.transactionOpen,
+          ...messageFields(value.messages),
         },
       ];
     case "statement.cancel":
@@ -107,7 +116,13 @@ function summary(request: LoggedRequest, result: unknown, context: RequestContex
     case "statement.explain":
       return [
         "plan explained",
-        { ...base, sessionId: request.sessionId, kind: context.statementKind, analyze: request.analyze },
+        {
+          ...base,
+          sessionId: request.sessionId,
+          kind: context.statementKind,
+          analyze: request.analyze,
+          ...messageFields(record(value.plan).messages),
+        },
       ];
     case "table.query":
       return ["table opened", { ...base, sessionId: request.sessionId, rowCount: record(value.statement).rowCount }];
