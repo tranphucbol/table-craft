@@ -51,12 +51,12 @@ Run from the repository root.
   compose variables and `TABLE_CRAFT_EVIDENCE_DIR`; paths narrow the run like `vitest run`
   (`bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts`) and `-` arguments go to
   Vitest. Files run `TABLE_CRAFT_SMOKE_WORKERS` at a time, one display each (decision 096): unset,
-  3 on a Docker VM of 8 GiB or more and 1 below, as the first line of the run says. The files
-  in `SERIAL_SMOKE_FILES` (`test/e2e/serialFiles.ts`) run after, one by one; a file that flakes
-  beside others moves there with its reason, never to a longer timeout. A run fails at setup when
-  a database container predates its seed; `bun test/db/up.ts` (with the compose variables) fixes
-  it. Evidence is Linux evidence; macOS-only checks (`titleBar.smoke`, `update.live`, the packaged
-  app) still run on the host
+  3 on a Docker VM of 8 GiB or more and 1 below, shared with headless runs already on the VM, as
+  the first line of the run says. The files in `SERIAL_SMOKE_FILES` (`test/e2e/serialFiles.ts`)
+  run after, one by one; a file that flakes beside others moves there with its reason, never to a
+  longer timeout. A run fails at setup when a database container predates its seed;
+  `bun test/db/up.ts` (with the compose variables) fixes it. Evidence is Linux evidence;
+  macOS-only checks (`titleBar.smoke`, `update.live`, the packaged app) still run on the host
 - `bun run typecheck` - `tsc --noEmit`, every program: the root one, the renderer
   (`packages/desktop/src/renderer/tsconfig.json`) and the renderer tests (`test/renderer/tsconfig.json`)
 - `bun run lint` / `bun run lint:fix` - ESLint, including the architecture fences

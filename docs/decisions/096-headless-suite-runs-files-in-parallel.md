@@ -21,7 +21,9 @@ a server one by one.
 - **`W` follows the Docker VM.** `TABLE_CRAFT_SMOKE_WORKERS` sets it; unset, it is 3 when the
   Docker VM is set to 8 GiB or more and 1 below, and the runner prints the VM size, the `W` it
   chose and how to raise it (`test/e2e/docker/workers.ts`). The cut is at 7 GiB of reported
-  memory, since a VM set to 8 GiB reports 7.8.
+  memory, since a VM set to 8 GiB reports 7.8. The three belong to the VM, not to each run: a
+  run that finds other headless boxes running takes its share (3 ÷ (others + 1), at least 1),
+  since nine apps on one 8 GiB VM starve each other's CPU and swap.
 - **Every worktree keeps its own stack.** A second checkout still runs its own databases on its
   own ports. Containers carry a `table-craft.seed` label, the hash of the files each was seeded
   from (`test/db/stack.ts`), so `up -d` recreates exactly the ones whose seed changed; a global
@@ -45,7 +47,9 @@ a trimmed performance schema) mostly pays back.
 ## Consequences
 
 - A suite on an 8 GiB VM runs three apps at once; on Docker Desktop's and OrbStack's 4 GiB
-  default it runs one, as before, and says how to get three.
+  default it runs one, as before, and says how to get three. Three worktrees running theirs at
+  once share the three; boxes started in the same second each see none and take three, so stagger
+  them or set `TABLE_CRAFT_SMOKE_WORKERS`.
 - A new smoke file that counts tables, writes `orders` or `edit_probe`, or kills sessions by
   text goes into `SERIAL_SMOKE_FILES`, or names its objects and markers so it can share.
 - Every global setup runs once per Vitest project in the one main process, so each must be
