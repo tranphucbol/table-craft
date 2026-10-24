@@ -6,8 +6,10 @@ import { checkServerIdentity, createSecureContext, TLSSocket, type ConnectionOpt
 import {
   homeExpanded,
   PluginError,
+  TlsSettingsError,
   tlsFailureMessage,
   tlsFileMessage,
+  tlsKeyIsEncrypted,
   tlsKeyMessage,
   type TlsInfo,
 } from "@table-craft/plugin-api";
@@ -40,16 +42,16 @@ async function readTlsFile(config: TlsConfig, key: FileKey): Promise<string | un
   try {
     return await readFile(homeExpanded(path, homedir()), "utf8");
   } catch (cause) {
-    throw new PluginError("connectionFailed", tlsFileMessage(LABELS[key], path, cause), { cause });
+    throw new TlsSettingsError(tlsFileMessage(LABELS[key], path, cause), { cause });
   }
 }
 
 /** Parses each file before the driver sees it, so a bad one is named instead of failing the handshake. */
-function checked(config: TlsConfig, key: FileKey, use: () => unknown): void {
+function checked(config: TlsConfig, key: FileKey, use: () => unknown, encrypted = false): void {
   try {
     use();
   } catch (cause) {
-    throw new PluginError("connectionFailed", tlsKeyMessage(LABELS[key], config[key], cause), { cause });
+    throw new TlsSettingsError(tlsKeyMessage(LABELS[key], config[key], cause, encrypted), { cause });
   }
 }
 
@@ -66,7 +68,7 @@ export async function tlsOptions(
   ]);
   const passphrase = config.sslKeyPassphrase === "" ? undefined : config.sslKeyPassphrase;
   if (cert !== undefined) checked(config, "sslCert", () => new X509Certificate(cert));
-  if (key !== undefined) checked(config, "sslKey", () => createPrivateKey({ key, passphrase }));
+  if (key !== undefined) checked(config, "sslKey", () => createPrivateKey({ key, passphrase }), tlsKeyIsEncrypted(key));
   const files = {
     ...(ca === undefined ? {} : { ca }),
     ...(cert === undefined ? {} : { cert }),
@@ -91,14 +93,21 @@ export async function tlsOptions(
   }
 }
 
-/** Says what a verifying handshake did not match, or null when `cause` is no such failure. */
-export function tlsConnectMessage(config: TlsConfig, serverName: string | undefined, cause: unknown): string | null {
-  if (config.sslMode !== "verify-ca" && config.sslMode !== "verify-full") return null;
-  return tlsFailureMessage(cause, {
-    caLabel: LABELS.sslRootCert,
-    caPath: config.sslRootCert === "" ? null : config.sslRootCert,
-    host: serverName ?? config.host,
-  });
+/**
+ * The error a failed connect throws: a `TlsSettingsError` saying what a verifying handshake did not
+ * match, else a plain `connectionFailed` with the driver's message.
+ */
+export function connectFailure(config: TlsConfig, serverName: string | undefined, cause: unknown): PluginError {
+  const verifying = config.sslMode === "verify-ca" || config.sslMode === "verify-full";
+  const message = verifying
+    ? tlsFailureMessage(cause, {
+        caLabel: LABELS.sslRootCert,
+        caPath: config.sslRootCert === "" ? null : config.sslRootCert,
+        host: serverName ?? config.host,
+      })
+    : null;
+  if (message !== null) return new TlsSettingsError(message, { cause });
+  return new PluginError("connectionFailed", cause instanceof Error ? cause.message : String(cause), { cause });
 }
 
 /** What the handshake agreed on `socket`, or null when it is not TLS. */

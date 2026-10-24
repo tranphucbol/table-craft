@@ -27,9 +27,11 @@ export {
 export {
   DefinitionNotFoundError,
   isPluginError,
+  isTlsSettingsError,
   PLUGIN_ERROR_CODES,
   PluginError,
   type PluginErrorCode,
+  TlsSettingsError,
 } from "./errors.js";
 export {
   type ExplainedPlan,
@@ -150,6 +152,7 @@ export {
   homeExpanded,
   tlsFailureMessage,
   tlsFileMessage,
+  tlsKeyIsEncrypted,
   tlsKeyMessage,
   type TlsVerification,
 } from "./tls.js";

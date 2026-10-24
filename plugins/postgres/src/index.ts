@@ -62,7 +62,7 @@ import { postgresIntrospector } from "./introspect.js";
 import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
 import { postgresSessions } from "./sessions.js";
-import { SSL_MODES, tlsConnectMessage, tlsInfoOf, tlsOptions } from "./tls.js";
+import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 
 const PLUGIN_ID = "postgres";
 const CAPABILITIES: readonly Capability[] = [
@@ -295,8 +295,7 @@ async function openClient(config: PostgresConfig, options: OpenOptions): Promise
   try {
     await client.connect();
   } catch (cause) {
-    const message = tlsConnectMessage(config, options.serverName, cause) ?? messageOf(cause);
-    throw new PluginError("connectionFailed", message, { cause });
+    throw connectFailure(config, options.serverName, cause);
   }
   return client;
 }

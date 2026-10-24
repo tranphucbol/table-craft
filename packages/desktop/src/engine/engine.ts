@@ -38,6 +38,7 @@ import {
 } from "@table-craft/core";
 import {
   isPluginError,
+  isTlsSettingsError,
   switchableTo,
   type BoundStatement,
   type Capability,
@@ -176,13 +177,16 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+const CONNECTION_HINT = "Check that the database is running and that the host, port, user and password are right.";
+const TLS_SETTINGS_HINT = "Fix the SSL settings under SSH/SSL in the data source's properties.";
+
 function connectionFailed(cause: unknown): unknown {
   if (!isPluginError(cause) || cause.code !== "connectionFailed") return cause;
   return new EngineFailure(
     {
       code: "connectionFailed",
       message: `Could not connect: ${cause.message}`,
-      hint: "Check that the database is running and that the host, port, user and password are right.",
+      hint: isTlsSettingsError(cause) ? TLS_SETTINGS_HINT : CONNECTION_HINT,
     },
     cause,
   );

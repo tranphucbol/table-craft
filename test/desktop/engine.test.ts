@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PluginError, z, type DatasourcePlugin, type Session } from "@table-craft/plugin-api";
+import { PluginError, TlsSettingsError, z, type DatasourcePlugin, type Session } from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine, probeDatasource } from "@table-craft/desktop/engine/engine.js";
@@ -582,6 +582,18 @@ describe("probeDatasource", () => {
 
     expect(result).toMatchObject({ ok: false, error: { code: "connectionFailed" } });
     expect(!result.ok && result.error.hint).toMatch(/\S/);
+  });
+
+  it("givenTlsSettingsFailure_whenProbed_thenHintPointsAtSslSettings", async () => {
+    const refused: DatasourcePlugin = {
+      ...sqlite,
+      connect: () => Promise.reject(new TlsSettingsError("The server certificate is not signed by the CA in /ca.pem.")),
+    };
+
+    const result = await probeDatasource({ datasource: DATASOURCE, plugins: [{ ...LOADED_SQLITE, plugin: refused }] });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "connectionFailed" } });
+    expect(!result.ok && result.error.hint).toContain("SSL settings");
   });
 });
 

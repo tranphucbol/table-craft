@@ -71,7 +71,7 @@ import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { isTidb, killStatementFor, tidbGlobalKill } from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
-import { SSL_MODES, tlsConnectMessage, tlsInfoOf, tlsOptions } from "./tls.js";
+import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
@@ -352,8 +352,7 @@ async function openConnection(config: MysqlConfig, options: OpenOptions): Promis
         resolve(connection);
         return;
       }
-      const message = tlsConnectMessage(config, options.serverName, error) ?? messageOf(error);
-      reject(new PluginError("connectionFailed", message, { cause: error }));
+      reject(connectFailure(config, options.serverName, error));
     });
   });
 }

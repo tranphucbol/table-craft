@@ -46,6 +46,24 @@ export function isPluginError(error: unknown): error is PluginError {
 }
 
 /**
+ * A `connectionFailed` the SSL settings caused: a certificate file that cannot be read or used, or
+ * a server certificate that failed verification. The host then points at those settings instead
+ * of the host, port, user and password (decision 072).
+ */
+export class TlsSettingsError extends PluginError {
+  readonly tlsSettings = true;
+
+  constructor(message: string, options?: ErrorOptions) {
+    super("connectionFailed", message, options);
+  }
+}
+
+/** Structural for the same reason as `isPluginError`. */
+export function isTlsSettingsError(error: unknown): error is TlsSettingsError {
+  return isPluginError(error) && (error as { tlsSettings?: unknown }).tlsSettings === true;
+}
+
+/**
  * `Introspector.definition` asked for a relation the database does not have, usually one dropped
  * or renamed since the catalog was read (decision 029). Coded `definitionNotFound`, so the host
  * recognises it with `isPluginError` across plugin bundles.

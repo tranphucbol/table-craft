@@ -61,11 +61,42 @@ function reasonOf(cause: unknown): string {
 }
 
 /**
+ * OpenSSL's `X509_verify_cert_error_string` for each code, lower-cased and with hyphens as spaces:
+ * OpenSSL 3 writes "self-signed", BoringSSL (Electron) "self signed".
+ */
+const VERIFY_REASONS: Readonly<Record<string, string>> = {
+  "unable to verify the first certificate": "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "unable to get issuer certificate": "UNABLE_TO_GET_ISSUER_CERT",
+  "unable to get local issuer certificate": "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "self signed certificate in certificate chain": "SELF_SIGNED_CERT_IN_CHAIN",
+  "self signed certificate": "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "certificate signature failure": "CERT_SIGNATURE_FAILURE",
+  "certificate not trusted": "CERT_UNTRUSTED",
+  "certificate has expired": "CERT_HAS_EXPIRED",
+  "certificate is not yet valid": "CERT_NOT_YET_VALID",
+};
+
+const KNOWN_CODES: readonly string[] = [...TLS_CHAIN_CODES, ...TLS_DATE_CODES, TLS_HOST_CODE];
+
+/**
+ * Node's code for a TLS failure. A driver may overwrite it (mysql2 sets `HANDSHAKE_SSL_ERROR`,
+ * `lib/commands/client_handshake.js`), so the error is recognised by what survives: the
+ * `reason`, `host` and `cert` of a `checkServerIdentity` error, or OpenSSL's message.
+ */
+function tlsCodeOf(cause: unknown): string | null {
+  const code = codeOf(cause);
+  if (code !== null && KNOWN_CODES.includes(code)) return code;
+  if (typeof cause !== "object" || cause === null) return null;
+  if ("reason" in cause && "host" in cause && "cert" in cause) return TLS_HOST_CODE;
+  return VERIFY_REASONS[reasonOf(cause).toLowerCase().replaceAll("-", " ")] ?? null;
+}
+
+/**
  * Says what a verification failure did not match, or null when `cause` is not one: the CA file
  * (or the system's CAs) for a chain error, the host name for a name mismatch.
  */
 export function tlsFailureMessage(cause: unknown, verification: TlsVerification): string | null {
-  const code = codeOf(cause);
+  const code = tlsCodeOf(cause);
   if (code === null) return null;
   const reason = reasonOf(cause);
   if (code === TLS_HOST_CODE) {
@@ -87,13 +118,20 @@ export function tlsFileMessage(label: string, path: string, cause: unknown): str
   return `Cannot read the ${label} ${path}: ${reason}.`;
 }
 
+const ENCRYPTED_KEY = /-----BEGIN ENCRYPTED PRIVATE KEY-----|^Proc-Type: 4,ENCRYPTED/m;
+
+/** Whether a PEM private key needs a passphrase: PKCS#8 encrypted, or traditional with `Proc-Type`. */
+export function tlsKeyIsEncrypted(text: string): boolean {
+  return ENCRYPTED_KEY.test(text);
+}
+
 /**
- * Words a client key or certificate OpenSSL refused, naming the key file; a wrong or missing
- * passphrase is told apart from a malformed file.
+ * Words a client key or certificate OpenSSL refused, naming the key file. Any failure on an
+ * `encrypted` key is put down to the passphrase, since OpenSSL's codes for it vary by version.
  */
-export function tlsKeyMessage(label: string, path: string, cause: unknown): string {
+export function tlsKeyMessage(label: string, path: string, cause: unknown, encrypted = false): string {
   const code = codeOf(cause);
-  if (code !== null && BAD_DECRYPT_CODES.includes(code)) {
+  if (encrypted || (code !== null && BAD_DECRYPT_CODES.includes(code))) {
     return `Cannot decrypt the ${label} ${path}: the passphrase is wrong or missing.`;
   }
   return `Cannot use the ${label} ${path}: ${reasonOf(cause)}.`;

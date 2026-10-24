@@ -1,4 +1,14 @@
-import { homeExpanded, tlsFailureMessage, tlsFileMessage, tlsKeyMessage } from "@table-craft/plugin-api";
+import {
+  homeExpanded,
+  isPluginError,
+  isTlsSettingsError,
+  PluginError,
+  TlsSettingsError,
+  tlsFailureMessage,
+  tlsFileMessage,
+  tlsKeyIsEncrypted,
+  tlsKeyMessage,
+} from "@table-craft/plugin-api";
 import { describe, expect, it } from "vitest";
 
 const CA_LABEL = "SSL root certificate";
@@ -50,6 +60,24 @@ describe("tlsFailureMessage", () => {
     expect(tlsFailureMessage(failure("CERT_HAS_EXPIRED"), verification)).toContain("validity dates");
   });
 
+  it("givenChainErrorWhoseCodeTheDriverReplaced_whenWorded_thenRecognisedByMessage", () => {
+    const openSsl = failure("HANDSHAKE_SSL_ERROR", "self-signed certificate in certificate chain");
+    const boringSsl = failure("HANDSHAKE_SSL_ERROR", "self signed certificate in certificate chain");
+
+    expect(tlsFailureMessage(openSsl, verification)).toContain(`not signed by the CA in ${CA_PATH}`);
+    expect(tlsFailureMessage(boringSsl, verification)).toContain(`not signed by the CA in ${CA_PATH}`);
+  });
+
+  it("givenHostErrorWhoseCodeTheDriverReplaced_whenWorded_thenRecognisedByItsFields", () => {
+    const error = Object.assign(failure("HANDSHAKE_SSL_ERROR", "Hostname/IP does not match"), {
+      reason: "Host: db. is not in the cert's altnames",
+      host: "db",
+      cert: {},
+    });
+
+    expect(tlsFailureMessage(error, verification)).toContain("not valid for host db.example.com");
+  });
+
   it("givenOtherError_whenWorded_thenNull", () => {
     expect(tlsFailureMessage(failure("ECONNREFUSED"), verification)).toBeNull();
     expect(tlsFailureMessage(new Error("no code"), verification)).toBeNull();
@@ -80,9 +108,40 @@ describe("tlsKeyMessage", () => {
     );
   });
 
+  it("givenEncryptedKeyWithAnyFailure_whenWorded_thenSaysPassphrase", () => {
+    const interrupted = failure("ERR_OSSL_CRYPTO_INTERRUPTED_OR_CANCELLED", "interrupted or cancelled");
+
+    expect(tlsKeyMessage("Client key", "/k", interrupted, true)).toContain("the passphrase is wrong or missing");
+  });
+
   it("givenMalformedKey_whenWorded_thenKeepsReason", () => {
     const message = tlsKeyMessage("Client key", "/certs/client.key", failure("ERR_OSSL_UNSUPPORTED", "unsupported"));
 
     expect(message).toBe("Cannot use the Client key /certs/client.key: unsupported.");
+  });
+});
+
+describe("tlsKeyIsEncrypted", () => {
+  it("givenEncryptedPemKeys_whenChecked_thenTrue", () => {
+    expect(tlsKeyIsEncrypted("-----BEGIN ENCRYPTED PRIVATE KEY-----\nMII")).toBe(true);
+    expect(tlsKeyIsEncrypted("-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: x")).toBe(true);
+  });
+
+  it("givenPlainKey_whenChecked_thenFalse", () => {
+    expect(tlsKeyIsEncrypted("-----BEGIN PRIVATE KEY-----\nMII")).toBe(false);
+  });
+});
+
+describe("isTlsSettingsError", () => {
+  it("givenTlsSettingsError_whenChecked_thenIsAConnectionFailedPluginError", () => {
+    const error = new TlsSettingsError("Cannot read the Client key /k.pem: the file does not exist.");
+
+    expect(isPluginError(error)).toBe(true);
+    expect(error.code).toBe("connectionFailed");
+    expect(isTlsSettingsError(error)).toBe(true);
+  });
+
+  it("givenPlainConnectionFailed_whenChecked_thenNotTlsSettings", () => {
+    expect(isTlsSettingsError(new PluginError("connectionFailed", "refused"))).toBe(false);
   });
 });
