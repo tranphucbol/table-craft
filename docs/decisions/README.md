@@ -91,3 +91,5 @@ started, not when it is merged.
 | 090 | [Routine calls are written by the plugin](090-routine-calls-are-written-by-the-plugin.md)                                                                              |
 | 091 | [File size budget and module layout of the engine](091-file-size-budget-and-module-layout-of-the-engine.md)                                                            |
 | 096 | [The headless suite runs files in parallel](096-headless-suite-runs-files-in-parallel.md)                                                                              |
+| 097 | [Function specs with server ranges](097-function-specs-with-server-ranges.md)                                                                                          |
+| 098 | [Signature help is answered by the plugin](098-signature-help-is-answered-by-the-plugin.md)                                                                            |

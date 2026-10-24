@@ -165,6 +165,7 @@ interface SqlLanguage {
   bind(statement: string, values: Readonly<Record<string, ParameterValue>>): BoundStatement; // { sql, params }
   importType?(column: InferredColumn): string; // { kind, integerDigits, scale } to a column type; with `bulkInsert`
   createTable?(qualifiedName: string, columns: readonly NewColumn[]): string; // CREATE TABLE for an import; with `bulkInsert`
+  signatureAt?(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>; // the call at the caret; sqlCompleter (decision 098)
   selectSource?(sql: string, catalog: CompletionCatalog): Promise<SelectSource>; // the one table a plain SELECT reads; sqlCompleter
   savepoint?(name: string): SavepointStatements; // { set, rollback, release }; sqlSavepoints
 }
@@ -480,6 +481,7 @@ handles belong to the port that created them and are released when it closes.
 | `table.orderBy`         | `terms: { name, direction }[]`                                                                    | the ORDER BY text in the plugin's quoting, e.g. `"qty" DESC, "label"`                                                                       |
 | `table.condition`       | `handle`, `rows`, `columns: { column, name }[]`                                                   | a WHERE condition matching those rows' values, written against `name`                                                                       |
 | `completion.complete`   | `text`, `offset`, `scope?: { path, relation }`, `current?`                                        | `{ from, to, items, validFor }`; see Completion and navigation                                                                              |
+| `completion.signature`  | `text`, `offset`, `scope?: { path, relation }`                                                    | `{ name, summary, signatures, argument, from, to }` or `null`; see Completion and navigation                                                |
 | `navigation.resolve`    | `text`, `offset`, `current?`                                                                      | `Declaration` or `null`; see Completion and navigation                                                                                      |
 | `edits.preview`         | `handle`, `edits: RowEdit[]`                                                                      | the statements Submit would run                                                                                                             |
 | `edits.submit`          | `sessionId`, `handle`, `edits: RowEdit[]`                                                         | `{ statements, rowsAffected, transactionOpen }`, or `editRejected` after a rollback                                                         |
@@ -1323,7 +1325,7 @@ cache; the renderer sends text and a caret and never parses SQL. `SqlLanguage` h
 | Plugin     | `identifierFolding` | `plainIdentifier`           | Quotes         | Extra keywords / functions                                    |
 | ---------- | ------------------- | --------------------------- | -------------- | ------------------------------------------------------------- |
 | PostgreSQL | `lower`             | `^[a-z_][a-z0-9_$]*$`       | `"Line Items"` | `ILIKE`, `LATERAL`, `RETURNING`; `array_agg`, `string_agg`, … |
-| MySQL      | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$` | `` `x` ``      | `STRAIGHT_JOIN`, `REPLACE`; `group_concat`, `date_format`, …  |
+| MySQL      | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$` | `` `x` ``      | `STRAIGHT_JOIN`, `REPLACE`; the full built-in list (below)    |
 | SQLite     | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$` | `"x"`          | `GLOB`, `PRAGMA`; `datetime`, `json_extract`, …               |
 
 `scopeAt` reads the statement around the caret (cut at the lexer's `;` delimiters) into the clause
@@ -1345,8 +1347,9 @@ A join item follows a foreign key from or to an in-scope relation, outgoing firs
 initials of the relation's words (`Line Items` → `li`), suffixed with a digit when taken or a
 keyword; a target in another namespace is qualified (`archive.old_orders oo ON …`). A name is quoted
 only when it fails `plainIdentifier` or is a keyword; a prefix starting with a quote keeps the
-labels quoted. Items are `{ label, kind, detail, apply, boost }`; `detail` is a column's type or a
-relation's namespace, or the foreign key's name for a join. The engine orders them (join 50, column
+labels quoted. Items are `{ label, kind, detail, apply, boost, info, caret }`; `detail` is a
+column's type or a relation's namespace, the foreign key's name for a join, or a function's first
+overload (`(date, format) → string`). The engine orders them (join 50, column
 40, CTE 35, table and view 30, alias 20, namespace 10, function 0, keyword −10) and the popup keeps
 that order between equal fuzzy scores. `validFor` is `^[A-Za-z0-9_$]*$` unless the prefix is quoted.
 
@@ -1362,6 +1365,38 @@ table editor's WHERE and ORDER BY bars complete with `scope: { path, relation }`
 read as the body of a WHERE on that relation. While the popup is open Enter accepts and Esc closes
 it; Tab accepts too and also overwrites the rest of the identifier right of the caret, in one undo
 step (decision 059). With no popup, Tab indents in the console and moves focus in a bar.
+
+### Functions and parameter hints
+
+Plan 052, decisions 097 and 098. `CompleterOptions.functions` takes plain names or `FunctionSpec`s
+(`{ name, signatures: { parameters: { name, optional?, variadic? }[], returns }[], summary,
+category, available? }`) from `@table-craft/plugin-api/sql`. A spec's item is the lower-case name
+with `detail` its first overload, `info` every overload and the summary (the popup's side panel),
+`apply` `name()` and `caret` the offset inside the parentheses, or after them when no overload takes
+an argument. A function spelled like a keyword (`IF`, `LEFT`, `REPLACE`, `VALUES`) is offered once,
+as a function, where an expression goes; keyword positions keep the keyword.
+
+`available` is a `ServerRange`: per flavour, space-separated comparators on a dotted version
+(`{ mysql: "<8.0", tidb: false }`); a flavour it does not name gets the function in every version.
+The catalog carries `server: { version }`, the session's `serverVersion`, and the plugin's
+`CompleterOptions.server` reads it into `{ flavour, version }`; an unknown or unread version gets
+the union. The MySQL plugin ships its lists in `plugins/mysql/src/functions/` by category, one spec
+per name, written for this project with the manuals they follow named in each file's header;
+`serverIdentity` reads `8.4.0` as MySQL 8.4.0 and `5.7.25-TiDB-v4.0.14` as TiDB 4.0.14. Functions
+the TiDB v4.0 manual leaves out but its current manual lists are offered from TiDB 5.0
+(`TIDB_AFTER_4`). PostgreSQL and SQLite wrap their short lists as specs; their full lists are a
+later plan.
+
+`signatureAt(request, catalog)` finds the innermost unclosed call before the caret in the
+statement's tokens, so commas in strings, comments and quoted names never count, and grouping
+parentheses are looked through. It answers `{ name, summary, signatures, argument, from, to }`, or
+null in a literal, outside a call, inside a subquery, or when the name before `(` is not an
+available function (`IN (`, `VALUES (` after a table, `CREATE TABLE t (`). The engine method is
+`completion.signature`. The console and the table editor's bars ask when `(` or `,` is typed and
+on every edit or caret move while the hint shows; it sits above the call with each overload on a
+line and the parameter at the caret bold, an overload the call has outgrown dimmed, and the summary
+below. It closes when the caret leaves the call, on Escape (after the completion popup's) and on
+blur. Parameter Info (`⌘P`) asks at once.
 
 ### Current namespace
 

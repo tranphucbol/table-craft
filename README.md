@@ -294,7 +294,12 @@ Completion runs in the engine against a cache of the catalog. After `FROM` it of
 after `JOIN` it offers whole join conditions that follow foreign keys, such as
 `customers c ON c.id = o.customer_id`; after `c.` it offers the columns of that alias. `⌃Space`
 opens it anywhere. `Enter` inserts the selected option and keeps the rest of the word after the
-caret; `Tab` replaces the whole word, as in DataGrip. `⌘B` (Go to Declaration) on an alias moves the caret to where it is defined, and
+caret; `Tab` replaces the whole word, as in DataGrip. In an expression it offers the server's
+built-in functions with their parameters, return type and a line on what each does; MySQL and
+TiDB get the full list for the server's version, so MySQL 8.4 never offers `PASSWORD` and TiDB
+offers its own `TIDB_*` functions. Accepting one leaves the caret inside `()`, and a hint above
+the call shows every overload with the parameter at the caret in bold; `⌘P` (Parameter Info)
+brings it back and `Escape` hides it. `⌘B` (Go to Declaration) on an alias moves the caret to where it is defined, and
 on a table opens its DDL. Completion follows `USE` and `SET search_path`: once one runs, the
 console's toolbar shows the database or schema it is in and unqualified names complete there; a
 `USE` above the caret in a script counts even before it runs. After `USE `, `SET search_path TO `
@@ -489,6 +494,7 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Drop…                     | `⌘⌫`    | `Ctrl+Backspace`       |
 | Go to DDL                 | `⌘B`    | `Ctrl+B`               |
 | Go to Declaration         | `⌘B`    | `Ctrl+B`               |
+| Parameter Info            | `⌘P`    | `Ctrl+P`               |
 | Quick Documentation       | `F1`    | `F1`                   |
 | Open Data                 | `F4`    | `F4`                   |
 | SQL Generator…            | `⌥⌘G`   | `Ctrl+Alt+G`           |

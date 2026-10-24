@@ -24,6 +24,7 @@ import { registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import { connectedSignature } from "@table-craft/desktop/renderer/console/signatureHint.js";
 import {
   errorMarks,
   errorMarksOf,
@@ -145,6 +146,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           completion({
             dialect: () => dialectRef.current,
             engine: connectedEngine(datasourceId),
+            signature: connectedSignature(datasourceId),
             current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
           }),
           highlightSelectionMatches(),

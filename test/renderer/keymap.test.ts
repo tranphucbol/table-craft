@@ -3,6 +3,7 @@ import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js
 import type { FocusRegion } from "@table-craft/desktop/renderer/actions/context.js";
 import { createKeyDispatcher, findClashes, findReservedClashes } from "@table-craft/desktop/renderer/actions/keymap.js";
 import { GRID_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridActions.js";
+import { NAVIGATION_ACTION_IDS } from "@table-craft/desktop/renderer/actions/navigationActions.js";
 import { createActionRegistry, defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { EDITOR_CHORDS, FIELD_CHORDS } from "@table-craft/desktop/renderer/console/editorKeys.js";
@@ -255,6 +256,19 @@ describe("grid keymap", () => {
     dispatch(keydown({ key: "r", metaKey: true }));
 
     expect(ran).toEqual(["grid.selectAll", "grid.toggleValuePanel", "grid.rerun"]);
+  });
+
+  it("givenModP_whenPressedInEachRegion_thenParameterInfoOnlyInSqlFields", () => {
+    let region: FocusRegion = "editor";
+    const { dispatch, ran } = dispatcherIn(() => region);
+
+    for (const where of ["editor", "tableEditor", "grid", "database"] as const) {
+      region = where;
+      dispatch(keydown({ key: "p", metaKey: true }));
+    }
+
+    expect(ran).toEqual([NAVIGATION_ACTION_IDS.parameterInfo, NAVIGATION_ACTION_IDS.parameterInfo]);
+    expect(EDITOR_CHORDS).not.toContain("Mod+P");
   });
 
   it("givenModMinus_whenPressedInEditorThenDatabasePane_thenZoomOutThenCollapseAll", () => {

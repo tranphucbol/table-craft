@@ -3,6 +3,12 @@ import type { Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { COMPLETION_GLYPH_CLASS } from "@table-craft/desktop/renderer/console/completionGlyphs.js";
+import {
+  SIGNATURE_ACTIVE_CLASS,
+  SIGNATURE_HINT_CLASS,
+  SIGNATURE_OFF_CLASS,
+  SIGNATURE_SUMMARY_CLASS,
+} from "@table-craft/desktop/renderer/console/signatureHint.js";
 
 /**
  * The SQL editor's look, every value a `--tc-*` variable `appearance/apply.ts` writes from the
@@ -30,6 +36,10 @@ const GUTTER_PADDING = "0 8px 0 12px";
 const LINE_PADDING = "0 var(--tc-cell-padding)";
 const PANEL_PADDING = "4px var(--tc-cell-padding)";
 const GLYPH_GAP = "6px";
+/** The completion's info panel and the parameter hint, wide enough for a long overload on one line. */
+const HINT_WIDTH = "480px";
+/** Tailwind's `font-semibold`, which the rest of the window bolds with. */
+const SEMIBOLD = "600";
 
 /**
  * CodeMirror's base theme paints the focused band through this five-class selector; a shorter one
@@ -116,6 +126,28 @@ export const EDITOR_THEME_SPEC = {
   [`.${COMPLETION_GLYPH_CLASS}`]: { display: "inline-flex", flexShrink: "0" },
   ".cm-completionDetail": { marginLeft: "auto", paddingLeft: "var(--tc-gap)", color: "var(--tc-ink-muted)" },
   ".cm-completionMatchedText": { textDecoration: "none", color: "var(--tc-accent)" },
+  ".cm-tooltip.cm-completionInfo": {
+    maxWidth: HINT_WIDTH,
+    padding: PANEL_PADDING,
+    fontFamily: "var(--tc-font-ui)",
+    fontSize: "var(--tc-font-ui-size)",
+    whiteSpace: "pre-wrap",
+  },
+  [`.${SIGNATURE_HINT_CLASS}`]: {
+    maxWidth: HINT_WIDTH,
+    padding: PANEL_PADDING,
+    fontFamily: "var(--tc-font-editor)",
+    fontSize: "var(--tc-font-editor-size)",
+  },
+  [`.${SIGNATURE_OFF_CLASS}`]: { color: "var(--tc-ink-muted)" },
+  [`.${SIGNATURE_ACTIVE_CLASS}`]: { fontWeight: SEMIBOLD, color: "var(--tc-accent)" },
+  [`.${SIGNATURE_SUMMARY_CLASS}`]: {
+    marginTop: "var(--tc-cell-padding)",
+    fontFamily: "var(--tc-font-ui)",
+    fontSize: "var(--tc-font-ui-size)",
+    color: "var(--tc-ink-muted)",
+    whiteSpace: "pre-wrap",
+  },
 };
 
 const HIGHLIGHT_STYLE = HighlightStyle.define([

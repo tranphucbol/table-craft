@@ -1,9 +1,12 @@
+import { EditorView } from "@codemirror/view";
 import type { Capability, CurrentNamespace, Declaration, RelationKind } from "@table-craft/desktop/engine/protocol.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { openDdl } from "@table-craft/desktop/renderer/actions/ddlCommands.js";
 import { revealInDatabase } from "@table-craft/desktop/renderer/actions/explorerActions.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { openTable } from "@table-craft/desktop/renderer/actions/tableCommands.js";
+import { editorOf } from "@table-craft/desktop/renderer/console/caretAnchor.js";
+import { requestParameterInfo } from "@table-craft/desktop/renderer/console/signatureHint.js";
 import { pathKey } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
@@ -12,7 +15,18 @@ import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.
 export const NAVIGATION_ACTION_IDS = {
   goToDeclaration: "editor.goToDeclaration",
   openData: "editor.openData",
+  parameterInfo: "editor.parameterInfo",
 } as const;
+
+const CODE_EDITOR_SELECTOR = ".cm-editor";
+
+/** The SQL field Parameter Info asks in: the focused one, else the active console's editor. */
+function parameterInfoTarget(context: ActionContext): EditorView | null {
+  const focused = document.activeElement?.closest(CODE_EDITOR_SELECTOR);
+  const view = focused instanceof HTMLElement ? EditorView.findFromDOM(focused) : null;
+  if (view !== null) return view;
+  return context.activeTab?.kind === "console" ? editorOf(context.activeTab.id) : null;
+}
 
 /** A relation Go to Declaration or Open Data lands on. */
 type RelationDeclaration = Extract<Declaration, { kind: "relation" | "column" }>;
@@ -135,6 +149,23 @@ export const NAVIGATION_ACTIONS: readonly AnyAction[] = [
       const target = await relationOf(caret, await resolve(caret));
       if (target === null) return;
       await openTable({ datasourceId: caret.datasourceId, path: target.path, relation: target.relation });
+    },
+  }),
+  defineAction({
+    id: NAVIGATION_ACTION_IDS.parameterInfo,
+    title: "Parameter Info",
+    category: "Editor",
+    icon: "quickDoc",
+    shortcut: "Mod+P",
+    shortcutRegion: ["editor", "tableEditor"],
+    when: (context) =>
+      context.capabilities.includes("sql") &&
+      (context.activeTab?.kind === "console" || context.activeTab?.kind === "table"),
+    run: (context) => {
+      const view = parameterInfoTarget(context);
+      if (view === null) return;
+      view.focus();
+      requestParameterInfo(view);
     },
   }),
 ];

@@ -7,6 +7,7 @@ import type { CompletionScope } from "@table-craft/desktop/engine/protocol.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { dialectOf } from "@table-craft/desktop/renderer/console/Editor.js";
 import { EDITOR_THEME } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import { connectedSignature } from "@table-craft/desktop/renderer/console/signatureHint.js";
 
 /** Chords CodeMirror would take that belong to the registry here: ⌘↵ is Submit. */
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
@@ -67,6 +68,7 @@ export function FilterBar({
           completion({
             dialect: () => dialect,
             engine: connectedEngine(() => datasourceId),
+            signature: connectedSignature(() => datasourceId),
             scope: { path: JSON.parse(pathKey) as readonly string[], relation },
           }),
           placeholder(placeholderText),

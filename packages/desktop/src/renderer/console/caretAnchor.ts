@@ -12,6 +12,11 @@ export function trackEditor(consoleId: string, view: EditorView): () => void {
   };
 }
 
+/** The console's editor while it is mounted. */
+export function editorOf(consoleId: string): EditorView | null {
+  return views.get(consoleId) ?? null;
+}
+
 /** Where `offset` sits on screen in the console's editor, or null when it is not mounted or not drawn. */
 export function caretAnchor(consoleId: string, offset: number): PopoverAnchor | null {
   const coords = views.get(consoleId)?.coordsAtPos(offset) ?? null;

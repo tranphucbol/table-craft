@@ -16,6 +16,7 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { tabAcceptsCompletion } from "@table-craft/desktop/renderer/console/completionKeys.js";
 import { renderCompletionGlyph } from "@table-craft/desktop/renderer/console/completionGlyphs.js";
+import { signatureHint, type SignatureCall } from "@table-craft/desktop/renderer/console/signatureHint.js";
 import { connectionOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 
 /** How long typing waits before asking the engine; ⌃Space asks at once (plan 009 decision 11). */
@@ -37,6 +38,8 @@ export interface CompletionTarget {
   readonly scope?: CompletionScope;
   /** The console's namespace, which unqualified names complete in (decision 048); null for the catalog's. */
   readonly current?: () => CurrentNamespace;
+  /** The engine to ask for the call at the caret; without it the editor shows no parameter hint. */
+  readonly signature?: () => SignatureCall | null;
 }
 
 /** Where the engine put each option; lang-sql's keywords have none. */
@@ -136,8 +139,12 @@ export function connectedEngine(datasourceId: () => string | undefined): () => C
   };
 }
 
-/** Autocompletion with the engine source, the app's glyphs, the typing delay and Tab to accept. */
+/**
+ * Autocompletion with the engine source, the app's glyphs, the typing delay and Tab to accept,
+ * then the parameter hint, after it so Escape closes the popup before the hint.
+ */
 export function completion(target: CompletionTarget): Extension {
+  const { signature, scope } = target;
   return [
     autocompletion({
       override: [engineCompletionSource(target)],
@@ -147,5 +154,6 @@ export function completion(target: CompletionTarget): Extension {
       addToOptions: [{ render: renderCompletionGlyph, position: GLYPH_POSITION }],
     }),
     tabAcceptsCompletion,
+    signature === undefined ? [] : signatureHint(scope === undefined ? { signature } : { signature, scope }),
   ];
 }
