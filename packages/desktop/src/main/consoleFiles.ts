@@ -41,6 +41,8 @@ export interface ConsoleFiles {
   delete(datasourceId: string, name: string): Promise<void>;
   /** Renames a saved console; refuses a name another console has. Nothing saved yet is nothing to move. */
   rename(datasourceId: string, from: string, to: string): Promise<void>;
+  /** The absolute path a console's text is saved at, whether or not it is written yet. */
+  path(datasourceId: string, name: string): string;
   /** Removes every console saved for the datasource, when the datasource is deleted. */
   deleteAll(datasourceId: string): Promise<void>;
 }
@@ -100,6 +102,7 @@ export function createConsoleFiles(options: ConsoleFilesOptions): ConsoleFiles {
       if ((await files.readText(source)) === null) return;
       await files.rename(source, target);
     },
+    path: pathOf,
     deleteAll: async (datasourceId) => files.removeDirectory(directoryOf(datasourceId)),
   };
 }

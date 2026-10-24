@@ -37,6 +37,7 @@ export interface OpenConsole {
   readonly name: string;
   readonly active: boolean;
   readonly path?: string;
+  readonly pinned?: boolean;
 }
 
 /** A table tab as the layout remembers it; its filter and edits are not kept. */
@@ -89,12 +90,13 @@ const isSize = (value: unknown): value is number =>
 
 function isOpenConsole(value: unknown): value is OpenConsole {
   if (typeof value !== "object" || value === null) return false;
-  const { datasourceId, name, active, path } = value as Record<string, unknown>;
+  const { datasourceId, name, active, path, pinned } = value as Record<string, unknown>;
   return (
     typeof datasourceId === "string" &&
     typeof name === "string" &&
     typeof active === "boolean" &&
-    (path === undefined || typeof path === "string")
+    (path === undefined || typeof path === "string") &&
+    (pinned === undefined || typeof pinned === "boolean")
   );
 }
 

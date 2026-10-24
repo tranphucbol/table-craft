@@ -41,7 +41,7 @@ describe("application menu", () => {
     const items = file?.kind === "submenu" ? labelsOf(file.items) : [];
 
     expect(file?.kind === "submenu" ? file.label : "").toBe("File");
-    expect(items.slice(-3)).toEqual(["Settings…", "-", "Close Tab"]);
+    expect(items.slice(-4)).toEqual(["Settings…", "-", "Close Tab", "Reopen Closed Tab"]);
     expect(menuActionIds(menuFor(false)).filter((id) => id === "settings.show")).toHaveLength(1);
   });
 

@@ -64,6 +64,7 @@ const bridge: TableCraftBridge = {
   writeConsole: (datasourceId, name, text) => invoke(INVOKE_CHANNELS.writeConsole, { datasourceId, name, text }),
   deleteConsole: (datasourceId, name) => invoke(INVOKE_CHANNELS.deleteConsole, { datasourceId, name }),
   renameConsole: (datasourceId, from, to) => invoke(INVOKE_CHANNELS.renameConsole, { datasourceId, from, to }),
+  consolePath: (datasourceId, name) => invoke(INVOKE_CHANNELS.consolePath, { datasourceId, name }),
   chooseSqlFiles: (title) => invoke(INVOKE_CHANNELS.chooseSqlFiles, { title }),
   openSqlFile: (path) => invoke(INVOKE_CHANNELS.openSqlFile, { path }),
   readSqlFile: (path) => invoke(INVOKE_CHANNELS.readSqlFile, { path }),

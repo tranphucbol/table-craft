@@ -55,6 +55,7 @@ export const INVOKE_CHANNELS = {
   writeConsole: "table-craft:consoles.write",
   deleteConsole: "table-craft:consoles.delete",
   renameConsole: "table-craft:consoles.rename",
+  consolePath: "table-craft:consoles.path",
   chooseSqlFiles: "table-craft:sql-files.choose",
   openSqlFile: "table-craft:sql-files.open",
   readSqlFile: "table-craft:sql-files.read",
@@ -547,6 +548,8 @@ export interface TableCraftBridge {
   deleteConsole(datasourceId: string, name: string): Promise<InvokeResult<null>>;
   /** Renames a saved console; fails naming the pattern a name must match, or when the name is taken. */
   renameConsole(datasourceId: string, from: string, to: string): Promise<InvokeResult<null>>;
+  /** The absolute path of a scratch console's file, for Copy Path and Reveal in Finder; fails on a name main refuses. */
+  consolePath(datasourceId: string, name: string): Promise<InvokeResult<string>>;
   /** The native open dialog for `.sql` files, several at once; empty when cancelled. */
   chooseSqlFiles(title: string): Promise<InvokeResult<readonly string[]>>;
   /** Reads a SQL file for a file console, with its remembered attachment, and makes it the most recent. */
