@@ -223,6 +223,24 @@ export interface StatementSpan {
   readonly sql: string;
 }
 
+/**
+ * A statement of a streamed script (decision 081): offsets count UTF-16 units from the start of
+ * everything pushed, and `line` and `column` (both from 1) say where it starts.
+ */
+export interface StreamedStatement extends StatementSpan {
+  readonly line: number;
+  readonly column: number;
+}
+
+/**
+ * `split` over text that arrives in pieces, so a script never has to be held whole (decision 081).
+ * `push` returns the statements the text so far completes; `end` returns the rest.
+ */
+export interface StatementStream {
+  push(text: string): readonly StreamedStatement[];
+  end(): readonly StreamedStatement[];
+}
+
 export const STATEMENT_KINDS = ["read", "write", "ddl", "transaction", "other"] as const;
 
 export type StatementKind = (typeof STATEMENT_KINDS)[number];
@@ -304,6 +322,11 @@ export interface SavepointStatements {
 export interface SqlLanguage {
   /** Every non-empty statement in `text`, in order. Comments and blanks between statements belong to none. */
   split(text: string): readonly StatementSpan[];
+  /**
+   * A fresh stream that splits exactly as `split` would, for scripts too large to hold (decision
+   * 081). Absent: the host splits the whole file with `split`, up to a size it can hold.
+   */
+  splitStream?(): StatementStream;
   classify(sql: string): StatementClass;
   /** `name` quoted as an identifier, whatever characters it holds. */
   quoteIdentifier(name: string): string;

@@ -41,6 +41,7 @@ import {
   sqlLiteral,
   sqlParameters,
   sqlSplitter,
+  sqlStatementStream,
   transactionEffect,
   type ParameterOptions,
   type SqlDialectOptions,
@@ -81,6 +82,7 @@ const { explainable } = sqlExplainable({ dialect: DIALECT, name: "SQLite", verbs
 
 const language: SqlLanguage = {
   split: sqlSplitter(DIALECT),
+  splitStream: sqlStatementStream(DIALECT),
   classify: (sql) => classifyTokens(sql, DIALECT),
   quoteIdentifier,
   literal: (value) => sqlLiteral(value, LITERALS),

@@ -125,6 +125,8 @@ export {
   type StatementClass,
   type StatementKind,
   type StatementSpan,
+  type StatementStream,
+  type StreamedStatement,
   TRANSACTION_MODES,
   type TransactionMode,
   type Transactions,

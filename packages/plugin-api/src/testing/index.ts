@@ -718,6 +718,20 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         },
       );
 
+      it.each([...SHARED_SCRIPTS, ...(fixture.scripts ?? [])])(
+        "givenScriptInPieces_whenSplitStreamed_thenSameStatementsAsSplit: $text",
+        ({ text }) => {
+          const stream = language().splitStream?.();
+          if (stream === undefined) return;
+          const streamed = [...text].flatMap((character) => stream.push(character)).concat(stream.end());
+          expect(streamed.map(({ from, to, sql }) => ({ from, to, sql }))).toEqual(
+            language()
+              .split(text)
+              .map(({ from, to, sql }) => ({ from, to, sql })),
+          );
+        },
+      );
+
       it("givenSplitScript_whenEachStatementExecuted_thenEachSucceeds", async () => {
         const statements = statementsOf("SELECT 'a;b' AS s;\n-- between\nSELECT 2 AS n;");
         await withSession(plugin, fixture, async (session) => {
