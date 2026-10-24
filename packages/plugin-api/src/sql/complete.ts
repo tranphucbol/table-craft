@@ -368,7 +368,13 @@ export function sqlCompleter(
   }
 
   function availableFunctions(server: ServerIdentity | null): (string | FunctionSpec)[] {
-    return options.functions.filter((spec) => typeof spec === "string" || isAvailable(spec, server));
+    const offered = new Set<string>();
+    return options.functions.filter((spec) => {
+      const name = functionName(spec).toUpperCase();
+      if (offered.has(name) || (typeof spec !== "string" && !isAvailable(spec, server))) return false;
+      offered.add(name);
+      return true;
+    });
   }
 
   async function qualifiedItems(scope: ScopeAt, lookup: Lookup): Promise<CompletionItem[]> {

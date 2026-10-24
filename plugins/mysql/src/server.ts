@@ -1,3 +1,6 @@
+import type { ServerIdentity } from "@table-craft/plugin-api/sql";
+import { MYSQL_FLAVOUR, TIDB_FLAVOUR } from "./functions/ranges.js";
+
 /**
  * TiDB's `VERSION()` reads like `8.0.11-TiDB-v7.5.1`: a MySQL version, then its own after the
  * marker.
@@ -6,6 +9,25 @@ const TIDB_VERSION = /-TiDB-v(\d+)\.(\d+)/i;
 
 /** The first TiDB release with Global Kill on by default, whose connection ids are cluster-wide. */
 const TIDB_GLOBAL_KILL = { major: 6, minor: 1 } as const;
+
+/** The leading `major.minor[.patch]` of a version string, TiDB's after its marker. */
+const MYSQL_RELEASE = /^(\d+)\.(\d+)(?:\.(\d+))?/;
+const TIDB_RELEASE = /-TiDB-v(\d+)\.(\d+)(?:\.(\d+))?/i;
+
+function release(match: RegExpExecArray): number[] {
+  return match
+    .slice(1)
+    .filter((part): part is string => part !== undefined)
+    .map(Number);
+}
+
+/** Which function list applies: TiDB by its own release, else MySQL; null when the version is unreadable. */
+export function serverIdentity(serverVersion: string): ServerIdentity | null {
+  const tidb = TIDB_RELEASE.exec(serverVersion);
+  if (tidb !== null) return { flavour: TIDB_FLAVOUR, version: release(tidb) };
+  const mysql = MYSQL_RELEASE.exec(serverVersion);
+  return mysql === null ? null : { flavour: MYSQL_FLAVOUR, version: release(mysql) };
+}
 
 export function isTidb(serverVersion: string | null): boolean {
   return serverVersion !== null && TIDB_VERSION.test(serverVersion);

@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
+import type { SqlLanguage } from "@table-craft/plugin-api";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
-import type { CompletionResult, Declaration, EngineResponse } from "@table-craft/desktop/engine/protocol.js";
+import type {
+  CompletionResult,
+  Declaration,
+  EngineResponse,
+  SignatureHelp,
+} from "@table-craft/desktop/engine/protocol.js";
 import { SQLITE_MANIFEST } from "../support/manifests.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 
@@ -13,11 +19,42 @@ const LOADED_SQLITE: PluginLoadResult = {
   plugin: sqlite,
 };
 
-function connection() {
+const SQLITE_VERSION = /^3\.\d+\.\d+/;
+
+/** SQLite whose completion answers with the server version its catalog carries. */
+function echoingServerVersion(): PluginLoadResult {
+  const language = sqlite.language;
+  if (language === undefined) throw new Error("The SQLite plugin has no language.");
+  const echo: SqlLanguage = {
+    ...language,
+    complete: async (request, catalog) => ({
+      ...(await language.complete(request, catalog)),
+      items: [
+        {
+          label: String(catalog.server.version),
+          kind: "keyword",
+          detail: null,
+          apply: "",
+          boost: 0,
+          info: null,
+          caret: null,
+        },
+      ],
+    }),
+  };
+  return {
+    status: "loaded",
+    directory: "plugins/sqlite",
+    manifest: SQLITE_MANIFEST,
+    plugin: { ...sqlite, language: echo },
+  };
+}
+
+function connection(plugin: PluginLoadResult = LOADED_SQLITE) {
   const path = seededSqliteFile();
   return createEngine({
     datasource: { id: "seeded", pluginId: "sqlite", config: { path }, readOnly: false, keepAliveSeconds: 0 },
-    plugins: [LOADED_SQLITE],
+    plugins: [plugin],
   }).connect();
 }
 
@@ -27,6 +64,39 @@ function resultOf<T>(response: EngineResponse): T {
 }
 
 describe("engine completion", () => {
+  it("givenSqlite_whenCompleting_thenServerVersionReachesCatalog", async () => {
+    const engine = connection(echoingServerVersion());
+    const text = "SELECT ";
+
+    const result = resultOf<CompletionResult>(
+      await engine.handle({ id: 1, type: "completion.complete", text, offset: text.length }),
+    );
+
+    expect(result.items[0]?.label).toMatch(SQLITE_VERSION);
+  });
+
+  it("givenCallAtCaret_whenAskingSignature_thenHelp", async () => {
+    const engine = connection();
+    const text = "SELECT substr(name, ";
+
+    const help = resultOf<SignatureHelp | null>(
+      await engine.handle({ id: 1, type: "completion.signature", text, offset: text.length }),
+    );
+
+    expect(help).toMatchObject({ name: "substr", argument: 1, from: "SELECT ".length });
+  });
+
+  it("givenNoCall_whenAskingSignature_thenNull", async () => {
+    const engine = connection();
+    const text = "SELECT name FROM ";
+
+    expect(
+      resultOf<SignatureHelp | null>(
+        await engine.handle({ id: 1, type: "completion.signature", text, offset: text.length }),
+      ),
+    ).toBeNull();
+  });
+
   it("givenFromClause_whenCompleting_thenOffersSeededTablesWithoutAConsoleSession", async () => {
     const engine = connection();
     const text = "SELECT * FROM ";

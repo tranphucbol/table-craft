@@ -73,6 +73,11 @@ export default defineConfig({
         find: /^@table-craft\/plugin-mysql\/(server|warnings)$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/$1.ts"),
       },
+      // The MySQL and TiDB function list, which the list tests filter by server version (plan 052).
+      {
+        find: /^@table-craft\/plugin-mysql\/functions$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/functions/index.ts"),
+      },
       {
         find: /^@table-craft\/plugin-postgres\/notices$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/notices.ts"),

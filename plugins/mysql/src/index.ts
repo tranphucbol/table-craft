@@ -38,7 +38,6 @@ import {
   namespaceSwitcher,
   quoteIdentifierWith,
   sqlSavepoints,
-  SQL_FUNCTIONS,
   SQL_KEYWORDS,
   sqlCompleter,
   sqlExplainable,
@@ -57,6 +56,7 @@ import {
 } from "@table-craft/plugin-api/sql";
 import { insertStatement, MYSQL_IMPORT_TYPES, mysqlDecimal } from "./bulk.js";
 import { syntaxErrorPosition } from "./errorPosition.js";
+import { MYSQL_FUNCTIONS } from "./functions/index.js";
 import {
   ANALYZE_VERBS,
   EXPLAIN_VERBS,
@@ -71,7 +71,7 @@ import {
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { mysqlRoutineCall } from "./routines.js";
-import { isTidb, killStatementFor, tidbGlobalKill } from "./server.js";
+import { isTidb, killStatementFor, serverIdentity, tidbGlobalKill } from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
@@ -135,7 +135,8 @@ const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     quoteIdentifier,
     keywords: KEYWORDS,
-    functions: [...SQL_FUNCTIONS, "concat", "date_format", "group_concat", "ifnull", "now"],
+    functions: MYSQL_FUNCTIONS,
+    server: serverIdentity,
   }),
   ...sqlGenerator({
     quoteIdentifier,
