@@ -1,4 +1,5 @@
 import { readFile as readFileFromDisk } from "node:fs/promises";
+import { homedir } from "node:os";
 import { createServer, type AddressInfo, type Server, type Socket } from "node:net";
 import ssh2 from "ssh2";
 import type { ConnectConfig } from "ssh2";
@@ -75,6 +76,13 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+const HOME_PREFIX = /^~(?=$|[\\/])/;
+
+/** The path with a leading `~` read as the home directory, as OpenSSH reads `IdentityFile`. */
+export function expandHome(path: string, home: string = homedir()): string {
+  return path.replace(HOME_PREFIX, () => home);
+}
+
 async function keyConfig(ssh: SshEndpoint, read: (path: string) => Promise<Buffer>): Promise<Partial<ConnectConfig>> {
   const path = ssh.keyPath ?? "";
   if (path === "") {
@@ -85,7 +93,7 @@ async function keyConfig(ssh: SshEndpoint, read: (path: string) => Promise<Buffe
   }
   let key: Buffer;
   try {
-    key = await read(path);
+    key = await read(expandHome(path));
   } catch (cause) {
     throw authFailed(
       `Could not read the SSH key file ${path}: ${messageOf(cause)}`,

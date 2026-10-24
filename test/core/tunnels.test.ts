@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   TunnelError,
+  expandHome,
   fingerprintOf,
   keyNeedsPassphrase,
   openTunnel,
@@ -207,6 +208,15 @@ describe("openTunnel", () => {
     ssh.dropClients();
 
     expect(await closed).toEqual(expect.any(String));
+  });
+});
+
+describe("expandHome", () => {
+  it("givenTildePath_whenExpanded_thenHomeReplacesOnlyALeadingTilde", () => {
+    expect(expandHome("~/.ssh/id_ed25519", "/home/me")).toBe("/home/me/.ssh/id_ed25519");
+    expect(expandHome("~", "/home/me")).toBe("/home/me");
+    expect(expandHome("~other/key", "/home/me")).toBe("~other/key");
+    expect(expandHome("/keys/~/id", "/home/me")).toBe("/keys/~/id");
   });
 });
 

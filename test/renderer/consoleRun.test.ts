@@ -106,6 +106,12 @@ function fakeEngine() {
             new EngineRequestError({ code: "connectionLost", message: "The connection was lost.", hint: "Run again." }),
           );
         }
+        if (sql.includes("TUNNEL")) {
+          open = false;
+          return Promise.reject(
+            new EngineRequestError({ code: "sshTunnelLost", message: "The SSH tunnel closed.", hint: "Run again." }),
+          );
+        }
         if (sql.includes("FAIL")) {
           return Promise.reject(
             new EngineRequestError({ code: "statementFailed", message: "syntax error", hint: "Fix the SQL." }),
@@ -405,6 +411,15 @@ describe("console connection health", () => {
     await store.getState().run("c1", "all");
 
     expect(messages().at(-1)).toBe("The connection was lost.");
+    expect(session().transactionOpen).toBe(false);
+  });
+
+  it("givenOpenTransaction_whenSshTunnelLost_thenTransactionClosed", async () => {
+    const { store, session, messages } = await opened("BEGIN;\nSELECT TUNNEL;");
+
+    await store.getState().run("c1", "all");
+
+    expect(messages().at(-1)).toBe("The SSH tunnel closed.");
     expect(session().transactionOpen).toBe(false);
   });
 

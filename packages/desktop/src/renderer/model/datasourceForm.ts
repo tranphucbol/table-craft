@@ -1,13 +1,18 @@
-import type {
-  ConfigValue,
-  ConnectionField,
-  DatasourceColor,
-  DatasourceView,
-  ParsedUrl,
-  PluginInfo,
-  SaveDatasourceRequest,
-  SecretChange,
-  SecretMode,
+import type { SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
+import {
+  DEFAULT_SSH_PORT,
+  SSH_SECRET_KEYS,
+  SSH_SECRET_LABELS,
+  type ConfigValue,
+  type ConnectionField,
+  type DatasourceColor,
+  type DatasourceView,
+  type ParsedUrl,
+  type PluginInfo,
+  type SaveDatasourceRequest,
+  type SecretChange,
+  type SecretMode,
+  type SshSettings,
 } from "@table-craft/desktop/preload/bridge.js";
 import { keepAliveSecondsError, statementTimeoutSecondsError } from "@table-craft/desktop/settings/settings.js";
 
@@ -36,8 +41,55 @@ export interface FormDraft {
   /** Blank means keep (decision 020); typed means set; Clear means clear. */
   readonly secrets: Readonly<Record<string, SecretChange>>;
   readonly storedSecrets: readonly string[];
+  /** The SSH/SSL section; only a plugin whose manifest declares `network` shows it (decision 070). */
+  readonly ssh: SshDraft;
   readonly ephemeral: boolean;
   readonly dirty: boolean;
+}
+
+/** The SSH tunnel as typed; its password and passphrase live in `secrets` under `SSH_SECRET_KEYS`. */
+export interface SshDraft {
+  readonly enabled: boolean;
+  readonly host: string;
+  /** As typed; blank is 22. */
+  readonly port: string;
+  readonly user: string;
+  readonly auth: SshAuthMethod;
+  readonly keyPath: string;
+}
+
+const MAX_PORT = 65_535;
+const SSH_KEYS: readonly string[] = Object.values(SSH_SECRET_KEYS);
+
+const BLANK_SSH: SshDraft = { enabled: false, host: "", port: "", user: "", auth: "password", keyPath: "" };
+
+/** Whether the plugin's sessions can run through an SSH tunnel, so the form shows the SSH/SSL section. */
+export function offersSshTunnel(plugin: PluginInfo | undefined): boolean {
+  return plugin?.network != null;
+}
+
+/** The SSH secret the chosen authentication types into the form, as a secret field; agent has none. */
+export function sshSecretField(ssh: SshDraft): ConnectionField | null {
+  const key =
+    ssh.auth === "password" ? SSH_SECRET_KEYS.password : ssh.auth === "key" ? SSH_SECRET_KEYS.passphrase : null;
+  if (key === null) return null;
+  return { key, label: SSH_SECRET_LABELS[key] ?? key, kind: "password", secret: true };
+}
+
+function sshDraftOf(settings: SshSettings | undefined): SshDraft {
+  if (settings === undefined) return BLANK_SSH;
+  return { ...settings, port: settings.port === DEFAULT_SSH_PORT ? "" : String(settings.port) };
+}
+
+/** Every secret key the form keeps a mode and a change for: the plugin's, then the tunnel's. */
+function secretKeysOf(plugin: PluginInfo | undefined): readonly string[] {
+  const own = secretFieldsOf(plugin).map((field) => field.key);
+  return offersSshTunnel(plugin) ? [...own, ...SSH_KEYS] : own;
+}
+
+/** Whether the user touched the SSH section; an untouched one is not saved, so the record has no `ssh`. */
+function sshTouched(ssh: SshDraft): boolean {
+  return ssh.enabled || ssh.host.trim() !== "" || ssh.user.trim() !== "" || ssh.keyPath.trim() !== "";
 }
 
 /** The outcome of pasting a URL, for the line under the URL row. */
@@ -79,11 +131,27 @@ export function uniqueName(base: string, taken: readonly string[]): string {
   }
 }
 
+/**
+ * A record saved before its tunnel was set up has no SSH modes; they start as the database
+ * password's, the choice the user already made for this datasource.
+ */
+function withSshModes(
+  modes: Readonly<Record<string, SecretMode>>,
+  plugin: PluginInfo | undefined,
+): Readonly<Record<string, SecretMode>> {
+  if (!offersSshTunnel(plugin)) return modes;
+  const first = secretFieldsOf(plugin)[0];
+  const fallback = (first === undefined ? undefined : modes[first.key]) ?? "never";
+  const filled = { ...modes };
+  for (const key of SSH_KEYS) filled[key] ??= fallback;
+  return filled;
+}
+
 export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefined): FormDraft {
   const values: Record<string, string | boolean> = {};
   for (const field of plainFieldsOf(plugin)) values[field.key] = inputOf(field, view.config[field.key]);
   const secrets: Record<string, SecretChange> = {};
-  for (const field of secretFieldsOf(plugin)) secrets[field.key] = KEEP;
+  for (const key of secretKeysOf(plugin)) secrets[key] = KEEP;
   return {
     key: view.id,
     id: view.id,
@@ -98,9 +166,10 @@ export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefin
     url: "",
     urlNote: null,
     values,
-    secretModes: view.secretModes,
+    secretModes: withSshModes(view.secretModes, plugin),
     secrets,
     storedSecrets: view.storedSecrets,
+    ssh: sshDraftOf(view.ssh),
     ephemeral: view.ephemeral,
     dirty: false,
   };
@@ -117,9 +186,9 @@ export function newDraft(
   for (const field of plainFieldsOf(plugin)) values[field.key] = inputOf(field, field.default);
   const secretModes: Record<string, SecretMode> = {};
   const secrets: Record<string, SecretChange> = {};
-  for (const field of secretFieldsOf(plugin)) {
-    secretModes[field.key] = defaultMode;
-    secrets[field.key] = KEEP;
+  for (const key of secretKeysOf(plugin)) {
+    secretModes[key] = defaultMode;
+    secrets[key] = KEEP;
   }
   return {
     key,
@@ -138,6 +207,7 @@ export function newDraft(
     secretModes,
     secrets,
     storedSecrets: [],
+    ssh: BLANK_SSH,
     ephemeral: false,
     dirty: true,
   };
@@ -153,9 +223,9 @@ export function duplicateDraft(
 ): FormDraft {
   const source = draftFromView(view, plugin);
   const secretModes: Record<string, SecretMode> = {};
-  for (const field of secretFieldsOf(plugin)) {
-    const mode = source.secretModes[field.key] ?? defaultMode;
-    secretModes[field.key] = view.ephemeral ? defaultMode : mode;
+  for (const key of secretKeysOf(plugin)) {
+    const mode = source.secretModes[key] ?? defaultMode;
+    secretModes[key] = view.ephemeral ? defaultMode : mode;
   }
   return {
     ...source,
@@ -187,7 +257,36 @@ export function draftProblems(draft: FormDraft, plugin: PluginInfo | undefined):
   const timeout = secondsOf(draft.statementTimeoutSeconds);
   if (Number.isNaN(timeout)) problems.push("The statement timeout must be a whole number of seconds.");
   else if (timeout !== undefined) pushError(problems, statementTimeoutSecondsError(timeout));
+  if (offersSshTunnel(plugin) && draft.ssh.enabled) problems.push(...sshProblems(draft.ssh));
   return problems;
+}
+
+function sshProblems(ssh: SshDraft): string[] {
+  const problems: string[] = [];
+  if (ssh.host.trim() === "") problems.push("SSH host is required.");
+  if (Number.isNaN(sshPortOf(ssh.port)))
+    problems.push(`The SSH port must be a whole number from 1 to ${String(MAX_PORT)}.`);
+  if (ssh.user.trim() === "") problems.push("SSH user is required.");
+  if (ssh.auth === "key" && ssh.keyPath.trim() === "") problems.push("The private key file is required.");
+  return problems;
+}
+
+/** 22 when blank, NaN when not a port. */
+function sshPortOf(text: string): number {
+  const port = secondsOf(text) ?? DEFAULT_SSH_PORT;
+  return port >= 1 && port <= MAX_PORT ? port : Number.NaN;
+}
+
+function sshSettingsOf(ssh: SshDraft): SshSettings {
+  const port = sshPortOf(ssh.port);
+  return {
+    enabled: ssh.enabled,
+    host: ssh.host.trim(),
+    port: Number.isNaN(port) ? DEFAULT_SSH_PORT : port,
+    user: ssh.user.trim(),
+    auth: ssh.auth,
+    keyPath: ssh.keyPath.trim(),
+  };
 }
 
 function pushError(problems: string[], error: string | null): void {
@@ -219,6 +318,8 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
     if (value !== undefined) config[field.key] = value;
   }
   const folder = draft.folder.trim();
+  const tunnel = offersSshTunnel(plugin) && sshTouched(draft.ssh);
+  const kept = (key: string): boolean => tunnel || !SSH_KEYS.includes(key);
   return {
     datasource: {
       id: draft.id,
@@ -231,9 +332,10 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
       ...secondsField("statementTimeoutSeconds", draft.statementTimeoutSeconds),
       comment: draft.comment,
       config,
-      secretModes: draft.secretModes,
+      secretModes: Object.fromEntries(Object.entries(draft.secretModes).filter(([key]) => kept(key))),
+      ...(tunnel ? { ssh: sshSettingsOf(draft.ssh) } : {}),
     },
-    secrets: draft.secrets,
+    secrets: Object.fromEntries(Object.entries(draft.secrets).filter(([key]) => kept(key))),
   };
 }
 

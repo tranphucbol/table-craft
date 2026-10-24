@@ -23,7 +23,7 @@ import {
   type UtilityProcess,
   type WebContents,
 } from "electron";
-import { createKnownHosts, openQueryHistory, type HistoryRun } from "@table-craft/core";
+import { createKnownHosts, expandHome, openQueryHistory, type HistoryRun } from "@table-craft/core";
 import { windowChrome } from "@table-craft/desktop/main/chrome.js";
 import { createCloseGuard } from "@table-craft/desktop/main/closeGuard.js";
 import { createConsoleFiles, type DirectoryFileSystem } from "@table-craft/desktop/main/consoleFiles.js";
@@ -679,7 +679,7 @@ void app.whenReady().then(async () => {
     consoles,
     history,
     onChanged: (list) => broadcast(CHANNELS.datasourcesChanged, list),
-    readKeyFile: (path) => files.readText(path).catch(() => null),
+    readKeyFile: (path) => files.readText(expandHome(path)).catch(() => null),
   });
   const importer = createImporter({
     environment: {

@@ -13,6 +13,7 @@ import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useObjects } from "@table-craft/desktop/renderer/state/objects.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
+import { useHostKeyPrompt } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
@@ -38,6 +39,7 @@ const STORES = [
   usePalette,
   useDataSourcesDialog,
   useSecretPrompt,
+  useHostKeyPrompt,
   useModal,
   useObjects,
   useWindowState,

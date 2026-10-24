@@ -249,6 +249,9 @@ export async function createDatasourceService<Target>(
       else if (change.action === "clear") await secrets.clear(id, key);
       else if (previous !== undefined) await secrets.changeMode(id, key, previous.secretModes[key] ?? mode, mode);
     }
+    if (previous?.ssh !== undefined && next.ssh === undefined) {
+      for (const key of SSH_KEYS) await secrets.clear(id, key);
+    }
     datasources = previous === undefined ? [...datasources, next] : datasources.map((d) => (d.id === id ? next : d));
     await store.save(datasources);
     changed();

@@ -5,12 +5,15 @@ import {
   draftProblems,
   duplicateDraft,
   newDraft,
+  offersSshTunnel,
   secretPlaceholder,
+  sshSecretField,
   toSaveRequest,
   uniqueName,
   withoutPassword,
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
-import { POSTGRES_PLUGIN, view } from "./datasourceViews.js";
+import type { SshSettings } from "@table-craft/desktop/preload/bridge.js";
+import { POSTGRES_PLUGIN, SQLITE_PLUGIN, view } from "./datasourceViews.js";
 
 const SAVED = view({
   id: "pg",
@@ -28,7 +31,7 @@ describe("datasource form", () => {
 
     expect(draft.name).toBe("PostgreSQL (2)");
     expect(draft.values).toEqual({ host: "localhost", port: "5432", database: "", user: "", sslMode: "disable" });
-    expect(draft.secretModes).toEqual({ password: "forever" });
+    expect(draft.secretModes).toEqual({ password: "forever", "ssh.password": "forever", "ssh.passphrase": "forever" });
     expect(draft.folder).toBe("Local");
     expect(draft.dirty).toBe(true);
   });
@@ -50,7 +53,7 @@ describe("datasource form", () => {
     const draft = draftFromView(SAVED, POSTGRES_PLUGIN);
 
     expect(draft.values.port).toBe("55432");
-    expect(draft.secrets).toEqual({ password: { action: "keep" } });
+    expect(draft.secrets).toMatchObject({ password: { action: "keep" } });
     expect(secretPlaceholder(draft, "password")).toBe("Saved; leave blank to keep");
     expect(toSaveRequest(draft, POSTGRES_PLUGIN).datasource.id).toBe("pg");
   });
@@ -121,7 +124,7 @@ describe("datasource form", () => {
     );
 
     expect(next.values).toMatchObject({ host: "db.example.com", port: "6543", database: "sales", user: "app" });
-    expect(next.secrets).toEqual({ password: { action: "set", value: "s3cret" } });
+    expect(next.secrets).toMatchObject({ password: { action: "set", value: "s3cret" } });
     expect(next.url).toBe("postgresql://alice@db.example.com:6543/sales?target_session_attrs=any");
     expect(next.urlNote).toEqual({ kind: "applied", secrets: ["Password"], ignored: ["target_session_attrs"] });
     expect(next.dirty).toBe(true);
@@ -131,5 +134,86 @@ describe("datasource form", () => {
     expect(withoutPassword("postgresql://h/db?password=x&sslmode=require")).toBe("postgresql://h/db?sslmode=require");
     expect(withoutPassword("postgresql://h/db?sslmode=require&password=x")).toBe("postgresql://h/db?sslmode=require");
     expect(withoutPassword("postgresql://u:p@h/db")).toBe("postgresql://u@h/db");
+  });
+});
+
+const TUNNEL: SshSettings = {
+  enabled: true,
+  host: "bastion",
+  port: 2204,
+  user: "deploy",
+  auth: "password",
+  keyPath: "",
+};
+
+describe("datasource form SSH tunnel", () => {
+  it("givenManifestWithoutNetwork_whenDialogRenders_thenNoSshSection", () => {
+    const blank = newDraft("new-0", SQLITE_PLUGIN, [], "forever");
+    const draft = { ...blank, values: { path: "/tmp/a.db" }, ssh: { ...blank.ssh, enabled: true, host: "h" } };
+
+    expect(offersSshTunnel(SQLITE_PLUGIN)).toBe(false);
+    expect(offersSshTunnel(POSTGRES_PLUGIN)).toBe(true);
+    expect(draft.secretModes).not.toHaveProperty("ssh.password");
+    expect(toSaveRequest(draft, SQLITE_PLUGIN).datasource).not.toHaveProperty("ssh");
+    expect(draftProblems(draft, SQLITE_PLUGIN)).toEqual([]);
+  });
+
+  it("givenUntouchedSshSection_whenSaveRequestBuilt_thenNoSshAndNoSshSecrets", () => {
+    const request = toSaveRequest(newDraft("new-0", POSTGRES_PLUGIN, [], "forever"), POSTGRES_PLUGIN);
+
+    expect(request.datasource).not.toHaveProperty("ssh");
+    expect(request.datasource.secretModes).toEqual({ password: "forever" });
+    expect(request.secrets).toEqual({ password: { action: "keep" } });
+  });
+
+  it("givenSavedTunnel_whenDraftRoundTrips_thenSettingsAndSecretsCarried", () => {
+    const saved = {
+      ...SAVED,
+      ssh: TUNNEL,
+      secretModes: { password: "forever" as const, "ssh.password": "never" as const },
+    };
+    const draft = draftFromView(saved, POSTGRES_PLUGIN);
+    const typed = { ...draft, secrets: { ...draft.secrets, "ssh.password": { action: "set" as const, value: "pw" } } };
+
+    const request = toSaveRequest(typed, POSTGRES_PLUGIN);
+
+    expect(draft.ssh).toEqual({ ...TUNNEL, port: "2204" });
+    expect(request.datasource.ssh).toEqual(TUNNEL);
+    expect(request.datasource.secretModes).toEqual({
+      password: "forever",
+      "ssh.password": "never",
+      "ssh.passphrase": "forever",
+    });
+    expect(request.secrets["ssh.password"]).toEqual({ action: "set", value: "pw" });
+  });
+
+  it("givenBlankSshPort_whenSaveRequestBuilt_thenPort22", () => {
+    const draft = { ...newDraft("new-0", POSTGRES_PLUGIN, [], "forever"), ssh: { ...TUNNEL, port: "" } };
+
+    expect(toSaveRequest(draft, POSTGRES_PLUGIN).datasource.ssh?.port).toBe(22);
+  });
+
+  it("givenEnabledTunnelMissingFields_whenChecked_thenProblemsNameThem", () => {
+    const draft = {
+      ...newDraft("new-0", POSTGRES_PLUGIN, [], "forever"),
+      values: { host: "db", port: "5432", user: "app" },
+      ssh: { enabled: true, host: " ", port: "70000", user: "", auth: "key" as const, keyPath: "" },
+    };
+
+    expect(draftProblems(draft, POSTGRES_PLUGIN)).toEqual([
+      "SSH host is required.",
+      "The SSH port must be a whole number from 1 to 65535.",
+      "SSH user is required.",
+      "The private key file is required.",
+    ]);
+    expect(draftProblems({ ...draft, ssh: { ...draft.ssh, enabled: false } }, POSTGRES_PLUGIN)).toEqual([]);
+  });
+
+  it("givenAuthMethod_whenSecretFieldAsked_thenPasswordPassphraseOrNone", () => {
+    const ssh = { ...newDraft("new-0", POSTGRES_PLUGIN, [], "forever").ssh };
+
+    expect(sshSecretField({ ...ssh, auth: "password" })).toMatchObject({ key: "ssh.password", label: "SSH password" });
+    expect(sshSecretField({ ...ssh, auth: "key" })).toMatchObject({ key: "ssh.passphrase", label: "Key passphrase" });
+    expect(sshSecretField({ ...ssh, auth: "agent" })).toBeNull();
   });
 });

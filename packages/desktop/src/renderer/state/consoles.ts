@@ -498,8 +498,8 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
 
     function logError(id: string, sql: string, error: EngineError): void {
       log(id, { sql, message: error.message, hint: error.hint, tone: "error" });
-      // The engine dropped the session; the next Run opens a new one with no transaction (decision 054).
-      if (error.code === "connectionLost") patch(id, { transactionOpen: false });
+      // The engine dropped the session; the next Run opens a new one with no transaction (decisions 054, 070).
+      if (error.code === "connectionLost" || error.code === "sshTunnelLost") patch(id, { transactionOpen: false });
     }
 
     function messagesOf(said: { readonly messages?: readonly ServerMessage[] }): Pick<ExecutionEnd, "messages"> {

@@ -1,9 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo, useState } from "react";
-import type { ProbeResult } from "@table-craft/desktop/engine/protocol.js";
+import type { ProbeResult, SshHop } from "@table-craft/desktop/engine/protocol.js";
 import {
   DATASOURCE_COLORS,
-  SECRET_MODES,
   type BridgeFailure,
   type ConnectionField,
   type DatasourceView,
@@ -22,13 +21,15 @@ import {
   OVERLAY_CLASS,
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { SECRET_MODE_LABEL, SecretField } from "@table-craft/desktop/renderer/dialogs/SecretField.js";
+import { SshSection } from "@table-craft/desktop/renderer/dialogs/SshSection.js";
 import {
   applyParsedUrl,
   draftFromView,
   draftProblems,
   duplicateDraft,
   newDraft,
-  secretPlaceholder,
+  offersSshTunnel,
   toSaveRequest,
   type FormDraft,
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
@@ -40,11 +41,6 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS, DatabaseIcon, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
-const SECRET_MODE_LABEL: Readonly<Record<SecretMode, string>> = {
-  forever: "Forever",
-  untilRestart: "Until restart",
-  never: "Never",
-};
 const NEW_KEY_PREFIX = "new-";
 const KEEPALIVE_HINT = "Seconds idle before TCP keepalive probes start; 0 turns them off. Blank is 30.";
 const TIMEOUT_HINT =
@@ -53,6 +49,11 @@ const URL_SEPARATOR = "://";
 const READ_ONLY_HINT = "A guard against accidents, not a security boundary: use a read-only database user for that.";
 
 type TestState = { readonly kind: "testing" } | { readonly kind: "done"; readonly result: ProbeResult };
+
+/** "SSH: connected to bastion as deploy · 12 ms", the first hop Test Connection reports (decision 070). */
+export function sshHopSummary(hop: SshHop): string {
+  return `SSH: connected to ${hop.host} as ${hop.user} · ${String(Math.round(hop.elapsedMs))} ms`;
+}
 
 /** "Succeeded · PostgreSQL 17.4 · 38 ms" (plan 004). */
 export function testSummary(result: Extract<ProbeResult, { ok: true }>): string {
@@ -132,56 +133,6 @@ interface FieldProps {
   readonly onChange: (change: Partial<FormDraft>) => void;
   /** Takes text pasted into the field when it is a connection URL; false leaves the paste alone. */
   readonly onPasteUrl: (field: ConnectionField, text: string) => boolean;
-}
-
-function SecretField({ field, draft, encryption, onChange }: FieldProps) {
-  const id = useId();
-  const change = draft.secrets[field.key] ?? { action: "keep" };
-  const mode = draft.secretModes[field.key] ?? "never";
-  const stored = draft.storedSecrets.includes(field.key);
-  return (
-    <FieldRow label={field.label} htmlFor={id}>
-      <TextInput
-        id={id}
-        type="password"
-        className="flex-1"
-        placeholder={secretPlaceholder(draft, field.key)}
-        value={change.action === "set" ? change.value : ""}
-        onChange={(event) =>
-          onChange({
-            secrets: {
-              ...draft.secrets,
-              [field.key]:
-                event.target.value === "" ? { action: "keep" } : { action: "set", value: event.target.value },
-            },
-          })
-        }
-      />
-      <select
-        aria-label={`Save ${field.label.toLowerCase()}`}
-        className={INPUT_CLASS}
-        value={mode}
-        title={encryption.available ? undefined : (encryption.reason ?? undefined)}
-        onChange={(event) =>
-          onChange({ secretModes: { ...draft.secretModes, [field.key]: event.target.value as SecretMode } })
-        }
-      >
-        {SECRET_MODES.map((option) => (
-          <option key={option} value={option} disabled={option === "forever" && !encryption.available}>
-            {SECRET_MODE_LABEL[option]}
-          </option>
-        ))}
-      </select>
-      {stored || change.action === "clear" ? (
-        <Button
-          disabled={change.action === "clear"}
-          onClick={() => onChange({ secrets: { ...draft.secrets, [field.key]: { action: "clear" } } })}
-        >
-          Clear
-        </Button>
-      ) : null}
-    </FieldRow>
-  );
 }
 
 function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
@@ -394,6 +345,12 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
       {draft.ephemeral || encryption.available ? null : (
         <p className="col-span-2 text-ink-muted">Forever is unavailable: {encryption.reason}</p>
       )}
+      {offersSshTunnel(plugin) ? (
+        <>
+          <SectionTitle>SSH/SSL</SectionTitle>
+          <SshSection draft={draft} encryption={encryption} onChange={onChange} />
+        </>
+      ) : null}
       {advanced.length === 0 && !keepAlive && !timeout ? null : (
         <>
           <SectionTitle>Advanced</SectionTitle>
@@ -739,21 +696,33 @@ function TestResult({ state }: { readonly state: TestState | undefined }) {
   if (state === undefined) return null;
   if (state.kind === "testing") return <span className="text-ink-muted">Testing…</span>;
   const { result } = state;
+  const hop =
+    result.ssh === undefined ? null : (
+      <span data-testid="test-hop" className="truncate text-success">
+        {sshHopSummary(result.ssh)}
+      </span>
+    );
   if (result.ok) {
     return (
-      <span data-testid="test-result" data-ok="true" className="truncate text-success">
-        {testSummary(result)}
+      <span className="flex min-w-0 flex-col">
+        {hop}
+        <span data-testid="test-result" data-ok="true" className="truncate text-success">
+          {testSummary(result)}
+        </span>
       </span>
     );
   }
   return (
-    <span
-      data-testid="test-result"
-      data-ok="false"
-      className="line-clamp-2 min-w-0 text-danger"
-      title={`${result.error.message} ${result.error.hint}`}
-    >
-      {result.error.message} <span className="text-ink-muted">{result.error.hint}</span>
+    <span className="flex min-w-0 flex-col">
+      {hop}
+      <span
+        data-testid="test-result"
+        data-ok="false"
+        className={cn("min-w-0 text-danger", hop === null ? "line-clamp-2" : "truncate")}
+        title={`${result.error.message} ${result.error.hint}`}
+      >
+        {result.error.message} <span className="text-ink-muted">{result.error.hint}</span>
+      </span>
     </span>
   );
 }

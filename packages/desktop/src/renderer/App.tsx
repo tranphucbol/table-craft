@@ -16,12 +16,14 @@ import { QuickDoc } from "@table-craft/desktop/renderer/catalog/QuickDoc.js";
 import { editorReservedChords } from "@table-craft/desktop/renderer/console/editorKeys.js";
 import { DataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/DataSources.js";
 import { ImportDataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/ImportDataSources.js";
+import { HostKeyPrompt } from "@table-craft/desktop/renderer/dialogs/HostKeyPrompt.js";
 import { Modal } from "@table-craft/desktop/renderer/dialogs/Modal.js";
 import { SecretPrompt } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
 import { SettingsDialog } from "@table-craft/desktop/renderer/dialogs/Settings.js";
 import { Palette } from "@table-craft/desktop/renderer/palette/Palette.js";
 import { Shell } from "@table-craft/desktop/renderer/shell/Shell.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { installHostKeyPrompts } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { installUpdateState } from "@table-craft/desktop/renderer/state/update.js";
 import { installWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
@@ -77,6 +79,8 @@ export function App() {
 
   useEffect(() => answerCloseRequests(), []);
 
+  useEffect(() => installHostKeyPrompts(), []);
+
   useEffect(() => installWindowState(), []);
 
   useEffect(() => installUpdateState(), []);
@@ -89,6 +93,7 @@ export function App() {
       <ImportDataSourcesDialog />
       <SettingsDialog />
       <SecretPrompt />
+      <HostKeyPrompt />
       <Modal />
       <QuickDoc />
     </TooltipProvider>

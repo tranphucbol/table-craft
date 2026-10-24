@@ -399,6 +399,23 @@ describe("datasource service SSH tunnel", () => {
     expect(bootedConfig(dependencies)).not.toHaveProperty("ssh");
   });
 
+  it("givenTunnelRemoved_whenSaved_thenSshSecretsCleared", async () => {
+    const { service: datasources } = await service();
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: SSH_SETTINGS },
+      secrets: { password: { action: "set", value: SECRET }, "ssh.password": { action: "set", value: SSH_PASSWORD } },
+    });
+
+    const cleared = await datasources.save({ datasource: { ...PG_DRAFT, id: saved.id }, secrets: {} });
+    const restored = await datasources.save({
+      datasource: { ...PG_DRAFT, id: saved.id, ssh: SSH_SETTINGS, secretModes: saved.secretModes },
+      secrets: {},
+    });
+
+    expect(cleared.ssh).toBeUndefined();
+    expect(restored.storedSecrets).toEqual(["password"]);
+  });
+
   it("givenPluginWithoutNetwork_whenSavedWithSsh_thenSshDropped", async () => {
     const { service: datasources } = await service();
 

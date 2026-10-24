@@ -23,6 +23,7 @@ import {
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
+import { useHostKeyPrompt } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
 import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useTables, type TableSession } from "@table-craft/desktop/renderer/state/tables.js";
@@ -115,6 +116,7 @@ export function modalOpen(): boolean {
     useImportDataSourcesDialog.getState().session !== null ||
     useSettingsDialog.getState().page !== null ||
     useSecretPrompt.getState().pending !== null ||
+    useHostKeyPrompt.getState().queue.length > 0 ||
     useModal.getState().pending !== null
   );
 }

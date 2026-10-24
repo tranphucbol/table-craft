@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import type { Capability, EngineError, EngineEvent } from "@table-craft/desktop/engine/protocol.js";
-import type {
-  ConnectionField,
-  DatasourceList,
-  DatasourceView,
-  EngineExited,
-  PluginInfo,
+import {
+  SSH_SECRET_LABELS,
+  type ConnectionField,
+  type DatasourceList,
+  type DatasourceView,
+  type EngineExited,
+  type PluginInfo,
 } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import {
@@ -110,6 +111,16 @@ export function pluginOf(plugins: readonly PluginInfo[], pluginId: string): Plug
   return plugins.find((plugin) => plugin.id === pluginId);
 }
 
+/** The fields the secret prompt asks for `keys`: the plugin's own, then the SSH tunnel's (decision 070). */
+export function promptFields(plugin: PluginInfo | undefined, keys: readonly string[]): readonly ConnectionField[] {
+  const own = (plugin?.fields ?? []).filter((field) => keys.includes(field.key));
+  const tunnel = keys.flatMap((key): ConnectionField[] => {
+    const label = SSH_SECRET_LABELS[key];
+    return label === undefined ? [] : [{ key, label, kind: "password", secret: true }];
+  });
+  return [...own, ...tunnel];
+}
+
 export function capabilitiesOf(plugins: readonly PluginInfo[], pluginId: string): readonly Capability[] {
   return pluginOf(plugins, pluginId)?.capabilities ?? [];
 }
@@ -148,9 +159,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
         const connection = await dependencies.connectEngine(id, secrets);
         if (connection.status === "connected") return connection.client;
         if (connection.status === "failed") throw new EngineRequestError(connection.error);
-        const fields = (pluginOf(get().plugins, datasource.pluginId)?.fields ?? []).filter((field) =>
-          connection.keys.includes(field.key),
-        );
+        const fields = promptFields(pluginOf(get().plugins, datasource.pluginId), connection.keys);
         const typed = await dependencies.promptSecrets({ datasource, fields });
         if (typed === null) throw new EngineRequestError(CANCELLED);
         secrets = typed;

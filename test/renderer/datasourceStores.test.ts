@@ -18,6 +18,7 @@ import {
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import {
   createDatasourcesStore,
+  promptFields,
   type DatasourcesDependencies,
   type SecretRequest,
 } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -163,6 +164,16 @@ describe("datasource and console stores", () => {
     expect(Object.keys(consoles.getState().consoles)).toEqual(["c2"]);
     expect(tabs.getState().tabs.map((tab) => tab.id)).toEqual(["c2"]);
     expect(datasources.getState().connections.pg).toBeUndefined();
+  });
+
+  it("givenSshSecretsNeeded_whenPrompting_thenAsksWithSshLabels", () => {
+    const fields = promptFields(POSTGRES_PLUGIN, ["password", "ssh.password", "ssh.passphrase"]);
+
+    expect(fields.map((field) => [field.key, field.label])).toEqual([
+      ["password", "Password"],
+      ["ssh.password", "SSH password"],
+      ["ssh.passphrase", "Key passphrase"],
+    ]);
   });
 
   it("givenNeverSecret_whenConnecting_thenPromptsOnceAndConnectsWithTypedValue", async () => {

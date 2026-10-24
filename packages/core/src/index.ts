@@ -193,6 +193,7 @@ export {
   hostKeyOffer,
   keyNeedsPassphrase,
   knownHostName,
+  expandHome,
   openTunnel,
   tunneledSession,
   type Connector,
