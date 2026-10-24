@@ -871,7 +871,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   }
 
   async function scriptSession(namespace: readonly string[] | null): Promise<ScriptSession> {
-    const session = await connectDatasource(options);
+    const session = await connectDatasource(options, connector);
     try {
       if (namespace !== null && namespaceSwitchable())
         await drained(await session.execute(switchStatement(namespace).sql));

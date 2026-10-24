@@ -16,7 +16,7 @@ like an import (decision 046).
   and rescans an unfinished statement only once its tail has doubled, so the work is linear in the
   file. Its statements equal `split` on the whole text for any cut of the input; the contract suite
   checks it. A plugin without it gets each file split whole, up to 32 MiB. `API_VERSION` moves to
-  `0.22.0`.
+  `0.23.0`.
 - The run has a session of its own in auto-commit, never a console's, honouring a read-only
   datasource. Run on a namespace, it first runs the plugin's namespace switch statement.
 - Progress (`script.progress`, at most every 200 ms) carries statements done and bytes read of the
