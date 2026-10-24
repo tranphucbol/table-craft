@@ -129,7 +129,8 @@ export async function dailyLoop(page: Page, target: LoopTarget): Promise<readonl
   await step("open table", async () => {
     await openFromTree(page, "orders");
     expect(await activeEditorTab(page).textContent()).toBe(tab("orders"));
-    await expect.poll(() => columnValues(page, 0)).toEqual(["1", "2", "3"]);
+    // Unordered: on a reused PostgreSQL container a reseeded row may land anywhere in the heap.
+    await expect.poll(async () => (await columnValues(page, 0)).sort()).toEqual(["1", "2", "3"]);
   });
 
   await step("filter and sort", async () => {
