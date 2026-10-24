@@ -100,6 +100,24 @@ const PROTOCOL_PURITY_IMPORTS = "^(?!\\./[^/]+\\.js$)";
 const PROTOCOL_PURITY_RULE =
   "A protocol area imports nothing but its sibling areas (./<area>.js); the engine and the renderer both load it.";
 
+/**
+ * Code lines a source file may hold (decision 091). Past this an agent reads a file in slices and
+ * re-reads it after every compression, which is where most of a plan session's tokens go.
+ */
+export const MAX_LINES = 800;
+const MAX_LINES_RULE = ["error", { max: MAX_LINES, skipBlankLines: true, skipComments: true }];
+
+/**
+ * Files over MAX_LINES when the budget arrived, each waiting for its own split. The list only
+ * shrinks: `test/desktop/lintBudget.test.ts` fails once a listed file fits the budget.
+ */
+export const OVERSIZED_FILES = [
+  // 2,085 code lines: split the contract suite into one module per capability.
+  "packages/plugin-api/src/testing/index.ts",
+  // 1,659 code lines: split the console store into its run, result-tab and transaction slices.
+  "packages/desktop/src/renderer/state/consoles.ts",
+];
+
 /** @param {...({ group: string[], message: string } | { regex: string, message: string })} groups */
 function restrictImports(...groups) {
   return [
@@ -132,7 +150,11 @@ export default tseslint.config(
   },
   {
     files: SOURCE_FILES,
-    rules: { "no-restricted-imports": restrictImports() },
+    rules: { "no-restricted-imports": restrictImports(), "max-lines": MAX_LINES_RULE },
+  },
+  {
+    files: OVERSIZED_FILES,
+    rules: { "max-lines": "off" },
   },
   {
     files: PLUGIN_API_FILES,

@@ -89,3 +89,4 @@ started, not when it is merged.
 | 088 | [Server sessions are a plugin capability](088-server-sessions-are-a-plugin-capability.md)                                                                              |
 | 089 | [File consoles autosave, and Save on a scratch console asks for a file](089-file-consoles-autosave-and-save-asks-for-a-file.md)                                        |
 | 090 | [Routine calls are written by the plugin](090-routine-calls-are-written-by-the-plugin.md)                                                                              |
+| 091 | [File size budget and module layout of the engine](091-file-size-budget-and-module-layout-of-the-engine.md)                                                            |
