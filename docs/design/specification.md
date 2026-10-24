@@ -88,6 +88,14 @@ kind. A plugin that declares it offers the SSH tunnel (decision 070): core opens
 passes `connect` a config whose host is `127.0.0.1` and whose port is the forwarded one. Without
 it the Data Sources dialog shows no SSH section.
 
+`connection.tls`, optional, is `{ mode, verifyModes, caFile?, certFile?, keyFile?, keyPassphrase? }`
+(decision 072): `mode` a `select` field offering every value in `verifyModes`, the files `file`
+fields and `keyPassphrase` a secret `password` field; the schema refuses anything else. The plugin
+reads the files on connect; core only draws the fields, asks for the passphrase when the key file is
+encrypted and, under a tunnel, passes the configured host as `ConnectOptions.serverName`.
+`TlsSettingsError` (a `connectionFailed`) marks a failure the SSL settings can fix, and
+`tlsFailureMessage`, `tlsFileMessage` and `tlsKeyMessage` word them the same way for every plugin.
+
 ### Capabilities
 
 | Capability         | Promises                                                                                                                                                                           | Contract cases                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -109,7 +117,8 @@ Every plugin, whatever it declares, is checked for a valid schema; for its manif
 fields agreeing with `connectionSchema` (each field a key the schema accepts, every required key
 filled by a field, a `password` field marked `secret`) and its URL agreeing with the fields (each
 part and parameter filling a declared field, only the password part a secret one, the port a
-number field, mapped values among the field's options); for a non-empty `serverVersion`; when the
+number field, mapped values among the field's options); for a non-empty `serverVersion`; for a
+`tls` that is absent, `null` or a non-empty protocol and cipher; when the
 fixture gives a `wrongPasswordConfig`, for `connect` rejecting `connectionFailed`; and, when it
 gives `statements.write`, for a read-only session rejecting that write with `statementFailed` and
 staying usable.
@@ -174,6 +183,7 @@ type GeneratedStatement = "drop" | "select" | "insert" | "update";
 interface ConnectOptions {
   readonly readOnly: boolean; // a guard against mistakes, not a security boundary (decision 011)
   readonly keepAliveInitialDelayMs?: number; // TCP keepalive; the engine asks on every connection (decision 054)
+  readonly serverName?: string; // the host a certificate must name when config's host is a tunnel's 127.0.0.1 (decision 073)
 }
 
 interface ExecuteOptions {
@@ -184,6 +194,7 @@ interface Session {
   readonly serverVersion: string | null; // "17.4", "8.4.3", "3.53.4"
   execute(sql: string, params?: readonly ParameterValue[], options?: ExecuteOptions): Promise<ExecuteResult>; // one at a time; params bind the driver's placeholders; rejects with a PluginError
   readonly privateDatabase?: boolean; // another session on the same config sees another database (SQLite :memory:)
+  readonly tls?: TlsInfo | null; // { protocol, cipher } of an encrypted connection, null when unencrypted, absent when not reported (decision 072)
   cancel?(): Promise<void>; // present exactly when `cancel` is declared; no-op when idle; may drop the connection where nothing else stops the statement safely (decision 058)
   readonly introspector?: Introspector; // present exactly when `schemaTree` is declared
   readonly transactions?: Transactions; // present exactly when `transactions` is declared
@@ -401,8 +412,9 @@ passphrase? }` with its secrets decrypted the same way. Before signing in to a b
 engine posts `engine.host-key { requestId, offer { host, port, algorithm, fingerprint, key } }` and
 waits for the answer (decision 071).
 A `probe` engine connects once, answers `engine.probed { result }` with
-`{ ok: true, pluginName, serverVersion, elapsedMs, ssh? }` or `{ ok: false, error, ssh? }`, where
-`ssh { host, user, elapsedMs }` is the SSH hop when it was reached, and exits; main
+`{ ok: true, pluginName, serverVersion, elapsedMs, ssh?, tls? }` or `{ ok: false, error, ssh? }`,
+where `ssh { host, user, elapsedMs }` is the SSH hop when it was reached and `tls` is the session's
+`{ protocol, cipher }` or `null` when the plugin reports it, and exits; main
 kills it after `PROBE_TIMEOUT_MS = 15_000`, a clock that stops while a host key is being asked
 about, and answers `timedOut`. A `serve` engine lives while any
 port to it is open and exits when the last one closes; on `engine.shutdown` it closes its sessions
@@ -1577,6 +1589,42 @@ Host keys follow decision 071: `<userData>/ssh_known_hosts.json`
 key" (server, key type, `SHA256:` fingerprint; Cancel by default, Trust); a changed key refuses with
 both fingerprints and the file.
 
+### SSL certificates
+
+A plugin whose manifest declares `connection.tls` (decision 072) names its SSL fields: `mode`, a
+select offering every value in `verifyModes`, and optionally `caFile`, `certFile`, `keyFile` (kind
+`file`) and `keyPassphrase` (a secret password). PostgreSQL and MySQL declare `sslMode` (Disable,
+Require, Verify CA, Verify full), `sslRootCert`, `sslCert`, `sslKey` and `sslKeyPassphrase`:
+
+```json
+"config": { "host": "db.example.com", "sslMode": "verify-full", "sslRootCert": "~/certs/ca.pem" }
+```
+
+`config` keeps the paths, never the file contents; the plugin reads them on every connect, with a
+leading `~` as the home folder. A file it cannot read fails `connectionFailed` naming the field's
+label and the path, as does a key it cannot decrypt; a server certificate the CA does not sign names
+the CA file, one issued for another name names the host. Such failures carry the hint "Fix the SSL
+settings under SSH/SSL in the data source's properties." instead of the host-and-password one.
+
+| Mode        | Encrypted | Chain checked                        | Host name checked |
+| ----------- | --------- | ------------------------------------ | ----------------- |
+| Disable     | no        | no                                   | no                |
+| Require     | yes       | no                                   | no                |
+| Verify CA   | yes       | against the CA file, else the system | no                |
+| Verify full | yes       | against the CA file, else the system | yes               |
+
+The dialog shows the fields under an **SSL** heading in the SSH/SSL section, in that order. A CA file
+with Disable or Require stays unused and says "Use Verify CA or Verify full to check this CA file."
+The passphrase is kept only while a client key is named, and connect asks for it only when the key
+file is encrypted (`ENCRYPTED PRIVATE KEY` or a PEM `Proc-Type: 4,ENCRYPTED`). Test Connection adds
+"SSL: `<protocol>` · `<cipher>`", or "SSL: not encrypted", for a plugin whose session reports `tls`.
+
+Through an SSH tunnel the plugin connects to `127.0.0.1`, so the connector passes the configured
+host as `ConnectOptions.serverName` (decision 073), and Verify full checks the certificate against
+that name. URLs carry the paths: `sslmode`, `sslrootcert`, `sslcert`, `sslkey` for PostgreSQL;
+`ssl-mode` (`VERIFY_CA`, `VERIFY_IDENTITY`), `ssl-ca`, `ssl-cert`, `ssl-key` for MySQL. A blank
+path is left out of a copied URL.
+
 ### Save modes
 
 | Mode          | Kept                                    | Connect                                       |
@@ -1595,44 +1643,44 @@ mode moves the stored value. Deleting a datasource clears its secrets.
 Each invoke answers `{ ok: true, value }` or `{ ok: false, error: { message, hint } }`, and each
 request is parsed with Zod in main.
 
-| Channel (`table-craft:` …) | Request                             | Value                                                                              |
-| -------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
-| `datasources.list`         | none                                | `{ datasources, warning, encryption: { available, reason } }`                      |
-| `datasources.save`         | `{ datasource, secrets }`           | the saved datasource                                                               |
-| `datasources.delete`       | `id`                                | `null`; stops its engine, clears its secrets, consoles and history                 |
-| `datasources.test`         | `{ datasource, secrets }`           | the probe result; stored secrets are merged in main                                |
-| `datasources.parse-url`    | `pluginId`, `url`                   | `{ values, secrets, ignored }`; nothing is saved                                   |
-| `datasources.url`          | `id`                                | the saved datasource's URL, without secrets                                        |
-| `plugins.list`             | none                                | `{ id, name, unavailableReason, capabilities, fields, url, network, highlight }[]` |
-| `ssh.answer-host-key`      | `requestId`, `trust`                | `null`; answers an `ssh.host-key-prompt` (decision 071)                            |
-| `consoles.list`            | `datasourceId`                      | the saved console names, sorted                                                    |
-| `consoles.read`            | `datasourceId`, `name`              | the text, or `null` when there is no file                                          |
-| `consoles.write`           | `datasourceId`, `name`, `text`      | `null`; written atomically                                                         |
-| `consoles.delete`          | `datasourceId`, `name`              | `null`; deleting a missing file is not an error                                    |
-| `consoles.rename`          | `datasourceId`, `from`, `to`        | `null`; refuses a name taken in the directory                                      |
-| `sql-files.choose`         | `title`                             | the `.sql` paths chosen, several at once, or none                                  |
-| `sql-files.open`           | `path`                              | `{ path, sql, lineEnding, modifiedAt, attachment }`; marks it recent               |
-| `sql-files.read`           | `path`                              | the same, leaving the recent files alone                                           |
-| `sql-files.write`          | `path`, `sql`, `lineEnding`         | `{ modifiedAt }`; written atomically, marks it recent                              |
-| `sql-files.rename`         | `path`, `name`                      | `{ path }`; renamed in its folder                                                  |
-| `sql-files.stat`           | `paths`                             | each file's modification time, or `null` when it is gone                           |
-| `sql-files.attach`         | `path`, `datasourceId`, `namespace` | `null`; remembers the file's data source and namespace                             |
-| `sql-files.recent`         | none                                | the recent files, most recent first                                                |
-| `history.record`           | a `HistoryEntry`                    | `null`                                                                             |
-| `history.search`           | `datasourceId`, `query`             | `HistoryStatement[]`, newest first                                                 |
-| `history.clear`            | `datasourceId`                      | `null`                                                                             |
-| `window.answer-close`      | `proceed`                           | `null`; closes the window, or finishes the quit (decision 024)                     |
-| `engine.connect`           | `datasourceId`, typed `secrets?`    | `connected`, `needsSecrets { keys }` or `failed`                                   |
-| `engine.disconnect`        | `datasourceId`                      | `null` once the engine has exited                                                  |
-| `dialog.choose-file`       | `title`                             | a path, or `null`                                                                  |
-| `settings.read`            | none                                | `{ settings, themes, warning }`; see Settings and appearance                       |
-| `settings.write`           | the whole settings document         | `null`; saved, then broadcast as `settings.changed`                                |
-| `themes.reload`            | none                                | `null`; rereads `<userData>/themes/`, then broadcasts                              |
-| `themes.open-folder`       | none                                | `null`; creates the folder if missing and opens it                                 |
-| `import.scan`              | none                                | `ImportSource[]`: per app, found, count, where it looked, password store           |
-| `import.preview`           | `{ source }` or a file + phrase     | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`                |
-| `import.run`               | `previewId`, `keys`, options        | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`             |
-| `import.cancel`            | none                                | `null`; the run stops before its next item                                         |
+| Channel (`table-craft:` …) | Request                             | Value                                                                                   |
+| -------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------- |
+| `datasources.list`         | none                                | `{ datasources, warning, encryption: { available, reason } }`                           |
+| `datasources.save`         | `{ datasource, secrets }`           | the saved datasource                                                                    |
+| `datasources.delete`       | `id`                                | `null`; stops its engine, clears its secrets, consoles and history                      |
+| `datasources.test`         | `{ datasource, secrets }`           | the probe result; stored secrets are merged in main                                     |
+| `datasources.parse-url`    | `pluginId`, `url`                   | `{ values, secrets, ignored }`; nothing is saved                                        |
+| `datasources.url`          | `id`                                | the saved datasource's URL, without secrets                                             |
+| `plugins.list`             | none                                | `{ id, name, unavailableReason, capabilities, fields, url, network, tls, highlight }[]` |
+| `ssh.answer-host-key`      | `requestId`, `trust`                | `null`; answers an `ssh.host-key-prompt` (decision 071)                                 |
+| `consoles.list`            | `datasourceId`                      | the saved console names, sorted                                                         |
+| `consoles.read`            | `datasourceId`, `name`              | the text, or `null` when there is no file                                               |
+| `consoles.write`           | `datasourceId`, `name`, `text`      | `null`; written atomically                                                              |
+| `consoles.delete`          | `datasourceId`, `name`              | `null`; deleting a missing file is not an error                                         |
+| `consoles.rename`          | `datasourceId`, `from`, `to`        | `null`; refuses a name taken in the directory                                           |
+| `sql-files.choose`         | `title`                             | the `.sql` paths chosen, several at once, or none                                       |
+| `sql-files.open`           | `path`                              | `{ path, sql, lineEnding, modifiedAt, attachment }`; marks it recent                    |
+| `sql-files.read`           | `path`                              | the same, leaving the recent files alone                                                |
+| `sql-files.write`          | `path`, `sql`, `lineEnding`         | `{ modifiedAt }`; written atomically, marks it recent                                   |
+| `sql-files.rename`         | `path`, `name`                      | `{ path }`; renamed in its folder                                                       |
+| `sql-files.stat`           | `paths`                             | each file's modification time, or `null` when it is gone                                |
+| `sql-files.attach`         | `path`, `datasourceId`, `namespace` | `null`; remembers the file's data source and namespace                                  |
+| `sql-files.recent`         | none                                | the recent files, most recent first                                                     |
+| `history.record`           | a `HistoryEntry`                    | `null`                                                                                  |
+| `history.search`           | `datasourceId`, `query`             | `HistoryStatement[]`, newest first                                                      |
+| `history.clear`            | `datasourceId`                      | `null`                                                                                  |
+| `window.answer-close`      | `proceed`                           | `null`; closes the window, or finishes the quit (decision 024)                          |
+| `engine.connect`           | `datasourceId`, typed `secrets?`    | `connected`, `needsSecrets { keys }` or `failed`                                        |
+| `engine.disconnect`        | `datasourceId`                      | `null` once the engine has exited                                                       |
+| `dialog.choose-file`       | `title`                             | a path, or `null`                                                                       |
+| `settings.read`            | none                                | `{ settings, themes, warning }`; see Settings and appearance                            |
+| `settings.write`           | the whole settings document         | `null`; saved, then broadcast as `settings.changed`                                     |
+| `themes.reload`            | none                                | `null`; rereads `<userData>/themes/`, then broadcasts                                   |
+| `themes.open-folder`       | none                                | `null`; creates the folder if missing and opens it                                      |
+| `import.scan`              | none                                | `ImportSource[]`: per app, found, count, where it looked, password store                |
+| `import.preview`           | `{ source }` or a file + phrase     | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`                     |
+| `import.run`               | `previewId`, `keys`, options        | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`                  |
+| `import.cancel`            | none                                | `null`; the run stops before its next item                                              |
 
 Console ids and names must match `CONSOLE_NAME_PATTERN = /^[\w.-]{1,64}$/` and not be dots alone,
 so no request leaves `<userData>/consoles/`. A listed datasource carries `storedSecrets` (the keys
@@ -1667,8 +1715,9 @@ it reads; a preview row says only where a password would come from (`keychain`, 
   passphrase, with them.
 
 A connection maps by its URL scheme to a plugin's `connection.url.schemes`; one no plugin claims is
-listed as not supported. An SSH tunnel, an SSL mode TableCraft lacks and certificate files become
-warnings. A connection whose origin, or whose plugin, host, port, database, user and path, matches
+listed as not supported. An SSH tunnel and an SSL mode TableCraft lacks become warnings; the CA,
+client certificate and client key paths fill the plugin's `connection.tls` fields, and Verify CA
+maps to `verify-ca`. A connection whose origin, or whose plugin, host, port, database, user and path, matches
 an existing datasource starts unticked; importing it adds `<name> (2)`. `import.run` saves all of
 them in one write and sends `import.progress { done, total, message }` as it goes. The `import`
 log child records counts only.

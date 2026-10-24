@@ -164,6 +164,16 @@ is reached, TableCraft shows its key fingerprint and asks before trusting it; tr
 trusted too. A bastion whose key changed is refused, naming both fingerprints. If the tunnel drops,
 the next statement reopens it.
 
+The **SSL** rows of the same section choose how the connection is encrypted: _Disable_, _Require_
+(encrypted, certificate not checked), _Verify CA_ (signed by the CA you trust) or _Verify full_ (and
+issued for the host you typed, also through a tunnel). Point _SSL root certificate_ at the server's
+CA file, and _Client certificate_ and _Client key_ at yours when the server signs users in by
+certificate; a passphrase-protected key asks for its passphrase on connect unless you save it.
+TableCraft keeps the paths and reads the files on every connect, so a renewed certificate needs no
+edit. **Test Connection** names the TLS version and cipher, and a refused certificate names the CA
+file or host it failed on. The URL keeps the paths too (`sslrootcert`, `sslcert`, `sslkey`;
+`ssl-ca`, `ssl-cert`, `ssl-key` for MySQL).
+
 Sessions stay healthy on their own. Every connection uses TCP keepalive (30 s by default, under
 Advanced). A console idle that long checks its session before the next Run and reconnects if the
 connection dropped, saying so in Output; a statement running when the network goes away fails
@@ -641,6 +651,12 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
 optionally a number of seconds to wait). A plugin that declares it gets the SSH tunnel: TableCraft
 opens the tunnel and hands the plugin `127.0.0.1` and the forwarded port in those fields, so the
 plugin itself knows nothing about SSH.
+
+`connection.tls` names the SSL fields (`mode`, a select offering every one of `verifyModes`, and
+optionally the `caFile`, `certFile` and `keyFile` file fields and the `keyPassphrase` secret). The
+dialog draws them under SSL, asks for the passphrase only when the key file is encrypted, and shows
+the session's `tls` (protocol and cipher) after Test Connection. Through a tunnel `connect` gets the
+configured host as `serverName`, which a `verify-full` check must use instead of `127.0.0.1`.
 
 A plugin depends on `@table-craft/plugin-api` and should pass its contract suite,
 `runPluginContract` from `@table-craft/plugin-api/testing`, which the built-in plugins run against

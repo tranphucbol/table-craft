@@ -80,6 +80,8 @@ started, not when it is merged.
 | 069 | [The must-have release amends the v1 scope](069-the-must-have-release-amends-the-v1-scope.md)                                                                          |
 | 070 | [SSH tunnels live in core, behind the manifest's network fields](070-ssh-tunnels-live-in-core-behind-the-manifest-network.md)                                          |
 | 071 | [SSH host keys are trusted on first use, after asking](071-ssh-host-keys-are-trusted-on-first-use-after-asking.md)                                                     |
+| 072 | [Certificate files are paths the plugin reads on connect](072-certificate-files-are-paths-the-plugin-reads-on-connect.md)                                              |
+| 073 | [A tunneled connection checks the configured host's name](073-a-tunneled-connection-checks-the-configured-host-name.md)                                                |
 | 080 | [File consoles save explicitly, scratch consoles autosave](080-file-consoles-save-explicitly-scratch-consoles-autosave.md)                                             |
 | 081 | [SQL scripts stream through the plugin splitter](081-sql-scripts-stream-through-the-plugin-splitter.md)                                                                |
 | 088 | [Server sessions are a plugin capability](088-server-sessions-are-a-plugin-capability.md)                                                                              |

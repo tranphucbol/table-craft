@@ -59,4 +59,5 @@ its export, not from its code. IntelliJ's formats come from its Apache-2.0 sourc
   imported; the connection asks on connect.
 - An imported connection without a password keeps the Forever mode with no value, so it asks on
   connect until the user saves one in the Data Sources dialog.
-- SSH tunnels and SSL certificate files are not imported; such rows say so.
+- SSH tunnels and SSL certificate files are not imported; such rows say so. Amended by decision 072:
+  certificate file paths now fill the plugin's SSL fields, and Verify CA maps to `verify-ca`.

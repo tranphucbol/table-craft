@@ -53,4 +53,5 @@ named in the database hop's error, because the driver alone would only see a clo
 - SSL settings (plan 037) sit in the same SSH/SSL section of the dialog. TLS runs end to end
   inside the tunnel, but the plugin sees `127.0.0.1` as its host, so a check of the server
   certificate's name (`verify-full`) would compare against `127.0.0.1`; plan 037 has to hand the
-  plugin the configured host as the TLS server name.
+  plugin the configured host as the TLS server name. Decision 073 does so with
+  `ConnectOptions.serverName`.
