@@ -5,7 +5,9 @@ import {
   FORMAT_STYLES,
   IMPORT_KINDS,
   DefinitionNotFoundError,
+  errorPositionOf,
   isPluginError,
+  offsetOfPosition,
   switchableTo,
   z,
   type BoundStatement,
@@ -65,6 +67,11 @@ export interface ContractFixture {
       readonly level: ServerMessage["level"];
       readonly code: string | null;
     };
+    /**
+     * A statement with a syntax error and the 0-based offset the plugin's `PluginError.position`
+     * must resolve to; leave it out for a database that cannot locate one.
+     */
+    readonly syntaxError?: { readonly sql: string; readonly offset: number };
   };
   readonly typeProbe: {
     /** The rows of `SELECT * FROM type_probe ORDER BY id`, as wire values. */
@@ -587,6 +594,22 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           expect(await rejectionCode(session.execute("SELEC 1"))).toBe("statementFailed");
         });
       });
+
+      it.runIf(fixture.statements?.syntaxError !== undefined)(
+        "givenSyntaxError_whenExecuted_thenPositionPointsAtToken",
+        async () => {
+          const { sql, offset } = fixture.statements?.syntaxError ?? { sql: "", offset: 0 };
+          await withSession(plugin, fixture, async (session) => {
+            const failure = await session.execute(sql).then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+            const position = errorPositionOf(failure);
+            expect(position).toBeDefined();
+            expect(position === undefined ? null : offsetOfPosition(sql, position)).toBe(offset);
+          });
+        },
+      );
 
       it.runIf(fixture.statements?.write !== undefined)(
         "givenReadOnlySession_whenInsert_thenStatementFailed",

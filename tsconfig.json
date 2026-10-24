@@ -23,7 +23,10 @@
       "@table-craft/plugin-mysql/warnings": ["plugins/mysql/src/warnings.ts"],
       "@table-craft/plugin-postgres/notices": ["plugins/postgres/src/notices.ts"],
       "@table-craft/plugin-postgres/sessions": ["plugins/postgres/src/sessions.ts"],
-      "@table-craft/plugin-mysql/sessions": ["plugins/mysql/src/sessions.ts"]
+      "@table-craft/plugin-mysql/sessions": ["plugins/mysql/src/sessions.ts"],
+      "@table-craft/plugin-sqlite/errorPosition": ["plugins/sqlite/src/errorPosition.ts"],
+      "@table-craft/plugin-postgres/errorPosition": ["plugins/postgres/src/errorPosition.ts"],
+      "@table-craft/plugin-mysql/errorPosition": ["plugins/mysql/src/errorPosition.ts"]
     },
     "types": ["node"],
     "strict": true,

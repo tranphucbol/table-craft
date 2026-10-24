@@ -7,7 +7,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./explain": "./src/explain.ts"
+    "./explain": "./src/explain.ts",
+    "./errorPosition": "./src/errorPosition.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*"

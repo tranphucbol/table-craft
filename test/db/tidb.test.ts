@@ -1,7 +1,14 @@
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import type { PlanNode, ServerSession, Session, SessionMonitor } from "@table-craft/plugin-api";
+import {
+  errorPositionOf,
+  offsetOfPosition,
+  type PlanNode,
+  type ServerSession,
+  type Session,
+  type SessionMonitor,
+} from "@table-craft/plugin-api";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type {
   DatasourceConfig,
@@ -198,6 +205,21 @@ describe("tidb 4", () => {
         text: `use_index(${TIDB_DATABASE}.${SAGA_INDEX}) is inapplicable, check whether the table(${TIDB_DATABASE}.${SAGA_INDEX}) exists`,
       },
     ]);
+  });
+
+  it("givenTidbSyntaxError_whenExecuted_thenPositionFoundOnItsLine", async () => {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+    // `dual` takes no alias, so TiDB stops at the misspelt keyword on line 3.
+    const sql = "SELECT 1,\n  2\nFROM dual WHER 1 = 1";
+
+    const failure: unknown = await session.execute(sql).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    const position = errorPositionOf(failure);
+    expect(position === undefined ? null : offsetOfPosition(sql, position)).toBe(sql.indexOf("WHER"));
   });
 
   it.each([

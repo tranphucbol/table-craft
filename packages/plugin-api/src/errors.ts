@@ -22,16 +22,30 @@ export const PLUGIN_ERROR_CODES = [
 
 export type PluginErrorCode = (typeof PLUGIN_ERROR_CODES)[number];
 
+/**
+ * Where the database located a failure, relative to the statement text the plugin received:
+ * `offset` is 0-based in UTF-16 code units (a JavaScript string index); `line` and `column` count
+ * from 1, the column in UTF-16 code units too.
+ */
+export type ErrorPosition = { readonly offset: number } | { readonly line: number; readonly column: number };
+
+export interface PluginErrorOptions extends ErrorOptions {
+  /** Leave it out when the database did not say; the host then underlines nothing. */
+  readonly position?: ErrorPosition;
+}
+
 /** What a plugin throws when the host should react to the kind of failure, not just show it. */
 export class PluginError extends Error {
   override readonly name = "PluginError";
+  readonly position: ErrorPosition | undefined;
 
   constructor(
     readonly code: PluginErrorCode,
     message: string,
-    options?: ErrorOptions,
+    options?: PluginErrorOptions,
   ) {
     super(message, options);
+    this.position = options?.position;
   }
 }
 
@@ -43,6 +57,38 @@ export function isPluginError(error: unknown): error is PluginError {
   if (!(error instanceof Error) || error.name !== "PluginError") return false;
   const code: unknown = (error as { code?: unknown }).code;
   return PLUGIN_ERROR_CODES.some((known) => known === code);
+}
+
+function isWholeAtLeast(value: unknown, least: number): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= least;
+}
+
+/**
+ * The position a plugin attached to a `PluginError`, checked by shape, since the error comes from
+ * another bundle; anything malformed reads as no position.
+ */
+export function errorPositionOf(error: unknown): ErrorPosition | undefined {
+  if (!isPluginError(error)) return undefined;
+  const position: unknown = (error as { position?: unknown }).position;
+  if (typeof position !== "object" || position === null) return undefined;
+  const { offset, line, column } = position as Record<string, unknown>;
+  if (isWholeAtLeast(offset, 0)) return { offset };
+  if (isWholeAtLeast(line, 1) && isWholeAtLeast(column, 1)) return { line, column };
+  return undefined;
+}
+
+/** `position` as a 0-based offset into `text`, clamped to the text. */
+export function offsetOfPosition(text: string, position: ErrorPosition): number {
+  if ("offset" in position) return Math.min(position.offset, text.length);
+  let start = 0;
+  for (let line = 1; line < position.line; line += 1) {
+    const end = text.indexOf("\n", start);
+    if (end === -1) return text.length;
+    start = end + 1;
+  }
+  const lineEnd = text.indexOf("\n", start);
+  const limit = lineEnd === -1 ? text.length : lineEnd;
+  return Math.min(start + position.column - 1, limit);
 }
 
 /**

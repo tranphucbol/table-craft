@@ -56,6 +56,7 @@ import {
   type SqlLiteralOptions,
 } from "@table-craft/plugin-api/sql";
 import { insertStatement, MYSQL_IMPORT_TYPES, mysqlDecimal } from "./bulk.js";
+import { syntaxErrorPosition } from "./errorPosition.js";
 import {
   ANALYZE_VERBS,
   EXPLAIN_VERBS,
@@ -649,7 +650,7 @@ class MysqlSession implements Session {
       return { columns, rows: this.#rows(inFlight, running, first, messages), rowsAffected: null, messages };
     } catch (cause) {
       this.#running = null;
-      throw this.#failure(cause, running);
+      throw this.#failure(cause, running, sql);
     }
   }
 
@@ -850,13 +851,15 @@ class MysqlSession implements Session {
     return new PluginError("cancelled", running.reset ? RESET_CANCELLED_MESSAGE : CANCELLED_MESSAGE);
   }
 
-  #failure(cause: unknown, running: Running): PluginError {
+  #failure(cause: unknown, running: Running, sql?: string): PluginError {
     if (cause instanceof PluginError) return cause;
     const errno = (cause as { errno?: unknown }).errno;
     if (running.cancelRequested || errno === QUERY_INTERRUPTED) {
       return new PluginError("cancelled", running.reset ? RESET_CANCELLED_MESSAGE : CANCELLED_MESSAGE, { cause });
     }
-    return new PluginError("statementFailed", messageOf(cause), { cause });
+    const message = messageOf(cause);
+    const position = sql === undefined ? undefined : syntaxErrorPosition(sql, message);
+    return new PluginError("statementFailed", message, { cause, position });
   }
 
   cancel(): Promise<void> {

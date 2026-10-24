@@ -13,6 +13,7 @@ runPluginContract(postgres, {
     write: TYPE_PROBE_WRITE,
     sleep: (seconds) => `SELECT pg_sleep(${String(seconds)})`,
     message: { sql: "DO $$ BEGIN RAISE NOTICE 'probe'; END $$", level: "notice", code: "00000" },
+    syntaxError: { sql: "SELECT id, FROM customers", offset: "SELECT id, ".length },
   },
   typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_AS },
   scripts: [

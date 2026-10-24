@@ -14,6 +14,7 @@ runPluginContract(mysql, {
     write: TYPE_PROBE_WRITE,
     sleep: (seconds) => `SELECT SLEEP(${String(seconds)})`,
     message: { sql: "SELECT CAST('1x' AS SIGNED) AS n", level: "warning", code: "1292" },
+    syntaxError: { sql: "SELECT id FROM customers WHER id = 1", offset: "SELECT id FROM customers WHER ".length },
   },
   typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_AS },
   scripts: [

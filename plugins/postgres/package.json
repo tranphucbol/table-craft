@@ -10,7 +10,8 @@
     "./explain": "./src/explain.ts",
     "./bulk": "./src/bulk.ts",
     "./notices": "./src/notices.ts",
-    "./sessions": "./src/sessions.ts"
+    "./sessions": "./src/sessions.ts",
+    "./errorPosition": "./src/errorPosition.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*",

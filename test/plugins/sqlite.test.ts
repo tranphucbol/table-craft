@@ -31,7 +31,10 @@ async function collect(rows: AsyncIterable<Row>): Promise<Row[]> {
 runPluginContract(sqlite, {
   manifest: SQLITE_MANIFEST,
   config: { path: seededSqliteFile() },
-  statements: { write: TYPE_PROBE_WRITE },
+  statements: {
+    write: TYPE_PROBE_WRITE,
+    syntaxError: { sql: "SELECT 1 FROM customers ORDER id", offset: "SELECT 1 FROM customers ORDER ".length },
+  },
   typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_SQLITE },
   scripts: [
     {

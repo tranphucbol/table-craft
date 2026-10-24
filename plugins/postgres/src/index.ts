@@ -57,6 +57,7 @@ import {
   type SqlLiteralOptions,
 } from "@table-craft/plugin-api/sql";
 import { copyLine, POSTGRES_IMPORT_TYPES, postgresDecimal } from "./bulk.js";
+import { serverErrorPosition } from "./errorPosition.js";
 import { EXPLAIN_VERBS, explainStatement, readPlan } from "./explain.js";
 import { postgresIntrospector } from "./introspect.js";
 import { NoticeCollector, type Notice } from "./notices.js";
@@ -482,7 +483,7 @@ class PostgresSession implements Session {
     } catch (cause) {
       this.#notices = null;
       this.#running = null;
-      throw this.#failure(cause, running);
+      throw this.#failure(cause, running, sql);
     }
   }
 
@@ -604,12 +605,13 @@ class PostgresSession implements Session {
     }
   }
 
-  #failure(cause: unknown, running: Running): PluginError {
+  #failure(cause: unknown, running: Running, sql?: string): PluginError {
     const code = (cause as { code?: unknown }).code;
     if (running.cancelRequested || code === QUERY_CANCELED) {
       return new PluginError("cancelled", "The statement was cancelled.", { cause });
     }
-    return new PluginError("statementFailed", messageOf(cause), { cause });
+    const position = sql === undefined ? undefined : serverErrorPosition(sql, cause);
+    return new PluginError("statementFailed", messageOf(cause), { cause, position });
   }
 
   cancel(): Promise<void> {

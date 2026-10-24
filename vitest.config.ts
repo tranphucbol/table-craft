@@ -40,6 +40,11 @@ export default defineConfig({
         find: /^@table-craft\/plugin-(postgres|mysql)\/sessions$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/$1/src/sessions.ts"),
       },
+      // Where each dialect locates a failed statement's error (decision 082).
+      {
+        find: /^@table-craft\/plugin-(sqlite|postgres|mysql)\/errorPosition$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/$1/src/errorPosition.ts"),
+      },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },
       { find: "@table-craft/plugin-mysql", replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/index.ts") },

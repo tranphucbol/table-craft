@@ -11,7 +11,8 @@
     "./bulk": "./src/bulk.ts",
     "./server": "./src/server.ts",
     "./sessions": "./src/sessions.ts",
-    "./warnings": "./src/warnings.ts"
+    "./warnings": "./src/warnings.ts",
+    "./errorPosition": "./src/errorPosition.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*",

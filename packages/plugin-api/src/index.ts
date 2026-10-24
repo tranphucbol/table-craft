@@ -26,11 +26,15 @@ export {
 } from "./completion.js";
 export {
   DefinitionNotFoundError,
+  type ErrorPosition,
+  errorPositionOf,
   isPluginError,
   isTlsSettingsError,
+  offsetOfPosition,
   PLUGIN_ERROR_CODES,
   PluginError,
   type PluginErrorCode,
+  type PluginErrorOptions,
   TlsSettingsError,
 } from "./errors.js";
 export {

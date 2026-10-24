@@ -47,6 +47,7 @@ import {
   type SqlDialectOptions,
   type SqlLiteralOptions,
 } from "@table-craft/plugin-api/sql";
+import { sqliteErrorPosition } from "./errorPosition.js";
 import { EXPLAIN_VERBS, explainStatement, readPlanRows } from "./explain.js";
 import { sqliteIntrospector } from "./introspect.js";
 import { sqliteObjects } from "./objects.js";
@@ -191,11 +192,13 @@ function cellFor(column: Column, options: ExecuteOptions): Cell {
 
 /** node:sqlite is synchronous; this turns a throw into a rejection coded as the contract expects. */
 // eslint-disable-next-line @typescript-eslint/require-await -- async is what turns the throw into a rejection
-async function settle<T>(code: PluginErrorCode, work: () => T): Promise<T> {
+async function settle<T>(code: PluginErrorCode, work: () => T, sql?: string): Promise<T> {
   try {
     return work();
   } catch (cause) {
-    throw new PluginError(code, cause instanceof Error ? cause.message : String(cause), { cause });
+    const message = cause instanceof Error ? cause.message : String(cause);
+    const position = sql === undefined ? undefined : sqliteErrorPosition(sql, message);
+    throw new PluginError(code, message, { cause, position });
   }
 }
 
@@ -263,32 +266,36 @@ class SqliteSession implements Session {
   }
 
   execute(sql: string, params: readonly ParameterValue[] = [], options: ExecuteOptions = {}): Promise<ExecuteResult> {
-    return settle("statementFailed", () => {
-      const database = this.#database;
-      if (this.#mode === "manual" && !database.isTransaction && transactionEffect(sql, DIALECT) === null) {
-        database.exec(BEGIN_SQL);
-      }
-      const statement = database.prepare(sql);
-      statement.setReadBigInts(true);
-      const columns: Column[] = statement.columns().map((column) => ({
-        name: column.name,
-        type: column.type,
-        origin: originOf(column),
-      }));
-      if (columns.length === 0) {
-        const { changes } = statement.run(...params);
-        return { columns, rows: readRows([].values(), []), rowsAffected: Number(changes) };
-      }
-      statement.setReturnArrays(true);
-      return {
-        columns,
-        rows: readRows(
-          statement.iterate(...params),
-          columns.map((column) => cellFor(column, options)),
-        ),
-        rowsAffected: null,
-      };
-    });
+    return settle(
+      "statementFailed",
+      () => {
+        const database = this.#database;
+        if (this.#mode === "manual" && !database.isTransaction && transactionEffect(sql, DIALECT) === null) {
+          database.exec(BEGIN_SQL);
+        }
+        const statement = database.prepare(sql);
+        statement.setReadBigInts(true);
+        const columns: Column[] = statement.columns().map((column) => ({
+          name: column.name,
+          type: column.type,
+          origin: originOf(column),
+        }));
+        if (columns.length === 0) {
+          const { changes } = statement.run(...params);
+          return { columns, rows: readRows([].values(), []), rowsAffected: Number(changes) };
+        }
+        statement.setReturnArrays(true);
+        return {
+          columns,
+          rows: readRows(
+            statement.iterate(...params),
+            columns.map((column) => cellFor(column, options)),
+          ),
+          rowsAffected: null,
+        };
+      },
+      sql,
+    );
   }
 
   insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
