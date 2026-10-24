@@ -13,9 +13,13 @@ import * as sql from "@table-craft/desktop/engine/protocol/sql.js";
 import * as tables from "@table-craft/desktop/engine/protocol/tables.js";
 import * as transfer from "@table-craft/desktop/engine/protocol/transfer.js";
 import * as wire from "@table-craft/desktop/engine/protocol/wire.js";
+import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
+import { ROUTE_GROUPS } from "@table-craft/desktop/engine/routes/index.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PROTOCOL_FIXTURE = "packages/desktop/src/engine/protocol/fixture.ts";
+/** A route group only reads its connection when a handler runs, so building one needs none. */
+const NO_CONNECTION = {} as ConnectionContext;
 const AREAS = { calls, catalog, datasource, objects, results, sessions, sql, tables, transfer, wire };
 
 const METHODS = [
@@ -112,5 +116,12 @@ describe("the protocol barrel", () => {
 
     expect(outside).toEqual([expect.stringContaining("imports nothing but its sibling areas")]);
     expect(sibling).toEqual([]);
+  });
+
+  it("givenRouteGroups_whenMerged_thenEveryEngineMethodHasExactlyOneRoute", () => {
+    const keys = ROUTE_GROUPS.flatMap((group) => Object.keys(group(NO_CONNECTION)));
+
+    expect(new Set(keys).size).toBe(keys.length);
+    expect([...keys].sort()).toEqual([...METHODS].sort());
   });
 });
