@@ -3,6 +3,7 @@ import { z } from "@table-craft/plugin-api";
 import { writeAtomically, type FileSystem } from "@table-craft/desktop/main/files.js";
 import {
   DATASOURCE_COLORS,
+  IMPORT_APPS,
   SECRET_MODES,
   type ConnectionField,
   type Datasource,
@@ -36,6 +37,7 @@ const datasourceSchema = z.strictObject({
   comment: z.string(),
   config: z.record(z.string(), configValue),
   secretModes: z.record(z.string(), z.enum(SECRET_MODES)),
+  origin: z.strictObject({ app: z.enum(IMPORT_APPS), id: z.string().min(1) }).optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -115,6 +117,7 @@ export function toDatasource(draft: DatasourceDraft, id: string, fields: readonl
     comment: draft.comment,
     config,
     secretModes,
+    ...(draft.origin === undefined ? {} : { origin: { app: draft.origin.app, id: draft.origin.id } }),
   };
 }
 

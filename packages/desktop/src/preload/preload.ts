@@ -7,6 +7,7 @@ import {
   type DatasourceList,
   type EnginePortWindowMessage,
   type EngineExited,
+  type ImportProgress,
   type InvokeResult,
   type SettingsChanged,
   type TableCraftBridge,
@@ -97,6 +98,11 @@ const bridge: TableCraftBridge = {
   updateSkip: () => invoke(INVOKE_CHANNELS.updateSkip),
   updateDismiss: () => invoke(INVOKE_CHANNELS.updateDismiss),
   updateOpenNotes: () => invoke(INVOKE_CHANNELS.updateOpenNotes),
+  importScan: () => invoke(INVOKE_CHANNELS.importScan),
+  importPreview: (request) => invoke(INVOKE_CHANNELS.importPreview, request),
+  importRun: (request) => invoke(INVOKE_CHANNELS.importRun, request),
+  importCancel: () => invoke(INVOKE_CHANNELS.importCancel),
+  onImportProgress: (listener) => subscribe<ImportProgress>(CHANNELS.importProgress, listener),
 };
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

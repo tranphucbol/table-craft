@@ -1,0 +1,417 @@
+import { createCipheriv, createHash, pbkdf2Sync, randomBytes } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { gzipSync } from "node:zlib";
+
+/**
+ * Writers for the foreign stores plan 035 imports from, so tests never need DataGrip or TablePro
+ * installed. The KeePass writer is the inverse of `main/import/kdbx.ts` (KDBX 3.1 as IntelliJ
+ * writes it); the bundle encoder follows the `.tablepro` layout decision 067 describes.
+ */
+
+const KDBX_SIGNATURE_1 = 0x9aa2d903;
+const KDBX_SIGNATURE_2 = 0xb54bfb67;
+const KDBX_VERSION_3_1 = 0x00030001;
+const AES_CIPHER_ID = Buffer.from("31c1f2e6bf714350be5805216afc5aff", "hex");
+const TRANSFORM_ROUNDS = 60n;
+const CHACHA20_STREAM = 3;
+const GZIP = 1;
+const BUILT_IN_KEY = Buffer.from("Proxy Config Sec", "latin1");
+/** IntelliJ's root group in its KeePass database (`ROOT_GROUP_NAME`). */
+const INTELLIJ_ROOT_GROUP = "IntelliJ Platform";
+const DB_SERVICE_PREFIX = "IntelliJ Platform DB \u2014 ";
+const TABLEPRO_ITERATIONS = 600_000;
+
+export function dataGripService(uuid: string): string {
+  return `${DB_SERVICE_PREFIX}${uuid}`;
+}
+
+function sha256(...parts: Uint8Array[]): Buffer {
+  const hash = createHash("sha256");
+  for (const part of parts) hash.update(part);
+  return hash.digest();
+}
+
+function headerField(type: number, data: Buffer): Buffer {
+  const head = Buffer.alloc(3);
+  head.writeUInt8(type, 0);
+  head.writeUInt16LE(data.length, 1);
+  return Buffer.concat([head, data]);
+}
+
+function u32(value: number): Buffer {
+  const buffer = Buffer.alloc(4);
+  buffer.writeUInt32LE(value, 0);
+  return buffer;
+}
+
+function escapeXml(text: string): string {
+  return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+export interface KdbxFixtureEntry {
+  readonly title: string;
+  readonly user: string;
+  readonly password: string;
+}
+
+/** A KDBX 3.1 database holding `entries` under IntelliJ's root group, opened by `mainKey`. */
+export function writeKdbx(entries: readonly KdbxFixtureEntry[], mainKey: Uint8Array): Buffer {
+  const masterSeed = randomBytes(32);
+  const transformSeed = randomBytes(32);
+  const iv = randomBytes(16);
+  const protectedStreamKey = randomBytes(64);
+  const streamStart = randomBytes(32);
+  const rounds = Buffer.alloc(8);
+  rounds.writeBigUInt64LE(TRANSFORM_ROUNDS, 0);
+  const header = Buffer.concat([
+    u32(KDBX_SIGNATURE_1),
+    u32(KDBX_SIGNATURE_2),
+    u32(KDBX_VERSION_3_1),
+    headerField(2, AES_CIPHER_ID),
+    headerField(3, u32(GZIP)),
+    headerField(4, masterSeed),
+    headerField(5, transformSeed),
+    headerField(6, rounds),
+    headerField(7, iv),
+    headerField(8, protectedStreamKey),
+    headerField(9, streamStart),
+    headerField(10, u32(CHACHA20_STREAM)),
+    headerField(0, Buffer.from("\r\n\r\n", "latin1")),
+  ]);
+  const streamHash = createHash("sha512").update(protectedStreamKey).digest();
+  const inner = createCipheriv(
+    "chacha20",
+    streamHash.subarray(0, 32),
+    Buffer.concat([Buffer.alloc(4), streamHash.subarray(32, 44)]),
+  );
+  const protect = (value: string) => inner.update(Buffer.from(value, "utf8")).toString("base64");
+  const xml = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    "<KeePassFile><Meta><Generator>table-craft test</Generator></Meta><Root><Group>",
+    `<Name>${INTELLIJ_ROOT_GROUP}</Name>`,
+    ...entries.map(
+      (entry) =>
+        `<Entry><String><Key>Title</Key><Value>${escapeXml(entry.title)}</Value></String>` +
+        `<String><Key>UserName</Key><Value>${escapeXml(entry.user)}</Value></String>` +
+        `<String><Key>Password</Key><Value Protected="True">${protect(entry.password)}</Value></String></Entry>`,
+    ),
+    "</Group></Root></KeePassFile>",
+  ].join("");
+  const payload = gzipSync(Buffer.from(xml, "utf8"));
+  const block = Buffer.concat([u32(0), sha256(payload), u32(payload.length), payload]);
+  const end = Buffer.concat([u32(1), Buffer.alloc(32), u32(0)]);
+  let transformed: Buffer = sha256(sha256(mainKey));
+  const transform = createCipheriv("aes-256-ecb", transformSeed, null).setAutoPadding(false);
+  for (let round = 0n; round < TRANSFORM_ROUNDS; round++) transformed = transform.update(transformed);
+  const key = sha256(masterSeed, sha256(transformed));
+  const cipher = createCipheriv("aes-256-cbc", key, iv);
+  const body = Buffer.concat([cipher.update(Buffer.concat([streamStart, block, end])), cipher.final()]);
+  return Buffer.concat([header, body]);
+}
+
+/** IntelliJ's `c.pwd` for `mainKey`, with the BUILT_IN encryption it writes by default. */
+export function writeMainKey(mainKey: Uint8Array): string {
+  const iv = randomBytes(16);
+  const cipher = createCipheriv("aes-128-cbc", BUILT_IN_KEY, iv);
+  const ivLength = Buffer.alloc(4);
+  ivLength.writeUInt32BE(iv.length, 0);
+  const blob = Buffer.concat([ivLength, iv, cipher.update(mainKey), cipher.final()]);
+  return `encryption: BUILT_IN\nisAutoGenerated: true\nvalue: !!binary ${blob.toString("base64")}\n`;
+}
+
+/** An encrypted `.tablepro` bundle: `TPRO`, version 1, salt, nonce, AES-256-GCM text, tag. */
+export function encryptTableProBundle(json: string, passphrase: string): Buffer {
+  const salt = randomBytes(32);
+  const nonce = randomBytes(12);
+  const key = pbkdf2Sync(passphrase, salt, TABLEPRO_ITERATIONS, 32, "sha256");
+  const cipher = createCipheriv("aes-256-gcm", key, nonce);
+  const sealed = Buffer.concat([cipher.update(json, "utf8"), cipher.final()]);
+  return Buffer.concat([Buffer.from("TPRO", "latin1"), Buffer.from([1]), salt, nonce, sealed, cipher.getAuthTag()]);
+}
+
+export interface ServerAddress {
+  readonly host: string;
+  readonly port: number;
+}
+
+export interface ImportFixtureOptions {
+  readonly mysql: ServerAddress;
+  readonly postgres: ServerAddress;
+  /** Where DataGrip keeps passwords: its KeePass file, or the system store (the default). */
+  readonly passwords: "keepass" | "native";
+  /** `darwin` lays files out as on macOS; anything else as on Linux. */
+  readonly platform: NodeJS.Platform;
+  /** The database password every fixture connection uses. */
+  readonly password: string;
+}
+
+/** DataGrip's uuids in the fixture, by the connection each names. */
+export const DATAGRIP_IDS = {
+  shopMysql: "1a6b2c3d-0000-4000-8000-000000000001",
+  shopPostgres: "1a6b2c3d-0000-4000-8000-000000000002",
+  analyticsTidb: "1a6b2c3d-0000-4000-8000-000000000003",
+  localFile: "1a6b2c3d-0000-4000-8000-000000000004",
+  events: "1a6b2c3d-0000-4000-8000-000000000005",
+  bastion: "1a6b2c3d-0000-4000-8000-000000000006",
+  global: "1a6b2c3d-0000-4000-8000-000000000007",
+} as const;
+
+export const DATAGRIP_CONFIG = "DataGrip2025.3";
+export const SHOP_PROJECT = "shop";
+const SSH_CONFIG_ID = "5f1e0000-0000-4000-8000-0000000000aa";
+
+export interface ImportFixture {
+  readonly home: string;
+  readonly configDir: string;
+  readonly project: string;
+  readonly tableProDir: string;
+  /** A plain and an encrypted `.tablepro` export of the same three connections. */
+  readonly plainBundle: string;
+  readonly encryptedBundle: string;
+  readonly bundlePassphrase: string;
+}
+
+function write(path: string, contents: string | Buffer): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, contents);
+}
+
+function dataSource(uuid: string, name: string, body: string, attributes = ""): string {
+  return `    <data-source source="LOCAL" name="${escapeXml(name)}" uuid="${uuid}"${attributes}>\n${body}    </data-source>\n`;
+}
+
+function dataSources(entries: readonly string[]): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<project version="4">',
+    '  <component name="DataSourceManagerImpl" format="xml" multifile-model="true">',
+    ...entries.map((entry) => entry.trimEnd()),
+    "  </component>",
+    "</project>",
+    "",
+  ].join("\n");
+}
+
+function shared(driver: string, url: string, extra = ""): string {
+  return [
+    `      <driver-ref>${driver}</driver-ref>`,
+    "      <synchronize>true</synchronize>",
+    `      <jdbc-url>${escapeXml(url)}</jdbc-url>`,
+    "      <working-dir>$ProjectFileDir$</working-dir>",
+    extra,
+  ]
+    .filter((line) => line !== "")
+    .map((line) => `${line}\n`)
+    .join("");
+}
+
+function local(user: string | null, storage = "master_key", extra = ""): string {
+  return [
+    '      <database-info product="" version="" />',
+    `      <secret-storage>${storage}</secret-storage>`,
+    user === null ? "" : `      <user-name>${user}</user-name>`,
+    extra,
+  ]
+    .filter((line) => line !== "")
+    .map((line) => `${line}\n`)
+    .join("");
+}
+
+/**
+ * Lays out DataGrip's configuration directory with a `shop` project and a global data source, and
+ * TablePro's `connections.json` plus two exports, under `home`. Writes nothing outside it.
+ */
+export function writeImportFixture(home: string, options: ImportFixtureOptions): ImportFixture {
+  const { mysql, postgres, password } = options;
+  const macOs = options.platform === "darwin";
+  const jetBrains = macOs
+    ? join(home, "Library", "Application Support", "JetBrains")
+    : join(home, ".config", "JetBrains");
+  const configDir = join(jetBrains, DATAGRIP_CONFIG);
+  write(join(jetBrains, "DataGrip2024.1", "options", "other.xml"), "<application/>\n");
+  const project = join(home, "work", SHOP_PROJECT);
+  const idea = join(project, ".idea");
+  const mysqlUrl = `jdbc:mysql://${mysql.host}:${String(mysql.port)}/table_craft`;
+  const postgresUrl = `jdbc:postgresql://${postgres.host}:${String(postgres.port)}/table_craft`;
+
+  write(
+    join(idea, "dataSources.xml"),
+    dataSources([
+      dataSource(
+        DATAGRIP_IDS.shopMysql,
+        "Shop MySQL",
+        shared("mysql.8", mysqlUrl, "      <user-name>shared_user</user-name>\n      <group-name>Docker</group-name>"),
+      ),
+      dataSource(
+        DATAGRIP_IDS.shopPostgres,
+        "Shop PG",
+        shared("postgresql", postgresUrl, "      <group-name>Docker</group-name>"),
+      ),
+      dataSource(
+        DATAGRIP_IDS.analyticsTidb,
+        "Analytics TiDB",
+        shared("tidb", "jdbc:mysql://tidb.internal:4000/analytics"),
+      ),
+      dataSource(
+        DATAGRIP_IDS.localFile,
+        "Local file",
+        shared("sqlite.xerial", "jdbc:sqlite:$PROJECT_DIR$/data/app.db"),
+      ),
+      dataSource(DATAGRIP_IDS.events, "Events", shared("mongo", "mongodb://mongo.internal:27017/events")),
+      dataSource(
+        DATAGRIP_IDS.bastion,
+        "Prod via bastion",
+        shared(
+          "mysql.8",
+          "jdbc:mysql://10.0.0.5:3306/prod",
+          `      <ssh-properties>\n        <enabled>true</enabled>\n        <ssh-config-id>${SSH_CONFIG_ID}</ssh-config-id>\n      </ssh-properties>`,
+        ),
+      ),
+    ]),
+  );
+  write(
+    join(idea, "dataSources.local.xml"),
+    dataSources([
+      dataSource(DATAGRIP_IDS.shopMysql, "Shop MySQL", local("table_craft")),
+      dataSource(DATAGRIP_IDS.shopPostgres, "Shop PG", local("table_craft")),
+      dataSource(DATAGRIP_IDS.analyticsTidb, "Analytics TiDB", local("root")),
+      dataSource(
+        DATAGRIP_IDS.localFile,
+        "Local file",
+        local(null, "master_key", "      <auth-provider>no-auth</auth-provider>"),
+      ),
+      dataSource(DATAGRIP_IDS.events, "Events", local("events")),
+      dataSource(DATAGRIP_IDS.bastion, "Prod via bastion", local("app")),
+    ]),
+  );
+  write(
+    join(configDir, "options", "recentProjects.xml"),
+    [
+      "<application>",
+      '  <component name="RecentProjectsManager">',
+      '    <option name="additionalInfo">',
+      "      <map>",
+      `        <entry key="$USER_HOME$/work/${SHOP_PROJECT}">`,
+      "          <value><RecentProjectMetaInfo /></value>",
+      "        </entry>",
+      "      </map>",
+      "    </option>",
+      "  </component>",
+      "</application>",
+      "",
+    ].join("\n"),
+  );
+  write(
+    join(configDir, "options", "dataSources.xml"),
+    dataSources([
+      dataSource(
+        DATAGRIP_IDS.global,
+        "Global PG",
+        shared("postgresql", postgresUrl, "      <user-name>table_craft</user-name>"),
+      ),
+    ]),
+  );
+  write(
+    join(configDir, "options", "sshConfigs.xml"),
+    [
+      "<application>",
+      '  <component name="SshConfigs">',
+      "    <configs>",
+      `      <sshConfig authType="PASSWORD" host="bastion.example" id="${SSH_CONFIG_ID}" port="22" username="ops" />`,
+      "    </configs>",
+      "  </component>",
+      "</application>",
+      "",
+    ].join("\n"),
+  );
+  if (options.passwords === "keepass") {
+    const mainKey = randomBytes(64);
+    write(
+      join(configDir, "options", "security.xml"),
+      '<application>\n  <component name="PasswordSafe">\n    <option name="PROVIDER" value="KEEPASS" />\n  </component>\n</application>\n',
+    );
+    write(join(configDir, "c.pwd"), writeMainKey(mainKey));
+    write(
+      join(configDir, "c.kdbx"),
+      writeKdbx(
+        [DATAGRIP_IDS.shopMysql, DATAGRIP_IDS.shopPostgres, DATAGRIP_IDS.global].map((uuid) => ({
+          title: dataGripService(uuid),
+          user: "table_craft",
+          password,
+        })),
+        mainKey,
+      ),
+    );
+  }
+
+  const tableProDir = join(home, "Library", "Application Support", "TablePro");
+  write(
+    join(tableProDir, "connections.json"),
+    JSON.stringify(
+      [
+        {
+          id: "TP-1",
+          name: "Orders MySQL",
+          type: "MySQL",
+          ...hostFields(mysql),
+          sshEnabled: false,
+          sslMode: "Disabled",
+          color: "Purple",
+        },
+        {
+          id: "TP-2",
+          name: "Reports PG",
+          type: "PostgreSQL",
+          ...hostFields(postgres),
+          sshEnabled: false,
+          sslMode: "Preferred",
+          color: "None",
+        },
+        {
+          id: "TP-3",
+          name: "Cache",
+          type: "Redis",
+          host: "cache.internal",
+          port: 6379,
+          database: "",
+          username: "",
+          sshEnabled: false,
+          sslMode: "Disabled",
+          color: "None",
+        },
+      ],
+      null,
+      2,
+    ),
+  );
+  const bundle = JSON.stringify(
+    {
+      formatVersion: 2,
+      exportedAt: "2026-10-01T09:00:00Z",
+      appVersion: "1.0",
+      connections: [
+        { ref: "c1", name: "Orders MySQL", type: "MySQL", ...hostFields(mysql), groupRef: "g2" },
+        { ref: "c2", name: "Reports PG", type: "PostgreSQL", ...hostFields(postgres), groupRef: "g1" },
+        { ref: "c3", name: "Notes", type: "SQLite", host: "", port: 0, database: join(home, "notes.db"), username: "" },
+      ],
+      groups: [
+        { ref: "g1", name: "Work" },
+        { ref: "g2", name: "Shop", parentRef: "g1" },
+      ],
+      credentials: { c1: { password }, c2: { password } },
+    },
+    null,
+    2,
+  );
+  const plainBundle = join(home, "exports", "connections.tablepro");
+  const encryptedBundle = join(home, "exports", "connections-encrypted.tablepro");
+  const bundlePassphrase = "correct horse battery staple";
+  write(plainBundle, bundle);
+  write(encryptedBundle, encryptTableProBundle(bundle, bundlePassphrase));
+  return { home, configDir, project, tableProDir, plainBundle, encryptedBundle, bundlePassphrase };
+}
+
+function hostFields(address: ServerAddress) {
+  return { host: address.host, port: address.port, database: "table_craft", username: "table_craft" };
+}

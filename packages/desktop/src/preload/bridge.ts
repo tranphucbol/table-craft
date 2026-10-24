@@ -27,6 +27,8 @@ export const CHANNELS = {
   logAppended: "table-craft:log.appended",
   /** Main to every window: the updater moved; the payload is the whole `UpdateState` (plan 020). */
   updateState: "table-craft:update.state",
+  /** Main to the importing window: one more connection done; the payload is an `ImportProgress`. */
+  importProgress: "table-craft:import.progress",
 } as const;
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
@@ -72,6 +74,10 @@ export const INVOKE_CHANNELS = {
   updateSkip: "table-craft:update.skip",
   updateDismiss: "table-craft:update.dismiss",
   updateOpenNotes: "table-craft:update.open-notes",
+  importScan: "table-craft:import.scan",
+  importPreview: "table-craft:import.preview",
+  importRun: "table-craft:import.run",
+  importCancel: "table-craft:import.cancel",
 } as const;
 
 /** The `window.postMessage` kind preload uses to hand a port on; contextBridge cannot carry one. */
@@ -160,6 +166,106 @@ export interface Datasource {
   readonly config: Readonly<Record<string, ConfigValue>>;
   /** How each secret field is kept, by key. */
   readonly secretModes: Readonly<Record<string, SecretMode>>;
+  /** The app and id it was imported from (decision 068); absent for one made in TableCraft. */
+  readonly origin?: DatasourceOrigin | undefined;
+}
+
+/** The apps whose saved connections TableCraft imports (plan 035). */
+export const IMPORT_APPS = ["datagrip", "tablepro"] as const;
+export type ImportApp = (typeof IMPORT_APPS)[number];
+
+export interface DatasourceOrigin {
+  readonly app: ImportApp;
+  /** The other app's id for it: a DataGrip uuid, a TablePro connection id or bundle ref. */
+  readonly id: string;
+}
+
+/** What the import preview says of a connection's password; never the password itself. */
+export type ImportPasswordState =
+  /** In the system credential store; reading it may show the system's prompt. */
+  | "keychain"
+  /** Read already, from DataGrip's KeePass file. */
+  | "found"
+  /** In the decrypted `.tablepro` bundle. */
+  | "inFile"
+  | "notSaved"
+  | "locked"
+  /** Kept where TableCraft cannot read it; asked for on the first connect. */
+  | "askOnConnect"
+  /** The datasource type has no password, or the row is not importable. */
+  | "notNeeded";
+
+export interface ImportRow {
+  /** `<app>:<id>`, unique within a preview. */
+  readonly key: string;
+  readonly app: ImportApp;
+  readonly name: string;
+  readonly pluginId: string | null;
+  /** The plugin's name, or the other app's driver when no plugin reads it. */
+  readonly pluginName: string;
+  /** `host:port/database` or the file path. */
+  readonly target: string;
+  readonly user: string | null;
+  /** The folder within the other app, before the top-level folder option. */
+  readonly folder: string | null;
+  readonly password: ImportPasswordState;
+  readonly warnings: readonly string[];
+  /** `unsupported` cannot be ticked; `duplicate` and `sshTunnel` start unticked. */
+  readonly status: "ready" | "duplicate" | "sshTunnel" | "unsupported";
+  readonly selected: boolean;
+}
+
+export interface ImportSource {
+  readonly app: ImportApp;
+  readonly label: string;
+  readonly found: boolean;
+  /** Connections found; 0 when not found. */
+  readonly count: number;
+  /** The configuration read, or where it was looked for when not found. */
+  readonly locations: readonly string[];
+  /** The store its passwords are in, such as "macOS Keychain", or why they cannot be read. */
+  readonly passwords: string;
+}
+
+export type ImportPreviewRequest =
+  | { readonly source: ImportApp }
+  /** A `.tablepro` bundle or a `dataSources.xml` the user picked; the passphrase is used once. */
+  | { readonly source: "file"; readonly path: string; readonly passphrase?: string | undefined };
+
+export type ImportPreview =
+  | {
+      readonly status: "ready";
+      readonly previewId: number;
+      readonly app: ImportApp;
+      /** The folder the top-level option puts everything under, such as `DataGrip`. */
+      readonly topFolder: string;
+      readonly rows: readonly ImportRow[];
+    }
+  | { readonly status: "needsPassphrase" | "wrongPassphrase"; readonly message: string };
+
+export interface ImportRunRequest {
+  readonly previewId: number;
+  readonly keys: readonly string[];
+  readonly importPasswords: boolean;
+  readonly topFolder: boolean;
+}
+
+export interface ImportProgress {
+  readonly done: number;
+  readonly total: number;
+  /** What is happening now, such as "Reading keychain 3 of 14…". */
+  readonly message: string;
+}
+
+export interface ImportSummary {
+  readonly imported: number;
+  readonly withPasswords: number;
+  readonly skipped: number;
+  /** The new datasources, for the tree to select. */
+  readonly ids: readonly string[];
+  readonly cancelled: boolean;
+  /** The user denied the keychain; the rest were imported without passwords. */
+  readonly keychainDenied: boolean;
 }
 
 /** What the renderer sees of a datasource: its record, and which secrets have a stored value. */
@@ -406,4 +512,12 @@ export interface TableCraftBridge {
   updateDismiss(): Promise<InvokeResult<null>>;
   /** Opens the offered release's notes page in the browser. */
   updateOpenNotes(): Promise<InvokeResult<null>>;
+  /** Looks for DataGrip and TablePro on this machine (plan 035); reads files, asks no keychain. */
+  importScan(): Promise<InvokeResult<readonly ImportSource[]>>;
+  importPreview(request: ImportPreviewRequest): Promise<InvokeResult<ImportPreview>>;
+  /** Imports the ticked rows; progress arrives through `onImportProgress`. */
+  importRun(request: ImportRunRequest): Promise<InvokeResult<ImportSummary>>;
+  /** Stops a running import before its next connection. */
+  importCancel(): Promise<InvokeResult<null>>;
+  onImportProgress(listener: (progress: ImportProgress) => void): () => void;
 }

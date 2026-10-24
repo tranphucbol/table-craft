@@ -10,6 +10,7 @@ import type {
   ConnectionField,
   ConnectResult,
   Datasource,
+  DatasourceDraft,
   DatasourceList,
   DatasourceView,
   ParsedUrl,
@@ -56,6 +57,8 @@ export interface DatasourceService<Target> {
   list(): DatasourceList;
   plugins(): readonly PluginInfo[];
   save(request: SaveDatasourceRequest): Promise<DatasourceView>;
+  /** Adds imported datasources in one write (plan 035); secret values go straight to the store. */
+  importMany(items: readonly ImportedDatasource[]): Promise<string[]>;
   delete(id: string): Promise<void>;
   test(request: SaveDatasourceRequest): Promise<ProbeResult>;
   /** Reads a pasted URL for the plugin's form; the password comes back only to fill the field it was pasted for. */
@@ -64,6 +67,12 @@ export interface DatasourceService<Target> {
   url(id: string): string;
   connect(datasourceId: string, typed: Readonly<Record<string, string>>, target: Target): Promise<ConnectResult>;
   disconnect(datasourceId: string): Promise<void>;
+}
+
+export interface ImportedDatasource {
+  readonly draft: DatasourceDraft;
+  /** Secret values by field key; each is kept in the field's default mode. */
+  readonly secrets: Readonly<Record<string, string>>;
 }
 
 const DRAFT_ID = "draft";
@@ -193,7 +202,8 @@ export async function createDatasourceService<Target>(
     const previous = datasources.find((datasource) => datasource.id === draft.id);
     const id = previous?.id ?? options.newId();
     const modes = modesFor(plugin, draft.secretModes);
-    const next = toDatasource({ ...draft, secretModes: modes }, id, plugin.fields);
+    const origin = draft.origin ?? previous?.origin;
+    const next = toDatasource({ ...draft, secretModes: modes, origin }, id, plugin.fields);
     checkRequired(plugin, next.config);
     if (Object.values(modes).includes("forever") && !secrets.encryption().available) {
       const { reason } = secrets.encryption();
@@ -209,6 +219,26 @@ export async function createDatasourceService<Target>(
     await store.save(datasources);
     changed();
     return view(next, false);
+  }
+
+  async function importMany(items: readonly ImportedDatasource[]): Promise<string[]> {
+    const added: Datasource[] = [];
+    for (const item of items) {
+      const plugin = availablePlugin(item.draft.pluginId);
+      const id = options.newId();
+      const modes = modesFor(plugin, {});
+      const next = toDatasource({ ...item.draft, secretModes: modes }, id, plugin.fields);
+      for (const [key, value] of Object.entries(item.secrets)) {
+        const mode = modes[key];
+        if (mode !== undefined) await secrets.set(id, key, mode, value);
+      }
+      added.push(next);
+    }
+    if (added.length === 0) return [];
+    datasources = [...datasources, ...added];
+    await store.save(datasources);
+    changed();
+    return added.map((datasource) => datasource.id);
   }
 
   async function remove(id: string): Promise<void> {
@@ -327,6 +357,7 @@ export async function createDatasourceService<Target>(
     list,
     plugins: () => options.plugins,
     save,
+    importMany,
     delete: remove,
     test,
     parseUrl,

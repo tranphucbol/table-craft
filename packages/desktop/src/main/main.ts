@@ -2,7 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { release } from "node:os";
+import { homedir, release } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import {
@@ -30,6 +30,10 @@ import { createConsoleFiles, type DirectoryFileSystem } from "@table-craft/deskt
 import { datasourceFromEnvironment } from "@table-craft/desktop/main/datasource.js";
 import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import { createHostRegistry, type EngineProcess } from "@table-craft/desktop/main/hosts.js";
+import { createImporter } from "@table-craft/desktop/main/import/importer.js";
+import { createCredentialReader, runCommand } from "@table-craft/desktop/main/import/keychain.js";
+import { nodeImportFiles } from "@table-craft/desktop/main/import/nodeFiles.js";
+import { parseTableProDefaults, TABLEPRO_DEFAULTS_DOMAIN } from "@table-craft/desktop/main/import/tablepro.js";
 import { registerIpc } from "@table-craft/desktop/main/ipc.js";
 import {
   DIAGNOSTICS_HISTORY_RUNS,
@@ -98,6 +102,8 @@ const USER_DATA_DIRECTORY = UPDATE_TEST_BUILD ? "table-craft-update-test" : "tab
 const WINDOW_WIDTH = 1200;
 const WINDOW_HEIGHT = 800;
 const USER_PLUGINS_DIR = "plugins";
+/** macOS reads TablePro's folders from its preferences with this tool (plan 035). */
+const DEFAULTS_TOOL = "/usr/bin/defaults";
 const USER_DATA = "userData";
 const APP_DATA = "appData";
 /** A test seam: a fresh profile per launch, so layout, datasources and plugins never leak between smoke runs. */
@@ -629,6 +635,22 @@ void app.whenReady().then(async () => {
     history,
     onChanged: (list) => broadcast(CHANNELS.datasourcesChanged, list),
   });
+  const importer = createImporter({
+    environment: {
+      platform: process.platform,
+      home: homedir(),
+      appData: process.env.APPDATA ?? null,
+      files: nodeImportFiles,
+    },
+    credentials: createCredentialReader({ platform: process.platform, run: runCommand }),
+    async tableProGroups() {
+      if (process.platform !== "darwin") return [];
+      const exported = await runCommand(DEFAULTS_TOOL, ["export", TABLEPRO_DEFAULTS_DOMAIN, "-"]);
+      return exported.code === 0 ? parseTableProDefaults(exported.stdout) : [];
+    },
+    service,
+    log: mainLog.child("import"),
+  });
   const themes = createThemeFolder({ directory, files });
   const settings: SettingsService = await createSettingsService({
     store: createSettingsStore({ directory, files }),
@@ -707,6 +729,15 @@ void app.whenReady().then(async () => {
           datasources: () => service.list().datasources,
           runs: () => history.recentRuns(DIAGNOSTICS_HISTORY_RUNS),
         }),
+    },
+    importer: {
+      scan: () => importer.scan(),
+      preview: (request) => importer.preview(request),
+      run: (request, sender) =>
+        importer.run(request, (progress) => {
+          if (!sender.isDestroyed()) sender.send(CHANNELS.importProgress, progress);
+        }),
+      cancel: () => importer.cancel(),
     },
     updates: {
       state: () => updates.state(),

@@ -9,10 +9,16 @@ import { DatasourceError, type DatasourceService } from "@table-craft/desktop/ma
 import {
   HISTORY_OUTCOMES,
   HISTORY_SOURCES,
+  IMPORT_APPS,
   INVOKE_CHANNELS,
   type AppInfo,
   type BridgeFailure,
   type HistoryEntry,
+  type ImportPreview,
+  type ImportPreviewRequest,
+  type ImportRunRequest,
+  type ImportSource,
+  type ImportSummary,
   type InvokeResult,
   type MenuPoint,
   type SaveDatasourceRequest,
@@ -73,6 +79,16 @@ const menuPoint = z.strictObject({
   y: z.number().int().nonnegative(),
 }) satisfies z.ZodType<MenuPoint>;
 const noRequest = z.undefined();
+const importPreviewRequest = z.union([
+  z.strictObject({ source: z.enum(IMPORT_APPS) }),
+  z.strictObject({ source: z.literal("file"), path: z.string().min(1), passphrase: z.string().optional() }),
+]) satisfies z.ZodType<ImportPreviewRequest>;
+const importRunRequest = z.strictObject({
+  previewId: z.number().int().positive(),
+  keys: z.array(z.string().min(1)),
+  importPasswords: z.boolean(),
+  topFolder: z.boolean(),
+}) satisfies z.ZodType<ImportRunRequest>;
 
 /** The slice of `ipcMain` the handlers need; `sender` is the window that asked. */
 export interface InvokeRegistrar<Sender> {
@@ -102,6 +118,15 @@ export interface IpcOptions<Sender> {
   readonly log: Logger;
   readonly logs: LogChannels<Sender>;
   readonly updates: UpdateChannels;
+  readonly importer: ImportChannels<Sender>;
+}
+
+/** The importer behind the `import.*` channels (plan 035); progress goes to the asking window. */
+export interface ImportChannels<Sender> {
+  scan(): Promise<readonly ImportSource[]>;
+  preview(request: ImportPreviewRequest): Promise<ImportPreview>;
+  run(request: ImportRunRequest, sender: Sender): Promise<ImportSummary>;
+  cancel(): void;
 }
 
 /** The updater behind the `update.*` channels (plan 020); URLs never come from the renderer. */
@@ -180,6 +205,14 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   );
   handle(INVOKE_CHANNELS.disconnectEngine, disconnectRequest, async ({ datasourceId }) => {
     await service.disconnect(datasourceId);
+    return null;
+  });
+  const { importer } = options;
+  handle(INVOKE_CHANNELS.importScan, noRequest, () => importer.scan());
+  handle(INVOKE_CHANNELS.importPreview, importPreviewRequest, (request) => importer.preview(request));
+  handle(INVOKE_CHANNELS.importRun, importRunRequest, (request, sender) => importer.run(request, sender));
+  handle(INVOKE_CHANNELS.importCancel, noRequest, () => {
+    importer.cancel();
     return null;
   });
   handle(INVOKE_CHANNELS.chooseFile, chooseFileRequest, ({ title }, sender) => options.chooseFile(sender, title));
