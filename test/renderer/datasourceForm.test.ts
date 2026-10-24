@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyParsedUrl,
+  CA_FILE_UNUSED_NOTE,
+  caFileNote,
   draftFromView,
   draftProblems,
   duplicateDraft,
@@ -8,6 +10,7 @@ import {
   offersSshTunnel,
   secretPlaceholder,
   sshSecretField,
+  tlsFieldsOf,
   toSaveRequest,
   uniqueName,
   withoutPassword,
@@ -30,8 +33,22 @@ describe("datasource form", () => {
     const draft = newDraft("new-0", POSTGRES_PLUGIN, ["PostgreSQL"], "forever", "Local");
 
     expect(draft.name).toBe("PostgreSQL (2)");
-    expect(draft.values).toEqual({ host: "localhost", port: "5432", database: "", user: "", sslMode: "disable" });
-    expect(draft.secretModes).toEqual({ password: "forever", "ssh.password": "forever", "ssh.passphrase": "forever" });
+    expect(draft.values).toEqual({
+      host: "localhost",
+      port: "5432",
+      database: "",
+      user: "",
+      sslMode: "disable",
+      sslRootCert: "",
+      sslCert: "",
+      sslKey: "",
+    });
+    expect(draft.secretModes).toEqual({
+      password: "forever",
+      sslKeyPassphrase: "forever",
+      "ssh.password": "forever",
+      "ssh.passphrase": "forever",
+    });
     expect(draft.folder).toBe("Local");
     expect(draft.dirty).toBe(true);
   });
@@ -215,5 +232,53 @@ describe("datasource form SSH tunnel", () => {
     expect(sshSecretField({ ...ssh, auth: "password" })).toMatchObject({ key: "ssh.password", label: "SSH password" });
     expect(sshSecretField({ ...ssh, auth: "key" })).toMatchObject({ key: "ssh.passphrase", label: "Key passphrase" });
     expect(sshSecretField({ ...ssh, auth: "agent" })).toBeNull();
+  });
+});
+
+describe("datasource form certificates", () => {
+  const blank = newDraft("new-0", POSTGRES_PLUGIN, [], "forever");
+  const withValues = (values: Record<string, string>) => ({ ...blank, values: { ...blank.values, ...values } });
+
+  it("givenTlsSpec_whenFieldsListed_thenModeCaCertKeyPassphraseInOrder", () => {
+    expect(tlsFieldsOf(POSTGRES_PLUGIN).map((field) => field.key)).toEqual([
+      "sslMode",
+      "sslRootCert",
+      "sslCert",
+      "sslKey",
+      "sslKeyPassphrase",
+    ]);
+    expect(tlsFieldsOf(SQLITE_PLUGIN)).toEqual([]);
+  });
+
+  it("givenCaFileWithRequire_whenNoted_thenSuggestsVerifyMode", () => {
+    expect(caFileNote(withValues({ sslMode: "require", sslRootCert: "/ca.pem" }), POSTGRES_PLUGIN)).toBe(
+      CA_FILE_UNUSED_NOTE,
+    );
+    expect(caFileNote(withValues({ sslMode: "disable", sslRootCert: "/ca.pem" }), POSTGRES_PLUGIN)).toBe(
+      CA_FILE_UNUSED_NOTE,
+    );
+  });
+
+  it("givenCaFileWithVerifyMode_whenNoted_thenNoNote", () => {
+    expect(caFileNote(withValues({ sslMode: "verify-ca", sslRootCert: "/ca.pem" }), POSTGRES_PLUGIN)).toBeNull();
+    expect(caFileNote(withValues({ sslMode: "require", sslRootCert: " " }), POSTGRES_PLUGIN)).toBeNull();
+  });
+
+  it("givenClientKey_whenSaveRequestBuilt_thenPassphraseKept", () => {
+    const draft = withValues({ sslMode: "verify-full", sslKey: "~/client.key" });
+    const typed = { ...draft, secrets: { ...draft.secrets, sslKeyPassphrase: { action: "set" as const, value: "p" } } };
+
+    const request = toSaveRequest(typed, POSTGRES_PLUGIN);
+
+    expect(request.datasource.config).toMatchObject({ sslKey: "~/client.key" });
+    expect(request.datasource.secretModes).toEqual({ password: "forever", sslKeyPassphrase: "forever" });
+    expect(request.secrets.sslKeyPassphrase).toEqual({ action: "set", value: "p" });
+  });
+
+  it("givenNoClientKey_whenSaveRequestBuilt_thenPassphraseDropped", () => {
+    const request = toSaveRequest(withValues({ sslMode: "verify-full" }), POSTGRES_PLUGIN);
+
+    expect(request.datasource.secretModes).not.toHaveProperty("sslKeyPassphrase");
+    expect(request.secrets).not.toHaveProperty("sslKeyPassphrase");
   });
 });

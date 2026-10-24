@@ -545,6 +545,35 @@ describe("probeDatasource", () => {
     expect(result.ok && result.serverVersion).toMatch(VERSION);
   });
 
+  it("givenTlsSession_whenProbed_thenReportsProtocolAndCipher", async () => {
+    const tls = { protocol: "TLSv1.3", cipher: "TLS_AES_256_GCM_SHA384" };
+    const encrypted: DatasourcePlugin = {
+      ...sqlite,
+      connect: async (config, options) => {
+        const session = await sqlite.connect(config, options);
+        return {
+          execute: (sql, params) => session.execute(sql, params),
+          serverVersion: "1",
+          tls,
+          close: () => session.close(),
+        };
+      },
+    };
+
+    const result = await probeDatasource({
+      datasource: DATASOURCE,
+      plugins: [{ ...LOADED_SQLITE, plugin: encrypted }],
+    });
+
+    expect(result).toMatchObject({ ok: true, tls });
+  });
+
+  it("givenSessionWithoutTlsReport_whenProbed_thenNoTlsLine", async () => {
+    const result = await probeDatasource({ datasource: DATASOURCE, plugins: [LOADED_SQLITE] });
+
+    expect(result).not.toHaveProperty("tls");
+  });
+
   it("givenUnreachableDatabase_whenProbed_thenFailsWithConnectionFailedAndHint", async () => {
     const result = await probeDatasource({
       datasource: { ...DATASOURCE, config: { path: "/nonexistent-table-craft-directory/db.sqlite" } },

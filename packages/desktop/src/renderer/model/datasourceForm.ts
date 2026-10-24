@@ -81,6 +81,38 @@ function sshDraftOf(settings: SshSettings | undefined): SshDraft {
   return { ...settings, port: settings.port === DEFAULT_SSH_PORT ? "" : String(settings.port) };
 }
 
+/** The client key passphrase's key, which is saved only beside a client key file (decision 072). */
+function keyPassphraseOf(plugin: PluginInfo | undefined): string | undefined {
+  return plugin?.tls?.keyFile === undefined ? undefined : plugin.tls.keyPassphrase;
+}
+
+/** Whether the draft names a client key file, the only thing the client key passphrase unlocks. */
+function namesClientKey(draft: FormDraft, plugin: PluginInfo | undefined): boolean {
+  const keyFile = plugin?.tls?.keyFile;
+  const value = keyFile === undefined ? undefined : draft.values[keyFile];
+  return typeof value === "string" && value.trim() !== "";
+}
+
+export const CA_FILE_UNUSED_NOTE = "Use Verify CA or Verify full to check this CA file.";
+
+/** Why a CA file the draft names would not be checked: the SSL mode does not verify; null when it would. */
+export function caFileNote(draft: FormDraft, plugin: PluginInfo | undefined): string | null {
+  const tls = plugin?.tls;
+  if (tls?.caFile === undefined) return null;
+  const caFile = draft.values[tls.caFile];
+  if (typeof caFile !== "string" || caFile.trim() === "") return null;
+  const mode = draft.values[tls.mode];
+  return typeof mode === "string" && tls.verifyModes.includes(mode) ? null : CA_FILE_UNUSED_NOTE;
+}
+
+/** The plugin's certificate fields in the order the SSL part of the form draws them: mode, CA, certificate, key, passphrase. */
+export function tlsFieldsOf(plugin: PluginInfo | undefined): readonly ConnectionField[] {
+  const tls = plugin?.tls;
+  if (tls === undefined || tls === null) return [];
+  const keys = [tls.mode, tls.caFile, tls.certFile, tls.keyFile, tls.keyPassphrase];
+  return keys.flatMap((key) => plugin?.fields.find((field) => field.key === key) ?? []);
+}
+
 /** Every secret key the form keeps a mode and a change for: the plugin's, then the tunnel's. */
 function secretKeysOf(plugin: PluginInfo | undefined): readonly string[] {
   const own = secretFieldsOf(plugin).map((field) => field.key);
@@ -132,18 +164,19 @@ export function uniqueName(base: string, taken: readonly string[]): string {
 }
 
 /**
- * A record saved before its tunnel was set up has no SSH modes; they start as the database
- * password's, the choice the user already made for this datasource.
+ * A record saved before its tunnel or client key was set up has no modes for their secrets; they
+ * start as the database password's, the choice the user already made for this datasource.
  */
-function withSshModes(
+function withLaterModes(
   modes: Readonly<Record<string, SecretMode>>,
   plugin: PluginInfo | undefined,
 ): Readonly<Record<string, SecretMode>> {
-  if (!offersSshTunnel(plugin)) return modes;
   const first = secretFieldsOf(plugin)[0];
   const fallback = (first === undefined ? undefined : modes[first.key]) ?? "never";
   const filled = { ...modes };
-  for (const key of SSH_KEYS) filled[key] ??= fallback;
+  if (offersSshTunnel(plugin)) for (const key of SSH_KEYS) filled[key] ??= fallback;
+  const passphrase = keyPassphraseOf(plugin);
+  if (passphrase !== undefined) filled[passphrase] ??= fallback;
   return filled;
 }
 
@@ -166,7 +199,7 @@ export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefin
     url: "",
     urlNote: null,
     values,
-    secretModes: withSshModes(view.secretModes, plugin),
+    secretModes: withLaterModes(view.secretModes, plugin),
     secrets,
     storedSecrets: view.storedSecrets,
     ssh: sshDraftOf(view.ssh),
@@ -319,7 +352,9 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
   }
   const folder = draft.folder.trim();
   const tunnel = offersSshTunnel(plugin) && sshTouched(draft.ssh);
-  const kept = (key: string): boolean => tunnel || !SSH_KEYS.includes(key);
+  const clientKey = namesClientKey(draft, plugin);
+  const kept = (key: string): boolean =>
+    (tunnel || !SSH_KEYS.includes(key)) && (clientKey || key !== keyPassphraseOf(plugin));
   return {
     datasource: {
       id: draft.id,

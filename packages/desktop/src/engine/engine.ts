@@ -353,6 +353,7 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
       serverVersion: session.serverVersion,
       elapsedMs,
       ...(hop === null ? {} : { ssh: hop }),
+      ...(session.tls === undefined ? {} : { tls: session.tls === null ? null : { ...session.tls } }),
     };
   } catch (cause) {
     const hop = connector.hop;

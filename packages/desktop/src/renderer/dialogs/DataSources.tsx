@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo, useState } from "react";
-import type { ProbeResult, SshHop } from "@table-craft/desktop/engine/protocol.js";
+import type { ProbeResult, SshHop, TlsHop } from "@table-craft/desktop/engine/protocol.js";
 import {
   DATASOURCE_COLORS,
   type BridgeFailure,
@@ -25,11 +25,13 @@ import { SECRET_MODE_LABEL, SecretField } from "@table-craft/desktop/renderer/di
 import { SshSection } from "@table-craft/desktop/renderer/dialogs/SshSection.js";
 import {
   applyParsedUrl,
+  caFileNote,
   draftFromView,
   draftProblems,
   duplicateDraft,
   newDraft,
   offersSshTunnel,
+  tlsFieldsOf,
   toSaveRequest,
   type FormDraft,
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
@@ -53,6 +55,11 @@ type TestState = { readonly kind: "testing" } | { readonly kind: "done"; readonl
 /** "SSH: connected to bastion as deploy · 12 ms", the first hop Test Connection reports (decision 070). */
 export function sshHopSummary(hop: SshHop): string {
   return `SSH: connected to ${hop.host} as ${hop.user} · ${String(Math.round(hop.elapsedMs))} ms`;
+}
+
+/** "SSL: TLSv1.3 · TLS_AES_256_GCM_SHA384", or that the connection is not encrypted (decision 072). */
+export function tlsSummary(tls: TlsHop | null): string {
+  return tls === null ? "SSL: not encrypted" : `SSL: ${tls.protocol} · ${tls.cipher}`;
 }
 
 /** "Succeeded · PostgreSQL 17.4 · 38 ms" (plan 004). */
@@ -247,6 +254,32 @@ function SectionTitle({ children }: { readonly children: string }) {
   return <h3 className="col-span-2 mt-gap border-b border-line pb-1 font-semibold text-ink-muted">{children}</h3>;
 }
 
+function SubsectionTitle({ children }: { readonly children: string }) {
+  return <h4 className="col-span-2 mt-1 font-semibold text-ink-muted">{children}</h4>;
+}
+
+/** The SSL rows under SSH/SSL: the mode, then the certificate files (decision 072). */
+function SslRows(
+  props: Omit<FieldProps, "field"> & {
+    readonly fields: readonly ConnectionField[];
+    readonly plugin: PluginInfo | undefined;
+  },
+) {
+  const { plugin, ...rest } = props;
+  const note = caFileNote(props.draft, plugin);
+  return (
+    <>
+      <SubsectionTitle>SSL</SubsectionTitle>
+      <Fields {...rest} />
+      {note === null ? null : (
+        <p data-testid="ca-file-note" className="col-start-2 text-ink-muted">
+          {note}
+        </p>
+      )}
+    </>
+  );
+}
+
 interface FormProps {
   readonly draft: FormDraft;
   readonly plugin: PluginInfo | undefined;
@@ -266,8 +299,11 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
   const keepAliveId = useId();
   const timeoutId = useId();
   const fields = plugin?.fields ?? [];
-  const general = fields.filter((field) => field.group !== "advanced");
-  const advanced = fields.filter((field) => field.group === "advanced");
+  const tlsFields = tlsFieldsOf(plugin);
+  const ownFields = fields.filter((field) => !tlsFields.includes(field));
+  const general = ownFields.filter((field) => field.group !== "advanced");
+  const advanced = ownFields.filter((field) => field.group === "advanced");
+  const tunnel = offersSshTunnel(plugin);
   const spec = plugin?.url ?? null;
   const capabilities = plugin?.capabilities ?? [];
   const keepAlive = capabilities.includes("keepAlive");
@@ -345,10 +381,11 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
       {draft.ephemeral || encryption.available ? null : (
         <p className="col-span-2 text-ink-muted">Forever is unavailable: {encryption.reason}</p>
       )}
-      {offersSshTunnel(plugin) ? (
+      {tunnel || tlsFields.length > 0 ? (
         <>
           <SectionTitle>SSH/SSL</SectionTitle>
-          <SshSection draft={draft} encryption={encryption} onChange={onChange} />
+          {tunnel ? <SshSection draft={draft} encryption={encryption} onChange={onChange} /> : null}
+          {tlsFields.length > 0 ? <SslRows fields={tlsFields} plugin={plugin} {...fieldProps} /> : null}
         </>
       ) : null}
       {advanced.length === 0 && !keepAlive && !timeout ? null : (
@@ -709,6 +746,14 @@ function TestResult({ state }: { readonly state: TestState | undefined }) {
         <span data-testid="test-result" data-ok="true" className="truncate text-success">
           {testSummary(result)}
         </span>
+        {result.tls === undefined ? null : (
+          <span
+            data-testid="test-tls"
+            className={cn("truncate", result.tls === null ? "text-ink-muted" : "text-success")}
+          >
+            {tlsSummary(result.tls)}
+          </span>
+        )}
       </span>
     );
   }

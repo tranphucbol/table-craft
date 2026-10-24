@@ -485,6 +485,12 @@ export interface EngineBoot {
   readonly pluginRoots: readonly string[];
 }
 
+/** The protocol and cipher a TLS connection to the database negotiated, as Test Connection reports them. */
+export interface TlsHop {
+  readonly protocol: string;
+  readonly cipher: string;
+}
+
 /**
  * What Test Connection shows: the server that answered, or why none did. `ssh` is the tunnel's hop
  * when it opened, so a failure past it still says the bastion was reached.
@@ -496,6 +502,8 @@ export type ProbeResult =
       readonly serverVersion: string | null;
       readonly elapsedMs: number;
       readonly ssh?: SshHop;
+      /** The TLS the database connection negotiated; null when it is not encrypted (decision 072). */
+      readonly tls?: TlsHop | null;
     }
   | { readonly ok: false; readonly error: EngineError; readonly ssh?: SshHop };
 

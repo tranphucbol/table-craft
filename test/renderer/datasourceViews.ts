@@ -30,8 +30,14 @@ const POSTGRES_FIELDS: readonly ConnectionField[] = [
     options: [
       { value: "disable", label: "Disable" },
       { value: "require", label: "Require" },
+      { value: "verify-ca", label: "Verify CA" },
+      { value: "verify-full", label: "Verify full" },
     ],
   },
+  { key: "sslRootCert", label: "SSL root certificate", kind: "file", group: "advanced" },
+  { key: "sslCert", label: "Client certificate", kind: "file", group: "advanced" },
+  { key: "sslKey", label: "Client key", kind: "file", group: "advanced" },
+  { key: "sslKeyPassphrase", label: "Client key passphrase", kind: "password", secret: true, group: "advanced" },
 ];
 
 export const POSTGRES_PLUGIN: PluginInfo = {
@@ -48,6 +54,14 @@ export const POSTGRES_PLUGIN: PluginInfo = {
     params: [{ name: "sslmode", key: "sslMode", values: { disable: "disable", require: "require" } }],
   },
   network: { host: "host", port: "port" },
+  tls: {
+    mode: "sslMode",
+    verifyModes: ["verify-ca", "verify-full"],
+    caFile: "sslRootCert",
+    certFile: "sslCert",
+    keyFile: "sslKey",
+    keyPassphrase: "sslKeyPassphrase",
+  },
 };
 
 export const SQLITE_PLUGIN: PluginInfo = {
@@ -59,4 +73,5 @@ export const SQLITE_PLUGIN: PluginInfo = {
   highlight: "sqlite",
   url: { schemes: ["sqlite", "file"], form: "file", parts: { path: "path" } },
   network: null,
+  tls: null,
 };
