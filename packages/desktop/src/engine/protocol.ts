@@ -780,14 +780,33 @@ export interface ImportEvent {
 }
 
 /**
- * Where a script stopped (decision 081): the file, and the line and column (from 1) the failing
- * statement starts at, with its first characters; all null when the run failed before a statement.
+ * What a run of several statements does when one fails (decision 083): pause and ask, stop as it
+ * always did, or log the failure and go on.
  */
-export interface ScriptError extends EngineError {
+export const ON_ERROR_CHOICES = ["ask", "stop", "continue"] as const;
+export type OnErrorChoice = (typeof ON_ERROR_CHOICES)[number];
+
+/** The answers to a paused run: go on, go on without asking again, stop, or run it again. */
+export const ERROR_ANSWERS = ["skip", "skipAll", "stop", "retry"] as const;
+export type ErrorAnswer = (typeof ERROR_ANSWERS)[number];
+
+/** A line and column in a file, both from 1, the column in UTF-16 code units. */
+export interface FilePosition {
+  readonly line: number;
+  readonly column: number;
+}
+
+/**
+ * Where a script statement failed (decision 081): the file, and the line and column (from 1) the
+ * failing statement starts at, with its first characters; all null when the run failed before a
+ * statement. `at` is where in the file the database located the error (decision 082), when it did.
+ */
+export interface ScriptError extends Omit<EngineError, "position"> {
   readonly file: string | null;
   readonly line: number | null;
   readonly column: number | null;
   readonly statement: string | null;
+  readonly at: FilePosition | null;
 }
 
 /** One Run SQL Script task, as every event carries it whole (decision 081). */
@@ -805,8 +824,18 @@ export interface ScriptTask {
   readonly bytes: number;
   readonly size: number;
   readonly elapsedMs: number;
+  /** Why the task failed or was cancelled; null while it runs and when it is done. */
   readonly error: ScriptError | null;
+  /** Statements that failed and were skipped past (decision 083), across every file. */
+  readonly failed: number;
+  /** The first `SCRIPT_FAILURES_KEPT` of them, in order; `failed` counts them all. */
+  readonly failures: readonly ScriptError[];
+  /** The failure an `ask` task waits on, until `script.answer` answers it. */
+  readonly question: ScriptError | null;
 }
+
+/** A script that fails a million times keeps the first failures, not an event the size of the file. */
+export const SCRIPT_FAILURES_KEPT = 100;
 
 export const SCRIPT_EVENT_TYPES = ["script.progress", "script.done", "script.failed", "script.cancelled"] as const;
 export type ScriptEventType = (typeof SCRIPT_EVENT_TYPES)[number];
@@ -1191,12 +1220,19 @@ export interface EngineCalls {
   /**
    * Runs `files` (absolute paths) one after another on a session of the task's own, in auto-commit,
    * first switching to `namespace` when given; answers at once with the task. The files are
-   * streamed through the plugin's splitter and stop at the first failing statement (decision 081).
+   * streamed through the plugin's splitter (decision 081); a failing statement stops the task,
+   * pauses it for `script.answer`, or is skipped past, as `onError` says (decision 083).
    */
   "script.run": {
-    params: { readonly files: readonly string[]; readonly namespace: readonly string[] | null };
+    params: {
+      readonly files: readonly string[];
+      readonly namespace: readonly string[] | null;
+      readonly onError: OnErrorChoice;
+    };
     result: ScriptTask;
   };
+  /** Answers the failure a task paused on (`ScriptTask.question`); refused when it waits on none. */
+  "script.answer": { params: { readonly taskId: string; readonly answer: ErrorAnswer }; result: null };
   /** Stops a running script between statements, cancelling the one in flight where the plugin can. */
   "script.cancel": { params: { readonly taskId: string }; result: null };
   /** Every script this engine ran, for a renderer that reloaded. */
@@ -1377,6 +1413,12 @@ export interface EngineError {
   readonly hint: string;
   /** For `editRejected`: the 0-based index of the statement that failed or touched the wrong rows. */
   readonly statementIndex?: number;
+  /**
+   * For `statementFailed`: where the database located the error, as a 0-based offset into the
+   * request's `sql` (decision 082); absent when it did not say, or when the text it ran was not the
+   * request's own (bound parameters, Explain).
+   */
+  readonly position?: number;
 }
 
 export interface EngineErrorMessage {

@@ -29,7 +29,7 @@ const CHOSEN: Settings = {
   editor: {
     format: { style: "standard", keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0, alignAliases: false },
   },
-  console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30 },
+  console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30, runAllOnError: "continue" },
   data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
   log: { level: "debug" },
   updates: { checkAutomatically: false },
@@ -156,6 +156,14 @@ describe("settings document", () => {
       readSettings({ ...CHOSEN, appearance: { ...appearance, systemTitleBar: "yes" } }).appearance.systemTitleBar,
     ).toBe(false);
     expect(readSettings(CHOSEN).appearance.systemTitleBar).toBe(true);
+  });
+
+  it("givenRunAllOnErrorMissingOrUnknown_whenRead_thenAsk", () => {
+    expect(readSettings(CHOSEN).console.runAllOnError).toBe("continue");
+    expect(readSettings({ ...CHOSEN, console: { parameters: false } }).console.runAllOnError).toBe("ask");
+    expect(
+      readSettings({ ...CHOSEN, console: { ...CHOSEN.console, runAllOnError: "ignore" } }).console.runAllOnError,
+    ).toBe("ask");
   });
 
   it("givenWriteRequest_whenAnyValueOutOfRange_thenRefused", () => {

@@ -7,7 +7,7 @@ import {
   TRANSACTION_MODES,
   z,
 } from "@table-craft/plugin-api";
-import type { EngineRequest } from "@table-craft/desktop/engine/protocol.js";
+import { ERROR_ANSWERS, ON_ERROR_CHOICES, type EngineRequest } from "@table-craft/desktop/engine/protocol.js";
 import {
   EXPORT_STALL_SECONDS_RANGE,
   FETCH_ALL_CAP_RANGE,
@@ -274,7 +274,9 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     type: z.literal("script.run"),
     files: z.array(file).min(1),
     namespace: namespacePath.nullable(),
+    onError: z.enum(ON_ERROR_CHOICES),
   }),
+  z.strictObject({ id: requestId, type: z.literal("script.answer"), taskId, answer: z.enum(ERROR_ANSWERS) }),
   z.strictObject({ id: requestId, type: z.literal("script.cancel"), taskId }),
   z.strictObject({ id: requestId, type: z.literal("script.list") }),
   z.strictObject({ id: requestId, type: z.literal("catalog.namespaces"), refresh: z.boolean().optional() }),

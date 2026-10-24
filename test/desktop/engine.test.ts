@@ -182,6 +182,33 @@ describe("engine", () => {
     if (response.type === "engine.error") expect(response.error.hint).not.toBe("");
   });
 
+  it("givenSyntaxError_whenExecuted_thenErrorCarriesOffsetIntoTheSentSql", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+    const sql = "SELECT 1\nFROM t ORDER x";
+
+    const response = await connection.handle({ id: 2, type: "statement.execute", ...PAGING, sessionId, sql });
+
+    expect(response).toMatchObject({ type: "engine.error", error: { position: sql.indexOf("x") } });
+  });
+
+  it("givenBoundParametersRewroteTheSql_whenItFails_thenNoPosition", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+
+    const response = await connection.handle({
+      id: 2,
+      type: "statement.execute",
+      ...PAGING,
+      sessionId,
+      sql: "SELECT :v ORDER x",
+      parameters: { ":v": "1" },
+    });
+
+    expect(response).toMatchObject({ type: "engine.error", error: { code: "statementFailed" } });
+    expect(response.type === "engine.error" && response.error.position).toBeUndefined();
+  });
+
   it("givenUnknownSession_whenExecuted_thenUnknownSessionError", async () => {
     const response = await connected().handle({
       id: 7,

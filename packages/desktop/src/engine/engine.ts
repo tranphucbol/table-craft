@@ -37,8 +37,10 @@ import {
   type RowEdit,
 } from "@table-craft/core";
 import {
+  errorPositionOf,
   isPluginError,
   isTlsSettingsError,
+  offsetOfPosition,
   switchableTo,
   type BoundStatement,
   type Capability,
@@ -200,7 +202,16 @@ const READ_ONLY_STATEMENT_HINT =
 const RECONNECT_HINT = "Run it again; the console reconnects first.";
 const UNKNOWN_OUTCOME_HINT = "Run it again to reconnect, but check first whether it took effect.";
 
-function statementFailed(cause: unknown, readOnly: boolean): EngineFailure {
+function positionIn(sent: string, cause: unknown): number | undefined {
+  const position = errorPositionOf(cause);
+  return position === undefined ? undefined : offsetOfPosition(sent, position);
+}
+
+/**
+ * `sent` is the text the plugin ran, when it is also the request's own `sql`: only then does the
+ * plugin's error position point into the user's text (decision 082).
+ */
+function statementFailed(cause: unknown, readOnly: boolean, sent?: string): EngineFailure {
   if (cause instanceof EngineFailure) return cause;
   if (isPluginError(cause) && cause.code === "connectionLost") {
     return new EngineFailure({ code: "connectionLost", message: cause.message, hint: RECONNECT_HINT }, cause);
@@ -212,8 +223,14 @@ function statementFailed(cause: unknown, readOnly: boolean): EngineFailure {
   if (cause instanceof TunnelError) {
     return new EngineFailure({ code: cause.code, message: cause.message, hint: cause.hint }, cause);
   }
+  const position = sent === undefined ? undefined : positionIn(sent, cause);
   return new EngineFailure(
-    { code: "statementFailed", message: messageOf(cause), hint: readOnly ? READ_ONLY_STATEMENT_HINT : STATEMENT_HINT },
+    {
+      code: "statementFailed",
+      message: messageOf(cause),
+      hint: readOnly ? READ_ONLY_STATEMENT_HINT : STATEMENT_HINT,
+      ...(position === undefined ? {} : { position }),
+    },
     cause,
   );
 }
@@ -904,6 +921,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       },
       cancel: () => void session.cancel?.().catch(() => undefined),
       close: () => session.close(),
+      inTransaction: () => session.transactions?.open === true,
     };
   }
 
@@ -916,7 +934,8 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       namespace: params.namespace,
       open: () => scriptSession(params.namespace),
       stream: () => language.splitStream?.() ?? wholeFileStream((text) => language.split(text)),
-      failure: (cause) => statementFailed(cause, options.datasource.readOnly).error,
+      failure: (cause, sql) => statementFailed(cause, options.datasource.readOnly, sql).error,
+      onError: params.onError,
     });
   }
 
@@ -1797,7 +1816,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
           open,
           timeoutSeconds,
           (session) => session.execute(bound.sql, bound.params).then((result) => results.put(result, paging)),
-          (cause) => statementFailed(cause, options.datasource.readOnly),
+          (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
           (late) => void results.release(late.handle),
         );
         if (sessions.get(sessionId) !== open) {
@@ -2223,6 +2242,17 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       "script.cancel": ({ taskId }) => {
         scriptTaskOf(taskId);
         scripts.cancel(taskId);
+        return Promise.resolve(null);
+      },
+      "script.answer": ({ taskId, answer }) => {
+        scriptTaskOf(taskId);
+        if (!scripts.answer(taskId, answer)) {
+          throw new EngineFailure({
+            code: "invalidRequest",
+            message: `Script task "${taskId}" is not waiting for an answer.`,
+            hint: "It went on or stopped already; see its line in Services.",
+          });
+        }
         return Promise.resolve(null);
       },
       "script.list": () => Promise.resolve(scripts.list()),

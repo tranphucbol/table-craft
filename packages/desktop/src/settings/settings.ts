@@ -72,6 +72,11 @@ export interface EditorSettings {
   readonly format: FormatSettings;
 }
 
+/** Mirrors `ON_ERROR_CHOICES` in the engine protocol (decision 083). */
+export const RUN_ALL_ON_ERROR_CHOICES = ["ask", "stop", "continue"] as const;
+
+export type RunAllOnError = (typeof RUN_ALL_ON_ERROR_CHOICES)[number];
+
 export interface ConsoleSettings {
   /** Prompt for `:name`, `?` and `$1` before a run and bind the values (decision 043); off runs SQL verbatim. */
   readonly parameters: boolean;
@@ -82,6 +87,8 @@ export interface ConsoleSettings {
   readonly statementTimeoutSeconds: number;
   /** How often a Sessions tab with Auto-refresh on lists the server's sessions again (plan 045). */
   readonly sessionsRefreshSeconds: number;
+  /** What a run of more than one statement, and Run SQL Script, does when a statement fails (decision 083). */
+  readonly runAllOnError: RunAllOnError;
 }
 
 /** The levels Settings → Advanced offers; `error` and `warn` are always written (plan 017 decision 3). */
@@ -150,6 +157,7 @@ export const DEFAULT_SETTINGS: Settings = {
     parameters: true,
     statementTimeoutSeconds: 0,
     sessionsRefreshSeconds: 5,
+    runAllOnError: "ask",
   },
   data: {
     nullText: "<null>",
@@ -311,6 +319,9 @@ export function readSettings(input: unknown): Settings {
       sessionsRefreshSeconds: inRange(console.sessionsRefreshSeconds, SESSIONS_REFRESH_SECONDS_RANGE)
         ? console.sessionsRefreshSeconds
         : defaults.console.sessionsRefreshSeconds,
+      runAllOnError: RUN_ALL_ON_ERROR_CHOICES.includes(console.runAllOnError as RunAllOnError)
+        ? (console.runAllOnError as RunAllOnError)
+        : defaults.console.runAllOnError,
     },
     data: {
       nullText:

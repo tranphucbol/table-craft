@@ -16,7 +16,12 @@ import type {
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { rendererLog } from "@table-craft/desktop/renderer/log/log.js";
 import type { CellFormats } from "@table-craft/desktop/renderer/grid/format.js";
-import { DEFAULT_SETTINGS, type Settings, type ThemeChoice } from "@table-craft/desktop/settings/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  type RunAllOnError,
+  type Settings,
+  type ThemeChoice,
+} from "@table-craft/desktop/settings/settings.js";
 
 type SettingsBridge = Pick<TableCraftBridge, "readSettings" | "writeSettings" | "reloadThemes" | "openThemesFolder">;
 
@@ -190,4 +195,9 @@ export function statementTimeoutOf(
 /** Whether a run looks for `:name`, `?` and `$1` and asks for their values (plan 019 decision 8). */
 export function detectsParameters(): boolean {
   return useSettings.getState().settings.console.parameters;
+}
+
+/** What a run of more than one statement does when one fails (decision 083). */
+export function runAllOnError(): RunAllOnError {
+  return useSettings.getState().settings.console.runAllOnError;
 }

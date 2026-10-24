@@ -2,12 +2,16 @@ import { randomBytes } from "node:crypto";
 import { fileChunks, systemClock, Utf8Error, utf8Decoder, type ExportClock } from "@table-craft/core";
 import type { StatementStream, StreamedStatement } from "@table-craft/plugin-api";
 import type { Logger } from "@table-craft/desktop/log/record.js";
-import type {
-  EngineError,
-  ScriptError,
-  ScriptEvent,
-  ScriptEventType,
-  ScriptTask,
+import {
+  SCRIPT_FAILURES_KEPT,
+  type EngineError,
+  type ErrorAnswer,
+  type FilePosition,
+  type OnErrorChoice,
+  type ScriptError,
+  type ScriptEvent,
+  type ScriptEventType,
+  type ScriptTask,
 } from "@table-craft/desktop/engine/protocol.js";
 
 /** How long a finished script waits for its session to close before it reports anyway. */
@@ -22,6 +26,9 @@ const UNEXPECTED_HINT = "This is a TableCraft bug; restart the app and report it
 const CANCEL_HINT = "Statements that finished stay applied; run the script again when you are ready.";
 const UTF8_HINT = "Save the file as UTF-8 and run it again; the statements before that byte ran.";
 const READ_HINT = "Check that the file exists and that you may read it, then run the script again.";
+/** Said with every failure skipped past inside a transaction the script opened (plan 042). */
+const IN_TRANSACTION_HINT =
+  "It failed inside a transaction: PostgreSQL refuses every later statement until the transaction ends, and then rolls it back.";
 
 /**
  * `pending`, or a rejection as soon as `signal` aborts. The listener goes once `pending` settles,
@@ -50,6 +57,8 @@ export interface ScriptSession {
   /** Stops the statement in flight, where the plugin can. */
   cancel(): void;
   close(): Promise<void>;
+  /** Whether a transaction the script began is still open. */
+  inTransaction(): boolean;
 }
 
 export interface ScriptFile {
@@ -63,8 +72,9 @@ export interface ScriptJob {
   open(): Promise<ScriptSession>;
   /** A fresh splitter for each file. */
   stream(): StatementStream;
-  /** What a failed connect or statement tells the user. */
-  failure(cause: unknown): EngineError;
+  /** What a failed connect or statement tells the user; `sql` is the statement that failed. */
+  failure(cause: unknown, sql?: string): EngineError;
+  readonly onError: OnErrorChoice;
 }
 
 export type ScriptListener = (event: ScriptEvent) => void;
@@ -73,6 +83,8 @@ export interface ScriptTasks {
   start(job: ScriptJob): ScriptTask;
   get(taskId: string): ScriptTask | undefined;
   cancel(taskId: string): void;
+  /** Answers the failure a task waits on; false when it waits on none. */
+  answer(taskId: string, answer: ErrorAnswer): boolean;
   list(): ScriptTask[];
   subscribe(listener: ScriptListener): () => void;
   /** Resolves once no task runs, including tasks started while it waited. */
@@ -92,6 +104,8 @@ interface Running {
   task: ScriptTask;
   readonly controller: AbortController;
   done: Promise<void>;
+  /** Resolves the question the task waits on. */
+  answer: ((answer: ErrorAnswer) => void) | null;
 }
 
 /** Why a run stopped, before it becomes the task's `ScriptError`. */
@@ -104,7 +118,15 @@ class ScriptStop extends Error {
   }
 }
 
-const NOWHERE = { file: null, line: null, column: null, statement: null } as const;
+const NOWHERE = { file: null, line: null, column: null, statement: null, at: null } as const;
+
+/** Where in the file `offset` into a statement starting at `statement.line:column` falls. */
+function filePosition(statement: StreamedStatement, offset: number): FilePosition {
+  const before = statement.sql.slice(0, offset);
+  const lastBreak = before.lastIndexOf("\n");
+  if (lastBreak === -1) return { line: statement.line, column: statement.column + offset };
+  return { line: statement.line + before.split("\n").length - 1, column: offset - lastBreak };
+}
 
 function withinGrace(pending: Promise<void>, clock: ExportClock): Promise<void> {
   return new Promise((resolve) => {
@@ -164,22 +186,64 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
         true,
       );
 
-    const runStatement = async (open: ScriptSession, path: string, statement: StreamedStatement): Promise<void> => {
-      if (controller.signal.aborted) throw cancelled();
-      try {
-        await abortable(open.execute(statement.sql), controller.signal);
-      } catch (cause) {
-        if (controller.signal.aborted) throw cancelled();
-        throw new ScriptStop({
-          ...job.failure(cause),
-          file: path,
-          line: statement.line,
-          column: statement.column,
-          statement: statement.sql.slice(0, STATEMENT_PREVIEW_CHARS),
+    let onError = job.onError;
+    const failed = (open: ScriptSession, cause: unknown, path: string, statement: StreamedStatement): ScriptError => {
+      const { position, ...error } = job.failure(cause, statement.sql);
+      return {
+        ...error,
+        ...(open.inTransaction() && error.code === "statementFailed" ? { hint: IN_TRANSACTION_HINT } : {}),
+        file: path,
+        line: statement.line,
+        column: statement.column,
+        statement: statement.sql.slice(0, STATEMENT_PREVIEW_CHARS),
+        at: position === undefined ? null : filePosition(statement, position),
+      };
+    };
+    const asked = (error: ScriptError): Promise<ErrorAnswer> => {
+      const answered = new Promise<ErrorAnswer>((resolve) => {
+        entry.answer = resolve;
+      });
+      update({ question: error });
+      progress(true);
+      return abortable(answered, controller.signal)
+        .catch(() => {
+          throw cancelled();
+        })
+        .finally(() => {
+          entry.answer = null;
+          update({ question: null });
         });
+    };
+    const skipped = (error: ScriptError): void => {
+      const { failures } = entry.task;
+      update({
+        failed: entry.task.failed + 1,
+        failures: failures.length < SCRIPT_FAILURES_KEPT ? [...failures, error] : failures,
+      });
+      progress(true);
+    };
+
+    const runStatement = async (open: ScriptSession, path: string, statement: StreamedStatement): Promise<void> => {
+      for (;;) {
+        if (controller.signal.aborted) throw cancelled();
+        try {
+          await abortable(open.execute(statement.sql), controller.signal);
+          update({ statements: entry.task.statements + 1 });
+          progress();
+          return;
+        } catch (cause) {
+          if (controller.signal.aborted) throw cancelled();
+          const error = failed(open, cause, path, statement);
+          // Only a statement's own failure may be skipped past; a lost connection fails the rest too.
+          if (onError === "stop" || error.code !== "statementFailed") throw new ScriptStop(error);
+          const answer = onError === "continue" ? "skip" : await asked(error);
+          if (answer === "stop") throw new ScriptStop(error);
+          if (answer === "retry") continue;
+          if (answer === "skipAll") onError = "continue";
+          skipped(error);
+          return;
+        }
       }
-      update({ statements: entry.task.statements + 1 });
-      progress();
     };
 
     const runFile = async (open: ScriptSession, path: string): Promise<void> => {
@@ -239,7 +303,8 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
       );
       const opened = await abortable(opening, controller.signal).catch((cause: unknown) => {
         if (controller.signal.aborted) throw cancelled();
-        throw new ScriptStop({ ...job.failure(cause), ...NOWHERE });
+        const { position: _unlocated, ...error } = job.failure(cause);
+        throw new ScriptStop({ ...error, ...NOWHERE });
       });
       session = opened;
       controller.signal.addEventListener("abort", () => opened.cancel(), { once: true });
@@ -267,7 +332,7 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
       size: task.size,
       elapsedMs: task.elapsedMs,
     };
-    if (task.state === "done") log.info("script finished", fields);
+    if (task.state === "done") log.info("script finished", { ...fields, failed: task.failed });
     else if (task.state === "cancelled") log.info("script cancelled", fields);
     // The message can quote the statement or a value; the code and the counts say enough (decision 038).
     else log.warn("script failed", { ...fields, code: task.error?.code });
@@ -281,6 +346,7 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
       const entry: Running = {
         controller: new AbortController(),
         done: Promise.resolve(),
+        answer: null,
         task: {
           taskId,
           files,
@@ -292,6 +358,9 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
           size: job.files.reduce((total, file) => total + file.size, 0),
           elapsedMs: 0,
           error: null,
+          failed: 0,
+          failures: [],
+          question: null,
         },
       };
       tasks.set(taskId, entry);
@@ -301,6 +370,12 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
     get: (taskId) => tasks.get(taskId)?.task,
     cancel(taskId) {
       tasks.get(taskId)?.controller.abort();
+    },
+    answer(taskId, answer) {
+      const respond = tasks.get(taskId)?.answer;
+      if (respond == null) return false;
+      respond(answer);
+      return true;
     },
     list: () => [...tasks.values()].map((entry) => entry.task),
     subscribe(listener) {

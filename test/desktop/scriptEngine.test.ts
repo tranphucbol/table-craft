@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
-import type { EngineResponse, ScriptEvent, ScriptTask } from "@table-craft/desktop/engine/protocol.js";
+import type { EngineResponse, OnErrorChoice, ScriptEvent, ScriptTask } from "@table-craft/desktop/engine/protocol.js";
 import { execute, exportHarness, openSession, resultOf, type ExportHarness } from "../support/engineExports.js";
 import { SQLITE_MANIFEST } from "../support/manifests.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
@@ -51,8 +51,23 @@ describe("engine scripts", () => {
     }
   }
 
-  async function run(harness: ExportHarness, files: readonly string[]): Promise<EngineResponse> {
-    return harness.connection.handle({ id: 7, type: "script.run", files, namespace: null });
+  async function run(
+    harness: ExportHarness,
+    files: readonly string[],
+    onError: OnErrorChoice = "stop",
+  ): Promise<EngineResponse> {
+    return harness.connection.handle({ id: 7, type: "script.run", files, namespace: null, onError });
+  }
+
+  async function asked(harness: ExportHarness, taskId: string): Promise<ScriptTask> {
+    for (;;) {
+      const event = harness.events.find(
+        (candidate): candidate is ScriptEvent =>
+          candidate.task.taskId === taskId && "question" in candidate.task && candidate.task.question !== null,
+      );
+      if (event !== undefined) return event.task;
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+    }
   }
 
   it("givenScriptFile_whenRun_thenEveryStatementAppliedOnItsOwnSession", async () => {
@@ -84,7 +99,13 @@ describe("engine scripts", () => {
 
     expect(done.state).toBe("failed");
     expect(done.statements).toBe(1);
-    expect(done.error).toMatchObject({ code: "statementFailed", file: path, line: 3, column: 4 });
+    expect(done.error).toMatchObject({
+      code: "statementFailed",
+      file: path,
+      line: 3,
+      column: 4,
+      at: { line: 3, column: 16 },
+    });
     expect(done.error?.message).toContain("nowhere");
     const sessionId = await openSession(harness.connection);
     const tables = await execute(
@@ -93,6 +114,35 @@ describe("engine scripts", () => {
       "SELECT name FROM sqlite_master WHERE name IN ('kept', 'never') ORDER BY name",
     );
     expect(tables.firstWindow.rows).toEqual([["kept"]]);
+  });
+
+  it("givenAskingScript_whenAnsweredSkip_thenRunsTheRestAndCountsTheFailure", async () => {
+    const harness = open();
+    const path = await file(
+      "broken.sql",
+      "CREATE TABLE kept (id INTEGER);\nINSERT INTO nowhere VALUES (1);\nCREATE TABLE after (id INTEGER);\n",
+    );
+    const { taskId } = resultOf<ScriptTask>(await run(harness, [path], "ask"));
+
+    const asking = await asked(harness, taskId);
+    const answered = await harness.connection.handle({ id: 8, type: "script.answer", taskId, answer: "skip" });
+    const done = await finished(harness, taskId);
+
+    expect(asking.question).toMatchObject({ code: "statementFailed", line: 2, at: { line: 2, column: 13 } });
+    expect(resultOf(answered)).toBeNull();
+    expect(done).toMatchObject({ state: "done", statements: 2, failed: 1, question: null, error: null });
+    expect(done.failures).toHaveLength(1);
+  });
+
+  it("givenTaskNotAsking_whenAnswered_thenInvalidRequest", async () => {
+    const harness = open();
+    const path = await file("fine.sql", "SELECT 1;\n");
+    const { taskId } = resultOf<ScriptTask>(await run(harness, [path]));
+    await finished(harness, taskId);
+
+    const response = await harness.connection.handle({ id: 8, type: "script.answer", taskId, answer: "skip" });
+
+    expect(response).toMatchObject({ type: "engine.error", error: { code: "invalidRequest" } });
   });
 
   it("givenRelativeOrMissingFile_whenRun_thenRefusedBeforeATask", async () => {

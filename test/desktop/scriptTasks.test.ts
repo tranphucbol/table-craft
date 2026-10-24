@@ -39,6 +39,7 @@ function sessionOf(record: Recorded, execute: (sql: string) => Promise<void> = (
       record.closed += 1;
       return Promise.resolve();
     },
+    inTransaction: () => false,
   };
 }
 
@@ -48,11 +49,17 @@ function jobOf(session: ScriptSession, overrides: Partial<ScriptJob> = {}): Scri
     namespace: null,
     open: () => Promise.resolve(session),
     stream: sqlStatementStream(),
-    failure: (cause): EngineError => ({
-      code: "statementFailed",
-      message: cause instanceof Error ? cause.message : String(cause),
-      hint: "Fix the statement.",
-    }),
+    failure: (cause, sql): EngineError => {
+      const at = (cause as { at?: string }).at;
+      const position = at === undefined || sql === undefined ? -1 : sql.indexOf(at);
+      return {
+        code: "statementFailed",
+        message: cause instanceof Error ? cause.message : String(cause),
+        hint: "Fix the statement.",
+        ...(position === -1 ? {} : { position }),
+      };
+    },
+    onError: "stop",
     ...overrides,
   };
 }
@@ -71,6 +78,24 @@ async function finished(tasks: ReturnType<typeof scriptTasks>, taskId: string): 
   const task = tasks.get(taskId);
   if (task === undefined) throw new Error("task vanished");
   return task;
+}
+
+const FAILING = "SELECT 1;\nSELECT bad1;\nSELECT 2;\n  SELECT\n    bad2 FROM t;\nSELECT 3;\n";
+
+/** Fails every statement naming `bad…`, locating the error at that word. */
+function failingSession(record: Recorded): ScriptSession {
+  return sessionOf(record, (sql) => {
+    const bad = /bad\d/.exec(sql)?.[0];
+    return bad === undefined ? Promise.resolve() : Promise.reject(Object.assign(new Error(`no ${bad}`), { at: bad }));
+  });
+}
+
+async function questioned(tasks: ReturnType<typeof scriptTasks>, taskId: string): Promise<ScriptTask> {
+  for (;;) {
+    const task = tasks.get(taskId);
+    if (task?.question != null || task?.state !== "running") return task as ScriptTask;
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
 }
 
 describe("scriptTasks", () => {
@@ -212,5 +237,107 @@ describe("wholeFileStream", () => {
       { from: 0, to: 8, sql: "SELECT 1", line: 1, column: 1 },
       { from: 13, to: 21, sql: "SELECT 2", line: 3, column: 3 },
     ]);
+  });
+
+  it("givenRunScriptContinue_whenErrors_thenTaskFinishesWithFailures", async () => {
+    const record = recorded();
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });
+
+    const done = await finished(tasks, tasks.start(jobOf(failingSession(record), { onError: "continue" })).taskId);
+
+    expect(done).toMatchObject({ state: "done", statements: 3, failed: 2, error: null, question: null });
+    expect(done.failures.map((failure) => [failure.message, failure.line, failure.column, failure.at])).toEqual([
+      ["no bad1", 2, 1, { line: 2, column: 8 }],
+      ["no bad2", 4, 3, { line: 5, column: 5 }],
+    ]);
+    expect(record.executed.at(-1)).toBe("SELECT 3");
+  });
+
+  it("givenRunScriptAsk_whenSkip_thenGoesOn", async () => {
+    const record = recorded();
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });
+    const { taskId } = tasks.start(jobOf(failingSession(record), { onError: "ask" }));
+
+    const first = await questioned(tasks, taskId);
+    expect(first.question).toMatchObject({ message: "no bad1", line: 2 });
+    expect(record.executed).toEqual(["SELECT 1", "SELECT bad1"]);
+    expect(tasks.answer(taskId, "skip")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await questioned(tasks, taskId);
+    expect(second.question?.message).toBe("no bad2");
+    tasks.answer(taskId, "stop");
+    const done = await finished(tasks, taskId);
+
+    expect(done).toMatchObject({ state: "failed", failed: 1, question: null, error: { message: "no bad2" } });
+    expect(record.executed).not.toContain("SELECT 3");
+  });
+
+  it("givenRunScriptAskSkipAll_whenTwoFail_thenAsksOnce", async () => {
+    const record = recorded();
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });
+    const events: ScriptEvent[] = [];
+    tasks.subscribe((event) => events.push(event));
+    const { taskId } = tasks.start(jobOf(failingSession(record), { onError: "ask" }));
+
+    await questioned(tasks, taskId);
+    tasks.answer(taskId, "skipAll");
+    const done = await finished(tasks, taskId);
+
+    expect(done).toMatchObject({ state: "done", failed: 2, statements: 3 });
+    expect(events.filter((event) => event.task.question !== null)).toHaveLength(1);
+    expect(tasks.answer(taskId, "skip")).toBe(false);
+  });
+
+  it("givenRunScriptAskRetry_whenFixed_thenRunsAgain", async () => {
+    const record = recorded();
+    let broken = true;
+    const session = sessionOf(record, (sql) =>
+      sql === "SELECT flaky" && broken ? Promise.reject(new Error("locked")) : Promise.resolve(),
+    );
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode("SELECT flaky;\nSELECT 2;\n")] }, record) });
+    const { taskId } = tasks.start(jobOf(session, { onError: "ask" }));
+
+    await questioned(tasks, taskId);
+    broken = false;
+    tasks.answer(taskId, "retry");
+    const done = await finished(tasks, taskId);
+
+    expect(done).toMatchObject({ state: "done", statements: 2, failed: 0 });
+    expect(record.executed).toEqual(["SELECT flaky", "SELECT flaky", "SELECT 2"]);
+  });
+
+  it("givenAskingScript_whenCancelled_thenCancelledWithoutAnswer", async () => {
+    const record = recorded();
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });
+    const { taskId } = tasks.start(jobOf(failingSession(record), { onError: "ask" }));
+
+    await questioned(tasks, taskId);
+    tasks.cancel(taskId);
+    const done = await finished(tasks, taskId);
+
+    expect(done).toMatchObject({ state: "cancelled", question: null, error: { code: "cancelled" } });
+  });
+
+  it("givenFailureInsideTransaction_whenSkipped_thenHintSaysTheRestIsRefused", async () => {
+    const record = recorded();
+    const session = { ...failingSession(record), inTransaction: () => true };
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });
+
+    const done = await finished(tasks, tasks.start(jobOf(session, { onError: "continue" })).taskId);
+
+    expect(done.failures[0]?.hint).toMatch(/PostgreSQL refuses every later statement/);
+  });
+
+  it("givenLostConnection_whenContinue_thenStopsAnyway", async () => {
+    const record = recorded();
+    const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });
+    const job = jobOf(failingSession(record), {
+      onError: "continue",
+      failure: () => ({ code: "connectionLost", message: "gone", hint: "Reconnect." }),
+    });
+
+    const done = await finished(tasks, tasks.start(job).taskId);
+
+    expect(done).toMatchObject({ state: "failed", failed: 0, error: { code: "connectionLost" } });
   });
 });

@@ -1,7 +1,14 @@
 import { create } from "zustand";
-import type { EngineError, ScriptEvent, ScriptTask } from "@table-craft/desktop/engine/protocol.js";
+import type {
+  EngineError,
+  ErrorAnswer,
+  OnErrorChoice,
+  ScriptEvent,
+  ScriptTask,
+} from "@table-craft/desktop/engine/protocol.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { runAllOnError } from "@table-craft/desktop/renderer/state/settings.js";
 
 /** One Run SQL Script task as Services lists it (decision 081), never saved. */
 export interface ScriptEntry {
@@ -22,6 +29,8 @@ export interface ScriptsState {
   /** The datasource's engine went away, and with it the script's connection. */
   readonly detached: (datasourceId: string, error: EngineError | null) => void;
   readonly cancel: (taskId: string) => Promise<void>;
+  /** Answers the task's question about a failed statement (decision 083); a task not asking ignores it. */
+  readonly answer: (taskId: string, answer: ErrorAnswer) => Promise<void>;
   /** Drops a finished task from the list; a running one stays. */
   readonly dismiss: (taskId: string) => void;
   /** Resolves with the task once it is done, failed or cancelled. */
@@ -30,6 +39,8 @@ export interface ScriptsState {
 
 export interface ScriptsDependencies {
   readonly client: (datasourceId: string) => Promise<EngineClient>;
+  /** Read when a script starts, so a settings change applies to the next one. */
+  readonly onError: () => OnErrorChoice;
 }
 
 const TRAILING_PERIOD = /\.$/;
@@ -38,6 +49,10 @@ const AGAIN_HINT = "Connect again, then check what ran before running the script
 
 export function isScriptRunning(entry: ScriptEntry): boolean {
   return entry.task.state === "running";
+}
+
+export function isScriptAsking(entry: ScriptEntry): boolean {
+  return isScriptRunning(entry) && entry.task.question !== null;
 }
 
 export function createScriptsStore(dependencies: ScriptsDependencies) {
@@ -69,7 +84,7 @@ export function createScriptsStore(dependencies: ScriptsDependencies) {
       entries: [],
       async start(datasourceId, files, namespace) {
         const client = await dependencies.client(datasourceId);
-        const task = await client.call("script.run", { files, namespace });
+        const task = await client.call("script.run", { files, namespace, onError: dependencies.onError() });
         upsert(datasourceId, entryOf(task.taskId)?.task ?? task);
         return task;
       },
@@ -83,6 +98,7 @@ export function createScriptsStore(dependencies: ScriptsDependencies) {
           upsert(datasourceId, {
             ...entry.task,
             state: error === null ? "cancelled" : "failed",
+            question: null,
             error: {
               code: error === null ? "cancelled" : "scriptFailed",
               message: `${why}. ${KEPT}`,
@@ -91,6 +107,7 @@ export function createScriptsStore(dependencies: ScriptsDependencies) {
               line: null,
               column: null,
               statement: null,
+              at: null,
             },
           });
         }
@@ -100,6 +117,12 @@ export function createScriptsStore(dependencies: ScriptsDependencies) {
         if (entry === undefined || !isScriptRunning(entry)) return;
         const client = await dependencies.client(entry.datasourceId);
         await client.call("script.cancel", { taskId });
+      },
+      async answer(taskId, answer) {
+        const entry = entryOf(taskId);
+        if (entry === undefined || !isScriptAsking(entry)) return;
+        const client = await dependencies.client(entry.datasourceId);
+        await client.call("script.answer", { taskId, answer });
       },
       dismiss(taskId) {
         const entry = entryOf(taskId);
@@ -121,4 +144,5 @@ export type ScriptsStore = ReturnType<typeof createScriptsStore>;
 
 export const useScripts = createScriptsStore({
   client: (datasourceId) => useDatasources.getState().connect(datasourceId),
+  onError: runAllOnError,
 });
