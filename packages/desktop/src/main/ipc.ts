@@ -272,6 +272,7 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
     await consoles.delete(datasourceId, name);
     return null;
   });
+  handle(INVOKE_CHANNELS.consolePath, consoleRequest, ({ datasourceId, name }) => consoles.path(datasourceId, name));
   handle(INVOKE_CHANNELS.renameConsole, consoleRenameRequest, async ({ datasourceId, from, to }) => {
     await consoles.rename(datasourceId, from, to);
     return null;

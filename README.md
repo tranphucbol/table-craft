@@ -250,12 +250,18 @@ are saved as files as you type.
 
 **Open File…** (`⌘O`) opens `.sql` files from anywhere on disk, such as the migrations in your
 project, as file consoles on the data source you are in; each file remembers its data source and
-schema for next time, and **File → Recent Files** lists the last ten. A file console saves only
-when you press `⌘S`: its tab shows a dot while there are unsaved changes, and closing it asks to
-save. **Save As…** (`⇧⌘S`) writes any console to a file of your choosing, and **Rename Console…**
-renames the console or the file. When another program changes the file, a clean console reloads
-it as the window comes back to the front, and one with unsaved edits asks whether to reload or keep
-yours. Files are UTF-8; Windows line endings are kept as they were.
+schema for next time, and **File → Recent Files** lists the last ten. A file console saves itself
+as you type, as DataGrip does; its tab shows a dot until the write lands. **Save** (`⌘S`) in a
+scratch console and **Save As…** (`⇧⌘S`) in any console write it to a file of your choosing, which
+it then follows, and **Rename File…** renames the console or the file. When another program
+changes the file, a clean console reloads it as the window comes back to the front; one with edits
+not yet written shows a banner to reload or keep yours, and is never written over without asking.
+Files are UTF-8; Windows line endings are kept as they were.
+
+Right-click an editor tab to close the others, all, or those to its right; to copy its file's path,
+show it in Finder (or its folder elsewhere) or rename it; to **Duplicate** it as a new console on
+the same data source and schema; or to **Pin** it at the left, where closing many tabs leaves it
+open. **Reopen Closed Tab** (`⇧⌘T`) brings back the consoles you closed, newest first.
 
 **Run SQL Script…**, on a data source or schema in the Database pane, runs one or more `.sql` files
 without opening them: the files are streamed, so a multi-gigabyte dump uses flat memory, and the
@@ -466,6 +472,7 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Save                      | `⌘S`    | `Ctrl+S`               |
 | Save As…                  | `⇧⌘S`   | `Ctrl+Shift+S`         |
 | Close Tab                 | `⌘W`    | `Ctrl+W`               |
+| Reopen Closed Tab         | `⇧⌘T`   | `Ctrl+Shift+T`         |
 | Select Next Tab           | `⇧⌘]`   | `Ctrl+Shift+]`         |
 | Select Previous Tab       | `⇧⌘[`   | `Ctrl+Shift+[`         |
 | Database                  | `⌘1`    | `Ctrl+1`               |

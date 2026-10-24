@@ -86,7 +86,7 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
       SEPARATOR,
       { kind: "action", label: "Save", actionId: "file.save", accelerator: "CmdOrCtrl+S" },
       { kind: "action", label: "Save As…", actionId: "file.saveAs", accelerator: "CmdOrCtrl+Shift+S" },
-      { kind: "action", label: "Rename Console…", actionId: "console.rename" },
+      { kind: "action", label: "Rename File…", actionId: "console.rename" },
       SEPARATOR,
       {
         kind: "action",
@@ -106,6 +106,12 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
       },
       SEPARATOR,
       { kind: "action", label: "Close Tab", actionId: "tab.close", accelerator: "CmdOrCtrl+W" },
+      {
+        kind: "action",
+        label: "Reopen Closed Tab",
+        actionId: "tab.reopenClosed",
+        accelerator: "CmdOrCtrl+Shift+T",
+      },
     ],
   },
   { kind: "role", role: "editMenu" },

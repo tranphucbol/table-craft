@@ -1,6 +1,6 @@
 # 080: File consoles save explicitly, scratch consoles autosave
 
-Status: Accepted.
+Status: Accepted. Explicit saving of file consoles is superseded by decision 089.
 
 ## Decision
 

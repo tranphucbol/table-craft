@@ -1,3 +1,4 @@
+import type { TabArgs } from "@table-craft/desktop/renderer/actions/appActions.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { fileConsoles, renameConsole, saveConsole } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
@@ -42,11 +43,21 @@ export function openRecentFromMenu(context: () => ActionContext): () => void {
   });
 }
 
-/** Looks for changes made on disk each time the window gains focus (decision 6). */
-export function checkFilesOnFocus(target: Pick<Window, "addEventListener" | "removeEventListener">): () => void {
+/**
+ * Keeps file consoles and their files in step (decision 089): autosaves as typing pauses, writes
+ * what is pending when the window loses focus, and looks for changes made on disk when it gains it.
+ */
+export function syncFileConsoles(target: Pick<Window, "addEventListener" | "removeEventListener">): () => void {
+  const stopSaving = fileConsoles.autosave();
   const check = () => void fileConsoles.checkDisk();
+  const flush = () => void fileConsoles.flush();
   target.addEventListener("focus", check);
-  return () => target.removeEventListener("focus", check);
+  target.addEventListener("blur", flush);
+  return () => {
+    stopSaving();
+    target.removeEventListener("focus", check);
+    target.removeEventListener("blur", flush);
+  };
 }
 
 export const FILE_ACTIONS: readonly AnyAction[] = [
@@ -97,7 +108,10 @@ export const FILE_ACTIONS: readonly AnyAction[] = [
     shortcut: "Mod+S",
     when: hasConsole,
     run: async (context) => {
-      if (context.activeTab !== null) await saveConsole(context.activeTab.id);
+      if (context.activeTab === null || context.console === null) return;
+      // DataGrip's Save on a scratch console asks where to keep it as a file (decision 089).
+      if (fileSourceOf(context.console) === null) await fileConsoles.saveAs(context.activeTab.id);
+      else await saveConsole(context.activeTab.id);
     },
   }),
   defineAction({
@@ -110,13 +124,15 @@ export const FILE_ACTIONS: readonly AnyAction[] = [
       if (context.activeTab !== null) await fileConsoles.saveAs(context.activeTab.id);
     },
   }),
-  defineAction({
+  defineAction<TabArgs | undefined>({
     id: FILE_ACTION_IDS.rename,
-    title: "Rename Console…",
+    title: "Rename File…",
     category: "Console",
-    when: hasConsole,
-    run: async (context) => {
-      if (context.activeTab !== null) await renameConsole(context.activeTab.id);
+    // The tab menu passes the right-clicked tab, which need not be the active one.
+    when: (context) => context.tabs.some((tab) => tab.kind === "console"),
+    run: async (context, args) => {
+      const id = args?.tabId ?? context.activeTab?.id;
+      if (id !== undefined) await renameConsole(id);
     },
   }),
   defineAction({

@@ -1,4 +1,5 @@
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { closedConsoleOf, duplicateSeed } from "@table-craft/desktop/renderer/model/consoleTabs.js";
 import type { ParameterValues } from "@table-craft/desktop/renderer/model/parameters.js";
 import {
   autosave,
@@ -57,9 +58,11 @@ export function persists(datasourceId: string): boolean {
 
 /** Opens a console tab on the datasource, named with the first free `console`, `console_1`… (decision 16); answers its tab id. */
 export function openConsole(datasourceId: string, sql?: string, parameterValues?: ParameterValues): Promise<string> {
-  return allocateConsole(datasourceId, (id, name) => {
-    void useConsoles.getState().open(id, datasourceId, { name, sql, parameterValues });
-  });
+  return allocateConsole(
+    datasourceId,
+    (tab) => useTabs.getState().open(tab),
+    (id, name) => void useConsoles.getState().open(id, datasourceId, { name, sql, parameterValues }),
+  );
 }
 
 /**
@@ -71,25 +74,96 @@ export async function openConsoleOn(
   options: { readonly sql: string; readonly parameterValues: ParameterValues; readonly namespace: readonly string[] },
 ): Promise<string> {
   let session: Promise<void> = Promise.resolve();
-  const id = await allocateConsole(datasourceId, (tabId, name) => {
-    session = useConsoles.getState().open(tabId, datasourceId, { name, ...options });
-  });
+  const id = await allocateConsole(
+    datasourceId,
+    (tab) => useTabs.getState().open(tab),
+    (tabId, name) => {
+      session = useConsoles.getState().open(tabId, datasourceId, { name, ...options });
+    },
+  );
   await session;
   return id;
 }
 
-function allocateConsole(datasourceId: string, open: (id: string, name: string) => void): Promise<string> {
+function allocateConsole(
+  datasourceId: string,
+  place: (tab: Tab) => void,
+  open: (id: string, name: string) => void,
+): Promise<string> {
   const previous = allocating.get(datasourceId) ?? Promise.resolve();
   const opened = previous.then(async () => {
     const saved = persists(datasourceId) ? await files.list(datasourceId).catch(() => []) : [];
     const name = firstFreeName([...saved, ...openNames(datasourceId)]);
     const tab = newTab(name);
-    useTabs.getState().open(tab);
+    place(tab);
     open(tab.id, name);
     return tab.id;
   });
   allocating.set(datasourceId, opened);
   return opened;
+}
+
+/** Duplicate: a new scratch console on the same datasource and namespace with the same text, right after the original. */
+export async function duplicateConsole(id: string): Promise<string | null> {
+  const session = useConsoles.getState().consoles[id];
+  if (session === undefined || datasourceById(useDatasources.getState(), session.datasourceId) === undefined)
+    return null;
+  const seed = duplicateSeed(session);
+  return allocateConsole(
+    session.datasourceId,
+    (tab) => useTabs.getState().openAfter(id, tab),
+    (tabId, name) => void useConsoles.getState().open(tabId, session.datasourceId, { ...seed, name }),
+  );
+}
+
+/** The absolute path of the console's `.sql`: its file, or its scratch file; null for an ephemeral datasource's. */
+export async function consoleFilePath(id: string): Promise<string | null> {
+  const session = useConsoles.getState().consoles[id];
+  if (session === undefined) return null;
+  const source = fileSourceOf(session);
+  if (source !== null) return source.path;
+  if (!persists(session.datasourceId)) return null;
+  return unwrap(bridge().consolePath(session.datasourceId, session.name));
+}
+
+/** Reveal in Finder: a scratch console's pending text lands first, so its file is there to show. */
+export async function revealConsoleFile(id: string): Promise<void> {
+  const path = await consoleFilePath(id);
+  if (path === null) return;
+  await autosave.flush();
+  await unwrap(bridge().revealFile(path));
+}
+
+/** Reopen Closed Tab: the most recently closed file, or scratch console whose datasource is still there. */
+export async function reopenClosedTab(): Promise<void> {
+  for (let closed = useTabs.getState().takeClosed(); closed !== undefined; closed = useTabs.getState().takeClosed()) {
+    const { path, pinned, datasourceId } = closed;
+    if (path !== undefined) {
+      const known = datasourceById(useDatasources.getState(), datasourceId) === undefined ? null : datasourceId;
+      await fileConsoles.open([path], known);
+      const reopened = fileConsoles.consoleOf(path);
+      if (reopened !== null && pinned === true) pinOpened(reopened);
+      return;
+    }
+    if (datasourceById(useDatasources.getState(), datasourceId) === undefined) continue;
+    let tabId: string;
+    if (openNames(datasourceId).includes(closed.name)) {
+      tabId = await openConsole(datasourceId, closed.sql);
+    } else {
+      await autosave.flush();
+      const saved = persists(datasourceId) ? await files.read(datasourceId, closed.name).catch(() => null) : null;
+      const tab = newTab(closed.name);
+      useTabs.getState().open(tab);
+      void useConsoles.getState().open(tab.id, datasourceId, { name: closed.name, sql: saved ?? closed.sql });
+      tabId = tab.id;
+    }
+    if (pinned === true) pinOpened(tabId);
+    return;
+  }
+}
+
+function pinOpened(id: string): void {
+  if (useTabs.getState().tabs.some((tab) => tab.id === id && tab.pinned !== true)) useTabs.getState().togglePin(id);
 }
 
 function openNames(datasourceId: string): readonly string[] {
@@ -151,6 +225,7 @@ export async function restoreConsoles(): Promise<void> {
       if (file === null) continue;
       tabId = fileConsoles.openTab(file, entry.datasourceId);
     }
+    if (entry.pinned === true) pinOpened(tabId);
     if (entry.active) active = tabId;
   }
   if (active !== null) useTabs.getState().activate(active);
@@ -166,12 +241,16 @@ export function rememberOpenConsoles(): () => void {
       strip.tabs.flatMap((tab): OpenConsole[] => {
         const session = consoles[tab.id];
         if (tab.kind !== "console" || session === undefined) return [];
-        const active = tab.id === current;
+        const remembered = {
+          datasourceId: session.datasourceId,
+          name: session.name,
+          active: tab.id === current,
+          ...(tab.pinned === true ? { pinned: true } : {}),
+        };
         const source = fileSourceOf(session);
-        if (source !== null)
-          return [{ datasourceId: session.datasourceId, name: session.name, active, path: source.path }];
+        if (source !== null) return [{ ...remembered, path: source.path }];
         if (!persists(session.datasourceId)) return [];
-        return [{ datasourceId: session.datasourceId, name: session.name, active }];
+        return [remembered];
       }),
     );
   };
@@ -188,7 +267,7 @@ export function rememberOpenConsoles(): () => void {
 
 /**
  * Writes each scratch console as it changes and when it closes, unless its datasource is gone or
- * ephemeral; file consoles save only when asked (plan 041 decision 3).
+ * ephemeral; file consoles autosave to their own files through `syncFileConsoles` (decision 089).
  */
 export function autosaveConsoles(): () => void {
   return useConsoles.subscribe((state, previous) => {
@@ -254,7 +333,11 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
   if (!(await settlePendingEdits(ids, "close"))) return;
   if (!(await settleConsoleEdits(ids, "close"))) return;
   if (!(await settleTransactions(ids, "close"))) return;
+  const closing = useConsoles.getState().consoles;
   for (const tab of close()) {
+    const session = closing[tab.id];
+    if (tab.kind === "console" && session !== undefined)
+      useTabs.getState().rememberClosed(closedConsoleOf(tab, session));
     if (tab.kind === "console") useConsoles.getState().close(tab.id);
     else if (tab.kind === "table") useTables.getState().close(tab.id);
     else if (tab.kind === "sessions") useSessions.getState().close(tab.id);
@@ -271,14 +354,16 @@ export async function saveConsole(id: string): Promise<boolean> {
   return true;
 }
 
-/** Rename Console…: a scratch console's saved file, checked against the name pattern in main, or a file on disk. */
+const RENAME_TITLE = "Rename File";
+
+/** Rename File…: a file console's file on disk, or a scratch console's saved file, checked against the name pattern in main. */
 export async function renameConsole(id: string): Promise<void> {
   const session = useConsoles.getState().consoles[id];
   if (session === undefined) return;
   const file = fileSourceOf(session) !== null;
   const name = await useModal.getState().ask({
     kind: "text",
-    title: file ? "Rename File" : "Rename Console",
+    title: RENAME_TITLE,
     label: file ? "File name" : "Name",
     initial: session.name,
     confirm: "Rename",

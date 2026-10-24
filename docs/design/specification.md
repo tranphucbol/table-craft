@@ -625,7 +625,7 @@ run either.
 | `file.openRecent`                        | Recent Files…                         |          |                        |
 | `file.save`                              | Save                                  | `⌘S`     | `Ctrl+S`               |
 | `file.saveAs`                            | Save As…                              | `⇧⌘S`    | `Ctrl+Shift+S`         |
-| `console.rename`                         | Rename Console…                       |          |                        |
+| `console.rename`                         | Rename File…                          |          |                        |
 | `file.reload`, `file.keepMine`           | Reload from Disk, Keep My Changes     |          |                        |
 | `database.runSqlScript`                  | Run SQL Script…                       |          |                        |
 | `script.cancel`                          | Cancel SQL Script                     |          |                        |
@@ -1168,10 +1168,13 @@ detached console asks for a data source on its first Run. A file already open ac
 Main remembers each file's data source and namespace in `<userData>/fileAttachments.json`, with the
 last 10 files opened or saved, which **File → Recent Files** and **Recent Files…** list.
 
-A file console saves only on **Save** (`⌘S`, which on a scratch console writes the pending
-autosave); the tab shows a dot while its text differs from the file. Closing a dirty file console,
-or quitting, asks **Save**, **Don't Save** or **Cancel** first. **Save As…** writes any console to a
-chosen path, and a scratch console becomes a file console there. **Rename Console…** renames a
+A file console autosaves 500 ms after typing pauses, when the window loses focus, before its tab
+closes and before quit (decision 089); the tab shows a dot while its text differs from the file.
+An autosave skips a file changed on disk and shows the changed-on-disk banner instead; closing or
+quitting asks **Save**, **Don't Save** or **Cancel** only for such a file or after a failed write.
+**Save** (`⌘S`) writes a file console now and, on a scratch console, asks for a path like
+**Save As…** (`⌘⇧S`), which writes any console to a chosen path; a scratch console becomes a file
+console there. **Rename File…** renames a
 scratch console's file in the profile, under the name pattern, or the file on disk in its folder.
 Removing a data source leaves its file consoles open, detached.
 

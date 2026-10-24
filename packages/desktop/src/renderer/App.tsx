@@ -9,7 +9,7 @@ import {
   restoreConsoles,
 } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { currentContext, focusedRegion, modalOpen, trackFocus } from "@table-craft/desktop/renderer/actions/context.js";
-import { checkFilesOnFocus, openRecentFromMenu } from "@table-craft/desktop/renderer/actions/fileActions.js";
+import { openRecentFromMenu, syncFileConsoles } from "@table-craft/desktop/renderer/actions/fileActions.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { installKeymap } from "@table-craft/desktop/renderer/actions/keymap.js";
 import { rememberOpenTables, restoreTables } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -87,7 +87,7 @@ export function App() {
 
   useEffect(() => openRecentFromMenu(currentContext), []);
 
-  useEffect(() => checkFilesOnFocus(window), []);
+  useEffect(() => syncFileConsoles(window), []);
 
   useEffect(() => installWindowState(), []);
 

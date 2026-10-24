@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FileAttachment, LineEnding, SqlFileOpened } from "@table-craft/desktop/preload/bridge.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
-import { ConsoleFileFailure } from "@table-craft/desktop/renderer/state/consoleFiles.js";
+import { ConsoleFileFailure, type Timers } from "@table-craft/desktop/renderer/state/consoleFiles.js";
 import { createConsolesStore, DETACHED, isDirty } from "@table-craft/desktop/renderer/state/consoles.js";
 import { createFileConsoles, UNSAVED_CHOICES } from "@table-craft/desktop/renderer/state/fileConsoles.js";
 import type { ModalRequest } from "@table-craft/desktop/renderer/state/modal.js";
@@ -65,8 +65,30 @@ function fakeDisk(initial: Record<string, string>) {
   return { disk, files, writes, attachments, edit, chooseSaveAt };
 }
 
+/** Timers the test fires by hand: `fire()` runs every timer still set. */
+function manualTimers() {
+  const set = new Map<number, () => void>();
+  let next = 0;
+  const timers: Timers = {
+    set: (run) => {
+      const id = next++;
+      set.set(id, run);
+      return id;
+    },
+    clear: (timer) => set.delete(timer as number),
+  };
+  const fire = async () => {
+    const due = [...set.values()];
+    set.clear();
+    for (const run of due) run();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+  return { timers, fire, count: () => set.size };
+}
+
 function harness(initial: Record<string, string> = { [FILE]: "SELECT 1;\n" }, answer: string | null = null) {
   const disk = fakeDisk(initial);
+  const clock = manualTimers();
   const consoles = createConsolesStore({
     connect: () => Promise.resolve({ call: vi.fn() } as unknown as EngineClient),
     now: () => 0,
@@ -84,13 +106,14 @@ function harness(initial: Record<string, string> = { [FILE]: "SELECT 1;\n" }, an
     },
     newTab: (title): Tab => ({ id: `console-${String(opened++)}`, kind: "console", title }),
     datasourceExists: (id) => id === DATASOURCE,
+    timers: clock.timers,
   });
   const session = (id: string) => {
     const current = consoles.getState().consoles[id];
     if (current === undefined) throw new Error(`console ${id} is gone`);
     return current;
   };
-  return { ...disk, consoles, tabs, asked, fileConsoles, session };
+  return { ...disk, consoles, tabs, asked, fileConsoles, session, clock };
 }
 
 async function openedFile(initial?: Record<string, string>, answer?: string | null) {
@@ -149,9 +172,21 @@ describe("file consoles", () => {
     expect(isDirty(session(id))).toBe(false);
   });
 
-  it("givenDirtyFileConsole_whenClose_thenAsksToSave", async () => {
+  it("givenDirtyFileConsole_whenClose_thenWrittenWithoutAsking", async () => {
+    const { id, consoles, fileConsoles, disk, asked, session } = await openedFile();
+    consoles.getState().setSql(id, "SELECT 2;");
+
+    expect(await fileConsoles.settleDirty([id], "close")).toBe(true);
+
+    expect(asked).toEqual([]);
+    expect(disk.get(FILE)?.sql).toBe("SELECT 2;");
+    expect(isDirty(session(id))).toBe(false);
+  });
+
+  it("givenFileChangedOnDiskWhileDirty_whenClose_thenAsksToSave", async () => {
     const saving = await openedFile(undefined, UNSAVED_CHOICES.save);
     saving.consoles.getState().setSql(saving.id, "SELECT 2;");
+    saving.edit(FILE, "theirs");
 
     expect(await saving.fileConsoles.settleDirty([saving.id], "close")).toBe(true);
     expect(saving.asked[0]).toMatchObject({ kind: "choice", title: "Unsaved file" });
@@ -159,13 +194,66 @@ describe("file consoles", () => {
 
     const cancelling = await openedFile(undefined, null);
     cancelling.consoles.getState().setSql(cancelling.id, "SELECT 3;");
+    cancelling.edit(FILE, "theirs");
     expect(await cancelling.fileConsoles.settleDirty([cancelling.id], "close")).toBe(false);
     expect(cancelling.writes).toEqual([]);
 
     const discarding = await openedFile(undefined, UNSAVED_CHOICES.discard);
     discarding.consoles.getState().setSql(discarding.id, "SELECT 4;");
+    discarding.edit(FILE, "theirs");
     expect(await discarding.fileConsoles.settleDirty([discarding.id], "close")).toBe(true);
     expect(discarding.writes).toEqual([]);
+  });
+
+  it("givenTypingInFileConsole_whenTypingPauses_thenFileWrittenOnce", async () => {
+    const { id, consoles, fileConsoles, disk, writes, session, clock } = await openedFile();
+    const stop = fileConsoles.autosave();
+    consoles.getState().setSql(id, "SELECT");
+    consoles.getState().setSql(id, "SELECT 2;");
+    expect(clock.count()).toBe(1);
+
+    await clock.fire();
+    stop();
+
+    expect(writes).toEqual([{ path: FILE, sql: "SELECT 2;", lineEnding: "lf" }]);
+    expect(disk.get(FILE)?.sql).toBe("SELECT 2;");
+    expect(isDirty(session(id))).toBe(false);
+  });
+
+  it("givenFileChangedOnDisk_whenAutosaveFires_thenBannerAndNothingWritten", async () => {
+    const { id, consoles, fileConsoles, edit, writes, session, clock } = await openedFile();
+    const stop = fileConsoles.autosave();
+    consoles.getState().setSql(id, "mine");
+    edit(FILE, "theirs");
+
+    await clock.fire();
+    stop();
+
+    expect(writes).toEqual([]);
+    expect(session(id)).toMatchObject({ sql: "mine", diskChanged: "changed" });
+  });
+
+  it("givenPendingAutosave_whenFlushed_thenWrittenNow", async () => {
+    const { id, consoles, fileConsoles, disk, clock } = await openedFile();
+    const stop = fileConsoles.autosave();
+    consoles.getState().setSql(id, "SELECT 5;");
+
+    await fileConsoles.flush();
+    stop();
+
+    expect(disk.get(FILE)?.sql).toBe("SELECT 5;");
+    expect(clock.count()).toBe(0);
+  });
+
+  it("givenScratchConsole_whenEdited_thenNoFileAutosave", async () => {
+    const context = harness({});
+    await context.consoles.getState().open("c1", DATASOURCE, { name: "console", sql: "x", connect: false });
+    const stop = context.fileConsoles.autosave();
+
+    context.consoles.getState().setSql("c1", "y");
+    stop();
+
+    expect(context.clock.count()).toBe(0);
   });
 
   it("givenCleanFileConsole_whenClose_thenNothingAsked", async () => {
@@ -211,7 +299,7 @@ describe("file consoles", () => {
   });
 
   it("givenFileChangedOnDisk_whenFocus_thenCleanReloadsAndDirtyBanners", async () => {
-    const { id: clean, fileConsoles, consoles, edit, session } = await openedFile({ [FILE]: "a", [OTHER]: "b" });
+    const { id: clean, fileConsoles, consoles, edit, session, disk } = await openedFile({ [FILE]: "a", [OTHER]: "b" });
     await fileConsoles.open([OTHER], DATASOURCE);
     const dirty = fileConsoles.consoleOf(OTHER) ?? "";
     consoles.getState().setSql(dirty, "mine");
@@ -226,6 +314,8 @@ describe("file consoles", () => {
     await fileConsoles.keepMine(dirty);
     await fileConsoles.checkDisk();
     expect(session(dirty)).toMatchObject({ sql: "mine", diskChanged: null });
+    expect(isDirty(session(dirty))).toBe(false);
+    expect(disk.get(OTHER)?.sql).toBe("mine");
   });
 
   it("givenFileDeletedOnDisk_whenFocus_thenBannerSaysDeleted", async () => {

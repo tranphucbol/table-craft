@@ -1,8 +1,13 @@
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
+import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import {
   closeTabs,
+  consoleFilePath,
   disconnectDatasource,
+  duplicateConsole,
   openConsole,
+  reopenClosedTab,
+  revealConsoleFile,
   settleTransactions,
 } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import {
@@ -20,7 +25,7 @@ import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/da
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
-import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
+import { otherTabIds, rightTabIds, unpinnedTabIds, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 
 /** Action ids other modules name: the menu declaration, toolbar buttons, the palette. */
 export const ACTION_IDS = {
@@ -36,6 +41,12 @@ export const ACTION_IDS = {
   closeTab: "tab.close",
   closeOtherTabs: "tab.closeOthers",
   closeAllTabs: "tab.closeAll",
+  closeTabsToRight: "tab.closeRight",
+  togglePinTab: "tab.togglePin",
+  reopenClosedTab: "tab.reopenClosed",
+  duplicateTab: "tab.duplicate",
+  copyTabPath: "tab.copyPath",
+  revealTab: "tab.reveal",
   nextTab: "tab.next",
   previousTab: "tab.previous",
   toggleDatabase: "toolWindow.database.toggle",
@@ -100,6 +111,23 @@ function selectedFolder(context: ActionContext): string | null {
   return context.focus === "database" ? (context.datasource?.view.folder ?? null) : null;
 }
 const hasSeveralTabs = (context: ActionContext) => context.tabs.length > 1;
+const hasConsoleTab = (context: ActionContext) => context.tabs.some((tab) => tab.kind === "console");
+const MAC_REVEAL_TITLE = "Reveal in Finder";
+const OTHER_REVEAL_TITLE = "Show in Folder";
+
+/** The file manager's own name for showing a file; the platform is read late, as tests load this without a window. */
+function revealTitle(): string {
+  return typeof navigator !== "undefined" && currentPlatform() === "mac" ? MAC_REVEAL_TITLE : OTHER_REVEAL_TITLE;
+}
+
+async function noticeTabFailure(title: string, cause: unknown): Promise<void> {
+  await useModal.getState().ask({
+    kind: "notice",
+    title,
+    message: cause instanceof Error ? cause.message : String(cause),
+    hint: "Check that the profile directory is readable, then try again.",
+  });
+}
 const canRunConsole = (context: ActionContext) => context.console !== null && canRun(context.console.status);
 const hasTransactionsCapability = (context: ActionContext) => context.capabilities.includes("transactions");
 const hasTransactions = (context: ActionContext) => context.console !== null && hasTransactionsCapability(context);
@@ -241,8 +269,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     run: async (context, args) => {
       const id = targetTab(context, args);
       if (id === null) return;
-      const others = context.tabs.filter((tab) => tab.id !== id).map((tab) => tab.id);
-      await closeTabs(others, () => useTabs.getState().closeOthers(id));
+      await closeTabs(otherTabIds(context, id), () => useTabs.getState().closeOthers(id));
     },
   }),
   defineAction({
@@ -251,10 +278,84 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     category: "Editor Tabs",
     when: hasTabs,
     run: async (context) => {
-      await closeTabs(
-        context.tabs.map((tab) => tab.id),
-        () => useTabs.getState().closeAll(),
-      );
+      await closeTabs(unpinnedTabIds(context), () => useTabs.getState().closeAll());
+    },
+  }),
+  defineAction<TabArgs | undefined>({
+    id: ACTION_IDS.closeTabsToRight,
+    title: "Close Tabs to the Right",
+    category: "Editor Tabs",
+    when: hasSeveralTabs,
+    run: async (context, args) => {
+      const id = targetTab(context, args);
+      if (id === null) return;
+      await closeTabs(rightTabIds(context, id), () => useTabs.getState().closeRight(id));
+    },
+  }),
+  defineAction<TabArgs | undefined>({
+    id: ACTION_IDS.copyTabPath,
+    title: "Copy Path",
+    category: "Editor Tabs",
+    icon: "copy",
+    when: hasConsoleTab,
+    run: async (context, args) => {
+      const id = targetTab(context, args);
+      if (id === null) return;
+      try {
+        const path = await consoleFilePath(id);
+        if (path !== null) await navigator.clipboard.writeText(path);
+      } catch (cause) {
+        await noticeTabFailure("Could not copy the path", cause);
+      }
+    },
+  }),
+  defineAction<TabArgs | undefined>({
+    id: ACTION_IDS.togglePinTab,
+    title: "Pin Tab",
+    category: "Editor Tabs",
+    icon: "pin",
+    when: hasTabs,
+    run: (context, args) => {
+      const id = targetTab(context, args);
+      if (id !== null) useTabs.getState().togglePin(id);
+    },
+  }),
+  defineAction({
+    id: ACTION_IDS.reopenClosedTab,
+    title: "Reopen Closed Tab",
+    category: "Editor Tabs",
+    icon: "reopen",
+    shortcut: "Mod+Shift+T",
+    when: () => useTabs.getState().closedConsoles.length > 0,
+    run: () => reopenClosedTab(),
+  }),
+  defineAction<TabArgs | undefined>({
+    id: ACTION_IDS.duplicateTab,
+    title: "Duplicate",
+    category: "Editor Tabs",
+    icon: "duplicate",
+    when: hasConsoleTab,
+    run: async (context, args) => {
+      const id = targetTab(context, args);
+      if (id !== null) await duplicateConsole(id);
+    },
+  }),
+  defineAction<TabArgs | undefined>({
+    id: ACTION_IDS.revealTab,
+    get title() {
+      return revealTitle();
+    },
+    category: "Editor Tabs",
+    icon: "folder",
+    when: hasConsoleTab,
+    run: async (context, args) => {
+      const id = targetTab(context, args);
+      if (id === null) return;
+      try {
+        await revealConsoleFile(id);
+      } catch (cause) {
+        await noticeTabFailure("Could not show the file", cause);
+      }
     },
   }),
   defineAction({
