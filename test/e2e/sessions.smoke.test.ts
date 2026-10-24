@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { DatasourcePlugin, Session } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, MYSQL_ROOT_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, MYSQL_ROOT_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, TIDB_DATABASE } from "../support/databases.js";
 import {
   activeEditorTab,
   answerSecretPrompt,
@@ -410,10 +410,13 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     async () => {
       holder = await TIDB_SERVER.plugin.connect(TIDB_SERVER.config, { readOnly: false });
       const holderId = holder.serverSessionId ?? "";
+      if (holder.serverInstance === undefined) throw new Error("A TiDB 4 session knows the server it is on.");
       const page = await launch(TIDB);
       await startStatement(page, TIDB_SLEEP);
 
       await showSessions(page, "tidb");
+      // The TiDB may be shared: keep to this run's own sessions, which all sit in its database.
+      await page.getByRole("textbox", { name: "Search sessions" }).fill(TIDB_DATABASE);
       const sleeping = rowWithQuery(page, TIDB_SLEEP);
       await refreshUntilListed(page, sleeping);
       expect(await cellText(page, sleeping, "State")).toBe("active");
@@ -425,7 +428,8 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
         .toEqual(expect.arrayContaining([expect.stringContaining("This TiDB version cannot cancel")]));
       await captureWindow(page, "tidb-sleep-listed");
 
-      await sessionRow(page, holderId).click();
+      const holderRow = sessionRow(page, `${holder.serverInstance}/${holderId}`);
+      await holderRow.click();
       await sessionsButton(page, "Terminate Session…").click();
       const dialog = terminateDialog(page);
       await dialog.waitFor();
@@ -438,7 +442,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
       await expect
         .poll(async () => {
           await sessionsButton(page, "Refresh Sessions").click();
-          return sessionRow(page, holderId).count();
+          return holderRow.count();
         })
         .toBe(0);
       await captureWindow(page, "tidb-terminated");

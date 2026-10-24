@@ -197,6 +197,12 @@ export interface Session {
    */
   readonly serverSessionId?: string;
   /**
+   * The `ServerSession.instance` this connection is listed under, where an id names a session on one
+   * server of a cluster only (TiDB before Global Kill); absent elsewhere, or when the server would
+   * not say, and the host then matches by id alone.
+   */
+  readonly serverInstance?: string;
+  /**
    * Settles in bounded time even when the network is gone: a graceful goodbye that does not
    * answer within a few seconds gives way to dropping the socket (decision 040).
    */

@@ -245,8 +245,11 @@ export function grantee(currentUser: string): string {
 }
 
 const ID = /^\d+$/;
-/** How many fresh connections a pre-Global-Kill terminate tries before giving up on reaching the session's server. */
-const INSTANCE_ATTEMPTS = 5;
+/**
+ * How many fresh connections a pre-Global-Kill terminate tries before giving up on reaching the
+ * session's server: behind a load balancer over four servers, 20 tries all miss 0.3% of the time.
+ */
+const INSTANCE_ATTEMPTS = 20;
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -273,6 +276,19 @@ async function optional<T>(read: Promise<T>): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * The TiDB server `connection` landed on, as `CLUSTER_PROCESSLIST` names it: the connection finds
+ * its own row by a nonce, since an id alone may repeat on another server before Global Kill.
+ */
+export async function tidbInstanceOf(connection: mysql.Connection): Promise<string | null> {
+  const nonce = randomUUID();
+  const here = await rows<{ instance: string }>(
+    connection,
+    `SELECT INSTANCE AS instance FROM information_schema.CLUSTER_PROCESSLIST WHERE ID = CONNECTION_ID() AND INFO LIKE '%${nonce}%'`,
+  );
+  return here[0]?.instance ?? null;
 }
 
 /**
@@ -322,15 +338,11 @@ export function mysqlSessions(
     if (target.instance === null) throw stopFailed(target, "the TiDB server it lives on is unknown");
     for (let attempt = 0; attempt < INSTANCE_ATTEMPTS; attempt += 1) {
       const candidate = await open();
-      const nonce = randomUUID();
-      const here = await rows<{ instance: string }>(
-        candidate,
-        `SELECT INSTANCE AS instance FROM information_schema.CLUSTER_PROCESSLIST WHERE ID = CONNECTION_ID() AND INFO LIKE '%${nonce}%'`,
-      ).catch(async (cause: unknown) => {
+      const here = await tidbInstanceOf(candidate).catch(async (cause: unknown) => {
         await end(candidate);
         throw cause;
       });
-      if (here.some((row) => row.instance === target.instance)) return candidate;
+      if (here === target.instance) return candidate;
       await end(candidate);
     }
     throw stopFailed(target, `no connection reached its TiDB server ${target.instance}, so nothing was killed`);

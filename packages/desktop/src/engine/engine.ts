@@ -58,6 +58,7 @@ import {
   type ResolveRequest,
   type Row,
   type Session,
+  type ServerSession,
   type SessionListing,
   type SessionMonitor,
   type SessionTarget,
@@ -511,6 +512,12 @@ const DESIGN_HINT = "Fix the design and preview it again.";
 const OBJECT_BUSY_HINT = "Wait for it to finish or cancel it in the Services tool window, then try again.";
 const STALE_PREVIEW = "The object changed since the preview, so the statements to run differ from what was shown.";
 const STALE_PREVIEW_HINT = "Review the new preview, then apply again.";
+/** Whether `row` is `session`'s own connection, by id and, where ids repeat across a cluster, instance. */
+function isListedAs(session: Session, row: ServerSession): boolean {
+  if (session.serverSessionId !== row.id) return false;
+  return session.serverInstance === undefined || session.serverInstance === row.instance;
+}
+
 const READ_ONLY_SESSIONS = "This data source is read-only, so its server sessions cannot be cancelled or terminated.";
 const READ_ONLY_SESSIONS_HINT = "Clear Read-only in the data source's properties to cancel or terminate sessions.";
 const SESSION_STOP_HINT = "Refresh the list: the session may have ended, or this user may not have the right.";
@@ -1255,13 +1262,10 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     return session.sessions;
   }
 
-  /** The listing, and the server id of the catalog's own connection, which is this engine's too. */
-  function listServerSessions(): Promise<{ readonly listing: SessionListing; readonly catalogId: string | null }> {
+  /** The listing, and the catalog's own connection, which is this engine's too. */
+  function listServerSessions(): Promise<{ readonly listing: SessionListing; readonly catalog: Session }> {
     requireSessions();
-    return introspect(async ({ session }) => ({
-      listing: await monitorOf(session).list(),
-      catalogId: session.serverSessionId ?? null,
-    }));
+    return introspect(async ({ session }) => ({ listing: await monitorOf(session).list(), catalog: session }));
   }
 
   /** Runs the row's statement on the plugin's fresh connection; no retry, since a kill is not idempotent. */
@@ -1553,17 +1557,13 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
 
     /** Tags each row this engine holds: a console's with its session id, the catalog's with none. */
     async function listedSessions(): Promise<SessionsListing> {
-      const { listing, catalogId } = await listServerSessions();
-      const owners = new Map<string, string>();
-      for (const [sessionId, open] of sessions) {
-        const serverId = open.session.serverSessionId;
-        if (serverId !== undefined) owners.set(serverId, sessionId);
-      }
+      const { listing, catalog } = await listServerSessions();
       return {
         notes: listing.notes,
         sessions: listing.sessions.map((row) => {
-          const ownSessionId = owners.get(row.id) ?? null;
-          return { ...row, ownSessionId, own: ownSessionId !== null || row.id === catalogId };
+          let ownSessionId: string | null = null;
+          for (const [sessionId, open] of sessions) if (isListedAs(open.session, row)) ownSessionId = sessionId;
+          return { ...row, ownSessionId, own: ownSessionId !== null || isListedAs(catalog, row) };
         }),
       };
     }

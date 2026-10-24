@@ -1472,7 +1472,8 @@ for.
 
 Stopping runs on a fresh connection. The engine (`sessions.list`, `sessions.cancel`,
 `sessions.terminate`) reads on the catalog's introspection session, tags each row whose id is the
-`serverSessionId` of one of its own sessions with that engine session id, and refuses to stop
+`serverSessionId` of one of its own sessions (and, on TiDB before Global Kill, whose instance is its
+`serverInstance`) with that engine session id, and refuses to stop
 anything on a read-only data source. The request log records `cancelled query of session` and
 `terminated session` with the server id and never SQL.
 

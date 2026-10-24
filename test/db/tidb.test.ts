@@ -38,17 +38,23 @@ const LONG_DATABASE = tidbScratchDatabase(
 const LISTED_WITHIN_MS = 10_000;
 const LISTING_POLL_MS = 200;
 
+/**
+ * Polls for `session`'s own row, by id and server: the TiDB may be shared, and an id alone can name
+ * someone else's connection on another of its servers.
+ */
 async function listedUntil(
   monitor: SessionMonitor,
-  id: string | undefined,
+  session: Session,
   ready: (row: ServerSession | undefined) => boolean,
 ): Promise<ServerSession | undefined> {
   const deadline = Date.now() + LISTED_WITHIN_MS;
   for (;;) {
-    const row = (await monitor.list()).sessions.find((listed) => listed.id === id);
+    const row = (await monitor.list()).sessions.find(
+      (listed) => listed.id === session.serverSessionId && listed.instance === session.serverInstance,
+    );
     if (ready(row)) return row;
     if (Date.now() > deadline)
-      throw new Error(`Session ${String(id)} never got there; last seen ${JSON.stringify(row)}.`);
+      throw new Error(`Session ${String(session.serverSessionId)} never got there; last seen ${JSON.stringify(row)}.`);
     await new Promise((resolve) => setTimeout(resolve, LISTING_POLL_MS));
   }
 }
@@ -282,7 +288,7 @@ describe("tidb 4", () => {
     cleanup.push(() => sleeping);
     cleanup.push(() => sleeper.cancel?.() ?? Promise.resolve());
 
-    const row = await listedUntil(monitor, sleeper.serverSessionId, (listed) => listed?.state === "active");
+    const row = await listedUntil(monitor, sleeper, (listed) => listed?.state === "active");
     const { notes } = await monitor.list();
 
     expect(row).toMatchObject({
@@ -291,7 +297,7 @@ describe("tidb 4", () => {
       cancel: null,
       terminate: `KILL TIDB ${row?.id ?? ""}`,
     });
-    expect(row?.instance).toEqual(expect.any(String));
+    expect(sleeper.serverInstance).toEqual(expect.any(String));
     expect(notes.join("\n")).toMatch(/cannot cancel/);
     expect(notes.join("\n")).toMatch(/Blocked by is empty/);
     await expect(monitor.cancelSession({ id: row?.id ?? "", instance: row?.instance ?? null })).rejects.toMatchObject({
@@ -304,12 +310,12 @@ describe("tidb 4", () => {
     const holder = await connected();
     await holder.transactions?.setMode("manual");
     // With autocommit off TiDB opens the transaction at the first read of a stored table.
-    for await (const _row of (await holder.execute("SELECT COUNT(*) FROM mysql.tidb")).rows) {
+    for await (const _row of (await holder.execute(`SELECT COUNT(*) FROM ${SAGA_TABLE}`)).rows) {
       // Drained, so the session sits idle in its transaction.
     }
     cleanup.push(() => holder.transactions?.rollback() ?? Promise.resolve());
 
-    const row = await listedUntil(monitor, holder.serverSessionId, (listed) => listed?.state === "idleInTransaction");
+    const row = await listedUntil(monitor, holder, (listed) => listed?.state === "idleInTransaction");
 
     expect(row?.transactionMs).toBeGreaterThanOrEqual(0);
   });
@@ -318,12 +324,12 @@ describe("tidb 4", () => {
     const sent = spySql();
     const monitor = (await connected()).sessions;
     const victim = await connected();
-    const row = await listedUntil(monitor, victim.serverSessionId, (listed) => listed !== undefined);
+    const row = await listedUntil(monitor, victim, (listed) => listed !== undefined);
 
     await monitor.terminateSession({ id: row?.id ?? "", instance: row?.instance ?? null });
     // TiDB 4 ends an idle connection it was told to kill only when the connection next speaks.
     await expect(victim.execute("SELECT 1")).rejects.toThrow();
-    await listedUntil(monitor, row?.id, (listed) => listed === undefined);
+    await listedUntil(monitor, victim, (listed) => listed === undefined);
 
     const check = sent.findIndex((sql) => /CLUSTER_PROCESSLIST WHERE ID = CONNECTION_ID\(\)/.test(sql));
     expect(check).toBeGreaterThanOrEqual(0);

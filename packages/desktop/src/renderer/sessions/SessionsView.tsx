@@ -172,7 +172,7 @@ export function SessionsView({ sessionsId }: { readonly sessionsId: string }) {
                 <tr
                   key={key}
                   aria-selected={isSelected}
-                  data-session={session.id}
+                  data-session={key}
                   data-tone={tone ?? undefined}
                   className={cn(
                     "h-row cursor-default hover:bg-raised",

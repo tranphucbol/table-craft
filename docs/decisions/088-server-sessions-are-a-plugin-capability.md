@@ -7,7 +7,8 @@ Status: Accepted. Plugin API 0.22.0.
 Listing, cancelling and terminating a server's sessions is the `sessions` capability. It requires
 `sql` and `schemaTree`, because the engine lists on its introspection session, which only a
 `schemaTree` plugin opens. A plugin that declares it gives every `Session` a `sessions` monitor and
-a `serverSessionId`, the server's id of that connection.
+a `serverSessionId`, the server's id of that connection, and, where ids repeat across a cluster's
+servers (TiDB before Global Kill), a `serverInstance` naming the server it landed on.
 
 - `SessionMonitor.list()` returns a `SessionListing`: typed `ServerSession` rows (`id`, `instance`,
   `state` of `active | idle | idleInTransaction | blocked | other` with the server's `rawState`,
@@ -27,7 +28,7 @@ a `serverSessionId`, the server's id of that connection.
   runs a terminate only on a connection that has reached the row's instance. **SQLite** does not
   declare it.
 - The engine tags the rows that are its own sessions with their engine session id, by
-  `serverSessionId`, never by application name. It refuses cancel and terminate on a read-only data
+  `serverSessionId` and, when the session has one, `serverInstance`, never by application name. It refuses cancel and terminate on a read-only data
   source. The request log records the session id and the data source, never the statement or the
   query text.
 - The renderer asks before a terminate and shows the statement. On a data source coloured red the

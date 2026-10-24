@@ -67,8 +67,8 @@ import {
 } from "./explain.js";
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
-import { isTidb, killStatementFor } from "./server.js";
-import { mysqlSessions } from "./sessions.js";
+import { isTidb, killStatementFor, tidbGlobalKill } from "./server.js";
+import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
@@ -356,6 +356,7 @@ interface Identity {
   /** What stops this connection's running statement from another connection; `null` when nothing safely does. */
   readonly kill: string | null;
   readonly serverSessionId: string;
+  readonly serverInstance: string | null;
 }
 
 /**
@@ -376,6 +377,7 @@ async function prepareConnection(connection: mysql.Connection, options: ConnectO
     serverVersion,
     kill: Number.isSafeInteger(id) ? killStatementFor(serverVersion, id) : null,
     serverSessionId,
+    serverInstance: tidbGlobalKill(serverVersion) === false ? await tidbInstanceOf(connection).catch(() => null) : null,
   };
 }
 
@@ -541,6 +543,7 @@ class MysqlSession implements Session {
   readonly transactions: Transactions;
   readonly sessions: SessionMonitor;
   readonly serverSessionId: string;
+  readonly serverInstance?: string;
 
   constructor(config: MysqlConfig, connection: mysql.Connection, identity: Identity) {
     this.#config = config;
@@ -550,6 +553,7 @@ class MysqlSession implements Session {
     this.introspector = mysqlIntrospector(connection);
     this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config));
     this.serverSessionId = identity.serverSessionId;
+    if (identity.serverInstance !== null) this.serverInstance = identity.serverInstance;
     const state = this.#transaction;
     this.transactions = {
       setMode: (mode) => this.#setMode(mode),

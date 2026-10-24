@@ -41,8 +41,11 @@ function row(id: string, overrides: Partial<ServerSession> = {}): ServerSession 
   };
 }
 
+const OWN_INSTANCE = "10.0.0.1:10080";
+const OTHER_INSTANCE = "10.0.0.2:10080";
+
 /** SQLite with a pretend server: every connection gets a server id, and the monitor lists them all plus a stranger. */
-function monitoredEngine(options: { readOnly?: boolean; failStop?: string } = {}) {
+function monitoredEngine(options: { readOnly?: boolean; failStop?: string; instance?: string } = {}) {
   const live = new Set<string>();
   const stopped: { readonly stop: string; readonly target: SessionTarget }[] = [];
   let next = 100;
@@ -65,13 +68,18 @@ function monitoredEngine(options: { readOnly?: boolean; failStop?: string } = {}
         sessions: {
           list: () =>
             Promise.resolve({
-              sessions: [...[...live].map((id) => row(id)), row(FOREIGN_ID)],
+              sessions: [
+                ...[...live].map((id) => row(id, { instance: options.instance ?? null })),
+                ...(options.instance === undefined ? [] : [...live].map((id) => row(id, { instance: OTHER_INSTANCE }))),
+                row(FOREIGN_ID),
+              ],
               notes: ["a note"],
             }),
           cancelSession: stop("cancel"),
           terminateSession: stop("terminate"),
         },
         serverSessionId,
+        ...(options.instance === undefined ? {} : { serverInstance: options.instance }),
         serverVersion: session.serverVersion,
         close: async () => {
           live.delete(serverSessionId);
@@ -125,6 +133,17 @@ describe("engine server sessions", () => {
       own: false,
       ownSessionId: null,
     });
+  });
+
+  it("givenSameIdOnAnotherServer_whenList_thenOnlyOwnServersRowTagged", async () => {
+    const { connection } = monitoredEngine({ instance: OWN_INSTANCE });
+    const { sessionId } = resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open" }));
+
+    const listing = resultOf<SessionsListing>(await connection.handle({ id: 2, type: "sessions.list" }));
+
+    const tagged = listing.sessions.filter((session) => session.ownSessionId === sessionId);
+    expect(tagged.map((session) => session.instance)).toEqual([OWN_INSTANCE]);
+    expect(listing.sessions.filter((session) => session.instance === OTHER_INSTANCE && session.own)).toEqual([]);
   });
 
   it("givenTerminate_whenRun_thenPluginGetsTarget", async () => {
