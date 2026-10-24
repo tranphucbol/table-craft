@@ -49,7 +49,6 @@ const HASH_BYTES = 32;
 const STREAM_START_BYTES = 32;
 const CHACHA_KEY_BYTES = 32;
 const CHACHA_NONCE_BYTES = 12;
-const CHACHA_COUNTER_BYTES = 4;
 /** KeePass's fixed Salsa20 IV for protected values (KDBX 3.1). */
 const SALSA20_IV = Buffer.from([0xe8, 0x30, 0x09, 0x4b, 0x97, 0x20, 0x5d, 0x2a]);
 /** `EncryptionSupport.kt`: the BUILT_IN main-key cipher is AES-128-CBC under this fixed key. */
@@ -180,31 +179,51 @@ function unhashBlocks(reader: Reader): Buffer {
   return Buffer.concat(blocks);
 }
 
-const SALSA_ROUNDS = 20;
-const SALSA_CONSTANTS = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574];
+const DOUBLE_ROUNDS = 10;
+const BLOCK_BYTES = 64;
+/** "expand 32-byte k", the constant both Salsa20 and ChaCha20 put in their state. */
+const SIGMA = [0x61707865, 0x3320646e, 0x79622d32, 0x6b206574];
 
 function rotate(value: number, bits: number): number {
   return (value << bits) | (value >>> (32 - bits));
+}
+
+type Keystream = (length: number) => Buffer;
+
+/** Serves a block function's output `length` bytes at a time. */
+function keystream(block: () => Buffer): Keystream {
+  let pending = Buffer.alloc(0);
+  return (length) => {
+    while (pending.length < length) pending = Buffer.concat([pending, block()]);
+    const taken = pending.subarray(0, length);
+    pending = pending.subarray(length);
+    return taken;
+  };
+}
+
+function finishBlock(state: Uint32Array, mixed: Uint32Array): Buffer {
+  const out = Buffer.alloc(BLOCK_BYTES);
+  for (let i = 0; i < 16; i++) out.writeUInt32LE((((mixed[i] ?? 0) + (state[i] ?? 0)) | 0) >>> 0, i * 4);
+  return out;
 }
 
 /**
  * A Salsa20/20 keystream (Bernstein, "Salsa20 specification", 2005) for a 32-byte key and an
  * 8-byte nonce; node:crypto has no Salsa20. Each call returns the next `length` bytes.
  */
-export function salsa20(key: Buffer, nonce: Buffer): (length: number) => Buffer {
+export function salsa20(key: Buffer, nonce: Buffer): Keystream {
   const input = new Uint32Array(16);
-  input[0] = SALSA_CONSTANTS[0] ?? 0;
-  input[5] = SALSA_CONSTANTS[1] ?? 0;
-  input[10] = SALSA_CONSTANTS[2] ?? 0;
-  input[15] = SALSA_CONSTANTS[3] ?? 0;
+  input[0] = SIGMA[0] ?? 0;
+  input[5] = SIGMA[1] ?? 0;
+  input[10] = SIGMA[2] ?? 0;
+  input[15] = SIGMA[3] ?? 0;
   for (let i = 0; i < 4; i++) {
     input[1 + i] = key.readUInt32LE(i * 4);
     input[11 + i] = key.readUInt32LE(16 + i * 4);
   }
   input[6] = nonce.readUInt32LE(0);
   input[7] = nonce.readUInt32LE(4);
-  let pending = Buffer.alloc(0);
-  const block = (): Buffer => {
+  return keystream(() => {
     const x = Uint32Array.from(input);
     const quarter = (a: number, b: number, c: number, d: number) => {
       x[b] = (x[b] ?? 0) ^ rotate(((x[a] ?? 0) + (x[d] ?? 0)) | 0, 7);
@@ -212,7 +231,7 @@ export function salsa20(key: Buffer, nonce: Buffer): (length: number) => Buffer 
       x[d] = (x[d] ?? 0) ^ rotate(((x[c] ?? 0) + (x[b] ?? 0)) | 0, 13);
       x[a] = (x[a] ?? 0) ^ rotate(((x[d] ?? 0) + (x[c] ?? 0)) | 0, 18);
     };
-    for (let round = 0; round < SALSA_ROUNDS; round += 2) {
+    for (let round = 0; round < DOUBLE_ROUNDS; round++) {
       quarter(0, 4, 8, 12);
       quarter(5, 9, 13, 1);
       quarter(10, 14, 2, 6);
@@ -222,29 +241,57 @@ export function salsa20(key: Buffer, nonce: Buffer): (length: number) => Buffer 
       quarter(10, 11, 8, 9);
       quarter(15, 12, 13, 14);
     }
-    const out = Buffer.alloc(64);
-    for (let i = 0; i < 16; i++) out.writeUInt32LE((((x[i] ?? 0) + (input[i] ?? 0)) | 0) >>> 0, i * 4);
+    const out = finishBlock(input, x);
     input[8] = ((input[8] ?? 0) + 1) >>> 0;
     if (input[8] === 0) input[9] = ((input[9] ?? 0) + 1) >>> 0;
     return out;
-  };
-  return (length) => {
-    while (pending.length < length) pending = Buffer.concat([pending, block()]);
-    const taken = pending.subarray(0, length);
-    pending = pending.subarray(length);
-    return taken;
-  };
+  });
 }
 
-function innerStream(header: Header): (length: number) => Buffer {
+/**
+ * A ChaCha20 keystream (RFC 8439, section 2.4) for a 32-byte key and a 12-byte nonce, counter from
+ * 0. Electron's BoringSSL has no raw `chacha20` cipher, though Node's OpenSSL does.
+ */
+export function chacha20(key: Buffer, nonce: Buffer): Keystream {
+  const input = new Uint32Array(16);
+  for (let i = 0; i < 4; i++) input[i] = SIGMA[i] ?? 0;
+  for (let i = 0; i < 8; i++) input[4 + i] = key.readUInt32LE(i * 4);
+  for (let i = 0; i < 3; i++) input[13 + i] = nonce.readUInt32LE(i * 4);
+  return keystream(() => {
+    const x = Uint32Array.from(input);
+    const quarter = (a: number, b: number, c: number, d: number) => {
+      x[a] = ((x[a] ?? 0) + (x[b] ?? 0)) | 0;
+      x[d] = rotate((x[d] ?? 0) ^ (x[a] ?? 0), 16);
+      x[c] = ((x[c] ?? 0) + (x[d] ?? 0)) | 0;
+      x[b] = rotate((x[b] ?? 0) ^ (x[c] ?? 0), 12);
+      x[a] = ((x[a] ?? 0) + (x[b] ?? 0)) | 0;
+      x[d] = rotate((x[d] ?? 0) ^ (x[a] ?? 0), 8);
+      x[c] = ((x[c] ?? 0) + (x[d] ?? 0)) | 0;
+      x[b] = rotate((x[b] ?? 0) ^ (x[c] ?? 0), 7);
+    };
+    for (let round = 0; round < DOUBLE_ROUNDS; round++) {
+      quarter(0, 4, 8, 12);
+      quarter(1, 5, 9, 13);
+      quarter(2, 6, 10, 14);
+      quarter(3, 7, 11, 15);
+      quarter(0, 5, 10, 15);
+      quarter(1, 6, 11, 12);
+      quarter(2, 7, 8, 13);
+      quarter(3, 4, 9, 14);
+    }
+    const out = finishBlock(input, x);
+    input[12] = ((input[12] ?? 0) + 1) >>> 0;
+    return out;
+  });
+}
+
+function innerStream(header: Header): Keystream {
   if (header.innerStream === INNER_STREAM_CHACHA20) {
     const hash = createHash("sha512").update(header.protectedStreamKey).digest();
-    const iv = Buffer.concat([
-      Buffer.alloc(CHACHA_COUNTER_BYTES),
+    return chacha20(
+      hash.subarray(0, CHACHA_KEY_BYTES),
       hash.subarray(CHACHA_KEY_BYTES, CHACHA_KEY_BYTES + CHACHA_NONCE_BYTES),
-    ]);
-    const cipher = createCipheriv("chacha20", hash.subarray(0, CHACHA_KEY_BYTES), iv);
-    return (length) => cipher.update(Buffer.alloc(length));
+    );
   }
   if (header.innerStream === INNER_STREAM_SALSA20) return salsa20(sha256(header.protectedStreamKey), SALSA20_IV);
   throw new KdbxError("unsupported", "This KeePass database protects values in a way TableCraft does not read.");
@@ -272,7 +319,7 @@ export function readKdbx(bytes: Uint8Array, password: Uint8Array): KdbxEntry[] {
   const document = parseXml(payload.toString("utf8"));
   const root = descendants(document, "Root")[0];
   if (root === undefined) return [];
-  const keystream = innerStream(header);
+  const stream = innerStream(header);
   const entries: KdbxEntry[] = [];
   for (const entry of descendants(root, "Entry")) {
     // History entries are older copies; their protected values still advance the stream.
@@ -283,7 +330,7 @@ export function readKdbx(bytes: Uint8Array, password: Uint8Array): KdbxEntry[] {
       if (key === null || valueElement === undefined) continue;
       if (valueElement.attributes.Protected === "True") {
         const cipherText = Buffer.from(valueElement.text, "base64");
-        const mask = keystream(cipherText.length);
+        const mask = stream(cipherText.length);
         fields[key] = Buffer.from(cipherText.map((byte, index) => byte ^ (mask[index] ?? 0))).toString("utf8");
       } else {
         fields[key] = valueElement.text;

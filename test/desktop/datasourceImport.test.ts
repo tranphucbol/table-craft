@@ -8,7 +8,7 @@ import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js"
 import { createHostRegistry } from "@table-craft/desktop/main/hosts.js";
 import { scanDataGrip } from "@table-craft/desktop/main/import/datagrip.js";
 import { createImporter } from "@table-craft/desktop/main/import/importer.js";
-import { KdbxError, readKdbx, readMainKey, salsa20 } from "@table-craft/desktop/main/import/kdbx.js";
+import { chacha20, KdbxError, readKdbx, readMainKey, salsa20 } from "@table-craft/desktop/main/import/kdbx.js";
 import {
   createCredentialReader,
   splitJoinedSecret,
@@ -212,6 +212,18 @@ describe("KeePass reader", () => {
     expect(stream.toString("hex").toUpperCase()).toBe(
       "E3BE8FDD8BECA2E3EA8EF9475B29A6E7003951E1097A5C38D23B7A5FAD9F6844" +
         "B22C97559E2723C7CBBD3FE4FC8D9A0744652A83E72A9C461876AF4D7EF1A117",
+    );
+  });
+
+  it("givenRfc8439BlockVector_whenChaCha20_thenSecondBlockMatches", () => {
+    const key = Buffer.from(Array.from({ length: 32 }, (_, index) => index));
+    const nonce = Buffer.from("000000090000004a00000000", "hex");
+
+    const stream = chacha20(key, nonce)(128);
+
+    expect(stream.subarray(64).toString("hex")).toBe(
+      "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e" +
+        "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e",
     );
   });
 });

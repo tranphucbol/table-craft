@@ -99,9 +99,10 @@ export function createImporter(options: ImporterOptions): Importer {
       }
       return { passwords };
     } catch (cause) {
-      if (!(cause instanceof KdbxError)) throw cause;
-      log.warn("keepass unreadable", { problem: cause.problem });
-      return { locked: cause.message };
+      // Connections import without their passwords rather than not at all.
+      const known = cause instanceof KdbxError;
+      log.warn("keepass unreadable", { problem: known ? cause.problem : "unexpected" });
+      return { locked: known ? cause.message : "TableCraft could not read DataGrip's KeePass database." };
     }
   }
 
@@ -196,7 +197,7 @@ export function createImporter(options: ImporterOptions): Importer {
           label: LABELS.tablepro,
           found: tablePro.found,
           count: tablePro.connections.length,
-          locations: [tablePro.path],
+          locations: tablePro.path === null ? [] : [tablePro.path],
           passwords: "In TablePro's keychain; export an encrypted .tablepro file to bring them",
         },
       ];

@@ -11,10 +11,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=UTC
 
 # Xvfb is the display; openbox gives windows focus and activation the way a desktop does;
-# gnome-keyring is the secret service `safeStorage` encrypts with, as on a Linux desktop. The
+# gnome-keyring is the secret service `safeStorage` encrypts with, as on a Linux desktop, and
+# libsecret-tools its `secret-tool`, which plan 035's import reads DataGrip passwords with. The
 # libraries are what `ldd` on the Electron binary asks for, plus GTK for its dialogs and menus.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      xvfb xauth openbox x11-utils xdotool xclip dbus dbus-x11 gnome-keyring \
+      xvfb xauth openbox x11-utils xdotool xclip dbus dbus-x11 gnome-keyring libsecret-tools \
       libgtk-3-0 libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libdbus-1-3 \
       libx11-xcb1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libxss1 libxtst6 \
       libxkbcommon0 libgbm1 libdrm2 libasound2 libcups2 libsecret-1-0 libnotify4 \

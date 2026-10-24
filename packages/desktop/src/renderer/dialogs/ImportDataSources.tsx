@@ -39,7 +39,7 @@ type Step =
 const BROWSE_TITLE = "Import Data Sources from a File";
 const FILE_FIELD_ID = "import-datasources-file";
 const PASSPHRASE_FIELD_ID = "import-datasources-passphrase";
-const KEYCHAIN_NOTE = "macOS may ask for each password; click Allow, not Always Allow.";
+const KEYCHAIN_NOTE = "The system may ask once for each password; on macOS click Allow, not Always Allow.";
 
 function SourceCard({
   source,

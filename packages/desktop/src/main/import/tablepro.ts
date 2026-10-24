@@ -55,7 +55,8 @@ export interface TableProGroup {
 }
 
 export interface TableProScan {
-  readonly path: string;
+  /** Null where TablePro does not run (it is a macOS app). */
+  readonly path: string | null;
   readonly found: boolean;
   readonly connections: readonly ForeignConnection[];
 }
@@ -154,8 +155,9 @@ export async function scanTablePro(
   groups: readonly TableProGroup[] = [],
 ): Promise<TableProScan> {
   const directory = tableProDirectory(environment);
-  const path = directory === null ? TABLEPRO_CONNECTIONS : join(directory, TABLEPRO_CONNECTIONS);
-  const contents = directory === null ? null : await environment.files.readText(path);
+  if (directory === null) return { path: null, found: false, connections: [] };
+  const path = join(directory, TABLEPRO_CONNECTIONS);
+  const contents = await environment.files.readText(path);
   if (contents === null) return { path, found: false, connections: [] };
   let entries: unknown;
   try {
