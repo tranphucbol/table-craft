@@ -214,3 +214,4 @@ export {
   type TunnelPool,
   type TunnelTarget,
 } from "./tunnels/index.js";
+export { Utf8Error, decodeUtf8, utf8Decoder, type Utf8Decoder } from "./scripts/index.js";
