@@ -64,6 +64,13 @@ interface SentinelReport {
   readonly unreachable: ReadonlyMap<SeededService, string>;
 }
 
+/** A refused connection to both `localhost` addresses is an `AggregateError` with no message, only a code. */
+function describeError(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  const code = (error as { code?: unknown }).code;
+  return error.message || (typeof code === "string" ? code : error.name);
+}
+
 async function inspect(query: SentinelQuery, sentinels: readonly Sentinel[]): Promise<SentinelReport> {
   const missing = new Map<SeededService, string[]>();
   const unreachable = new Map<SeededService, string>();
@@ -74,7 +81,7 @@ async function inspect(query: SentinelQuery, sentinels: readonly Sentinel[]): Pr
         missing.set(sentinel.service, [...(missing.get(sentinel.service) ?? []), sentinel.object]);
       }
     } catch (error) {
-      unreachable.set(sentinel.service, error instanceof Error ? error.message : String(error));
+      unreachable.set(sentinel.service, describeError(error));
     }
   }
   return { missing, unreachable };

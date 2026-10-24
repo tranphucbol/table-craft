@@ -29,6 +29,16 @@ describe("smoke fixture sentinels (smokeFixtures.ts)", () => {
     ]);
   });
 
+  it("givenRefusedOnEveryAddress_whenChecked_thenReasonIsTheCode", async () => {
+    const refused = Object.assign(new AggregateError([], ""), { code: "ECONNREFUSED" });
+    const query: SentinelQuery = (service) =>
+      service === "postgres-tls" ? Promise.reject(refused) : Promise.resolve(true);
+
+    expect(await staleServices(query)).toEqual([
+      "the `postgres-tls` server did not answer (ECONNREFUSED); run `bun test/db/up.ts`",
+    ]);
+  });
+
   it("givenMissingAndUnreachableServices_whenListedForReseed_thenOnlyTheMissingOnes", async () => {
     const query: SentinelQuery = (service, sql) =>
       service === "mysql"
