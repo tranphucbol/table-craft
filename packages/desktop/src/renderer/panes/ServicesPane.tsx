@@ -427,7 +427,7 @@ function ScriptLine({ entry }: { readonly entry: ScriptEntry }) {
           : SCRIPT_STATE_TEXT[task.state]}
       </span>
       {task.error?.line == null ? null : (
-        <span className="min-w-0 truncate text-danger" data-testid="script-error">
+        <span className="min-w-0 shrink-first truncate text-danger" data-testid="script-error">
           {`line ${String(task.error.line)}: ${task.error.message}`}
         </span>
       )}
