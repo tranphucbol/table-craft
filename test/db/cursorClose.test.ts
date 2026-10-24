@@ -24,7 +24,6 @@ interface Target {
   readonly pluginId: string;
   readonly loaded: PluginLoadResult;
   readonly config: DatasourceConfig["config"];
-  readonly explains: boolean;
 }
 
 const TARGETS: readonly Target[] = [
@@ -33,21 +32,18 @@ const TARGETS: readonly Target[] = [
     pluginId: "postgres",
     loaded: { status: "loaded", directory: "plugins/postgres", manifest: POSTGRES_MANIFEST, plugin: postgres },
     config: POSTGRES_CONFIG,
-    explains: true,
   },
   {
     name: "mysql",
     pluginId: "mysql",
     loaded: { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql },
     config: MYSQL_CONFIG,
-    explains: true,
   },
   {
     name: "tidb",
     pluginId: "mysql",
     loaded: { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql },
     config: TIDB_CONFIG,
-    explains: false,
   },
 ];
 
@@ -146,9 +142,7 @@ for (const target of TARGETS) {
         analyze: false,
       });
 
-      if (target.explains) expect(response.type).toBe("statement.explain");
-      // TiDB has no `FORMAT=TREE`; what matters is that the server, not a busy session, refused.
-      else expect(response.type === "engine.error" ? response.error.message : response.type).toMatch(/syntax/);
+      expect(response.type).toBe("statement.explain");
     });
   });
 }
