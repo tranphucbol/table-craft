@@ -10,7 +10,9 @@ import {
   type PluginInfo,
   type SecretMode,
 } from "@table-craft/desktop/preload/bridge.js";
+import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { deleteDatasource } from "@table-craft/desktop/renderer/actions/datasourceCommands.js";
+import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import {
   Button,
@@ -594,6 +596,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   }
 
   const AddIcon = ACTION_ICONS.add;
+  const ImportIcon = ACTION_ICONS.import;
   const DuplicateIcon = ACTION_ICONS.duplicate;
   const DeleteIcon = ACTION_ICONS.delete;
 
@@ -611,6 +614,15 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               onClick={() => setState((previous) => ({ ...previous, choosingPlugin: true }))}
             >
               <AddIcon aria-hidden className="size-icon" />
+            </button>
+            <button
+              type="button"
+              aria-label="Import data sources"
+              title="Import from DataGrip or TablePro…"
+              className="flex size-tab items-center justify-center rounded hover:bg-raised"
+              onClick={() => void invoke(ACTION_IDS.importDatasources)}
+            >
+              <ImportIcon aria-hidden className="size-icon" />
             </button>
             <button
               type="button"

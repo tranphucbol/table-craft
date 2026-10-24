@@ -15,6 +15,7 @@ import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
 import { canRun, OUTPUT_TAB, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
+import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
@@ -45,6 +46,7 @@ export const ACTION_IDS = {
   findAction: "palette.findAction",
   searchEverywhere: "palette.searchEverywhere",
   newDatasource: "datasource.new",
+  importDatasources: "datasource.import",
   datasourceProperties: "datasource.properties",
   duplicateDatasource: "datasource.duplicate",
   copyDatasourceUrl: "datasource.copyUrl",
@@ -337,6 +339,16 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     shortcutRegion: "database",
     run: (context) =>
       useDataSourcesDialog.getState().show({ kind: "new", pluginId: null, folder: selectedFolder(context) ?? "" }),
+  }),
+  defineAction({
+    id: ACTION_IDS.importDatasources,
+    title: "Import Data Sources…",
+    category: "Database",
+    icon: "import",
+    run: () => {
+      useDataSourcesDialog.getState().hide();
+      useImportDataSourcesDialog.getState().show();
+    },
   }),
   defineAction({
     id: ACTION_IDS.datasourceProperties,

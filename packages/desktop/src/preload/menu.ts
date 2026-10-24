@@ -73,6 +73,7 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
     items: [
       // No accelerator: ⌘N belongs to the Database tool window alone (plan 004).
       { kind: "action", label: "New Data Source…", actionId: "datasource.new" },
+      { kind: "action", label: "Import Data Sources…", actionId: "datasource.import" },
       { kind: "action", label: "New Console", actionId: "console.new", accelerator: "CmdOrCtrl+Shift+L" },
       SEPARATOR,
       {

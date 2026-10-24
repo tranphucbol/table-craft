@@ -15,6 +15,7 @@ import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { QuickDoc } from "@table-craft/desktop/renderer/catalog/QuickDoc.js";
 import { editorReservedChords } from "@table-craft/desktop/renderer/console/editorKeys.js";
 import { DataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/DataSources.js";
+import { ImportDataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/ImportDataSources.js";
 import { Modal } from "@table-craft/desktop/renderer/dialogs/Modal.js";
 import { SecretPrompt } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
 import { SettingsDialog } from "@table-craft/desktop/renderer/dialogs/Settings.js";
@@ -85,6 +86,7 @@ export function App() {
       <Shell />
       <Palette />
       <DataSourcesDialog />
+      <ImportDataSourcesDialog />
       <SettingsDialog />
       <SecretPrompt />
       <Modal />
