@@ -24,6 +24,10 @@ Run from the repository root.
   `tc_run_*` database (`test/support/tidbScratch.ts`, read through `TIDB_DATABASE` and
   `tidbScratchDatabase` in `test/support/databases.ts`) and drops it after: never write to,
   create users in, or kill sessions outside what the run made, since the remote server is shared.
+  Prefer the remote whenever `.env` names it: never pass `--profile tidb` to compose, never
+  start the `tidb` service or any TiDB container by hand; go through `test:db`, `test:smoke:db`,
+  their headless forms or `bun test/db/up.ts`. A log line `TiDB: local container` with `.env`
+  present means the remote did not answer: say so, and stop that container when the run ends.
   The SSH tunnel suite (`test/db/tunnel.test.ts`) runs through the `ssh` bastion (port 2222, user
   `tunnel`, test-only keys in `test/db/ssh/`). The certificate suite (`test/db/tls.test.ts`) uses
   the TLS-only `postgres-tls` (port 55433) and `mysql-tls` (port 53307) servers and the test-only
@@ -31,7 +35,9 @@ Run from the repository root.
   A second checkout (a parallel worktree) sets `COMPOSE_PROJECT_NAME`, `TABLE_CRAFT_PG_PORT`,
   `TABLE_CRAFT_MYSQL_PORT`, `TABLE_CRAFT_TIDB_PORT`, `TABLE_CRAFT_SSH_PORT`,
   `TABLE_CRAFT_PG_TLS_PORT` and `TABLE_CRAFT_MYSQL_TLS_PORT` for every `test:db`,
-  `test:smoke:db` and `docker compose` command so it gets its own containers
+  `test:smoke:db` and `docker compose` command so it gets its own containers, and copies the
+  main checkout's `.env` into its root (`cp <main checkout>/.env .env`, when the main checkout has
+  one) right after the worktree is made, before any test or plan work
 - `bun run test:smoke` - build the app and drive it under Playwright; needs a display
 - `bun run test:smoke:db` - the same against PostgreSQL, MySQL and SQLite; set
   `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/NNN` to save a window PNG per scenario for plan NNN's
@@ -209,7 +215,9 @@ or a named constant over a comment.
   row to `docs/decisions/README.md`.
 - `docs/plans/` holds implementation plans. Start from `docs/plans/TEMPLATE.md`. A plan is done
   when its phases are green and its Live test section, with screenshots in `docs/evidence/NNN/`,
-  is filled in. Plans and evidence stay out of git; never commit them (decision 035).
+  is filled in. Plans and evidence stay out of git; never commit them (decision 035). A plan
+  worked in its own worktree starts by copying the main checkout's `.env` there, so its TiDB
+  suites use the remote server; `.env` is git-ignored and never committed.
 - `README.md` is for users. `test/renderer/readme.test.ts` checks it against the code: images,
   anchors, the shortcut table against the action registry, the settings table against the defaults,
   the plugin capabilities, and the `bun run` scripts. Change the README with the behaviour it
