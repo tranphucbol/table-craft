@@ -106,6 +106,27 @@ describe("parseConnectionUrl", () => {
     );
   });
 
+  it("givenUrlWithSslrootcert_whenPasted_thenFieldsFilled", () => {
+    const parsed = parseConnectionUrl(
+      POSTGRES,
+      "postgresql://h/db?sslmode=verify-ca&sslrootcert=%2Fcerts%2Fca.pem&sslcert=~/c.crt&sslkey=~/c.key",
+    );
+
+    expect(parsed.values).toMatchObject({
+      sslMode: "verify-ca",
+      sslRootCert: "/certs/ca.pem",
+      sslCert: "~/c.crt",
+      sslKey: "~/c.key",
+    });
+    expect(parsed.ignored).toEqual([]);
+  });
+
+  it("givenMysqlUrlWithSslCa_whenPasted_thenFieldsFilled", () => {
+    const parsed = parseConnectionUrl(MYSQL, "mysql://h/db?ssl-mode=VERIFY_CA&ssl-ca=/certs/ca.pem&ssl-key=/c.key");
+
+    expect(parsed.values).toMatchObject({ sslMode: "verify-ca", sslRootCert: "/certs/ca.pem", sslKey: "/c.key" });
+  });
+
   it("givenManifestWithoutUrl_whenParsed_thenRejects", () => {
     const { url: _url, ...connection } = SQLITE.connection;
     expect(() => parseConnectionUrl({ connection }, "/a.db")).toThrow("This data source type has no connection URL.");
@@ -134,6 +155,21 @@ describe("formatConnectionUrl", () => {
 
     expect(url).toBe("mysql://x%40y@[::1]:3307/a%20b?ssl-mode=VERIFY_IDENTITY");
     expect(parseConnectionUrl(MYSQL, url).values).toEqual(config);
+  });
+
+  it("givenCertificatePaths_whenFormatted_thenCarriedAndBlankOnesOmitted", () => {
+    const config = {
+      host: "h",
+      user: "u",
+      sslMode: "verify-full",
+      sslRootCert: "/certs/ca.pem",
+      sslCert: "",
+      sslKey: "",
+    };
+
+    expect(formatConnectionUrl(POSTGRES, config)).toBe(
+      "postgresql://u@h?sslmode=verify-full&sslrootcert=%2Fcerts%2Fca.pem",
+    );
   });
 
   it("givenSqlitePaths_whenFormatted_thenRoundTrips", () => {

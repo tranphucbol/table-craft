@@ -118,6 +118,61 @@ describe("pluginManifestSchema network", () => {
   });
 });
 
+describe("pluginManifestSchema tls", () => {
+  const MODE = {
+    key: "sslMode",
+    label: "SSL mode",
+    kind: "select",
+    options: [
+      { value: "disable", label: "Disable" },
+      { value: "verify-ca", label: "Verify CA" },
+      { value: "verify-full", label: "Verify full" },
+    ],
+  };
+  const CA = { key: "sslRootCert", label: "SSL root certificate", kind: "file" };
+  const CERT = { key: "sslCert", label: "Client certificate", kind: "file" };
+  const KEY = { key: "sslKey", label: "Client key", kind: "file" };
+  const PASSPHRASE = { key: "sslKeyPassphrase", label: "Client key passphrase", kind: "password", secret: true };
+  const TLS = {
+    mode: "sslMode",
+    verifyModes: ["verify-ca", "verify-full"],
+    caFile: "sslRootCert",
+    certFile: "sslCert",
+    keyFile: "sslKey",
+    keyPassphrase: "sslKeyPassphrase",
+  };
+  const parses = (fields: readonly unknown[], tls: unknown): boolean =>
+    pluginManifestSchema.safeParse({ ...VALID_MANIFEST, id: "server", connection: { fields, tls } }).success;
+
+  it("givenTlsNamingDeclaredFields_whenParsed_thenAccepted", () => {
+    expect(parses([MODE, CA, CERT, KEY, PASSPHRASE], TLS)).toBe(true);
+    expect(parses([MODE, CA], { mode: "sslMode", verifyModes: ["verify-full"], caFile: "sslRootCert" })).toBe(true);
+  });
+
+  it("givenTlsNamingMissingField_whenParsed_thenRejected", () => {
+    expect(parses([MODE, CA, CERT, KEY], TLS)).toBe(false);
+    expect(parses([CA, CERT, KEY, PASSPHRASE], TLS)).toBe(false);
+  });
+
+  it("givenTlsVerifyModeTheSelectLacks_whenParsed_thenRejected", () => {
+    expect(parses([MODE, CA], { mode: "sslMode", verifyModes: ["verify-identity"], caFile: "sslRootCert" })).toBe(
+      false,
+    );
+    expect(parses([MODE], { mode: "sslMode", verifyModes: [] })).toBe(false);
+  });
+
+  it("givenTlsNamingFieldOfWrongKind_whenParsed_thenRejected", () => {
+    expect(
+      parses([MODE, { ...CA, kind: "text" }], { mode: "sslMode", verifyModes: ["verify-ca"], caFile: "sslRootCert" }),
+    ).toBe(false);
+    const passphrase = { mode: "sslMode", verifyModes: ["verify-ca"], keyPassphrase: "sslKeyPassphrase" };
+    expect(parses([MODE, { ...PASSPHRASE, secret: false }], passphrase)).toBe(false);
+    expect(
+      parses([{ ...MODE, kind: "text", options: undefined }], { mode: "sslMode", verifyModes: ["verify-ca"] }),
+    ).toBe(false);
+  });
+});
+
 describe("connectionFormProblems", () => {
   it("givenAgreeingFormAndSchema_whenCompared_thenNoProblems", () => {
     expect(connectionFormProblems(serverManifest([HOST, USER, PASSWORD]), SERVER_SCHEMA)).toEqual([]);

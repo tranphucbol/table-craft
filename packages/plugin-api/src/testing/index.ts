@@ -453,6 +453,16 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
     });
 
+    it("givenSession_whenConnected_thenTlsIsNullOrDescribed", async () => {
+      await withSession(plugin, fixture, (session) => {
+        if (session.tls !== undefined && session.tls !== null) {
+          expect(session.tls.protocol).toMatch(/\S/);
+          expect(session.tls.cipher).toMatch(/\S/);
+        }
+        return Promise.resolve();
+      });
+    });
+
     it("givenPlugin_whenInspected_thenHasLanguageExactlyWhenSqlDeclared", () => {
       expect(plugin.language !== undefined).toBe(plugin.capabilities.includes("sql"));
     });

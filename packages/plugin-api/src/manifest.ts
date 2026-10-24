@@ -109,6 +109,55 @@ function networkFieldsDeclared(connection: {
   });
 }
 
+/**
+ * Which fields configure TLS (decision 072), so the dialog groups them under SSL, hints when a CA
+ * file goes unchecked, and main asks for the key passphrase only when the key file is encrypted.
+ * `mode` is the `select` of SSL modes; `verifyModes` are its values that check the server
+ * certificate. Absent: the plugin speaks no TLS the host knows about.
+ */
+export const tlsSpecSchema = z.strictObject({
+  mode: z.string().regex(FIELD_KEY),
+  verifyModes: z.array(z.string().min(1)).min(1),
+  caFile: z.string().regex(FIELD_KEY).optional(),
+  certFile: z.string().regex(FIELD_KEY).optional(),
+  keyFile: z.string().regex(FIELD_KEY).optional(),
+  keyPassphrase: z.string().regex(FIELD_KEY).optional(),
+});
+
+export type TlsSpec = z.infer<typeof tlsSpecSchema>;
+
+/** The roles of `TlsSpec` that name a field, in the order the dialog draws them. */
+export const TLS_FIELD_ROLES = ["mode", "caFile", "certFile", "keyFile", "keyPassphrase"] as const;
+
+export type TlsFieldRole = (typeof TLS_FIELD_ROLES)[number];
+
+function tlsFieldFits(role: TlsFieldRole, field: ConnectionField, tls: TlsSpec): boolean {
+  switch (role) {
+    case "mode": {
+      const values = new Set((field.options ?? []).map((option) => option.value));
+      return field.kind === "select" && tls.verifyModes.every((mode) => values.has(mode));
+    }
+    case "keyPassphrase":
+      return field.kind === "password" && field.secret === true;
+    default:
+      return field.kind === "file";
+  }
+}
+
+function tlsFieldsDeclared(connection: {
+  readonly fields: readonly ConnectionField[];
+  readonly tls?: TlsSpec | undefined;
+}): boolean {
+  const tls = connection.tls;
+  if (tls === undefined) return true;
+  return TLS_FIELD_ROLES.every((role) => {
+    const key = tls[role];
+    if (key === undefined) return true;
+    const field = connection.fields.find((candidate) => candidate.key === key);
+    return field !== undefined && tlsFieldFits(role, field, tls);
+  });
+}
+
 export const pluginManifestSchema = z
   .strictObject({
     id: z.string().regex(PLUGIN_ID, { message: "expected lower-case letters, digits and dashes" }),
@@ -127,10 +176,16 @@ export const pluginManifestSchema = z
         /** Absent: the form offers no URL to paste and the data source no Copy as URL. */
         url: connectionUrlSchema.optional(),
         network: networkSpecSchema.optional(),
+        tls: tlsSpecSchema.optional(),
       })
       .refine(networkFieldsDeclared, {
         message: "network names a field the form does not declare, or one of the wrong kind",
         path: ["network"],
+      })
+      .refine(tlsFieldsDeclared, {
+        message:
+          "tls names a field the form does not declare or one of the wrong kind: mode a select offering every verify mode, files of kind file, the passphrase a secret password",
+        path: ["tls"],
       }),
   })
   // A definition is read through the introspector, which only `schemaTree` promises (decision 029).

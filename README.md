@@ -604,7 +604,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "0.24.0",
+  "apiVersion": "0.25.0",
   "entry": "index.js",
   "capabilities": [
     "sql",

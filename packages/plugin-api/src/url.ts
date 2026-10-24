@@ -237,7 +237,7 @@ export function formatConnectionUrl(form: ConnectionForm, config: Readonly<Recor
   for (const param of url.params ?? []) {
     const value = config[param.key];
     const field = fieldOf(form, param.key);
-    if (field?.secret === true || !isConnectionValue(value) || value === field?.default) continue;
+    if (field?.secret === true || !isConnectionValue(value) || value === "" || value === field?.default) continue;
     const text =
       param.values === undefined
         ? written(value)

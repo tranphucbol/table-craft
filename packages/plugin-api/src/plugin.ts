@@ -214,6 +214,17 @@ export interface Session {
    * SQLite's `:memory:`; the engine then never re-runs this session's statements elsewhere.
    */
   readonly privateDatabase?: boolean;
+  /**
+   * The TLS the connection settled on, read once after connect; null or absent when it is plain
+   * (decision 072).
+   */
+  readonly tls?: TlsInfo | null;
+}
+
+/** What a TLS handshake agreed, as Node's socket names it: `TLSv1.3`, `TLS_AES_256_GCM_SHA384`. */
+export interface TlsInfo {
+  readonly protocol: string;
+  readonly cipher: string;
 }
 
 export interface ConnectOptions {
@@ -228,6 +239,11 @@ export interface ConnectOptions {
    * plugin declaring `keepAlive` honours it; one without a socket ignores it.
    */
   readonly keepAliveInitialDelayMs?: number;
+  /**
+   * The host name the server certificate must carry when the plugin dials another address, as
+   * through an SSH tunnel to `127.0.0.1` (decision 073). Absent: the configured host itself.
+   */
+  readonly serverName?: string;
 }
 
 /** One statement of a script, in UTF-16 offsets into the text `split` received (decision 023). */

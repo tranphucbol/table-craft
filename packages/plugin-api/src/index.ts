@@ -64,6 +64,8 @@ export {
   MANIFEST_FILE,
   networkSpecSchema,
   pluginManifestSchema,
+  TLS_FIELD_ROLES,
+  tlsSpecSchema,
   type ConnectionField,
   type ConnectionFieldGroup,
   type ConnectionFieldKind,
@@ -72,6 +74,8 @@ export {
   type ConnectionUrlPart,
   type NetworkSpec,
   type PluginManifest,
+  type TlsFieldRole,
+  type TlsSpec,
 } from "./manifest.js";
 export {
   ConnectionUrlError,
@@ -127,6 +131,7 @@ export {
   type StatementSpan,
   type StatementStream,
   type StreamedStatement,
+  type TlsInfo,
   TRANSACTION_MODES,
   type TransactionMode,
   type Transactions,
@@ -139,6 +144,15 @@ export {
   type SessionMonitor,
   type SessionTarget,
 } from "./sessions.js";
+export {
+  TLS_CHAIN_CODES,
+  TLS_HOST_CODE,
+  homeExpanded,
+  tlsFailureMessage,
+  tlsFileMessage,
+  tlsKeyMessage,
+  type TlsVerification,
+} from "./tls.js";
 export {
   BYTES_PREVIEW_LENGTH,
   toBytesValue,

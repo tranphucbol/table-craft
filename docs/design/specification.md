@@ -19,7 +19,7 @@ its own MessagePort (decision 002).
 
 A plugin is a directory with `table-craft-plugin.json` and an ESM entry exporting a
 `DatasourcePlugin` (decisions 005 to 008). The contract lives in `@table-craft/plugin-api`.
-`API_VERSION` is `0.23.0`; while it is `0.x` the contract is unstable and every minor is a break.
+`API_VERSION` is `0.25.0`; while it is `0.x` the contract is unstable and every minor is a break.
 
 ### Discovery
 
