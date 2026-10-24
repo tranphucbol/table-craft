@@ -947,6 +947,7 @@ describe("errors in a run", () => {
     await running;
 
     expect(asking.status).toBe("confirming");
+    expect(serviceState(asking)).toBe("asking");
     expect(asking.question).toMatchObject({
       number: 1,
       total: 3,

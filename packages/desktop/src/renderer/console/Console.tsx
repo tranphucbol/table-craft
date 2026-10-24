@@ -109,7 +109,9 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
   if (session === undefined) return null;
-  const { status, error } = session;
+  const { status } = session;
+  // While the run asks about a failure, the banner shows it; the toolbar has no room for both.
+  const error = session.question === null ? session.error : null;
   const capabilities = plugin?.capabilities ?? [];
   const color = datasource?.color ?? null;
 

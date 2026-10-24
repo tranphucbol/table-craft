@@ -79,6 +79,7 @@ const STATE_CLASS: Readonly<Record<ServiceState, string>> = {
   idle: "text-ink-muted",
   running: "text-accent",
   waiting: "text-warning",
+  asking: "text-danger",
   failed: "text-danger",
   disconnected: "text-ink-muted",
 };

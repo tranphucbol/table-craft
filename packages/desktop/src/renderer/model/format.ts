@@ -117,7 +117,7 @@ export function firstLine(sql: string): string {
   return sql.trimStart().split("\n", 1)[0]?.trimEnd() ?? "";
 }
 
-export type ServiceState = "connecting" | "idle" | "running" | "waiting" | "failed" | "disconnected";
+export type ServiceState = "connecting" | "idle" | "running" | "waiting" | "asking" | "failed" | "disconnected";
 
 /** How a Services session row words its state. */
 export const SERVICE_STATE_TEXT: Readonly<Record<ServiceState, string>> = {
@@ -125,6 +125,7 @@ export const SERVICE_STATE_TEXT: Readonly<Record<ServiceState, string>> = {
   idle: "idle",
   running: "running",
   waiting: "waiting for confirmation…",
+  asking: "waiting on a failed statement",
   failed: "failed",
   disconnected: "disconnected",
 };
@@ -133,7 +134,7 @@ export const SERVICE_STATE_TEXT: Readonly<Record<ServiceState, string>> = {
 export function serviceState(console: ConsoleSession): ServiceState {
   if (console.status === "connecting") return "connecting";
   if (console.status === "running") return "running";
-  if (console.status === "confirming") return "waiting";
+  if (console.status === "confirming") return console.question === null ? "waiting" : "asking";
   if (console.status === "disconnected") return "disconnected";
   if (console.status === "failed" || console.lastRun?.outcome === "failed") return "failed";
   return "idle";
