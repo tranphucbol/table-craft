@@ -192,7 +192,9 @@ See [Database explorer](docs/design/specification.md#database-explorer).
 ### SQL console
 
 `⌘↩` runs the statement at the caret, or the selection; `⇧⌘↩` runs the whole console. Each result
-opens its own tab next to **Output**, which logs every statement with its row count and time.
+opens its own tab next to **Output**, which logs every statement with its row count and time,
+followed by the warnings and notices the server left about it (MySQL's and TiDB's `SHOW WARNINGS`,
+PostgreSQL's `RAISE NOTICE`); the result tab shows how many warnings there were.
 `UPDATE` or `DELETE` without a `WHERE`, `DROP` and `TRUNCATE` are listed in a confirmation before
 anything runs. Switch
 **Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**. Consoles
@@ -307,8 +309,9 @@ See [Query history and Services](docs/design/specification.md#query-history-and-
 
 **Explain Plan** (`⇧⌘E`) shows the plan of the statement at the caret as a tree with estimated rows
 and cost; select a node to see its details. **Explain Analyse** runs the statement and adds actual
-rows, time and loops; when the statement writes, it asks first. PostgreSQL and MySQL support both;
-SQLite has Explain Plan only.
+rows, time and loops; when the statement writes, it asks first. PostgreSQL, MySQL and TiDB support
+both; SQLite has Explain Plan only. Warnings the server gives while planning, such as a hint it
+could not apply, show in Output and on the plan tab.
 
 ![Explain](docs/media/explain.gif)
 

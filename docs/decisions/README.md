@@ -74,3 +74,4 @@ started, not when it is merged.
 | 063 | [Live tests run in a headless Linux box](063-live-tests-run-in-a-headless-linux-box.md)                                                                                |
 | 064 | [Ported themes are generated, audited data](064-ported-themes-are-generated-audited-data.md)                                                                           |
 | 065 | [The theme is chosen from a previewing dropdown](065-the-theme-is-chosen-from-a-previewing-dropdown.md)                                                                |
+| 066 | [Server messages reach the user](066-server-messages-reach-the-user.md)                                                                                                |
