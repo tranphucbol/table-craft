@@ -177,10 +177,16 @@ function ssl(local: XmlElement | undefined, shared: XmlElement | undefined): For
     (shared === undefined ? undefined : child(shared, "ssl-config"));
   if (config === undefined) return null;
   if (childText(config, "enabled") === "false") return null;
-  const certificateFiles = ["ca-cert", "client-cert", "client-key"].some(
-    (name) => (childText(config, name) ?? "") !== "",
-  );
-  return { mode: sslMode(childText(config, "mode") ?? ""), certificateFiles };
+  const file = (name: string): string | null => {
+    const value = childText(config, name) ?? "";
+    return value === "" ? null : value;
+  };
+  return {
+    mode: sslMode(childText(config, "mode") ?? ""),
+    caFile: file("ca-cert"),
+    certFile: file("client-cert"),
+    keyFile: file("client-key"),
+  };
 }
 
 function ssh(

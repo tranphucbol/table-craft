@@ -4,6 +4,14 @@ export type ForeignApp = ImportApp;
 
 export type ForeignSslMode = "disabled" | "preferred" | "required" | "verifyCa" | "verifyIdentity";
 
+/** A connection's SSL settings; each file is a path as the other app saved it, or null when unset. */
+export interface ForeignSsl {
+  readonly mode: ForeignSslMode;
+  readonly caFile: string | null;
+  readonly certFile: string | null;
+  readonly keyFile: string | null;
+}
+
 /**
  * Where a connection's password is, if anywhere. A `bundle` value never leaves main: the preview
  * the renderer gets says only `inFile`.
@@ -35,7 +43,7 @@ export interface ForeignConnection {
   /** A database file, for file databases given as separate fields. */
   readonly path: string | null;
   readonly ssh: { readonly host: string; readonly port: number | null } | null;
-  readonly ssl: { readonly mode: ForeignSslMode; readonly certificateFiles: boolean } | null;
+  readonly ssl: ForeignSsl | null;
   readonly color: string | null;
   readonly comment: string;
   readonly readOnly: boolean;

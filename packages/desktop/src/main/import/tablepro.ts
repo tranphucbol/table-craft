@@ -97,8 +97,8 @@ function sslMode(value: unknown): ForeignSslMode {
   }
 }
 
-function ssl(mode: unknown, files: readonly unknown[]): ForeignConnection["ssl"] {
-  return { mode: sslMode(mode), certificateFiles: files.some((file) => text(file) !== null) };
+function ssl(mode: unknown, caFile: unknown, certFile: unknown, keyFile: unknown): ForeignConnection["ssl"] {
+  return { mode: sslMode(mode), caFile: text(caFile), certFile: text(certFile), keyFile: text(keyFile) };
 }
 
 /** The `/`-joined names from the group up through its parents; cycles end the walk. */
@@ -171,7 +171,7 @@ export async function scanTablePro(
       id: text(entry.id) ?? String(index),
       entry,
       ssh: entry.sshEnabled === true ? { host: text(entry.sshHost) ?? "", port: port(entry.sshPort) } : null,
-      ssl: ssl(entry.sslMode, [entry.sslCaCertificatePath, entry.sslClientCertificatePath, entry.sslClientKeyPath]),
+      ssl: ssl(entry.sslMode, entry.sslCaCertificatePath, entry.sslClientCertificatePath, entry.sslClientKeyPath),
       folder: groupPath(text(entry.groupId), byId),
       password: { kind: "elsewhere" },
     }),
@@ -297,7 +297,7 @@ export async function readTableProBundle(
       id: ref ?? `${source}#${String(index)}`,
       entry,
       ssh: sshConfig.enabled === true ? { host: text(sshConfig.host) ?? "", port: port(sshConfig.port) } : null,
-      ssl: ssl(sslConfig.mode, [sslConfig.caCertificatePath, sslConfig.clientCertificatePath, sslConfig.clientKeyPath]),
+      ssl: ssl(sslConfig.mode, sslConfig.caCertificatePath, sslConfig.clientCertificatePath, sslConfig.clientKeyPath),
       folder: groupPath(groupId, groups),
       password: value === null ? { kind: "none" } : { kind: "bundle", value },
     });

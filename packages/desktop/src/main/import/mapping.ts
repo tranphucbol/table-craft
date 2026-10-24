@@ -1,7 +1,7 @@
 import { ConnectionUrlError, parseConnectionUrl, type ConnectionForm } from "@table-craft/plugin-api";
 import { normalizeFolder } from "@table-craft/desktop/main/datasources.js";
 import { urlScheme, withoutJdbc } from "@table-craft/desktop/main/import/jdbc.js";
-import type { ForeignApp, ForeignConnection } from "@table-craft/desktop/main/import/types.js";
+import type { ForeignApp, ForeignConnection, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
 import {
   DATASOURCE_COLORS,
   type ConfigValue,
@@ -45,6 +45,7 @@ const NEAREST_COLOR: Readonly<Record<string, DatasourceColor>> = {
 const DEFAULT_SSH_PORT = 22;
 const SSL_DISABLE = "disable";
 const SSL_REQUIRE = "require";
+const SSL_VERIFY_CA = "verify-ca";
 const SSL_VERIFY_FULL = "verify-full";
 
 /** Whether the other app kept the password, and where; `bundle` values are read in main only. */
@@ -122,13 +123,41 @@ function applySsl(
     warnings.push(`${plugin.name} has no SSL setting; the connection's SSL mode was not imported.`);
     return;
   }
-  const wanted = ssl.mode === "preferred" || ssl.mode === "required" ? SSL_REQUIRE : SSL_VERIFY_FULL;
+  const wanted =
+    ssl.mode === "preferred" || ssl.mode === "required"
+      ? SSL_REQUIRE
+      : ssl.mode === "verifyCa" && field.values.has(SSL_VERIFY_CA)
+        ? SSL_VERIFY_CA
+        : SSL_VERIFY_FULL;
   config[field.key] = field.values.has(wanted) ? wanted : SSL_REQUIRE;
   if (ssl.mode === "preferred") {
     warnings.push("SSL Preferred became Require: TableCraft does not fall back to an unencrypted connection.");
   }
-  if (ssl.mode === "verifyCa") warnings.push("SSL Verify CA became Verify full, which also checks the host name.");
-  if (ssl.certificateFiles) {
+  if (ssl.mode === "verifyCa" && wanted !== SSL_VERIFY_CA) {
+    warnings.push("SSL Verify CA became Verify full, which also checks the host name.");
+  }
+  applyCertificateFiles(ssl, plugin, config, warnings);
+}
+
+/** Carries the CA, client certificate and key paths into the plugin's certificate fields (decision 072). */
+function applyCertificateFiles(
+  ssl: ForeignSsl,
+  plugin: PluginInfo,
+  config: Record<string, ConfigValue>,
+  warnings: string[],
+): void {
+  const pairs = [
+    [ssl.caFile, plugin.tls?.caFile],
+    [ssl.certFile, plugin.tls?.certFile],
+    [ssl.keyFile, plugin.tls?.keyFile],
+  ] as const;
+  let dropped = false;
+  for (const [path, key] of pairs) {
+    if (path === null) continue;
+    if (key === undefined) dropped = true;
+    else config[key] = path;
+  }
+  if (dropped) {
     warnings.push("SSL certificate files were not imported; TableCraft uses the system's trusted certificates.");
   }
 }
