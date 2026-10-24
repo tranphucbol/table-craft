@@ -44,6 +44,8 @@ import {
   toolWindow,
   treeNode,
   waitUntilReady,
+  chooseTheme,
+  themePickerTrigger,
 } from "./harness.js";
 import type { RunningApp, SavedDatasource } from "./harness.js";
 import { DAILY_LOOP_STEPS, dailyLoop, stubSaveDialog } from "./workflows.js";
@@ -97,10 +99,6 @@ function savedSqlite(): SavedDatasource {
 
 function settingsDialog(page: Page) {
   return page.getByRole("dialog", { name: "Settings" });
-}
-
-function themeOption(page: Page, name: string) {
-  return settingsDialog(page).getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name, exact: true });
 }
 
 async function openAppearance(page: Page): Promise<void> {
@@ -196,8 +194,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
       const saved = savedSqlite();
       const first = await launchSaved([saved], userDataDir);
       await openAppearance(first.page);
-      await themeOption(first.page, CHOSEN_THEME).click();
-      await expect.poll(() => themeOption(first.page, CHOSEN_THEME).getAttribute("aria-checked")).toBe("true");
+      await chooseTheme(first.page, CHOSEN_THEME);
       // The option checks before main has written settings.json, and closing kills the app: on
       // the Windows runner the write lost that race (found live, plan 014).
       await expect.poll(() => savedTheme(userDataDir), { timeout: LAUNCH_TIMEOUT_MS }).toBe(CHOSEN_THEME_ID);
@@ -208,7 +205,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
       await waitUntilReady(page);
       await openAppearance(page);
 
-      await expect.poll(() => themeOption(page, CHOSEN_THEME).getAttribute("aria-checked")).toBe("true");
+      await expect.poll(() => themePickerTrigger(page).getAttribute("aria-label")).toBe(`Theme: ${CHOSEN_THEME}`);
       await captureWindow(page, "packaged-relaunch");
     },
     SCENARIO_TIMEOUT_MS * 2,

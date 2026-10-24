@@ -187,7 +187,12 @@ export function installAppearance(
   readSystem();
   apply();
   const offStore = store.subscribe((state, previous) => {
-    if (state.settings !== previous.settings || state.system !== previous.system || state.themes !== previous.themes) {
+    if (
+      state.settings !== previous.settings ||
+      state.system !== previous.system ||
+      state.themes !== previous.themes ||
+      state.previewTheme !== previous.previewTheme
+    ) {
       apply();
     }
   });

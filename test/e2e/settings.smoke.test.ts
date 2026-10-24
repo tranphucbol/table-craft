@@ -17,6 +17,7 @@ import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
+  chooseTheme,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
   DATABASES_ENABLED,
@@ -25,6 +26,7 @@ import {
   LAUNCH_TIMEOUT_MS,
   launchApp,
   newProfile,
+  openThemePicker,
   pressChord,
   readProfileFile,
   runStatement,
@@ -33,6 +35,8 @@ import {
   seedTheme,
   setWindowSize,
   sqlEditor,
+  themePickerOption,
+  themePickerTrigger,
   toolWindow,
   waitUntilReady,
   type Datasource,
@@ -132,10 +136,6 @@ function settingsTab(page: Page, name: string) {
   return settingsDialog(page).getByRole("tablist", { name: "Settings pages" }).getByRole("tab", { name, exact: true });
 }
 
-function themeOption(page: Page, name: string) {
-  return settingsDialog(page).getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name, exact: true });
-}
-
 async function openSettings(page: Page, tab = "Appearance"): Promise<void> {
   await pressChord(page, ",");
   await settingsDialog(page).waitFor();
@@ -146,11 +146,6 @@ async function openSettings(page: Page, tab = "Appearance"): Promise<void> {
 async function closeSettings(page: Page): Promise<void> {
   await settingsDialog(page).getByRole("button", { name: "Close", exact: true }).click();
   await expect.poll(() => settingsDialog(page).count()).toBe(0);
-}
-
-async function chooseTheme(page: Page, name: string): Promise<void> {
-  await themeOption(page, name).click();
-  await expect.poll(() => themeOption(page, name).getAttribute("aria-checked")).toBe("true");
 }
 
 /** Replaces a settings field's text; the dialog saves each valid keystroke. */
@@ -384,7 +379,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
       const { page } = await launch(sqlite());
       await runStatement(page, "SELECT * FROM customers ORDER BY id");
       await openSettings(page);
-      expect(await themeOption(page, "Follow system").getAttribute("aria-checked")).toBe("true");
+      expect(await themePickerTrigger(page).getAttribute("aria-label")).toBe("Theme: Follow system");
       await closeSettings(page);
 
       await page.emulateMedia({ colorScheme: "light" });
@@ -406,7 +401,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
     async () => {
       const userDataDir = newProfile();
       seedTheme(userDataDir, "solarized", {
-        name: "Solarized Dark",
+        name: "My Solarized",
         base: "dark",
         colors: { canvas: USER_CANVAS, panel: USER_PANEL },
       });
@@ -415,17 +410,20 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
       await runStatement(page, "SELECT * FROM customers ORDER BY id");
 
       await openSettings(page);
-      const broken = themeOption(page, "broken.json");
+      const before = await canvas(page);
+      await openThemePicker(page);
+      const broken = themePickerOption(page, "broken.json");
       expect(await broken.getAttribute("aria-disabled")).toBe("true");
-      const errors = await settingsDialog(page).getByRole("list", { name: "Errors in broken.json" }).textContent();
-      expect(errors).toContain("base");
+      expect(await broken.textContent()).toContain("2 errors");
+      await broken.hover();
+      const errors = await page.getByRole("list", { name: "Errors in broken.json" }).textContent();
+      expect(errors).toContain("sepia");
       expect(errors).toContain("canvass");
       await broken.click({ force: true });
       expect(await broken.getAttribute("aria-checked")).toBe("false");
-      await broken.hover({ force: true });
-      expect(await backgroundOf(broken)).toBe(await backgroundOf(settingsDialog(page)));
+      expect(await canvas(page)).toBe(before);
 
-      await chooseTheme(page, "Solarized Dark");
+      await chooseTheme(page, "My Solarized");
       await expect.poll(() => canvas(page)).toBe(USER_CANVAS);
       expect(await cssVariable(page, "--tc-panel")).toBe(USER_PANEL);
       expect(await cssVariable(page, "--tc-ink")).toBe("#dfe1e5");

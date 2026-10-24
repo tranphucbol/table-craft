@@ -49,6 +49,7 @@ import {
   type Datasource,
   type RunningApp,
   type SavedDatasource,
+  chooseTheme,
 } from "./harness.js";
 
 const PLAN = "015";
@@ -496,10 +497,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
       expect((await styleOf(mainToolbar(page))).background).toBe(DARK_PANEL);
       await openAppearance(page);
 
-      await settingsDialog(page)
-        .getByRole("radiogroup", { name: "Theme" })
-        .getByRole("radio", { name: "Light" })
-        .click();
+      await chooseTheme(page, "Light");
       await settingsDialog(page).getByRole("radio", { name: "Compact", exact: true }).check();
       await closeSettings(page);
 

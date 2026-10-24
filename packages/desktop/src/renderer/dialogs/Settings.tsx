@@ -1,11 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import {
-  BUILT_IN_THEMES,
-  isBrokenUserTheme,
-  type ColorTokens,
-  type DensityId,
-} from "@table-craft/desktop/appearance/themes.js";
+import type { DensityId } from "@table-craft/desktop/appearance/themes.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { registry } from "@table-craft/desktop/renderer/actions/index.js";
@@ -21,6 +16,7 @@ import {
   OVERLAY_CLASS,
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { ThemePicker } from "@table-craft/desktop/renderer/dialogs/ThemePicker.js";
 import { installedFontFamilies, type FontFamilies } from "@table-craft/desktop/renderer/settings/fonts.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import {
@@ -56,7 +52,6 @@ import {
   type FontSetting,
   type NumberRange,
   type Settings,
-  type ThemeChoice,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
   statementTimeoutSecondsError,
 } from "@table-craft/desktop/settings/settings.js";
@@ -93,13 +88,6 @@ const FONT_LABELS: Readonly<Record<FontRole, string>> = {
 /** The `<select>` value standing for the built-in stack, which no installed family can be named. */
 const BUILT_IN_FAMILY = "";
 const WHOLE_NUMBER = /^\d+$/;
-const SWATCH_TOKENS: readonly (keyof Pick<ColorTokens, "canvas" | "panel" | "ink" | "accent">)[] = [
-  "canvas",
-  "panel",
-  "ink",
-  "accent",
-];
-
 function update(patch: (current: Settings) => Settings): void {
   void useSettings.getState().update(patch);
 }
@@ -318,104 +306,13 @@ function FontFields({ role }: { readonly role: FontRole }) {
   );
 }
 
-function Swatch({ colors }: { readonly colors: ColorTokens }) {
-  return (
-    <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
-      {SWATCH_TOKENS.map((token) => (
-        <span key={token} className="size-2.5" style={{ backgroundColor: colors[token] }} />
-      ))}
-    </span>
-  );
-}
-
-function ThemeOption({
-  choice,
-  name,
-  colors,
-  errors,
-  chosen,
-}: {
-  readonly choice: ThemeChoice;
-  readonly name: string;
-  readonly colors: ColorTokens | null;
-  readonly errors?: readonly string[];
-  readonly chosen: boolean;
-}) {
-  const broken = errors !== undefined;
-  return (
-    <li className="flex flex-col">
-      <button
-        type="button"
-        role="radio"
-        aria-checked={chosen}
-        aria-disabled={broken}
-        data-theme={choice}
-        title={broken ? "This theme file has errors and cannot be chosen." : undefined}
-        className={cn(
-          "flex h-row items-center gap-cell rounded px-cell text-left",
-          chosen && "bg-selection",
-          broken ? "cursor-not-allowed text-ink-muted" : !chosen && "hover:bg-raised",
-        )}
-        onClick={() => {
-          if (!broken) update((current) => ({ ...current, appearance: { ...current.appearance, theme: choice } }));
-        }}
-      >
-        {colors === null ? <span aria-hidden className="w-10 shrink-0" /> : <Swatch colors={colors} />}
-        <span className="truncate">{name}</span>
-      </button>
-      {errors === undefined ? null : (
-        <ul aria-label={`Errors in ${name}`} className="ml-10 flex flex-col pb-1 text-danger">
-          {errors.map((error) => (
-            <li key={error} className="break-words">
-              {error}
-            </li>
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-}
-
 function AppearancePage() {
-  const theme = useSettings((state) => state.settings.appearance.theme);
   const density = useSettings((state) => state.settings.appearance.density);
-  const themes = useSettings((state) => state.themes);
   return (
     <>
       <SectionTitle>Theme</SectionTitle>
       <div className="col-span-2 flex flex-col gap-1">
-        <ul role="radiogroup" aria-label="Theme" className="flex flex-col">
-          <ThemeOption choice="system" name="Follow system" colors={null} chosen={theme === "system"} />
-          {Object.values(BUILT_IN_THEMES).map((builtIn) => (
-            <ThemeOption
-              key={builtIn.id}
-              choice={builtIn.id}
-              name={builtIn.name}
-              colors={builtIn.colors}
-              chosen={theme === builtIn.id}
-            />
-          ))}
-          {themes.map((entry) =>
-            isBrokenUserTheme(entry) ? (
-              <ThemeOption
-                key={entry.id}
-                choice={entry.id}
-                name={entry.file}
-                colors={null}
-                errors={entry.errors}
-                chosen={false}
-              />
-            ) : (
-              <ThemeOption
-                key={entry.id}
-                choice={entry.id}
-                name={entry.name}
-                colors={entry.colors}
-                chosen={theme === entry.id}
-              />
-            ),
-          )}
-        </ul>
+        <ThemePicker />
         <div className="flex gap-gap">
           <Button onClick={() => void useSettings.getState().reloadThemes()}>Reload Themes</Button>
           <Button onClick={() => void useSettings.getState().openThemesFolder()}>Open Themes Folder</Button>

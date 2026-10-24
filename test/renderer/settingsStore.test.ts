@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   BUILT_IN_THEMES,
+  BUNDLED_THEMES,
   COMPACT_DENSITY,
   type Appearance,
   type ColorScheme,
@@ -151,6 +152,21 @@ describe("live appearance", () => {
       BUILT_IN_THEMES.highContrast.colors.canvas,
     ]);
     expect(applied.map((entry) => entry.scheme)).toEqual(["dark", "light", "dark"]);
+  });
+
+  it("givenPreviewTheme_whenEscape_thenCommittedThemeIsApplied", () => {
+    const { store, applied, stop } = installed();
+
+    store.getState().preview("gruvbox-light");
+    store.getState().preview(null);
+    stop();
+
+    expect(applied.map((entry) => [entry.appearance.colors.canvas, entry.scheme])).toEqual([
+      [BUILT_IN_THEMES.dark.colors.canvas, "dark"],
+      [BUNDLED_THEMES["gruvbox-light"].colors.canvas, "light"],
+      [BUILT_IN_THEMES.dark.colors.canvas, "dark"],
+    ]);
+    expect(store.getState().settings.appearance.theme).toBe("system");
   });
 
   it("givenDensityAndFontChange_whenSettingsUpdate_thenReappliedWithThem", async () => {

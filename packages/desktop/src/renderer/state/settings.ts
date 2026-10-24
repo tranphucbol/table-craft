@@ -16,7 +16,7 @@ import type {
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { rendererLog } from "@table-craft/desktop/renderer/log/log.js";
 import type { CellFormats } from "@table-craft/desktop/renderer/grid/format.js";
-import { DEFAULT_SETTINGS, type Settings } from "@table-craft/desktop/settings/settings.js";
+import { DEFAULT_SETTINGS, type Settings, type ThemeChoice } from "@table-craft/desktop/settings/settings.js";
 
 type SettingsBridge = Pick<TableCraftBridge, "readSettings" | "writeSettings" | "reloadThemes" | "openThemesFolder">;
 
@@ -27,11 +27,18 @@ export interface SettingsState {
   readonly system: SystemAppearance;
   /** Why `settings.json` was set aside, or why a save failed; shown once, until dismissed. */
   readonly notice: string | null;
+  /**
+   * The theme the picker has highlighted, drawn instead of the chosen one until it is chosen or the
+   * picker closes (decision 065). Never saved, and not seen by main or other windows.
+   */
+  readonly previewTheme: ThemeChoice | null;
   /** Reads main's copy; `main.tsx` awaits it before the first render (plan 013 decision 5). */
   readonly load: () => Promise<void>;
   /** Main saved settings or reread the themes, in this window or another. */
   readonly changed: (changed: SettingsChanged) => void;
   readonly setSystem: (system: SystemAppearance) => void;
+  /** Draws `choice` without choosing it; `null` goes back to the chosen theme. */
+  readonly preview: (choice: ThemeChoice | null) => void;
   /**
    * The one way settings change: applied here at once, then saved through main. A save that fails
    * puts the previous settings back and says why.
@@ -75,6 +82,7 @@ export function createSettingsStore(options: SettingsStoreOptions) {
       themes: [],
       system: DARK_SYSTEM,
       notice: null,
+      previewTheme: null,
       async load() {
         let snapshot: SettingsSnapshot | null = null;
         await call(async () => {
@@ -95,6 +103,9 @@ export function createSettingsStore(options: SettingsStoreOptions) {
           return;
         }
         set({ system });
+      },
+      preview(choice) {
+        if (get().previewTheme !== choice) set({ previewTheme: choice });
       },
       async update(patch) {
         const previous = get().settings;
@@ -124,9 +135,14 @@ export const useSettings = createSettingsStore({
   log: (message, cause) => rendererLog("settings").warn(message, { err: cause }),
 });
 
-/** The theme the settings choose, made concrete for the system appearance and the user themes. */
-export function themeOf(state: Pick<SettingsState, "settings" | "system" | "themes">): ResolvedTheme {
-  return resolveTheme(state.settings.appearance.theme, state.system, state.themes);
+/**
+ * The theme to draw: the one being previewed, else the one the settings choose, made concrete for
+ * the system appearance and the user themes.
+ */
+export function themeOf(
+  state: Pick<SettingsState, "settings" | "system" | "themes"> & Partial<Pick<SettingsState, "previewTheme">>,
+): ResolvedTheme {
+  return resolveTheme(state.previewTheme ?? state.settings.appearance.theme, state.system, state.themes);
 }
 
 /**

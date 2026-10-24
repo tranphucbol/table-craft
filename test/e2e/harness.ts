@@ -454,6 +454,27 @@ export async function enginePids(app: ElectronApplication): Promise<readonly num
   );
 }
 
+/** Settings → Appearance's theme dropdown (decision 065); the Settings dialog must be open. */
+export function themePickerTrigger(page: Page) {
+  return page.getByTestId("theme-picker-trigger");
+}
+
+export function themePickerOption(page: Page, name: string) {
+  return page.getByTestId("theme-picker").getByRole("option", { name, exact: true });
+}
+
+export async function openThemePicker(page: Page): Promise<void> {
+  if ((await themePickerTrigger(page).getAttribute("aria-expanded")) !== "true") await themePickerTrigger(page).click();
+  await page.getByTestId("theme-picker").waitFor();
+}
+
+/** Opens the dropdown, picks `name` and waits for the trigger to show it. */
+export async function chooseTheme(page: Page, name: string): Promise<void> {
+  await openThemePicker(page);
+  await themePickerOption(page, name).click();
+  await expect.poll(() => themePickerTrigger(page).getAttribute("aria-label")).toBe(`Theme: ${name}`);
+}
+
 export function readProfileFile(userDataDir: string, file: string): string | null {
   const path = join(userDataDir, file);
   return existsSync(path) ? readFileSync(path, "utf8") : null;

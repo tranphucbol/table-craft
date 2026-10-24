@@ -737,13 +737,15 @@ describe.runIf(README_MEDIA_ENABLED)("README media", () => {
       const dialog = page.getByRole("dialog", { name: "Settings" });
       await dialog.waitFor();
       await pause(page);
-      const theme = (name: string) =>
-        dialog.getByRole("radiogroup", { name: "Theme" }).getByRole("radio", { name, exact: true });
-      await clickVisibly(page, theme("Light"));
+      const theme = async (name: string) => {
+        await clickVisibly(page, dialog.getByTestId("theme-picker-trigger"));
+        await clickVisibly(page, page.getByTestId("theme-picker").getByRole("option", { name, exact: true }));
+      };
+      await theme("Light");
       await pause(page, 1200);
-      await clickVisibly(page, theme("High contrast"));
+      await theme("Gruvbox Dark");
       await pause(page, 1200);
-      await clickVisibly(page, theme("Dark"));
+      await theme("Dark");
       await pause(page);
       await clickVisibly(page, dialog.getByRole("radio", { name: "Compact", exact: true }));
       await pause(page, 1200);
