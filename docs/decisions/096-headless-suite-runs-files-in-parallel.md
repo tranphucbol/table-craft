@@ -19,8 +19,9 @@ a server one by one.
   `orders` and `edit_probe` rows, or kills sessions it did not open. A file that flakes beside
   others moves there with its reason; it never gets a longer timeout.
 - **`W` follows the Docker VM.** `TABLE_CRAFT_SMOKE_WORKERS` sets it; unset, it is 3 when the
-  Docker VM has 8 GiB or more and 1 below, and the runner prints the VM size, the `W` it chose and
-  how to raise it (`test/e2e/docker/workers.ts`).
+  Docker VM is set to 8 GiB or more and 1 below, and the runner prints the VM size, the `W` it
+  chose and how to raise it (`test/e2e/docker/workers.ts`). The cut is at 7 GiB of reported
+  memory, since a VM set to 8 GiB reports 7.8.
 - **Every worktree keeps its own stack.** A second checkout still runs its own databases on its
   own ports. Containers carry a `table-craft.seed` label, the hash of the files each was seeded
   from (`test/db/stack.ts`), so `up -d` recreates exactly the ones whose seed changed; a global
