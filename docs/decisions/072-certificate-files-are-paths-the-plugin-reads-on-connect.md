@@ -45,8 +45,8 @@ every plugin and a stray CA file never makes a working connection fail.
 
 ## Consequences
 
-- Plugin API minor bump: `connection.tls`, `Session.tls`, `TlsSettingsError` and the TLS helpers are
-  new; a plugin built for the older minor must be rebuilt, as for any 0.x minor.
+- Plugin API 0.25.0: `connection.tls`, `Session.tls`, `TlsSettingsError` and the TLS helpers are
+  new; a plugin built for 0.24 must be rebuilt, as for any 0.x minor.
 - DataGrip and TablePro imports carry the CA, client certificate and client key paths, and map
   Verify CA to `verify-ca` (amending decision 067's "certificate files are not imported").
 - A password-less certificate user still meets the password prompt: an empty secret is never stored.
