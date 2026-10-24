@@ -354,6 +354,13 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({
     id: requestId,
+    type: z.literal("completion.signature"),
+    text: z.string(),
+    offset: index,
+    scope: z.strictObject({ path: namespacePath, relation }).optional(),
+  }),
+  z.strictObject({
+    id: requestId,
     type: z.literal("navigation.resolve"),
     text: z.string(),
     offset: index,

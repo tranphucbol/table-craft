@@ -17,6 +17,7 @@ import {
   type NamespaceSwitch,
   type Relation,
   type ResolveRequest,
+  type SignatureHelp,
   type Routine,
   type RoutineArgument,
   type RoutineCall,
@@ -65,6 +66,7 @@ interface Introspection {
 
 const EMPTY_COMPLETION_CATALOG: CompletionCatalog = {
   current: null,
+  server: { version: null },
   namespaces: () => Promise.resolve([]),
   relations: () => Promise.resolve([]),
   referencing: () => Promise.resolve([]),
@@ -298,7 +300,8 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     const open = await catalog().catch(() => null);
     if (open === null)
       return current === undefined ? EMPTY_COMPLETION_CATALOG : { ...EMPTY_COMPLETION_CATALOG, current };
-    return completionCatalog(open.cache, current === undefined ? {} : { current });
+    const serverVersion = open.session.serverVersion;
+    return completionCatalog(open.cache, current === undefined ? { serverVersion } : { current, serverVersion });
   }
 
   function checkedOffset(text: string, offset: number): void {
@@ -321,6 +324,13 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     checkedOffset(request.text, request.offset);
     const language = sqlLanguage();
     return language.resolve(request, await completionCatalogOf(current));
+  }
+
+  async function signatureAt(request: CompletionRequest): Promise<SignatureHelp | null> {
+    checkedOffset(request.text, request.offset);
+    const language = sqlLanguage();
+    if (language.signatureAt === undefined) return null;
+    return language.signatureAt(request, await completionCatalogOf(undefined));
   }
 
   /** Count Rows on a session of its own: the editor's session would close its open cursor. */
@@ -445,6 +455,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     checkedOffset,
     complete,
     resolve,
+    signatureAt,
     countRows,
     namespaceSwitch,
     switchTargets,

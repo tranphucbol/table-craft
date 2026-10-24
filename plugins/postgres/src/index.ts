@@ -40,7 +40,6 @@ import {
   namespaceSwitcher,
   quoteIdentifierWith,
   sqlSavepoints,
-  SQL_FUNCTIONS,
   SQL_KEYWORDS,
   sqlCompleter,
   sqlExplainable,
@@ -59,6 +58,7 @@ import {
 import { copyLine, POSTGRES_IMPORT_TYPES, postgresDecimal } from "./bulk.js";
 import { serverErrorPosition } from "./errorPosition.js";
 import { EXPLAIN_VERBS, explainStatement, readPlan } from "./explain.js";
+import { POSTGRES_FUNCTIONS } from "./functions.js";
 import { postgresIntrospector } from "./introspect.js";
 import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
@@ -125,7 +125,7 @@ const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     quoteIdentifier,
     keywords: KEYWORDS,
-    functions: [...SQL_FUNCTIONS, "array_agg", "now", "string_agg", "to_char"],
+    functions: POSTGRES_FUNCTIONS,
   }),
   ...sqlGenerator({
     quoteIdentifier,

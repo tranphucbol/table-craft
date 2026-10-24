@@ -10,8 +10,11 @@ import {
   type Relation,
   type ResolveRequest,
   type SelectSource,
+  type SignatureHelp,
   type SqlLanguage,
 } from "@table-craft/plugin-api";
+import { functionItem, functionName, isAvailable, type FunctionSpec, type ServerIdentity } from "./functions.js";
+import { callAt } from "./signature.js";
 import { parseSimpleSelect, SELECT_READ_ONLY_REASONS, type SimpleSelect } from "./select.js";
 import {
   scopeAt,
@@ -38,7 +41,10 @@ export interface CompleterOptions {
   readonly quoteIdentifier: (name: string) => string;
   /** Offered where a keyword fits; a name that spells one is quoted. Upper case. */
   readonly keywords: readonly string[];
-  readonly functions: readonly string[];
+  /** Built-in functions; a spec brings its signatures, summary and server range (decision 097). */
+  readonly functions: readonly (string | FunctionSpec)[];
+  /** Reads the catalog's server version into the flavour and version the specs' ranges name; null when it cannot. */
+  readonly server?: (version: string) => ServerIdentity | null;
 }
 
 /** Reserved words every built-in dialect shares; a plugin adds its own. */
@@ -95,26 +101,6 @@ export const SQL_KEYWORDS: readonly string[] = [
   "WITH",
 ];
 
-/** Aggregate and scalar functions every built-in dialect has; a plugin adds its own. */
-export const SQL_FUNCTIONS: readonly string[] = [
-  "abs",
-  "avg",
-  "cast",
-  "coalesce",
-  "count",
-  "length",
-  "lower",
-  "max",
-  "min",
-  "nullif",
-  "replace",
-  "round",
-  "substr",
-  "sum",
-  "trim",
-  "upper",
-];
-
 /** Ranks items the typed prefix matches equally well (plan 009 decision 12). */
 const BOOST: Readonly<Record<CompletionKind, number>> = {
   join: 50,
@@ -165,9 +151,24 @@ function relationKind(relation: Relation): CompletionKind {
 /** The shared completion and navigation every built-in plugin spreads into its `SqlLanguage` (decision 028). */
 export function sqlCompleter(
   options: CompleterOptions,
-): Pick<SqlLanguage, "complete" | "resolve"> & Required<Pick<SqlLanguage, "selectSource">> {
+): Pick<SqlLanguage, "complete" | "resolve"> & Required<Pick<SqlLanguage, "selectSource" | "signatureAt">> {
   const reserved = new Set(options.keywords.map((keyword) => keyword.toUpperCase()));
   const split = sqlSplitter(options.dialect);
+  const specs = new Map<string, FunctionSpec[]>();
+  for (const spec of options.functions) {
+    if (typeof spec === "string") continue;
+    const key = spec.name.toUpperCase();
+    specs.set(key, [...(specs.get(key) ?? []), spec]);
+  }
+
+  function serverOf(catalog: CompletionCatalog): ServerIdentity | null {
+    const version = catalog.server.version;
+    return version === null || options.server === undefined ? null : options.server(version);
+  }
+
+  function specNamed(name: string, server: ServerIdentity | null): FunctionSpec | undefined {
+    return specs.get(name.toUpperCase())?.find((spec) => isAvailable(spec, server));
+  }
 
   function fold(name: string): string {
     switch (options.identifierFolding) {
@@ -241,6 +242,10 @@ export function sqlCompleter(
     constructor(catalog: CompletionCatalog) {
       this.#catalog = catalog;
       this.#current = catalog.current;
+    }
+
+    get server(): ServerIdentity | null {
+      return serverOf(this.#catalog);
     }
 
     get current(): readonly string[] | null {
@@ -342,7 +347,7 @@ export function sqlCompleter(
   }
 
   function item(kind: CompletionKind, label: string, apply: string, detail: string | null): CompletionItem {
-    return { label, kind, detail, apply, boost: BOOST[kind] };
+    return { label, kind, detail, apply, boost: BOOST[kind], info: null, caret: null };
   }
 
   function relationItems(relations: readonly Relation[], namespace: string | null): CompletionItem[] {
@@ -356,12 +361,14 @@ export function sqlCompleter(
       .map((column) => item("column", column.name, quoted(column.name), column.type));
   }
 
-  function keywordItems(): CompletionItem[] {
-    return options.keywords.map((keyword) => item("keyword", keyword, keyword, null));
+  function keywordItems(except: ReadonlySet<string> = new Set()): CompletionItem[] {
+    return options.keywords
+      .filter((keyword) => !except.has(keyword.toUpperCase()))
+      .map((keyword) => item("keyword", keyword, keyword, null));
   }
 
-  function functionItems(): CompletionItem[] {
-    return options.functions.map((name) => item("function", name, name, null));
+  function availableFunctions(server: ServerIdentity | null): (string | FunctionSpec)[] {
+    return options.functions.filter((spec) => typeof spec === "string" || isAvailable(spec, server));
   }
 
   async function qualifiedItems(scope: ScopeAt, lookup: Lookup): Promise<CompletionItem[]> {
@@ -492,7 +499,14 @@ export function sqlCompleter(
           source.kind === "relation" ? source.name.name : null,
         ),
       );
-    return [...items, ...aliases, ...functionItems(), ...keywordItems()];
+    const functions = availableFunctions(lookup.server);
+    const functionNames = new Set(functions.map((spec) => functionName(spec).toUpperCase()));
+    return [
+      ...items,
+      ...aliases,
+      ...functions.map((spec) => functionItem(spec, BOOST.function)),
+      ...keywordItems(functionNames),
+    ];
   }
 
   async function itemsFor(scope: ScopeAt, lookup: Lookup): Promise<CompletionItem[]> {
@@ -706,5 +720,21 @@ export function sqlCompleter(
     return { kind: "table", path: found.path, relation: found.relation.name, columns };
   }
 
-  return { complete, resolve, selectSource };
+  function signatureAt(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null> {
+    const { text, offset, shift } = wrap(request);
+    const server = serverOf(catalog);
+    const call = callAt(text, offset, options.dialect, reserved, (name) => specNamed(name, server) !== undefined);
+    const spec = call === null ? undefined : specNamed(call.name, server);
+    if (call === null || spec === undefined) return Promise.resolve(null);
+    return Promise.resolve({
+      name: spec.name.toLowerCase(),
+      summary: spec.summary,
+      signatures: spec.signatures,
+      argument: call.argument,
+      from: call.from - shift,
+      to: call.to - shift,
+    });
+  }
+
+  return { complete, resolve, selectSource, signatureAt };
 }

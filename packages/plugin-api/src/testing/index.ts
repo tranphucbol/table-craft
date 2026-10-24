@@ -332,7 +332,10 @@ async function connect(plugin: DatasourcePlugin, config: unknown, options = WRIT
 }
 
 /** A completion catalog straight over `introspector`, describing each namespace once. */
-async function liveCompletionCatalog(introspector: Introspector): Promise<CompletionCatalog> {
+async function liveCompletionCatalog(
+  introspector: Introspector,
+  serverVersion: string | null = null,
+): Promise<CompletionCatalog> {
   const namespaces = await introspector.namespaces();
   const described = new Map<string, Promise<NamespaceCatalog>>();
   const describe = (path: readonly string[]): Promise<NamespaceCatalog> => {
@@ -343,6 +346,7 @@ async function liveCompletionCatalog(introspector: Introspector): Promise<Comple
   };
   return {
     current: namespaces.find((namespace) => namespace.current)?.path ?? null,
+    server: { version: serverVersion },
     namespaces: () => Promise.resolve(namespaces),
     relations: async (path) => (await describe(path)).relations,
     referencing: async (path, relation) => {
@@ -1621,7 +1625,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await withSession(plugin, fixture, async (session) => {
             const introspector = session.introspector;
             if (introspector === undefined) throw new Error("A schemaTree session needs an introspector.");
-            await use(language, await liveCompletionCatalog(introspector));
+            await use(language, await liveCompletionCatalog(introspector, session.serverVersion));
           });
         }
 
@@ -1675,6 +1679,27 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             const declaration = await language.resolve({ text, offset: text.indexOf("o.id") }, catalog);
             const from = text.indexOf("orders o");
             expect(declaration).toEqual({ kind: "alias", from, to: from + "orders o".length });
+          });
+        });
+
+        it("givenUpperCallOpen_whenAskingSignature_thenFirstArgumentOfUpper", async () => {
+          await withCompletion(async (language, catalog) => {
+            const text = "SELECT upper( FROM orders";
+            const offset = text.indexOf("(") + 1;
+            const help = await language.signatureAt?.({ text, offset }, catalog);
+            expect(help).toMatchObject({ name: "upper", argument: 0, from: text.indexOf("upper") });
+            expect(help?.signatures[0]?.parameters.length).toBe(1);
+            expect(help?.summary).toMatch(/\S/);
+          });
+        });
+
+        it("givenFunctionPrefix_whenCompleting_thenItemCarriesSignatureAndCaretInsideCall", async () => {
+          await withCompletion(async (language, catalog) => {
+            const result = await language.complete(at("SELECT upp| FROM orders", "|"), catalog);
+            const upper = result.items.find((item) => item.kind === "function" && item.label === "upper");
+            expect(upper).toMatchObject({ apply: "upper()", caret: "upper(".length });
+            expect(upper?.detail).toMatch(/^\(.*\) → /);
+            expect(upper?.info).toMatch(/\S/);
           });
         });
 

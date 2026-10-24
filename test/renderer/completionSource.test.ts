@@ -1,6 +1,10 @@
-import { CompletionContext, type CompletionResult as EditorCompletionResult } from "@codemirror/autocomplete";
+import {
+  CompletionContext,
+  type Completion,
+  type CompletionResult as EditorCompletionResult,
+} from "@codemirror/autocomplete";
 import { PostgreSQL } from "@codemirror/lang-sql";
-import { EditorState } from "@codemirror/state";
+import { EditorState, type TransactionSpec } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import type { CompletionResult } from "@table-craft/desktop/engine/protocol.js";
@@ -16,8 +20,8 @@ const RESULT: CompletionResult = {
   from: 14,
   to: 14,
   items: [
-    { label: "orders", kind: "table", detail: "public", apply: "orders", boost: 30 },
-    { label: "Line Items", kind: "table", detail: "public", apply: '"Line Items"', boost: 30 },
+    { label: "orders", kind: "table", detail: "public", apply: "orders", boost: 30, info: null, caret: null },
+    { label: "Line Items", kind: "table", detail: "public", apply: '"Line Items"', boost: 30, info: null, caret: null },
   ],
   validFor: "^[A-Za-z0-9_$]*$",
 };
@@ -159,6 +163,33 @@ describe("engine result in the editor", () => {
     expect(toEditorResult({ ...RESULT, validFor: null }).validFor).toBeUndefined();
   });
 
+  it("givenInfoAndCaret_whenMapped_thenInfoShownAndCaretPlaced", () => {
+    const upper = {
+      label: "upper",
+      kind: "function" as const,
+      detail: "(str) → string",
+      apply: "upper()",
+      boost: 0,
+      info: "upper(str) → string\n\nThe string in upper case.",
+      caret: "upper(".length,
+    };
+    const now = { ...upper, label: "now", apply: "now()", info: "now() → datetime", caret: null };
+    const [option, plain] = toEditorResult({ ...RESULT, from: 7, to: 9, items: [upper, now] }).options;
+    expect(option?.info).toBe(upper.info);
+    expect(plain?.apply).toBe("now()");
+
+    const state = EditorState.create({ doc: "SELECT up FROM t" });
+    const dispatched: TransactionSpec[] = [];
+    const view = { dispatch: (spec: TransactionSpec) => dispatched.push(spec) } as unknown as EditorView;
+    const apply = option?.apply;
+    if (typeof apply !== "function") throw new Error("A caret inside the call needs an apply function.");
+    apply(view, option as Completion, 7, 9);
+    const after = state.update(...dispatched).state;
+
+    expect(after.doc.toString()).toBe("SELECT upper() FROM t");
+    expect(after.selection.main.head).toBe("SELECT upper(".length);
+  });
+
   it("givenTiedScores_whenSorted_thenEngineOrderBeatsTheAlphabet", () => {
     const columns: CompletionResult = {
       ...RESULT,
@@ -168,6 +199,8 @@ describe("engine result in the editor", () => {
         detail: null,
         apply: label,
         boost: 40,
+        info: null,
+        caret: null,
       })),
     };
     const mapped = toEditorResult(columns).options;

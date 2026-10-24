@@ -101,6 +101,7 @@ export interface FakeCatalog extends CompletionCatalog {
 export function fakeCatalog(
   relations: Map<string, Relation[]> = fixtureRelations(),
   current: readonly string[] = PUBLIC,
+  serverVersion: string | null = null,
 ): FakeCatalog {
   const namespaces: Namespace[] = [...relations.keys()].map((key) => {
     const path = JSON.parse(key) as string[];
@@ -115,6 +116,7 @@ export function fakeCatalog(
   const asked: string[][] = [];
   return {
     current,
+    server: { version: serverVersion },
     asked,
     namespaces: () => Promise.resolve(namespaces),
     relations: (path) => {

@@ -1,5 +1,11 @@
 import type { CompletionResult, Namespace, Relation } from "@table-craft/plugin-api";
-import { quoteIdentifierWith, SQL_FUNCTIONS, SQL_KEYWORDS, sqlCompleter } from "@table-craft/plugin-api/sql";
+import {
+  functionSpecs,
+  quoteIdentifierWith,
+  SQL_FUNCTIONS,
+  SQL_KEYWORDS,
+  sqlCompleter,
+} from "@table-craft/plugin-api/sql";
 import { describe, expect, it } from "vitest";
 import { ARCHIVE, fakeCatalog, fixtureRelations, PUBLIC, relation } from "../support/completionCatalog.js";
 
@@ -561,5 +567,120 @@ describe("sqlCompleter in a namespace statement's target", () => {
     const result = await complete("USE |", mysql, mysqlCatalog());
 
     expect(labels(result, "namespace")).toEqual([]);
+  });
+});
+
+const RANGED_FUNCTIONS = [
+  ...SQL_FUNCTIONS,
+  ...functionSpecs("datetime", [
+    ["DATE_FORMAT", "date, format -> string", "Writes a date using format specifiers."],
+    ["NOW", "-> datetime", "The current date and time."],
+  ]),
+  ...functionSpecs("string", [
+    ["LEFT", "str, length -> string", "The first characters of a string."],
+    ["CEIL", "x -> integer", "Rounds up."],
+    ["CHAR_LENGTH", "str -> integer", "Characters in a string."],
+  ]),
+  ...functionSpecs("encryption", [["PASSWORD", "str -> string", "An old password hash.", { mysql: "<8.0" }]]),
+];
+
+const ranged = sqlCompleter({
+  dialect: { backslashEscapes: true, hashComments: true },
+  identifierFolding: "none",
+  plainIdentifier: /^[A-Za-z_][A-Za-z0-9_$]*$/,
+  quoteIdentifier: quoteIdentifierWith("`"),
+  keywords: SQL_KEYWORDS,
+  functions: RANGED_FUNCTIONS,
+  server: (version) => {
+    const triple = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+    return triple === null ? null : { flavour: "mysql", version: triple.slice(1).map(Number) };
+  },
+});
+
+describe("function specs in completion", () => {
+  it("givenSpecFunction_whenCompleting_thenSignatureInfoAndCaret", async () => {
+    const result = await complete("SELECT date_f| FROM orders", ranged);
+    const item = result.items.find((candidate) => candidate.label === "date_format");
+
+    expect(item).toMatchObject({
+      kind: "function",
+      detail: "(date, format) → string",
+      apply: "date_format()",
+      caret: "date_format(".length,
+    });
+    expect(item?.info).toBe("date_format(date, format) → string\n\nWrites a date using format specifiers.");
+  });
+
+  it("givenZeroArgumentFunction_whenCompleting_thenCaretAfterParentheses", async () => {
+    const result = await complete("SELECT no| FROM orders", ranged);
+
+    expect(result.items.find((item) => item.label === "now")).toMatchObject({ apply: "now()", caret: null });
+  });
+
+  it("givenOverloads_whenCompleting_thenInfoListsEachAndDetailTheFirst", async () => {
+    const result = await complete("SELECT cou| FROM orders", ranged);
+    const count = result.items.find((item) => item.label === "count");
+
+    expect(count?.detail).toBe("(*) → integer");
+    expect(count?.info?.split("\n").slice(0, 2)).toEqual(["count(*) → integer", "count(expr) → integer"]);
+  });
+
+  it("givenKeywordNamedFunction_whenInExpression_thenOfferedOnceAsFunction", async () => {
+    const result = await complete("SELECT le| FROM orders", ranged);
+
+    expect(result.items.filter((item) => item.label.toUpperCase() === "LEFT").map((item) => item.kind)).toEqual([
+      "function",
+    ]);
+    const keywords = await complete("SELECT * FROM orders o |", ranged);
+    expect(labels(keywords, "keyword")).toContain("LEFT");
+  });
+
+  it("givenServerVersion_whenCompleting_thenOnlyFunctionsInItsRange", async () => {
+    const at84 = await complete("SELECT pass| FROM orders", ranged, fakeCatalog(undefined, PUBLIC, "8.4.3"));
+    const at57 = await complete("SELECT pass| FROM orders", ranged, fakeCatalog(undefined, PUBLIC, "5.7.44-log"));
+    const unknown = await complete("SELECT pass| FROM orders", ranged);
+
+    expect(labels(at84, "function")).not.toContain("password");
+    expect(labels(at57, "function")).toContain("password");
+    expect(labels(unknown, "function")).toContain("password");
+  });
+
+  it("givenColumnPrefix_whenManyFunctions_thenColumnsRankFirst", async () => {
+    const catalog = fakeCatalog(
+      new Map([
+        [
+          JSON.stringify(PUBLIC),
+          [
+            relation("orders", [
+              ["created_at", "datetime"],
+              ["customer_id", "int"],
+            ]),
+          ],
+        ],
+      ]),
+    );
+    const result = await complete("SELECT c| FROM orders", ranged, catalog);
+
+    expect(ranked(result).slice(0, 2)).toEqual(["created_at", "customer_id"]);
+    expect(ranked(result).indexOf("ceil")).toBeGreaterThan(1);
+    expect(ranked(result).indexOf("char_length")).toBeGreaterThan(1);
+  });
+
+  it("givenPlainNames_whenCompleting_thenItemsCarryNoInfoNorCaret", async () => {
+    const plain = sqlCompleter({
+      dialect: {},
+      identifierFolding: "none",
+      plainIdentifier: /^[A-Za-z_]\w*$/,
+      quoteIdentifier: quoteIdentifierWith('"'),
+      keywords: SQL_KEYWORDS,
+      functions: ["my_func"],
+    });
+    const result = await complete("SELECT my| FROM orders", plain);
+
+    expect(result.items.find((item) => item.label === "my_func")).toMatchObject({
+      apply: "my_func",
+      info: null,
+      caret: null,
+    });
   });
 });

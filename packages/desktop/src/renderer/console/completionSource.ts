@@ -1,5 +1,6 @@
 import {
   autocompletion,
+  pickedCompletion,
   type Completion,
   type CompletionContext,
   type CompletionResult as EditorCompletionResult,
@@ -23,6 +24,8 @@ export const COMPLETION_TYPING_DELAY_MS = 80;
 const TYPING_TRIGGER = /[\w$."`]$/;
 /** CodeMirror's own icon slot, before the label, as the Database pane puts a glyph before a name. */
 const GLYPH_POSITION = 20;
+/** CodeMirror's user event for an accepted completion, which the Tab filter extends. */
+const COMPLETE_EVENT = "input.complete";
 
 export type CompleteCall = (params: EngineCalls["completion.complete"]["params"]) => Promise<CompletionResult>;
 
@@ -49,14 +52,34 @@ export function compareByEngineOrder(left: Completion, right: Completion): numbe
   return byRank === 0 ? left.label.localeCompare(right.label) : byRank;
 }
 
+/** Inserts `text` over the typed word and puts the caret `caret` characters into it, as one completion. */
+function applyWithCaret(text: string, caret: number): Completion["apply"] {
+  return (view, completion, from, to) => {
+    view.dispatch({
+      changes: { from, to, insert: text },
+      selection: { anchor: from + caret },
+      scrollIntoView: true,
+      userEvent: COMPLETE_EVENT,
+      annotations: pickedCompletion.of(completion),
+    });
+  };
+}
+
 export function toEditorResult(result: CompletionResult): EditorCompletionResult {
   const options = result.items.map((item, rank): Completion => {
+    const apply =
+      item.caret !== null && item.caret < item.apply.length
+        ? { apply: applyWithCaret(item.apply, item.caret) }
+        : item.apply === item.label
+          ? {}
+          : { apply: item.apply };
     const option: Completion = {
       label: item.label,
       type: item.kind,
       boost: item.boost,
       ...(item.detail === null ? {} : { detail: item.detail }),
-      ...(item.apply === item.label ? {} : { apply: item.apply }),
+      ...(item.info === null ? {} : { info: item.info }),
+      ...apply,
     };
     engineRanks.set(option, rank);
     return option;

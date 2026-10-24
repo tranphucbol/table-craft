@@ -35,7 +35,8 @@ export const restOfWordFilter = EditorState.transactionFilter.of((transaction) =
   const head = before.selection.main.head;
   const length = restOfWordEnd(before, head) - head;
   if (length === 0) return transaction;
-  const at = transaction.newSelection.main.head;
+  // The end of the inserted text, not the new caret: a function's caret lands inside its `()`.
+  const at = transaction.changes.mapPos(head, 1);
   return [transaction, { changes: { from: at, to: at + length }, sequential: true }];
 });
 

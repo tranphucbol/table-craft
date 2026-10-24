@@ -31,7 +31,6 @@ import {
   identifierWriter,
   quoteIdentifierWith,
   sqlSavepoints,
-  SQL_FUNCTIONS,
   SQL_KEYWORDS,
   sqlCompleter,
   sqlExplainable,
@@ -48,6 +47,7 @@ import {
   type SqlLiteralOptions,
 } from "@table-craft/plugin-api/sql";
 import { sqliteErrorPosition } from "./errorPosition.js";
+import { SQLITE_FUNCTIONS } from "./functions.js";
 import { EXPLAIN_VERBS, explainStatement, readPlanRows } from "./explain.js";
 import { sqliteIntrospector } from "./introspect.js";
 import { sqliteObjects } from "./objects.js";
@@ -96,7 +96,7 @@ const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     quoteIdentifier,
     keywords: KEYWORDS,
-    functions: [...SQL_FUNCTIONS, "date", "datetime", "group_concat", "ifnull", "json_extract"],
+    functions: SQLITE_FUNCTIONS,
   }),
   ...sqlGenerator({ quoteIdentifier, updateDefault, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
   explainable,

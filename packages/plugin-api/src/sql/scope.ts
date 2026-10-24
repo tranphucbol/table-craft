@@ -468,7 +468,8 @@ class QueryReader {
   }
 }
 
-function statementTokens(
+/** The statement around `offset` without its comments, and whether the caret sits in a string or comment. */
+export function statementTokens(
   text: string,
   offset: number,
   dialect: SqlDialectOptions,

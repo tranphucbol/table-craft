@@ -1,10 +1,20 @@
+export { SQL_KEYWORDS, sqlCompleter, type CompleterOptions, type IdentifierFolding } from "./complete.js";
 export {
+  FUNCTION_CATEGORIES,
+  functionInfo,
+  functionItem,
+  functionSpecs,
+  isAvailable,
+  parseSignature,
+  signatureLabel,
   SQL_FUNCTIONS,
-  SQL_KEYWORDS,
-  sqlCompleter,
-  type CompleterOptions,
-  type IdentifierFolding,
-} from "./complete.js";
+  type FunctionCategory,
+  type FunctionEntry,
+  type FunctionSpec,
+  type ServerIdentity,
+  type ServerRange,
+} from "./functions.js";
+export { callAt, type CallAt } from "./signature.js";
 export {
   classifyTokens,
   EXPLAIN_ANALYZE_REASON_PREFIX,

@@ -129,6 +129,32 @@ export interface CompletionItem {
   readonly detail: string | null;
   readonly apply: string;
   readonly boost: number;
+  readonly info: string | null;
+  /** Where the caret lands, as an offset into `apply`; null for its end. */
+  readonly caret: number | null;
+}
+
+/** Mirrors `FunctionParameter` in plugin-api. */
+export interface FunctionParameter {
+  readonly name: string;
+  readonly optional?: boolean;
+  readonly variadic?: boolean;
+}
+
+/** Mirrors `FunctionSignature` in plugin-api. */
+export interface FunctionSignature {
+  readonly parameters: readonly FunctionParameter[];
+  readonly returns: string;
+}
+
+/** Mirrors `SignatureHelp` in plugin-api: the call around the caret and the argument it is at. */
+export interface SignatureHelp {
+  readonly name: string;
+  readonly summary: string;
+  readonly signatures: readonly FunctionSignature[];
+  readonly argument: number;
+  readonly from: number;
+  readonly to: number;
 }
 
 /** Mirrors `CompletionScope` in plugin-api: the table a clause body is written against. */

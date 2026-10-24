@@ -23,9 +23,13 @@ export {
   type CompletionRequest,
   type CompletionResult,
   type CompletionScope,
+  type CompletionServer,
   type Declaration,
+  type FunctionParameter,
+  type FunctionSignature,
   type IncomingForeignKey,
   type ResolveRequest,
+  type SignatureHelp,
 } from "./completion.js";
 export {
   DefinitionNotFoundError,

@@ -75,6 +75,7 @@ const METHODS = [
   "table.condition",
   "table.orderBy",
   "completion.complete",
+  "completion.signature",
   "navigation.resolve",
   "edits.preview",
   "edits.submit",

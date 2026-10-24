@@ -11,6 +11,8 @@ export interface CompletionCatalogOptions {
    * listing marks: that listing is the catalog session's, which no `USE` in a console moves.
    */
   readonly current?: readonly string[];
+  /** What the catalog's session reports, so the plugin offers the functions that server has (decision 097). */
+  readonly serverVersion?: string | null;
 }
 
 const TIMED_OUT = Symbol("timedOut");
@@ -71,5 +73,5 @@ export async function completionCatalog(
     );
   }
 
-  return { current, namespaces, relations, referencing };
+  return { current, server: { version: options.serverVersion ?? null }, namespaces, relations, referencing };
 }

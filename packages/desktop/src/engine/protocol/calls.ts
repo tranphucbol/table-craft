@@ -7,6 +7,7 @@ import type {
   Routine,
   RoutineArgument,
   RoutineCall,
+  SignatureHelp,
 } from "./catalog.js";
 import type { AppliedChange, DdlScript, ObjectChange, ObjectFeatures, TableDesign } from "./objects.js";
 import type { FoundMatch, ResultState, ResultWindow, SortKey, ViewSpec, ViewState } from "./results.js";
@@ -330,6 +331,14 @@ export interface EngineCalls {
       readonly current?: readonly string[];
     };
     result: CompletionResult;
+  };
+  /**
+   * The built-in function call around `offset` and the argument it is at, for the parameter hint
+   * (decision 098); null outside a call the plugin documents. Needs `sql`.
+   */
+  "completion.signature": {
+    params: { readonly text: string; readonly offset: number; readonly scope?: CompletionScope };
+    result: SignatureHelp | null;
   };
   /** Where the name at `offset` was declared; null when it names nothing known. Needs `sql`. */
   "navigation.resolve": {

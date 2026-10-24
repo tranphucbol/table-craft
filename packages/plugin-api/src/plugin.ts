@@ -6,6 +6,7 @@ import type {
   CompletionResult,
   Declaration,
   ResolveRequest,
+  SignatureHelp,
 } from "./completion.js";
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { ObjectEditor } from "./objects.js";
@@ -392,6 +393,11 @@ export interface SqlLanguage {
   complete(request: CompletionRequest, catalog: CompletionCatalog): Promise<CompletionResult>;
   /** Where the name at the caret was declared; null when it names nothing the scope or catalog knows. */
   resolve(request: ResolveRequest, catalog: CompletionCatalog): Promise<Declaration | null>;
+  /**
+   * The built-in function call the caret is inside and the argument it is at, for the parameter
+   * hint (decision 098); null outside a call or in one the dialect does not document.
+   */
+  signatureAt?(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>;
   /**
    * A `statement` over `relation` for the SQL Generator (decision 029): one clause per line, columns
    * in table order, names quoted only where needed; `qualifiedName` is what the introspector names

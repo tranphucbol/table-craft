@@ -25,6 +25,41 @@ export interface CompletionItem {
   readonly apply: string;
   /** Orders items the typed prefix matches equally well; higher comes first, within -99…99. */
   readonly boost: number;
+  /** Longer text the popup shows beside the selected item, such as a function's signatures and summary. */
+  readonly info: string | null;
+  /** Where the caret lands, as an offset into `apply`; null for its end. */
+  readonly caret: number | null;
+}
+
+export interface FunctionParameter {
+  readonly name: string;
+  readonly optional?: boolean;
+  /** Repeats: the call may pass it any number of times. */
+  readonly variadic?: boolean;
+}
+
+/** One way to call a function: its parameters in order and what it returns. */
+export interface FunctionSignature {
+  readonly parameters: readonly FunctionParameter[];
+  readonly returns: string;
+}
+
+/** The function call around the caret (decision 098). */
+export interface SignatureHelp {
+  readonly name: string;
+  readonly summary: string;
+  readonly signatures: readonly FunctionSignature[];
+  /** The zero-based argument the caret is in: the top-level commas before it inside the call. */
+  readonly argument: number;
+  /** The call's name to the end of its arguments, or to the caret while it is still open. */
+  readonly from: number;
+  readonly to: number;
+}
+
+/** What completion knows about the server it completes for; null fields when the catalog could not open. */
+export interface CompletionServer {
+  /** The version string the session reports, such as `8.4.3` or `5.7.25-TiDB-v4.0.14`. */
+  readonly version: string | null;
 }
 
 /** The table a clause body is written against, such as the table editor's WHERE bar (plan 009 decision 9). */
@@ -78,6 +113,8 @@ export interface IncomingForeignKey {
 export interface CompletionCatalog {
   /** Where unqualified names resolve; null when the datasource reports no current namespace. */
   readonly current: readonly string[] | null;
+  /** The server behind the cache, so a plugin offers only the functions it has (decision 097). */
+  readonly server: CompletionServer;
   namespaces(): Promise<readonly Namespace[]>;
   /** Every relation in `path`, described on demand; empty when the describe fails or runs too long. */
   relations(path: readonly string[]): Promise<readonly Relation[]>;
