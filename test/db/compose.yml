@@ -128,7 +128,11 @@ services:
   # reaches the databases by service name. Only `--profile e2e` starts it.
   e2e:
     profiles: ["e2e"]
-    build: ../e2e/docker
+    # The headless runner sets BUN_VERSION from .bun-version; unset, the Dockerfile default applies.
+    build:
+      context: ../e2e/docker
+      args:
+        BUN_VERSION:
     image: table-craft-e2e:local
     working_dir: /work
     shm_size: 1gb

@@ -7,11 +7,14 @@
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/031 bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts
  */
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { composeProfiles, resolveTidbTarget } from "../../db/tidbTarget.js";
 
 const DATABASES_FLAG = "--databases";
-const COMPOSE_FILE = join(import.meta.dirname, "..", "..", "db", "compose.yml");
+const CHECKOUT = join(import.meta.dirname, "..", "..", "..");
+const COMPOSE_FILE = join(CHECKOUT, "test", "db", "compose.yml");
+const BUN_VERSION_FILE = join(CHECKOUT, ".bun-version");
 const SERVICE = "e2e";
 const PROFILE = "e2e";
 const DEFAULT_TESTS = "test/e2e";
@@ -30,7 +33,7 @@ const argv = process.argv.slice(2);
 const databases = argv.includes(DATABASES_FLAG);
 const tests = argv.filter((argument) => argument !== DATABASES_FLAG);
 const target = databases ? await resolveTidbTarget() : null;
-const env = { ...process.env, ...target?.env };
+const env = { ...process.env, ...target?.env, BUN_VERSION: readFileSync(BUN_VERSION_FILE, "utf8").trim() };
 const compose = ["compose", "-f", COMPOSE_FILE, ...(target === null ? [] : composeProfiles(target))];
 
 if (target !== null) {
