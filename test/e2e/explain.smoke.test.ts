@@ -63,6 +63,11 @@ const SAVED_POSTGRES: SavedDatasource = {
 };
 
 const JOIN_SQL = "SELECT o.id, c.name FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.total > 10";
+/**
+ * PostgreSQL picks a nested loop once autovacuum has analysed the three-row fixtures and a hash
+ * join on a freshly seeded container, which estimates rows from pages.
+ */
+const JOIN_NODE_TYPE = /"Node Type": "(Nested Loop|Hash Join|Merge Join)"/;
 const TOUCH_ORDER_ONE = "UPDATE orders SET total = total WHERE id = 1";
 const ZERO_ORDER_ONE = "UPDATE orders SET total = 0 WHERE id = 1";
 const ORDER_ONE_TOTAL = "SELECT total FROM orders WHERE id = 1";
@@ -318,7 +323,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
       const copied = await clipboardText(running?.app as ElectronApplication);
       expect(JSON.parse(copied)).toEqual([expect.objectContaining({ Plan: expect.any(Object) as unknown })]);
       expect(copied.split("\n").slice(0, shown.length)).toEqual(shown);
-      expect(shown.join("\n")).toContain('"Node Type": "Nested Loop"');
+      expect(shown.join("\n")).toMatch(JOIN_NODE_TYPE);
       expect(await page.getByRole("button", { name: "Raw", exact: true }).getAttribute("aria-pressed")).toBe("true");
       await captureWindow(page, "plan-raw");
     },
