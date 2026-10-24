@@ -44,6 +44,18 @@ describe("smoke workers (workers.ts)", () => {
     expect(resolveWorkers(undefined, ORBSTACK_8192_MIB_MEM_TOTAL).workers).toBe(SMOKE_WORKERS_DEFAULT);
   });
 
+  it("givenOtherRunsOnTheVm_whenResolved_thenTheThreeAreSharedOut", () => {
+    const beside = resolveWorkers(undefined, ORBSTACK_8192_MIB_MEM_TOTAL, 2);
+
+    expect(beside.workers).toBe(1);
+    expect(beside.reason).toContain("2 other headless run(s)");
+    expect(resolveWorkers(undefined, ORBSTACK_8192_MIB_MEM_TOTAL, 5).workers).toBe(1);
+  });
+
+  it("givenWorkersEnvAndOtherRuns_whenResolved_thenEnvWins", () => {
+    expect(resolveWorkers("3", ORBSTACK_8192_MIB_MEM_TOTAL, 2).workers).toBe(3);
+  });
+
   it("givenVmSizeUnknown_whenResolved_thenOneWorker", () => {
     expect(resolveWorkers("", undefined).workers).toBe(1);
   });

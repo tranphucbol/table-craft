@@ -3,7 +3,8 @@
  * display, so a live test never takes the screen, the keyboard or the clipboard of the machine it
  * runs on. Positional arguments narrow the run, as they would for `vitest run`; other arguments
  * starting with `-` are passed to Vitest (`runner.ts`). Files run `TABLE_CRAFT_SMOKE_WORKERS` at a
- * time, chosen by the Docker VM's memory when unset (`workers.ts`), then `serialFiles.ts` one by one.
+ * time, chosen by the Docker VM's memory and the boxes already running when unset (`workers.ts`),
+ * then `serialFiles.ts` one by one.
  *
  *   bun run test:smoke:headless
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/031 bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts
@@ -33,6 +34,16 @@ function dockerMemoryBytes(): number | undefined {
   return status === 0 && Number.isFinite(bytes) && bytes > 0 ? bytes : undefined;
 }
 
+/** Headless boxes already running, from any worktree; read just before this one starts. */
+function runningBoxes(): number {
+  const { stdout, status } = spawnSync(
+    "docker",
+    ["ps", "--quiet", "--filter", `label=com.docker.compose.service=${SERVICE}`],
+    { encoding: "utf8" },
+  );
+  return status === 0 ? stdout.split("\n").filter((line) => line !== "").length : 0;
+}
+
 function quote(argument: string): string {
   return `'${argument.replaceAll("'", `'\\''`)}'`;
 }
@@ -44,7 +55,7 @@ const compose = ["compose", "-f", COMPOSE_FILE, ...(target === null ? [] : compo
 if (target !== null) console.log(target.description);
 const env = target === null ? base : await upDatabases(target, base);
 
-const { workers, reason } = resolveWorkers(process.env[WORKERS_ENV], dockerMemoryBytes());
+const { workers, reason } = resolveWorkers(process.env[WORKERS_ENV], dockerMemoryBytes(), runningBoxes());
 console.log(reason);
 
 const smokeEnv = ["TABLE_CRAFT_SMOKE=1", ...(databases ? ["TABLE_CRAFT_SMOKE_DATABASES=1"] : [])];

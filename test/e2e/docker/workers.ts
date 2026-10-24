@@ -21,9 +21,11 @@ export interface WorkerChoice {
 
 /**
  * `TABLE_CRAFT_SMOKE_WORKERS` when set, else three on a Docker VM of 8 GiB or more and one below;
- * `vmBytes` is `undefined` when Docker did not say.
+ * `vmBytes` is `undefined` when Docker did not say. The three are the VM's, not the run's: with
+ * `otherRuns` headless boxes of other worktrees already running, they are shared out, since nine
+ * apps on one VM starve each other's CPU and swap (plan 051, scenario 4).
  */
-export function resolveWorkers(given: string | undefined, vmBytes: number | undefined): WorkerChoice {
+export function resolveWorkers(given: string | undefined, vmBytes: number | undefined, otherRuns = 0): WorkerChoice {
   if (given !== undefined && given !== "") {
     const workers = Number(given);
     if (!Number.isInteger(workers) || workers < 1) {
@@ -35,6 +37,15 @@ export function resolveWorkers(given: string | undefined, vmBytes: number | unde
   }
   const size = vmBytes === undefined ? "an unknown amount of memory" : `${(vmBytes / GIB).toFixed(1)} GiB`;
   if (vmBytes !== undefined && vmBytes >= SMOKE_WORKERS_MIN_VM_BYTES) {
+    if (otherRuns > 0) {
+      const workers = Math.max(1, Math.floor(SMOKE_WORKERS_DEFAULT / (otherRuns + 1)));
+      return {
+        workers,
+        reason:
+          `${String(workers)} smoke worker(s): ${String(otherRuns)} other headless run(s) share the Docker VM's ` +
+          `${size}, which fits ${String(SMOKE_WORKERS_DEFAULT)} apps in all`,
+      };
+    }
     return {
       workers: SMOKE_WORKERS_DEFAULT,
       reason: `${String(SMOKE_WORKERS_DEFAULT)} smoke workers: the Docker VM has ${size}`,
