@@ -2,7 +2,8 @@
  * Plan 014's packaged-app suite: the unpacked app electron-builder produced, not the development
  * build, so the bundles in `app.asar`, the plugins in `<resources>/plugins` and the bundled drivers
  * are what run. Plan 015 adds the title bar check CI runs on every platform, so Windows and Linux
- * show the main-menu button and the caption-button overlay. Runs only when
+ * show the main-menu button and the caption-button overlay; plan 036 connects through the compose
+ * SSH bastion once, since ssh2 is inlined with its native modules stubbed. Runs only when
  * `TABLE_CRAFT_APP_EXECUTABLE` names that app:
  *
  *   bun run test:smoke:packaged        # SQLite only, as CI runs it
@@ -14,7 +15,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { appVersion, systemGit } from "../../packages/desktop/scripts/version.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_BEHIND_BASTION, POSTGRES_CONFIG, SSH_BASTION } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -38,6 +39,7 @@ import {
   readProfileFile,
   runStatement,
   SCENARIO_TIMEOUT_MS,
+  secretPrompt,
   seedDatasources,
   setWindowSize,
   SMOKE_ENABLED,
@@ -51,6 +53,7 @@ import type { RunningApp, SavedDatasource } from "./harness.js";
 import { DAILY_LOOP_STEPS, dailyLoop, stubSaveDialog } from "./workflows.js";
 
 const captureWindow = evidenceFor("014");
+const captureTunnel = evidenceFor("036");
 const LOOP_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
 const BUILT_IN_KINDS = ["MySQL", "PostgreSQL", "SQLite"];
 /** Not the default on a light-mode host, so the relaunched window shows it was kept. */
@@ -91,6 +94,21 @@ const SAVED_MYSQL: SavedDatasource = {
   pluginId: "mysql",
   config: { ...MYSQL_PLAIN, sslMode: "disable" },
   secretModes: { password: "untilRestart" },
+};
+const SAVED_POSTGRES_BEHIND_BASTION: SavedDatasource = {
+  id: "pg-ssh",
+  name: "pg-ssh",
+  pluginId: "postgres",
+  config: { ...POSTGRES_PLAIN, ...POSTGRES_BEHIND_BASTION, sslMode: "disable" },
+  secretModes: { password: "untilRestart", "ssh.password": "untilRestart" },
+  ssh: {
+    enabled: true,
+    host: SSH_BASTION.host,
+    port: SSH_BASTION.port,
+    user: SSH_BASTION.user,
+    auth: "password",
+    keyPath: "",
+  },
 };
 
 function savedSqlite(): SavedDatasource {
@@ -255,6 +273,32 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
         expect(await gridText(page)).toEqual({ headers: ["one"], cells: ["1"] });
       }
       await captureWindow(page, "packaged-drivers");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it.runIf(DATABASES_ENABLED)(
+    "givenPackagedApp_whenPostgresBehindSshBastion_thenSelectOneReturnsThroughTunnel",
+    async () => {
+      const saved = SAVED_POSTGRES_BEHIND_BASTION;
+      const { page } = await launchSaved([saved]);
+      await openConsoleOn(page, saved.name);
+
+      const prompt = secretPrompt(page, saved.name);
+      await prompt.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await prompt.getByLabel("Password", { exact: true }).fill(PASSWORD);
+      await prompt.getByLabel("SSH password", { exact: true }).fill(SSH_BASTION.password);
+      await prompt.getByRole("button", { name: "Connect", exact: true }).click();
+      const hostKey = page.getByRole("dialog", { name: "Unknown SSH host key" });
+      await hostKey.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      expect(await hostKey.getByTestId("host-key-fingerprint").textContent()).toBe(SSH_BASTION.fingerprint);
+      await hostKey.getByRole("button", { name: "Trust", exact: true }).click();
+      await waitUntilReady(page);
+
+      await runStatement(page, "SELECT 1 AS one");
+
+      expect(await gridText(page)).toEqual({ headers: ["one"], cells: ["1"] });
+      await captureTunnel(page, "13-packaged-select-through-tunnel");
     },
     SCENARIO_TIMEOUT_MS,
   );
