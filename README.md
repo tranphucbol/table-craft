@@ -238,6 +238,20 @@ anything runs. Switch
 **Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**. Consoles
 are saved as files as you type.
 
+**Open File…** (`⌘O`) opens `.sql` files from anywhere on disk, such as the migrations in your
+project, as file consoles on the data source you are in; each file remembers its data source and
+schema for next time, and **File → Recent Files** lists the last ten. A file console saves only
+when you press `⌘S`: its tab shows a dot while there are unsaved changes, and closing it asks to
+save. **Save As…** (`⇧⌘S`) writes any console to a file of your choosing, and **Rename Console…**
+renames the console or the file. When another program changes the file, a clean console reloads
+it as the window comes back to the front, and one with unsaved edits asks whether to reload or keep
+yours. Files are UTF-8; Windows line endings are kept as they were.
+
+**Run SQL Script…**, on a data source or schema in the Database pane, runs one or more `.sql` files
+without opening them: the files are streamed, so a multi-gigabyte dump uses flat memory, and the
+run shows its statements and bytes under **SQL Scripts** in Services, where you can cancel it. It
+stops at the first failing statement, and **Go to statement** opens the file at that line.
+
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
 back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
 under it, `AS` lined up, `AND`/`OR` under `WHERE`; other statements keep the standard layout. A statement with `:name`, `?` or (on PostgreSQL) `$1` placeholders asks for their values
@@ -399,6 +413,9 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Commit                    | `⌥⇧⌘↩`  | `Ctrl+Alt+Shift+Enter` |
 | Reformat Code             | `⌥⌘L`   | `Ctrl+Alt+L`           |
 | New Console               | `⇧⌘L`   | `Ctrl+Shift+L`         |
+| Open File…                | `⌘O`    | `Ctrl+O`               |
+| Save                      | `⌘S`    | `Ctrl+S`               |
+| Save As…                  | `⇧⌘S`   | `Ctrl+Shift+S`         |
 | Close Tab                 | `⌘W`    | `Ctrl+W`               |
 | Select Next Tab           | `⇧⌘]`   | `Ctrl+Shift+]`         |
 | Select Previous Tab       | `⇧⌘[`   | `Ctrl+Shift+[`         |

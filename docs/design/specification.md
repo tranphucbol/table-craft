@@ -19,7 +19,7 @@ its own MessagePort (decision 002).
 
 A plugin is a directory with `table-craft-plugin.json` and an ESM entry exporting a
 `DatasourcePlugin` (decisions 005 to 008). The contract lives in `@table-craft/plugin-api`.
-`API_VERSION` is `0.18.0`; while it is `0.x` the contract is unstable and every minor is a break.
+`API_VERSION` is `0.22.0`; while it is `0.x` the contract is unstable and every minor is a break.
 
 ### Discovery
 
@@ -319,6 +319,14 @@ marker inside a string, a quoted identifier, a comment, a dollar quote or a `::c
 A `?` is named `?1`, `?2`… by position within its statement. `bind` rejects `statementFailed` when
 a value is missing. Values are text or `null`; the database converts text as it would a literal.
 
+`sqlStatementStream(options)` gives the optional `splitStream()` (plan 041, decision 081): a
+`StatementStream` whose `push(text)` takes the script a piece at a time and answers the statements
+complete so far, and whose `end()` answers the rest. Each `StreamedStatement` is a span with
+offsets from the start of everything pushed plus its 1-based `line` and `column`; the statements
+equal `split` on the whole text, for any cut of the pieces (the contract suite checks a cut at
+every code point). It rescans only whole lines and only once the unfinished tail has doubled, so a
+huge statement costs linear time. A plugin without it gets its scripts split whole, up to 32 MiB.
+
 ### Catalog
 
 The namespace is the unit of introspection (decision 022). A `Namespace` is
@@ -435,6 +443,9 @@ handles belong to the port that created them and are released when it closes.
 | `import.cancel`         | `taskId`                                                                                          | `null`; the task rolls back what it has not committed and ends `cancelled`                                                               |
 | `import.resume`         | `taskId`, `stallSeconds`                                                                          | a new `ImportTask` from the first uncommitted row, or from row 1 when nothing was committed                                              |
 | `import.list`           | none                                                                                              | `ImportTask[]`, every import of the engine                                                                                               |
+| `script.run`            | `files`, `namespace`                                                                              | `ScriptTask`; runs absolute `.sql` paths in order on a session of its own, after switching to `namespace` when not null (decision 081)   |
+| `script.cancel`         | `taskId`                                                                                          | `null`; cancels the running statement and ends the task `cancelled`                                                                      |
+| `script.list`           | none                                                                                              | `ScriptTask[]`, every script run of the engine                                                                                           |
 | `session.close`         | `sessionId`                                                                                       | `null`; releases the session's handles, then closes it                                                                                   |
 | `catalog.namespaces`    | `refresh?`                                                                                        | `Namespace[]`                                                                                                                            |
 | `catalog.describe`      | `path`, `refresh?`                                                                                | `{ catalog, introspectedAt, elapsedMs }`                                                                                                 |
@@ -464,7 +475,10 @@ request: `export.start` answers at once, and the engine pushes `export.progress`
 250 ms) and one of `export.done`, `export.failed` or `export.cancelled` to every renderer port,
 each a message with `id: null` carrying the whole `ExportTask`. See Export. An import is the same
 kind of task: `import.progress`, `import.done`, `import.failed` and `import.cancelled` carry the
-whole `ImportTask`. See Import.
+whole `ImportTask`. See Import. A script run too: `script.progress` (at most every 200 ms),
+`script.done`, `script.failed` and `script.cancelled` carry the whole `ScriptTask` `{ taskId, files,
+file, namespace, state, statements, bytes, size, elapsedMs, error }`; a failure's `ScriptError`
+adds the `file`, `line`, `column` and the start of the `statement`. See Console files.
 A statement still running when its session closes is answered with `unknownSession`.
 `script.split` needs no session; it runs the plugin's `language` in the engine, so the renderer
 never parses SQL (decision 008). `transactionOpen` is `false` on a plugin without `transactions`,
@@ -573,6 +587,16 @@ run either.
 | `plan.rerun`, `plan.copy`                | Explain Again, Copy Raw Plan          |          |                        |
 | `plan.showTree`, `plan.showRaw`          | Show Plan Tree, Show Raw Plan         |          |                        |
 | `console.new`                            | New Console                           | `⇧⌘L`    | `Ctrl+Shift+L`         |
+| `file.open`                              | Open File…                            | `⌘O`     | `Ctrl+O`               |
+| `file.openRecent`                        | Recent Files…                         |          |                        |
+| `file.save`                              | Save                                  | `⌘S`     | `Ctrl+S`               |
+| `file.saveAs`                            | Save As…                              | `⇧⌘S`    | `Ctrl+Shift+S`         |
+| `console.rename`                         | Rename Console…                       |          |                        |
+| `file.reload`, `file.keepMine`           | Reload from Disk, Keep My Changes     |          |                        |
+| `database.runSqlScript`                  | Run SQL Script…                       |          |                        |
+| `script.cancel`                          | Cancel SQL Script                     |          |                        |
+| `script.goTo`                            | Go to Failed Script Statement         |          |                        |
+| `script.dismiss`                         | Remove Finished SQL Script            |          |                        |
 | `transaction.commit`                     | Commit                                | `⌥⇧⌘↩`   | `Ctrl+Alt+Shift+Enter` |
 | `transaction.rollback`                   | Rollback                              |          |                        |
 | `transaction.toggleMode`                 | Toggle Transaction Mode (Auto/Manual) |          |                        |
@@ -1067,9 +1091,47 @@ datasource deletes its console directory; the confirmation says how many files t
 the `TABLE_CRAFT_DATASOURCE` datasource are not saved. A closed console's file comes back through
 Open Closed Console… (see Query history and Services), which reopens it under its own name.
 
-The layout remembers the open console tabs (`openConsoles`: datasource id, name, which is active).
-At launch they reopen with their text and their datasource disconnected; the first Run connects, so
-launch makes no connections.
+The layout remembers the open console tabs (`openConsoles`: datasource id, name, which is active,
+and a file console's `path`). At launch they reopen with their text and their datasource
+disconnected; the first Run connects, so launch makes no connections. A file that is gone or
+unreadable is skipped, and one notice names it.
+
+### File consoles
+
+A console is a scratch console (above) or a file console, whose text is a `.sql` file anywhere on
+disk (decision 080). **Open File…** picks one or more files and opens each on the data source the
+file was last used with, else the focused console's or the selected tree node's, else detached: a
+detached console asks for a data source on its first Run. A file already open activates its tab.
+Main remembers each file's data source and namespace in `<userData>/fileAttachments.json`, with the
+last 10 files opened or saved, which **File → Recent Files** and **Recent Files…** list.
+
+A file console saves only on **Save** (`⌘S`, which on a scratch console writes the pending
+autosave); the tab shows a dot while its text differs from the file. Closing a dirty file console,
+or quitting, asks **Save**, **Don't Save** or **Cancel** first. **Save As…** writes any console to a
+chosen path, and a scratch console becomes a file console there. **Rename Console…** renames a
+scratch console's file in the profile, under the name pattern, or the file on disk in its folder.
+Removing a data source leaves its file consoles open, detached.
+
+Files are read as strict UTF-8: a BOM is stripped and never written back, and a file that is not
+UTF-8 is refused with the offset of its first bad byte. Line endings are kept: a file whose first
+line ends in CRLF is written back with CRLF. A file over 32 MiB (`SQL_FILE_EDITOR_MAX_BYTES`) does
+not open in the editor; the error points to Run SQL Script. Saves write beside the file and rename
+over it, keeping its permissions.
+
+When the window gains focus, main stats the open files. A clean file console whose file changed
+reloads; a dirty one shows a banner, **The file changed on disk**, with **Reload** and **Keep
+mine**; a deleted file shows **The file was deleted on disk**, and Save writes it again.
+
+### Run SQL Script
+
+**Run SQL Script…**, on a data source or a schema or database in the Database tool window, runs
+one or more files without opening them (decision 081). The engine streams each file in 64 KiB
+chunks through a strict UTF-8 decoder and the plugin's `splitStream`, on a session of its own in
+auto-commit, after the namespace switch statement when run on a namespace. A read-only data source
+refuses writes as consoles do. Services shows the run under **SQL Scripts** with the file, the
+statements done and the bytes read of the total, and **Cancel**, which cancels the running
+statement. The run stops at the first failing statement; the task's error names the file, line
+and column, and **Go to statement** opens the file as a file console with that statement selected.
 
 ## Table data editor
 
@@ -1496,35 +1558,44 @@ mode moves the stored value. Deleting a datasource clears its secrets.
 Each invoke answers `{ ok: true, value }` or `{ ok: false, error: { message, hint } }`, and each
 request is parsed with Zod in main.
 
-| Channel (`table-craft:` …) | Request                          | Value                                                                              |
-| -------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
-| `datasources.list`         | none                             | `{ datasources, warning, encryption: { available, reason } }`                      |
-| `datasources.save`         | `{ datasource, secrets }`        | the saved datasource                                                               |
-| `datasources.delete`       | `id`                             | `null`; stops its engine, clears its secrets, consoles and history                 |
-| `datasources.test`         | `{ datasource, secrets }`        | the probe result; stored secrets are merged in main                                |
-| `datasources.parse-url`    | `pluginId`, `url`                | `{ values, secrets, ignored }`; nothing is saved                                   |
-| `datasources.url`          | `id`                             | the saved datasource's URL, without secrets                                        |
-| `plugins.list`             | none                             | `{ id, name, unavailableReason, capabilities, fields, url, network, highlight }[]` |
-| `ssh.answer-host-key`      | `requestId`, `trust`             | `null`; answers an `ssh.host-key-prompt` (decision 071)                            |
-| `consoles.list`            | `datasourceId`                   | the saved console names, sorted                                                    |
-| `consoles.read`            | `datasourceId`, `name`           | the text, or `null` when there is no file                                          |
-| `consoles.write`           | `datasourceId`, `name`, `text`   | `null`; written atomically                                                         |
-| `consoles.delete`          | `datasourceId`, `name`           | `null`; deleting a missing file is not an error                                    |
-| `history.record`           | a `HistoryEntry`                 | `null`                                                                             |
-| `history.search`           | `datasourceId`, `query`          | `HistoryStatement[]`, newest first                                                 |
-| `history.clear`            | `datasourceId`                   | `null`                                                                             |
-| `window.answer-close`      | `proceed`                        | `null`; closes the window, or finishes the quit (decision 024)                     |
-| `engine.connect`           | `datasourceId`, typed `secrets?` | `connected`, `needsSecrets { keys }` or `failed`                                   |
-| `engine.disconnect`        | `datasourceId`                   | `null` once the engine has exited                                                  |
-| `dialog.choose-file`       | `title`                          | a path, or `null`                                                                  |
-| `settings.read`            | none                             | `{ settings, themes, warning }`; see Settings and appearance                       |
-| `settings.write`           | the whole settings document      | `null`; saved, then broadcast as `settings.changed`                                |
-| `themes.reload`            | none                             | `null`; rereads `<userData>/themes/`, then broadcasts                              |
-| `themes.open-folder`       | none                             | `null`; creates the folder if missing and opens it                                 |
-| `import.scan`              | none                             | `ImportSource[]`: per app, found, count, where it looked, password store           |
-| `import.preview`           | `{ source }` or a file + phrase  | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`                |
-| `import.run`               | `previewId`, `keys`, options     | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`             |
-| `import.cancel`            | none                             | `null`; the run stops before its next item                                         |
+| Channel (`table-craft:` …) | Request                             | Value                                                                              |
+| -------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- |
+| `datasources.list`         | none                                | `{ datasources, warning, encryption: { available, reason } }`                      |
+| `datasources.save`         | `{ datasource, secrets }`           | the saved datasource                                                               |
+| `datasources.delete`       | `id`                                | `null`; stops its engine, clears its secrets, consoles and history                 |
+| `datasources.test`         | `{ datasource, secrets }`           | the probe result; stored secrets are merged in main                                |
+| `datasources.parse-url`    | `pluginId`, `url`                   | `{ values, secrets, ignored }`; nothing is saved                                   |
+| `datasources.url`          | `id`                                | the saved datasource's URL, without secrets                                        |
+| `plugins.list`             | none                                | `{ id, name, unavailableReason, capabilities, fields, url, network, highlight }[]` |
+| `ssh.answer-host-key`      | `requestId`, `trust`                | `null`; answers an `ssh.host-key-prompt` (decision 071)                            |
+| `consoles.list`            | `datasourceId`                      | the saved console names, sorted                                                    |
+| `consoles.read`            | `datasourceId`, `name`              | the text, or `null` when there is no file                                          |
+| `consoles.write`           | `datasourceId`, `name`, `text`      | `null`; written atomically                                                         |
+| `consoles.delete`          | `datasourceId`, `name`              | `null`; deleting a missing file is not an error                                    |
+| `consoles.rename`          | `datasourceId`, `from`, `to`        | `null`; refuses a name taken in the directory                                      |
+| `sql-files.choose`         | `title`                             | the `.sql` paths chosen, several at once, or none                                  |
+| `sql-files.open`           | `path`                              | `{ path, sql, lineEnding, modifiedAt, attachment }`; marks it recent               |
+| `sql-files.read`           | `path`                              | the same, leaving the recent files alone                                           |
+| `sql-files.write`          | `path`, `sql`, `lineEnding`         | `{ modifiedAt }`; written atomically, marks it recent                              |
+| `sql-files.rename`         | `path`, `name`                      | `{ path }`; renamed in its folder                                                  |
+| `sql-files.stat`           | `paths`                             | each file's modification time, or `null` when it is gone                           |
+| `sql-files.attach`         | `path`, `datasourceId`, `namespace` | `null`; remembers the file's data source and namespace                             |
+| `sql-files.recent`         | none                                | the recent files, most recent first                                                |
+| `history.record`           | a `HistoryEntry`                    | `null`                                                                             |
+| `history.search`           | `datasourceId`, `query`             | `HistoryStatement[]`, newest first                                                 |
+| `history.clear`            | `datasourceId`                      | `null`                                                                             |
+| `window.answer-close`      | `proceed`                           | `null`; closes the window, or finishes the quit (decision 024)                     |
+| `engine.connect`           | `datasourceId`, typed `secrets?`    | `connected`, `needsSecrets { keys }` or `failed`                                   |
+| `engine.disconnect`        | `datasourceId`                      | `null` once the engine has exited                                                  |
+| `dialog.choose-file`       | `title`                             | a path, or `null`                                                                  |
+| `settings.read`            | none                                | `{ settings, themes, warning }`; see Settings and appearance                       |
+| `settings.write`           | the whole settings document         | `null`; saved, then broadcast as `settings.changed`                                |
+| `themes.reload`            | none                                | `null`; rereads `<userData>/themes/`, then broadcasts                              |
+| `themes.open-folder`       | none                                | `null`; creates the folder if missing and opens it                                 |
+| `import.scan`              | none                                | `ImportSource[]`: per app, found, count, where it looked, password store           |
+| `import.preview`           | `{ source }` or a file + phrase     | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`                |
+| `import.run`               | `previewId`, `keys`, options        | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`             |
+| `import.cancel`            | none                                | `null`; the run stops before its next item                                         |
 
 Console ids and names must match `CONSOLE_NAME_PATTERN = /^[\w.-]{1,64}$/` and not be dots alone,
 so no request leaves `<userData>/consoles/`. A listed datasource carries `storedSecrets` (the keys
@@ -1532,8 +1603,9 @@ main can use without asking), never values.
 `secrets` in a save or test maps each secret key to `keep`, `set { value }` or `clear`. Main
 broadcasts `datasources.changed` with the new list after every save or delete, and
 `engine.exited { datasourceId, code, clean }` when an engine ends, and sends
-`window.close-requested` when the window is asked to close, and `ssh.host-key-prompt { requestId,
-offer }` to the focused window when an engine meets an unknown host key. On `connected` the port arrives
+`window.close-requested` when the window is asked to close, `ssh.host-key-prompt { requestId,
+offer }` to the focused window when an engine meets an unknown host key, and `sql-files.open-recent`
+with the path chosen in File → Recent Files. On `connected` the port arrives
 as `table-craft:engine-port` with the datasource id, relayed by preload as a window message; a
 window holds one port per connected datasource.
 

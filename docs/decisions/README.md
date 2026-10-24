@@ -80,3 +80,5 @@ started, not when it is merged.
 | 069 | [The must-have release amends the v1 scope](069-the-must-have-release-amends-the-v1-scope.md)                                                                          |
 | 070 | [SSH tunnels live in core, behind the manifest's network fields](070-ssh-tunnels-live-in-core-behind-the-manifest-network.md)                                          |
 | 071 | [SSH host keys are trusted on first use, after asking](071-ssh-host-keys-are-trusted-on-first-use-after-asking.md)                                                     |
+| 080 | [File consoles save explicitly, scratch consoles autosave](080-file-consoles-save-explicitly-scratch-consoles-autosave.md)                                             |
+| 081 | [SQL scripts stream through the plugin splitter](081-sql-scripts-stream-through-the-plugin-splitter.md)                                                                |
