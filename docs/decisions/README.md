@@ -82,3 +82,4 @@ started, not when it is merged.
 | 071 | [SSH host keys are trusted on first use, after asking](071-ssh-host-keys-are-trusted-on-first-use-after-asking.md)                                                     |
 | 080 | [File consoles save explicitly, scratch consoles autosave](080-file-consoles-save-explicitly-scratch-consoles-autosave.md)                                             |
 | 081 | [SQL scripts stream through the plugin splitter](081-sql-scripts-stream-through-the-plugin-splitter.md)                                                                |
+| 088 | [Server sessions are a plugin capability](088-server-sessions-are-a-plugin-capability.md)                                                                              |
