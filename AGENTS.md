@@ -90,6 +90,25 @@ release.
 Run all four before considering a change done: `bun run lint`, `bun run format:check`,
 `bun run typecheck`, `bun run test`. Touching a plugin or the contract also means `bun run test:db`.
 
+## Working efficiently
+
+Most of a session's tokens go to finding code, not changing it.
+
+- Map unfamiliar code with one `explore` subagent before reading it, using the brief below; then
+  read the files it names.
+- Read a file whole: source files fit one read (800 code lines, decision 091).
+- Send independent reads and searches in one turn.
+- Find a spot with `grep -n` and context lines, not `sed -n` windows.
+- Do not re-read a file unchanged since you last read it, even after a compression.
+- `bun scripts/agent-cost/report.ts <session id or title>` measures a session's steps and cost.
+
+```
+Map for <plan or task>. For each claim below, return file:line and one line on what is there:
+<claims, one per line>
+Also list the functions, tests and fixtures the change will touch, with file:line.
+Read only; return a list, no advice.
+```
+
 ## Layout
 
 ```
@@ -133,8 +152,13 @@ packages/desktop/          @table-craft/desktop, the Electron app
                            the menu popup with its lone-Alt watcher (`menuPopup.ts`)
   src/preload/             contextBridge; hands the engine port to the renderer and relays
                            menu clicks. `menu.ts` declares the native menu as data
-  src/engine/              the utilityProcess; `protocol.ts` is the only module the
-                           engine and renderer share
+  src/engine/              the utilityProcess (decision 091). `protocol.ts` is the only
+                           module the engine and renderer share, a barrel over
+                           `protocol/<area>.ts`; `engine.ts` parses and dispatches;
+                           `context.ts` (with `transfers.ts`, `objectChanges.ts`) is the
+                           per-engine state, `connection.ts` (with `statements.ts`) the
+                           per-port sessions and runners, `failures.ts` the typed errors
+                           and hints. A method's handler is `routes/<prefix>.ts`
   src/renderer/            React 19, Zustand, Tailwind v4, CodeMirror 6; a pure view.
                            `actions/` is the one command registry and keymap; `shell/`,
                            `panes/`, `palette/` the DataGrip-shaped window, whose title
@@ -155,6 +179,8 @@ plugins/<id>/              built-in plugins (@table-craft/plugin-<id>): postgres
                            ships a `table-craft-plugin.json` beside `src/`; its
                            `introspect.ts` answers `schemaTree`, its `explain.ts` builds
                            the EXPLAIN statement and reads the plan (subpath `./explain`)
+scripts/agent-cost/        `report.ts`: steps, context and cost of an agent session, read
+                           from the OpenCode session store
 test/                      Vitest suites, `givenX_whenY_thenZ`
   db/                      compose.yml, the fixture schema per dialect, contract runs per database
   e2e/                     Playwright `_electron` suites and the shared harness;
@@ -179,8 +205,9 @@ docs/evidence/NNN/         screenshots from each plan's live test; untracked (de
 
 - Three processes (decision 002). Main holds no state and is not in the request path. The
   renderer reaches the engine over a MessagePort, and every capability is a message in
-  `engine/protocol.ts`. ESLint forbids the renderer `@table-craft/core`, any plugin, `node:*`,
-  `electron`, and the Node globals. That fence is the architecture; do not route around it.
+  `engine/protocol.ts` and its `protocol/` modules. ESLint forbids the renderer
+  `@table-craft/core`, any plugin, `node:*`, `electron`, and the Node globals. That fence is the
+  architecture; do not route around it.
 - Built-in plugins load through the same runtime loader as user plugins (decision 005). Never
   import a plugin statically from core or desktop.
 - The UI branches on plugin capabilities, never on plugin ids (decision 007).

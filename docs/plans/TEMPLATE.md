@@ -6,7 +6,8 @@ sections that genuinely do not apply — an empty heading is worse than no headi
 Rules the existing plans follow, and this one should too:
 
 - **Point at code.** Every claim about current behaviour cites `file.ts:line`. A plan that says
-  "the explorer ignores views" without a line number cannot be checked.
+  "the explorer ignores views" without a line number cannot be checked. The cites come from one
+  `explore` subagent's map (the brief in `AGENTS.md`), not from paging through files.
 - **Decide, don't survey.** The Decisions table holds rulings, not options. If a choice is still
   open, the plan is not ready.
 - **Name the consequences.** Anything that changes existing behaviour, weakens a guarantee, changes
