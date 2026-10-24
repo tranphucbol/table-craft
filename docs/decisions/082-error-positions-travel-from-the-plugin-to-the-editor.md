@@ -10,7 +10,7 @@ path from the plugin to the editor.
 - `PluginError` gains an optional `position`: `{ offset }` (UTF-16, from 0) or `{ line, column }`
   (from 1), relative to the SQL the plugin was given. `errorPositionOf` reads it structurally and
   `offsetOfPosition` turns either form into an offset, clamped to the text. `API_VERSION` moves to
-  `0.25.0`.
+  `0.26.0`.
 - Each built-in plugin parses its own driver's error, because only it knows the shape: PostgreSQL
   reads the server's `position` (code points, converted to UTF-16); MySQL and TiDB read the line and
   the `near '…'` fragment of a syntax error; SQLite reads `near "…"`, `no such column` and
@@ -48,5 +48,5 @@ move with edits until their statement changes.
   the message still reaches Output and the toolbar.
 - MySQL reports only the line and a fragment; when the fragment repeats on the line, the mark lands
   on its last match.
-- Plugins built against `0.24` must be rebuilt, as every minor is a break while the contract is
+- Plugins built against `0.25` must be rebuilt, as every minor is a break while the contract is
   `0.x`.
