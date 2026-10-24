@@ -154,6 +154,16 @@ into the URL row, or into Host, and the fields fill themselves; the password goe
 never to `datasources.json`. A SQLite file takes a path or a `sqlite:` URL. **Copy as URL** in a data
 source's context menu copies its URL without the password.
 
+A PostgreSQL or MySQL data source can go through an **SSH tunnel**: tick _Use SSH tunnel_ in the
+SSH/SSL section and give the bastion's host, port and user, then sign in with a password, a private
+key (OpenSSH or PEM, with its passphrase if it has one) or the running SSH agent. The host and port
+above stay the database's address as the bastion sees it. The SSH password and passphrase take save
+modes like the database password, and **Test Connection** reports each hop. The first time a bastion
+is reached, TableCraft shows its key fingerprint and asks before trusting it; trusted keys go to
+`ssh_known_hosts.json` beside your data sources, and those already in `~/.ssh/known_hosts` are
+trusted too. A bastion whose key changed is refused, naming both fingerprints. If the tunnel drops,
+the next statement reopens it.
+
 Sessions stay healthy on their own. Every connection uses TCP keepalive (30 s by default, under
 Advanced). A console idle that long checks its session before the next Run and reconnects if the
 connection dropped, saying so in Output; a statement running when the network goes away fails
@@ -585,10 +595,16 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
       "schemes": ["postgresql", "postgres"],
       "form": "server",
       "parts": { "host": "host", "password": "password" }
-    }
+    },
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" }
   }
 }
 ```
+
+`connection.network` names the fields that hold the server's address (a text host, a number port and
+optionally a number of seconds to wait). A plugin that declares it gets the SSH tunnel: TableCraft
+opens the tunnel and hands the plugin `127.0.0.1` and the forwarded port in those fields, so the
+plugin itself knows nothing about SSH.
 
 A plugin depends on `@table-craft/plugin-api` and should pass its contract suite,
 `runPluginContract` from `@table-craft/plugin-api/testing`, which the built-in plugins run against
@@ -603,18 +619,19 @@ Everything is stored in one profile folder:
 - Windows: `%APPDATA%\table-craft`
 - Linux: `~/.config/table-craft`
 
-| Path                | Holds                                                                     |
-| :------------------ | :------------------------------------------------------------------------ |
-| `datasources.json`  | Data sources and folders, without passwords                               |
-| `secrets.json`      | Passwords saved _Forever_, encrypted with the operating system's keychain |
-| `consoles/`         | One folder per data source with its console files                         |
-| `history.sqlite`    | Query history                                                             |
-| `settings.json`     | [Settings](#settings)                                                     |
-| `logs/`             | The app log, `table-craft.log` and up to four older files of 5 MB each    |
-| `update-state.json` | The version you chose to skip                                             |
-| `update-swap.log`   | The last macOS update's swap, logged and removed at the next launch       |
-| `themes/`           | Your themes                                                               |
-| `plugins/`          | Your plugins                                                              |
+| Path                   | Holds                                                                     |
+| :--------------------- | :------------------------------------------------------------------------ |
+| `datasources.json`     | Data sources and folders, without passwords                               |
+| `secrets.json`         | Passwords saved _Forever_, encrypted with the operating system's keychain |
+| `ssh_known_hosts.json` | The SSH host keys you chose to trust                                      |
+| `consoles/`            | One folder per data source with its console files                         |
+| `history.sqlite`       | Query history                                                             |
+| `settings.json`        | [Settings](#settings)                                                     |
+| `logs/`                | The app log, `table-craft.log` and up to four older files of 5 MB each    |
+| `update-state.json`    | The version you chose to skip                                             |
+| `update-swap.log`      | The last macOS update's swap, logged and removed at the next launch       |
+| `themes/`              | Your themes                                                               |
+| `plugins/`             | Your plugins                                                              |
 
 Passwords are never written to `datasources.json` or to the log, and there is no plaintext fallback:
 where the keychain cannot encrypt, _Forever_ is disabled. Apart from the databases you connect to,
@@ -624,7 +641,7 @@ for Updates…**.
 
 ## Not in v1
 
-- Planned for v1.1: SSH tunnels and saved query files.
+- Planned for v1.1: saved query files.
 - Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, Redis and
   MongoDB plugins, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
   Kubernetes integration.

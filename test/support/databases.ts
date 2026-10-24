@@ -1,4 +1,5 @@
 /** Connection configs for the `test/db/compose.yml` databases, shared by `test:db` and the live test. */
+import { join } from "node:path";
 
 const CREDENTIAL = "table_craft";
 const WRONG_PASSWORD = "not-the-password";
@@ -77,6 +78,26 @@ export function tidbScratchDatabase(suffix: string, length?: number): string {
   if (padded.length > DATABASE_NAME_LIMIT) throw new Error(`TiDB scratch database name too long: ${padded}`);
   return padded;
 }
+
+const DEFAULT_SSH_PORT = 2222;
+const SSH_USER = "tunnel";
+
+/**
+ * The `ssh` bastion in `test/db/compose.yml`; every key under `test/db/ssh/` is test-only. The
+ * bastion reaches the databases by service name, so tunnel targets are the same everywhere.
+ */
+export const SSH_BASTION = {
+  host: hostFromEnv("TABLE_CRAFT_SSH_HOST"),
+  port: portFromEnv("TABLE_CRAFT_SSH_PORT", DEFAULT_SSH_PORT),
+  user: SSH_USER,
+  password: "tunnel",
+  keyPath: join(import.meta.dirname, "..", "db", "ssh", "id_ed25519"),
+  passphrase: "tunnel-key",
+  fingerprint: "SHA256:cCEVNeTkTJOv+K7Nfi/QPhn6BJZ7yH06aEJzWF6EiAg",
+} as const;
+
+export const POSTGRES_BEHIND_BASTION = { host: "postgres", port: 5432 } as const;
+export const MYSQL_BEHIND_BASTION = { host: "mysql", port: 3306 } as const;
 
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };

@@ -1,0 +1,10 @@
+# The committed host key keeps the fingerprint across `docker compose restart ssh`.
+Port 22
+HostKey /etc/ssh/ssh_host_ed25519_key
+AllowUsers tunnel
+PermitRootLogin no
+PasswordAuthentication yes
+PubkeyAuthentication yes
+KbdInteractiveAuthentication no
+AllowTcpForwarding yes
+X11Forwarding no

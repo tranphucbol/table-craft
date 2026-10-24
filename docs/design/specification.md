@@ -39,16 +39,16 @@ Each directory ends as `loaded` or `unavailable` with a reason; nothing a plugin
 
 ### Manifest
 
-| Field          | Type                | Meaning                                                                                 |
-| -------------- | ------------------- | --------------------------------------------------------------------------------------- |
-| `id`           | `^[a-z][a-z0-9-]*$` | Unique across both roots; datasources refer to it                                       |
-| `name`         | string              | Shown before the entry is ever imported                                                 |
-| `version`      | semver              | The plugin's own version                                                                |
-| `apiVersion`   | semver              | The `API_VERSION` it was built against; caret-compatible, so `0.x` needs the same minor |
-| `entry`        | relative path       | The ESM module, inside the directory                                                    |
-| `capabilities` | `Capability[]`      | Must equal the export's                                                                 |
-| `highlight`    | string              | The highlighter the console uses (decision 008)                                         |
-| `connection`   | `{ fields, url? }`  | The connection form, at least one field (decision 019), and its URL (decision 055)      |
+| Field          | Type                         | Meaning                                                                                                              |
+| -------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `id`           | `^[a-z][a-z0-9-]*$`          | Unique across both roots; datasources refer to it                                                                    |
+| `name`         | string                       | Shown before the entry is ever imported                                                                              |
+| `version`      | semver                       | The plugin's own version                                                                                             |
+| `apiVersion`   | semver                       | The `API_VERSION` it was built against; caret-compatible, so `0.x` needs the same minor                              |
+| `entry`        | relative path                | The ESM module, inside the directory                                                                                 |
+| `capabilities` | `Capability[]`               | Must equal the export's                                                                                              |
+| `highlight`    | string                       | The highlighter the console uses (decision 008)                                                                      |
+| `connection`   | `{ fields, url?, network? }` | The connection form, at least one field (decision 019), its URL (decision 055) and its network fields (decision 070) |
 
 No other field is accepted. Main reads manifests without importing plugin code, so the Data Sources
 dialog lists every plugin, an unavailable one with its reason. A connection field is:
@@ -80,6 +80,13 @@ ignored }` or throws `ConnectionUrlError`; `formatConnectionUrl(manifest, config
 secret field or a parameter at its default. A parameter the manifest does not map, or a value
 outside the field's options, lands in `ignored`. A `jdbc:` prefix is dropped, and libpq's `host`,
 `port`, `dbname`, `user` and `password` parameters fill their parts.
+
+`connection.network`, optional, is `{ host, port, connectTimeout? }`: the keys of a `text` field
+holding the server's host, a `number` field holding its port and a `number` field of seconds to
+wait for a connection. The schema refuses a key the form does not declare or a field of another
+kind. A plugin that declares it offers the SSH tunnel (decision 070): core opens the tunnel and
+passes `connect` a config whose host is `127.0.0.1` and whose port is the forwarded one. Without
+it the Data Sources dialog shows no SSH section.
 
 ### Capabilities
 
@@ -371,16 +378,23 @@ constants both sides need are restated there and pinned by `test/desktop/protoco
 
 ### Main to engine (parent port)
 
-| Message           | Payload                                                                                                       | When                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `engine.boot`     | `mode` (`serve` or `probe`), `datasource { id, pluginId, config, readOnly, keepAliveSeconds }`, `pluginRoots` | Once, right after fork                   |
-| `engine.port`     | transfers one `MessagePortMain`                                                                               | Each time a window connects (serve only) |
-| `engine.shutdown` | none                                                                                                          | Disconnect or delete (decision 021)      |
+| Message                  | Payload                                                                                                             | When                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `engine.boot`            | `mode` (`serve` or `probe`), `datasource { id, pluginId, config, readOnly, keepAliveSeconds, ssh? }`, `pluginRoots` | Once, right after fork                   |
+| `engine.port`            | transfers one `MessagePortMain`                                                                                     | Each time a window connects (serve only) |
+| `engine.host-key-answer` | `requestId`, `verdict` (`trusted`, `rejected`, or `changed` with `knownFingerprint` and `file`)                     | The answer to an `engine.host-key`       |
+| `engine.shutdown`        | none                                                                                                                | Disconnect or delete (decision 021)      |
 
 `config` carries the datasource's secrets, decrypted by main for this engine alone (decision 020).
+`ssh`, present only when the tunnel is on, is `{ host, port, user, auth, keyPath?, password?,
+passphrase? }` with its secrets decrypted the same way. Before signing in to a bastion either
+engine posts `engine.host-key { requestId, offer { host, port, algorithm, fingerprint, key } }` and
+waits for the answer (decision 071).
 A `probe` engine connects once, answers `engine.probed { result }` with
-`{ ok: true, pluginName, serverVersion, elapsedMs }` or `{ ok: false, error }`, and exits; main
-kills it after `PROBE_TIMEOUT_MS = 15_000` and answers `timedOut`. A `serve` engine lives while any
+`{ ok: true, pluginName, serverVersion, elapsedMs, ssh? }` or `{ ok: false, error, ssh? }`, where
+`ssh { host, user, elapsedMs }` is the SSH hop when it was reached, and exits; main
+kills it after `PROBE_TIMEOUT_MS = 15_000`, a clock that stops while a host key is being asked
+about, and answers `timedOut`. A `serve` engine lives while any
 port to it is open and exits when the last one closes; on `engine.shutdown` it closes its sessions
 and exits, and main kills it after `SHUTDOWN_GRACE_MS = 3_000`. Main never sees a request.
 
@@ -500,25 +514,30 @@ Transfer stall timeout ends one (decisions 040, 046).
 `{ id, type: "engine.error", error: { code, message, hint } }`. `id` is `null` only when the request
 was unreadable. `hint` says what to do next.
 
-| Code                  | Raised when                                                             |
-| --------------------- | ----------------------------------------------------------------------- |
-| `unknownPlugin`       | No plugin has the datasource's `pluginId`                               |
-| `pluginUnavailable`   | The plugin exists but failed to load; the message carries the reason    |
-| `invalidConfig`       | The datasource config fails the plugin's `connectionSchema`             |
-| `unknownSession`      | `sessionId` is not open on this port                                    |
-| `unknownHandle`       | The handle was released, or belongs to another port                     |
-| `connectionFailed`    | The plugin could not connect; the message is the driver's               |
-| `statementFailed`     | The database rejected the statement; the message is the driver's        |
-| `cancelled`           | `statement.cancel` stopped the statement                                |
-| `introspectionFailed` | The database refused to describe a namespace; the hint says Synchronize |
-| `definitionNotFound`  | `catalog.definition` named a relation the database no longer has        |
-| `explainUnsupported`  | `statement.explain` got a statement the plugin cannot explain; why      |
-| `timedOut`            | Test Connection got no answer within `PROBE_TIMEOUT_MS`                 |
-| `statementTimedOut`   | A statement ran past its `timeoutSeconds` and was cancelled             |
-| `connectionLost`      | The session was lost with a transaction open, or while a statement ran  |
-| `editRejected`        | Submit rolled back; `statementIndex` names the failing statement        |
-| `invalidRequest`      | The request did not parse, or asks a plugin for a capability it lacks   |
-| `internal`            | Anything else; a bug                                                    |
+| Code                  | Raised when                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| `unknownPlugin`       | No plugin has the datasource's `pluginId`                                |
+| `pluginUnavailable`   | The plugin exists but failed to load; the message carries the reason     |
+| `invalidConfig`       | The datasource config fails the plugin's `connectionSchema`              |
+| `unknownSession`      | `sessionId` is not open on this port                                     |
+| `unknownHandle`       | The handle was released, or belongs to another port                      |
+| `connectionFailed`    | The plugin could not connect; the message is the driver's                |
+| `statementFailed`     | The database rejected the statement; the message is the driver's         |
+| `cancelled`           | `statement.cancel` stopped the statement                                 |
+| `introspectionFailed` | The database refused to describe a namespace; the hint says Synchronize  |
+| `definitionNotFound`  | `catalog.definition` named a relation the database no longer has         |
+| `explainUnsupported`  | `statement.explain` got a statement the plugin cannot explain; why       |
+| `timedOut`            | Test Connection got no answer within `PROBE_TIMEOUT_MS`                  |
+| `statementTimedOut`   | A statement ran past its `timeoutSeconds` and was cancelled              |
+| `connectionLost`      | The session was lost with a transaction open, or while a statement ran   |
+| `editRejected`        | Submit rolled back; `statementIndex` names the failing statement         |
+| `invalidRequest`      | The request did not parse, or asks a plugin for a capability it lacks    |
+| `sshAuthFailed`       | The bastion refused the SSH user, password, key or agent                 |
+| `sshHostUnreachable`  | The bastion did not answer, or the SSH handshake failed                  |
+| `sshHostKeyChanged`   | The bastion's key differs from the recorded one; names both and the file |
+| `sshHostKeyUnknown`   | The user did not trust the bastion's key, or no window could ask         |
+| `sshTunnelLost`       | The SSH connection under the session dropped                             |
+| `internal`            | Anything else; a bug                                                     |
 
 ## Shell and actions
 
@@ -1425,6 +1444,40 @@ menu and the palette writes the saved datasource's URL, never a secret.
 `<userData>/secrets.json` is `{ "version": 1, "secrets": { "<datasource id>": { "<field key>":
 "<base64 safeStorage ciphertext>" } } }`, holding Forever secrets only.
 
+### SSH tunnel
+
+A datasource whose plugin declares `connection.network` may carry, beside `config` (decision 070):
+
+```json
+"ssh": { "enabled": true, "host": "bastion.example.com", "port": 22, "user": "deploy", "auth": "key", "keyPath": "~/.ssh/id_ed25519" }
+```
+
+`auth` is `password`, `key` (an OpenSSH or PEM private key; a leading `~` is the home folder) or
+`agent` (`SSH_AUTH_SOCK`, Pageant on Windows). The SSH password and the key passphrase are secrets
+under `ssh.password` and `ssh.passphrase`, with save modes like any other. Connect asks for
+`ssh.password` with password auth and for `ssh.passphrase` only when the key file is encrypted. A
+save without `ssh` clears both, and `ssh` is dropped for a plugin without `network`. `enabled:
+false` keeps the settings but connects directly.
+
+The Data Sources dialog shows an **SSH/SSL** section between General and Advanced for such a
+plugin: _Use SSH tunnel_, SSH host and port (22 when blank), SSH user, Authentication (Password,
+Key pair, SSH agent), the private key with Browse…, and the password or passphrase with its save
+mode. The fields are disabled while the box is clear; when it is ticked, host, user and, for key
+auth, the key file are required. Test Connection shows "SSH: connected to `<host>` as `<user>`"
+above the database line when the bastion was reached.
+
+The engine host's connector opens one SSH connection per datasource on the first session and shares
+it, counting sessions; the last to close takes it down. The host and port in `config` are where the
+bastion forwards to. If the SSH connection drops, every session call fails `sshTunnelLost`; a
+console abandons the session and its next statement reconnects through a new tunnel. A forward the
+bastion refuses is named in the database hop's `connectionFailed`.
+
+Host keys follow decision 071: `<userData>/ssh_known_hosts.json`
+(`{ "version": 1, "hosts": [{ "host", "algorithm", "key", "addedAt" }] }`, host `name` on port 22,
+`[name]:port` otherwise) and `~/.ssh/known_hosts`, read only. An unknown key opens "Unknown SSH host
+key" (server, key type, `SHA256:` fingerprint; Cancel by default, Trust); a changed key refuses with
+both fingerprints and the file.
+
 ### Save modes
 
 | Mode          | Kept                                    | Connect                                       |
@@ -1443,34 +1496,35 @@ mode moves the stored value. Deleting a datasource clears its secrets.
 Each invoke answers `{ ok: true, value }` or `{ ok: false, error: { message, hint } }`, and each
 request is parsed with Zod in main.
 
-| Channel (`table-craft:` …) | Request                          | Value                                                                     |
-| -------------------------- | -------------------------------- | ------------------------------------------------------------------------- |
-| `datasources.list`         | none                             | `{ datasources, warning, encryption: { available, reason } }`             |
-| `datasources.save`         | `{ datasource, secrets }`        | the saved datasource                                                      |
-| `datasources.delete`       | `id`                             | `null`; stops its engine, clears its secrets, consoles and history        |
-| `datasources.test`         | `{ datasource, secrets }`        | the probe result; stored secrets are merged in main                       |
-| `datasources.parse-url`    | `pluginId`, `url`                | `{ values, secrets, ignored }`; nothing is saved                          |
-| `datasources.url`          | `id`                             | the saved datasource's URL, without secrets                               |
-| `plugins.list`             | none                             | `{ id, name, unavailableReason, capabilities, fields, url, highlight }[]` |
-| `consoles.list`            | `datasourceId`                   | the saved console names, sorted                                           |
-| `consoles.read`            | `datasourceId`, `name`           | the text, or `null` when there is no file                                 |
-| `consoles.write`           | `datasourceId`, `name`, `text`   | `null`; written atomically                                                |
-| `consoles.delete`          | `datasourceId`, `name`           | `null`; deleting a missing file is not an error                           |
-| `history.record`           | a `HistoryEntry`                 | `null`                                                                    |
-| `history.search`           | `datasourceId`, `query`          | `HistoryStatement[]`, newest first                                        |
-| `history.clear`            | `datasourceId`                   | `null`                                                                    |
-| `window.answer-close`      | `proceed`                        | `null`; closes the window, or finishes the quit (decision 024)            |
-| `engine.connect`           | `datasourceId`, typed `secrets?` | `connected`, `needsSecrets { keys }` or `failed`                          |
-| `engine.disconnect`        | `datasourceId`                   | `null` once the engine has exited                                         |
-| `dialog.choose-file`       | `title`                          | a path, or `null`                                                         |
-| `settings.read`            | none                             | `{ settings, themes, warning }`; see Settings and appearance              |
-| `settings.write`           | the whole settings document      | `null`; saved, then broadcast as `settings.changed`                       |
-| `themes.reload`            | none                             | `null`; rereads `<userData>/themes/`, then broadcasts                     |
-| `themes.open-folder`       | none                             | `null`; creates the folder if missing and opens it                        |
-| `import.scan`              | none                             | `ImportSource[]`: per app, found, count, where it looked, password store  |
-| `import.preview`           | `{ source }` or a file + phrase  | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`       |
-| `import.run`               | `previewId`, `keys`, options     | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`    |
-| `import.cancel`            | none                             | `null`; the run stops before its next item                                |
+| Channel (`table-craft:` …) | Request                          | Value                                                                              |
+| -------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
+| `datasources.list`         | none                             | `{ datasources, warning, encryption: { available, reason } }`                      |
+| `datasources.save`         | `{ datasource, secrets }`        | the saved datasource                                                               |
+| `datasources.delete`       | `id`                             | `null`; stops its engine, clears its secrets, consoles and history                 |
+| `datasources.test`         | `{ datasource, secrets }`        | the probe result; stored secrets are merged in main                                |
+| `datasources.parse-url`    | `pluginId`, `url`                | `{ values, secrets, ignored }`; nothing is saved                                   |
+| `datasources.url`          | `id`                             | the saved datasource's URL, without secrets                                        |
+| `plugins.list`             | none                             | `{ id, name, unavailableReason, capabilities, fields, url, network, highlight }[]` |
+| `ssh.answer-host-key`      | `requestId`, `trust`             | `null`; answers an `ssh.host-key-prompt` (decision 071)                            |
+| `consoles.list`            | `datasourceId`                   | the saved console names, sorted                                                    |
+| `consoles.read`            | `datasourceId`, `name`           | the text, or `null` when there is no file                                          |
+| `consoles.write`           | `datasourceId`, `name`, `text`   | `null`; written atomically                                                         |
+| `consoles.delete`          | `datasourceId`, `name`           | `null`; deleting a missing file is not an error                                    |
+| `history.record`           | a `HistoryEntry`                 | `null`                                                                             |
+| `history.search`           | `datasourceId`, `query`          | `HistoryStatement[]`, newest first                                                 |
+| `history.clear`            | `datasourceId`                   | `null`                                                                             |
+| `window.answer-close`      | `proceed`                        | `null`; closes the window, or finishes the quit (decision 024)                     |
+| `engine.connect`           | `datasourceId`, typed `secrets?` | `connected`, `needsSecrets { keys }` or `failed`                                   |
+| `engine.disconnect`        | `datasourceId`                   | `null` once the engine has exited                                                  |
+| `dialog.choose-file`       | `title`                          | a path, or `null`                                                                  |
+| `settings.read`            | none                             | `{ settings, themes, warning }`; see Settings and appearance                       |
+| `settings.write`           | the whole settings document      | `null`; saved, then broadcast as `settings.changed`                                |
+| `themes.reload`            | none                             | `null`; rereads `<userData>/themes/`, then broadcasts                              |
+| `themes.open-folder`       | none                             | `null`; creates the folder if missing and opens it                                 |
+| `import.scan`              | none                             | `ImportSource[]`: per app, found, count, where it looked, password store           |
+| `import.preview`           | `{ source }` or a file + phrase  | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`                |
+| `import.run`               | `previewId`, `keys`, options     | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`             |
+| `import.cancel`            | none                             | `null`; the run stops before its next item                                         |
 
 Console ids and names must match `CONSOLE_NAME_PATTERN = /^[\w.-]{1,64}$/` and not be dots alone,
 so no request leaves `<userData>/consoles/`. A listed datasource carries `storedSecrets` (the keys
@@ -1478,7 +1532,8 @@ main can use without asking), never values.
 `secrets` in a save or test maps each secret key to `keep`, `set { value }` or `clear`. Main
 broadcasts `datasources.changed` with the new list after every save or delete, and
 `engine.exited { datasourceId, code, clean }` when an engine ends, and sends
-`window.close-requested` when the window is asked to close. On `connected` the port arrives
+`window.close-requested` when the window is asked to close, and `ssh.host-key-prompt { requestId,
+offer }` to the focused window when an engine meets an unknown host key. On `connected` the port arrives
 as `table-craft:engine-port` with the datasource id, relayed by preload as a window message; a
 window holds one port per connected datasource.
 

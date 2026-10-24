@@ -24,8 +24,10 @@ Run from the repository root.
   `tc_run_*` database (`test/support/tidbScratch.ts`, read through `TIDB_DATABASE` and
   `tidbScratchDatabase` in `test/support/databases.ts`) and drops it after: never write to,
   create users in, or kill sessions outside what the run made, since the remote server is shared.
+  The SSH tunnel suite (`test/db/tunnel.test.ts`) runs through the `ssh` bastion (port 2222, user
+  `tunnel`, test-only keys in `test/db/ssh/`).
   A second checkout (a parallel worktree) sets `COMPOSE_PROJECT_NAME`, `TABLE_CRAFT_PG_PORT`,
-  `TABLE_CRAFT_MYSQL_PORT` and `TABLE_CRAFT_TIDB_PORT` for every `test:db`,
+  `TABLE_CRAFT_MYSQL_PORT`, `TABLE_CRAFT_TIDB_PORT` and `TABLE_CRAFT_SSH_PORT` for every `test:db`,
   `test:smoke:db` and `docker compose` command so it gets its own containers
 - `bun run test:smoke` - build the app and drive it under Playwright; needs a display
 - `bun run test:smoke:db` - the same against PostgreSQL, MySQL and SQLite; set

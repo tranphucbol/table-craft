@@ -78,3 +78,5 @@ started, not when it is merged.
 | 067 | [Importing another app's connections and secrets](067-importing-another-apps-connections-and-secrets.md)                                                               |
 | 068 | [A datasource remembers where it came from](068-a-datasource-remembers-where-it-came-from.md)                                                                          |
 | 069 | [The must-have release amends the v1 scope](069-the-must-have-release-amends-the-v1-scope.md)                                                                          |
+| 070 | [SSH tunnels live in core, behind the manifest's network fields](070-ssh-tunnels-live-in-core-behind-the-manifest-network.md)                                          |
+| 071 | [SSH host keys are trusted on first use, after asking](071-ssh-host-keys-are-trusted-on-first-use-after-asking.md)                                                     |
