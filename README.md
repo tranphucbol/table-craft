@@ -259,8 +259,18 @@ yours. Files are UTF-8; Windows line endings are kept as they were.
 
 **Run SQL Script…**, on a data source or schema in the Database pane, runs one or more `.sql` files
 without opening them: the files are streamed, so a multi-gigabyte dump uses flat memory, and the
-run shows its statements and bytes under **SQL Scripts** in Services, where you can cancel it. It
-stops at the first failing statement, and **Go to statement** opens the file at that line.
+run shows its statements and bytes under **SQL Scripts** in Services, where you can cancel it. A
+failing statement is handled as in a console run (below): the line asks **Skip**, **Skip All**,
+**Stop** or **Retry**, a run that went on ends `done, 2 failed`, and **Go to statement** opens the
+file where the database pointed, every failure of that file underlined.
+
+When a statement fails, the console underlines where the database says it went wrong, with a mark in
+the gutter and the message on hover; **Go to Error** beside the error jumps there, and `F2` / `⇧F2`
+step through the marks. Editing the statement drops its mark. When one of several statements fails,
+the run asks above the results: **Skip** it, **Skip All** failures from now on, **Stop**, or
+**Retry**. Settings → Editor → Running → _On error_ can stop or continue without asking; a run that
+went on ends with `12 run, 2 failed.` in Output. In an open transaction PostgreSQL refuses every
+later statement until it is rolled back, and Output says so.
 
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
 back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
@@ -435,6 +445,8 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Run                       | `⌘↩`    | `Ctrl+Enter`           |
 | Run All                   | `⇧⌘↩`   | `Ctrl+Shift+Enter`     |
 | Explain Plan              | `⇧⌘E`   | `Ctrl+Shift+E`         |
+| Next Error                | `F2`    | `F2`                   |
+| Previous Error            | `⇧F2`   | `Shift+F2`             |
 | Commit                    | `⌥⇧⌘↩`  | `Ctrl+Alt+Shift+Enter` |
 | Reformat Code             | `⌥⌘L`   | `Ctrl+Alt+L`           |
 | New Console               | `⇧⌘L`   | `Ctrl+Shift+L`         |
@@ -479,29 +491,30 @@ Settings live in `settings.json` in your [profile folder](#where-your-data-lives
 dialog writes it; you can also edit it by hand, and a field that is missing or out of range falls
 back to its default without affecting the others.
 
-| Field                                  | Values                                                                                      | Default       |
-| :------------------------------------- | :------------------------------------------------------------------------------------------ | :------------ |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>` | `system`      |
-| `appearance.density`                   | `comfortable`, `compact`                                                                    | `comfortable` |
-| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                 | `false`       |
-| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                           | `null`, 13    |
-| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                           | `null`, 13    |
-| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                           | `null`, 12    |
-| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                       | `aligned`     |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                              | `upper`       |
-| `editor.format.indentWidth`            | 1–8 spaces                                                                                  | 2             |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                             | 1             |
-| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                              | `true`        |
-| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                          | `true`        |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                          | 0             |
-| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                          | 5             |
-| `data.nullText`                        | 1–16 characters                                                                             | `<null>`      |
-| `data.groupDigits`                     | `true`, `false`                                                                             | `false`       |
-| `data.pageRows`                        | 10–10,000                                                                                   | 500           |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                        | 100,000       |
-| `log.level`                            | `info`, `debug`                                                                             | `info`        |
-| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                           | 120           |
-| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                              | `true`        |
+| Field                                  | Values                                                                                        | Default       |
+| :------------------------------------- | :-------------------------------------------------------------------------------------------- | :------------ |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`   | `system`      |
+| `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
+| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                   | `false`       |
+| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                             | `null`, 13    |
+| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                             | `null`, 13    |
+| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                             | `null`, 12    |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                         | `aligned`     |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                | `upper`       |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                    | 2             |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                               | 1             |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                | `true`        |
+| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                            | `true`        |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                            | 0             |
+| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                            | 5             |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure | `ask`         |
+| `data.nullText`                        | 1–16 characters                                                                               | `<null>`      |
+| `data.groupDigits`                     | `true`, `false`                                                                               | `false`       |
+| `data.pageRows`                        | 10–10,000                                                                                     | 500           |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                          | 100,000       |
+| `log.level`                            | `info`, `debug`                                                                               | `info`        |
+| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                             | 120           |
+| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                | `true`        |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then

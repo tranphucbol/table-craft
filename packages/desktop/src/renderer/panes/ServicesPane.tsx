@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
-import { located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
+import { hasFailedStatement, located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { SESSIONS_ACTION_IDS, showableInSessions } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import type { ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
@@ -51,12 +51,12 @@ import {
   importProgressText,
 } from "@table-craft/desktop/renderer/model/importText.js";
 import {
-  SCRIPT_STATE_TEXT,
+  scriptFailure,
   scriptName,
-  scriptPercent,
   scriptProgressText,
+  scriptStateText,
 } from "@table-craft/desktop/renderer/model/scriptText.js";
-import { useScripts, type ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
+import { isScriptAsking, useScripts, type ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -135,11 +135,22 @@ function importActionsOf(entry: ImportEntry): readonly string[] {
   ];
 }
 
-/** What a script line offers: Cancel while it runs; the failing statement and Remove after. */
+const SCRIPT_ANSWERS = [
+  SCRIPT_ACTION_IDS.skip,
+  SCRIPT_ACTION_IDS.skipAll,
+  SCRIPT_ACTION_IDS.stop,
+  SCRIPT_ACTION_IDS.retry,
+];
+
+/**
+ * What a script line offers: Cancel while it runs, the answers while it asks about a failed
+ * statement (decision 083); the failing statement and Remove after.
+ */
 function scriptActionsOf(entry: ScriptEntry): readonly string[] {
-  const { task } = entry;
-  if (task.state === "running") return [SCRIPT_ACTION_IDS.cancel];
-  return [...(task.error?.line == null ? [] : [SCRIPT_ACTION_IDS.goTo]), SCRIPT_ACTION_IDS.dismiss];
+  const goTo = hasFailedStatement(entry) ? [SCRIPT_ACTION_IDS.goTo] : [];
+  if (isScriptAsking(entry)) return [...SCRIPT_ANSWERS, ...goTo];
+  if (entry.task.state === "running") return [SCRIPT_ACTION_IDS.cancel];
+  return [...goTo, SCRIPT_ACTION_IDS.dismiss];
 }
 
 function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): readonly MenuEntry[] {
@@ -400,37 +411,38 @@ function ScriptsLine({ count }: { readonly count: number }) {
 const SCRIPT_BUTTON_LABEL: Readonly<Record<string, string>> = {
   [SCRIPT_ACTION_IDS.cancel]: "Cancel",
   [SCRIPT_ACTION_IDS.goTo]: "Go to statement",
+  [SCRIPT_ACTION_IDS.skip]: "Skip",
+  [SCRIPT_ACTION_IDS.skipAll]: "Skip All",
+  [SCRIPT_ACTION_IDS.stop]: "Stop",
+  [SCRIPT_ACTION_IDS.retry]: "Retry",
 };
 
 /**
- * One Run SQL Script task: its file, state and progress; where it stopped, with the message and
- * hint in the tooltip. Cancel and Go to statement are buttons too.
+ * One Run SQL Script task: its file, state and progress; the failure it asks about, stopped at or
+ * skipped last, with the message and hint in the tooltip. Its actions are buttons too.
  */
 function ScriptLine({ entry }: { readonly entry: ScriptEntry }) {
   const { task } = entry;
-  const percent = scriptPercent(task);
+  const failure = scriptFailure(task);
   const detail = [
     ...task.files,
-    ...(task.error === null
-      ? []
-      : [task.error.line === null ? "" : located(task.error), task.error.message, task.error.hint]),
+    ...(failure === null ? [] : [failure.line === null ? "" : located(failure), failure.message, failure.hint]),
   ]
     .filter((line) => line !== "")
     .join("\n");
+  const failing = task.state === "failed" || task.question !== null || task.failed > 0;
   return (
     <>
       <OutcomeGlyph outcome={EXPORT_OUTCOME[task.state]} />
       <span className="min-w-0 truncate" title={detail}>
         {scriptName(task)}
       </span>
-      <span className={cn("shrink-0", task.state === "failed" ? "text-danger" : "text-ink-muted")}>
-        {task.state === "running" && percent !== null
-          ? `${SCRIPT_STATE_TEXT.running} ${String(percent)}%`
-          : SCRIPT_STATE_TEXT[task.state]}
+      <span data-testid="script-state" className={cn("shrink-0", failing ? "text-danger" : "text-ink-muted")}>
+        {scriptStateText(task)}
       </span>
-      {task.error?.line == null ? null : (
+      {failure?.line == null ? null : (
         <span className="min-w-0 shrink-first truncate text-danger" data-testid="script-error">
-          {`line ${String(task.error.line)}: ${task.error.message}`}
+          {`line ${String(failure.line)}: ${failure.message}`}
         </span>
       )}
       <span className="ml-auto flex shrink-0 items-center gap-cell text-ink-muted tabular-nums">
@@ -451,7 +463,7 @@ function rowLabel(row: ServiceRow): string {
   if (row.kind === "scripts") return `SQL Scripts, ${String(row.count)}`;
   if (row.kind === "script") {
     const { task } = row.node;
-    return [scriptName(task), SCRIPT_STATE_TEXT[task.state], scriptProgressText(task)].join(", ");
+    return [scriptName(task), scriptStateText(task), scriptProgressText(task)].join(", ");
   }
   if (row.kind === "imports") return `Imports, ${String(row.count)}`;
   if (row.kind === "import") {

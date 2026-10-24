@@ -8,14 +8,25 @@ import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { capabilitiesOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
-import { isScriptRunning, useScripts, type ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
-import type { ScriptError } from "@table-craft/desktop/engine/protocol.js";
+import {
+  isScriptAsking,
+  isScriptRunning,
+  useScripts,
+  type ScriptEntry,
+} from "@table-craft/desktop/renderer/state/scripts.js";
+import { fileMarks, offsetOf } from "@table-craft/desktop/renderer/model/errorLocation.js";
+import { scriptFailure, scriptFailures } from "@table-craft/desktop/renderer/model/scriptText.js";
+import type { ErrorAnswer, ScriptError } from "@table-craft/desktop/engine/protocol.js";
 
 export const SCRIPT_ACTION_IDS = {
   run: "database.runSqlScript",
   cancel: "script.cancel",
   goTo: "script.goTo",
   dismiss: "script.dismiss",
+  skip: "script.skip",
+  skipAll: "script.skipAll",
+  stop: "script.stop",
+  retry: "script.retry",
 } as const;
 
 const CHOOSE_TITLE = "Run SQL Script";
@@ -67,28 +78,34 @@ export function located(error: ScriptError): string {
   return error.line === null ? name : `${name}, line ${String(error.line)}, column ${String(error.column ?? 1)}`;
 }
 
-/** The offset of `line` and `column` (both from 1) in `text`, clamped to the text. */
-export function offsetOf(text: string, line: number, column: number): number {
-  let start = 0;
-  for (let current = 1; current < line; current += 1) {
-    const end = text.indexOf(NEWLINE, start);
-    if (end < 0) return text.length;
-    start = end + 1;
-  }
-  const end = text.indexOf(NEWLINE, start);
-  return Math.min(start + column - 1, end < 0 ? text.length : end);
-}
-
+/**
+ * Opens the failed statement's file and lands on where the database pointed, else on the
+ * statement's line; every failure of that file is marked in its console (decision 083).
+ */
 async function goToStatement(entry: ScriptEntry): Promise<void> {
-  const { error } = entry.task;
-  if (error?.file === null || error?.file === undefined) return;
-  await fileConsoles.open([error.file], entry.datasourceId);
-  const id = fileConsoles.consoleOf(error.file);
+  const failure = scriptFailure(entry.task);
+  const file = failure?.file;
+  if (failure === null || file === null || file === undefined) return;
+  await fileConsoles.open([file], entry.datasourceId);
+  const id = fileConsoles.consoleOf(file);
   const session = id === null ? undefined : useConsoles.getState().consoles[id];
-  if (id === null || session === undefined || error.line === null) return;
-  const from = offsetOf(session.sql, error.line, error.column ?? 1);
+  if (id === null || session === undefined || failure.line === null) return;
+  const consoles = useConsoles.getState();
+  consoles.markErrors(
+    id,
+    fileMarks(
+      session.sql,
+      scriptFailures(entry.task).filter((each) => each.file === file),
+    ),
+  );
+  const [mark] = fileMarks(session.sql, [failure]);
+  if (mark !== undefined) {
+    consoles.jumpTo(id, mark);
+    return;
+  }
+  const from = offsetOf(session.sql, failure.line, failure.column ?? 1);
   const lineEnd = session.sql.indexOf(NEWLINE, from);
-  useConsoles.getState().jumpTo(id, { from, to: lineEnd < 0 ? session.sql.length : lineEnd });
+  consoles.jumpTo(id, { from, to: lineEnd < 0 ? session.sql.length : lineEnd });
 }
 
 /** A Services line names its task; from the palette the newest one the action fits. */
@@ -108,8 +125,25 @@ function entryFor(
   return [...entries].reverse().find(fits) ?? null;
 }
 
-const stoppedAtStatement = (entry: ScriptEntry) => entry.task.state === "failed" && entry.task.error?.file != null;
+/** A failure Go to statement can land on: one with a file and a line. */
+export function hasFailedStatement(entry: ScriptEntry): boolean {
+  const failure = scriptFailure(entry.task);
+  return failure?.file != null && failure.line !== null;
+}
 const dismissable = (entry: ScriptEntry) => !isScriptRunning(entry);
+
+function answerAction(id: string, title: string, value: ErrorAnswer): AnyAction {
+  return defineAction<Partial<ScriptTaskArgs> | undefined>({
+    id,
+    title,
+    category: "Tool Windows",
+    when: () => entryFor(undefined, isScriptAsking) !== null,
+    run: async (_context, args) => {
+      const entry = entryFor(args, isScriptAsking);
+      if (entry !== null) await useScripts.getState().answer(entry.task.taskId, value);
+    },
+  });
+}
 
 export const SCRIPT_ACTIONS: readonly AnyAction[] = [
   defineAction({
@@ -150,9 +184,9 @@ export const SCRIPT_ACTIONS: readonly AnyAction[] = [
     title: "Go to Failed Script Statement",
     category: "Tool Windows",
     icon: "search",
-    when: () => entryFor(undefined, stoppedAtStatement) !== null,
+    when: () => entryFor(undefined, hasFailedStatement) !== null,
     run: async (_context, args) => {
-      const entry = entryFor(args, stoppedAtStatement);
+      const entry = entryFor(args, hasFailedStatement);
       if (entry !== null) await goToStatement(entry);
     },
   }),
@@ -167,4 +201,8 @@ export const SCRIPT_ACTIONS: readonly AnyAction[] = [
       if (entry !== null) useScripts.getState().dismiss(entry.task.taskId);
     },
   }),
+  answerAction(SCRIPT_ACTION_IDS.skip, "Skip Failed Script Statement", "skip"),
+  answerAction(SCRIPT_ACTION_IDS.skipAll, "Skip All Failed Script Statements", "skipAll"),
+  answerAction(SCRIPT_ACTION_IDS.stop, "Stop SQL Script at Failed Statement", "stop"),
+  answerAction(SCRIPT_ACTION_IDS.retry, "Retry Failed Script Statement", "retry"),
 ];
