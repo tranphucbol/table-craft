@@ -66,6 +66,8 @@ export interface TabsState extends TabStrip {
   readonly closeOthers: (id: string) => readonly Tab[];
   readonly closeAll: () => readonly Tab[];
   readonly cycle: (delta: number) => void;
+  /** A console renamed or saved under another file name (plan 041). */
+  readonly retitle: (id: string, title: string) => void;
 }
 
 export function createTabsStore() {
@@ -84,6 +86,10 @@ export function createTabsStore() {
       closeOthers: (id) => apply(closedOthers(get(), id)),
       closeAll: () => apply(EMPTY_STRIP),
       cycle: (delta) => void apply(cycled(get(), delta)),
+      retitle: (id, title) => {
+        if (!get().tabs.some((tab) => tab.id === id && tab.title !== title)) return;
+        set({ tabs: get().tabs.map((tab) => (tab.id === id ? { ...tab, title } : tab)) });
+      },
     };
   });
 }

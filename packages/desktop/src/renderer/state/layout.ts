@@ -28,11 +28,15 @@ export interface Layout {
   readonly valuePanel: boolean;
 }
 
-/** A console tab as the layout remembers it; its text lives in its file (decision 16). */
+/**
+ * A console tab as the layout remembers it; its text lives in its file (decision 16). A file
+ * console (plan 041) carries its absolute `path`; its datasource may be empty, detached.
+ */
 export interface OpenConsole {
   readonly datasourceId: string;
   readonly name: string;
   readonly active: boolean;
+  readonly path?: string;
 }
 
 /** A table tab as the layout remembers it; its filter and edits are not kept. */
@@ -85,8 +89,13 @@ const isSize = (value: unknown): value is number =>
 
 function isOpenConsole(value: unknown): value is OpenConsole {
   if (typeof value !== "object" || value === null) return false;
-  const { datasourceId, name, active } = value as Record<string, unknown>;
-  return typeof datasourceId === "string" && typeof name === "string" && typeof active === "boolean";
+  const { datasourceId, name, active, path } = value as Record<string, unknown>;
+  return (
+    typeof datasourceId === "string" &&
+    typeof name === "string" &&
+    typeof active === "boolean" &&
+    (path === undefined || typeof path === "string")
+  );
 }
 
 function isOpenTable(value: unknown): value is OpenTable {

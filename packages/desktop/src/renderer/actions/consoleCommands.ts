@@ -1,17 +1,28 @@
+import type { SqlFileOpened } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import type { ParameterValues } from "@table-craft/desktop/renderer/model/parameters.js";
 import {
   autosave,
   bridgeConsoleFiles,
   closedConsoleNames,
+  ConsoleFileFailure,
   firstFreeName,
+  unwrap,
   type ConsoleFileAccess,
 } from "@table-craft/desktop/renderer/state/consoleFiles.js";
-import { consolesOf, openTransactions, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import {
+  consolesOf,
+  fileSourceOf,
+  openTransactions,
+  SCRATCH,
+  useConsoles,
+} from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { createFileConsoles } from "@table-craft/desktop/renderer/state/fileConsoles.js";
+import { useLayout, type OpenConsole } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
+import { bridgeSqlFiles } from "@table-craft/desktop/renderer/state/sqlFiles.js";
 import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { pendingTables, tablesOf, useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -27,6 +38,16 @@ const files: ConsoleFileAccess = bridgeConsoleFiles();
 function newTab(name: string): Tab {
   return { id: `${CONSOLE_ID_PREFIX}${String(consolesOpened++)}`, kind: "console", title: name };
 }
+
+/** The window's file consoles (plan 041). */
+export const fileConsoles = createFileConsoles({
+  files: bridgeSqlFiles(),
+  consoles: useConsoles,
+  tabs: useTabs,
+  ask: (request) => useModal.getState().ask(request),
+  newTab,
+  datasourceExists: (id) => datasourceById(useDatasources.getState(), id) !== undefined,
+});
 
 /** Whether the datasource's consoles are kept on disk: an ephemeral one is never saved (decision 018). */
 export function persists(datasourceId: string): boolean {
@@ -80,22 +101,55 @@ export async function reopenConsole(datasourceId: string, name: string): Promise
  * its first Run: launching connects nothing (decision 17).
  */
 export async function restoreConsoles(): Promise<void> {
-  const remembered = useLayout.getState().layout.openConsoles.filter((entry) => persists(entry.datasourceId));
-  const texts = await Promise.all(
-    remembered.map((entry) => files.read(entry.datasourceId, entry.name).catch(() => null)),
-  );
+  const remembered = useLayout
+    .getState()
+    .layout.openConsoles.filter((entry) => entry.path !== undefined || persists(entry.datasourceId));
+  const restored = await Promise.all(remembered.map((entry) => restoredText(entry)));
   let active: string | null = null;
+  const missing: string[] = [];
   for (const [index, entry] of remembered.entries()) {
-    const tab = newTab(entry.name);
-    useTabs.getState().open(tab);
-    void useConsoles.getState().open(tab.id, entry.datasourceId, {
-      name: entry.name,
-      sql: texts[index] ?? "",
-      connect: false,
-    });
-    if (entry.active) active = tab.id;
+    const text = restored[index];
+    if (text === undefined) continue;
+    let tabId: string;
+    if (text.kind === "scratch") {
+      const tab = newTab(entry.name);
+      useTabs.getState().open(tab);
+      void useConsoles.getState().open(tab.id, entry.datasourceId, { name: entry.name, sql: text.sql, connect: false });
+      tabId = tab.id;
+    } else if (text.kind === "file") {
+      tabId = fileConsoles.openTab(text.file, entry.datasourceId);
+    } else {
+      missing.push(text.reason);
+      continue;
+    }
+    if (entry.active) active = tabId;
   }
   if (active !== null) useTabs.getState().activate(active);
+  if (missing.length > 0) {
+    void useModal.getState().ask({
+      kind: "notice",
+      title: missing.length === 1 ? "A file did not reopen" : "Some files did not reopen",
+      message: missing.join("\n"),
+      hint: "Its tab was skipped. Open the file with Open File… once it is back.",
+    });
+  }
+}
+
+type RestoredText =
+  | { readonly kind: "scratch"; readonly sql: string }
+  | { readonly kind: "file"; readonly file: SqlFileOpened }
+  | { readonly kind: "missing"; readonly reason: string };
+
+async function restoredText(entry: OpenConsole): Promise<RestoredText> {
+  if (entry.path === undefined) {
+    const sql = await files.read(entry.datasourceId, entry.name).catch(() => null);
+    return { kind: "scratch", sql: sql ?? "" };
+  }
+  try {
+    return { kind: "file", file: await unwrap(bridge().readSqlFile(entry.path)) };
+  } catch (cause) {
+    return { kind: "missing", reason: cause instanceof Error ? cause.message : String(cause) };
+  }
 }
 
 /** Keeps the layout's list of open console tabs in step with the tab strip. */
@@ -105,10 +159,15 @@ export function rememberOpenConsoles(): () => void {
     const current = activeTab(strip)?.id ?? null;
     const { consoles } = useConsoles.getState();
     useLayout.getState().setOpenConsoles(
-      strip.tabs.flatMap((tab) => {
+      strip.tabs.flatMap((tab): OpenConsole[] => {
         const session = consoles[tab.id];
-        if (tab.kind !== "console" || session === undefined || !persists(session.datasourceId)) return [];
-        return [{ datasourceId: session.datasourceId, name: session.name, active: tab.id === current }];
+        if (tab.kind !== "console" || session === undefined) return [];
+        const active = tab.id === current;
+        const source = fileSourceOf(session);
+        if (source !== null)
+          return [{ datasourceId: session.datasourceId, name: session.name, active, path: source.path }];
+        if (!persists(session.datasourceId)) return [];
+        return [{ datasourceId: session.datasourceId, name: session.name, active }];
       }),
     );
   };
@@ -123,16 +182,20 @@ export function rememberOpenConsoles(): () => void {
   };
 }
 
-/** Writes each console as it changes and when it closes, unless its datasource is gone or ephemeral. */
+/**
+ * Writes each scratch console as it changes and when it closes, unless its datasource is gone or
+ * ephemeral; file consoles save only when asked (plan 041 decision 3).
+ */
 export function autosaveConsoles(): () => void {
   return useConsoles.subscribe((state, previous) => {
     for (const [id, session] of Object.entries(state.consoles)) {
       const before = previous.consoles[id];
-      if (before === undefined || before.sql === session.sql || !persists(session.datasourceId)) continue;
+      if (before === undefined || before.sql === session.sql || fileSourceOf(session) !== null) continue;
+      if (!persists(session.datasourceId)) continue;
       autosave.changed(session.datasourceId, session.name, session.sql);
     }
     for (const [id, session] of Object.entries(previous.consoles)) {
-      if (id in state.consoles) continue;
+      if (id in state.consoles || fileSourceOf(session) !== null) continue;
       if (persists(session.datasourceId)) void autosave.closed(session.datasourceId, session.name, session.sql);
       else autosave.discard(session.datasourceId);
     }
@@ -183,6 +246,7 @@ async function settleConsoleEdits(ids: readonly string[], verb: string): Promise
  * tables' pending changes (plan 008) are settled.
  */
 export async function closeTabs(ids: readonly string[], close: () => readonly Tab[]): Promise<void> {
+  if (!(await fileConsoles.settleDirty(ids, "close"))) return;
   if (!(await settlePendingEdits(ids, "close"))) return;
   if (!(await settleConsoleEdits(ids, "close"))) return;
   if (!(await settleTransactions(ids, "close"))) return;
@@ -191,6 +255,61 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
     else if (tab.kind === "table") useTables.getState().close(tab.id);
     else useDdl.getState().close(tab.id);
   }
+}
+
+/** Save: a file console writes its file; a scratch console's pending autosave lands now. */
+export async function saveConsole(id: string): Promise<boolean> {
+  const session = useConsoles.getState().consoles[id];
+  if (session === undefined) return false;
+  if (fileSourceOf(session) !== null) return fileConsoles.save(id);
+  await autosave.flush();
+  return true;
+}
+
+/** Rename Console…: a scratch console's saved file, checked against the name pattern in main, or a file on disk. */
+export async function renameConsole(id: string): Promise<void> {
+  const session = useConsoles.getState().consoles[id];
+  if (session === undefined) return;
+  const file = fileSourceOf(session) !== null;
+  const name = await useModal.getState().ask({
+    kind: "text",
+    title: file ? "Rename File" : "Rename Console",
+    label: file ? "File name" : "Name",
+    initial: session.name,
+    confirm: "Rename",
+  });
+  if (name === null || name.trim() === session.name) return;
+  if (file) {
+    await fileConsoles.rename(id, name);
+    return;
+  }
+  const renamed = name.trim();
+  if (openNames(session.datasourceId).includes(renamed)) {
+    await useModal.getState().ask({
+      kind: "notice",
+      title: "Could not rename the console",
+      message: `A console named "${renamed}" is open.`,
+      hint: "Choose another name.",
+    });
+    return;
+  }
+  if (persists(session.datasourceId)) {
+    // A pending write under the old name would recreate the old file after the rename.
+    await autosave.flush();
+    try {
+      await unwrap(bridge().renameConsole(session.datasourceId, session.name, renamed));
+    } catch (cause) {
+      await useModal.getState().ask({
+        kind: "notice",
+        title: "Could not rename the console",
+        message: cause instanceof Error ? cause.message : String(cause),
+        hint: cause instanceof ConsoleFileFailure ? cause.hint : "Check that the profile directory is writable.",
+      });
+      return;
+    }
+  }
+  useConsoles.getState().saved(id, SCRATCH, renamed);
+  useTabs.getState().retitle(id, renamed);
 }
 
 export async function disconnectDatasource(datasourceId: string): Promise<void> {
@@ -205,6 +324,7 @@ export function answerCloseRequests(): () => void {
   return bridge().onCloseRequested(() => {
     void (async () => {
       const proceed =
+        (await fileConsoles.settleDirty(Object.keys(useConsoles.getState().consoles), "quit")) &&
         (await settlePendingEdits(pendingTables(useTables.getState().tables), "quit")) &&
         (await settleConsoleEdits(Object.keys(useConsoles.getState().consoles), "quit")) &&
         (await settleTransactions(openTransactions(useConsoles.getState().consoles), "quit"));

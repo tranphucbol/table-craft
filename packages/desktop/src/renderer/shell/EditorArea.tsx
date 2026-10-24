@@ -7,6 +7,7 @@ import { Console } from "@table-craft/desktop/renderer/console/Console.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
 import { tabLabel } from "@table-craft/desktop/renderer/model/format.js";
+import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { activeTab, useTabs, type Tab, type TabKind } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -48,6 +49,11 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
   const datasource = useConsoleDatasource(tab.id);
   const label = tabLabel(tab.title, datasource?.name);
   const tint = datasource?.color == null ? null : TINT_TAB[datasource.color];
+  const path = useConsoles((state) => fileSourceOf(state.consoles[tab.id])?.path);
+  const dirty = useConsoles((state) => {
+    const session = state.consoles[tab.id];
+    return session !== undefined && isDirty(session);
+  });
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
@@ -63,11 +69,21 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
             role="tab"
             aria-selected={active}
             data-color={datasource?.color ?? undefined}
+            data-path={path}
+            title={path}
             className="flex items-center gap-cell outline-none"
             onClick={() => activate(tab.id)}
           >
             <TabIcon kind={tab.kind} />
             {label}
+            {dirty ? (
+              <span
+                data-testid="tab-dirty"
+                role="img"
+                aria-label="unsaved"
+                className="size-2 shrink-0 rounded-full bg-ink"
+              />
+            ) : null}
             {datasource?.readOnly === true ? (
               <ReadOnlyIcon aria-label="read-only" className="size-icon text-ink-muted" />
             ) : null}

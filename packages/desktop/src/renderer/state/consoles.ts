@@ -14,7 +14,7 @@ import {
   type TransactionMode,
   type TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
-import type { HistoryEntry } from "@table-craft/desktop/preload/bridge.js";
+import type { HistoryEntry, LineEnding } from "@table-craft/desktop/preload/bridge.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { carriedLayout, type ColumnLayout } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import {
@@ -131,10 +131,46 @@ export interface Flash extends TextSpan {
   readonly seq: number;
 }
 
+/** Where a console's text lives (plan 041 decision 1): the profile's consoles folder, or a file the user chose. */
+export type ConsoleSource =
+  | { readonly kind: "scratch" }
+  | {
+      readonly kind: "file";
+      readonly path: string;
+      /** The text last read from or written to `path`; the console is dirty while its text differs. */
+      readonly savedSql: string;
+      readonly lineEnding: LineEnding;
+      /** The file's modification time when last read or written, to notice changes made elsewhere. */
+      readonly modifiedAt: number;
+    };
+
+export type FileConsoleSource = Extract<ConsoleSource, { kind: "file" }>;
+
+export const SCRATCH: ConsoleSource = { kind: "scratch" };
+
+/** A file console not yet attached to a datasource (plan 041 decision 2); it asks for one on first Run. */
+export const DETACHED = "";
+
+/** What changed on disk under a file console with unsaved edits (plan 041 decision 6). */
+export type DiskChange = "changed" | "deleted";
+
+export function fileSourceOf(session: Pick<ConsoleSession, "source"> | undefined): FileConsoleSource | null {
+  return session?.source.kind === "file" ? session.source : null;
+}
+
+/** True for a file console whose text differs from what its file holds; scratch consoles autosave. */
+export function isDirty(session: Pick<ConsoleSession, "source" | "sql">): boolean {
+  return session.source.kind === "file" && session.source.savedSql !== session.sql;
+}
+
 export interface ConsoleSession {
   readonly datasourceId: string;
   /** The console's file name without `.sql` (decision 16). */
   readonly name: string;
+  readonly source: ConsoleSource;
+  readonly diskChanged: DiskChange | null;
+  /** The namespace a restored file console switches to once its session opens (plan 041 decision 5). */
+  readonly pendingNamespace: readonly string[] | null;
   readonly sessionId: string | null;
   readonly status: ConsoleStatus;
   readonly error: EngineError | null;
@@ -196,6 +232,9 @@ export interface OpenOptions {
   readonly connect?: boolean;
   /** Values the next Parameters dialog starts from, such as a history entry's (plan 019 decision 9). */
   readonly parameterValues?: ParameterValues;
+  readonly source?: ConsoleSource;
+  /** The namespace to switch to once the session opens; a remembered attachment's. */
+  readonly namespace?: readonly string[] | null;
 }
 
 export interface ConsolesState extends ConsoleEdits {
@@ -217,6 +256,15 @@ export interface ConsolesState extends ConsoleEdits {
   /** Marks the datasource's consoles disconnected; `error` says why when it was not asked for. */
   readonly detach: (datasourceId: string, error: EngineError | null) => void;
   readonly setSql: (id: string, sql: string) => void;
+  /** Attaches a detached file console to `datasourceId`; its session opens on the next Run. */
+  readonly attach: (id: string, datasourceId: string) => void;
+  /** Detaches a file console from its removed datasource, dropping its results; its text stays. */
+  readonly release: (id: string) => void;
+  /** The console's text now lives in `source`, as written or renamed; clears any disk change. */
+  readonly saved: (id: string, source: ConsoleSource, name?: string) => void;
+  /** Replaces the console's text with what its file now holds. */
+  readonly reloaded: (id: string, sql: string, source: FileConsoleSource) => void;
+  readonly setDiskChanged: (id: string, change: DiskChange | null) => void;
   readonly setSelection: (id: string, selection: TextSpan) => void;
   /** Puts the editor's caret at `span.from` and flashes `span`, as Go to Declaration lands. */
   readonly jumpTo: (id: string, span: TextSpan) => void;
@@ -377,6 +425,8 @@ export interface ConsolesDependencies {
   readonly statementTimeout?: (datasourceId: string) => number;
   /** Asks whether to submit or discard pending result edits before `verb`; null cancels (plan 026). */
   readonly askPendingEdits?: (request: PendingEditsRequest) => Promise<PendingEditsAnswer | null>;
+  /** Asks which datasource a detached file console runs on (plan 041 decision 2); null runs nothing. */
+  readonly chooseDatasource?: () => Promise<string | null>;
 }
 
 export interface PendingEditsRequest {
@@ -390,6 +440,9 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
   return {
     datasourceId,
     name,
+    source: SCRATCH,
+    diskChanged: null,
+    pendingNamespace: null,
     sessionId: null,
     status: connect ? "connecting" : "disconnected",
     error: null,
@@ -571,10 +624,48 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       };
     }
 
+    /** Runs the plugin's switch statement for `path` on an open session, saying where it landed. */
+    async function switchOn(
+      id: string,
+      client: EngineClient,
+      sessionId: string,
+      path: readonly string[],
+      inTransaction: boolean,
+    ): Promise<RunOutcome> {
+      const switching = await client.call("namespace.switchStatement", { path });
+      const statement: ClassifiedStatement = {
+        from: 0,
+        to: 0,
+        sql: switching.sql,
+        kind: "other",
+        destructive: null,
+        parameters: [],
+      };
+      const outcome = await execute(id, client, sessionId, [statement], null, false);
+      if (outcome !== "succeeded") return outcome;
+      if (switching.transactional && inTransaction) {
+        log(id, { sql: "", message: SWITCH_IN_TRANSACTION, tone: "info" });
+      }
+      const landed = get().consoles[id]?.namespace ?? null;
+      if (landed !== null && landed.join(".") !== path.join(".")) {
+        log(id, {
+          sql: "",
+          message: `The session is in ${landed.join(".")}, not ${path.join(".")}.`,
+          tone: "warning",
+        });
+      }
+      return outcome;
+    }
+
     /** Opens a session for the console; false when it could not, with the console marked failed. */
     async function openSession(id: string): Promise<boolean> {
+      if (get().consoles[id]?.datasourceId === DETACHED) {
+        const chosen = (await dependencies.chooseDatasource?.()) ?? null;
+        if (chosen === null) return false;
+        get().attach(id, chosen);
+      }
       const current = get().consoles[id];
-      if (current === undefined) return false;
+      if (current === undefined || current.datasourceId === DETACHED) return false;
       patch(id, { status: "connecting", error: null });
       try {
         const client = await dependencies.connect(current.datasourceId);
@@ -594,6 +685,16 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         });
         const mode = get().consoles[id]?.txMode;
         if (mode === "manual") await applyMode(id, client, opened.sessionId, mode);
+        const wanted = get().consoles[id]?.pendingNamespace ?? null;
+        if (wanted !== null) {
+          patch(id, { pendingNamespace: null });
+          if (opened.namespace?.join(".") !== wanted.join(".")) {
+            // The remembered namespace may be gone; the console stays usable where the session opened.
+            await switchOn(id, client, opened.sessionId, wanted, false).catch((cause: unknown) => {
+              logError(id, "", toError(cause));
+            });
+          }
+        }
         return true;
       } catch (cause) {
         patch(id, { status: "failed", error: toError(cause) });
@@ -1067,10 +1168,34 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         set({
           consoles: {
             ...get().consoles,
-            [id]: { ...session, parameterValues: options.parameterValues ?? session.parameterValues },
+            [id]: {
+              ...session,
+              parameterValues: options.parameterValues ?? session.parameterValues,
+              source: options.source ?? session.source,
+              pendingNamespace: options.namespace ?? null,
+            },
           },
         });
         if (connect) await openSession(id);
+      },
+
+      attach(id, datasourceId) {
+        const current = get().consoles[id];
+        if (current === undefined || current.datasourceId !== DETACHED) return;
+        patch(id, { datasourceId, status: "disconnected", error: null });
+      },
+
+      saved(id, source, name) {
+        patch(id, { source, diskChanged: null, ...(name === undefined ? {} : { name }) });
+      },
+
+      reloaded(id, sql, source) {
+        patch(id, { sql, source, diskChanged: null });
+      },
+
+      setDiskChanged(id, diskChanged) {
+        if (get().consoles[id]?.diskChanged === diskChanged) return;
+        patch(id, { diskChanged });
       },
 
       close(id) {
@@ -1114,6 +1239,26 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             ),
           });
         }
+      },
+
+      release(id) {
+        const session = get().consoles[id];
+        if (session === undefined) return;
+        clients.delete(id);
+        pendingDdl.delete(id);
+        for (const result of session.results) invalidateWindows(result.id);
+        patch(id, {
+          datasourceId: DETACHED,
+          edits: {},
+          sessionId: null,
+          status: "disconnected",
+          error: null,
+          transactionOpen: false,
+          namespace: null,
+          pendingNamespace: null,
+          results: [],
+          activeResult: OUTPUT_TAB,
+        });
       },
 
       setSql(id, sql) {
@@ -1197,31 +1342,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         const before = get().consoles[id];
         if (before === undefined || !canRun(before.status)) return;
         if (!(await settleEdits(id, SWITCH_VERB))) return;
-        await onSession(id, async (client, sessionId, session) => {
-          const { sql, transactional } = await client.call("namespace.switchStatement", { path });
-          const statement: ClassifiedStatement = {
-            from: 0,
-            to: 0,
-            sql,
-            kind: "other",
-            destructive: null,
-            parameters: [],
-          };
-          const outcome = await execute(id, client, sessionId, [statement], null, false);
-          if (outcome !== "succeeded") return outcome;
-          if (transactional && session.transactionOpen) {
-            log(id, { sql: "", message: SWITCH_IN_TRANSACTION, tone: "info" });
-          }
-          const landed = get().consoles[id]?.namespace ?? null;
-          if (landed !== null && landed.join(".") !== path.join(".")) {
-            log(id, {
-              sql: "",
-              message: `The session is in ${landed.join(".")}, not ${path.join(".")}.`,
-              tone: "warning",
-            });
-          }
-          return outcome;
-        });
+        await onSession(id, (client, sessionId, session) =>
+          switchOn(id, client, sessionId, path, session.transactionOpen),
+        );
       },
 
       async run(id, scope) {
@@ -1596,8 +1719,27 @@ async function askAnalyse(request: AnalyseRequest): Promise<boolean> {
   return (await useModal.getState().ask(analyseConfirmation(request))) !== null;
 }
 
+export const CHOOSE_DATASOURCE_TITLE = "Run on Data Source";
+
+/** Asks which datasource a detached file console runs on. */
+export async function chooseDatasourceInDialog(title = CHOOSE_DATASOURCE_TITLE): Promise<string | null> {
+  return useModal.getState().ask({
+    kind: "pick",
+    title,
+    searchLabel: "Data sources",
+    items: useDatasources.getState().datasources.map((datasource) => ({
+      id: datasource.id,
+      label: datasource.name,
+      detail: datasource.pluginId,
+    })),
+    empty: "No data sources. Add one with New Data Source….",
+    confirm: "Choose",
+  });
+}
+
 export const useConsoles = createConsolesStore({
   connect: (datasourceId) => useDatasources.getState().connect(datasourceId),
+  chooseDatasource: () => chooseDatasourceInDialog(),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),
   now: () => performance.now(),

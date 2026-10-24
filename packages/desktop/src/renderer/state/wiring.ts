@@ -1,6 +1,11 @@
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { useCatalog, type CatalogStore } from "@table-craft/desktop/renderer/state/catalog.js";
-import { consolesOf, useConsoles, type ConsolesStore } from "@table-craft/desktop/renderer/state/consoles.js";
+import {
+  consolesOf,
+  fileSourceOf,
+  useConsoles,
+  type ConsolesStore,
+} from "@table-craft/desktop/renderer/state/consoles.js";
 import { ddlsOf, followRedescribes, useDdl, type DdlStore } from "@table-craft/desktop/renderer/state/ddl.js";
 import {
   capabilitiesOf,
@@ -67,6 +72,10 @@ export function wireStores({
   const offRemoved = datasources.onRemoved((ids) => {
     for (const id of ids) {
       for (const consoleId of consolesOf(consoles.getState().consoles, id)) {
+        if (fileSourceOf(consoles.getState().consoles[consoleId]) !== null) {
+          consoles.getState().release(consoleId);
+          continue;
+        }
         tabs.getState().close(consoleId);
         consoles.getState().close(consoleId);
       }

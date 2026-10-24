@@ -8,6 +8,7 @@ import { ExportData } from "@table-craft/desktop/renderer/dialogs/ExportData.js"
 import { ImportData } from "@table-craft/desktop/renderer/dialogs/ImportData.js";
 import { ObjectChange } from "@table-craft/desktop/renderer/dialogs/ObjectChange.js";
 import { OpenClosedConsole } from "@table-craft/desktop/renderer/dialogs/OpenClosedConsole.js";
+import { Pick } from "@table-craft/desktop/renderer/dialogs/Pick.js";
 import { ParametersDialog } from "@table-craft/desktop/renderer/dialogs/ParametersDialog.js";
 import { QueryHistory } from "@table-craft/desktop/renderer/dialogs/QueryHistory.js";
 import { SqlGenerator } from "@table-craft/desktop/renderer/dialogs/SqlGenerator.js";
@@ -24,6 +25,7 @@ const MODAL_WIDTHS: Readonly<Record<ModalRequest["kind"], string>> = {
   generator: "w-generator",
   history: "w-picker",
   closedConsoles: "w-picker",
+  pick: "w-picker",
   parameters: "w-[40rem]",
   export: "w-generator",
   import: "w-dialog",
@@ -32,7 +34,15 @@ const MODAL_WIDTHS: Readonly<Record<ModalRequest["kind"], string>> = {
 };
 
 type PickerKind =
-  "generator" | "history" | "closedConsoles" | "parameters" | "export" | "import" | "tableDesign" | "objectChange";
+  | "generator"
+  | "history"
+  | "closedConsoles"
+  | "pick"
+  | "parameters"
+  | "export"
+  | "import"
+  | "tableDesign"
+  | "objectChange";
 
 function Items({ items }: { readonly items: readonly ModalItem[] }) {
   return (
@@ -149,6 +159,8 @@ export function Modal() {
             <QueryHistory request={pending.request} />
           ) : pending.request.kind === "closedConsoles" ? (
             <OpenClosedConsole request={pending.request} />
+          ) : pending.request.kind === "pick" ? (
+            <Pick request={pending.request} />
           ) : pending.request.kind === "parameters" ? (
             <ParametersDialog request={pending.request} />
           ) : pending.request.kind === "export" ? (

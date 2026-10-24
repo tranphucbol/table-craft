@@ -41,7 +41,7 @@ export class ConsoleFileFailure extends Error {
   }
 }
 
-async function unwrap<T>(pending: Promise<InvokeResult<T>>): Promise<T> {
+export async function unwrap<T>(pending: Promise<InvokeResult<T>>): Promise<T> {
   const result = await pending;
   if (!result.ok) throw new ConsoleFileFailure(result.error.message, result.error.hint);
   return result.value;

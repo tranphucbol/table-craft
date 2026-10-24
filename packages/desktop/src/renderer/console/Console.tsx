@@ -8,10 +8,11 @@ import { NamespaceSwitcher } from "@table-craft/desktop/renderer/console/Namespa
 import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js";
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
-import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
+import { DETACHED, useConsoles, type DiskChange } from "@table-craft/desktop/renderer/state/consoles.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const STATUS_TEXT = {
@@ -22,6 +23,42 @@ const STATUS_TEXT = {
   failed: "",
   disconnected: "Disconnected; Run reconnects.",
 } as const;
+
+const DISK_CHANGE_TEXT = {
+  changed: "The file changed on disk.",
+  deleted: "The file was deleted on disk; Save writes it again.",
+} as const satisfies Record<DiskChange, string>;
+
+/** A file console's edits and its file parted ways (plan 041 decision 6). */
+function DiskChangedBanner({ change }: { readonly change: DiskChange }) {
+  return (
+    <div
+      role="alert"
+      data-testid="disk-changed"
+      data-change={change}
+      className="flex items-center gap-gap border-b border-line bg-panel px-gap py-1"
+    >
+      <WarningIcon aria-hidden weight="fill" className="size-icon shrink-0 text-warning" />
+      <span className="min-w-0 flex-1 truncate">{DISK_CHANGE_TEXT[change]}</span>
+      {change === "changed" ? (
+        <button
+          type="button"
+          className="shrink-0 text-accent hover:underline"
+          onClick={() => void invoke(FILE_ACTION_IDS.reload)}
+        >
+          Reload
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className="shrink-0 text-accent hover:underline"
+        onClick={() => void invoke(FILE_ACTION_IDS.keepMine)}
+      >
+        Keep mine
+      </button>
+    </div>
+  );
+}
 
 /** One console tab: its toolbar, its SQL editor, and its Output and result tabs. */
 export function Console({ consoleId }: { readonly consoleId: string }) {
@@ -68,6 +105,11 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
             Show in Log
           </button>
         )}
+        {datasource === undefined && session.datasourceId === DETACHED ? (
+          <span data-testid="console-datasource" className="ml-auto shrink-0 text-ink-muted">
+            No data source; Run asks for one.
+          </span>
+        ) : null}
         {datasource === undefined ? null : (
           // The datasource and plugin names give up their width first, the namespace last: it is what
           // changes under the console, and a long error beside it once squeezed it out of sight
@@ -93,6 +135,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           </span>
         )}
       </div>
+      {session.diskChanged === null ? null : <DiskChangedBanner change={session.diskChanged} />}
       <div
         className={cn(
           "min-h-0 flex-1 basis-1/2 overflow-hidden border-b border-line",

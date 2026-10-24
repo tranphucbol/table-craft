@@ -3,11 +3,13 @@ import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js
 import {
   answerCloseRequests,
   autosaveConsoles,
+  fileConsoles,
   openConsole,
   rememberOpenConsoles,
   restoreConsoles,
 } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
-import { focusedRegion, modalOpen, trackFocus } from "@table-craft/desktop/renderer/actions/context.js";
+import { currentContext, focusedRegion, modalOpen, trackFocus } from "@table-craft/desktop/renderer/actions/context.js";
+import { checkFilesOnFocus, openRecentFromMenu } from "@table-craft/desktop/renderer/actions/fileActions.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { installKeymap } from "@table-craft/desktop/renderer/actions/keymap.js";
 import { rememberOpenTables, restoreTables } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -50,10 +52,12 @@ function onFirstList(): void {
     const forget = rememberOpenConsoles();
     const forgetTables = rememberOpenTables();
     const stopSaving = autosaveConsoles();
+    const forgetAttachments = fileConsoles.rememberAttachments();
     stopConsoleSync = () => {
       forget();
       forgetTables();
       stopSaving();
+      forgetAttachments();
     };
   });
 }
@@ -80,6 +84,10 @@ export function App() {
   useEffect(() => answerCloseRequests(), []);
 
   useEffect(() => installHostKeyPrompts(), []);
+
+  useEffect(() => openRecentFromMenu(currentContext), []);
+
+  useEffect(() => checkFilesOnFocus(window), []);
 
   useEffect(() => installWindowState(), []);
 

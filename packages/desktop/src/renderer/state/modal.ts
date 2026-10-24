@@ -20,6 +20,13 @@ export interface ModalItem {
   readonly tone?: "info";
 }
 
+/** A line of a `pick`; its `id` is the answer. */
+export interface PickItem {
+  readonly id: string;
+  readonly label: string;
+  readonly detail: string;
+}
+
 /** A button of a `choice`; its `id` is the answer. */
 export interface ModalChoice {
   readonly id: string;
@@ -138,6 +145,15 @@ export type ModalRequest =
       readonly preview: (file: string, format: ImportFormat) => Promise<ImportPreview>;
       readonly ddl: (relation: string, columns: readonly NewImportColumn[]) => Promise<string>;
       readonly highlight: string | null | undefined;
+    }
+  | {
+      /** One item out of a searchable list, such as a datasource or a recent file; resolves the item's id. */
+      readonly kind: "pick";
+      readonly title: string;
+      readonly searchLabel: string;
+      readonly items: readonly PickItem[];
+      readonly empty: string;
+      readonly confirm: string;
     }
   | {
       /** Open Closed Console (plan 011 decision 14): resolves `pickerAnswer(choice, name)` for a `CLOSED_CONSOLE_CHOICES` choice. */
