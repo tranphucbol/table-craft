@@ -173,13 +173,17 @@ export function readTidbSession(row: TidbProcessRow, globalKill: boolean): Serve
   const started = tsoMilliseconds(row.txn_start);
   const now = row.now_ms === null ? null : Number(row.now_ms);
   const transactionMs = started === null || now === null || !Number.isFinite(now) ? null : Math.max(0, now - started);
-  return readProcess(row, {
-    instance: row.instance,
-    blockedBy: null,
-    transactionMs,
-    inTransaction: started !== null,
-    kill: tidbKill(globalKill),
-  });
+  // TiDB's STATE is the connection's server-status bit flags, a number such as 2, not a wait.
+  return readProcess(
+    { ...row, state: null },
+    {
+      instance: row.instance,
+      blockedBy: null,
+      transactionMs,
+      inTransaction: started !== null,
+      kill: tidbKill(globalKill),
+    },
+  );
 }
 
 function tsoMilliseconds(txnStart: string | null): number | null {

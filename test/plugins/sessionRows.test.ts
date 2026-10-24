@@ -163,6 +163,11 @@ describe("tidb session rows", () => {
     });
   });
 
+  it("givenRunningTidbQuery_whenRead_thenStatusFlagsAreNoWait", () => {
+    const row = readTidbSession({ ...TIDB_ROW, command: "Query", state: "2" }, false);
+    expect(row).toMatchObject({ state: "active", waitEvent: null });
+  });
+
   it("givenTidbBeforeGlobalKill_whenRead_thenNoCancel", () => {
     expect(readTidbSession(TIDB_ROW, false)).toMatchObject({ cancel: null, terminate: "KILL TIDB 17" });
   });

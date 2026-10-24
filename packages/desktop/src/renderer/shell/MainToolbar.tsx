@@ -10,6 +10,7 @@ import { UpdateButton } from "@table-craft/desktop/renderer/shell/UpdateButton.j
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
+import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { activeTab, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
@@ -23,8 +24,10 @@ function useActiveCaption() {
   const consoleDatasource = useConsoles((state) => state.consoles[id]?.datasourceId);
   const tableDatasource = useTables((state) => state.tables[id]?.datasourceId);
   const ddlDatasource = useDdl((state) => state.ddls[id]?.datasourceId);
+  const sessionsDatasource = useSessions((state) => state.tabs[id]?.datasourceId);
   const name = useDatasources(
-    (state) => datasourceById(state, consoleDatasource ?? tableDatasource ?? ddlDatasource)?.name ?? null,
+    (state) =>
+      datasourceById(state, consoleDatasource ?? tableDatasource ?? ddlDatasource ?? sessionsDatasource)?.name ?? null,
   );
   return { tab, name };
 }
