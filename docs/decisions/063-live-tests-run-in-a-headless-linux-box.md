@@ -53,7 +53,8 @@ minutes per boot.
 - **Memory.** Docker Desktop's VM is small (4 GB by default); Electron and its engines take about
   700 MB beside the databases, and TiDB keeps its data in memory, so the million-row
   `reconnectNamespace.smoke` fixture gets TiDB OOM-killed, on the host as in the box. Give the VM
-  8 GB or more to run that suite.
+  8 GB or more to run that suite. Decision 096 runs three apps at once from 8 GB and one below it,
+  so a smaller VM is slower, not broken.
 - **Kernel buffers differ.** Linux autotunes socket buffers to several MB, so a result that
   stays on the wire on macOS can arrive whole. A test that strands a link mid-result needs a result
   bigger than the buffers (`hundredThousandRows`).

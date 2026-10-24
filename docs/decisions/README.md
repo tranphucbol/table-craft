@@ -90,3 +90,4 @@ started, not when it is merged.
 | 089 | [File consoles autosave, and Save on a scratch console asks for a file](089-file-consoles-autosave-and-save-asks-for-a-file.md)                                        |
 | 090 | [Routine calls are written by the plugin](090-routine-calls-are-written-by-the-plugin.md)                                                                              |
 | 091 | [File size budget and module layout of the engine](091-file-size-budget-and-module-layout-of-the-engine.md)                                                            |
+| 096 | [The headless suite runs files in parallel](096-headless-suite-runs-files-in-parallel.md)                                                                              |

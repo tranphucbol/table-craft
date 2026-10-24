@@ -17,7 +17,9 @@ Run from the repository root.
 - `bun run test:db` - the contract suite against PostgreSQL (port 55432) and MySQL (port 53306)
   in `docker compose`, seeded from `test/db/schema/`, plus the TiDB 4 suite (`test/db/tidb.test.ts`,
   port 54000, root with no password; an amd64 image, emulated on Apple silicon, and heavy).
-  `test/db/up.ts` starts the containers; when a git-ignored `.env` names a remote TiDB
+  `test/db/up.ts` starts the containers and recreates any whose seed files changed (a
+  `table-craft.seed` label holds their hash, `test/db/stack.ts`), so an edit under `schema/` or
+  `tls/` reseeds on the next run with no `down`; when a git-ignored `.env` names a remote TiDB
   (`TABLE_CRAFT_TIDB_REMOTE_HOST`, `_PORT`, `_USER`, `_PASSWORD`, see `.env.example`) and it
   answers, the TiDB container is left out and every suite, on the host and in the headless box,
   uses that server instead (`test/db/tidbTarget.ts`). Either way a run works only in its own
@@ -46,9 +48,15 @@ Run from the repository root.
 - `bun run test:smoke:headless` / `bun run test:smoke:db:headless` - the same two suites in the
   headless box (decision 063): a Linux container under Xvfb with its own keyring, so nothing takes
   the screen, keyboard or clipboard. Agents and plan sessions run live tests here, with the same
-  compose variables and `TABLE_CRAFT_EVIDENCE_DIR`; extra arguments narrow the run like `vitest run`
-  (`bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts`). Evidence is Linux evidence;
-  macOS-only checks (`titleBar.smoke`, `update.live`, the packaged app) still run on the host
+  compose variables and `TABLE_CRAFT_EVIDENCE_DIR`; paths narrow the run like `vitest run`
+  (`bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts`) and `-` arguments go to
+  Vitest. Files run `TABLE_CRAFT_SMOKE_WORKERS` at a time, one display each (decision 096): unset,
+  3 on a Docker VM of 8 GiB or more and 1 below, as the first line of the run says. The files
+  in `SERIAL_SMOKE_FILES` (`test/e2e/serialFiles.ts`) run after, one by one; a file that flakes
+  beside others moves there with its reason, never to a longer timeout. A run fails at setup when
+  a database container predates its seed; `bun test/db/up.ts` (with the compose variables) fixes
+  it. Evidence is Linux evidence; macOS-only checks (`titleBar.smoke`, `update.live`, the packaged
+  app) still run on the host
 - `bun run typecheck` - `tsc --noEmit`, every program: the root one, the renderer
   (`packages/desktop/src/renderer/tsconfig.json`) and the renderer tests (`test/renderer/tsconfig.json`)
 - `bun run lint` / `bun run lint:fix` - ESLint, including the architecture fences
@@ -185,7 +193,8 @@ test/                      Vitest suites, `givenX_whenY_thenZ`
   db/                      compose.yml, the fixture schema per dialect, contract runs per database
   e2e/                     Playwright `_electron` suites and the shared harness;
                            `workflows.ts` is the daily loop the dev and packaged suites run;
-                           `docker/` the headless box (image, entrypoint, `headless.ts`)
+                           `docker/` the headless box (image, entrypoint, `headless.ts`,
+                           `workers.ts`); `serialFiles.ts` the files run one by one
   renderer/                renderer unit tests, typechecked with the DOM lib; no jsdom
   support/                 fixtures shared across suites (type_probe rows, seeded SQLite, configs);
                            `plans/` holds real EXPLAIN outputs, byte-exact (prettier skips it)
