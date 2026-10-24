@@ -13,6 +13,7 @@ import {
   RESULT_FETCH_ALL_CAP,
   RESULT_PAGE_ROWS,
   RESULT_WINDOW_ROWS,
+  SSH_AUTH_METHODS,
   type CachedCatalog,
   type CellInput,
   type CoreErrorCode,
@@ -23,6 +24,10 @@ import {
   type FoundMatch,
   type HistoryEntry,
   type HistoryStatement,
+  type HostKeyOffer,
+  type SshAuthMethod,
+  type SshEndpoint,
+  type SshHop,
   type ImportErrorPolicy as CoreImportErrorPolicy,
   type ImportFormat as CoreImportFormat,
   type ImportTransaction as CoreImportTransaction,
@@ -74,6 +79,7 @@ import {
   type TransactionMode,
   type WireValue,
   type ConnectionUrlSpec,
+  type NetworkSpec,
   type ParsedConnectionUrl,
 } from "@table-craft/plugin-api";
 import * as protocol from "@table-craft/desktop/engine/protocol.js";
@@ -89,6 +95,16 @@ describe("engine protocol", () => {
   it("givenConnectionUrlTypes_whenComparedWithPluginApi_thenIdentical", () => {
     expectTypeOf<bridge.ConnectionUrlSpec>().toEqualTypeOf<ConnectionUrlSpec>();
     expectTypeOf<bridge.ParsedUrl>().toEqualTypeOf<ParsedConnectionUrl>();
+  });
+
+  it("givenSshTypes_whenComparedWithCoreAndPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.SshAuthMethod>().toEqualTypeOf<SshAuthMethod>();
+    expectTypeOf<protocol.SshTunnelConfig>().toEqualTypeOf<SshEndpoint>();
+    expectTypeOf<protocol.HostKeyOffer>().toEqualTypeOf<HostKeyOffer>();
+    expectTypeOf<protocol.SshHop>().toEqualTypeOf<SshHop>();
+    expectTypeOf<NonNullable<bridge.PluginInfo["network"]>>().toEqualTypeOf<Readonly<NetworkSpec>>();
+    expect(Object.values(bridge.SSH_SECRET_KEYS).every((key) => !/^[a-zA-Z][a-zA-Z0-9]*$/.test(key))).toBe(true);
+    expect(SSH_AUTH_METHODS).toEqual(["password", "key", "agent"]);
   });
 
   it("givenHistoryTypes_whenComparedWithCore_thenIdentical", () => {

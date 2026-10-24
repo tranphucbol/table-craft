@@ -62,6 +62,7 @@ export {
   connectionFieldSchema,
   connectionUrlSchema,
   MANIFEST_FILE,
+  networkSpecSchema,
   pluginManifestSchema,
   type ConnectionField,
   type ConnectionFieldGroup,
@@ -69,6 +70,7 @@ export {
   type ConnectionUrl,
   type ConnectionUrlForm,
   type ConnectionUrlPart,
+  type NetworkSpec,
   type PluginManifest,
 } from "./manifest.js";
 export {

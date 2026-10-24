@@ -6,14 +6,20 @@
  */
 import {
   ENGINE_BOOT_MESSAGE,
+  ENGINE_HOST_KEY_ANSWER_MESSAGE,
+  ENGINE_HOST_KEY_MESSAGE,
   ENGINE_LOG_MESSAGE,
   ENGINE_PROBED_MESSAGE,
   ENGINE_SHUTDOWN_MESSAGE,
   type DatasourceConfig,
   type EngineBoot,
+  type EngineHostKeyAnswer,
+  type EngineHostKeyRequest,
   type EngineLog,
   type EngineMode,
   type EngineProbed,
+  type HostKeyOffer,
+  type HostKeyVerdict,
   type ProbeResult,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
@@ -53,6 +59,8 @@ export interface HostRegistryOptions<Target> {
   readonly probeTimeoutMs?: number;
   readonly log?: HostLog;
   readonly now?: () => number;
+  /** Rules on a host key an engine's SSH tunnel was offered (decision 071); absent, every key is rejected. */
+  readonly hostKeys?: (offer: HostKeyOffer) => Promise<HostKeyVerdict>;
 }
 
 /** How the registry reaches main's log (plan 017 decisions 7 and 9). */
@@ -93,6 +101,18 @@ function isEngineLog(message: unknown): message is EngineLog {
   return (message as { kind?: unknown } | null)?.kind === ENGINE_LOG_MESSAGE;
 }
 
+function isHostKeyRequest(message: unknown): message is EngineHostKeyRequest {
+  return (message as { kind?: unknown } | null)?.kind === ENGINE_HOST_KEY_MESSAGE;
+}
+
+/** While the user reads a fingerprint; a probe's timeout must not run meanwhile. */
+interface Asking {
+  asked(): void;
+  answered(): void;
+}
+
+const REJECTED: HostKeyVerdict = { verdict: "rejected" };
+
 export function createHostRegistry<Target>(options: HostRegistryOptions<Target>): HostRegistry<Target> {
   const { dependencies } = options;
   const hosts = new Map<string, RunningHost>();
@@ -100,10 +120,30 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
   const now = options.now ?? Date.now;
   const log = options.log?.logger.child("engine");
 
-  function fork(serviceName: string, logProcess: string): EngineProcess {
+  function answerHostKey(process: EngineProcess, request: EngineHostKeyRequest, asking?: Asking): void {
+    asking?.asked();
+    const ruling = options.hostKeys?.(request.offer) ?? Promise.resolve(REJECTED);
+    void ruling
+      .catch((cause: unknown) => {
+        log?.warn("host key not checked", { error: cause instanceof Error ? cause.message : String(cause) });
+        return REJECTED;
+      })
+      .then((verdict) => {
+        asking?.answered();
+        const answer: EngineHostKeyAnswer = {
+          ...verdict,
+          kind: ENGINE_HOST_KEY_ANSWER_MESSAGE,
+          requestId: request.requestId,
+        };
+        process.postMessage(answer);
+      });
+  }
+
+  function fork(serviceName: string, logProcess: string, asking?: Asking): EngineProcess {
     const process = dependencies.fork(serviceName, logProcess);
     process.on("message", (message) => {
       if (isEngineLog(message)) options.log?.forward(message.record, logProcess);
+      else if (isHostKeyRequest(message)) answerHostKey(process, message, asking);
     });
     return process;
   }
@@ -145,7 +185,17 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
     options.log?.protect(datasource);
     const startedAt = now();
     const fields = { datasourceId: datasource.id, pluginId: datasource.pluginId };
-    const process = fork(`${PROBE_SERVICE_NAME_PREFIX}${datasource.id}`, `${PROBE_LOG_PROCESS}${datasource.id}`);
+    let timer: unknown = null;
+    let arm: () => void = () => undefined;
+    const asking: Asking = {
+      asked: () => dependencies.clearTimeout(timer),
+      answered: () => arm(),
+    };
+    const process = fork(
+      `${PROBE_SERVICE_NAME_PREFIX}${datasource.id}`,
+      `${PROBE_LOG_PROCESS}${datasource.id}`,
+      asking,
+    );
     return new Promise((resolve) => {
       let settled = false;
       const settle = (result: ProbeResult): void => {
@@ -163,17 +213,21 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
           });
         resolve(result);
       };
-      const timer = dependencies.setTimeout(() => {
-        settle({
-          ok: false,
-          error: {
-            code: "timedOut",
-            message: `The database did not answer within ${String(probeTimeoutMs / MS_PER_SECOND)} s.`,
-            hint: "Check the host and port, and that nothing between here and the server drops the connection.",
-          },
-        });
-        process.kill();
-      }, probeTimeoutMs);
+      arm = () => {
+        if (settled) return;
+        timer = dependencies.setTimeout(() => {
+          settle({
+            ok: false,
+            error: {
+              code: "timedOut",
+              message: `The database did not answer within ${String(probeTimeoutMs / MS_PER_SECOND)} s.`,
+              hint: "Check the host and port, and that nothing between here and the server drops the connection.",
+            },
+          });
+          process.kill();
+        }, probeTimeoutMs);
+      };
+      arm();
       process.on("message", (message) => {
         if (isProbed(message)) settle(message.result);
       });

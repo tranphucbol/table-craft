@@ -47,6 +47,7 @@ export const POSTGRES_PLUGIN: PluginInfo = {
     parts: { host: "host", port: "port", database: "database", user: "user", password: "password" },
     params: [{ name: "sslmode", key: "sslMode", values: { disable: "disable", require: "require" } }],
   },
+  network: { host: "host", port: "port" },
 };
 
 export const SQLITE_PLUGIN: PluginInfo = {
@@ -57,4 +58,5 @@ export const SQLITE_PLUGIN: PluginInfo = {
   fields: [{ key: "path", label: "File", kind: "file", required: true }],
   highlight: "sqlite",
   url: { schemes: ["sqlite", "file"], form: "file", parts: { path: "path" } },
+  network: null,
 };

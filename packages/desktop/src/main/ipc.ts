@@ -74,6 +74,7 @@ const historyEntry = z.strictObject({
 const historySearchRequest = z.strictObject({ datasourceId: z.string().min(1), query: z.string() });
 const historyClearRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const answerCloseRequest = z.strictObject({ proceed: z.boolean() });
+const answerHostKeyRequest = z.strictObject({ requestId: z.number().int().positive(), trust: z.boolean() });
 const menuPoint = z.strictObject({
   x: z.number().int().nonnegative(),
   y: z.number().int().nonnegative(),
@@ -105,6 +106,8 @@ export interface IpcOptions<Sender> {
   readonly revealFile: (path: string) => void;
   /** The renderer's answer to a held close (`CHANNELS.closeRequested`). */
   readonly answerClose: (sender: Sender, proceed: boolean) => void;
+  /** The renderer's answer to `CHANNELS.hostKeyPrompt` (decision 071). */
+  readonly answerHostKey: (requestId: number, trust: boolean) => void;
   readonly settings: SettingsService;
   /** Creates `<userData>/themes/` if missing and shows it in the file manager. */
   readonly openThemesFolder: () => Promise<void>;
@@ -226,6 +229,10 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   });
   handle(INVOKE_CHANNELS.answerClose, answerCloseRequest, ({ proceed }, sender) => {
     options.answerClose(sender, proceed);
+    return null;
+  });
+  handle(INVOKE_CHANNELS.answerHostKey, answerHostKeyRequest, ({ requestId, trust }) => {
+    options.answerHostKey(requestId, trust);
     return null;
   });
 

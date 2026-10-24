@@ -2,7 +2,7 @@
   "id": "mysql",
   "name": "MySQL",
   "version": "0.0.0",
-  "apiVersion": "0.21.0",
+  "apiVersion": "0.22.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -103,6 +103,7 @@
           }
         }
       ]
-    }
+    },
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" }
   }
 }

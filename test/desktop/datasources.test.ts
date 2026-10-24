@@ -113,4 +113,17 @@ describe("datasource records", () => {
     expect(stored.config).toEqual(LOCAL_PG.config);
     expect(stored.name).toBe("Local PG");
   });
+
+  it("givenDraftWithSsh_whenStored_thenKeptWithItsSecretModesOnlyWhenTheTunnelIsOffered", () => {
+    const ssh = { enabled: true, host: " bastion ", port: 22, user: "deploy", auth: "password", keyPath: "" } as const;
+    const draft = { ...LOCAL_PG, ssh, secretModes: { "ssh.password": "never", "ssh.other": "never" } as const };
+
+    const offered = toDatasource(draft, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields, true);
+    const refused = toDatasource(draft, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields);
+
+    expect(offered.ssh).toEqual({ ...ssh, host: "bastion" });
+    expect(offered.secretModes).toEqual({ "ssh.password": "never" });
+    expect(refused.ssh).toBeUndefined();
+    expect(refused.secretModes).toEqual({});
+  });
 });

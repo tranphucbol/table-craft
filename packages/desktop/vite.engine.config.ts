@@ -7,12 +7,14 @@ import {
   NODE_CONDITIONS,
   NODE_EXTERNALS,
   NODE_MAIN_FIELDS,
+  nativeAddonStubs,
   SOURCE_ROOT,
 } from "./vite.shared.js";
 
 const OUT_FILE = "main.js";
 
 export default defineConfig({
+  plugins: [nativeAddonStubs],
   resolve: { alias: ALIASES, mainFields: NODE_MAIN_FIELDS, conditions: NODE_CONDITIONS },
   build: {
     target: BUILD_TARGET,

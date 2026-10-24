@@ -1,22 +1,26 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENGINE_HOST_KEY_ANSWER_MESSAGE,
+  ENGINE_HOST_KEY_MESSAGE,
   ENGINE_LOG_MESSAGE,
   ENGINE_PROBED_MESSAGE,
   ENGINE_SHUTDOWN_MESSAGE,
 } from "@table-craft/desktop/engine/protocol.js";
+import type { HostKeyOffer, HostKeyVerdict } from "@table-craft/desktop/engine/protocol.js";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { createHostRegistry, PROBE_TIMEOUT_MS } from "@table-craft/desktop/main/hosts.js";
 import { fakeHostDependencies } from "../support/fakeHosts.js";
 
 const DATASOURCE = { id: "pg", pluginId: "postgres", config: { host: "db" }, readOnly: true, keepAliveSeconds: 0 };
 
-function registry() {
+function registry(hostKeys?: (offer: HostKeyOffer) => Promise<HostKeyVerdict>) {
   const dependencies = fakeHostDependencies();
   const exits: [string, number, boolean][] = [];
   const hosts = createHostRegistry({
     pluginRoots: ["/plugins"],
     dependencies,
     onExit: (id, code, clean) => exits.push([id, code, clean]),
+    ...(hostKeys === undefined ? {} : { hostKeys }),
   });
   return { dependencies, exits, hosts };
 }
@@ -154,3 +158,69 @@ function loggedRegistry() {
   });
   return { dependencies, forwarded, hosts, protectedConfigs, records };
 }
+
+const OFFER: HostKeyOffer = {
+  host: "bastion",
+  port: 22,
+  algorithm: "ssh-ed25519",
+  fingerprint: "SHA256:abc",
+  key: "AAAA",
+};
+
+function settle(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+describe("host registry host keys", () => {
+  it("givenEngineOffersHostKey_whenRuled_thenVerdictPostedBack", async () => {
+    const asked: HostKeyOffer[] = [];
+    const { dependencies, hosts } = registry((offer) => {
+      asked.push(offer);
+      return Promise.resolve({ verdict: "trusted" });
+    });
+    hosts.open(DATASOURCE, "window-1");
+    const host = dependencies.forked[0];
+
+    host?.answer({ kind: ENGINE_HOST_KEY_MESSAGE, requestId: 7, offer: OFFER });
+    await settle();
+
+    expect(asked).toEqual([OFFER]);
+    expect(host?.posted).toContainEqual({ kind: ENGINE_HOST_KEY_ANSWER_MESSAGE, requestId: 7, verdict: "trusted" });
+  });
+
+  it("givenNoHostKeyRuling_whenEngineOffersKey_thenRejected", async () => {
+    const { dependencies, hosts } = registry();
+    hosts.open(DATASOURCE, "window-1");
+    const host = dependencies.forked[0];
+
+    host?.answer({ kind: ENGINE_HOST_KEY_MESSAGE, requestId: 1, offer: OFFER });
+    await settle();
+
+    expect(host?.posted).toContainEqual({ kind: ENGINE_HOST_KEY_ANSWER_MESSAGE, requestId: 1, verdict: "rejected" });
+  });
+
+  it("givenHostKeyAsked_whenProbeTimerRuns_thenPausedUntilAnswered", async () => {
+    let answer: (verdict: HostKeyVerdict) => void = () => undefined;
+    const { dependencies, hosts } = registry(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    );
+    let result: unknown = null;
+    void hosts.probe(DATASOURCE).then((probed) => (result = probed));
+    const probe = dependencies.forked[0];
+
+    probe?.answer({ kind: ENGINE_HOST_KEY_MESSAGE, requestId: 1, offer: OFFER });
+    dependencies.elapse();
+    await settle();
+    expect(result).toBeNull();
+    expect(probe?.killed).toBe(false);
+
+    answer({ verdict: "trusted" });
+    await settle();
+    dependencies.elapse();
+    await settle();
+    expect(result).toMatchObject({ ok: false, error: { code: "timedOut" } });
+  });
+});

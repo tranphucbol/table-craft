@@ -333,6 +333,7 @@ describe("diagnostics", () => {
     capabilities: [],
     highlight: "postgresql",
     url: null,
+    network: null,
     fields: [
       { key: "host", label: "Host", kind: "text" },
       { key: "password", label: "Password", kind: "password", secret: true },

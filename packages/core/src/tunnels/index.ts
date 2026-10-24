@@ -1,3 +1,4 @@
+export { createConnector, type Connector, type ConnectorOptions, type SshHop } from "./connector.js";
 export {
   algorithmOf,
   fingerprintOf,

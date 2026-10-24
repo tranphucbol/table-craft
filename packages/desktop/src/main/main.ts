@@ -23,12 +23,13 @@ import {
   type UtilityProcess,
   type WebContents,
 } from "electron";
-import { openQueryHistory, type HistoryRun } from "@table-craft/core";
+import { createKnownHosts, openQueryHistory, type HistoryRun } from "@table-craft/core";
 import { windowChrome } from "@table-craft/desktop/main/chrome.js";
 import { createCloseGuard } from "@table-craft/desktop/main/closeGuard.js";
 import { createConsoleFiles, type DirectoryFileSystem } from "@table-craft/desktop/main/consoleFiles.js";
 import { datasourceFromEnvironment } from "@table-craft/desktop/main/datasource.js";
 import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js";
+import { createHostKeyService } from "@table-craft/desktop/main/hostKeys.js";
 import { createHostRegistry, type EngineProcess } from "@table-craft/desktop/main/hosts.js";
 import { createImporter } from "@table-craft/desktop/main/import/importer.js";
 import { createCredentialReader, runCommand } from "@table-craft/desktop/main/import/keychain.js";
@@ -78,7 +79,7 @@ import {
   type Updater,
 } from "@table-craft/desktop/main/update/updater.js";
 import { DENSITIES, resolveTheme, type DensityTokens, type Theme } from "@table-craft/desktop/appearance/themes.js";
-import { ENGINE_PORT_MESSAGE, type DatasourceConfig } from "@table-craft/desktop/engine/protocol.js";
+import { ENGINE_PORT_MESSAGE, type DatasourceConfig, type HostKeyOffer } from "@table-craft/desktop/engine/protocol.js";
 import { DEFAULT_LOG_LEVEL, enabled, LOG_READ_LIMIT, type LogRecord } from "@table-craft/desktop/log/record.js";
 import {
   CHANNELS,
@@ -86,6 +87,7 @@ import {
   type Datasource,
   type DatasourceList,
   type EngineExited,
+  type HostKeyPrompt,
   type PluginInfo,
   type SettingsChanged,
   type UpdateState,
@@ -104,6 +106,10 @@ const WINDOW_HEIGHT = 800;
 const USER_PLUGINS_DIR = "plugins";
 /** macOS reads TablePro's folders from its preferences with this tool (plan 035). */
 const DEFAULTS_TOOL = "/usr/bin/defaults";
+/** Host keys the user trusted in TableCraft (decision 071); `~/.ssh/known_hosts` is only read. */
+const KNOWN_HOSTS_FILE = "ssh_known_hosts.json";
+const USER_KNOWN_HOSTS = join(".ssh", "known_hosts");
+const TEMPORARY_SUFFIX = ".tmp";
 const USER_DATA = "userData";
 const APP_DATA = "appData";
 /** A test seam: a fresh profile per launch, so layout, datasources and plugins never leak between smoke runs. */
@@ -190,6 +196,9 @@ function protectConfig(datasource: DatasourceConfig): void {
   );
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === "string" && (secret.has(key) || isSecretKey(key))) logHub.redactor.remember(value);
+  }
+  for (const value of [datasource.ssh?.password, datasource.ssh?.passphrase]) {
+    if (value !== undefined && value !== "") logHub.redactor.remember(value);
   }
 }
 
@@ -278,6 +287,41 @@ function broadcast(
 
 const pluginRoots = [paths.builtInPlugins, join(app.getPath(USER_DATA), USER_PLUGINS_DIR)];
 
+const hostKeyQuestions = new Map<number, (trust: boolean) => void>();
+let nextHostKeyQuestion = 1;
+
+function answerHostKey(requestId: number, trust: boolean): void {
+  hostKeyQuestions.get(requestId)?.(trust);
+  hostKeyQuestions.delete(requestId);
+}
+
+/** Asks the focused window, else any; with none open the key is not trusted (decision 071). */
+function askHostKey(offer: HostKeyOffer): Promise<boolean> {
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (window === undefined) return Promise.resolve(false);
+  const requestId = nextHostKeyQuestion++;
+  return new Promise((resolve) => {
+    hostKeyQuestions.set(requestId, resolve);
+    window.webContents.once("destroyed", () => answerHostKey(requestId, false));
+    window.webContents.send(CHANNELS.hostKeyPrompt, { requestId, offer } satisfies HostKeyPrompt);
+  });
+}
+
+const hostKeys = createHostKeyService({
+  knownHosts: createKnownHosts({
+    appFile: join(app.getPath(USER_DATA), KNOWN_HOSTS_FILE),
+    userFile: homedir() === "" ? null : join(homedir(), USER_KNOWN_HOSTS),
+    files: {
+      readText: (path) => files.readText(path),
+      async writeText(path, text) {
+        await files.writeText(`${path}${TEMPORARY_SUFFIX}`, text);
+        await rename(`${path}${TEMPORARY_SUFFIX}`, path);
+      },
+    },
+  }),
+  ask: askHostKey,
+});
+
 const hosts = createHostRegistry<WebContents>({
   pluginRoots,
   dependencies: {
@@ -303,6 +347,7 @@ const hosts = createHostRegistry<WebContents>({
     },
     protect: protectConfig,
   },
+  hostKeys,
 });
 
 const closeGuard = createCloseGuard<BrowserWindow>({ quit: () => app.quit() });
@@ -634,6 +679,7 @@ void app.whenReady().then(async () => {
     consoles,
     history,
     onChanged: (list) => broadcast(CHANNELS.datasourcesChanged, list),
+    readKeyFile: (path) => files.readText(path).catch(() => null),
   });
   const importer = createImporter({
     environment: {
@@ -687,6 +733,7 @@ void app.whenReady().then(async () => {
     openFile,
     saveFile,
     revealFile: (path) => shell.showItemInFolder(path),
+    answerHostKey,
     answerClose(sender, proceed) {
       const window = BrowserWindow.fromWebContents(sender);
       if (!proceed) {

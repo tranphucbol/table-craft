@@ -31,7 +31,13 @@ const PG_DRAFT: DatasourceDraft = {
   secretModes: { password: "forever" },
 };
 
-async function service(options: { ephemeral?: EphemeralDatasource; cipher?: ReturnType<typeof fakeCipher> } = {}) {
+async function service(
+  options: {
+    ephemeral?: EphemeralDatasource;
+    cipher?: ReturnType<typeof fakeCipher>;
+    keyFiles?: Readonly<Record<string, string>>;
+  } = {},
+) {
   const files = memoryFiles();
   const cipher = options.cipher ?? fakeCipher();
   const dependencies = fakeHostDependencies();
@@ -49,6 +55,7 @@ async function service(options: { ephemeral?: EphemeralDatasource; cipher?: Retu
     consoles: createConsoleFiles({ directory: DIRECTORY, files }),
     history,
     onChanged: (list) => changes.push(list),
+    readKeyFile: (path) => Promise.resolve(options.keyFiles?.[path] ?? null),
   });
   return { files, cipher, dependencies, changes, history, service: created };
 }
@@ -303,5 +310,130 @@ describe("datasource service", () => {
     await expect(datasources.save({ datasource: { ...PG_DRAFT, id: "pg" }, secrets: {} })).rejects.toThrow(
       "TABLE_CRAFT_DATASOURCE",
     );
+  });
+});
+
+const SSH_PASSWORD = "bastion-secret";
+const KEY_PATH = "/home/me/.ssh/id_rsa";
+const ENCRYPTED_KEY =
+  "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,00\n\nAAAA\n-----END RSA PRIVATE KEY-----\n";
+const PLAIN_KEY = "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----\n";
+const SSH_SETTINGS = {
+  enabled: true,
+  host: "bastion",
+  port: 22,
+  user: "deploy",
+  auth: "password",
+  keyPath: "",
+} as const;
+
+describe("datasource service SSH tunnel", () => {
+  it("givenSshPassword_whenSavedAndConnected_thenSecretStoredApartAndTunnelBooted", async () => {
+    const { files, dependencies, service: datasources } = await service();
+
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: SSH_SETTINGS },
+      secrets: { password: { action: "set", value: SECRET }, "ssh.password": { action: "set", value: SSH_PASSWORD } },
+    });
+    await datasources.connect(saved.id, {}, WINDOW);
+
+    const json = files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`) ?? "";
+    expect(json).not.toContain(SSH_PASSWORD);
+    expect(saved.ssh).toEqual(SSH_SETTINGS);
+    expect(saved.storedSecrets).toEqual(["password", "ssh.password"]);
+    expect(bootedConfig(dependencies)).toEqual(
+      expect.objectContaining({
+        config: expect.not.objectContaining({ "ssh.password": SSH_PASSWORD }) as unknown,
+        ssh: { host: "bastion", port: 22, user: "deploy", auth: "password", password: SSH_PASSWORD },
+      }),
+    );
+  });
+
+  it("givenNeverSshPassword_whenConnecting_thenAskedForIt", async () => {
+    const { service: datasources } = await service();
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: SSH_SETTINGS, secretModes: { password: "forever", "ssh.password": "never" } },
+      secrets: { password: { action: "set", value: SECRET } },
+    });
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["ssh.password"] });
+  });
+
+  it("givenEncryptedKey_whenConnect_thenAsksForPassphrase", async () => {
+    const { service: datasources } = await service({ keyFiles: { [KEY_PATH]: ENCRYPTED_KEY } });
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: { ...SSH_SETTINGS, auth: "key", keyPath: KEY_PATH } },
+      secrets: { password: { action: "set", value: SECRET } },
+    });
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({
+      status: "needsSecrets",
+      keys: ["ssh.passphrase"],
+    });
+  });
+
+  it("givenUnencryptedKey_whenConnect_thenNoPassphraseAsked", async () => {
+    const { dependencies, service: datasources } = await service({ keyFiles: { [KEY_PATH]: PLAIN_KEY } });
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: { ...SSH_SETTINGS, auth: "key", keyPath: KEY_PATH } },
+      secrets: { password: { action: "set", value: SECRET } },
+    });
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
+    expect(bootedConfig(dependencies)).toMatchObject({
+      ssh: { host: "bastion", user: "deploy", auth: "key", keyPath: KEY_PATH },
+    });
+  });
+
+  it("givenTunnelTurnedOff_whenConnected_thenDirectButSettingsAndSecretKept", async () => {
+    const { dependencies, service: datasources } = await service();
+
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: { ...SSH_SETTINGS, enabled: false } },
+      secrets: { password: { action: "set", value: SECRET }, "ssh.password": { action: "set", value: SSH_PASSWORD } },
+    });
+    await datasources.connect(saved.id, {}, WINDOW);
+
+    expect(saved.ssh?.host).toBe("bastion");
+    expect(saved.storedSecrets).toContain("ssh.password");
+    expect(bootedConfig(dependencies)).not.toHaveProperty("ssh");
+  });
+
+  it("givenPluginWithoutNetwork_whenSavedWithSsh_thenSshDropped", async () => {
+    const { service: datasources } = await service();
+
+    const saved = await datasources.save({
+      datasource: {
+        ...PG_DRAFT,
+        pluginId: "sqlite",
+        config: { path: "/tmp/a.db" },
+        secretModes: { "ssh.password": "forever" },
+        ssh: SSH_SETTINGS,
+      },
+      secrets: { "ssh.password": { action: "set", value: SSH_PASSWORD } },
+    });
+
+    expect(saved.ssh).toBeUndefined();
+    expect(saved.secretModes).toEqual({});
+  });
+
+  it("givenTunnelWithoutHost_whenSaved_thenRefusedNamingIt", async () => {
+    const { service: datasources } = await service();
+
+    await expect(
+      datasources.save({ datasource: { ...PG_DRAFT, ssh: { ...SSH_SETTINGS, host: " " } }, secrets: {} }),
+    ).rejects.toThrow("SSH host is required.");
+  });
+
+  it("givenEditedTunnelWithBlankSshPassword_whenTested_thenStoredSecretMergedInMain", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save({
+      datasource: { ...PG_DRAFT, ssh: SSH_SETTINGS },
+      secrets: { password: { action: "set", value: SECRET }, "ssh.password": { action: "set", value: SSH_PASSWORD } },
+    });
+
+    void datasources.test({ datasource: saved, secrets: {} });
+
+    expect(bootedConfig(dependencies)).toMatchObject({ ssh: { password: SSH_PASSWORD }, config: { password: SECRET } });
   });
 });

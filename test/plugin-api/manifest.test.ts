@@ -87,6 +87,28 @@ describe("pluginManifestSchema", () => {
   });
 });
 
+describe("pluginManifestSchema network", () => {
+  const PORT = { key: "port", label: "Port", kind: "number" };
+  const TIMEOUT = { key: "connectTimeout", label: "Timeout", kind: "number" };
+  const parses = (fields: readonly unknown[], network: unknown): boolean =>
+    pluginManifestSchema.safeParse({ ...VALID_MANIFEST, id: "server", connection: { fields, network } }).success;
+
+  it("givenNetworkNamingDeclaredFields_whenParsed_thenAccepted", () => {
+    expect(parses([HOST, PORT, TIMEOUT], { host: "host", port: "port", connectTimeout: "connectTimeout" })).toBe(true);
+    expect(parses([HOST, PORT], { host: "host", port: "port" })).toBe(true);
+  });
+
+  it("givenManifestNetworkNamingMissingField_whenParsed_thenRejected", () => {
+    expect(parses([HOST], { host: "host", port: "port" })).toBe(false);
+    expect(parses([HOST, PORT], { host: "host", port: "port", connectTimeout: "connectTimeout" })).toBe(false);
+  });
+
+  it("givenNetworkNamingFieldOfWrongKind_whenParsed_thenRejected", () => {
+    expect(parses([HOST, { ...PORT, kind: "text" }], { host: "host", port: "port" })).toBe(false);
+    expect(parses([HOST, PORT], { host: "port", port: "host" })).toBe(false);
+  });
+});
+
 describe("connectionFormProblems", () => {
   it("givenAgreeingFormAndSchema_whenCompared_thenNoProblems", () => {
     expect(connectionFormProblems(serverManifest([HOST, USER, PASSWORD]), SERVER_SCHEMA)).toEqual([]);

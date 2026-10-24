@@ -5,6 +5,7 @@
  */
 import { builtinModules } from "node:module";
 import { resolve } from "node:path";
+import type { Plugin } from "vite";
 
 export const BUILD_TARGET = "node20";
 export const PACKAGE_ROOT = import.meta.dirname;
@@ -33,3 +34,17 @@ const NODE_SCHEME = /^node:/;
 
 /** Workspace packages and zod are inlined; only what the runtime itself provides stays external. */
 export const NODE_EXTERNALS = [...NODE_BUILTINS, NODE_SCHEME, "electron"];
+
+/**
+ * ssh2's optional native addons: the packaged app ships no `.node` files (decision 033), and ssh2
+ * requires each inside a `try`, falling back to its JavaScript crypto (decision 070).
+ */
+const OPTIONAL_NATIVE_ADDONS = [/sshcrypto\.node$/, /^cpu-features$/];
+const NATIVE_STUB_ID = "\0table-craft:native-stub";
+
+export const nativeAddonStubs: Plugin = {
+  name: "table-craft-native-addon-stubs",
+  enforce: "pre",
+  resolveId: (source) => (OPTIONAL_NATIVE_ADDONS.some((addon) => addon.test(source)) ? NATIVE_STUB_ID : null),
+  load: (id) => (id === NATIVE_STUB_ID ? 'throw new Error("This native addon is not bundled.");' : null),
+};

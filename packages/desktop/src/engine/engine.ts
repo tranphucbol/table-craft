@@ -4,6 +4,7 @@ import {
   completionCatalog,
   CoreError,
   CsvError,
+  createConnector,
   EditRejectedError,
   editableIdentity,
   fileChunks,
@@ -12,7 +13,6 @@ import {
   generateEdits,
   loadedPlugin,
   matchCondition,
-  openSession,
   orderClause,
   previewFile,
   project,
@@ -27,8 +27,11 @@ import {
   CONSOLE_READ_ONLY_REASONS,
   consoleEditable,
   tableSelect,
+  TunnelError,
+  type Connector,
   type EditTable,
   type ExportEncoderOptions,
+  type HostKeyVerifier,
   type PluginLoadResult,
   type ResultState,
   type RowEdit,
@@ -118,6 +121,8 @@ export interface EngineOptions {
   readonly plugins: readonly PluginLoadResult[];
   /** Where request records go (plan 017); silent when absent, as in most tests. */
   readonly log?: Logger;
+  /** Asks main whether to trust an SSH host key (decision 071); absent, every key is refused unknown. */
+  readonly verifyHostKey?: HostKeyVerifier;
 }
 
 /** One renderer port's view of the engine. Its sessions and results die with it. */
@@ -187,6 +192,9 @@ function statementFailed(cause: unknown, readOnly: boolean): EngineFailure {
     return new EngineFailure({ code: "cancelled", message: cause.message, hint: "Run it again when ready." });
   }
   if (isPluginError(cause) && cause.code === "sessionBusy") return sessionBusy();
+  if (cause instanceof TunnelError) {
+    return new EngineFailure({ code: cause.code, message: cause.message, hint: cause.hint }, cause);
+  }
   return new EngineFailure(
     { code: "statementFailed", message: messageOf(cause), hint: readOnly ? READ_ONLY_STATEMENT_HINT : STATEMENT_HINT },
     cause,
@@ -279,32 +287,65 @@ function connectOptions(datasource: DatasourceConfig, readOnly: boolean): Connec
   return keepAliveSeconds > 0 ? { readOnly, keepAliveInitialDelayMs: keepAliveSeconds * MS_PER_SECOND } : { readOnly };
 }
 
-function connectDatasource(options: EngineOptions, readOnly = options.datasource.readOnly): Promise<Session> {
+const refuseUnknownHostKey: HostKeyVerifier = (offer) =>
+  Promise.reject(
+    new TunnelError(
+      "sshHostKeyUnknown",
+      `The SSH server ${offer.host}:${String(offer.port)} presented an unknown ${offer.algorithm} key ${offer.fingerprint}.`,
+      "Connect from a TableCraft window, which asks whether to trust the key.",
+    ),
+  );
+
+/** The data source's connector: one SSH tunnel shared by every session, or none (decision 070). */
+export function datasourceConnector(options: EngineOptions): Connector {
   const { datasource } = options;
-  return openSession(
-    options.plugins,
-    datasource.pluginId,
-    datasource.config,
-    connectOptions(datasource, readOnly),
-  ).catch((cause: unknown) => {
+  const { keepAliveSeconds } = datasource;
+  return createConnector({
+    plugins: options.plugins,
+    pluginId: datasource.pluginId,
+    config: datasource.config,
+    ssh: datasource.ssh ?? null,
+    verifyHostKey: options.verifyHostKey ?? refuseUnknownHostKey,
+    ...(keepAliveSeconds > 0 ? { keepAliveMs: keepAliveSeconds * MS_PER_SECOND } : {}),
+  });
+}
+
+function connectDatasource(
+  options: EngineOptions,
+  connector: Connector,
+  readOnly = options.datasource.readOnly,
+): Promise<Session> {
+  return connector.connect(connectOptions(options.datasource, readOnly)).catch((cause: unknown) => {
     throw connectionFailed(cause);
   });
 }
 
 /**
  * Test Connection (plan 004): connect once, read what the server reports, close. Never rejects;
- * a failure comes back as the error the console would have shown.
+ * a failure comes back as the error the console would have shown, and the SSH hop, when the
+ * tunnel opened, comes back either way.
  */
 export async function probeDatasource(options: EngineOptions, now: () => number = Date.now): Promise<ProbeResult> {
+  const connector = datasourceConnector(options);
   const started = now();
   try {
-    const session = await connectDatasource(options);
+    const session = await connectDatasource(options, connector);
     const elapsedMs = now() - started;
     await session.close().catch(() => undefined);
     const { manifest } = loadedPlugin(options.plugins, options.datasource.pluginId);
-    return { ok: true, pluginName: manifest.name, serverVersion: session.serverVersion, elapsedMs };
+    const hop = connector.hop;
+    return {
+      ok: true,
+      pluginName: manifest.name,
+      serverVersion: session.serverVersion,
+      elapsedMs,
+      ...(hop === null ? {} : { ssh: hop }),
+    };
   } catch (cause) {
-    return { ok: false, error: toEngineError(cause) };
+    const hop = connector.hop;
+    return { ok: false, error: toEngineError(cause), ...(hop === null ? {} : { ssh: hop }) };
+  } finally {
+    await connector.close();
   }
 }
 
@@ -496,6 +537,7 @@ function countOf(value: WireValue | undefined): number {
 export function createEngine(options: EngineOptions, now: () => number = Date.now): Engine {
   const log = options.log ?? null;
   const sessionLog = log?.child("session") ?? null;
+  const connector = datasourceConnector(options);
   let target: LogFields | null = null;
 
   /** Classified for the record only; a plugin that cannot classify leaves the kind unknown. */
@@ -554,7 +596,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   let introspection: Promise<Introspection> | null = null;
 
   async function openIntrospection(): Promise<Introspection> {
-    const session = await connectDatasource(options);
+    const session = await connectDatasource(options, connector);
     if (session.introspector === undefined) {
       await session.close().catch(() => undefined);
       throw new EngineFailure({
@@ -702,7 +744,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
 
   /** An export's rows from `sql` on a read-only session of its own, every byte of binary values in full. */
   async function exportRowsOf(sql: string): Promise<ExportRows> {
-    const session = await connectDatasource(options, true);
+    const session = await connectDatasource(options, connector, true);
     try {
       const result = await session.execute(sql, [], { fullBytes: true });
       return { rows: result.rows, close: () => session.close() };
@@ -772,7 +814,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   /** Count Rows on a session of its own: the editor's session would close its open cursor. */
   async function countRows(path: readonly string[], name: string, where: string): Promise<number> {
     const { qualified } = await relationOf(path, name);
-    const session = await connectDatasource(options);
+    const session = await connectDatasource(options, connector);
     try {
       const result = await session.execute(tableCount(qualified, where));
       let first: Row | undefined;
@@ -874,8 +916,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
    * stall watchdog may end an import (decision 046).
    */
   async function importSession(target: InsertTarget): Promise<ImportSession> {
-    const { pluginId, config } = options.datasource;
-    const session = await openSession(options.plugins, pluginId, config, connectOptions(options.datasource, false));
+    const session = await connector.connect(connectOptions(options.datasource, false));
     const insertRows = session.insertRows?.bind(session);
     const { transactions } = session;
     if (transactions === undefined || insertRows === undefined) {
@@ -934,7 +975,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       fields = target.mapping.map((entry) => entry.field);
     } else {
       const { qualified, ddl } = await newTableDdl(target.path, target.relation, target.columns);
-      const session = await connectDatasource(options);
+      const session = await connectDatasource(options, connector);
       try {
         await drained(await session.execute(ddl));
       } catch (cause) {
@@ -1089,7 +1130,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       throw new EngineFailure({ code: "invalidRequest", message: STALE_PREVIEW, hint: STALE_PREVIEW_HINT });
     }
     if (script.statements.length > 0) {
-      const session = await connectDatasource(options);
+      const session = await connectDatasource(options, connector);
       try {
         await applyDdl(session, script);
       } catch (cause) {
@@ -1450,7 +1491,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
      */
     async function reconnect(sessionId: string, open: OpenSession): Promise<Reconnection> {
       const mode = open.session.transactions?.mode;
-      const session = await connectDatasource(options);
+      const session = await connectDatasource(options, connector);
       const opening = await namespaceOf({ session, capabilities: open.capabilities });
       // Before manual mode, so the replayed switch does not open a transaction.
       const restored = open.moved && (await replaySwitch(session, open.switchedBy));
@@ -1491,7 +1532,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     }
 
     function probeServer(): Promise<void> {
-      return connectDatasource(options, true).then((session) => {
+      return connectDatasource(options, connector, true).then((session) => {
         void session.close().catch(() => undefined);
       });
     }
@@ -1558,6 +1599,10 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
         busy = isPluginError(cause) && cause.code === "sessionBusy";
         const lost = isPluginError(cause) && cause.code === "connectionLost";
         if (busy && reconnected !== undefined && busyRefused(sessionId, open).transaction) throw transactionLost();
+        // Cut short mid-statement, so not retried; the next statement reconnects through a new tunnel.
+        if (cause instanceof TunnelError && cause.code === "sshTunnelLost" && open.lost === null) {
+          abandon(sessionId, open, cause.message);
+        }
         if (reconnected !== undefined || !(busy || lost)) throw failed(cause);
       }
       const { transaction } = busy ? busyRefused(sessionId, open) : abandon(sessionId, open, "driver reported");
@@ -1857,7 +1902,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
 
     const routes: { [M in EngineMethod]: (request: RequestOf<M>) => Promise<ResultOf<M>> } = {
       "session.open": async () => {
-        const session = await connectDatasource(options);
+        const session = await connectDatasource(options, connector);
         const { manifest, plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
         const sessionId = `${SESSION_PREFIX}${nextSession++}`;
         const opening = await namespaceOf({ session, capabilities: plugin.capabilities });
@@ -2094,8 +2139,8 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     await Promise.all([tasks.close(), imports.close()]);
     const open = introspection;
     introspection = null;
-    if (open === null) return;
-    await open.then((entry) => entry.session.close()).catch(() => undefined);
+    if (open !== null) await open.then((entry) => entry.session.close()).catch(() => undefined);
+    await connector.close();
   }
 
   return {

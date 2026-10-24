@@ -29,7 +29,7 @@ export interface TunnelOptions {
   readonly ssh: SshEndpoint;
   readonly target: TunnelTarget;
   readonly verifyHostKey: HostKeyVerifier;
-  /** Bounds the SSH handshake, not counting the time the host-key prompt waits for the user. */
+  /** Bounds the SSH handshake, not counting the time the host-key prompt waits for the user; 0 waits forever. */
   readonly timeoutMs: number;
   /** SSH keepalive interval; 0 or absent turns it off. */
   readonly keepAliveMs?: number;
@@ -178,6 +178,7 @@ export async function openTunnel(options: TunnelOptions): Promise<Tunnel> {
       reject(error instanceof Error ? error : new Error(String(error)));
     };
     const arm = (): void => {
+      if (options.timeoutMs <= 0) return;
       timer = setTimeout(() => {
         fail(
           new TunnelError(

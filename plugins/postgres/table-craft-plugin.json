@@ -2,7 +2,7 @@
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "0.21.0",
+  "apiVersion": "0.22.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -66,6 +66,7 @@
         { "name": "connect_timeout", "key": "connectTimeout" },
         { "name": "application_name", "key": "applicationName" }
       ]
-    }
+    },
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" }
   }
 }

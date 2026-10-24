@@ -4,7 +4,7 @@
  * their originals by `test/desktop/protocol.test.ts`.
  */
 import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
-import type { Capability, ProbeResult } from "@table-craft/desktop/engine/protocol.js";
+import type { Capability, HostKeyOffer, ProbeResult, SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import type { Settings } from "@table-craft/desktop/settings/settings.js";
 
@@ -29,6 +29,8 @@ export const CHANNELS = {
   updateState: "table-craft:update.state",
   /** Main to the importing window: one more connection done; the payload is an `ImportProgress`. */
   importProgress: "table-craft:import.progress",
+  /** Main to a window: an SSH server offered an unknown host key; the payload is a `HostKeyPrompt`. */
+  hostKeyPrompt: "table-craft:ssh.host-key-prompt",
 } as const;
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
@@ -78,6 +80,7 @@ export const INVOKE_CHANNELS = {
   importPreview: "table-craft:import.preview",
   importRun: "table-craft:import.run",
   importCancel: "table-craft:import.cancel",
+  answerHostKey: "table-craft:ssh.answer-host-key",
 } as const;
 
 /** The `window.postMessage` kind preload uses to hand a port on; contextBridge cannot carry one. */
@@ -146,6 +149,43 @@ export interface PluginInfo {
   readonly highlight: string | null;
   /** The manifest's connection URL; null when the plugin reads none. */
   readonly url: ConnectionUrlSpec | null;
+  /** Mirrors `NetworkSpec` in plugin-api; null when the data source is not reached over the network, so it has no SSH tunnel. */
+  readonly network: {
+    readonly host: string;
+    readonly port: string;
+    readonly connectTimeout?: string | undefined;
+  } | null;
+}
+
+/** The SSH tunnel's settings as `datasources.json` holds them (decision 070); its secrets are in `secretModes`. */
+export interface SshSettings {
+  readonly enabled: boolean;
+  readonly host: string;
+  readonly port: number;
+  readonly user: string;
+  readonly auth: SshAuthMethod;
+  /** The private key file, for `key` authentication. */
+  readonly keyPath: string;
+}
+
+export const DEFAULT_SSH_PORT = 22;
+
+/**
+ * The secret keys of the SSH tunnel, beside the plugin's own in `secretModes` and the secret
+ * store. Dotted, so no connection field (camelCase, decision 019) can share one.
+ */
+export const SSH_SECRET_KEYS = { password: "ssh.password", passphrase: "ssh.passphrase" } as const;
+
+/** How the SSH secrets are labelled where they are asked for. */
+export const SSH_SECRET_LABELS: Readonly<Record<string, string>> = {
+  [SSH_SECRET_KEYS.password]: "SSH password",
+  [SSH_SECRET_KEYS.passphrase]: "Key passphrase",
+};
+
+/** Main asks a window whether to trust an unknown SSH host key; answer with `answerHostKey`. */
+export interface HostKeyPrompt {
+  readonly requestId: number;
+  readonly offer: HostKeyOffer;
 }
 
 /** A datasource as `datasources.json` holds it: no secret value, ever (decision 010). */
@@ -168,6 +208,8 @@ export interface Datasource {
   readonly secretModes: Readonly<Record<string, SecretMode>>;
   /** The app and id it was imported from (decision 068); absent for one made in TableCraft. */
   readonly origin?: DatasourceOrigin | undefined;
+  /** Only for a plugin whose manifest declares `network`; absent is no tunnel. */
+  readonly ssh?: SshSettings | undefined;
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */
@@ -474,6 +516,9 @@ export interface TableCraftBridge {
   onCloseRequested(listener: () => void): () => void;
   /** Lets the held close go ahead, or keeps the window open. */
   answerClose(proceed: boolean): Promise<InvokeResult<null>>;
+  /** Main holds an SSH connection on an unknown host key until `answerHostKey`; returns the unsubscribe. */
+  onHostKeyPrompt(listener: (prompt: HostKeyPrompt) => void): () => void;
+  answerHostKey(requestId: number, trust: boolean): Promise<InvokeResult<null>>;
   readSettings(): Promise<InvokeResult<SettingsSnapshot>>;
   appInfo(): Promise<InvokeResult<AppInfo>>;
   /** Saves the whole document; every window, this one included, hears it on `onSettingsChanged`. */

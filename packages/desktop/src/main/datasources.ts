@@ -5,6 +5,7 @@ import {
   DATASOURCE_COLORS,
   IMPORT_APPS,
   SECRET_MODES,
+  SSH_SECRET_KEYS,
   type ConnectionField,
   type Datasource,
   type DatasourceDraft,
@@ -19,6 +20,16 @@ const FOLDER_SEPARATOR = "/";
 const JSON_INDENT = 2;
 
 const configValue = z.union([z.string(), z.number(), z.boolean()]);
+const MAX_PORT = 65_535;
+
+const sshSchema = z.strictObject({
+  enabled: z.boolean(),
+  host: z.string(),
+  port: z.number().int().min(1).max(MAX_PORT),
+  user: z.string(),
+  auth: z.enum(["password", "key", "agent"]),
+  keyPath: z.string(),
+});
 
 const datasourceSchema = z.strictObject({
   id: z.string().min(1),
@@ -38,6 +49,7 @@ const datasourceSchema = z.strictObject({
   config: z.record(z.string(), configValue),
   secretModes: z.record(z.string(), z.enum(SECRET_MODES)),
   origin: z.strictObject({ app: z.enum(IMPORT_APPS), id: z.string().min(1) }).optional(),
+  ssh: sshSchema.optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -92,8 +104,16 @@ export function normalizeFolder(folder: string | null): string | null {
   return segments.length === 0 ? null : segments.join(FOLDER_SEPARATOR);
 }
 
-/** Drops config keys the form does not declare and every secret value, whatever the renderer sent. */
-export function toDatasource(draft: DatasourceDraft, id: string, fields: readonly ConnectionField[]): Datasource {
+/**
+ * Drops config keys the form does not declare and every secret value, whatever the renderer sent,
+ * and the SSH tunnel unless the plugin `offersTunnel` (its manifest declares `network`, decision 070).
+ */
+export function toDatasource(
+  draft: DatasourceDraft,
+  id: string,
+  fields: readonly ConnectionField[],
+  offersTunnel = false,
+): Datasource {
   const config: Record<string, Datasource["config"][string]> = {};
   const secretModes: Record<string, Datasource["secretModes"][string]> = {};
   for (const field of fields) {
@@ -104,6 +124,13 @@ export function toDatasource(draft: DatasourceDraft, id: string, fields: readonl
     }
     const value = draft.config[field.key];
     if (value !== undefined) config[field.key] = value;
+  }
+  const ssh = offersTunnel ? draft.ssh : undefined;
+  if (ssh !== undefined) {
+    for (const key of Object.values(SSH_SECRET_KEYS)) {
+      const mode = draft.secretModes[key];
+      if (mode !== undefined) secretModes[key] = mode;
+    }
   }
   return {
     id,
@@ -118,6 +145,7 @@ export function toDatasource(draft: DatasourceDraft, id: string, fields: readonl
     config,
     secretModes,
     ...(draft.origin === undefined ? {} : { origin: { app: draft.origin.app, id: draft.origin.id } }),
+    ...(ssh === undefined ? {} : { ssh: { ...ssh, host: ssh.host.trim(), user: ssh.user.trim() } }),
   };
 }
 

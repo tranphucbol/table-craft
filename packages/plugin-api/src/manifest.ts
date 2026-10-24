@@ -81,6 +81,34 @@ export const connectionUrlSchema = z.strictObject({
 
 export type ConnectionUrl = z.infer<typeof connectionUrlSchema>;
 
+/**
+ * Which fields hold the server's address (decision 070), so the host can open an SSH tunnel and
+ * hand the plugin `127.0.0.1` and the forwarded port instead. `connectTimeout`, in seconds, bounds
+ * the SSH hop too. Absent: the data source is not reached over the network and offers no tunnel.
+ */
+export const networkSpecSchema = z.strictObject({
+  host: z.string().regex(FIELD_KEY),
+  port: z.string().regex(FIELD_KEY),
+  connectTimeout: z.string().regex(FIELD_KEY).optional(),
+});
+
+export type NetworkSpec = z.infer<typeof networkSpecSchema>;
+
+const NETWORK_FIELD_KINDS = { host: "text", port: "number", connectTimeout: "number" } as const;
+
+function networkFieldsDeclared(connection: {
+  readonly fields: readonly ConnectionField[];
+  readonly network?: NetworkSpec | undefined;
+}): boolean {
+  const network = connection.network;
+  if (network === undefined) return true;
+  return (Object.keys(NETWORK_FIELD_KINDS) as (keyof NetworkSpec)[]).every((role) => {
+    const key = network[role];
+    if (key === undefined) return true;
+    return connection.fields.some((field) => field.key === key && field.kind === NETWORK_FIELD_KINDS[role]);
+  });
+}
+
 export const pluginManifestSchema = z
   .strictObject({
     id: z.string().regex(PLUGIN_ID, { message: "expected lower-case letters, digits and dashes" }),
@@ -93,11 +121,17 @@ export const pluginManifestSchema = z
     /** The highlighter the console uses for this plugin's dialect (decision 008). */
     highlight: z.string().min(1),
     /** The connection form, readable without running plugin code (decision 019). */
-    connection: z.strictObject({
-      fields: z.array(connectionFieldSchema).min(1),
-      /** Absent: the form offers no URL to paste and the data source no Copy as URL. */
-      url: connectionUrlSchema.optional(),
-    }),
+    connection: z
+      .strictObject({
+        fields: z.array(connectionFieldSchema).min(1),
+        /** Absent: the form offers no URL to paste and the data source no Copy as URL. */
+        url: connectionUrlSchema.optional(),
+        network: networkSpecSchema.optional(),
+      })
+      .refine(networkFieldsDeclared, {
+        message: "network names a field the form does not declare, or one of the wrong kind",
+        path: ["network"],
+      }),
   })
   // A definition is read through the introspector, which only `schemaTree` promises (decision 029).
   .refine((manifest) => !manifest.capabilities.includes("ddl") || manifest.capabilities.includes("schemaTree"), {

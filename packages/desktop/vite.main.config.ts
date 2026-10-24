@@ -7,6 +7,7 @@ import {
   NODE_CONDITIONS,
   NODE_EXTERNALS,
   NODE_MAIN_FIELDS,
+  nativeAddonStubs,
   SOURCE_ROOT,
 } from "./vite.shared.js";
 
@@ -15,6 +16,7 @@ const OUT_FILE = "main.js";
 const UPDATE_TEST_BUILD = process.env.TABLE_CRAFT_UPDATE_TEST_BUILD === "1";
 
 export default defineConfig({
+  plugins: [nativeAddonStubs],
   resolve: { alias: ALIASES, mainFields: NODE_MAIN_FIELDS, conditions: NODE_CONDITIONS },
   define: { __TABLE_CRAFT_UPDATE_TEST_BUILD__: JSON.stringify(UPDATE_TEST_BUILD) },
   build: {
