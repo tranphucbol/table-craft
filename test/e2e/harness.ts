@@ -69,6 +69,15 @@ export interface SavedDatasource {
   readonly statementTimeoutSeconds?: number;
   readonly config: Readonly<Record<string, string | number | boolean>>;
   readonly secretModes?: Readonly<Record<string, "forever" | "untilRestart" | "never">>;
+  /** Plan 036's tunnel; its secrets are `ssh.password` and `ssh.passphrase` in `secretModes`. */
+  readonly ssh?: {
+    readonly enabled: boolean;
+    readonly host: string;
+    readonly port: number;
+    readonly user: string;
+    readonly auth: "password" | "key" | "agent";
+    readonly keyPath: string;
+  };
 }
 
 const DATASOURCES_FILE = "datasources.json";
