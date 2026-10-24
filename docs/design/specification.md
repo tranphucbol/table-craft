@@ -597,6 +597,7 @@ run either.
 | `palette.findAction`                     | Find Action…                          | `⇧⌘A`    | `Ctrl+Shift+A`         |
 | `palette.searchEverywhere`               | Search Everywhere                     | `⇧⇧`     | Double Shift           |
 | `datasource.new`                         | New Data Source…                      | `⌘N` ¹   | `Ctrl+N` ¹             |
+| `datasource.import`                      | Import Data Sources…                  |          |                        |
 | `datasource.properties`                  | Data Source Properties…               | `⌘;`     | `Ctrl+;`               |
 | `datasource.switchTo`                    | Switch to Data Source                 |          |                        |
 | `datasource.duplicate`                   | Duplicate Data Source                 | `⌘D` ¹   | `Ctrl+D` ¹             |
@@ -1411,7 +1412,9 @@ migrated on load. A file that is not JSON, fails the schema, or has an unknown v
 the reason once. Two optional keys sit beside `readOnly` (decision 054): `keepAliveSeconds`
 (0–7,200; absent means 30, 0 turns keepalive off) and `statementTimeoutSeconds` (0–86,400; absent
 follows the `console.statementTimeoutSeconds` setting, 0 waits). The Data Sources dialog shows
-them in Advanced, the first for a plugin with `keepAlive`, the second for one with `cancel`.
+them in Advanced, the first for a plugin with `keepAlive`, the second for one with `cancel`. An
+imported datasource carries `origin: { app: "datagrip" | "tablepro", id }` (decision 068), the
+other app's id for it, so a second import knows it; editing keeps it, and nothing else reads it.
 
 A plugin with `connection.url` (decision 055) gets a URL row at the top of General: a URL pasted
 there, or into the host or file field, fills the fields, and its password becomes the password
@@ -1464,6 +1467,10 @@ request is parsed with Zod in main.
 | `settings.write`           | the whole settings document      | `null`; saved, then broadcast as `settings.changed`                       |
 | `themes.reload`            | none                             | `null`; rereads `<userData>/themes/`, then broadcasts                     |
 | `themes.open-folder`       | none                             | `null`; creates the folder if missing and opens it                        |
+| `import.scan`              | none                             | `ImportSource[]`: per app, found, count, where it looked, password store  |
+| `import.preview`           | `{ source }` or a file + phrase  | `ready { previewId, rows }`, `needsPassphrase` or `wrongPassphrase`       |
+| `import.run`               | `previewId`, `keys`, options     | `{ imported, withPasswords, skipped, ids, cancelled, keychainDenied }`    |
+| `import.cancel`            | none                             | `null`; the run stops before its next item                                |
 
 Console ids and names must match `CONSOLE_NAME_PATTERN = /^[\w.-]{1,64}$/` and not be dots alone,
 so no request leaves `<userData>/consoles/`. A listed datasource carries `storedSecrets` (the keys
@@ -1474,6 +1481,33 @@ broadcasts `datasources.changed` with the new list after every save or delete, a
 `window.close-requested` when the window is asked to close. On `connected` the port arrives
 as `table-craft:engine-port` with the datasource id, relayed by preload as a window message; a
 window holds one port per connected datasource.
+
+### Importing from DataGrip and TablePro
+
+Main reads the other apps' files read-only (decision 067; `main/import/`) and keeps every password
+it reads; a preview row says only where a password would come from (`keychain`, `found`, `inFile`,
+`locked`, `askOnConnect`, `notSaved`, `notNeeded`). The preview stays in main under its
+`previewId` until the run.
+
+- **DataGrip**: the newest `DataGrip<version>` config directory, its global
+  `options/dataSources.xml`, and each project's `.idea/dataSources.xml` with
+  `dataSources.local.xml` winning per field. Projects come from `projects/` and
+  `options/recentProjects.xml`; `$USER_HOME$`, `$PROJECT_DIR$` and the path macros expand. A
+  `group-name` becomes the folder, else the project name. Passwords live where
+  `options/security.xml` says: the native store (macOS Keychain through `/usr/bin/security`, the
+  Secret Service through `secret-tool`), read only during the run and only when Import passwords is
+  on, one lookup per item, stopping at the first denial; or the KeePass `c.kdbx`, opened at
+  preview with the built-in main key in `c.pwd`.
+- **TablePro**: `connections.json` in its Application Support folder and its groups from the
+  `com.TablePro` defaults, without passwords; or a `.tablepro` export, plain or encrypted with a
+  passphrase, with them.
+
+A connection maps by its URL scheme to a plugin's `connection.url.schemes`; one no plugin claims is
+listed as not supported. An SSH tunnel, an SSL mode TableCraft lacks and certificate files become
+warnings. A connection whose origin, or whose plugin, host, port, database, user and path, matches
+an existing datasource starts unticked; importing it adds `<name> (2)`. `import.run` saves all of
+them in one write and sends `import.progress { done, total, message }` as it goes. The `import`
+log child records counts only.
 
 ### Database tool window
 

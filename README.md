@@ -170,6 +170,34 @@ close; one that cannot close within 5 seconds costs a reconnect, which Output re
 
 See [Datasources and secrets](docs/design/specification.md#datasources-and-secrets).
 
+### Import from DataGrip or TablePro
+
+**File → Import Data Sources…**, or the import button beside Add in the Data Sources dialog, brings
+your connections over from DataGrip or TablePro. TableCraft only reads their files; it never
+changes them. The first step shows what it found on this computer and where it looked; **From a
+file…** reads a DataGrip `dataSources.xml` or a TablePro `.tablepro` export instead.
+
+The next step lists every connection with its type, address, user, folder and where its password
+comes from. MySQL, MariaDB and TiDB open in the MySQL plugin, PostgreSQL in the PostgreSQL plugin,
+SQLite in the SQLite plugin; anything else is listed as not supported. A connection that needs an
+SSH tunnel, or one already in TableCraft, starts unticked; ticking a duplicate imports a copy named
+`<name> (2)`, never overwriting the one you have. Folders and colours come along, under a
+`DataGrip` or `TablePro` folder unless you turn that off.
+
+Passwords:
+
+- **DataGrip** keeps them in the system keychain or in its own KeePass file. A KeePass file is read
+  silently. From the macOS Keychain, macOS asks once for each password: click **Allow**, not
+  **Always Allow**, so DataGrip's items stay private to DataGrip. Deny once and TableCraft stops
+  asking and imports the rest without passwords. On Linux it asks the Secret Service through
+  `secret-tool` (package `libsecret-tools`).
+- **TablePro** keeps them in its own keychain items, which TableCraft does not read. Export the
+  connections from TablePro as an encrypted `.tablepro` file with its passwords, then import that
+  file and type the passphrase; it is used once and never stored.
+
+Untick **Import passwords** to bring none: such a data source asks on connect, and you save its
+password in the Data Sources dialog.
+
 ### Database explorer
 
 The Database tool window (`⌘1`) is a lazy tree: data source, schemas, then `tables`, `views` and

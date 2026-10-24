@@ -75,4 +75,6 @@ started, not when it is merged.
 | 064 | [Ported themes are generated, audited data](064-ported-themes-are-generated-audited-data.md)                                                                           |
 | 065 | [The theme is chosen from a previewing dropdown](065-the-theme-is-chosen-from-a-previewing-dropdown.md)                                                                |
 | 066 | [Server messages reach the user](066-server-messages-reach-the-user.md)                                                                                                |
+| 067 | [Importing another app's connections and secrets](067-importing-another-apps-connections-and-secrets.md)                                                               |
+| 068 | [A datasource remembers where it came from](068-a-datasource-remembers-where-it-came-from.md)                                                                          |
 | 069 | [The must-have release amends the v1 scope](069-the-must-have-release-amends-the-v1-scope.md)                                                                          |
