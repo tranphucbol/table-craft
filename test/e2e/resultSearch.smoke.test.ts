@@ -34,6 +34,7 @@ import {
   type Datasource,
   type RunningApp,
 } from "./harness.js";
+import { applyFilter } from "./workflows.js";
 
 const captureWindow = evidenceFor("023");
 
@@ -354,9 +355,7 @@ describe.runIf(DATABASES_ENABLED)("result find and local filter live test", () =
         await expect.poll(() => activeEditorTab(page).textContent()).toContain("orders");
         const editor = page.getByTestId("table-editor");
         await editor.locator('[role="gridcell"][data-row="0"][data-col="0"]').waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-        await editor.getByTestId("filter-where").locator(".cm-content").fill("total > 1");
-        await editor.getByTestId("filter-order-by").locator(".cm-content").fill("id");
-        await editor.getByTestId("filter-order-by").locator(".cm-content").press("Enter");
+        await applyFilter(page, "total > 1", "id");
         await expect.poll(() => columnValues(page, 0)).toEqual(["1", "2", "3"]);
 
         await cell(page, 0, 1).click();

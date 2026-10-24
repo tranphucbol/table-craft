@@ -323,7 +323,7 @@ function filterBar(page: Page, bar: "where" | "order-by"): Locator {
  * engine answers; when that lands before Enter, Enter accepts an option instead of applying (as
  * DataGrip's does), so Enter is pressed again until the Services tree shows the rows reloaded.
  */
-async function applyFilter(page: Page, where: string, orderBy: string): Promise<void> {
+export async function applyFilter(page: Page, where: string, orderBy: string): Promise<void> {
   await filterBar(page, "where").fill(where);
   await filterBar(page, "order-by").fill(orderBy);
   const executions = toolWindow(page, "Services").locator('[role="treeitem"][data-kind="execution"]');

@@ -42,6 +42,7 @@ import {
   type RunningApp,
   type SavedDatasource,
 } from "./harness.js";
+import { applyFilter } from "./workflows.js";
 
 const captureWindow = evidenceFor("011");
 const capture014 = evidenceFor("014");
@@ -357,8 +358,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
       try {
         await consoleOn(page, "pg");
         await openTable(page, "orders");
-        await page.getByTestId("filter-order-by").locator(".cm-content").fill("id");
-        await page.getByTestId("filter-order-by").locator(".cm-content").press("Enter");
+        await applyFilter(page, "", "id");
         await expect.poll(() => tableCell(page, 0, 0).textContent()).toBe("1");
         await tableCell(page, 0, 2).click();
         await page.keyboard.press("Enter");
@@ -569,8 +569,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
       const page = await launchWith([SAVED_POSTGRES]);
       await consoleOn(page, "pg");
       await openTable(page, "orders");
-      await page.getByTestId("filter-order-by").locator(".cm-content").fill("id");
-      await page.getByTestId("filter-order-by").locator(".cm-content").press("Enter");
+      await applyFilter(page, "", "id");
       await expect.poll(() => tableCell(page, 0, 0).textContent()).toBe("1");
       await tableCell(page, 0, 2).click();
       await page.keyboard.press("Enter");
