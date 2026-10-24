@@ -36,8 +36,13 @@ const GUTTER_PADDING = "0 8px 0 12px";
 const LINE_PADDING = "0 var(--tc-cell-padding)";
 const PANEL_PADDING = "4px var(--tc-cell-padding)";
 const GLYPH_GAP = "6px";
-/** The completion's info panel and the parameter hint, wide enough for a long overload on one line. */
+/** The parameter hint, wide enough for a long overload on one line. */
 const HINT_WIDTH = "480px";
+/**
+ * The completion's info panel. Wider than the room beside the list, CodeMirror drops it under the
+ * selected option, over the options below it.
+ */
+const INFO_WIDTH = "320px";
 /** Tailwind's `font-semibold`, which the rest of the window bolds with. */
 const SEMIBOLD = "600";
 
@@ -127,7 +132,7 @@ export const EDITOR_THEME_SPEC = {
   ".cm-completionDetail": { marginLeft: "auto", paddingLeft: "var(--tc-gap)", color: "var(--tc-ink-muted)" },
   ".cm-completionMatchedText": { textDecoration: "none", color: "var(--tc-accent)" },
   ".cm-tooltip.cm-completionInfo": {
-    maxWidth: HINT_WIDTH,
+    maxWidth: INFO_WIDTH,
     padding: PANEL_PADDING,
     fontFamily: "var(--tc-font-ui)",
     fontSize: "var(--tc-font-ui-size)",
