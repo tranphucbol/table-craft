@@ -42,7 +42,7 @@ const target = databases ? await resolveTidbTarget() : null;
 const base = { ...process.env, BUN_VERSION: readFileSync(BUN_VERSION_FILE, "utf8").trim() };
 const compose = ["compose", "-f", COMPOSE_FILE, ...(target === null ? [] : composeProfiles(target))];
 if (target !== null) console.log(target.description);
-const env = target === null ? base : upDatabases(target, base);
+const env = target === null ? base : await upDatabases(target, base);
 
 const { workers, reason } = resolveWorkers(process.env[WORKERS_ENV], dockerMemoryBytes());
 console.log(reason);

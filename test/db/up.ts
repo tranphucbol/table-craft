@@ -8,4 +8,4 @@ import { resolveTidbTarget } from "./tidbTarget.js";
 
 const target = await resolveTidbTarget();
 console.log(target.description);
-upDatabases(target);
+await upDatabases(target);

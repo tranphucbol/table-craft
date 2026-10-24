@@ -10,6 +10,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { servicesMissingSentinels } from "../support/smokeFixtures.js";
 import { composeProfiles, type TidbTarget } from "./tidbTarget.js";
 
 const DB_DIRECTORY = import.meta.dirname;
@@ -57,19 +58,30 @@ export function seedEnv(hashes: Readonly<Record<SeededService, string>> = seedHa
   return Object.fromEntries(SERVICES.map((service) => [SEED_ENV[service], hashes[service]]));
 }
 
-/**
- * `docker compose up -d --wait` with the seed labels set, leaving TiDB out when `target` is remote;
- * returns the environment the rest of the run should pass to compose and the suites. Exits the
- * process when compose fails, as the scripts that call it would.
- */
-export function upDatabases(target: TidbTarget, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const env = { ...base, ...target.env, ...seedEnv() };
-  const { status, error } = spawnSync(
-    "docker",
-    ["compose", "-f", COMPOSE_FILE, ...composeProfiles(target), "up", "-d", "--wait"],
-    { stdio: "inherit", env },
-  );
+function compose(args: readonly string[], env: NodeJS.ProcessEnv): void {
+  const { status, error } = spawnSync("docker", ["compose", "-f", COMPOSE_FILE, ...args], { stdio: "inherit", env });
   if (error !== undefined) throw error;
   if (status !== 0) process.exit(status ?? 1);
+}
+
+/**
+ * `docker compose up -d --wait` with the seed labels set, leaving TiDB out when `target` is remote,
+ * then recreates any seeded service whose sentinel objects are gone (`smokeFixtures.ts`): one
+ * whose label is current but whose data is not, such as a container a suite damaged. Returns the
+ * environment the rest of the run should pass to compose and the suites. Exits the process when
+ * compose fails, as the scripts that call it would.
+ */
+export async function upDatabases(
+  target: TidbTarget,
+  base: NodeJS.ProcessEnv = process.env,
+): Promise<NodeJS.ProcessEnv> {
+  const env = { ...base, ...target.env, ...seedEnv() };
+  const profiles = composeProfiles(target);
+  compose([...profiles, "up", "-d", "--wait"], env);
+  const stale = await servicesMissingSentinels();
+  if (stale.length > 0) {
+    console.log(`Reseeding ${stale.join(", ")}: their seed objects are missing.`);
+    compose([...profiles, "up", "-d", "--wait", "--force-recreate", ...stale], env);
+  }
   return env;
 }

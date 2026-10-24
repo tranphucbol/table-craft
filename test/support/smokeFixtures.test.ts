@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { SENTINELS, staleServices, type SentinelQuery } from "./smokeFixtures.js";
+import { SENTINELS, servicesMissingSentinels, staleServices, type SentinelQuery } from "./smokeFixtures.js";
 
 const NEWEST_POSTGRES = "SELECT 1 FROM pg_proc p JOIN pg_namespace n";
 
@@ -27,6 +27,15 @@ describe("smoke fixture sentinels (smokeFixtures.ts)", () => {
       "the `mysql` server did not answer (connect ECONNREFUSED); run `bun test/db/up.ts`",
       "the `mysql-tls` container predates its seed (no table tls_probe); run `bun test/db/up.ts`",
     ]);
+  });
+
+  it("givenMissingAndUnreachableServices_whenListedForReseed_thenOnlyTheMissingOnes", async () => {
+    const query: SentinelQuery = (service, sql) =>
+      service === "mysql"
+        ? Promise.reject(new Error("connect ECONNREFUSED"))
+        : Promise.resolve(!(service === "postgres" && sql.startsWith(NEWEST_POSTGRES)));
+
+    expect(await servicesMissingSentinels(query)).toEqual(["postgres"]);
   });
 
   it("givenSentinels_whenListed_thenEverySeededServiceHasOne", () => {

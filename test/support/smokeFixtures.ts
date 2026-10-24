@@ -2,7 +2,7 @@
  * Vitest global setup for the smoke suites with databases: checks that every seeded server holds
  * its seed's newest objects before any Electron launches. A container that predates its seed
  * (`test/db/stack.ts`) otherwise shows up as tests waiting out their locator timeouts for a tree
- * item that is not there.
+ * item that is not there. `upDatabases` runs the same check to recreate such a container.
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -57,11 +57,14 @@ export const SENTINELS: readonly Sentinel[] = [
 /** Asks one server whether `sql` returns a row; throws when the server cannot be reached. */
 export type SentinelQuery = (service: SeededService, sql: string) => Promise<boolean>;
 
-/** What is wrong with the stack, one line per service, empty when every sentinel is present. */
-export async function staleServices(
-  query: SentinelQuery,
-  sentinels: readonly Sentinel[] = SENTINELS,
-): Promise<string[]> {
+interface SentinelReport {
+  /** The objects each reachable service lacks. */
+  readonly missing: ReadonlyMap<SeededService, readonly string[]>;
+  /** Why each service that could not be asked failed. */
+  readonly unreachable: ReadonlyMap<SeededService, string>;
+}
+
+async function inspect(query: SentinelQuery, sentinels: readonly Sentinel[]): Promise<SentinelReport> {
   const missing = new Map<SeededService, string[]>();
   const unreachable = new Map<SeededService, string>();
   for (const sentinel of sentinels) {
@@ -74,6 +77,23 @@ export async function staleServices(
       unreachable.set(sentinel.service, error instanceof Error ? error.message : String(error));
     }
   }
+  return { missing, unreachable };
+}
+
+/** The reachable services that lack a sentinel: their data no longer matches their seed. */
+export async function servicesMissingSentinels(
+  query: SentinelQuery = serverQuery,
+  sentinels: readonly Sentinel[] = SENTINELS,
+): Promise<SeededService[]> {
+  return [...(await inspect(query, sentinels)).missing.keys()];
+}
+
+/** What is wrong with the stack, one line per service, empty when every sentinel is present. */
+export async function staleServices(
+  query: SentinelQuery,
+  sentinels: readonly Sentinel[] = SENTINELS,
+): Promise<string[]> {
+  const { missing, unreachable } = await inspect(query, sentinels);
   return [
     ...[...unreachable].map(
       ([service, reason]) => `the \`${service}\` server did not answer (${reason}); run \`${UP_COMMAND}\``,
