@@ -4,3 +4,4 @@ release/
 bun.lock
 test/fixtures/
 test/support/plans/
+packages/desktop/scripts/palettes/

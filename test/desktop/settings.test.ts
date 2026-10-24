@@ -130,6 +130,14 @@ describe("settings document", () => {
     });
   });
 
+  it("givenSettingsWithGruvboxDark_whenRead_thenThemeIsKept", () => {
+    expect(readSettings({ version: 1, appearance: { theme: "gruvbox-dark" } }).appearance.theme).toBe("gruvbox-dark");
+  });
+
+  it("givenSettingsWithUnknownThemeId_whenRead_thenSystemIsUsed", () => {
+    expect(readSettings({ version: 1, appearance: { theme: "gruvbox-sepia" } }).appearance.theme).toBe("system");
+  });
+
   it("givenFormatStyleUnknownOrAlignAliasesNotBoolean_whenRead_thenEachFallsBackAlone", () => {
     const read = readSettings({
       ...CHOSEN,

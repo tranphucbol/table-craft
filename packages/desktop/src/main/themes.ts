@@ -2,12 +2,13 @@ import { join } from "node:path";
 import { z } from "@table-craft/plugin-api";
 import type { DirectoryFileSystem } from "@table-craft/desktop/main/consoleFiles.js";
 import {
-  BUILT_IN_THEME_IDS,
-  BUILT_IN_THEMES,
+  BUNDLED_THEMES,
   DARK_COLORS,
+  isBundledThemeId,
   isHexColor,
   overrideColors,
   userThemeId,
+  type BundledThemeId,
   type UserThemeEntry,
 } from "@table-craft/desktop/appearance/themes.js";
 
@@ -29,7 +30,13 @@ const { syntax, datasource, ...flatColors } = DARK_COLORS;
 
 const themeFileSchema = z.strictObject({
   name: z.string().trim().min(1).max(MAX_THEME_NAME_LENGTH),
-  base: z.enum(BUILT_IN_THEME_IDS),
+  base: z.string().superRefine((base, context) => {
+    if (isBundledThemeId(base)) return;
+    context.addIssue({
+      code: "custom",
+      message: `"${base}" is not a bundled theme; use the id of one listed in Settings, such as "dark" or "gruvbox-dark".`,
+    });
+  }),
   colors: colorsOf(Object.keys(flatColors))
     .extend({
       syntax: colorsOf(Object.keys(syntax)).optional(),
@@ -62,12 +69,12 @@ export function readThemeFile(file: string, text: string): UserThemeEntry {
       errors: parsed.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`),
     };
   }
-  const base = parsed.data.base;
+  const base = parsed.data.base as BundledThemeId;
   return {
     id,
     name: parsed.data.name,
     base,
-    colors: overrideColors(BUILT_IN_THEMES[base].colors, parsed.data.colors),
+    colors: overrideColors(BUNDLED_THEMES[base].colors, parsed.data.colors),
   };
 }
 

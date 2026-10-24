@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isBrokenUserTheme, LIGHT_COLORS, type UserTheme } from "@table-craft/desktop/appearance/themes.js";
+import {
+  BUNDLED_THEMES,
+  isBrokenUserTheme,
+  LIGHT_COLORS,
+  type UserTheme,
+} from "@table-craft/desktop/appearance/themes.js";
 import {
   createThemeFolder,
   MAX_THEME_BYTES,
@@ -44,10 +49,21 @@ describe("user theme files", () => {
     expect(errors).toEqual([expect.stringContaining("colors.ink")]);
   });
 
-  it("givenBadBase_whenRead_thenErrorNamesBase", () => {
+  it("givenUserThemeWithMissingBase_whenLoaded_thenItIsBrokenAndNamesTheBase", () => {
     const errors = errorsOf(JSON.stringify({ name: "X", base: "sepia" }));
 
-    expect(errors).toEqual([expect.stringContaining("base")]);
+    expect(errors).toEqual([expect.stringMatching(/^base: "sepia" is not a bundled theme/)]);
+  });
+
+  it("givenUserThemeBasedOnNordLight_whenLoaded_thenColorsOverrideNord", () => {
+    const entry = readThemeFile(
+      "frost.json",
+      JSON.stringify({ name: "Frost", base: "nord-light", colors: { accent: "#5e81ac" } }),
+    );
+
+    expect(entry).toMatchObject({ id: "user:frost", base: "nord-light" });
+    const nord = BUNDLED_THEMES["nord-light"].colors;
+    expect((entry as UserTheme).colors).toEqual({ ...nord, accent: "#5e81ac" });
   });
 
   it("givenNotJson_whenRead_thenSaysSo", () => {

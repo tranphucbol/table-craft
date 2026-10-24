@@ -1,0 +1,47 @@
+Third-party colour palettes
+===========================
+
+The JSON files in this directory, except preman-dark.json, are vendored verbatim from openchamber
+by way of preman (https://github.com/openchamber/openchamber, packages/ui/src/lib/theme/themes/):
+
+    Copyright (c) 2025 Bohdan Triapitsyn
+    MIT
+
+preman-dark.json is preman's own dark theme (MIT), written out by hand in the same shape.
+
+They are copied rather than depended on because they are data, not code, and TableCraft does not
+ship them: `scripts/generate-themes.ts` reads them when run by hand, and the audited result is
+what is committed under `src/appearance/themes/` (decision 064). This directory is in
+`.prettierignore`, so re-vendoring is a readable diff instead of a reflow.
+
+openchamber's files are themselves ports of upstream colour schemes. Each generated theme carries
+the `source` and `licence` of its row below, and Settings shows them beside its name. Every scheme
+is MIT except JetBrains, which is Apache-2.0.
+
+    Palette               Source                                Licence
+    aura                  Aura Theme, daltonmenezes             MIT
+    ayu                   Ayu, dempfi                           MIT
+    carbonfox             Nightfox, EdenEast                    MIT
+    catppuccin            Catppuccin                            MIT
+    dracula               Dracula, Zeno Rocha                   MIT
+    fields-of-the-shire   Fields of the Shire, openchamber      MIT
+    flexoki               Flexoki, Steph Ango                   MIT
+    gruvbox               gruvbox, morhetz                      MIT
+    jetbrains             JetBrains Darcula / IntelliJ Light    Apache-2.0
+    kanagawa              Kanagawa, rebelot                     MIT
+    mono                  Mono, openchamber                     MIT
+    mono-plus             Mono+, openchamber                    MIT
+    monokai               Monokai, Wimer Hazenberg              MIT
+    nightowl              Night Owl, Sarah Drasner              MIT
+    nord                  Nord, Arctic Ice Studio               MIT
+    onedarkpro            One Dark Pro, binaryify               MIT
+    openchamber           openchamber                           MIT
+    preman                preman                                MIT
+    solarized             Solarized, Ethan Schoonover           MIT
+    tokyonight            Tokyo Night, enkia                    MIT
+    vesper                Vesper, Rauno Freiberg                MIT
+    vitesse               Vitesse, Anthony Fu                   MIT
+
+The generated themes are not these palettes. The quieter inks are solved for contrast rather than
+read, every tint behind text is mixed from the canvas, and a datasource tint is rotated where two
+arrived too close. A theme here is best described as "after gruvbox", not "gruvbox".

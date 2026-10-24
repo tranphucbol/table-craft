@@ -4,15 +4,15 @@
  * that the renderer, which never loads zod, can use it too.
  */
 import {
-  isBuiltInThemeId,
-  type BuiltInThemeId,
+  isBundledThemeId,
+  type BundledThemeId,
   type DensityId,
   type UserThemeId,
 } from "@table-craft/desktop/appearance/themes.js";
 
 export const SETTINGS_VERSION = 1;
 
-export type ThemeChoice = "system" | BuiltInThemeId | UserThemeId;
+export type ThemeChoice = "system" | BundledThemeId | UserThemeId;
 
 export interface FontSetting {
   /** `null` is the built-in stack; a family is written ahead of it, so a missing font falls back. */
@@ -175,7 +175,7 @@ function inRange(value: unknown, range: NumberRange): value is number {
 
 export function isThemeChoice(value: unknown): value is ThemeChoice {
   if (typeof value !== "string") return false;
-  if (value === "system" || isBuiltInThemeId(value)) return true;
+  if (value === "system" || isBundledThemeId(value)) return true;
   return value.startsWith(USER_THEME_PREFIX) && value.length > USER_THEME_PREFIX.length;
 }
 

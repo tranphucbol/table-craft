@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "id": "preman-dark",
+    "name": "preman Dark",
+    "description": "preman's own dark theme (preman decision 020), written in openchamber's palette shape so the generator reads it like the others",
+    "variant": "dark"
+  },
+  "colors": {
+    "primary": { "base": "#6aa9ff", "foreground": "#111214" },
+    "surface": {
+      "background": "#111214",
+      "foreground": "#d8dade",
+      "muted": "#17191c",
+      "mutedForeground": "#a8adb6",
+      "elevated": "#1d2024"
+    },
+    "interactive": { "border": "#2a2d32", "selection": "#1d2632" },
+    "status": { "error": "#ff7a6b", "warning": "#e0b355", "success": "#5ec27f", "info": "#4ec9c0" },
+    "pr": { "merged": "#b78bff" },
+    "syntax": {
+      "base": {
+        "background": "#111214",
+        "foreground": "#d8dade",
+        "comment": "#8a8f98",
+        "keyword": "#b78bff",
+        "string": "#5ec27f",
+        "number": "#e0b355",
+        "function": "#6aa9ff",
+        "variable": "#d8dade",
+        "type": "#e0b355",
+        "operator": "#ff9d8f"
+      },
+      "tokens": { "parameter": "#d0b6ff" }
+    }
+  }
+}

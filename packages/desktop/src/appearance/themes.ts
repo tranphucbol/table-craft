@@ -1,8 +1,14 @@
 /**
  * The colour, font and density tokens every surface draws from (decision 012), and the built-in
  * themes, as pure data. Main imports this for the window's first paint and the renderer for
- * everything else, so it may touch neither the DOM, Node, electron nor zod (decision 032).
+ * everything else, so it may touch neither the DOM, Node, electron nor zod (decision 032). The
+ * ported themes are generated into `themes/` by `scripts/generate-themes.ts` (decision 064).
  */
+import type { ContrastLevel } from "./contrast.js";
+import { PORTED_THEME_IDS, PORTED_THEMES, type PortedThemeId } from "./themes/index.js";
+
+export * from "./contrast.js";
+export { PORTED_THEME_IDS, PORTED_THEMES, type PortedThemeId } from "./themes/index.js";
 
 /** Mirrors `DATASOURCE_COLORS` in the bridge; a datasource stores the name, the theme the value. */
 export type DatasourceTint = "red" | "orange" | "yellow" | "green" | "blue" | "violet";
@@ -119,16 +125,24 @@ export interface Appearance {
   readonly density: DensityTokens;
 }
 
+/** TableCraft's own themes, the ones Follow system chooses between. */
 export type BuiltInThemeId = "dark" | "light" | "highContrast";
+/** Every theme the app ships: its own and the ported ones. */
+export type BundledThemeId = BuiltInThemeId | PortedThemeId;
 export type ColorScheme = "dark" | "light";
 export type UserThemeId = `user:${string}`;
-export type ThemeId = BuiltInThemeId | UserThemeId;
+export type ThemeId = BundledThemeId | UserThemeId;
 
 export interface Theme {
   readonly id: ThemeId;
   readonly name: string;
   /** Native scrollbars, form controls and `nativeTheme` follow this. */
   readonly colorScheme: ColorScheme;
+  /** What its audit holds it to (decision 064). */
+  readonly contrast: ContrastLevel;
+  /** Who made the palette, for a ported theme; shown beside its name. */
+  readonly source?: string;
+  readonly licence?: string;
   readonly colors: ColorTokens;
 }
 
@@ -271,15 +285,29 @@ export const HIGH_CONTRAST_COLORS: ColorTokens = {
 };
 
 export const BUILT_IN_THEMES: Readonly<Record<BuiltInThemeId, Theme>> = {
-  dark: { id: "dark", name: "Dark", colorScheme: "dark", colors: DARK_COLORS },
-  light: { id: "light", name: "Light", colorScheme: "light", colors: LIGHT_COLORS },
-  highContrast: { id: "highContrast", name: "High contrast", colorScheme: "dark", colors: HIGH_CONTRAST_COLORS },
+  dark: { id: "dark", name: "Dark", colorScheme: "dark", contrast: "aa", colors: DARK_COLORS },
+  light: { id: "light", name: "Light", colorScheme: "light", contrast: "aa", colors: LIGHT_COLORS },
+  highContrast: {
+    id: "highContrast",
+    name: "High contrast",
+    colorScheme: "dark",
+    contrast: "aaa",
+    colors: HIGH_CONTRAST_COLORS,
+  },
 };
 
 export const BUILT_IN_THEME_IDS = ["dark", "light", "highContrast"] as const satisfies readonly BuiltInThemeId[];
 
 export function isBuiltInThemeId(value: string): value is BuiltInThemeId {
   return (BUILT_IN_THEME_IDS as readonly string[]).includes(value);
+}
+
+export const BUNDLED_THEMES: Readonly<Record<BundledThemeId, Theme>> = { ...BUILT_IN_THEMES, ...PORTED_THEMES };
+
+export const BUNDLED_THEME_IDS: readonly BundledThemeId[] = [...BUILT_IN_THEME_IDS, ...PORTED_THEME_IDS];
+
+export function isBundledThemeId(value: string): value is BundledThemeId {
+  return Object.hasOwn(BUNDLED_THEMES, value);
 }
 
 export const DEFAULT_FONTS: FontTokens = {
@@ -358,7 +386,7 @@ export function overrideColors(base: ColorTokens, overrides: ColorOverrides): Co
 export interface UserTheme {
   readonly id: UserThemeId;
   readonly name: string;
-  readonly base: BuiltInThemeId;
+  readonly base: BundledThemeId;
   readonly colors: ColorTokens;
 }
 
@@ -391,7 +419,7 @@ export interface ResolvedTheme {
   readonly notice: string | null;
 }
 
-/** The theme choice of `settings.json` (`"system"`, a built-in id or `user:<stem>`) made concrete. */
+/** The theme choice of `settings.json` (`"system"`, a bundled id or `user:<stem>`) made concrete. */
 export function resolveTheme(
   choice: string,
   system: SystemAppearance,
@@ -401,7 +429,7 @@ export function resolveTheme(
     const id = system.prefersMoreContrast ? "highContrast" : system.prefersDark ? "dark" : "light";
     return { theme: BUILT_IN_THEMES[id], notice: null };
   }
-  if (isBuiltInThemeId(choice)) return { theme: BUILT_IN_THEMES[choice], notice: null };
+  if (isBundledThemeId(choice)) return { theme: BUNDLED_THEMES[choice], notice: null };
   const entry = userThemes.find((candidate) => candidate.id === choice);
   if (entry === undefined) {
     return {
@@ -419,99 +447,10 @@ export function resolveTheme(
     theme: {
       id: entry.id,
       name: entry.name,
-      colorScheme: BUILT_IN_THEMES[entry.base].colorScheme,
+      colorScheme: BUNDLED_THEMES[entry.base].colorScheme,
+      contrast: BUNDLED_THEMES[entry.base].contrast,
       colors: entry.colors,
     },
     notice: null,
   };
-}
-
-const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-
-export function isHexColor(value: string): boolean {
-  return HEX_COLOR.test(value);
-}
-
-/** Expands `#rgb` and drops the alpha of `#rrggbbaa`; contrast is measured on the opaque colour. */
-function channels(color: string): readonly [number, number, number] {
-  if (!isHexColor(color)) throw new Error(`${color} is not a #rgb, #rrggbb or #rrggbbaa colour.`);
-  const hex = color.length === 4 ? [...color.slice(1)].map((digit) => digit + digit).join("") : color.slice(1, 7);
-  return [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)) as unknown as readonly [
-    number,
-    number,
-    number,
-  ];
-}
-
-/** WCAG 2.1 relative luminance: https://www.w3.org/TR/WCAG21/#dfn-relative-luminance */
-function luminance(color: string): number {
-  const [red, green, blue] = channels(color).map((channel) => {
-    const value = channel / 255;
-    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
-  }) as unknown as readonly [number, number, number];
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
-}
-
-/** WCAG 2.1 contrast ratio, 1 to 21: https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio */
-export function contrastRatio(foreground: string, background: string): number {
-  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a) as [number, number];
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-/** `ink` is body text; `text` any other text; `nonText` a glyph or bar that carries meaning. */
-export type ContrastKind = "ink" | "text" | "nonText";
-
-export interface ContrastPair {
-  readonly foreground: string;
-  readonly background: string;
-  readonly kind: ContrastKind;
-  readonly pick: (colors: ColorTokens) => readonly [foreground: string, background: string];
-}
-
-const SURFACES = ["canvas", "panel", "raised"] as const;
-const SYNTAX_TEXT = ["keyword", "string", "number", "comment", "identifier", "operator", "variable"] as const;
-
-/** The pairs every built-in theme is measured on (plan 013 decision 9). */
-export const CONTRAST_PAIRS: readonly ContrastPair[] = [
-  ...(["ink", "inkMuted", "accent"] as const).flatMap((foreground) =>
-    SURFACES.map((background): ContrastPair => ({
-      foreground,
-      background,
-      kind: foreground === "ink" ? "ink" : "text",
-      pick: (colors) => [colors[foreground], colors[background]],
-    })),
-  ),
-  { foreground: "accentInk", background: "accent", kind: "text", pick: (colors) => [colors.accentInk, colors.accent] },
-  ...(["danger", "success", "warning"] as const).map((foreground): ContrastPair => ({
-    foreground,
-    background: "panel",
-    kind: "text",
-    pick: (colors) => [colors[foreground], colors.panel],
-  })),
-  ...SYNTAX_TEXT.map((name): ContrastPair => ({
-    foreground: `syntax.${name}`,
-    background: "canvas",
-    kind: "text",
-    pick: (colors) => [colors.syntax[name], colors.canvas],
-  })),
-  {
-    foreground: "ink",
-    background: "syntax.bracketMatch",
-    kind: "ink",
-    pick: (colors) => [colors.ink, colors.syntax.bracketMatch],
-  },
-  { foreground: "gridNull", background: "canvas", kind: "text", pick: (colors) => [colors.gridNull, colors.canvas] },
-  { foreground: "ink", background: "gridSelection", kind: "ink", pick: (colors) => [colors.ink, colors.gridSelection] },
-  { foreground: "keyIcon", background: "panel", kind: "nonText", pick: (colors) => [colors.keyIcon, colors.panel] },
-  { foreground: "planBar", background: "canvas", kind: "nonText", pick: (colors) => [colors.planBar, colors.canvas] },
-];
-
-const WCAG_TEXT = 4.5;
-const WCAG_NON_TEXT = 3;
-const WCAG_ENHANCED_TEXT = 7;
-
-/** WCAG AA (1.4.3, 1.4.11) for Dark and Light; AAA (1.4.6) for ink in High contrast. */
-export function requiredContrast(theme: BuiltInThemeId, kind: ContrastKind): number {
-  if (theme === "highContrast") return kind === "ink" ? WCAG_ENHANCED_TEXT : WCAG_TEXT;
-  return kind === "nonText" ? WCAG_NON_TEXT : WCAG_TEXT;
 }

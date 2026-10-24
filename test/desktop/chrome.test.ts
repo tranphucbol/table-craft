@@ -12,6 +12,7 @@ const SOLAR: Theme = {
   id: "user:solar",
   name: "Solar",
   colorScheme: "light",
+  contrast: "aa",
   colors: { ...BUILT_IN_THEMES.light.colors, panel: "#fdf6e3", ink: "#586e75" },
 };
 
