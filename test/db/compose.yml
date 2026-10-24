@@ -3,11 +3,15 @@
 # worktrees each set COMPOSE_PROJECT_NAME, TABLE_CRAFT_PG_PORT, TABLE_CRAFT_MYSQL_PORT,
 # TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT, TABLE_CRAFT_PG_TLS_PORT and TABLE_CRAFT_MYSQL_TLS_PORT so one
 # checkout's `up` never recreates the containers another checkout is testing against.
+# Each seeded service is labelled with the hash of its seed (`stack.ts`), so `bun test/db/up.ts`
+# and the headless runner recreate, and so reseed, exactly the containers whose seed changed.
 name: table-craft-test-db
 
 services:
   postgres:
     image: postgres:17-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_PG_SEED:-none}
     environment:
       POSTGRES_USER: table_craft
       POSTGRES_PASSWORD: table_craft
@@ -28,11 +32,33 @@ services:
 
   mysql:
     image: mysql:8.4
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_MYSQL_SEED:-none}
     environment:
       MYSQL_ROOT_PASSWORD: table_craft
       MYSQL_USER: table_craft
       MYSQL_PASSWORD: table_craft
       MYSQL_DATABASE: table_craft
+    # Stock MySQL takes ~650 MB idle, mostly a 128 MB buffer pool, a 100 MB redo log and the binary
+    # log on tmpfs, plus performance_schema; the fixtures fit in a few MB. performance_schema stays
+    # on because the session list reads `data_lock_waits` and `threads` (plugins/mysql/src/sessions.ts),
+    # with its digests, long histories and per-account summaries sized to nothing.
+    command:
+      - --innodb-buffer-pool-size=32M
+      - --innodb-redo-log-capacity=8M
+      - --innodb-log-buffer-size=1M
+      - --skip-log-bin
+      - --performance-schema-digests-size=0
+      - --performance-schema-max-digest-length=0
+      - --performance-schema-max-sql-text-length=0
+      - --performance-schema-error-size=0
+      - --performance-schema-events-stages-history-long-size=0
+      - --performance-schema-events-statements-history-long-size=0
+      - --performance-schema-events-transactions-history-long-size=0
+      - --performance-schema-events-waits-history-long-size=0
+      - --performance-schema-accounts-size=0
+      - --performance-schema-hosts-size=0
+      - --performance-schema-users-size=0
     ports:
       - "127.0.0.1:${TABLE_CRAFT_MYSQL_PORT:-53306}:3306"
     volumes:
@@ -54,6 +80,8 @@ services:
   # The image refuses a key file the postgres user does not own, so the entrypoint copies it first.
   postgres-tls:
     image: postgres:17-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_PG_TLS_SEED:-none}
     environment:
       POSTGRES_USER: table_craft
       POSTGRES_PASSWORD: table_craft
@@ -84,12 +112,19 @@ services:
 
   mysql-tls:
     image: mysql:8.4
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_MYSQL_TLS_SEED:-none}
     environment:
       MYSQL_ROOT_PASSWORD: table_craft
       MYSQL_USER: table_craft
       MYSQL_PASSWORD: table_craft
       MYSQL_DATABASE: table_craft
     command:
+      - --innodb-buffer-pool-size=32M
+      - --innodb-redo-log-capacity=8M
+      - --innodb-log-buffer-size=1M
+      - --skip-log-bin
+      - --performance-schema=OFF
       - --require-secure-transport=ON
       - --ssl-ca=/tls/ca.crt
       - --ssl-cert=/tls/server.crt
