@@ -75,6 +75,8 @@ import {
   Minus,
   Play,
   Plus,
+  Power,
+  Pulse,
   PushPin,
   Stop,
   Terminal,
@@ -121,6 +123,7 @@ export {
   Export as ExportIcon,
   FileArrowDown as ImportIcon,
   FileSql as ScriptIcon,
+  Pulse as SessionsIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */
@@ -187,4 +190,6 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   download: DownloadSimple,
   findNext: CaretDown,
   findPrevious: CaretUp,
+  sessions: Pulse,
+  terminate: Power,
 };

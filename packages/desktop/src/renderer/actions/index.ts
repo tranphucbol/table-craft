@@ -15,6 +15,7 @@ import { useObjects } from "@table-craft/desktop/renderer/state/objects.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { useHostKeyPrompt } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
+import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 
@@ -42,6 +43,7 @@ const STORES = [
   useHostKeyPrompt,
   useModal,
   useObjects,
+  useSessions,
   useWindowState,
 ] as const;
 

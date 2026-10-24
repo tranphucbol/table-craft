@@ -29,7 +29,7 @@ const CHOSEN: Settings = {
   editor: {
     format: { style: "standard", keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0, alignAliases: false },
   },
-  console: { parameters: false, statementTimeoutSeconds: 45 },
+  console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30 },
   data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
   log: { level: "debug" },
   updates: { checkAutomatically: false },

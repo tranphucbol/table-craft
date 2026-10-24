@@ -10,6 +10,7 @@ import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptA
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
+import { SESSIONS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
 import { TABLE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/tableActions.js";
 import type { OpenTableArgs } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -77,6 +78,7 @@ const DATASOURCE_MENU = [
   HISTORY_ACTION_IDS.show,
   HISTORY_ACTION_IDS.reopen,
   SCRIPT_ACTION_IDS.run,
+  SESSIONS_ACTION_IDS.show,
   ACTION_IDS.connect,
   ACTION_IDS.disconnect,
   ACTION_IDS.synchronize,
@@ -188,6 +190,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   OBJECT_ACTION_IDS.rename,
   OBJECT_ACTION_IDS.truncate,
   OBJECT_ACTION_IDS.drop,
+  SESSIONS_ACTION_IDS.show,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {

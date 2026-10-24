@@ -13,6 +13,7 @@ import { NAMESPACE_ACTIONS } from "@table-craft/desktop/renderer/actions/namespa
 import { NAVIGATION_ACTIONS } from "@table-craft/desktop/renderer/actions/navigationActions.js";
 import type { AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { LOG_ACTIONS } from "@table-craft/desktop/renderer/actions/logActions.js";
+import { SESSIONS_ACTIONS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import { SETTINGS_ACTIONS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
 import { WINDOW_ACTIONS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { TABLE_ACTIONS } from "@table-craft/desktop/renderer/actions/tableActions.js";
@@ -33,6 +34,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...DDL_ACTIONS,
   ...HISTORY_ACTIONS,
   ...EXPLAIN_ACTIONS,
+  ...SESSIONS_ACTIONS,
   ...NAMESPACE_ACTIONS,
   ...SETTINGS_ACTIONS,
   ...LOG_ACTIONS,

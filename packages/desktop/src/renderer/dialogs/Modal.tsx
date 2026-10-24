@@ -64,12 +64,15 @@ function Items({ items }: { readonly items: readonly ModalItem[] }) {
 function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: PickerKind }> }) {
   const answer = useModal((state) => state.answer);
   const [text, setText] = useState(request.kind === "text" ? request.initial : "");
+  const typed = request.kind === "confirm" ? request.typed : undefined;
+  const blocked = typed !== undefined && text !== typed;
 
   return (
     <form
       className="flex flex-col gap-gap p-gap"
       onSubmit={(event) => {
         event.preventDefault();
+        if (blocked) return;
         if (request.kind === "choice") answer(request.choices[0]?.id ?? null);
         else answer(request.kind === "text" ? text : "");
       }}
@@ -95,6 +98,19 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
       {(request.kind === "confirm" || request.kind === "choice") && request.items !== undefined ? (
         <Items items={request.items} />
       ) : null}
+      {typed === undefined ? null : (
+        <label className="flex flex-col gap-1">
+          <span className="text-ink-muted">
+            Type <code className="font-editor text-editor">{typed}</code> to confirm
+          </span>
+          <TextInput
+            autoFocus
+            aria-label={`Type ${typed} to confirm`}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+          />
+        </label>
+      )}
       {request.kind === "statements" ? <PreviewStatements statements={request.statements} /> : null}
       <div className="flex justify-end gap-gap">
         {request.kind === "notice" ? (
@@ -126,7 +142,8 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
         ) : (
           <Button
             type="submit"
-            autoFocus={request.kind !== "text"}
+            autoFocus={request.kind !== "text" && typed === undefined}
+            disabled={blocked}
             variant={request.kind === "confirm" && request.destructive === true ? "danger" : "primary"}
           >
             {request.kind === "notice" ? "OK" : request.confirm}

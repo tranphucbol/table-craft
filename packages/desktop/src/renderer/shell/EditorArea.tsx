@@ -6,13 +6,21 @@ import { invoke, registry, useActionEnabled } from "@table-craft/desktop/rendere
 import { Console } from "@table-craft/desktop/renderer/console/Console.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
-import { tabLabel } from "@table-craft/desktop/renderer/model/format.js";
+import { sessionsTabLabel, tabLabel } from "@table-craft/desktop/renderer/model/format.js";
 import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import { SessionsView } from "@table-craft/desktop/renderer/sessions/SessionsView.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { activeTab, useTabs, type Tab, type TabKind } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { TableEditor } from "@table-craft/desktop/renderer/table/TableEditor.js";
-import { CloseIcon, ConsoleIcon, DdlIcon, ReadOnlyIcon, TableIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import {
+  CloseIcon,
+  ConsoleIcon,
+  DdlIcon,
+  ReadOnlyIcon,
+  SessionsIcon,
+  TableIcon,
+} from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_TAB } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const TAB_MENU_ACTIONS = [ACTION_IDS.closeTab, ACTION_IDS.closeOtherTabs, ACTION_IDS.closeAllTabs] as const;
@@ -36,7 +44,12 @@ function TabMenuItem({ actionId, tabId }: { readonly actionId: string; readonly 
   );
 }
 
-const TAB_ICONS = { console: ConsoleIcon, table: TableIcon, ddl: DdlIcon } as const satisfies Record<TabKind, unknown>;
+const TAB_ICONS = {
+  console: ConsoleIcon,
+  table: TableIcon,
+  ddl: DdlIcon,
+  sessions: SessionsIcon,
+} as const satisfies Record<TabKind, unknown>;
 
 function TabIcon({ kind }: { readonly kind: TabKind }) {
   const Icon = TAB_ICONS[kind];
@@ -47,7 +60,7 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
   const activate = useTabs((state) => state.activate);
   const args: TabArgs = { tabId: tab.id };
   const datasource = useConsoleDatasource(tab.id);
-  const label = tabLabel(tab.title, datasource?.name);
+  const label = (tab.kind === "sessions" ? sessionsTabLabel : tabLabel)(tab.title, datasource?.name);
   const tint = datasource?.color == null ? null : TINT_TAB[datasource.color];
   const path = useConsoles((state) => fileSourceOf(state.consoles[tab.id])?.path);
   const dirty = useConsoles((state) => {
@@ -155,6 +168,8 @@ export function EditorArea() {
         <TableEditor key={active.id} tableId={active.id} />
       ) : active.kind === "ddl" ? (
         <DdlView key={active.id} ddlId={active.id} />
+      ) : active.kind === "sessions" ? (
+        <SessionsView key={active.id} sessionsId={active.id} />
       ) : (
         <Console key={active.id} consoleId={active.id} />
       )}

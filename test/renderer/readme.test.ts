@@ -23,6 +23,7 @@ import {
   NULL_TEXT_LENGTH,
   PAGE_ROWS_RANGE,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
+  SESSIONS_REFRESH_SECONDS_RANGE,
   type NumberRange,
 } from "@table-craft/desktop/settings/settings.js";
 
@@ -42,6 +43,7 @@ const RANGES: Readonly<Record<string, NumberRange>> = {
   "data.fetchAllCap": FETCH_ALL_CAP_RANGE,
   "data.exportStallSeconds": EXPORT_STALL_SECONDS_RANGE,
   "console.statementTimeoutSeconds": STATEMENT_TIMEOUT_SECONDS_RANGE,
+  "console.sessionsRefreshSeconds": SESSIONS_REFRESH_SECONDS_RANGE,
 };
 
 /** GitHub's heading anchor: lower case, punctuation dropped, each space a hyphen. */

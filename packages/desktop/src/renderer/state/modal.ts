@@ -43,6 +43,8 @@ export type ModalRequest =
       readonly items?: readonly ModalItem[];
       readonly confirm: string;
       readonly destructive?: boolean;
+      /** Text the user must type before the confirm button works, for a kill on a production-coloured data source. */
+      readonly typed?: string;
     }
   | {
       readonly kind: "text";

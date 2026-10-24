@@ -94,7 +94,9 @@ export const WINDOW_ACTIONS: readonly AnyAction[] = [
         recent: useTabs.getState().recent,
         datasourceOf: tabDatasource,
         activate: (tabId) => useTabs.getState().activate(tabId),
-        openConsole: (id) => openConsole(id),
+        openConsole: async (id) => {
+          await openConsole(id);
+        },
       });
     },
   }),

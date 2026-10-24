@@ -484,6 +484,7 @@ back to its default without affecting the others.
 | `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                              | `true`        |
 | `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                          | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                          | 0             |
+| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                          | 5             |
 | `data.nullText`                        | 1–16 characters                                                                             | `<null>`      |
 | `data.groupDigits`                     | `true`, `false`                                                                             | `false`       |
 | `data.pageRows`                        | 10–10,000                                                                                   | 500           |
@@ -596,7 +597,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
 - `serverMessages`: returns the warnings and notices the server left about a statement, which
   Output lists under it and the result tab counts.
 - `sessions`: lists the server's sessions with who blocks whom, and cancels or terminates one, for
-  the [Sessions](#sessions) view; requires `sql`.
+  the [Sessions](#sessions) view; requires `sql` and `schemaTree`.
 
 ```json
 {

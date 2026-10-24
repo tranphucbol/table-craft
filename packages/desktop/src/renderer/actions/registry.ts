@@ -68,7 +68,9 @@ export type ActionIcon =
   | "update"
   | "download"
   | "findNext"
-  | "findPrevious";
+  | "findPrevious"
+  | "sessions"
+  | "terminate";
 
 export interface Action<A = void> {
   readonly id: string;

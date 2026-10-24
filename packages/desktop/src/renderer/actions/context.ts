@@ -25,6 +25,7 @@ import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { useHostKeyPrompt } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
+import { useSessions, type SessionsTab } from "@table-craft/desktop/renderer/state/sessions.js";
 import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useTables, type TableSession } from "@table-craft/desktop/renderer/state/tables.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
@@ -63,6 +64,8 @@ export interface ActionContext {
   readonly table: TableSession | null;
   /** The active tab's relation definition, when the active tab is a DDL tab. */
   readonly ddl: DdlTab | null;
+  /** The active tab's server sessions, when the active tab is a Sessions tab. */
+  readonly sessions: SessionsTab | null;
   /** The grid's result: the active console's shown result tab, or the active table's rows. */
   readonly result: ResultTab | null;
   readonly datasources: readonly DatasourceView[];
@@ -72,7 +75,7 @@ export interface ActionContext {
    * focus, otherwise the active console's datasource, otherwise the tree's selection.
    */
   readonly datasource: DatasourceTarget | null;
-  /** The active console's, table's or DDL tab's datasource's capabilities. */
+  /** The active console's, table's, DDL or Sessions tab's datasource's capabilities. */
   readonly capabilities: readonly Capability[];
   readonly focus: FocusRegion;
   /** Focus is in the Database pane, or was when a menu or dialog took it: `datasource` is the tree's. */
@@ -129,7 +132,8 @@ export function currentContext(): ActionContext {
   const console = active?.kind === "console" ? (consoles[active.id] ?? null) : null;
   const table = active?.kind === "table" ? (useTables.getState().tables[active.id] ?? null) : null;
   const ddl = active?.kind === "ddl" ? (useDdl.getState().ddls[active.id] ?? null) : null;
-  const tabDatasourceId = console?.datasourceId ?? table?.datasourceId ?? ddl?.datasourceId;
+  const sessions = active?.kind === "sessions" ? (useSessions.getState().tabs[active.id] ?? null) : null;
+  const tabDatasourceId = console?.datasourceId ?? table?.datasourceId ?? ddl?.datasourceId ?? sessions?.datasourceId;
   const focus = focusedRegion();
   const selected = selectedDatasourceId(datasources.selection);
   const inTree = focus === "database" || (focus === "other" && lastRegion === "database");
@@ -141,6 +145,7 @@ export function currentContext(): ActionContext {
     console,
     table,
     ddl,
+    sessions,
     result: console === null ? (table?.result ?? null) : (activeResultOf(console) ?? null),
     datasources: datasources.datasources,
     selection: datasources.selection,

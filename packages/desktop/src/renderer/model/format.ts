@@ -198,6 +198,11 @@ export function tabLabel(title: string, datasourceName: string | undefined): str
   return datasourceName === undefined ? title : `${title} [${datasourceName}]`;
 }
 
+/** A Sessions tab's label (plan 045): `Sessions · pg`, since the tab belongs to the data source, not a console. */
+export function sessionsTabLabel(title: string, datasourceName: string | undefined): string {
+  return datasourceName === undefined ? title : `${title} · ${datasourceName}`;
+}
+
 const RECONNECTED_BECAUSE: Readonly<Record<NonNullable<Reconnection["reason"]> | "lost", string>> = {
   lost: "Reconnected: the connection had been lost.",
   resultNotClosed: "The previous result could not be closed in time; reconnected.",

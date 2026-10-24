@@ -54,6 +54,8 @@ import {
   type Settings,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
   statementTimeoutSecondsError,
+  sessionsRefreshSecondsError,
+  SESSIONS_REFRESH_SECONDS_RANGE,
 } from "@table-craft/desktop/settings/settings.js";
 
 const PAGE_TITLES: Readonly<Record<SettingsPage, string>> = {
@@ -502,6 +504,24 @@ function StatementTimeoutField() {
   );
 }
 
+function SessionsRefreshField() {
+  const seconds = useSettings((state) => state.settings.console.sessionsRefreshSeconds);
+  return (
+    <>
+      <NumberField
+        label="Sessions refresh (s)"
+        value={seconds}
+        range={SESSIONS_REFRESH_SECONDS_RANGE}
+        check={sessionsRefreshSecondsError}
+        onValid={(sessionsRefreshSeconds) =>
+          update((current) => ({ ...current, console: { ...current.console, sessionsRefreshSeconds } }))
+        }
+      />
+      <p className="col-start-2 text-ink-muted">How often a Sessions tab with Auto-refresh on lists again.</p>
+    </>
+  );
+}
+
 function EditorPage() {
   return (
     <>
@@ -517,6 +537,7 @@ function EditorPage() {
       <SectionTitle>Running</SectionTitle>
       <ParametersField />
       <StatementTimeoutField />
+      <SessionsRefreshField />
     </>
   );
 }

@@ -80,6 +80,8 @@ export interface ConsoleSettings {
    * source's own timeout overrides it (decision 054).
    */
   readonly statementTimeoutSeconds: number;
+  /** How often a Sessions tab with Auto-refresh on lists the server's sessions again (plan 045). */
+  readonly sessionsRefreshSeconds: number;
 }
 
 /** The levels Settings → Advanced offers; `error` and `warn` are always written (plan 017 decision 3). */
@@ -124,6 +126,7 @@ export const LINES_BETWEEN_STATEMENTS_RANGE: NumberRange = { min: 0, max: 5 };
 export const STATEMENT_TIMEOUT_SECONDS_RANGE: NumberRange = { min: 0, max: 86_400 };
 /** 0 turns keepalive off; the top is the two hours an OS waits by default (decision 054). */
 export const KEEPALIVE_SECONDS_RANGE: NumberRange = { min: 0, max: 7_200 };
+export const SESSIONS_REFRESH_SECONDS_RANGE: NumberRange = { min: 1, max: 3_600 };
 export const DEFAULT_KEEPALIVE_SECONDS = 30;
 /** Longer than any installed family's name; guards a hand-edited file, not a real font. */
 export const FONT_FAMILY_MAX_LENGTH = 128;
@@ -146,6 +149,7 @@ export const DEFAULT_SETTINGS: Settings = {
   console: {
     parameters: true,
     statementTimeoutSeconds: 0,
+    sessionsRefreshSeconds: 5,
   },
   data: {
     nullText: "<null>",
@@ -231,6 +235,10 @@ export function keepAliveSecondsError(seconds: number): string | null {
   return rangeError(seconds, KEEPALIVE_SECONDS_RANGE, "The keepalive interval");
 }
 
+export function sessionsRefreshSecondsError(seconds: number): string | null {
+  return rangeError(seconds, SESSIONS_REFRESH_SECONDS_RANGE, "The Sessions refresh interval");
+}
+
 export function nullTextError(nullText: string): string | null {
   if (nullText.length < NULL_TEXT_LENGTH.min || nullText.length > NULL_TEXT_LENGTH.max) {
     return `NULL text must be ${NULL_TEXT_LENGTH.min} to ${NULL_TEXT_LENGTH.max} characters.`;
@@ -300,6 +308,9 @@ export function readSettings(input: unknown): Settings {
       statementTimeoutSeconds: inRange(console.statementTimeoutSeconds, STATEMENT_TIMEOUT_SECONDS_RANGE)
         ? console.statementTimeoutSeconds
         : defaults.console.statementTimeoutSeconds,
+      sessionsRefreshSeconds: inRange(console.sessionsRefreshSeconds, SESSIONS_REFRESH_SECONDS_RANGE)
+        ? console.sessionsRefreshSeconds
+        : defaults.console.sessionsRefreshSeconds,
     },
     data: {
       nullText:

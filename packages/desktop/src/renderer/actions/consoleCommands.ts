@@ -22,6 +22,7 @@ import { createFileConsoles } from "@table-craft/desktop/renderer/state/fileCons
 import { useLayout, type OpenConsole } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { bridgeSqlFiles } from "@table-craft/desktop/renderer/state/sqlFiles.js";
+import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { pendingTables, tablesOf, useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -31,7 +32,7 @@ const COMMIT = "commit";
 const ROLLBACK = "rollback";
 let consolesOpened = 0;
 /** One allocation at a time per datasource, so two quick New Consoles never take the same name. */
-const allocating = new Map<string, Promise<void>>();
+const allocating = new Map<string, Promise<unknown>>();
 const files: ConsoleFileAccess = bridgeConsoleFiles();
 
 function newTab(name: string): Tab {
@@ -54,8 +55,8 @@ export function persists(datasourceId: string): boolean {
   return view !== undefined && !view.ephemeral;
 }
 
-/** Opens a console tab on the datasource, named with the first free `console`, `console_1`… (decision 16). */
-export function openConsole(datasourceId: string, sql?: string, parameterValues?: ParameterValues): Promise<void> {
+/** Opens a console tab on the datasource, named with the first free `console`, `console_1`… (decision 16); answers its tab id. */
+export function openConsole(datasourceId: string, sql?: string, parameterValues?: ParameterValues): Promise<string> {
   const previous = allocating.get(datasourceId) ?? Promise.resolve();
   const opened = previous.then(async () => {
     const saved = persists(datasourceId) ? await files.list(datasourceId).catch(() => []) : [];
@@ -63,6 +64,7 @@ export function openConsole(datasourceId: string, sql?: string, parameterValues?
     const tab = newTab(name);
     useTabs.getState().open(tab);
     void useConsoles.getState().open(tab.id, datasourceId, { name, sql, parameterValues });
+    return tab.id;
   });
   allocating.set(datasourceId, opened);
   return opened;
@@ -233,6 +235,7 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
   for (const tab of close()) {
     if (tab.kind === "console") useConsoles.getState().close(tab.id);
     else if (tab.kind === "table") useTables.getState().close(tab.id);
+    else if (tab.kind === "sessions") useSessions.getState().close(tab.id);
     else useDdl.getState().close(tab.id);
   }
 }

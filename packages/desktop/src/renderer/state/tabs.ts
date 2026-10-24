@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** A SQL console, a table open in the data editor (plan 008), or a relation's DDL (plan 010). */
-export type TabKind = "console" | "table" | "ddl";
+export type TabKind = "console" | "table" | "ddl" | "sessions";
 
 export interface Tab {
   readonly id: string;

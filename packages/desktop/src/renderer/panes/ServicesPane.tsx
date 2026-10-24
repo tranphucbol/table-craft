@@ -4,6 +4,7 @@ import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportA
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
+import { SESSIONS_ACTION_IDS, showableInSessions } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import type { ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import {
@@ -141,7 +142,7 @@ function scriptActionsOf(entry: ScriptEntry): readonly string[] {
   return [...(task.error?.line == null ? [] : [SCRIPT_ACTION_IDS.goTo]), SCRIPT_ACTION_IDS.dismiss];
 }
 
-function menuOf(row: ServiceRow, cancellable: boolean): readonly MenuEntry[] {
+function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): readonly MenuEntry[] {
   if (row.kind === "session") {
     const args = { tabId: row.node.tabId };
     return [
@@ -166,6 +167,7 @@ function menuOf(row: ServiceRow, cancellable: boolean): readonly MenuEntry[] {
     return [
       { actionId: HISTORY_ACTION_IDS.copySql, args },
       { actionId: HISTORY_ACTION_IDS.openInConsole, args },
+      ...(inSessions ? [{ actionId: SESSIONS_ACTION_IDS.showInSessions, args }] : []),
     ];
   }
   return [];
@@ -553,7 +555,9 @@ export function ServicesPane() {
         const canExpand = expandable(row);
         const cancellable =
           row.kind === "session" && row.node.kind === "console" && consoles[row.node.tabId]?.status === "running";
-        const entries = menuOf(row, cancellable);
+        // Reads the console and plugin stores; this pane re-renders on both through `consoles` and `datasources`.
+        const inSessions = row.kind === "execution" && showableInSessions(row.tabId);
+        const entries = menuOf(row, cancellable, inSessions);
         const line = (
           <li
             key={row.key}
