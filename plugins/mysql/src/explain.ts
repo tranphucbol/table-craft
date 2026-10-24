@@ -11,14 +11,20 @@ export const ANALYZE_VERBS = ["SELECT", "TABLE"];
  */
 const JSON_VERBS = new Set(["UPDATE", "DELETE"]);
 
-export type PlanFormat = "tree" | "json";
+/**
+ * `table` is TiDB's own: it has neither `FORMAT=TREE` nor MySQL's JSON, and prints its plan as
+ * rows of a table whose first column draws the tree.
+ */
+export type PlanFormat = "tree" | "json" | "table";
 
-export function planFormat(verb: string): PlanFormat {
+export function planFormat(verb: string, tidb: boolean): PlanFormat {
+  if (tidb) return "table";
   return JSON_VERBS.has(verb) ? "json" : "tree";
 }
 
 export function explainStatement(sql: string, analyze: boolean, format: PlanFormat): string {
   if (format === "json") return `EXPLAIN FORMAT=JSON ${sql}`;
+  if (format === "table") return analyze ? `EXPLAIN ANALYZE ${sql}` : `EXPLAIN ${sql}`;
   return analyze ? `EXPLAIN ANALYZE FORMAT=TREE ${sql}` : `EXPLAIN FORMAT=TREE ${sql}`;
 }
 
@@ -85,6 +91,86 @@ export function readTree(raw: string, statement: string, analyzed: boolean): Exp
     else parent.node.children.push(node);
     open.push({ depth, node });
     last = node;
+  }
+  return { statement, analyzed, roots, summary: [], raw };
+}
+
+const CELL_SEPARATOR = "\t";
+const LINE_BREAK = "\n";
+/** The tree TiDB draws in front of a step's id, two characters a level: `└─`, `├─`, `│ ` or spaces. */
+const TREE_PREFIX = /^[\s│├└─]*/u;
+/** `IndexRangeScan_5(Build)`: the step's id, then the side of a join or lookup it feeds. */
+const STEP_ID = /^(.*?)(?:\((Build|Probe)\))?$/;
+const TREE_LEVEL = 2;
+/** TiDB 4 calls the estimate `estRows`; TiDB 3 called it `count`. */
+const ESTIMATE_COLUMNS = ["estRows", "count"];
+const TIDB_MAPPED = new Set(["id", ...ESTIMATE_COLUMNS, "actRows", "access object", "operator info"]);
+/** What TiDB prints in a cell it has nothing for. */
+const NOTHING = new Set(["", "N/A"]);
+/** `time:1.21ms` at the start of `execution info`, the step's wall time over all its loops. */
+const EXECUTION_TIME = /(?:^|,\s*)time:\s*([\d.]+)(ns|µs|us|ms|s)\b/;
+const MILLISECONDS_PER: Readonly<Record<string, number>> = { ns: 1e-6, µs: 1e-3, us: 1e-3, ms: 1, s: 1e3 };
+
+/** A TiDB plan's rows as `readTidbTable` reads them: a header line, then one line a step, cells tab-separated. */
+export function tableText(columns: readonly string[], rows: readonly (readonly string[])[]): string {
+  return [columns, ...rows].map((cells) => cells.join(CELL_SEPARATOR)).join(LINE_BREAK);
+}
+
+function present(value: string | undefined): string | null {
+  return value === undefined || NOTHING.has(value) ? null : value;
+}
+
+function executionTime(info: string | null): number | null {
+  const match = info === null ? null : EXECUTION_TIME.exec(info);
+  if (match === null) return null;
+  return Number(match[1]) * (MILLISECONDS_PER[match[2] ?? ""] ?? Number.NaN);
+}
+
+function tidbNode(cells: ReadonlyMap<string, string>): { depth: number; node: Mutable } {
+  const id = cells.get("id") ?? "";
+  const prefix = TREE_PREFIX.exec(id)?.[0] ?? "";
+  const step = STEP_ID.exec(id.slice(prefix.length));
+  const role = step?.[2];
+  const estimate = ESTIMATE_COLUMNS.map((name) => cells.get(name)).find((value) => value !== undefined);
+  const executionInfo = present(cells.get("execution info"));
+  const properties = [
+    ...(role === undefined ? [] : [{ name: "role", value: role }]),
+    ...[...cells].flatMap(([name, value]) =>
+      TIDB_MAPPED.has(name) || present(value) === null ? [] : [{ name, value }],
+    ),
+  ];
+  return {
+    depth: Math.floor([...prefix].length / TREE_LEVEL),
+    node: {
+      operation: step?.[1] ?? id,
+      target: present(cells.get("access object")),
+      detail: present(cells.get("operator info")),
+      estimatedRows: number(present(estimate) ?? undefined),
+      estimatedCost: null,
+      actualRows: number(present(cells.get("actRows")) ?? undefined),
+      actualTimeMs: executionTime(executionInfo),
+      loops: null,
+      properties,
+      children: [],
+    },
+  };
+}
+
+/** Reads TiDB's plan table, as `tableText` writes it: each step nested under the one its tree prefix hangs from. */
+export function readTidbTable(raw: string, statement: string, analyzed: boolean): ExplainedPlan {
+  const [header = "", ...lines] = raw.split(LINE_BREAK);
+  const columns = header.split(CELL_SEPARATOR);
+  const roots: Mutable[] = [];
+  const open: Building[] = [];
+  for (const line of lines) {
+    if (line === "") continue;
+    const values = line.split(CELL_SEPARATOR);
+    const { depth, node } = tidbNode(new Map(columns.map((name, index) => [name, values[index] ?? ""])));
+    while (open.length > 0 && (open.at(-1)?.depth ?? 0) >= depth) open.pop();
+    const parent = open.at(-1);
+    if (parent === undefined) roots.push(node);
+    else parent.node.children.push(node);
+    open.push({ depth, node });
   }
   return { statement, analyzed, roots, summary: [], raw };
 }

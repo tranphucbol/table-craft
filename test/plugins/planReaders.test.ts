@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import type { PlanNode, Row } from "@table-craft/plugin-api";
-import { readJson, readTree } from "@table-craft/plugin-mysql/explain";
+import { explainStatement, planFormat, readJson, readTidbTable, readTree } from "@table-craft/plugin-mysql/explain";
 import { readPlan } from "@table-craft/plugin-postgres/explain";
 import { readPlanRows } from "@table-craft/plugin-sqlite/explain";
 import { describe, expect, it } from "vitest";
 
-/** Captured from the `test:db` containers (postgres:17, mysql:8.4) and node:sqlite on the fixture schema. */
+/** Captured from the `test:db` containers (postgres:17, mysql:8.4, TiDB v4.0.14) and node:sqlite on the fixture schema. */
 function captured(name: string): string {
   return readFileSync(new URL(`../support/plans/${name}`, import.meta.url), "utf8").trimEnd();
 }
@@ -87,6 +87,77 @@ describe("plan readers", () => {
       name: "attached_condition",
       value: "(`table_craft`.`orders`.`id` = 1)",
     });
+  });
+
+  it("givenTidb_whenPlanFormatChosen_thenPlainExplainWithoutFormat", () => {
+    expect(planFormat("SELECT", true)).toBe("table");
+    expect(planFormat("UPDATE", true)).toBe("table");
+    expect(planFormat("UPDATE", false)).toBe("json");
+    expect(explainStatement("SELECT 1", false, "table")).toBe("EXPLAIN SELECT 1");
+    expect(explainStatement("SELECT 1", true, "table")).toBe("EXPLAIN ANALYZE SELECT 1");
+  });
+
+  it("givenTidbTable_whenRead_thenTreeFromPrefixesAndAccessObjectAsTarget", () => {
+    const plan = readTidbTable(captured("tidb-explain.tsv"), "EXPLAIN …", false);
+    expect(plan.roots.map(shape)).toEqual([
+      {
+        operation: "IndexLookUp_13",
+        children: [
+          { operation: "Limit_12", children: [{ operation: "IndexFullScan_10", children: [] }] },
+          { operation: "TableRowIDScan_11", children: [] },
+        ],
+      },
+    ]);
+    const [root] = plan.roots;
+    expect(root).toMatchObject({ target: null, detail: "limit embedded(offset:0, count:10)", estimatedRows: 10 });
+    expect(root?.properties).toEqual([{ name: "task", value: "root" }]);
+    const scan = root?.children[0]?.children[0];
+    expect(scan).toMatchObject({
+      target: "table:order_events_202601, index:order_events_app_id(app_id)",
+      detail: "keep order:false, stats:pseudo",
+      actualRows: null,
+    });
+    expect(root?.children[1]?.properties).toEqual([
+      { name: "role", value: "Probe" },
+      { name: "task", value: "cop[tikv]" },
+    ]);
+  });
+
+  it("givenTidbJoin_whenRead_thenSiblingsUnderTheirOwnParent", () => {
+    const plan = readTidbTable(captured("tidb-join.tsv"), "EXPLAIN …", false);
+    expect(plan.roots.map(shape)).toEqual([
+      {
+        operation: "Sort_8",
+        children: [
+          {
+            operation: "IndexJoin_15",
+            children: [
+              { operation: "IndexReader_31", children: [{ operation: "IndexRangeScan_30", children: [] }] },
+              { operation: "TableReader_14", children: [{ operation: "TableRangeScan_13", children: [] }] },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(plan.roots[0]?.estimatedRows).toBe(12.5);
+  });
+
+  it("givenTidbAnalysedTable_whenRead_thenActualRowsTimeAndExecutionInfo", () => {
+    const plan = readTidbTable(captured("tidb-analyze.tsv"), "EXPLAIN ANALYZE …", true);
+    const [root] = plan.roots;
+    expect(root).toMatchObject({ operation: "IndexLookUp_7", actualRows: 2, actualTimeMs: 1.89, loops: null });
+    expect(root?.properties.map((property) => property.name)).toEqual(["task", "execution info", "memory"]);
+    expect(root?.children[0]).toMatchObject({ operation: "IndexRangeScan_5", actualRows: 2, actualTimeMs: 0.232 });
+    expect(root?.children[0]?.properties.map((property) => property.name)).not.toContain("disk");
+  });
+
+  it("givenTidbThreeCountColumn_whenRead_thenItIsTheEstimate", () => {
+    const plan = readTidbTable(
+      "id\tcount\ttask\toperator info\nTableReader_5\t3.00\troot\tdata:TableScan_4",
+      "",
+      false,
+    );
+    expect(plan.roots[0]).toMatchObject({ operation: "TableReader_5", estimatedRows: 3, detail: "data:TableScan_4" });
   });
 
   it("givenSqliteRows_whenRead_thenTreeFromParent", () => {

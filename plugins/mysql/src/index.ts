@@ -52,10 +52,20 @@ import {
   type SqlLiteralOptions,
 } from "@table-craft/plugin-api/sql";
 import { insertStatement, MYSQL_IMPORT_TYPES, mysqlDecimal } from "./bulk.js";
-import { ANALYZE_VERBS, EXPLAIN_VERBS, explainStatement, planFormat, readJson, readTree } from "./explain.js";
+import {
+  ANALYZE_VERBS,
+  EXPLAIN_VERBS,
+  explainStatement,
+  planFormat,
+  readJson,
+  type PlanFormat,
+  readTidbTable,
+  readTree,
+  tableText,
+} from "./explain.js";
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
-import { killStatementFor } from "./server.js";
+import { isTidb, killStatementFor } from "./server.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
@@ -390,6 +400,26 @@ async function closeWithin(connection: mysql.Connection): Promise<void> {
 /** Note 1003: EXPLAIN echoes the statement as the optimizer rewrote it, every time; it is not news. */
 const REWRITTEN_QUERY_NOTE = "1003";
 
+function readPlan(
+  format: PlanFormat,
+  columns: readonly Column[],
+  rows: readonly Row[],
+  statement: string,
+  analyzed: boolean,
+): ExplainedPlan {
+  if (format === "json") return readJson(planText(rows), statement);
+  if (format === "tree") return readTree(planText(rows), statement, analyzed);
+  const cells = rows.map((row) => row.map((cell) => planText([[cell]])));
+  return readTidbTable(
+    tableText(
+      columns.map((column) => column.name),
+      cells,
+    ),
+    statement,
+    analyzed,
+  );
+}
+
 const NO_ROWS: AsyncIterable<Row> = {
   [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve({ done: true, value: undefined }) }),
 };
@@ -652,13 +682,12 @@ class MysqlSession implements Session {
   async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
     const verdict = explainable(sql, options);
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
-    const format = planFormat(explainedVerb(sql, DIALECT));
+    const format = planFormat(explainedVerb(sql, DIALECT), isTidb(this.serverVersion));
     const statement = explainStatement(sql, options.analyze, format);
     const rows: Row[] = [];
     const result = await this.execute(statement);
     for await (const row of result.rows) rows.push(row);
-    const raw = planText(rows);
-    const plan = format === "json" ? readJson(raw, statement) : readTree(raw, statement, options.analyze);
+    const plan = readPlan(format, result.columns, rows, statement, options.analyze);
     const messages = (result.messages ?? []).filter((message) => message.code !== REWRITTEN_QUERY_NOTE);
     return { ...plan, messages };
   }

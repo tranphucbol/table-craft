@@ -7,6 +7,10 @@ const TIDB_VERSION = /-TiDB-v(\d+)\.(\d+)/i;
 /** The first TiDB release with Global Kill on by default, whose connection ids are cluster-wide. */
 const TIDB_GLOBAL_KILL = { major: 6, minor: 1 } as const;
 
+export function isTidb(serverVersion: string | null): boolean {
+  return serverVersion !== null && TIDB_VERSION.test(serverVersion);
+}
+
 /**
  * The statement that stops a running query of another connection, or `null` when no statement
  * stops it safely (decision 058).

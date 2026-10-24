@@ -1,0 +1,4 @@
+id	estRows	actRows	task	access object	execution info	operator info	memory	disk
+IndexLookUp_7	10.00	2	root		time:1.89ms, loops:2, index_task: {total_time: 305µs, fetch_handle: 254µs, build: 36µs, wait: 15µs}, table_task: {total_time: 5.12ms, num: 1, concurrency: 4}		9.24 KB	N/A
+├─IndexRangeScan_5(Build)	10.00	2	cop[tikv]	table:order_events_202601, index:order_events_app_id(app_id)	time:232µs, loops:3, cop_task: {num: 1, max: 364µs, proc_keys: 0, rpc_num: 1, rpc_time: 290µs, copr_cache: disabled}, tikv_task:{time:94µs, loops:3}	range:[7,7], keep order:false, stats:pseudo	N/A	N/A
+└─TableRowIDScan_6(Probe)	10.00	2	cop[tikv]	table:order_events_202601	time:571µs, loops:2, cop_task: {num: 1, max: 371µs, proc_keys: 0, rpc_num: 1, rpc_time: 310µs, copr_cache: disabled}, tikv_task:{time:115µs, loops:3}	keep order:false, stats:pseudo	N/A	N/A

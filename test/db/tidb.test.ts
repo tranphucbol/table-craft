@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import type { Session } from "@table-craft/plugin-api";
+import type { PlanNode, Session } from "@table-craft/plugin-api";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type {
   DatasourceConfig,
@@ -169,6 +169,57 @@ describe("tidb 4", () => {
         text: `use_index(test.${SAGA_INDEX}) is inapplicable, check whether the table(test.${SAGA_INDEX}) exists`,
       },
     ]);
+  });
+
+  it.each([
+    ["a plain comment", `SELECT /*USE_INDEX(${SAGA_INDEX})*/ * FROM ${SAGA_TABLE} LIMIT 10`, "TableFullScan", false],
+    [
+      "a hint without its table",
+      `SELECT /*+ USE_INDEX(${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`,
+      "TableFullScan",
+      true,
+    ],
+    [
+      "a hint naming its table",
+      `SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} LIMIT 10`,
+      "IndexFullScan",
+      false,
+    ],
+    ["an index clause", `SELECT * FROM ${SAGA_TABLE} USE INDEX (${SAGA_INDEX}) LIMIT 10`, "IndexFullScan", false],
+  ])("givenIndexChosenBy %s_whenExplained_thenTreeShowsTheScan", async (_how, sql, scan, warned) => {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+    await withSagaContext(session);
+
+    const plan = await session.explain?.(sql, { analyze: false });
+
+    const operations: string[] = [];
+    const walk = (nodes: readonly PlanNode[]) => {
+      for (const node of nodes) {
+        operations.push(node.operation);
+        walk(node.children);
+      }
+    };
+    walk(plan?.roots ?? []);
+    expect(plan?.statement).toBe(`EXPLAIN ${sql}`);
+    expect(operations.some((operation) => operation.startsWith(scan))).toBe(true);
+    expect(plan?.messages?.map((message) => message.code)).toEqual(warned ? ["1815"] : []);
+  });
+
+  it("givenHintedSelect_whenExplainAnalysed_thenActualRows", async () => {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+    await withSagaContext(session);
+
+    const plan = await session.explain?.(
+      `SELECT /*+ USE_INDEX(${SAGA_TABLE}, ${SAGA_INDEX}) */ * FROM ${SAGA_TABLE} WHERE app_id = 10`,
+      { analyze: true },
+    );
+
+    expect(plan?.analyzed).toBe(true);
+    expect(plan?.roots[0]?.operation).toMatch(/^IndexLookUp_/);
+    expect(plan?.roots[0]?.actualRows).toBe(2);
+    expect(plan?.roots[0]?.children[0]?.target).toBe(`table:${SAGA_TABLE}, index:${SAGA_INDEX}(app_id)`);
   });
 
   it("givenLongNamedDatabase_whenSwitchedThroughEngine_thenNamespaceIsIt", async () => {
