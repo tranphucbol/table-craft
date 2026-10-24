@@ -46,3 +46,4 @@ contract, which is the part that must be right before third parties build on it.
 - Features outside this list need this record updated, not just a plan.
 - The plans 002 to 014 follow this list in order; see `docs/plans/`.
 - Amended by decision 039: the daily-friction release (plans 017 to 026) adds to this list.
+- Amended by decision 069: the must-have release (plans 036 to 048) adds to this list.
