@@ -1,3 +1,4 @@
+import { currentCompletions } from "@codemirror/autocomplete";
 import { Prec, StateEffect, StateField, type EditorState, type Extension, type Transaction } from "@codemirror/state";
 import { keymap, showTooltip, ViewPlugin, type EditorView, type Tooltip, type ViewUpdate } from "@codemirror/view";
 import type {
@@ -135,7 +136,7 @@ export function requestParameterInfo(view: EditorView): void {
 /**
  * Asks the engine for the call around the caret when `(` or `,` is typed, on Parameter Info, and
  * on every edit or move while the hint shows, so it follows the caret and closes once it leaves
- * the call; a response a newer request has overtaken is dropped.
+ * the call; a response a newer request or a close has overtaken is dropped.
  */
 function hintPlugin(target: SignatureTarget) {
   return ViewPlugin.fromClass(
@@ -154,6 +155,11 @@ function hintPlugin(target: SignatureTarget) {
           transaction.effects.some((effect) => effect.is(askHelp)),
         );
         const open = update.state.field(helpField) !== null;
+        // A request still in flight when the hint closes (Escape, leaving the call) would reopen it.
+        if (!open && !explicit && update.startState.field(helpField) !== null) {
+          this.latest += 1;
+          return;
+        }
         const moved = update.docChanged || update.selectionSet;
         if (explicit || typedTrigger(update.state, update.transactions) || (open && moved)) this.ask();
       }
@@ -187,9 +193,18 @@ function hintPlugin(target: SignatureTarget) {
   );
 }
 
+/**
+ * Escape closes a shown completion popup first, then the hint. The hint goes ahead of
+ * autocompletion's own Escape, which also swallows the key while a source is merely active and
+ * no option is shown.
+ */
+function escapeHint(view: EditorView): boolean {
+  return currentCompletions(view.state).length === 0 && closeHint(view);
+}
+
 /** The parameter hint: the call's overloads above it, the parameter at the caret bold; Escape hides it. */
 export function signatureHint(target: SignatureTarget): Extension {
-  return [helpField, hintPlugin(target), Prec.highest(keymap.of([{ key: "Escape", run: closeHint }]))];
+  return [helpField, hintPlugin(target), Prec.highest(keymap.of([{ key: "Escape", run: escapeHint }]))];
 }
 
 /** The datasource's engine while it is connected; null otherwise. */

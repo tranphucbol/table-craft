@@ -146,6 +146,7 @@ export function connectedEngine(datasourceId: () => string | undefined): () => C
 export function completion(target: CompletionTarget): Extension {
   const { signature, scope } = target;
   return [
+    signature === undefined ? [] : signatureHint(scope === undefined ? { signature } : { signature, scope }),
     autocompletion({
       override: [engineCompletionSource(target)],
       icons: false,
@@ -154,6 +155,5 @@ export function completion(target: CompletionTarget): Extension {
       addToOptions: [{ render: renderCompletionGlyph, position: GLYPH_POSITION }],
     }),
     tabAcceptsCompletion,
-    signature === undefined ? [] : signatureHint(scope === undefined ? { signature } : { signature, scope }),
   ];
 }
