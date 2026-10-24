@@ -3,7 +3,7 @@
 # native arch, so Apple silicon runs arm64 Electron without emulation.
 FROM node:22-bookworm
 
-ARG BUN_VERSION=1.3.4
+ARG BUN_VERSION=1.4.4
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
