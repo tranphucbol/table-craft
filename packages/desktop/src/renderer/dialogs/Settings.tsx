@@ -507,18 +507,15 @@ function StatementTimeoutField() {
 function SessionsRefreshField() {
   const seconds = useSettings((state) => state.settings.console.sessionsRefreshSeconds);
   return (
-    <>
-      <NumberField
-        label="Sessions refresh (s)"
-        value={seconds}
-        range={SESSIONS_REFRESH_SECONDS_RANGE}
-        check={sessionsRefreshSecondsError}
-        onValid={(sessionsRefreshSeconds) =>
-          update((current) => ({ ...current, console: { ...current.console, sessionsRefreshSeconds } }))
-        }
-      />
-      <p className="col-start-2 text-ink-muted">How often a Sessions tab with Auto-refresh on lists again.</p>
-    </>
+    <NumberField
+      label="Sessions refresh (s)"
+      value={seconds}
+      range={SESSIONS_REFRESH_SECONDS_RANGE}
+      check={sessionsRefreshSecondsError}
+      onValid={(sessionsRefreshSeconds) =>
+        update((current) => ({ ...current, console: { ...current.console, sessionsRefreshSeconds } }))
+      }
+    />
   );
 }
 
@@ -537,7 +534,6 @@ function EditorPage() {
       <SectionTitle>Running</SectionTitle>
       <ParametersField />
       <StatementTimeoutField />
-      <SessionsRefreshField />
     </>
   );
 }
@@ -659,6 +655,8 @@ function AdvancedPage() {
         <ActionButton actionId={LOG_ACTION_IDS.reveal} />
         <ActionButton actionId={LOG_ACTION_IDS.exportDiagnostics} />
       </FieldRow>
+      <SectionTitle>Sessions</SectionTitle>
+      <SessionsRefreshField />
       <SectionTitle>Updates</SectionTitle>
       <FieldRow label="New versions" htmlFor={updatesId}>
         <label className="flex items-center gap-cell">
