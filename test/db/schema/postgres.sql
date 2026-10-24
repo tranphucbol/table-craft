@@ -82,3 +82,20 @@ CREATE TABLE archive.old_orders (
   id INTEGER PRIMARY KEY,
   customer_id INTEGER NOT NULL REFERENCES public.customers (id)
 );
+
+-- Routines, so Execute Routine meets a default, an overload, a table result and an OUT parameter.
+CREATE FUNCTION public.calc_fee(amount NUMERIC, rate NUMERIC DEFAULT 0.015) RETURNS NUMERIC
+  LANGUAGE sql IMMUTABLE
+  AS $$ SELECT round(amount * rate, 2) $$;
+
+CREATE FUNCTION public.calc_fee(amount NUMERIC, currency TEXT, rate NUMERIC DEFAULT 0.015) RETURNS NUMERIC
+  LANGUAGE sql IMMUTABLE
+  AS $$ SELECT round(amount * rate, 2) + CASE WHEN currency = 'USD' THEN 0 ELSE 1 END $$;
+
+CREATE FUNCTION public.customer_orders(customer INTEGER) RETURNS TABLE (id INTEGER, total NUMERIC)
+  LANGUAGE sql STABLE
+  AS $$ SELECT o.id, o.total FROM public.orders o WHERE o.customer_id = customer ORDER BY o.id $$;
+
+CREATE PROCEDURE public.settle_order(IN order_id INTEGER, OUT total NUMERIC)
+  LANGUAGE plpgsql
+  AS $$ BEGIN SELECT o.total INTO total FROM public.orders o WHERE o.id = order_id; END $$;

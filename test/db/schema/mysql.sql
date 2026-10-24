@@ -77,6 +77,22 @@ CREATE TABLE `Line Items` (
 
 INSERT INTO `Line Items` (id, sku) VALUES (1, 'SKU-1');
 
+-- Routines, so Execute Routine meets a function and a procedure with OUT and INOUT parameters.
+-- Binary logging is on in the image, so a function must say it reads no data.
+DELIMITER //
+
+CREATE FUNCTION calc_fee(amount DECIMAL(12, 2), rate DECIMAL(6, 4)) RETURNS DECIMAL(12, 2)
+  DETERMINISTIC NO SQL
+  RETURN ROUND(amount * rate, 2)//
+
+CREATE PROCEDURE settle_order(IN order_id INT, OUT total DECIMAL(12, 2), INOUT note VARCHAR(64))
+BEGIN
+  SELECT o.total INTO total FROM orders o WHERE o.id = order_id;
+  SET note = CONCAT_WS(' ', note, 'settled');
+END//
+
+DELIMITER ;
+
 -- A second database, so `USE` and completion meet a namespace that is not current. The image
 -- grants its user only MYSQL_DATABASE, and this script runs as root.
 CREATE DATABASE archive;

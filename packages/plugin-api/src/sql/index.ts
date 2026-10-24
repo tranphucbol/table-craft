@@ -63,3 +63,4 @@ export {
   sqlExplainable,
   type ExplainableOptions,
 } from "./explain.js";
+export { routineSlots, type RoutineSlot, type RoutineSlots } from "./routines.js";

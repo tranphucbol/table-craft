@@ -17,7 +17,8 @@
     "bulkInsert",
     "objects",
     "serverMessages",
-    "sessions"
+    "sessions",
+    "routineCall"
   ],
   "highlight": "mysql",
   "connection": {

@@ -33,6 +33,62 @@ runPluginContract(mysql, {
   },
   namespaceSwitch: { statement: "USE archive", path: ["archive"], missing: "USE no_such_database" },
   sessions: { monitorConfig: MYSQL_ROOT_CONFIG, limited: { config: MYSQL_CONFIG, note: /GRANT PROCESS/ } },
+  routines: {
+    expected: [
+      {
+        name: "calc_fee",
+        kind: "function",
+        signature: "amount decimal(12,2), rate decimal(6,4)",
+        parameters: [
+          { name: "amount", type: "decimal(12,2)", mode: "in", hasDefault: false },
+          { name: "rate", type: "decimal(6,4)", mode: "in", hasDefault: false },
+        ],
+        returns: "decimal(12,2)",
+      },
+      {
+        name: "settle_order",
+        kind: "procedure",
+        signature: "order_id int, OUT total decimal(12,2), INOUT note varchar(64)",
+        parameters: [
+          { name: "order_id", type: "int", mode: "in", hasDefault: false },
+          { name: "total", type: "decimal(12,2)", mode: "out", hasDefault: false },
+          { name: "note", type: "varchar(64)", mode: "inout", hasDefault: false },
+        ],
+        returns: null,
+      },
+    ],
+    function: {
+      name: "calc_fee",
+      kind: "function",
+      signature: "amount decimal(12,2), rate decimal(6,4)",
+      args: [
+        { kind: "value", value: "100.00" },
+        { kind: "value", value: "0.0200" },
+      ],
+      rows: [["2.00"]],
+    },
+    nullArgument: {
+      name: "calc_fee",
+      kind: "function",
+      signature: "amount decimal(12,2), rate decimal(6,4)",
+      args: [
+        { kind: "value", value: null },
+        { kind: "value", value: "0.0200" },
+      ],
+      rows: [[null]],
+    },
+    procedureOut: {
+      name: "settle_order",
+      kind: "procedure",
+      signature: "order_id int, OUT total decimal(12,2), INOUT note varchar(64)",
+      args: [
+        { kind: "value", value: "3" },
+        { kind: "value", value: null },
+        { kind: "value", value: "paid" },
+      ],
+      rows: [["120.50", "paid settled"]],
+    },
+  },
 });
 
 /** More rows than `SERVER_MESSAGE_LIMIT`, each truncating `'<n>x'` to an integer with a warning. */

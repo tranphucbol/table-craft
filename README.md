@@ -366,6 +366,18 @@ open in a console. The **SQL Generator** (`⌥⌘G`) writes `CREATE`, `DROP`, `S
 
 See [DDL and SQL generation](docs/design/specification.md#ddl-and-sql-generation).
 
+### Execute a routine
+
+The tree lists each function and procedure under Routines with its arguments, so every PostgreSQL
+overload has its own row. **Execute Routine…** on one opens a dialog with a field per argument, a
+NULL toggle and, where the argument has a default, a DEFAULT toggle; OUT arguments are listed as
+what comes back, and the SQL it will run is shown as you type. **Run** opens a new console on the
+routine's schema with that SQL and runs it, values bound rather than pasted in, so the result, the
+OUT values and server messages show in the usual result tabs and Output. **Open in Console** opens
+the same console without running it. PostgreSQL and MySQL support it.
+
+See [Execute a routine](docs/design/specification.md#execute-a-routine).
+
 ### Query history and Services
 
 Every statement you run is kept per data source in a local history. **Query History…** (`⌥⌘E`)
@@ -621,6 +633,8 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   Output lists under it and the result tab counts.
 - `sessions`: lists the server's sessions with who blocks whom, and cancels or terminates one, for
   the [Sessions](#sessions) view; requires `sql` and `schemaTree`.
+- `routineCall`: writes the statements that call a function or procedure with the values from
+  [Execute Routine](#execute-a-routine), OUT values included; requires `sql` and `schemaTree`.
 
 ```json
 {
@@ -642,7 +656,8 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
     "bulkInsert",
     "objects",
     "serverMessages",
-    "sessions"
+    "sessions",
+    "routineCall"
   ],
   "highlight": "postgresql",
   "connection": {

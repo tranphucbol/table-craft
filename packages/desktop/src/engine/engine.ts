@@ -59,6 +59,9 @@ import {
   type ObjectEditor,
   type Relation,
   type ResolveRequest,
+  type Routine,
+  type RoutineArgument,
+  type RoutineCall,
   type Row,
   type Session,
   type ServerSession,
@@ -531,6 +534,7 @@ const PRIVATE_OBJECTS =
   "An in-memory database's objects cannot be changed from the tree: the change's own connection would see another database.";
 const PRIVATE_OBJECTS_HINT = "Save the database to a file, or run the statement from a console.";
 const DESIGN_HINT = "Fix the design and preview it again.";
+const ROUTINE_ARGUMENTS_HINT = "Change the arguments in the dialog and try again.";
 const OBJECT_BUSY_HINT = "Wait for it to finish or cancel it in the Services tool window, then try again.";
 const STALE_PREVIEW = "The object changed since the preview, so the statements to run differ from what was shown.";
 const STALE_PREVIEW_HINT = "Review the new preview, then apply again.";
@@ -734,6 +738,46 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     const language = sqlLanguage();
     const { relation, qualified } = await relationOf(path, name);
     return language.generate(statement, relation, qualified);
+  }
+
+  /** Written by the plugin from the cached routine, described afresh once when the cache lacks it (decision 090). */
+  async function routineCall(
+    path: readonly string[],
+    target: Pick<Routine, "name" | "kind" | "signature">,
+    args: readonly RoutineArgument[],
+  ): Promise<RoutineCall> {
+    const language = sqlLanguage();
+    const call = language.routineCall?.bind(language);
+    if (call === undefined) {
+      throw new EngineFailure({
+        code: "invalidRequest",
+        message: "This datasource's plugin does not declare the routineCall capability.",
+        hint: BUG_HINT,
+      });
+    }
+    const { routine, qualified } = await introspect(async ({ cache, session }) => {
+      const find = (described: { readonly catalog: { readonly routines: readonly Routine[] } }) =>
+        described.catalog.routines.find(
+          (routine) =>
+            routine.name === target.name && routine.kind === target.kind && routine.signature === target.signature,
+        );
+      const routine = find(await cache.describe(path)) ?? find(await cache.describe(path, true));
+      if (routine === undefined) {
+        throw new EngineFailure({
+          code: "invalidRequest",
+          message: `There is no ${target.kind} ${target.name}(${target.signature}) in ${path.join(".")}.`,
+          hint: SYNCHRONIZE_HINT,
+        });
+      }
+      return { routine, qualified: session.introspector?.qualifiedName(path, routine.name) ?? routine.name };
+    });
+    // Outside `introspect`, which takes a plugin error for a broken session and reopens it.
+    try {
+      return call(routine, qualified, args);
+    } catch (cause) {
+      if (!isPluginError(cause)) throw cause;
+      throw new EngineFailure({ code: "statementFailed", message: cause.message, hint: ROUTINE_ARGUMENTS_HINT }, cause);
+    }
   }
 
   /** Foreign keys in every described namespace that target `path`.`name`. */
@@ -2268,6 +2312,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
         introspect(({ session }) => session.introspector?.qualifiedName(path, name) ?? name),
       "catalog.definition": ({ path, name }) => definitionOf(path, name),
       "sql.generate": ({ path, name, statement }) => generate(path, name, statement),
+      "routine.call": ({ path, name, kind, signature, args }) => routineCall(path, { name, kind, signature }, args),
       "completion.complete": ({ text, offset, scope, current }) =>
         complete(scope === undefined ? { text, offset } : { text, offset, scope }, current),
       "navigation.resolve": ({ text, offset, current }) => resolve({ text, offset }, current),

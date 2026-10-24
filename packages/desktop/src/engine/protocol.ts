@@ -67,7 +67,8 @@ export type Capability =
   | "bulkInsert"
   | "objects"
   | "serverMessages"
-  | "sessions";
+  | "sessions"
+  | "routineCall";
 
 /** Mirrors `ServerMessageLevel` in plugin-api. */
 export type ServerMessageLevel = "error" | "warning" | "notice" | "info";
@@ -261,6 +262,26 @@ export interface Relation {
 export interface Routine {
   readonly name: string;
   readonly kind: "function" | "procedure";
+  readonly signature: string;
+  readonly parameters: readonly RoutineParameter[];
+  readonly returns: string | null;
+}
+
+/** Mirrors `RoutineArgument` in plugin-api: a parameter's value, or its default (decision 090). */
+export type RoutineArgument = { readonly kind: "value"; readonly value: string | null } | { readonly kind: "default" };
+
+/** Mirrors `RoutineCall` in plugin-api: console text and the value of each `:marker` in it. */
+export interface RoutineCall {
+  readonly sql: string;
+  readonly params: Readonly<Record<string, string | null>>;
+}
+
+/** Mirrors `RoutineParameter` in plugin-api. */
+export interface RoutineParameter {
+  readonly name: string | null;
+  readonly type: string;
+  readonly mode: "in" | "out" | "inout" | "variadic";
+  readonly hasDefault: boolean;
 }
 
 /** Mirrors `Sequence` in plugin-api. */
@@ -1283,6 +1304,22 @@ export interface EngineCalls {
   "sql.generate": {
     params: { readonly path: readonly string[]; readonly name: string; readonly statement: GeneratorStatement };
     result: string;
+  };
+  /**
+   * The console text that calls the routine `name` (`kind`, `signature`) in `path` with `args`, one
+   * per parameter, written by the plugin from the cached catalog (decision 090), and the value of
+   * each `:marker` in it. Fails `invalidRequest` when the routine is not described, and
+   * `statementFailed` when the arguments do not fit it. Needs `routineCall`.
+   */
+  "routine.call": {
+    params: {
+      readonly path: readonly string[];
+      readonly name: string;
+      readonly kind: Routine["kind"];
+      readonly signature: string;
+      readonly args: readonly RoutineArgument[];
+    };
+    result: RoutineCall;
   };
   /**
    * Opens `relation` in the table editor: `SELECT *` with the bars' clauses verbatim, run on the

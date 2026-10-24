@@ -32,6 +32,8 @@ import {
   type ObjectChange,
   type ObjectEditor,
   type Relation,
+  type Routine,
+  type RoutineArgument,
   type Row,
   type ServerMessage,
   type ServerSession,
@@ -113,6 +115,28 @@ export interface ContractFixture {
     /** An account that sees only its own sessions, and what the listing's note must say about it. */
     readonly limited?: { readonly config: unknown; readonly note: RegExp };
   };
+  /** Required when the plugin declares `routineCall`, which also needs `catalog`. */
+  readonly routines?: {
+    /** Every routine the fixture seeds in `catalog.path`, as `describe` lists them. */
+    readonly expected: readonly Routine[];
+    /** A function given values, and the rows its call returns. */
+    readonly function: RoutineCase;
+    /** A call with one argument NULL, which must bind as SQL NULL. */
+    readonly nullArgument: RoutineCase;
+    /** A procedure whose OUT values come back as the last statement's rows. */
+    readonly procedureOut: RoutineCase;
+    /** A call that leaves a parameter to its default; omitted where the dialect has no defaults. */
+    readonly defaulted?: RoutineCase;
+  };
+}
+
+/** One routine call: which routine (from `routines.expected`), its arguments, and the rows it returns. */
+export interface RoutineCase {
+  readonly name: string;
+  readonly kind: Routine["kind"];
+  readonly signature: string;
+  readonly args: readonly RoutineArgument[];
+  readonly rows: readonly Row[];
 }
 
 export interface SplitCase {
@@ -555,6 +579,12 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       const objects = plugin.capabilities.includes("objects");
       if (objects) expect(plugin.capabilities).toEqual(expect.arrayContaining(["sql", "schemaTree"]));
       expect(plugin.language?.objects !== undefined).toBe(objects);
+    });
+
+    it("givenPlugin_whenInspected_thenHasRoutineCallExactlyWhenDeclared", () => {
+      const routineCall = plugin.capabilities.includes("routineCall");
+      if (routineCall) expect(plugin.capabilities).toEqual(expect.arrayContaining(["sql", "schemaTree"]));
+      expect(plugin.language?.routineCall !== undefined).toBe(routineCall);
     });
 
     it.runIf(fixture.wrongPasswordConfig !== undefined)(
@@ -2261,6 +2291,107 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           }
         },
       );
+    });
+
+    describe.runIf(plugin.capabilities.includes("routineCall"))("routineCall", () => {
+      function routinesFixture(): NonNullable<ContractFixture["routines"]> {
+        if (fixture.routines === undefined)
+          throw new Error("A plugin that declares routineCall needs fixture.routines.");
+        return fixture.routines;
+      }
+
+      function introspectorOf(session: Session): Introspector {
+        if (session.introspector === undefined) throw new Error("A routineCall plugin needs an introspector.");
+        return session.introspector;
+      }
+
+      async function seeded(session: Session): Promise<readonly Routine[]> {
+        return (await introspectorOf(session).describe(catalogPathOf(fixture))).routines;
+      }
+
+      /** Runs the call as the console does: each statement split, bound with the call's values, in turn. */
+      async function call(session: Session, routineCase: RoutineCase): Promise<Row[]> {
+        const language = plugin.language;
+        const routineCall = language?.routineCall?.bind(language);
+        if (language === undefined || routineCall === undefined) {
+          throw new Error("A routineCall plugin needs language.routineCall.");
+        }
+        const routine = (await seeded(session)).find(
+          (candidate) =>
+            candidate.name === routineCase.name &&
+            candidate.kind === routineCase.kind &&
+            candidate.signature === routineCase.signature,
+        );
+        if (routine === undefined) throw new Error(`The fixture routine ${routineCase.name} is not described.`);
+        const qualified = introspectorOf(session).qualifiedName(catalogPathOf(fixture), routine.name);
+        const { sql, params } = routineCall(routine, qualified, routineCase.args);
+        let rows: Row[] = [];
+        for (const span of language.split(sql)) {
+          const statement = language.bind(span.sql, params);
+          rows = await collect((await session.execute(statement.sql, statement.params)).rows);
+        }
+        return rows;
+      }
+
+      it("givenFixtureRoutines_whenDescribe_thenParametersAndModes", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          expect(await seeded(session)).toEqual(routinesFixture().expected);
+        });
+      });
+
+      it("givenFunction_whenCall_thenResultReturned", async () => {
+        const routineCase = routinesFixture().function;
+        await withSession(plugin, fixture, async (session) => {
+          expect(await call(session, routineCase)).toEqual(routineCase.rows);
+        });
+      });
+
+      it("givenNullToggle_whenRun_thenBindsNull", async () => {
+        const routineCase = routinesFixture().nullArgument;
+        expect(routineCase.args.some((argument) => argument.kind === "value" && argument.value === null)).toBe(true);
+        await withSession(plugin, fixture, async (session) => {
+          expect(await call(session, routineCase)).toEqual(routineCase.rows);
+        });
+      });
+
+      it("givenProcedureOut_whenCall_thenOutValueReturned", async () => {
+        const routineCase = routinesFixture().procedureOut;
+        await withSession(plugin, fixture, async (session) => {
+          expect(await call(session, routineCase)).toEqual(routineCase.rows);
+        });
+      });
+
+      it.runIf(fixture.routines?.defaulted !== undefined)(
+        "givenDefaultParameter_whenOmitted_thenUsesDefault",
+        async () => {
+          const routineCase = routinesFixture().defaulted;
+          if (routineCase === undefined) return;
+          expect(routineCase.args.some((argument) => argument.kind === "default")).toBe(true);
+          await withSession(plugin, fixture, async (session) => {
+            expect(await call(session, routineCase)).toEqual(routineCase.rows);
+          });
+        },
+      );
+
+      it("givenDefaultWithoutOne_whenCall_thenStatementFailed", async () => {
+        const routineCase = routinesFixture().function;
+        const routineCall = plugin.language?.routineCall?.bind(plugin.language);
+        await withSession(plugin, fixture, async (session) => {
+          const routine = (await seeded(session)).find(
+            (candidate) => candidate.name === routineCase.name && candidate.signature === routineCase.signature,
+          );
+          const required = routine?.parameters.findIndex(
+            (parameter) => !parameter.hasDefault && parameter.mode !== "out",
+          );
+          expect(required).toBeGreaterThanOrEqual(0);
+          if (routine === undefined || routineCall === undefined || required === undefined) return;
+          const args = routineCase.args.map((argument, index): RoutineArgument =>
+            index === required ? { kind: "default" } : argument,
+          );
+          const attempt = Promise.resolve().then(() => routineCall(routine, routine.name, args));
+          expect(await rejectionCode(attempt)).toBe("statementFailed");
+        });
+      });
     });
   });
 }

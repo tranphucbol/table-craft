@@ -64,9 +64,28 @@ export interface Relation {
   readonly indexes: readonly Index[];
 }
 
+export const ROUTINE_PARAMETER_MODES = ["in", "out", "inout", "variadic"] as const;
+export type RoutineParameterMode = (typeof ROUTINE_PARAMETER_MODES)[number];
+
+export interface RoutineParameter {
+  /** Null when the database records none, as PostgreSQL allows. */
+  readonly name: string | null;
+  /** As the database prints it, `numeric` or `decimal(12,2)`. */
+  readonly type: string;
+  readonly mode: RoutineParameterMode;
+  readonly hasDefault: boolean;
+}
+
+/** Name, kind and signature are unique in a namespace; PostgreSQL overloads are separate routines. */
 export interface Routine {
   readonly name: string;
   readonly kind: "function" | "procedure";
+  /** The argument list as the database prints it, without parentheses. */
+  readonly signature: string;
+  /** In declaration order; a function's result and `RETURNS TABLE` columns are not parameters. */
+  readonly parameters: readonly RoutineParameter[];
+  /** A function's result as the database prints it; null for a procedure. */
+  readonly returns: string | null;
 }
 
 export interface Sequence {

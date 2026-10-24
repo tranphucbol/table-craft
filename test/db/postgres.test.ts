@@ -32,6 +32,101 @@ runPluginContract(postgres, {
   },
   namespaceSwitch: { statement: "SET search_path TO archive, public", path: ["table_craft", "archive"] },
   sessions: { monitorConfig: POSTGRES_CONFIG },
+  routines: {
+    expected: [
+      {
+        name: "calc_fee",
+        kind: "function",
+        signature: "amount numeric, currency text, rate numeric",
+        parameters: [
+          { name: "amount", type: "numeric", mode: "in", hasDefault: false },
+          { name: "currency", type: "text", mode: "in", hasDefault: false },
+          { name: "rate", type: "numeric", mode: "in", hasDefault: true },
+        ],
+        returns: "numeric",
+      },
+      {
+        name: "calc_fee",
+        kind: "function",
+        signature: "amount numeric, rate numeric",
+        parameters: [
+          { name: "amount", type: "numeric", mode: "in", hasDefault: false },
+          { name: "rate", type: "numeric", mode: "in", hasDefault: true },
+        ],
+        returns: "numeric",
+      },
+      {
+        name: "customer_orders",
+        kind: "function",
+        signature: "customer integer",
+        parameters: [{ name: "customer", type: "integer", mode: "in", hasDefault: false }],
+        returns: "TABLE(id integer, total numeric)",
+      },
+      {
+        name: "settle_order",
+        kind: "procedure",
+        signature: "IN order_id integer, OUT total numeric",
+        parameters: [
+          { name: "order_id", type: "integer", mode: "in", hasDefault: false },
+          { name: "total", type: "numeric", mode: "out", hasDefault: false },
+        ],
+        returns: null,
+      },
+    ],
+    function: {
+      name: "calc_fee",
+      kind: "function",
+      signature: "amount numeric, rate numeric",
+      args: [
+        { kind: "value", value: "100" },
+        { kind: "value", value: "0.02" },
+      ],
+      rows: [["2.00"]],
+    },
+    nullArgument: {
+      name: "calc_fee",
+      kind: "function",
+      signature: "amount numeric, rate numeric",
+      args: [
+        { kind: "value", value: null },
+        { kind: "value", value: "0.02" },
+      ],
+      rows: [[null]],
+    },
+    procedureOut: {
+      name: "settle_order",
+      kind: "procedure",
+      signature: "IN order_id integer, OUT total numeric",
+      args: [
+        { kind: "value", value: "3" },
+        { kind: "value", value: null },
+      ],
+      rows: [["120.50"]],
+    },
+    defaulted: {
+      name: "calc_fee",
+      kind: "function",
+      signature: "amount numeric, currency text, rate numeric",
+      args: [{ kind: "value", value: "200" }, { kind: "value", value: "EUR" }, { kind: "default" }],
+      rows: [["4.00"]],
+    },
+  },
+});
+
+describe("postgres routines", () => {
+  it("givenOverloads_whenTree_thenSeparateRoutines", async () => {
+    const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
+    try {
+      const catalog = await session.introspector?.describe(["table_craft", "public"]);
+      const overloads = catalog?.routines.filter((routine) => routine.name === "calc_fee") ?? [];
+      expect(overloads.map((routine) => routine.signature)).toEqual([
+        "amount numeric, currency text, rate numeric",
+        "amount numeric, rate numeric",
+      ]);
+    } finally {
+      await session.close();
+    }
+  });
 });
 
 describe("postgres current namespace", () => {

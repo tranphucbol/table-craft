@@ -9,7 +9,10 @@ export {
   type NamespaceCatalog,
   type Relation,
   type RelationKind,
+  ROUTINE_PARAMETER_MODES,
   type Routine,
+  type RoutineParameter,
+  type RoutineParameterMode,
   type Sequence,
 } from "./catalog.js";
 export {
@@ -120,6 +123,8 @@ export {
   PARAMETER_STYLES,
   type ParameterStyle,
   type ParameterValue,
+  type RoutineArgument,
+  type RoutineCall,
   type Row,
   type SavepointStatements,
   type SelectSource,

@@ -226,6 +226,13 @@ export const pluginManifestSchema = z
       !manifest.capabilities.includes("sessions") ||
       (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
     { message: "the sessions capability requires sql and schemaTree", path: ["capabilities"] },
+  )
+  // A call runs in a console and is built from the routine the introspector describes (decision 090).
+  .refine(
+    (manifest) =>
+      !manifest.capabilities.includes("routineCall") ||
+      (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
+    { message: "the routineCall capability requires sql and schemaTree", path: ["capabilities"] },
   );
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;

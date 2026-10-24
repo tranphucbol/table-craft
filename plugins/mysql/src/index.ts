@@ -70,6 +70,7 @@ import {
 } from "./explain.js";
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
+import { mysqlRoutineCall } from "./routines.js";
 import { isTidb, killStatementFor, tidbGlobalKill } from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
@@ -90,6 +91,7 @@ const CAPABILITIES: readonly Capability[] = [
   "objects",
   "serverMessages",
   "sessions",
+  "routineCall",
 ];
 
 /** What the mysql client accepts: `'\''`, `# comments`, `DELIMITER //` and `BEGIN … END` routine bodies. */
@@ -109,6 +111,7 @@ const quoteIdentifier = quoteIdentifierWith("`");
 
 const PLAIN_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 const KEYWORDS: readonly string[] = [...SQL_KEYWORDS, "STRAIGHT_JOIN", "REPLACE"];
+const writeName = identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS });
 
 const { explainable } = sqlExplainable({
   dialect: DIALECT,
@@ -152,9 +155,10 @@ const language: SqlLanguage = {
   }),
   namespaceSwitch: namespaceSwitcher("use", quoteIdentifier),
   objects: mysqlObjects({
-    name: identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
+    name: writeName,
     text: (value) => sqlLiteral(value, LITERALS),
   }),
+  routineCall: mysqlRoutineCall(writeName),
 };
 
 /** Manual mode is autocommit off: the server opens a transaction with the next statement. */

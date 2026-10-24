@@ -62,6 +62,7 @@ import { EXPLAIN_VERBS, explainStatement, readPlan } from "./explain.js";
 import { postgresIntrospector } from "./introspect.js";
 import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
+import { postgresRoutineCall } from "./routines.js";
 import { postgresSessions } from "./sessions.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 
@@ -80,6 +81,7 @@ const CAPABILITIES: readonly Capability[] = [
   "objects",
   "serverMessages",
   "sessions",
+  "routineCall",
 ];
 
 /** Function bodies live in dollar quotes; `BEGIN ATOMIC … END` holds a SQL-standard body. */
@@ -99,6 +101,7 @@ const quoteIdentifier = quoteIdentifierWith('"');
 /** An upper-case letter would fold away unquoted, so only lower case reads back as written. */
 const PLAIN_IDENTIFIER = /^[a-z_][a-z0-9_$]*$/;
 const KEYWORDS: readonly string[] = [...SQL_KEYWORDS, "ILIKE", "LATERAL", "RETURNING"];
+const writeName = identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS });
 
 const { explainable } = sqlExplainable({
   dialect: DIALECT,
@@ -142,9 +145,10 @@ const language: SqlLanguage = {
   }),
   namespaceSwitch: namespaceSwitcher("searchPath", quoteIdentifier),
   objects: postgresObjects({
-    name: identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
+    name: writeName,
     text: (value) => sqlLiteral(value, LITERALS),
   }),
+  routineCall: postgresRoutineCall(writeName),
 };
 
 const BEGIN_SQL = "BEGIN";

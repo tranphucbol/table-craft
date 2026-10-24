@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Introspector, Namespace, Relation } from "./catalog.js";
+import type { Introspector, Namespace, Relation, Routine } from "./catalog.js";
 import type {
   CompletionCatalog,
   CompletionRequest,
@@ -30,6 +30,7 @@ export const CAPABILITIES = [
   "objects",
   "serverMessages",
   "sessions",
+  "routineCall",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -106,6 +107,17 @@ export function omittedMessages(count: number): ServerMessage {
 
 /** A value bound to a placeholder: text the server casts, or SQL NULL (decision 043). */
 export type ParameterValue = string | null;
+
+/** What one routine parameter is given: a value, or its declared default (decision 090). */
+export type RoutineArgument = { readonly kind: "value"; readonly value: ParameterValue } | { readonly kind: "default" };
+
+/** The console text that calls a routine, and the value for each `:marker` in it (decision 090). */
+export interface RoutineCall {
+  /** One statement per line; every value is a named placeholder, never a literal. */
+  readonly sql: string;
+  /** Keyed by marker with its colon, `:amount`: the record `bind` takes. */
+  readonly params: Readonly<Record<string, ParameterValue>>;
+}
 
 export interface ExecuteOptions {
   /**
@@ -433,6 +445,13 @@ export interface SqlLanguage {
   savepoint?(name: string): SavepointStatements;
   /** Present exactly when the plugin declares `currentNamespace`: how the console switches namespace (decision 060). */
   readonly namespaceSwitch?: NamespaceSwitch;
+  /**
+   * Present exactly when the plugin declares `routineCall` (decision 090): the console text that
+   * calls `routine`, named `qualifiedName` by the introspector, and returns its result, OUT values
+   * included. `args` has one entry per parameter in order; an `out` entry is ignored. Throws a
+   * `PluginError` coded `statementFailed` saying what to change when the arguments do not fit.
+   */
+  routineCall?(routine: Routine, qualifiedName: string, args: readonly RoutineArgument[]): RoutineCall;
 }
 
 /** How a session moves to another namespace from the console's switcher (decision 060). */

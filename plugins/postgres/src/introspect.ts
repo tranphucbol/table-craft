@@ -13,6 +13,8 @@ import {
   type Relation,
   type RelationKind,
   type Routine,
+  type RoutineParameter,
+  type RoutineParameterMode,
   type Sequence,
 } from "@table-craft/plugin-api";
 
@@ -40,6 +42,16 @@ const DEFAULT_ACTION = "NO ACTION";
 
 /** `pg_proc.prokind` letter for a procedure; functions, aggregates and window functions are functions. */
 const PROCEDURE_KIND = "p";
+
+/** `pg_proc.proargmodes` letters; `t` is a `RETURNS TABLE` column, part of the result instead. */
+const PARAMETER_MODES: ReadonlyMap<string, RoutineParameterMode> = new Map([
+  ["i", "in"],
+  ["o", "out"],
+  ["b", "inout"],
+  ["v", "variadic"],
+]);
+const INPUT_MODES: ReadonlySet<RoutineParameterMode> = new Set(["in", "inout", "variadic"]);
+const DEFAULT_PARAMETER_MODE = "i";
 
 const IDENTITY_NONE = "";
 const SERIAL_DEFAULT_PREFIX = "nextval(";
@@ -100,11 +112,20 @@ const INDEXES_SQL = `
   JOIN pg_class t ON t.oid = ix.indrelid
   WHERE t.relnamespace = $1::oid`;
 
+/** `proallargtypes` is null when every argument is IN; `proargtypes` then lists them all. */
 const ROUTINES_SQL = `
-  SELECT DISTINCT ON (p.proname) p.proname AS name, p.prokind AS kind
+  SELECT p.proname AS name, p.prokind AS kind,
+    pg_get_function_identity_arguments(p.oid) AS signature,
+    CASE WHEN p.prokind = 'p' THEN NULL ELSE pg_get_function_result(p.oid) END AS returns,
+    p.pronargdefaults::int AS defaults,
+    p.proargnames AS names,
+    p.proargmodes::text[] AS modes,
+    ARRAY(SELECT format_type(t.oid, NULL)
+      FROM unnest(COALESCE(p.proallargtypes, p.proargtypes::oid[])) WITH ORDINALITY AS t(oid, n)
+      ORDER BY t.n) AS types
   FROM pg_proc p
   WHERE p.pronamespace = $1::oid
-  ORDER BY p.proname, p.prokind`;
+  ORDER BY p.proname, signature, p.prokind`;
 
 const SEQUENCES_SQL = `
   SELECT c.relname AS name FROM pg_class c WHERE c.relnamespace = $1::oid AND c.relkind = 'S'`;
@@ -249,6 +270,37 @@ interface IndexRow {
 interface RoutineRow {
   readonly name: string;
   readonly kind: string;
+  readonly signature: string;
+  readonly returns: string | null;
+  readonly defaults: number;
+  readonly names: string[] | null;
+  readonly modes: string[] | null;
+  readonly types: string[];
+}
+
+/** PostgreSQL gives defaults to the last `pronargdefaults` input arguments. */
+function toRoutine(row: RoutineRow): Routine {
+  const parameters: RoutineParameter[] = [];
+  row.types.forEach((type, index) => {
+    const mode = PARAMETER_MODES.get(row.modes?.[index] ?? DEFAULT_PARAMETER_MODE);
+    if (mode === undefined) return;
+    const name = row.names?.[index] ?? "";
+    parameters.push({ name: name === "" ? null : name, type, mode, hasDefault: false });
+  });
+  let defaults = row.defaults;
+  for (let index = parameters.length - 1; index >= 0 && defaults > 0; index--) {
+    const parameter = parameters[index];
+    if (parameter === undefined || !INPUT_MODES.has(parameter.mode)) continue;
+    parameters[index] = { ...parameter, hasDefault: true };
+    defaults--;
+  }
+  return {
+    name: row.name,
+    kind: row.kind === PROCEDURE_KIND ? "procedure" : "function",
+    signature: row.signature,
+    parameters,
+    returns: row.returns,
+  };
 }
 
 function quote(identifier: string): string {
@@ -383,12 +435,7 @@ export function postgresIntrospector(client: pg.Client): Introspector {
       return {
         path: [...path],
         relations: byName(described),
-        routines: byName(
-          routines.map((row): Routine => ({
-            name: row.name,
-            kind: row.kind === PROCEDURE_KIND ? "procedure" : "function",
-          })),
-        ),
+        routines: byName(routines.map(toRoutine)),
         sequences: byName(sequences.map((row): Sequence => ({ name: row.name }))),
       };
     },

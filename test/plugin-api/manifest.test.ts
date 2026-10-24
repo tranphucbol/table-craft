@@ -75,6 +75,14 @@ describe("pluginManifestSchema", () => {
     expect(parses(["sql", "schemaTree", "sessions"])).toBe(true);
   });
 
+  it("givenRoutineCallWithoutSchemaTree_whenParsed_thenRejected", () => {
+    const parses = (capabilities: string[]): boolean =>
+      pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
+    expect(parses(["sql", "routineCall"])).toBe(false);
+    expect(parses(["schemaTree", "routineCall"])).toBe(false);
+    expect(parses(["sql", "schemaTree", "routineCall"])).toBe(true);
+  });
+
   it("givenNonSemverApiVersion_whenParsed_thenFails", () => {
     const result = pluginManifestSchema.safeParse({ ...VALID_MANIFEST, apiVersion: "latest" });
     expect(result.success).toBe(false);

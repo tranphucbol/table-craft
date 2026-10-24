@@ -87,3 +87,4 @@ started, not when it is merged.
 | 082 | [Error positions travel from the plugin to the editor](082-error-positions-travel-from-the-plugin-to-the-editor.md)                                                    |
 | 083 | [A multi-statement run asks before it continues past an error](083-a-multi-statement-run-asks-before-it-continues-past-an-error.md)                                    |
 | 088 | [Server sessions are a plugin capability](088-server-sessions-are-a-plugin-capability.md)                                                                              |
+| 090 | [Routine calls are written by the plugin](090-routine-calls-are-written-by-the-plugin.md)                                                                              |

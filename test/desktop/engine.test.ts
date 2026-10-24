@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { PluginError, TlsSettingsError, z, type DatasourcePlugin, type Session } from "@table-craft/plugin-api";
+import {
+  PluginError,
+  TlsSettingsError,
+  z,
+  type DatasourcePlugin,
+  type Routine,
+  type Session,
+} from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine, probeDatasource } from "@table-craft/desktop/engine/engine.js";
@@ -16,6 +23,7 @@ import type {
   Namespace,
   ResultState,
   ResultWindow,
+  RoutineCall,
   TransactionState,
   ViewState,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -557,6 +565,122 @@ describe("engine catalog", () => {
       .handle({ id: 13, type: "sql.generate", path: ["main"], name: "orders", statement: "delete" });
 
     expect(response).toMatchObject({ id: 13, type: "engine.error", error: { code: "invalidRequest" } });
+  });
+});
+
+describe("engine routine.call", () => {
+  const ROUTINE: Routine = {
+    name: "calc_fee",
+    kind: "function",
+    signature: "amount numeric",
+    parameters: [{ name: "amount", type: "numeric", mode: "in", hasDefault: false }],
+    returns: "numeric",
+  };
+
+  /** SQLite with one described routine and a language that writes what it was handed. */
+  function routineEngine(): ReturnType<typeof createEngine> {
+    const language = sqlite.language;
+    if (language === undefined) throw new Error("sqlite declares sql");
+    const plugin: DatasourcePlugin = {
+      ...sqlite,
+      capabilities: [...sqlite.capabilities, "routineCall"],
+      language: {
+        ...language,
+        routineCall: (routine, qualified, args) => {
+          if (args.length !== routine.parameters.length) throw new PluginError("statementFailed", "wrong count");
+          return {
+            sql: `SELECT ${qualified}(:amount);`,
+            params: { ":amount": args[0]?.kind === "value" ? args[0].value : null },
+          };
+        },
+      },
+      connect: async (config, options) => {
+        const session = await sqlite.connect(config, options);
+        const introspector = session.introspector;
+        if (introspector === undefined) throw new Error("sqlite declares schemaTree");
+        return {
+          ...session,
+          execute: (sql, params, executeOptions) => session.execute(sql, params, executeOptions),
+          close: () => session.close(),
+          introspector: {
+            ...introspector,
+            describe: async (path) => ({ ...(await introspector.describe(path)), routines: [ROUTINE] }),
+          },
+        };
+      },
+    };
+    return createEngine({
+      datasource: {
+        id: "routines",
+        pluginId: "sqlite",
+        config: { path: seededSqliteFile() },
+        readOnly: false,
+        keepAliveSeconds: 0,
+      },
+      plugins: [{ status: "loaded", directory: SQLITE_DIRECTORY, manifest: SQLITE_MANIFEST, plugin }],
+    });
+  }
+
+  it("givenRoutine_whenRoutineCall_thenPluginSqlFromCache", async () => {
+    const response = await routineEngine()
+      .connect()
+      .handle({
+        id: 1,
+        type: "routine.call",
+        path: ["main"],
+        name: "calc_fee",
+        kind: "function",
+        signature: "amount numeric",
+        args: [{ kind: "value", value: "5" }],
+      });
+
+    expect(resultOf<RoutineCall>(response)).toEqual({
+      sql: 'SELECT "main"."calc_fee"(:amount);',
+      params: { ":amount": "5" },
+    });
+  });
+
+  it("givenUnknownRoutine_whenRoutineCall_thenInvalidRequest", async () => {
+    const response = await routineEngine()
+      .connect()
+      .handle({
+        id: 2,
+        type: "routine.call",
+        path: ["main"],
+        name: "calc_fee",
+        kind: "procedure",
+        signature: "",
+        args: [],
+      });
+
+    expect(response).toMatchObject({ id: 2, type: "engine.error", error: { code: "invalidRequest" } });
+    expect(response.type === "engine.error" && response.error.hint).toMatch(/Synchronize/);
+  });
+
+  it("givenArgumentsThatDoNotFit_whenRoutineCall_thenStatementFailed", async () => {
+    const response = await routineEngine()
+      .connect()
+      .handle({
+        id: 3,
+        type: "routine.call",
+        path: ["main"],
+        name: "calc_fee",
+        kind: "function",
+        signature: "amount numeric",
+        args: [],
+      });
+
+    expect(response).toMatchObject({ id: 3, type: "engine.error", error: { code: "statementFailed" } });
+  });
+
+  it("givenPluginWithoutRoutineCall_whenRoutineCall_thenInvalidRequest", async () => {
+    const { engine } = countingSqlite();
+
+    const response = await engine
+      .connect()
+      .handle({ id: 4, type: "routine.call", path: ["main"], name: "f", kind: "function", signature: "", args: [] });
+
+    expect(response).toMatchObject({ id: 4, type: "engine.error", error: { code: "invalidRequest" } });
   });
 });
 

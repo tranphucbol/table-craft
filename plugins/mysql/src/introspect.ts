@@ -12,6 +12,8 @@ import {
   type NamespaceCatalog,
   type Relation,
   type Routine,
+  type RoutineParameter,
+  type RoutineParameterMode,
 } from "@table-craft/plugin-api";
 
 const SYSTEM_DATABASES: ReadonlySet<string> = new Set(["information_schema", "mysql", "performance_schema", "sys"]);
@@ -23,6 +25,13 @@ const PRIMARY_KEY = "PRIMARY KEY";
 const UNIQUE_KEY = "UNIQUE";
 const FOREIGN_KEY = "FOREIGN KEY";
 const PROCEDURE = "PROCEDURE";
+const PARAMETER_MODES: ReadonlyMap<string, RoutineParameterMode> = new Map([
+  ["IN", "in"],
+  ["OUT", "out"],
+  ["INOUT", "inout"],
+]);
+/** A function's parameters have no mode in `information_schema.PARAMETERS`; they are all IN. */
+const FUNCTION_PARAMETER_MODE: RoutineParameterMode = "in";
 const DEFAULT_ACTION = "NO ACTION";
 /** The result columns `SHOW CREATE TABLE` and `SHOW CREATE VIEW` put the statement in. */
 const CREATE_TABLE_COLUMN = "Create Table";
@@ -71,9 +80,17 @@ const INDEXES_SQL = `
   ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`;
 
 const ROUTINES_SQL = `
-  SELECT ROUTINE_NAME AS name, ROUTINE_TYPE AS kind
+  SELECT ROUTINE_NAME AS name, ROUTINE_TYPE AS kind, DTD_IDENTIFIER AS returns
   FROM information_schema.ROUTINES
   WHERE ROUTINE_SCHEMA = ?`;
+
+/** Position 0 is a function's result, which `ROUTINES.DTD_IDENTIFIER` already carries. */
+const PARAMETERS_SQL = `
+  SELECT SPECIFIC_NAME AS routine, ROUTINE_TYPE AS kind, PARAMETER_MODE AS mode,
+    PARAMETER_NAME AS name, DTD_IDENTIFIER AS type
+  FROM information_schema.PARAMETERS
+  WHERE SPECIFIC_SCHEMA = ? AND ORDINAL_POSITION > 0
+  ORDER BY SPECIFIC_NAME, ROUTINE_TYPE, ORDINAL_POSITION`;
 
 const RELATION_TYPE_SQL =
   "SELECT TABLE_TYPE AS kind FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?";
@@ -119,6 +136,48 @@ interface IndexRow {
   readonly name: Text;
   readonly non_unique: number | string;
   readonly col: Text;
+}
+
+interface RoutineRow {
+  readonly name: Text;
+  readonly kind: Text;
+  readonly returns: Text;
+}
+
+interface ParameterRow {
+  readonly routine: Text;
+  readonly kind: Text;
+  readonly mode: Text;
+  readonly name: Text;
+  readonly type: Text;
+}
+
+/** A function and a procedure may share a name, so a routine is its name and its type. */
+function toRoutines(routines: readonly RoutineRow[], parameters: readonly ParameterRow[]): Routine[] {
+  const parametersOf = new Map<string, RoutineParameter[]>();
+  for (const row of parameters) {
+    const key = `${text(row.kind)} ${text(row.routine)}`;
+    const mode = PARAMETER_MODES.get(text(row.mode)) ?? FUNCTION_PARAMETER_MODE;
+    const parameter: RoutineParameter = { name: optional(row.name), type: text(row.type), mode, hasDefault: false };
+    parametersOf.set(key, [...(parametersOf.get(key) ?? []), parameter]);
+  }
+  return routines.map((row): Routine => {
+    const kind = text(row.kind) === PROCEDURE ? "procedure" : "function";
+    const routineParameters = parametersOf.get(`${text(row.kind)} ${text(row.name)}`) ?? [];
+    return {
+      name: text(row.name),
+      kind,
+      signature: routineParameters.map(signatureOf).join(", "),
+      parameters: routineParameters,
+      returns: kind === "procedure" ? null : optional(row.returns),
+    };
+  });
+}
+
+/** Printed as PostgreSQL prints identity arguments: the mode only when it is not IN. */
+function signatureOf(parameter: RoutineParameter): string {
+  const declared = `${parameter.name ?? ""} ${parameter.type}`.trim();
+  return parameter.mode === FUNCTION_PARAMETER_MODE ? declared : `${parameter.mode.toUpperCase()} ${declared}`;
 }
 
 function text(value: Text): string {
@@ -205,12 +264,13 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
           `Database "${database}" does not exist, or this user has no privileges on it.`,
         );
       }
-      const [relations, columns, constraints, indexes, routines] = await Promise.all([
+      const [relations, columns, constraints, indexes, routines, parameters] = await Promise.all([
         rows<RelationRow>(RELATIONS_SQL, [database]),
         rows<ColumnRow>(COLUMNS_SQL, [database]),
         rows<ConstraintRow>(CONSTRAINTS_SQL, [database]),
         rows<IndexRow>(INDEXES_SQL, [database]),
-        rows<{ name: Text; kind: Text }>(ROUTINES_SQL, [database]),
+        rows<RoutineRow>(ROUTINES_SQL, [database]),
+        rows<ParameterRow>(PARAMETERS_SQL, [database]),
       ]);
       const columnsOf = new Map<string, ColumnRow[]>();
       for (const column of columns) {
@@ -265,17 +325,10 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
           ),
         };
       });
-      const routinesByName = new Map<string, Routine>();
-      for (const routine of routines) {
-        const name = text(routine.name);
-        if (!routinesByName.has(name)) {
-          routinesByName.set(name, { name, kind: text(routine.kind) === PROCEDURE ? "procedure" : "function" });
-        }
-      }
       return {
         path: [database],
         relations: byName(described),
-        routines: byName(routinesByName.values()),
+        routines: byName(toRoutines(routines, parameters)),
         sequences: [],
       };
     },

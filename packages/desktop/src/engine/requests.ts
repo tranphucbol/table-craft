@@ -304,6 +304,20 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({
     id: requestId,
+    type: z.literal("routine.call"),
+    path: namespacePath,
+    name: z.string().min(1),
+    kind: z.enum(["function", "procedure"]),
+    signature: z.string(),
+    args: z.array(
+      z.discriminatedUnion("kind", [
+        z.strictObject({ kind: z.literal("value"), value: z.string().nullable() }),
+        z.strictObject({ kind: z.literal("default") }),
+      ]),
+    ),
+  }),
+  z.strictObject({
+    id: requestId,
     type: z.literal("table.query"),
     sessionId,
     path: namespacePath,
