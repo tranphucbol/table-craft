@@ -58,6 +58,9 @@ import {
   type ResolveRequest,
   type Row,
   type Session,
+  type SessionListing,
+  type SessionMonitor,
+  type SessionTarget,
   type SavepointStatements,
   type SqlLanguage,
   type TableDesign,
@@ -98,6 +101,7 @@ import type {
   ResultPaging,
   RowRange,
   ResultEditable,
+  SessionsListing,
   TableQuery,
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -507,6 +511,9 @@ const DESIGN_HINT = "Fix the design and preview it again.";
 const OBJECT_BUSY_HINT = "Wait for it to finish or cancel it in the Services tool window, then try again.";
 const STALE_PREVIEW = "The object changed since the preview, so the statements to run differ from what was shown.";
 const STALE_PREVIEW_HINT = "Review the new preview, then apply again.";
+const READ_ONLY_SESSIONS = "This data source is read-only, so its server sessions cannot be cancelled or terminated.";
+const READ_ONLY_SESSIONS_HINT = "Clear Read-only in the data source's properties to cancel or terminate sessions.";
+const SESSION_STOP_HINT = "Refresh the list: the session may have ended, or this user may not have the right.";
 
 /** Reads a result to its end, so a statement run for its effect has finished. */
 async function drained(result: { readonly rows: AsyncIterable<Row> }): Promise<void> {
@@ -566,7 +573,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       log: log as Logger,
       elapsedMs: now() - started,
       statementKind: statementKind(request),
-      target: { pluginId: options.datasource.pluginId, ...target },
+      target: { pluginId: options.datasource.pluginId, datasourceId: options.datasource.id, ...target },
     };
   }
 
@@ -1231,6 +1238,48 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     return { statements: script.statements.length, elapsedMs: now() - started };
   }
 
+  const NO_SESSIONS: EngineError = {
+    code: "invalidRequest",
+    message: "This datasource's plugin does not declare the sessions capability.",
+    hint: BUG_HINT,
+  };
+
+  /** Checked before the catalog connects, so a plugin without the capability opens nothing. */
+  function requireSessions(): void {
+    const { capabilities } = loadedPlugin(options.plugins, options.datasource.pluginId).plugin;
+    if (!capabilities.includes("sessions")) throw new EngineFailure(NO_SESSIONS);
+  }
+
+  function monitorOf(session: Session): SessionMonitor {
+    if (session.sessions === undefined) throw new EngineFailure(NO_SESSIONS);
+    return session.sessions;
+  }
+
+  /** The listing, and the server id of the catalog's own connection, which is this engine's too. */
+  function listServerSessions(): Promise<{ readonly listing: SessionListing; readonly catalogId: string | null }> {
+    requireSessions();
+    return introspect(async ({ session }) => ({
+      listing: await monitorOf(session).list(),
+      catalogId: session.serverSessionId ?? null,
+    }));
+  }
+
+  /** Runs the row's statement on the plugin's fresh connection; no retry, since a kill is not idempotent. */
+  async function stopServerSession(target: SessionTarget, stop: "cancel" | "terminate"): Promise<null> {
+    requireSessions();
+    if (options.datasource.readOnly) {
+      throw new EngineFailure({ code: "invalidRequest", message: READ_ONLY_SESSIONS, hint: READ_ONLY_SESSIONS_HINT });
+    }
+    const { session } = await catalog();
+    const monitor = monitorOf(session);
+    try {
+      await (stop === "cancel" ? monitor.cancelSession(target) : monitor.terminateSession(target));
+    } catch (cause) {
+      throw new EngineFailure({ code: "statementFailed", message: messageOf(cause), hint: SESSION_STOP_HINT }, cause);
+    }
+    return null;
+  }
+
   function importTaskOf(taskId: string): ImportTask {
     const task = imports.get(taskId);
     if (task === undefined) {
@@ -1500,6 +1549,23 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
         });
       }
       return session;
+    }
+
+    /** Tags each row this engine holds: a console's with its session id, the catalog's with none. */
+    async function listedSessions(): Promise<SessionsListing> {
+      const { listing, catalogId } = await listServerSessions();
+      const owners = new Map<string, string>();
+      for (const [sessionId, open] of sessions) {
+        const serverId = open.session.serverSessionId;
+        if (serverId !== undefined) owners.set(serverId, sessionId);
+      }
+      return {
+        notes: listing.notes,
+        sessions: listing.sessions.map((row) => {
+          const ownSessionId = owners.get(row.id) ?? null;
+          return { ...row, ownSessionId, own: ownSessionId !== null || row.id === catalogId };
+        }),
+      };
     }
 
     /**
@@ -2177,6 +2243,9 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       "result.editable": (request) => resultEditable(request),
       "edits.preview": ({ handle, edits }) => Promise.resolve(editStatements(handle, edits)),
       "edits.submit": (request) => submit(request),
+      "sessions.list": () => listedSessions(),
+      "sessions.cancel": ({ target }) => stopServerSession(target, "cancel"),
+      "sessions.terminate": ({ target }) => stopServerSession(target, "terminate"),
     };
 
     async function route<M extends EngineMethod>(request: RequestOf<M>): Promise<EngineResponse> {

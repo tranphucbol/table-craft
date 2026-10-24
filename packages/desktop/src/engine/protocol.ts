@@ -1308,6 +1308,15 @@ export interface EngineCalls {
     params: { readonly sessionId: string; readonly handle: string; readonly edits: readonly RowEdit[] };
     result: SubmittedEdits & { readonly transactionOpen: boolean };
   };
+  /**
+   * The server's sessions, read on the introspection session, each tagged with the engine session that
+   * holds it when it is this engine's own. Needs `sessions` (decision 088).
+   */
+  "sessions.list": { params: Record<never, never>; result: SessionsListing };
+  /** Runs the row's `cancel` statement on a fresh connection. Refused on a read-only data source. */
+  "sessions.cancel": { params: { readonly target: SessionTarget }; result: null };
+  /** Runs the row's `terminate` statement on a fresh connection. Refused on a read-only data source. */
+  "sessions.terminate": { params: { readonly target: SessionTarget }; result: null };
 }
 
 export type EngineMethod = keyof EngineCalls;

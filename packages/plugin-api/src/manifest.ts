@@ -164,10 +164,13 @@ export const pluginManifestSchema = z
       (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
     { message: "the objects capability requires sql and schemaTree", path: ["capabilities"] },
   )
-  // A listed session's query opens in a console, and stopping one runs a statement (decision 088).
-  .refine((manifest) => !manifest.capabilities.includes("sessions") || manifest.capabilities.includes("sql"), {
-    message: "the sessions capability requires sql",
-    path: ["capabilities"],
-  });
+  // A listed session's query opens in a console, and the engine lists sessions on its introspection
+  // session, which only a schemaTree plugin opens (decision 088).
+  .refine(
+    (manifest) =>
+      !manifest.capabilities.includes("sessions") ||
+      (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
+    { message: "the sessions capability requires sql and schemaTree", path: ["capabilities"] },
+  );
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;

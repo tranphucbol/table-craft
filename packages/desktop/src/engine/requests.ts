@@ -26,6 +26,7 @@ const extractor = z.enum(EXTRACTOR_KINDS);
 const columns = z.array(index);
 const relation = z.string().min(1);
 const taskId = z.string().min(1);
+const sessionTarget = z.strictObject({ id: z.string().min(1), instance: z.string().min(1).nullable() });
 const stallSeconds = z.number().int().min(EXPORT_STALL_SECONDS_RANGE.min).max(EXPORT_STALL_SECONDS_RANGE.max);
 const exportSource = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("result"), handle, columns, shownOnly: z.boolean().optional() }),
@@ -349,6 +350,9 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   }),
   z.strictObject({ id: requestId, type: z.literal("edits.preview"), handle, edits }),
   z.strictObject({ id: requestId, type: z.literal("edits.submit"), sessionId, handle, edits }),
+  z.strictObject({ id: requestId, type: z.literal("sessions.list") }),
+  z.strictObject({ id: requestId, type: z.literal("sessions.cancel"), target: sessionTarget }),
+  z.strictObject({ id: requestId, type: z.literal("sessions.terminate"), target: sessionTarget }),
 ]) satisfies z.ZodType<EngineRequest>;
 
 const idOnly = z.object({ id: requestId });

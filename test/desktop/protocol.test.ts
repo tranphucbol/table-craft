@@ -73,6 +73,9 @@ import {
   KEYWORD_CASES,
   type ParameterValue,
   type PluginErrorCode,
+  type ServerSession,
+  type ServerSessionState,
+  type SessionTarget,
   type SqlParameter,
   type StatementClass,
   type StatementSpan,
@@ -218,6 +221,12 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.DdlScript>().toEqualTypeOf<DdlScript>();
     expectTypeOf<protocol.ObjectFeatures>().toEqualTypeOf<ObjectFeatures>();
     expect(protocol.OBJECT_KINDS).toEqual(OBJECT_KINDS);
+  });
+
+  it("givenSessionTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.ServerSessionState>().toEqualTypeOf<ServerSessionState>();
+    expectTypeOf<protocol.ServerSession>().toEqualTypeOf<ServerSession>();
+    expectTypeOf<protocol.SessionTarget>().toEqualTypeOf<SessionTarget>();
   });
 
   it("givenCoreErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {

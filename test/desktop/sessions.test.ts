@@ -1,0 +1,202 @@
+import { describe, expect, it } from "vitest";
+import {
+  PluginError,
+  type Capability,
+  type DatasourcePlugin,
+  type ServerSession,
+  type SessionTarget,
+} from "@table-craft/plugin-api";
+import type { PluginLoadResult } from "@table-craft/core";
+import sqlite from "@table-craft/plugin-sqlite";
+import { createEngine } from "@table-craft/desktop/engine/engine.js";
+import type { EngineResponse, OpenedSession, SessionsListing } from "@table-craft/desktop/engine/protocol.js";
+import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
+import { fakeManifest, SQLITE_MANIFEST } from "../support/manifests.js";
+
+const PLUGIN_ID = "monitored";
+const CAPABILITIES: readonly Capability[] = ["sql", "schemaTree", "sessions"];
+const FOREIGN_ID = "900";
+const KILL_TEXT = "SELECT pg_terminate_backend(900) -- the statement nobody may log";
+const SECRET_QUERY = "SELECT 'a query nobody may log'";
+
+function row(id: string, overrides: Partial<ServerSession> = {}): ServerSession {
+  return {
+    id,
+    instance: null,
+    state: "idle",
+    rawState: "idle",
+    user: "someone",
+    database: "main",
+    client: null,
+    application: null,
+    queryMs: null,
+    transactionMs: null,
+    waitEvent: null,
+    blockedBy: null,
+    query: SECRET_QUERY,
+    system: false,
+    cancel: `SELECT pg_cancel_backend(${id})`,
+    terminate: KILL_TEXT,
+    ...overrides,
+  };
+}
+
+/** SQLite with a pretend server: every connection gets a server id, and the monitor lists them all plus a stranger. */
+function monitoredEngine(options: { readOnly?: boolean; failStop?: string } = {}) {
+  const live = new Set<string>();
+  const stopped: { readonly stop: string; readonly target: SessionTarget }[] = [];
+  let next = 100;
+  const plugin: DatasourcePlugin = {
+    ...sqlite,
+    id: PLUGIN_ID,
+    capabilities: CAPABILITIES,
+    connect: async (config, connectOptions) => {
+      const session = await sqlite.connect(config, connectOptions);
+      const serverSessionId = String(next++);
+      live.add(serverSessionId);
+      const stop = (name: string) => (target: SessionTarget) => {
+        if (options.failStop !== undefined) return Promise.reject(new PluginError("statementFailed", options.failStop));
+        stopped.push({ stop: name, target });
+        return Promise.resolve();
+      };
+      return {
+        execute: (sql, params) => session.execute(sql, params),
+        ...(session.introspector === undefined ? {} : { introspector: session.introspector }),
+        sessions: {
+          list: () =>
+            Promise.resolve({
+              sessions: [...[...live].map((id) => row(id)), row(FOREIGN_ID)],
+              notes: ["a note"],
+            }),
+          cancelSession: stop("cancel"),
+          terminateSession: stop("terminate"),
+        },
+        serverSessionId,
+        serverVersion: session.serverVersion,
+        close: async () => {
+          live.delete(serverSessionId);
+          await session.close();
+        },
+      };
+    },
+  };
+  const loaded: PluginLoadResult = {
+    status: "loaded",
+    directory: "plugins/monitored",
+    manifest: fakeManifest({ id: PLUGIN_ID, name: "Monitored", capabilities: [...CAPABILITIES] }),
+    plugin,
+  };
+  const records: LogRecord[] = [];
+  const connection = createEngine({
+    datasource: {
+      id: "prod",
+      pluginId: PLUGIN_ID,
+      config: { path: ":memory:" },
+      readOnly: options.readOnly ?? false,
+      keepAliveSeconds: 0,
+    },
+    plugins: [loaded],
+    log: createLogger({ process: "engine", scope: "engine", sink: (record) => records.push(record) }),
+  }).connect();
+  return { connection, stopped, records };
+}
+
+function resultOf<T>(response: EngineResponse): T {
+  if (response.type === "engine.error") throw new Error(`unexpected engine error: ${response.error.message}`);
+  return response.result as T;
+}
+
+function errorOf(response: EngineResponse) {
+  if (response.type !== "engine.error") throw new Error(`expected an engine error, got ${response.type}`);
+  return response.error;
+}
+
+describe("engine server sessions", () => {
+  it("givenOwnConsole_whenList_thenTaggedWithItsSessionId", async () => {
+    const { connection } = monitoredEngine();
+    const { sessionId } = resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open" }));
+
+    const listing = resultOf<SessionsListing>(await connection.handle({ id: 2, type: "sessions.list" }));
+
+    expect(listing.notes).toEqual(["a note"]);
+    const own = listing.sessions.filter((session) => session.own);
+    expect(own.map((session) => session.ownSessionId).sort()).toEqual([null, sessionId]);
+    expect(listing.sessions.find((session) => session.id === FOREIGN_ID)).toMatchObject({
+      own: false,
+      ownSessionId: null,
+    });
+  });
+
+  it("givenTerminate_whenRun_thenPluginGetsTarget", async () => {
+    const { connection, stopped } = monitoredEngine();
+
+    resultOf(
+      await connection.handle({ id: 1, type: "sessions.terminate", target: { id: FOREIGN_ID, instance: null } }),
+    );
+    resultOf(await connection.handle({ id: 2, type: "sessions.cancel", target: { id: FOREIGN_ID, instance: "a:1" } }));
+
+    expect(stopped).toEqual([
+      { stop: "terminate", target: { id: FOREIGN_ID, instance: null } },
+      { stop: "cancel", target: { id: FOREIGN_ID, instance: "a:1" } },
+    ]);
+  });
+
+  it("givenReadOnlyDatasource_whenTerminate_thenInvalidRequest", async () => {
+    const { connection, stopped } = monitoredEngine({ readOnly: true });
+
+    const error = errorOf(
+      await connection.handle({ id: 1, type: "sessions.terminate", target: { id: FOREIGN_ID, instance: null } }),
+    );
+
+    expect(error).toMatchObject({ code: "invalidRequest", hint: expect.stringContaining("Read-only") as unknown });
+    expect(stopped).toEqual([]);
+    expect(resultOf<SessionsListing>(await connection.handle({ id: 2, type: "sessions.list" })).sessions).not.toEqual(
+      [],
+    );
+  });
+
+  it("givenRefusedTerminate_whenRun_thenStatementFailedWithHint", async () => {
+    const { connection } = monitoredEngine({
+      failStop: "Could not terminate session 900: it is no longer on the server.",
+    });
+
+    const error = errorOf(
+      await connection.handle({ id: 1, type: "sessions.terminate", target: { id: FOREIGN_ID, instance: null } }),
+    );
+
+    expect(error).toMatchObject({ code: "statementFailed", message: expect.stringContaining("no longer") as unknown });
+  });
+
+  it("givenSqlite_whenList_thenInvalidRequest", async () => {
+    const connection = createEngine({
+      datasource: { id: "s", pluginId: "sqlite", config: { path: ":memory:" }, readOnly: false, keepAliveSeconds: 0 },
+      plugins: [{ status: "loaded", directory: "plugins/sqlite", manifest: SQLITE_MANIFEST, plugin: sqlite }],
+    }).connect();
+
+    expect(errorOf(await connection.handle({ id: 1, type: "sessions.list" }))).toMatchObject({
+      code: "invalidRequest",
+      message: expect.stringContaining("sessions capability") as unknown,
+    });
+    expect(
+      errorOf(await connection.handle({ id: 2, type: "sessions.cancel", target: { id: "1", instance: null } })).code,
+    ).toBe("invalidRequest");
+  });
+
+  it("givenTerminate_whenLogged_thenNoSqlText", async () => {
+    const { connection, records } = monitoredEngine();
+    await connection.handle({ id: 1, type: "sessions.list" });
+
+    await connection.handle({ id: 2, type: "sessions.terminate", target: { id: FOREIGN_ID, instance: null } });
+
+    expect(records.find((record) => record.msg === "terminated session")).toMatchObject({
+      level: "info",
+      scope: "sessions",
+      requestId: 2,
+      serverSession: FOREIGN_ID,
+      datasourceId: "prod",
+    });
+    const logged = JSON.stringify(records);
+    expect(logged).not.toContain("nobody may log");
+    expect(logged).not.toContain("pg_terminate_backend");
+  });
+});

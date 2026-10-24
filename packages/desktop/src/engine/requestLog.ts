@@ -57,6 +57,8 @@ const SCOPES: Readonly<Record<string, string>> = {
   "import.resume": "import",
   "edits.submit": "edits",
   "objects.apply": "objects",
+  "sessions.cancel": "sessions",
+  "sessions.terminate": "sessions",
 };
 const DEFAULT_SCOPE = "request";
 
@@ -84,6 +86,12 @@ export function messageFields(messages: unknown): LogFields {
   if (!Array.isArray(messages) || messages.length === 0) return {};
   const codes = messages.map((message) => record(message).code).filter((code) => typeof code === "string");
   return { messageCount: messages.length, messageCodes: [...new Set(codes)] };
+}
+
+/** Which server session a cancel or terminate aimed at, by id and instance; never the statement it ran. */
+function serverSession(target: unknown): LogFields {
+  const value = record(target);
+  return { serverSession: value.id, instance: value.instance };
 }
 
 function summary(request: LoggedRequest, result: unknown, context: RequestContext): [string, LogFields] | null {
@@ -167,6 +175,10 @@ function summary(request: LoggedRequest, result: unknown, context: RequestContex
       ];
     case "objects.apply":
       return ["object changed", { ...base, ...changedObject(request.change), statements: value.statements }];
+    case "sessions.cancel":
+      return ["cancelled query of session", { ...base, ...serverSession(request.target), ...context.target }];
+    case "sessions.terminate":
+      return ["terminated session", { ...base, ...serverSession(request.target), ...context.target }];
     default:
       return null;
   }
@@ -181,6 +193,8 @@ const FAILURE_MESSAGES: Readonly<Record<string, string>> = {
   "import.resume": "import refused",
   "edits.submit": "edits rejected",
   "objects.apply": "object change failed",
+  "sessions.cancel": "session cancel failed",
+  "sessions.terminate": "session terminate failed",
 };
 
 export type RequestOutcome =
@@ -211,6 +225,9 @@ export function logResponse(request: LoggedRequest, outcome: RequestOutcome, con
     ...(context.statementKind === null ? {} : { kind: context.statementKind }),
     ...(request.type === "session.open" ? context.target : {}),
     ...(request.type === "objects.apply" ? changedObject(request.change) : {}),
+    ...(request.type === "sessions.cancel" || request.type === "sessions.terminate"
+      ? { ...serverSession(request.target), ...context.target }
+      : {}),
     err: outcome.cause,
   };
   const message = FAILURE_MESSAGES[request.type] ?? "request failed";

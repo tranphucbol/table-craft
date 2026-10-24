@@ -66,11 +66,13 @@ describe("pluginManifestSchema", () => {
     expect(parses(["sql", "currentNamespace"])).toBe(true);
   });
 
-  it("givenSessionsWithoutSql_whenParsed_thenFails", () => {
+  it("givenSessionsWithoutSqlOrSchemaTree_whenParsed_thenFails", () => {
     const parses = (capabilities: string[]): boolean =>
       pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
     expect(parses(["sessions"])).toBe(false);
-    expect(parses(["sql", "sessions"])).toBe(true);
+    expect(parses(["sql", "sessions"])).toBe(false);
+    expect(parses(["schemaTree", "sessions"])).toBe(false);
+    expect(parses(["sql", "schemaTree", "sessions"])).toBe(true);
   });
 
   it("givenNonSemverApiVersion_whenParsed_thenFails", () => {
