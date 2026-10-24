@@ -120,6 +120,7 @@ export {
   Prohibit as CancelledIcon,
   Export as ExportIcon,
   FileArrowDown as ImportIcon,
+  FileSql as ScriptIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */

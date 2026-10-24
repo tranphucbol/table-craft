@@ -6,6 +6,7 @@ import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/acti
 import { DDL_ACTION_IDS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
+import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
@@ -75,6 +76,7 @@ const DATASOURCE_MENU = [
   ACTION_IDS.newConsole,
   HISTORY_ACTION_IDS.show,
   HISTORY_ACTION_IDS.reopen,
+  SCRIPT_ACTION_IDS.run,
   ACTION_IDS.connect,
   ACTION_IDS.disconnect,
   ACTION_IDS.synchronize,
@@ -104,6 +106,7 @@ const NAMESPACE_MENU = [
   TABLE_ACTION_IDS.openData,
   ACTION_IDS.newConsole,
   IMPORT_ACTION_IDS.importNewTable,
+  SCRIPT_ACTION_IDS.run,
   null,
   OBJECT_ACTION_IDS.newTable,
   OBJECT_ACTION_IDS.newSchema,

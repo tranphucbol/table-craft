@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
+import { located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import type { ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import {
@@ -48,6 +49,13 @@ import {
   importPercent,
   importProgressText,
 } from "@table-craft/desktop/renderer/model/importText.js";
+import {
+  SCRIPT_STATE_TEXT,
+  scriptName,
+  scriptPercent,
+  scriptProgressText,
+} from "@table-craft/desktop/renderer/model/scriptText.js";
+import { useScripts, type ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -58,6 +66,7 @@ import {
   ExpandedIcon,
   ExportIcon,
   ImportIcon,
+  ScriptIcon,
   SpinnerIcon,
   TableIcon,
   WarningIcon,
@@ -125,6 +134,13 @@ function importActionsOf(entry: ImportEntry): readonly string[] {
   ];
 }
 
+/** What a script line offers: Cancel while it runs; the failing statement and Remove after. */
+function scriptActionsOf(entry: ScriptEntry): readonly string[] {
+  const { task } = entry;
+  if (task.state === "running") return [SCRIPT_ACTION_IDS.cancel];
+  return [...(task.error?.line == null ? [] : [SCRIPT_ACTION_IDS.goTo]), SCRIPT_ACTION_IDS.dismiss];
+}
+
 function menuOf(row: ServiceRow, cancellable: boolean): readonly MenuEntry[] {
   if (row.kind === "session") {
     const args = { tabId: row.node.tabId };
@@ -140,6 +156,10 @@ function menuOf(row: ServiceRow, cancellable: boolean): readonly MenuEntry[] {
   if (row.kind === "import") {
     const args = { taskId: row.node.task.taskId };
     return importActionsOf(row.node).map((actionId) => ({ actionId, args }));
+  }
+  if (row.kind === "script") {
+    const args = { taskId: row.node.task.taskId };
+    return scriptActionsOf(row.node).map((actionId) => ({ actionId, args }));
   }
   if (row.kind === "execution" && row.node.sql !== null) {
     const args = { tabId: row.tabId, executionId: row.node.id };
@@ -365,7 +385,72 @@ function ImportLine({ entry }: { readonly entry: ImportEntry }) {
   );
 }
 
+function ScriptsLine({ count }: { readonly count: number }) {
+  return (
+    <>
+      <ScriptIcon aria-hidden className="size-icon shrink-0 text-accent" />
+      <span className="truncate">SQL Scripts</span>
+      <span className="text-ink-muted tabular-nums">{count}</span>
+    </>
+  );
+}
+
+const SCRIPT_BUTTON_LABEL: Readonly<Record<string, string>> = {
+  [SCRIPT_ACTION_IDS.cancel]: "Cancel",
+  [SCRIPT_ACTION_IDS.goTo]: "Go to statement",
+};
+
+/**
+ * One Run SQL Script task: its file, state and progress; where it stopped, with the message and
+ * hint in the tooltip. Cancel and Go to statement are buttons too.
+ */
+function ScriptLine({ entry }: { readonly entry: ScriptEntry }) {
+  const { task } = entry;
+  const percent = scriptPercent(task);
+  const detail = [
+    ...task.files,
+    ...(task.error === null
+      ? []
+      : [task.error.line === null ? "" : located(task.error), task.error.message, task.error.hint]),
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+  return (
+    <>
+      <OutcomeGlyph outcome={EXPORT_OUTCOME[task.state]} />
+      <span className="min-w-0 truncate" title={detail}>
+        {scriptName(task)}
+      </span>
+      <span className={cn("shrink-0", task.state === "failed" ? "text-danger" : "text-ink-muted")}>
+        {task.state === "running" && percent !== null
+          ? `${SCRIPT_STATE_TEXT.running} ${String(percent)}%`
+          : SCRIPT_STATE_TEXT[task.state]}
+      </span>
+      {task.error?.line == null ? null : (
+        <span className="min-w-0 truncate text-danger" data-testid="script-error">
+          {`line ${String(task.error.line)}: ${task.error.message}`}
+        </span>
+      )}
+      <span className="ml-auto flex shrink-0 items-center gap-cell text-ink-muted tabular-nums">
+        <span data-testid="script-progress">{scriptProgressText(task)}</span>
+        <TaskButtons
+          actions={scriptActionsOf(entry).flatMap((actionId): (readonly [string, string])[] => {
+            const label = SCRIPT_BUTTON_LABEL[actionId];
+            return label === undefined ? [] : [[actionId, label]];
+          })}
+          taskId={task.taskId}
+        />
+      </span>
+    </>
+  );
+}
+
 function rowLabel(row: ServiceRow): string {
+  if (row.kind === "scripts") return `SQL Scripts, ${String(row.count)}`;
+  if (row.kind === "script") {
+    const { task } = row.node;
+    return [scriptName(task), SCRIPT_STATE_TEXT[task.state], scriptProgressText(task)].join(", ");
+  }
   if (row.kind === "imports") return `Imports, ${String(row.count)}`;
   if (row.kind === "import") {
     const { task } = row.node;
@@ -389,7 +474,8 @@ function rowLabel(row: ServiceRow): string {
 /**
  * The Services tree (plan 011 decision 12): each datasource with an open console or table tab, its
  * sessions, and what each sent, newest first. Enter or a click on a session or execution shows its tab.
- * Background exports follow under one Exports node (decision 040), imports under one Imports node.
+ * Background exports follow under one Exports node (decision 040), imports under one Imports node,
+ * Run SQL Script tasks under one SQL Scripts node (decision 081).
  */
 export function ServicesPane() {
   const tabs = useTabs((state) => state.tabs);
@@ -401,6 +487,7 @@ export function ServicesPane() {
   const datasources = useDatasources((state) => state.datasources);
   const exports = useExports((state) => state.entries);
   const imports = useImports((state) => state.entries);
+  const scripts = useScripts((state) => state.entries);
   const [selected, setSelected] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSED);
   const elements = useRef(new Map<string, HTMLLIElement>());
@@ -409,7 +496,10 @@ export function ServicesPane() {
     () => servicesTree({ tabs, consoles, tables, executions, datasources }),
     [tabs, consoles, tables, executions, datasources],
   );
-  const rows = useMemo(() => serviceRows(tree, collapsed, exports, imports), [tree, collapsed, exports, imports]);
+  const rows = useMemo(
+    () => serviceRows(tree, collapsed, exports, imports, scripts),
+    [tree, collapsed, exports, imports, scripts],
+  );
   const running = rows.some((row) => row.kind === "execution" && row.node.outcome === "running");
   const now = useNow(running);
   const selectedIndex = rows.findIndex((row) => row.key === selected);
@@ -483,7 +573,7 @@ export function ServicesPane() {
                 ? row.node.state
                 : row.kind === "execution"
                   ? row.node.outcome
-                  : row.kind === "export" || row.kind === "import"
+                  : row.kind === "export" || row.kind === "import" || row.kind === "script"
                     ? row.node.task.state
                     : undefined
             }
@@ -525,6 +615,10 @@ export function ServicesPane() {
               <ImportsLine count={row.count} />
             ) : row.kind === "import" ? (
               <ImportLine entry={row.node} />
+            ) : row.kind === "scripts" ? (
+              <ScriptsLine count={row.count} />
+            ) : row.kind === "script" ? (
+              <ScriptLine entry={row.node} />
             ) : (
               <ExecutionLine execution={row.node} now={now} />
             )}

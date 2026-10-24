@@ -4,6 +4,7 @@ import type { ConsoleSession } from "@table-craft/desktop/renderer/state/console
 import type { Execution } from "@table-craft/desktop/renderer/state/executions.js";
 import type { ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
 import type { ImportEntry } from "@table-craft/desktop/renderer/state/imports.js";
+import type { ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
 import type { TableSession, TableStatus } from "@table-craft/desktop/renderer/state/tables.js";
 import type { Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 
@@ -132,6 +133,14 @@ export type ServiceRow =
       readonly depth: 1;
       readonly parent: string;
       readonly node: ImportEntry;
+    }
+  | { readonly kind: "scripts"; readonly key: string; readonly depth: 0; readonly count: number }
+  | {
+      readonly kind: "script";
+      readonly key: string;
+      readonly depth: 1;
+      readonly parent: string;
+      readonly node: ScriptEntry;
     };
 
 /** The Exports node's key: one node under the datasources, every background export below it (decision 040). */
@@ -139,6 +148,9 @@ export const EXPORTS_ROW_KEY = "exports";
 
 /** The Imports node's key, beside the Exports node (plan 021). */
 export const IMPORTS_ROW_KEY = "imports";
+
+/** The SQL Scripts node's key, after the Imports node (decision 081). */
+export const SCRIPTS_ROW_KEY = "scripts";
 
 export function datasourceRowKey(datasourceId: string): string {
   return `datasource:${datasourceId}`;
@@ -150,13 +162,15 @@ export function sessionRowKey(tabId: string): string {
 
 /**
  * The lines shown, every node expanded unless `collapsed` holds its key (the tree starts expanded);
- * the Exports and Imports nodes follow the datasources while any task of theirs is listed, newest first.
+ * the Exports, Imports and SQL Scripts nodes follow the datasources while any task of theirs is
+ * listed, newest first.
  */
 export function serviceRows(
   tree: readonly ServiceDatasource[],
   collapsed: ReadonlySet<string>,
   exports: readonly ExportEntry[] = [],
   imports: readonly ImportEntry[] = [],
+  scripts: readonly ScriptEntry[] = [],
 ): readonly ServiceRow[] {
   const rows: ServiceRow[] = [];
   for (const datasource of tree) {
@@ -207,13 +221,27 @@ export function serviceRows(
       }
     }
   }
+  if (scripts.length > 0) {
+    rows.push({ kind: "scripts", key: SCRIPTS_ROW_KEY, depth: 0, count: scripts.length });
+    if (!collapsed.has(SCRIPTS_ROW_KEY)) {
+      for (const entry of [...scripts].reverse()) {
+        rows.push({
+          kind: "script",
+          key: `script:${entry.task.taskId}`,
+          depth: 1,
+          parent: SCRIPTS_ROW_KEY,
+          node: entry,
+        });
+      }
+    }
+  }
   return rows;
 }
 
 /** Whether a line has children to show or hide. */
 export function expandable(row: ServiceRow): boolean {
   if (row.kind === "datasource") return row.node.sessions.length > 0;
-  if (row.kind === "exports" || row.kind === "imports") return row.count > 0;
+  if (row.kind === "exports" || row.kind === "imports" || row.kind === "scripts") return row.count > 0;
   return row.kind === "session" && row.node.executions.length > 0;
 }
 
@@ -257,7 +285,7 @@ export function movedInTree(
     case "ArrowLeft": {
       if (row === undefined) return { selected, collapsed };
       if (expandable(row) && !collapsed.has(row.key)) return { selected, collapsed: new Set(collapsed).add(row.key) };
-      return row.kind === "datasource" || row.kind === "exports" || row.kind === "imports"
+      return row.kind === "datasource" || row.kind === "exports" || row.kind === "imports" || row.kind === "scripts"
         ? { selected, collapsed }
         : { selected: row.parent, collapsed };
     }

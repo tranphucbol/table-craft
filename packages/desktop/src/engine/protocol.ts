@@ -728,7 +728,46 @@ export interface ImportEvent {
   readonly task: ImportTask;
 }
 
-export type EngineEvent = ExportEvent | ImportEvent;
+/**
+ * Where a script stopped (decision 081): the file, and the line and column (from 1) the failing
+ * statement starts at, with its first characters; all null when the run failed before a statement.
+ */
+export interface ScriptError extends EngineError {
+  readonly file: string | null;
+  readonly line: number | null;
+  readonly column: number | null;
+  readonly statement: string | null;
+}
+
+/** One Run SQL Script task, as every event carries it whole (decision 081). */
+export interface ScriptTask {
+  readonly taskId: string;
+  /** Every file the task runs, in order; `file` is the one running or the last run. */
+  readonly files: readonly string[];
+  readonly file: string;
+  /** The schema or database each file runs in; null runs in the session's default. */
+  readonly namespace: readonly string[] | null;
+  readonly state: ExportTaskState;
+  /** Statements that finished, across every file. */
+  readonly statements: number;
+  /** Bytes read so far, of `size`, across every file. */
+  readonly bytes: number;
+  readonly size: number;
+  readonly elapsedMs: number;
+  readonly error: ScriptError | null;
+}
+
+export const SCRIPT_EVENT_TYPES = ["script.progress", "script.done", "script.failed", "script.cancelled"] as const;
+export type ScriptEventType = (typeof SCRIPT_EVENT_TYPES)[number];
+
+/** Pushed by the engine to every connection, unasked, like `ExportEvent`. */
+export interface ScriptEvent {
+  readonly id: null;
+  readonly type: ScriptEventType;
+  readonly task: ScriptTask;
+}
+
+export type EngineEvent = ExportEvent | ImportEvent | ScriptEvent;
 
 /** Mirrors `ResultSummary` in core, with the first window and the session's transaction attached. */
 export interface ExecutedStatement extends ResultState {
@@ -1098,6 +1137,19 @@ export interface EngineCalls {
   "import.resume": { params: { readonly taskId: string; readonly stallSeconds: number }; result: ImportTask };
   /** Every import this engine ran, for a renderer that reloaded. */
   "import.list": { params: Record<never, never>; result: readonly ImportTask[] };
+  /**
+   * Runs `files` (absolute paths) one after another on a session of the task's own, in auto-commit,
+   * first switching to `namespace` when given; answers at once with the task. The files are
+   * streamed through the plugin's splitter and stop at the first failing statement (decision 081).
+   */
+  "script.run": {
+    params: { readonly files: readonly string[]; readonly namespace: readonly string[] | null };
+    result: ScriptTask;
+  };
+  /** Stops a running script between statements, cancelling the one in flight where the plugin can. */
+  "script.cancel": { params: { readonly taskId: string }; result: null };
+  /** Every script this engine ran, for a renderer that reloaded. */
+  "script.list": { params: Record<never, never>; result: readonly ScriptTask[] };
   /** What the plugin's object editor can write: types, checks, comments, cascade, the kinds it renames and drops. Needs `objects`. */
   "objects.features": { params: Record<never, never>; result: ObjectFeatures };
   /** Table `relation` as the Modify Table dialog starts from it, described afresh. Needs `objects`. */
@@ -1249,6 +1301,7 @@ export type EngineErrorCode =
   | "sessionBusy"
   | "exportFailed"
   | "importFailed"
+  | "scriptFailed"
   | "objectBusy"
   | "sshAuthFailed"
   | "sshHostUnreachable"

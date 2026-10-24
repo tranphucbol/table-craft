@@ -17,8 +17,15 @@ import { appearanceOf } from "@table-craft/desktop/renderer/appearance/tokens.js
 import { useExecutions, type ExecutionsStore } from "@table-craft/desktop/renderer/state/executions.js";
 import { useExports, type ExportsStore } from "@table-craft/desktop/renderer/state/exports.js";
 import { useImports, type ImportsStore } from "@table-craft/desktop/renderer/state/imports.js";
-import { IMPORT_EVENT_TYPES, type EngineEvent, type ImportEvent } from "@table-craft/desktop/engine/protocol.js";
+import {
+  IMPORT_EVENT_TYPES,
+  SCRIPT_EVENT_TYPES,
+  type EngineEvent,
+  type ImportEvent,
+  type ScriptEvent,
+} from "@table-craft/desktop/engine/protocol.js";
 import { followObjectFeatures, useObjects, type ObjectsStore } from "@table-craft/desktop/renderer/state/objects.js";
+import { useScripts, type ScriptsStore } from "@table-craft/desktop/renderer/state/scripts.js";
 import { themeOf, useSettings, type SettingsStore } from "@table-craft/desktop/renderer/state/settings.js";
 import { tablesOf, useTables, type TablesStore } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs, type TabsStore } from "@table-craft/desktop/renderer/state/tabs.js";
@@ -33,6 +40,7 @@ export interface WiredStores {
   readonly executions?: ExecutionsStore;
   readonly exports?: ExportsStore;
   readonly imports?: ImportsStore;
+  readonly scripts?: ScriptsStore;
   readonly objects?: ObjectsStore;
 }
 
@@ -40,11 +48,15 @@ function isImportEvent(event: EngineEvent): event is ImportEvent {
   return (IMPORT_EVENT_TYPES as readonly string[]).includes(event.type);
 }
 
+function isScriptEvent(event: EngineEvent): event is ScriptEvent {
+  return (SCRIPT_EVENT_TYPES as readonly string[]).includes(event.type);
+}
+
 /**
  * What one store's change means for the others: a datasource whose engine went away leaves its
  * consoles and tables disconnected and its catalog forgotten, a deleted one takes its tabs with it,
  * a namespace described anew refreshes the DDL tabs showing its relations, and a closed tab's
- * executions leave Services with it; engine events reach the exports and imports lists.
+ * executions leave Services with it; engine events reach the exports, imports and scripts lists.
  */
 export function wireStores({
   datasources,
@@ -56,15 +68,18 @@ export function wireStores({
   executions,
   exports,
   imports,
+  scripts,
   objects,
 }: WiredStores): () => void {
   const offEvents = datasources.onEngineEvent((id, event) => {
     if (isImportEvent(event)) imports?.getState().received(id, event);
+    else if (isScriptEvent(event)) scripts?.getState().received(id, event);
     else exports?.getState().received(id, event);
   });
   const offDetached = datasources.onDetached((id, error) => {
     exports?.getState().detached(id, error);
     imports?.getState().detached(id, error);
+    scripts?.getState().detached(id, error);
     consoles.getState().detach(id, error);
     tables?.getState().detach(id, error);
     catalog?.getState().clear(id);
@@ -142,6 +157,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     executions: useExecutions,
     exports: useExports,
     imports: useImports,
+    scripts: useScripts,
     objects: useObjects,
   });
   const offChanged = bridge().onDatasourcesChanged((list) => useDatasources.getState().applyList(list));

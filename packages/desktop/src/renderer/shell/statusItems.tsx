@@ -7,6 +7,8 @@ import { exportingText } from "@table-craft/desktop/renderer/model/exportText.js
 import { isRunning, useExports } from "@table-craft/desktop/renderer/state/exports.js";
 import { importingText } from "@table-craft/desktop/renderer/model/importText.js";
 import { isImporting, useImports } from "@table-craft/desktop/renderer/state/imports.js";
+import { scriptsRunningText } from "@table-craft/desktop/renderer/model/scriptText.js";
+import { isScriptRunning, useScripts } from "@table-craft/desktop/renderer/state/scripts.js";
 import {
   connectionOf,
   datasourceById,
@@ -150,10 +152,26 @@ function ImportingIndicator() {
   );
 }
 
+/** Run SQL Script tasks still running (decision 081); Services lists each with Cancel. */
+function ScriptsIndicator() {
+  const text = useScripts((state) => {
+    const running = state.entries.filter(isScriptRunning).map((entry) => entry.task);
+    return running.length === 0 ? null : scriptsRunningText(running);
+  });
+  if (text === null) return null;
+  return (
+    <span data-testid="status-scripts" className="flex items-center gap-cell">
+      <SpinnerIcon aria-hidden className="size-icon animate-spin text-accent" />
+      {text}
+    </span>
+  );
+}
+
 export const STATUS_ITEMS: readonly StatusItem[] = [
   { id: "datasource", side: "left", Component: DatasourceStatus },
   { id: "sync", side: "left", Component: SyncStatus },
   { id: "running", side: "right", Component: RunningIndicator },
   { id: "exporting", side: "right", Component: ExportingIndicator },
   { id: "importing", side: "right", Component: ImportingIndicator },
+  { id: "scripts", side: "right", Component: ScriptsIndicator },
 ];

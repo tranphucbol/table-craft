@@ -1,6 +1,7 @@
 import {
   EXPORT_EVENT_TYPES,
   IMPORT_EVENT_TYPES,
+  SCRIPT_EVENT_TYPES,
   type EngineCalls,
   type EngineError,
   type EngineErrorCode,
@@ -42,7 +43,7 @@ export interface EngineClient {
 
 export type EngineEventListener = (event: EngineEvent) => void;
 
-const EVENT_TYPES: ReadonlySet<string> = new Set([...EXPORT_EVENT_TYPES, ...IMPORT_EVENT_TYPES]);
+const EVENT_TYPES: ReadonlySet<string> = new Set([...EXPORT_EVENT_TYPES, ...IMPORT_EVENT_TYPES, ...SCRIPT_EVENT_TYPES]);
 
 function isEvent(message: EngineResponse | EngineEvent): message is EngineEvent {
   return message.id === null && EVENT_TYPES.has(message.type);

@@ -87,6 +87,7 @@ import type {
   ImportFormat,
   ImportPreview,
   ImportTask,
+  ScriptTask,
   NewImportColumn,
   ParameterValue,
   ProbeResult,
@@ -109,6 +110,13 @@ import {
 } from "@table-craft/desktop/engine/requestLog.js";
 import { exportTasks, type ExportJob, type ExportRows } from "@table-craft/desktop/engine/exports.js";
 import { importTasks, type ImportJob, type ImportSession } from "@table-craft/desktop/engine/imports.js";
+import {
+  SCRIPT_WHOLE_FILE_MAX_BYTES,
+  scriptTasks,
+  wholeFileStream,
+  type ScriptFile,
+  type ScriptSession,
+} from "@table-craft/desktop/engine/scripts.js";
 import { engineRequestSchema, readRequestId } from "@table-craft/desktop/engine/requests.js";
 import { SessionLost, StatementTimedOut, watchStatement, type LostReason } from "@table-craft/desktop/engine/watch.js";
 import type { Logger, LogFields } from "@table-craft/desktop/log/record.js";
@@ -483,6 +491,7 @@ const EMPTY_COMPLETION_CATALOG: CompletionCatalog = {
 };
 
 const FORMAT_OPTIONS_HINT = "Check the format options (encoding, delimiter, quote) against the file.";
+const BYTES_PER_MIB = 1024 * 1024;
 const FILE_HINT = "Check that the file exists and that TableCraft may read it, then choose it again.";
 const READ_ONLY_IMPORT = "This data source is read-only, so it cannot be imported into.";
 const READ_ONLY_IMPORT_HINT = "Clear Read-only in the data source's properties to import.";
@@ -828,6 +837,77 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   }
 
   const imports = importTasks(log === null ? {} : { log: log.child("import") });
+  const scripts = scriptTasks(log === null ? {} : { log: log.child("script") });
+
+  async function scriptFiles(files: readonly string[], streams: boolean): Promise<ScriptFile[]> {
+    return Promise.all(
+      files.map(async (path) => {
+        if (!isAbsolute(path)) {
+          throw new EngineFailure({
+            code: "invalidRequest",
+            message: `Run SQL Script needs an absolute path, not "${path}".`,
+            hint: BUG_HINT,
+          });
+        }
+        let size: number;
+        try {
+          size = await fileSize(path);
+        } catch (cause) {
+          throw new EngineFailure(
+            { code: "scriptFailed", message: `Cannot read ${path}: ${messageOf(cause)}`, hint: FILE_HINT },
+            cause,
+          );
+        }
+        if (!streams && size > SCRIPT_WHOLE_FILE_MAX_BYTES) {
+          throw new EngineFailure({
+            code: "scriptFailed",
+            message: `${path} is larger than this data source's plugin can run as a script (${String(SCRIPT_WHOLE_FILE_MAX_BYTES / BYTES_PER_MIB)} MiB).`,
+            hint: "Split the file, or update the plugin to one that streams scripts.",
+          });
+        }
+        return { path, size };
+      }),
+    );
+  }
+
+  async function scriptSession(namespace: readonly string[] | null): Promise<ScriptSession> {
+    const session = await connectDatasource(options);
+    try {
+      if (namespace !== null && namespaceSwitchable())
+        await drained(await session.execute(switchStatement(namespace).sql));
+    } catch (cause) {
+      await session.close().catch(() => undefined);
+      throw statementFailed(cause, options.datasource.readOnly);
+    }
+    return {
+      execute: async (sql) => {
+        await drained(await session.execute(sql));
+      },
+      cancel: () => void session.cancel?.().catch(() => undefined),
+      close: () => session.close(),
+    };
+  }
+
+  async function runScript(params: RequestOf<"script.run">): Promise<ScriptTask> {
+    const language = sqlLanguage();
+    const streams = language.splitStream !== undefined;
+    const files = await scriptFiles(params.files, streams);
+    return scripts.start({
+      files,
+      namespace: params.namespace,
+      open: () => scriptSession(params.namespace),
+      stream: () => language.splitStream?.() ?? wholeFileStream((text) => language.split(text)),
+      failure: (cause) => statementFailed(cause, options.datasource.readOnly).error,
+    });
+  }
+
+  function scriptTaskOf(taskId: string): ScriptTask {
+    const task = scripts.get(taskId);
+    if (task === undefined) {
+      throw new EngineFailure({ code: "invalidRequest", message: `No script task "${taskId}".`, hint: BUG_HINT });
+    }
+    return task;
+  }
 
   /** The language of a plugin that declares `bulkInsert`, which has `importType` and `createTable`. */
   function importLanguage(): Required<Pick<SqlLanguage, "importType" | "createTable">> {
@@ -1036,6 +1116,11 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     return namespaces.filter((namespace) => switchableTo(targets, namespace));
   }
 
+  function namespaceSwitchable(): boolean {
+    const { plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
+    return plugin.capabilities.includes("currentNamespace") && plugin.language?.namespaceSwitch !== undefined;
+  }
+
   function switchStatement(path: readonly string[]): SwitchStatement {
     const switcher = namespaceSwitch();
     return { sql: switcher.statement(path), transactional: switcher.transactional };
@@ -1174,6 +1259,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     const edited = new Map<string, TableResult>();
     const unsubscribe = tasks.subscribe(emit);
     const unsubscribeImports = imports.subscribe(emit);
+    const unsubscribeScripts = scripts.subscribe(emit);
 
     function forget(handle: string): void {
       handles.delete(handle);
@@ -2062,6 +2148,13 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
         return Promise.resolve(imports.resume(taskId, stallSeconds * MS_PER_SECOND));
       },
       "import.list": () => Promise.resolve(imports.list()),
+      "script.run": (request) => runScript(request),
+      "script.cancel": ({ taskId }) => {
+        scriptTaskOf(taskId);
+        scripts.cancel(taskId);
+        return Promise.resolve(null);
+      },
+      "script.list": () => Promise.resolve(scripts.list()),
       "objects.features": () => Promise.resolve(objectEditor().features),
       "objects.design": ({ path, relation }) => objectDesign(path, relation),
       "objects.script": ({ change }) => objectScript(change),
@@ -2122,6 +2215,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
       async close() {
         unsubscribe();
         unsubscribeImports();
+        unsubscribeScripts();
         const held = [...handles.keys()];
         handles.clear();
         statements.clear();
@@ -2136,7 +2230,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   }
 
   async function close(): Promise<void> {
-    await Promise.all([tasks.close(), imports.close()]);
+    await Promise.all([tasks.close(), imports.close(), scripts.close()]);
     const open = introspection;
     introspection = null;
     if (open !== null) await open.then((entry) => entry.session.close()).catch(() => undefined);
@@ -2146,7 +2240,7 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   return {
     connect,
     tasksSettled: async () => {
-      await Promise.all([tasks.settled(), imports.settled()]);
+      await Promise.all([tasks.settled(), imports.settled(), scripts.settled()]);
     },
     close,
   };
