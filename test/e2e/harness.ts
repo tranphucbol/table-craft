@@ -120,6 +120,15 @@ export function seedTheme(userDataDir: string, name: string, theme: object | str
   writeFileSync(join(directory, `${name}.json`), typeof theme === "string" ? theme : JSON.stringify(theme, null, 2));
 }
 
+const USER_PLUGINS_DIRECTORY = "plugins";
+
+/** Writes a user plugin into `<userData>/plugins/<directory>/`, one file per `files` entry. */
+export function seedPlugin(userDataDir: string, directory: string, files: Readonly<Record<string, string>>): void {
+  const root = join(userDataDir, USER_PLUGINS_DIRECTORY, directory);
+  mkdirSync(root, { recursive: true });
+  for (const [name, text] of Object.entries(files)) writeFileSync(join(root, name), text);
+}
+
 export function newProfile(): string {
   return mkdtempSync(join(tmpdir(), USER_DATA_PREFIX));
 }
@@ -502,5 +511,17 @@ export function evidenceFor(plan: string): CaptureWindow {
     const directory = resolve(REPOSITORY_ROOT, EVIDENCE_DIR);
     mkdirSync(directory, { recursive: true });
     await page.screenshot({ path: join(directory, `${name}.png`), scale: "css" });
+  };
+}
+
+export type WriteEvidence = (file: string, text: string) => void;
+
+/** Like `evidenceFor`, for text evidence such as a log excerpt: writes `<EVIDENCE_DIR>/<file>`. */
+export function evidenceTextFor(plan: string): WriteEvidence {
+  return (file, text) => {
+    if (EVIDENCE_DIR === undefined || EVIDENCE_DIR === "" || basename(EVIDENCE_DIR) !== plan) return;
+    const directory = resolve(REPOSITORY_ROOT, EVIDENCE_DIR);
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(join(directory, file), text);
   };
 }
