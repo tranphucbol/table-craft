@@ -148,6 +148,7 @@ export function completion(target: CompletionTarget): Extension {
   return [
     signature === undefined ? [] : signatureHint(scope === undefined ? { signature } : { signature, scope }),
     autocompletion({
+      aboveCursor: false,
       override: [engineCompletionSource(target)],
       icons: false,
       activateOnTypingDelay: COMPLETION_TYPING_DELAY_MS,

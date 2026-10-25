@@ -258,7 +258,7 @@ const problemTooltip = hoverTooltip((view, pos) => {
   return {
     pos: Math.min(...problems.map((problem) => problem.from)),
     end: Math.max(...problems.map((problem) => problem.to)),
-    above: true,
+    above: false,
     create() {
       const dom = document.createElement("div");
       dom.className = PROBLEM_TOOLTIP_CLASS;
