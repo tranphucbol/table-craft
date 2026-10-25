@@ -12,7 +12,7 @@
 import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -223,7 +223,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
       .toBeGreaterThan(0);
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenThreeStatementsRun_whenQueryHistoryOpened_thenNewestFirstWithTimeDurationRowsAndOutcome",
     async () => {
       const page = await launchWith([SAVED_POSTGRES]);
@@ -243,7 +243,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenHistory_whenSearchingOrders_thenOnlyMatchingStatementsListed",
     async () => {
       const page = await launchWith([SAVED_POSTGRES]);
@@ -259,7 +259,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenHistoryEntry_whenEnterPressedInAConsole_thenInsertedAtCaretAndRunnable",
     async () => {
       const page = await launchWith([SAVED_POSTGRES]);
@@ -351,7 +351,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenTableSubmitted_whenQueryHistoryOpened_thenTheGeneratedScriptIsOneEntry",
     async () => {
       const page = await launchWith([SAVED_POSTGRES]);
@@ -382,7 +382,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenConsoleAndTableTabs_whenServicesShown_thenSessionsUnderTheDatasourceWithExecutions",
     async () => {
       const page = await launchEphemeral(POSTGRES);
@@ -403,7 +403,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenSleepRunning_whenServicesShown_thenElapsedTicksThenSuccessInAboutTwoSeconds",
     async () => {
       const page = await launchEphemeral(POSTGRES);
@@ -519,7 +519,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
    * confirmation and a failed submit. Their evidence belongs to plan 014.
    */
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenFetchAll_whenFinished_thenServicesRowShowsAllRows",
     async () => {
       const page = await launchEphemeral(POSTGRES);
@@ -563,7 +563,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenTableSubmitFails_whenHistoryOpened_thenErrorEntryWithScript",
     async () => {
       const page = await launchWith([SAVED_POSTGRES]);

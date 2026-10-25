@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -220,7 +220,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresConsole_whenBasicCompletionAfterFrom_thenTablesAndViewsWithGlyphs",
     async () => {
       const page = await launch(POSTGRES);
@@ -269,7 +269,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresJoinAfterOrders_whenCompletingAndAccepting_thenCustomersJoinWithOnIsInserted",
     async () => {
       const page = await launch(POSTGRES);
@@ -302,7 +302,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenLineItemsOnEachDatabase_whenCompletingLi_thenTheDialectQuotesIt",
     async () => {
       const expected: readonly [Datasource, string][] = [
@@ -326,7 +326,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS * 3,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresArchiveSchemaNotYetDescribed_whenCompletingItsDot_thenOldOrdersIsOffered",
     async () => {
       const page = await launch(POSTGRES);
@@ -340,7 +340,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersTableEditor_whenTypingInTheWhereBar_thenCustomerIdIsOffered",
     async () => {
       const page = await launch(POSTGRES);
@@ -363,7 +363,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresPopupOpenOnCust_whenTab_thenCustomersIsAcceptedAndNothingIndents",
     async () => {
       const page = await launch(POSTGRES);
@@ -382,7 +382,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaretInsideCustomerOld_whenTabOnCustomers_thenTheWholeIdentifierIsReplacedInOneUndo",
     async () => {
       const page = await launch(POSTGRES);
@@ -402,7 +402,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaretInsideCustomerOld_whenEnterOnCustomers_thenItInsertsAndKeepsTheRest",
     async () => {
       const page = await launch(POSTGRES);
@@ -420,7 +420,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenNoPopup_whenTabThenShiftTab_thenTheLineIndentsAndOutdents",
     async () => {
       const page = await launch(POSTGRES);
@@ -466,7 +466,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaretOnAliasO_whenGoToDeclaration_thenCaretMovesToOrdersO",
     async () => {
       const page = await launch(POSTGRES);
@@ -502,7 +502,7 @@ describe.runIf(DATABASES_ENABLED)("completion and navigation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaretOnOrders_whenF4InTheConsole_thenOrdersDataOpens",
     async () => {
       const page = await launch(POSTGRES);

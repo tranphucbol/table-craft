@@ -14,7 +14,7 @@ import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import sqlitePlugin from "@table-craft/plugin-sqlite";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES, serverSkipped } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
@@ -122,7 +122,7 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
   }
 
   for (const dialect of DIALECTS) {
-    it(
+    it.skipIf(serverSkipped(dialect.datasource().pluginId))(
       `givenOneLineQuery_on_${dialect.label}_whenModAltL_thenOneClausePerLineAndOneUndoRestores`,
       async () => {
         const page = await launch(dialect.datasource());
@@ -173,7 +173,7 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
     );
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenParameters_onPostgres_whenDialogCancelled_thenNothingRuns",
     async () => {
       const page = await launch(POSTGRES);
@@ -191,7 +191,7 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenNullTicked_onPostgres_whenRun_thenBindsNull",
     async () => {
       const page = await launch(POSTGRES);
@@ -211,7 +211,7 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCastsLiteralsAndComments_onPostgres_whenRun_thenNoDialog",
     async () => {
       const page = await launch(POSTGRES);
@@ -228,7 +228,7 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenSelectionAndLowerKeywordCase_onPostgres_whenModAltL_thenOnlySelectionFormattedInLowerCase",
     async () => {
       const profile = newProfile();

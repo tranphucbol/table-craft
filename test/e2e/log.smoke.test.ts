@@ -11,7 +11,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -377,7 +377,7 @@ describe.runIf(DATABASES_ENABLED)("app log live test (PostgreSQL and MySQL)", ()
     );
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenServerDropsConnectionMidQuery_whenLogRead_thenFailureWithDriverErrorLogged",
     async () => {
       const current = await open(POSTGRES);

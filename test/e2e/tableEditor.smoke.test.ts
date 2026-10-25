@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -76,7 +76,7 @@ async function asOwner(plugin: DatasourcePlugin, config: unknown, statements: re
 }
 
 async function resetFixtures(): Promise<void> {
-  await asOwner(postgres, POSTGRES_CONFIG, RESET_STATEMENTS);
+  if (!WITHOUT_POSTGRES) await asOwner(postgres, POSTGRES_CONFIG, RESET_STATEMENTS);
   await asOwner(mysql, MYSQL_CONFIG, RESET_STATEMENTS);
 }
 
@@ -186,7 +186,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersInTheTree_whenF4_thenTableTabOpensWithRowsInAutoCommit",
     async () => {
       const page = await launch(POSTGRES);
@@ -202,7 +202,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrders_whenWhereAndOrderByApplied_thenServerFiltersAndSorts",
     async () => {
       const page = await launch(POSTGRES);
@@ -248,7 +248,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     await editCell(page, 3, 3, "2024-03-03 08:00:00");
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrders_whenCellEditedRowInsertedAndRowDeleted_thenThreeHighlightsAndThreePending",
     async () => {
       const page = await launch(POSTGRES);
@@ -266,7 +266,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenThreePendingChanges_whenPreviewedAndSubmitted_thenDeleteUpdateInsertRunAndRowsReread",
     async () => {
       const page = await launch(POSTGRES);
@@ -319,7 +319,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPendingUpdate_whenRowDeletedFromConsoleThenSubmitted_thenRolledBackNamingTheStatement",
     async () => {
       const page = await launch(POSTGRES);
@@ -391,7 +391,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenNoKeyTableAndView_whenOpened_thenReadOnlyWithTheReason",
     async () => {
       const page = await launch(POSTGRES);
@@ -439,7 +439,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrderOfGrace_whenGoToReferencedRow_thenCustomersOpenFilteredToHer",
     async () => {
       const page = await launch(POSTGRES);
@@ -474,7 +474,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPendingChange_whenTabClosed_thenAskedToSubmitDiscardOrCancel",
     async () => {
       const page = await launch(POSTGRES);
@@ -497,7 +497,7 @@ describe.runIf(DATABASES_ENABLED)("table data editor live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenJsonCell_whenEditedInValuePanelAndSubmitted_thenNewDocumentStored",
     async () => {
       const page = await launch(POSTGRES);

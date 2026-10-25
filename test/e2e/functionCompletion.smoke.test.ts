@@ -9,7 +9,7 @@
  */
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, serverSkipped } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
@@ -260,10 +260,14 @@ describe.runIf(DATABASES_ENABLED)("function completion live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.each([
-    [POSTGRES, "052-other-dialects"],
-    [SQLITE, "052-other-dialects-sqlite"],
-  ] as const)(
+  it.each(
+    (
+      [
+        [POSTGRES, "052-other-dialects"],
+        [SQLITE, "052-other-dialects-sqlite"],
+      ] as const
+    ).filter(([datasource]) => !serverSkipped(datasource.pluginId)),
+  )(
     "givenOtherDialect_whenCompletingCou_thenCountWithItsSignature (%#)",
     async (datasource, evidence) => {
       const page = await launch(datasource);

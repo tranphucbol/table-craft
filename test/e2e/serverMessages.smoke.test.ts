@@ -10,7 +10,7 @@
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, TIDB_DATABASE } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, TIDB_DATABASE, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -168,7 +168,7 @@ describe.runIf(DATABASES_ENABLED)("server warnings and TiDB Explain live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenMysqlWarningAndPostgresNotice_whenRun_thenOutputListsThem",
     async () => {
       let page = await launch(MYSQL);

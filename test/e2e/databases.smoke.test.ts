@@ -8,7 +8,7 @@
  */
 import { formatCell } from "@table-craft/desktop/renderer/grid/format.js";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword, serverSkipped } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import { TYPE_PROBE_EXPECTED } from "../support/typeProbe.js";
 import {
@@ -97,7 +97,8 @@ describe.runIf(DATABASES_ENABLED)("desktop against real databases", () => {
   }, CLOSE_HOOK_TIMEOUT_MS);
 
   describe.each(TARGETS)("$name", (target) => {
-    it(
+    const scenario = it.skipIf(serverSkipped(target.datasource().pluginId));
+    scenario(
       "givenTypeProbe_whenSelected_thenGridShowsTheSameCellsAsEveryDatabase",
       async () => {
         const { page } = await open(target.datasource());
@@ -113,7 +114,7 @@ describe.runIf(DATABASES_ENABLED)("desktop against real databases", () => {
       SCENARIO_TIMEOUT_MS,
     );
 
-    it(
+    scenario(
       "givenInvalidStatement_whenRun_thenErrorIsShownAndSessionStaysUsable",
       async () => {
         const { page } = await open(target.datasource());

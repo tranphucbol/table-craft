@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   answerSecretPrompt,
@@ -196,7 +196,8 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
 
   afterEach(async () => {
     await closeRunning();
-    await asOwner(postgres, POSTGRES_CONFIG, [RESTORE_ORDER_ONE, "DROP TABLE IF EXISTS public.t"]);
+    if (!WITHOUT_POSTGRES)
+      await asOwner(postgres, POSTGRES_CONFIG, [RESTORE_ORDER_ONE, "DROP TABLE IF EXISTS public.t"]);
     await asOwner(mysql, MYSQL_CONFIG, [RESTORE_ORDER_ONE]);
   }, CLOSE_HOOK_TIMEOUT_MS);
 
@@ -214,7 +215,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     await planShown(page, "Plan");
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenJoinOnPostgres_whenShiftModE_thenPlanTabWithOperationsRowsAndCost",
     async () => {
       const page = await launch(POSTGRES);
@@ -286,7 +287,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresPlan_whenTheOrdersScanSelected_thenDetailsListItsFilterAndProperties",
     async () => {
       const page = await launch(POSTGRES);
@@ -306,7 +307,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresPlan_whenRawShownAndCopied_thenThePrintedJsonOnTheClipboard",
     async () => {
       const page = await launch(POSTGRES);
@@ -330,7 +331,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenSelectOnPostgres_whenExplainAnalyse_thenNoQuestionAndAnalysedPlanWithActualsAndBanner",
     async () => {
       const page = await launch(POSTGRES);
@@ -361,7 +362,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenUpdateInAutoMode_whenExplainAnalyse_thenAsksSayingItWillBeCommitted",
     async () => {
       const page = await launch(POSTGRES);
@@ -384,7 +385,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenManualMode_whenUpdateAnalysedAndRolledBack_thenPlanShownTransactionOpenAndOrdersUnchanged",
     async () => {
       const page = await launch(POSTGRES);
@@ -465,7 +466,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCreateTableOnPostgres_whenExplainPlan_thenRefusedInOutputWithTheReason",
     async () => {
       const page = await launch(POSTGRES);
@@ -484,7 +485,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenExplainAnalyzeDelete_whenRun_thenDestructiveConfirmationAndDecliningDeletesNothing",
     async () => {
       const page = await launch(POSTGRES);
@@ -506,7 +507,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenExplainOnSavedPostgres_whenServicesAndQueryHistoryShown_thenLabelAndTheExplainTextSent",
     async () => {
       const userDataDir = newProfile();

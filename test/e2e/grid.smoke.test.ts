@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ElectronApplication, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   answerExportDialog,
@@ -202,7 +202,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     return running;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenFiftyThousandRows_whenFetchNextThenAll_thenFirstPageThenNextThenEverything",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -226,7 +226,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOpenCursor_whenSameConsoleRunsAnotherStatement_thenFirstResultSaysFetchingStopped",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -245,7 +245,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenDecimalTotals_whenSortedDescending_thenNumericOrderNullFirst",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -309,7 +309,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenDraggedRectangle_whenModC_thenCsvWithHeaderOnClipboard",
     async () => {
       const { app, page } = await launch(POSTGRES);
@@ -391,7 +391,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenFirstPageShown_whenExported_thenFileHasEveryRow",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -441,7 +441,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenJsonAndBytes_whenValuePanelShown_thenPrettyJsonAndHexWithCount",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -482,7 +482,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOpenCursor_whenDisconnected_thenStaleBannerAndRerunReconnects",
     async () => {
       const { page } = await launch(POSTGRES);

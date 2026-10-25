@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   DATAGRIP_IDS,
   dataGripService,
@@ -143,7 +143,7 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await importDialog(page).waitFor({ state: "detached" });
 
       for (const folder of ["DataGrip", "Docker"]) await treeNode(page, folder).waitFor();
-      for (const name of ["Shop MySQL", "Shop PG"]) {
+      for (const name of WITHOUT_POSTGRES ? ["Shop MySQL"] : ["Shop MySQL", "Shop PG"]) {
         await connect(page, name);
         await connected(page, name);
       }
@@ -246,7 +246,7 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPasswordsNotImported_whenConnecting_thenAsksForThePassword",
     async () => {
       const home = fixture("native");

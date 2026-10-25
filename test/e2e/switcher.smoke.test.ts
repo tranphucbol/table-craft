@@ -17,6 +17,7 @@ import {
   TIDB_CONFIG,
   TIDB_DATABASE,
   tidbScratchDatabase,
+  WITHOUT_POSTGRES,
 } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
@@ -250,7 +251,7 @@ describe.runIf(DATABASES_ENABLED)("namespace switcher and USE completion live te
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresSearchPath_whenCompleting_thenSchemasNoKeywords",
     async () => {
       const page = await launch(POSTGRES, "public");
@@ -306,7 +307,7 @@ describe.runIf(DATABASES_ENABLED)("namespace switcher and USE completion live te
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresDropdown_whenSchemaPicked_thenSearchPathSetAndLabelIsIt",
     async () => {
       const page = await launch(POSTGRES, "public");

@@ -16,7 +16,7 @@ import type { ElectronApplication, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -229,7 +229,7 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPostgresFile_whenOpenedRunEditedAndSaved_thenRunsAndDiskMatches",
     async () => {
       await openRunEditSave(POSTGRES, "postgres");
@@ -398,7 +398,7 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     LARGE_SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenLargeScriptOnPostgres_whenRunScriptThenCancelled_thenProgressShownAndRunStops",
     async () => {
       await asOwner(postgres, POSTGRES_CONFIG, `DROP TABLE IF EXISTS public.${LIVE_TABLE}`);

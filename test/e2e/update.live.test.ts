@@ -448,12 +448,12 @@ describe.runIf(LIVE)("in-app update (packaged test builds, live)", () => {
         const result = await bridge.saveDatasource({
           datasource: {
             name: "Keychain probe",
-            pluginId: "postgres",
+            pluginId: "mysql",
             folder: null,
             color: null,
             readOnly: false,
             comment: "",
-            config: { host: "127.0.0.1", port: 56432, database: "table_craft", user: "table_craft" },
+            config: { host: "127.0.0.1", port: 56306, database: "table_craft", user: "table_craft" },
             secretModes: { password: "forever" },
           },
           secrets: { password: { action: "set", value: "table_craft" } },

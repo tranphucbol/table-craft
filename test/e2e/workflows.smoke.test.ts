@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
@@ -147,7 +147,7 @@ describe.runIf(SMOKE_ENABLED)("daily loop on the development build", () => {
     LOOP_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenDailyLoop_whenRunOnPostgres_thenEveryStepSucceeds",
     async () => {
       await loopAndRestore(POSTGRES);

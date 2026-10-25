@@ -7,7 +7,7 @@
  */
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   activeEditorTab,
   CLOSE_HOOK_TIMEOUT_MS,
@@ -60,7 +60,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgres_whenLaunched_thenShellShowsDatasourceConsoleAndServices",
     async () => {
       const page = await launchPostgres();
@@ -75,7 +75,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgres_whenToolWindowShortcutsPressed_thenEachTogglesOnce",
     async () => {
       const page = await launchPostgres();
@@ -104,7 +104,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgres_whenFindActionNewCon_thenSecondConsoleOpensActive",
     async () => {
       const page = await launchPostgres();
@@ -122,7 +122,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgres_whenShiftShiftPressed_thenSearchEverywhereListsActionsWithShortcuts",
     async () => {
       const page = await launchPostgres();
@@ -143,7 +143,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenTwoPostgresConsoles_whenEachRuns_thenEachKeepsItsOwnResult",
     async () => {
       const page = await launchPostgres();
@@ -170,7 +170,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenThreePostgresConsoles_whenCycledClosedAndClosedOthers_thenLastCloseShowsEmptyState",
     async () => {
       const page = await launchPostgres();

@@ -6,14 +6,20 @@
  * time, chosen by the Docker VM's memory and the boxes already running when unset (`workers.ts`),
  * then `serialFiles.ts` one by one.
  *
+ * With `--databases` it starts the servers `TABLE_CRAFT_DATABASES` selects (decision 099), which
+ * every smoke run needs to include MySQL and TiDB, and passes the selection into the box.
+ *
  *   bun run test:smoke:headless
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/031 bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts
+ *   bun run test:smoke:db:headless:postgres
  */
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { COMPOSE_FILE, upDatabases } from "../../db/stack.js";
-import { composeProfiles, resolveTidbTarget } from "../../db/tidbTarget.js";
+import { COMPOSE_FILE, describeSelection, stackFor, upDatabases } from "../../db/stack.js";
+import { resolveTidbTarget } from "../../db/tidbTarget.js";
+import { selectedDatabases } from "../../support/databases.js";
+import { smokeSelectionProblem } from "../../support/smokeFixtures.js";
 import { parseRunArguments } from "./runner.js";
 import { resolveWorkers, WORKERS_ENV } from "./workers.js";
 
@@ -49,11 +55,20 @@ function quote(argument: string): string {
 }
 
 const { databases, tests, options } = parseRunArguments(process.argv.slice(2));
+const selection = databases ? selectedDatabases() : [];
+const problem = smokeSelectionProblem(selection);
+if (databases && problem !== null) {
+  console.error(problem);
+  process.exit(1);
+}
 const target = databases ? await resolveTidbTarget() : null;
 const base = { ...process.env, BUN_VERSION: readFileSync(BUN_VERSION_FILE, "utf8").trim() };
-const compose = ["compose", "-f", COMPOSE_FILE, ...(target === null ? [] : composeProfiles(target))];
-if (target !== null) console.log(target.description);
-const env = target === null ? base : await upDatabases(target, base);
+const compose = ["compose", "-f", COMPOSE_FILE, ...(target === null ? [] : stackFor(selection, target).profiles)];
+if (target !== null) {
+  console.log(describeSelection(selection));
+  console.log(target.description);
+}
+const env = target === null ? base : await upDatabases(target, base, selection);
 
 const { workers, reason } = resolveWorkers(process.env[WORKERS_ENV], dockerMemoryBytes(), runningBoxes());
 console.log(reason);

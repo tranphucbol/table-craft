@@ -15,7 +15,13 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { appVersion, systemGit } from "../../packages/desktop/scripts/version.js";
-import { MYSQL_CONFIG, POSTGRES_BEHIND_BASTION, POSTGRES_CONFIG, SSH_BASTION } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  POSTGRES_BEHIND_BASTION,
+  POSTGRES_CONFIG,
+  SSH_BASTION,
+  WITHOUT_POSTGRES,
+} from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -256,7 +262,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPackagedApp_whenPostgresAndMysqlConnected_thenSelectOneReturns",
     async () => {
       const { page } = await launchSaved([SAVED_POSTGRES, SAVED_MYSQL]);
@@ -277,7 +283,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPackagedApp_whenPostgresBehindSshBastion_thenSelectOneReturnsThroughTunnel",
     async () => {
       const saved = SAVED_POSTGRES_BEHIND_BASTION;

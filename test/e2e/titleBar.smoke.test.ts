@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { chromium, type Browser, type ElectronApplication, type Locator, type Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -356,7 +356,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresConsole_whenActive_thenWindowTitledByTabAndDatasource",
     async () => {
       const { app, page } = await launch(POSTGRES);
@@ -369,7 +369,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenThreeDatasources_whenChosenInTheWidget_thenItsConsoleActivatesOrOneOpens",
     async () => {
       const userDataDir = newProfile();
@@ -407,7 +407,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
     SCENARIO_TIMEOUT_MS * 2,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaretInEditor_whenToolbarRunClicked_thenStatementRunsAndCaretStays",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -425,7 +425,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenSleepingStatement_whenToolbarCancelClicked_thenCancelled",
     async () => {
       const { page } = await launch(POSTGRES);

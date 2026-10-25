@@ -11,7 +11,7 @@ import { join } from "node:path";
 import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES, serverSkipped } from "../support/databases.js";
 import {
   answerSecretPrompt,
   CLOSE_HOOK_TIMEOUT_MS,
@@ -121,7 +121,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
   }
 
   for (const dialect of DIALECTS) {
-    it(
+    it.skipIf(serverSkipped(dialect.pluginId))(
       `given${dialect.name}SleepPastTimeout_whenRun_thenTimedOutAndSessionStillRuns`,
       async () => {
         const profile = newProfile();
@@ -202,7 +202,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
     );
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresUrl_whenPasted_thenFieldsFilledAndPasswordSavedOutsideTheFile",
     async () => {
       const page = await launch(null);
@@ -276,7 +276,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenSavedPostgres_whenCopiedAsUrl_thenClipboardHasNoPassword",
     async () => {
       const profile = newProfile();

@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ElectronApplication, Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES, serverSkipped } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -175,7 +175,7 @@ describe.runIf(DATABASES_ENABLED)("result find and local filter live test", () =
   }
 
   for (const { name, datasource } of DATABASES) {
-    it(
+    it.skipIf(serverSkipped(datasource().pluginId))(
       `givenTenThousandRows_whenFoundOnThe${name}Grid_thenCountHighlightAndStepsAcrossWindows`,
       async () => {
         const { page } = await launch(datasource());
@@ -289,7 +289,7 @@ describe.runIf(DATABASES_ENABLED)("result find and local filter live test", () =
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenLocalFilter_whenCopiedAndExported_thenVisibleRowsOnlyOrTheWholeResult",
     async () => {
       const { app, page } = await launch(POSTGRES);
@@ -341,7 +341,7 @@ describe.runIf(DATABASES_ENABLED)("result find and local filter live test", () =
   );
 
   for (const { name, datasource } of DATABASES) {
-    it(
+    it.skipIf(serverSkipped(datasource().pluginId))(
       `givenTableEditorOn${name}_whenLocalFilterBesideWhere_thenRowsHiddenLocallyAndLabelled`,
       async () => {
         const { page } = await launch(datasource());

@@ -14,7 +14,7 @@ import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import sqlitePlugin from "@table-craft/plugin-sqlite";
 import { GOLDEN, GOLDEN_ONE_LINE, GOLDEN_TABLE, GOLDEN_TABLE_DDL } from "../support/alignedGolden.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -179,7 +179,7 @@ describe.runIf(DATABASES_ENABLED)("Aligned Reformat Code live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenACteWithJoinsSubqueryCaseAndCasts_onPostgres_whenModAltL_thenAlignedAndOneUndoRestores",
     async () => {
       const page = await launch(POSTGRES, GOLDEN_WINDOW);
@@ -215,7 +215,7 @@ describe.runIf(DATABASES_ENABLED)("Aligned Reformat Code live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenStyleStandardThenAlignAliasesOff_onPostgres_whenModAltL_thenTodaysLayoutThenNoPadding",
     async () => {
       const page = await launch(POSTGRES);
@@ -245,7 +245,7 @@ describe.runIf(DATABASES_ENABLED)("Aligned Reformat Code live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenASelectionInsideALargerConsole_onPostgres_whenModAltL_thenOnlyTheSelectionIsReformatted",
     async () => {
       const page = await launch(POSTGRES);

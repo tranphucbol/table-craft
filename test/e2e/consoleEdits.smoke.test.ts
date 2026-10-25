@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
@@ -66,7 +66,7 @@ async function asOwner(plugin: DatasourcePlugin, config: unknown, statements: re
 }
 
 async function resetFixtures(): Promise<void> {
-  await asOwner(postgres, POSTGRES_CONFIG, RESET_STATEMENTS);
+  if (!WITHOUT_POSTGRES) await asOwner(postgres, POSTGRES_CONFIG, RESET_STATEMENTS);
   await asOwner(mysql, MYSQL_CONFIG, RESET_STATEMENTS);
 }
 
@@ -159,7 +159,7 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresOrders_whenCellEditedPreviewedAndSubmitted_thenUpdateRunsAndTheQueryRunsAgain",
     async () => {
       const page = await launch(POSTGRES);
@@ -227,7 +227,7 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
     );
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenJoinAggregateAndKeylessTable_whenRun_thenReadOnlyWithTheReason",
     async () => {
       const page = await launch(POSTGRES);
@@ -250,7 +250,7 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenAliasedExpressionColumn_whenEdited_thenOnlyThatColumnRefuses",
     async () => {
       const page = await launch(POSTGRES);
@@ -271,7 +271,7 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenManualConsole_whenSubmitted_thenTheEditsStayInTheOpenTransactionAndRollbackReverts",
     async () => {
       const page = await launch(POSTGRES);
@@ -321,7 +321,7 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenLocalFilterOn_whenShownRowEdited_thenTheUpdateNamesTheStoredRow",
     async () => {
       const page = await launch(POSTGRES);
@@ -357,7 +357,7 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
     await captureWindow(page, "filtered-submitted");
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenRowDeletedElsewhere_whenSubmitted_thenEditRejectedAndTheEditsStay",
     async () => {
       const page = await launch(POSTGRES);

@@ -8,7 +8,7 @@
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { BUNDLED_THEMES, type BundledThemeId } from "@table-craft/desktop/appearance/themes.js";
-import { POSTGRES_CONFIG } from "../support/databases.js";
+import { POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   chooseTheme,
@@ -193,7 +193,7 @@ describe.runIf(SMOKE_ENABLED)("ported themes and the theme dropdown live test", 
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPostgresConsoleAndGrid_whenEachContactSheetThemeChosen_thenItsTokensDrawEverySurface",
     async () => {
       const { page } = await launch({ id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG });

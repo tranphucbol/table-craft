@@ -9,7 +9,7 @@
  */
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -144,7 +144,7 @@ describe.runIf(DATABASES_ENABLED)("completion follows the console's namespace li
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresSearchPathSet_whenCompletingAfterFrom_thenTheArchiveSchemasTables",
     async () => {
       const page = await launch(POSTGRES);

@@ -13,7 +13,7 @@ import type { ElectronApplication, Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -472,7 +472,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCompactDensity_whenFiveThousandRowsScrolledToEnd_thenRowsAreTwentyPixelsAndLastRowLinesUp",
     async () => {
       const { page } = await launch(POSTGRES);
@@ -545,7 +545,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenNullSymbolAndGrouping_whenQueried_thenGridShowsThemAndCopyKeepsRawText",
     async () => {
       const { app, page } = await launch(POSTGRES);
@@ -571,7 +571,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPageSizeHundred_whenQueriedAndFetchedAndTableOpened_thenPagesHoldHundred",
     async () => {
       await asOwner(mysql, MYSQL_CONFIG, PAGE_PROBE_SETUP);

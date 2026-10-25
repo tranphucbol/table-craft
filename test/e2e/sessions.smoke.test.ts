@@ -13,7 +13,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { DatasourcePlugin, Session } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, MYSQL_ROOT_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, TIDB_DATABASE } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  MYSQL_ROOT_CONFIG,
+  POSTGRES_CONFIG,
+  TIDB_CONFIG,
+  TIDB_DATABASE,
+  WITHOUT_POSTGRES,
+} from "../support/databases.js";
 import {
   activeEditorTab,
   answerSecretPrompt,
@@ -169,19 +176,21 @@ async function refreshUntilListed(page: Page, row: ReturnType<typeof sessionRows
     .toBe(true);
 }
 
+const LOCK_SERVERS = WITHOUT_POSTGRES ? [MYSQL_SERVER] : [PG_SERVER, MYSQL_SERVER];
+
 describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
   let running: RunningApp | null = null;
   let holder: Session | null = null;
 
   beforeAll(async () => {
     const table = `CREATE TABLE ${LOCK_TABLE} (id INT PRIMARY KEY, n INT NOT NULL)`;
-    for (const server of [PG_SERVER, MYSQL_SERVER]) {
+    for (const server of LOCK_SERVERS) {
       await onServer(server, [`DROP TABLE IF EXISTS ${LOCK_TABLE}`, table, `INSERT INTO ${LOCK_TABLE} VALUES (1, 0)`]);
     }
   }, SCENARIO_TIMEOUT_MS);
 
   afterAll(async () => {
-    for (const server of [PG_SERVER, MYSQL_SERVER]) await onServer(server, [`DROP TABLE IF EXISTS ${LOCK_TABLE}`]);
+    for (const server of LOCK_SERVERS) await onServer(server, [`DROP TABLE IF EXISTS ${LOCK_TABLE}`]);
   }, SCENARIO_TIMEOUT_MS);
 
   afterEach(async () => {
@@ -257,7 +266,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     );
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenLockWaitOnRedPostgres_whenHolderTerminated_thenBlockedByShownAndPidTypedToConfirm",
     async () => {
       holder = await holdLock(PG_SERVER, "BEGIN");
@@ -348,7 +357,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenReadOnlyPostgres_whenSessionsTab_thenCancelAndTerminateDisabled",
     async () => {
       const page = await launchSaved(savedPostgres({ name: "pg-ro", readOnly: true }));

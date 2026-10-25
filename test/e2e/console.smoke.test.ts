@@ -11,7 +11,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -183,12 +183,13 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     const undo = Array.from({ length: drivingUpdates }, () => UNDO_DRIVING_UPDATE);
     drivingUpdates = 0;
     // Every scenario expects the fixture's three tables and its orders, untouched.
-    await asOwner(postgres, POSTGRES_CONFIG, [
-      ...undo,
-      DELETE_PROBE_ORDER,
-      `DROP TABLE IF EXISTS public.${SMOKE_TABLE}`,
-      `DROP FUNCTION IF EXISTS ${SMOKE_FUNCTION}(integer, integer)`,
-    ]);
+    if (!WITHOUT_POSTGRES)
+      await asOwner(postgres, POSTGRES_CONFIG, [
+        ...undo,
+        DELETE_PROBE_ORDER,
+        `DROP TABLE IF EXISTS public.${SMOKE_TABLE}`,
+        `DROP FUNCTION IF EXISTS ${SMOKE_FUNCTION}(integer, integer)`,
+      ]);
     await asOwner(mysql, MYSQL_CONFIG, [DELETE_PROBE_ORDER]);
   });
 
@@ -199,7 +200,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenThreeStatementScript_whenTyped_thenHighlightedWithLineNumbers",
     async () => {
       const page = await launch(POSTGRES);
@@ -216,7 +217,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaretInSecondStatement_whenModEnter_thenOnlyItRunsAndFlashes",
     async () => {
       const page = await launch(POSTGRES);
@@ -238,7 +239,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenAllThreeSelected_whenModEnter_thenOutputLogsThreeAndTwoResultTabsOpen",
     async () => {
       const page = await launch(POSTGRES);
@@ -310,7 +311,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenManualMode_whenInsertThenRollback_thenBadgeShownAndRowGone",
     async () => {
       const page = await launch(POSTGRES);
@@ -425,7 +426,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS * 2,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenDollarQuotedFunctionBody_whenRunAll_thenRunsAsOneStatement",
     async () => {
       const page = await launch(POSTGRES);
@@ -444,7 +445,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenAutoMode_whenCreateTable_thenTreeShowsItWithoutSynchronize",
     async () => {
       const page = await launch(POSTGRES);
@@ -462,7 +463,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersInTree_whenDraggedIntoEditor_thenQualifiedNameInsertedAtDrop",
     async () => {
       const page = await launch(POSTGRES);
@@ -503,7 +504,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenTreeAndEditor_whenEscapeAndCollapseAllPressed_thenEachGoesToItsOwner",
     async () => {
       const page = await launch(POSTGRES);

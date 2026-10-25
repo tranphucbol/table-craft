@@ -6,7 +6,7 @@
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/004 bun run test:smoke:db
  */
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, withWrongPassword, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -149,7 +149,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenNewPostgresForm_whenTestConnectionClicked_thenSucceedsWithServerVersionAndTime",
     async () => {
       const { page } = await launch();
@@ -182,7 +182,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenDatasourcesInFolders_whenEachConnected_thenTreeNestsFoldersAndShowsStatuses",
     async () => {
       const { page } = await launch([
@@ -220,7 +220,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenForeverPassword_whenRelaunched_thenDatasourceRestoredAndConnectsWithoutRetyping",
     async () => {
       const { page, userDataDir } = await launch();
@@ -250,7 +250,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenReadOnlyRedDatasource_whenInsertRun_thenRefusedAndConsoleTinted",
     async () => {
       const { page } = await launch([postgres({ name: "pg-prod", readOnly: true, color: "red" })]);
@@ -294,7 +294,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresAndMysqlConsoles_whenEachRuns_thenResultsStaySeparateAndStatusFollowsTab",
     async () => {
       const { app, page } = await launch([postgres(), mysql()]);
@@ -320,7 +320,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenConnectedPostgres_whenModF2Pressed_thenDisconnectedAndEngineProcessGone",
     async () => {
       const { app, page } = await launch([postgres()]);

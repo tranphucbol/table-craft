@@ -18,6 +18,7 @@ import {
   POSTGRES_BEHIND_BASTION,
   POSTGRES_CONFIG,
   SSH_BASTION,
+  WITHOUT_POSTGRES,
 } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
@@ -168,7 +169,7 @@ describe.runIf(DATABASES_ENABLED)("SSH tunnel live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresBehindBastionWithPassword_whenTested_thenAsksForHostKeyAndReportsBothHops",
     async () => {
       const page = await launch();
@@ -238,7 +239,7 @@ describe.runIf(DATABASES_ENABLED)("SSH tunnel live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenWrongSshPassword_whenTested_thenSshAuthenticationFailed",
     async () => {
       const page = await launch();
@@ -258,7 +259,7 @@ describe.runIf(DATABASES_ENABLED)("SSH tunnel live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenChangedHostKey_whenTested_thenRefusedNamingBothFingerprints",
     async () => {
       const profile = newProfile();
@@ -290,7 +291,7 @@ describe.runIf(DATABASES_ENABLED)("SSH tunnel live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenTunnelKilled_whenNextQuery_thenReconnectsThroughNewTunnel",
     async () => {
       const profile = newProfile();

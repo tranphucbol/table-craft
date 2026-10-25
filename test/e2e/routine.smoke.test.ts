@@ -7,7 +7,7 @@
  */
 import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   closeApp,
   DATABASES_ENABLED,
@@ -96,7 +96,7 @@ describe.runIf(DATABASES_ENABLED)("execute routine live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenRun_whenDialogSubmits_thenConsoleShowsResult",
     async () => {
       const page = await launch(POSTGRES);
@@ -114,7 +114,7 @@ describe.runIf(DATABASES_ENABLED)("execute routine live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenProcedureOut_whenRun_thenOutValueShown",
     async () => {
       const page = await launch(POSTGRES);
@@ -167,7 +167,7 @@ describe.runIf(DATABASES_ENABLED)("execute routine live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOpenInConsole_whenChosen_thenSqlNotRun",
     async () => {
       const page = await launch(POSTGRES);

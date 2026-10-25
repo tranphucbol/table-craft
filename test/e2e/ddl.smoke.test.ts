@@ -9,7 +9,7 @@
  */
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -168,7 +168,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
     await expect.poll(() => ddlText(page)).not.toBe("");
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersInThePane_whenGoToDdl_thenTabShowsForeignKeyIndexAndCheck",
     async () => {
       const page = await launch(POSTGRES);
@@ -186,7 +186,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersDdlOpen_whenGoToDeclarationOnOrdersInAConsole_thenTheSameTabIsFocused",
     async () => {
       const page = await launch(POSTGRES);
@@ -239,7 +239,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersDdlOpen_whenAColumnIsAddedInAConsole_thenTheTabRefetches",
     async () => {
       const page = await launch(POSTGRES);
@@ -284,7 +284,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCustomersInThePane_whenQuickDocumentation_thenCommentColumnsAndIncomingKey",
     async () => {
       const page = await launch(POSTGRES);
@@ -326,7 +326,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenLineItemsOnEachDatabase_whenSqlGenerator_thenSelectQuotesItPerDialect",
     async () => {
       const expected: readonly [Datasource, RegExp][] = [
@@ -410,7 +410,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrders_whenGeneratingUpdateAndRunningIt_thenNoRowIsUpdated",
     async () => {
       const page = await launch(POSTGRES);

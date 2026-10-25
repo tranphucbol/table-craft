@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   closeApp,
@@ -284,7 +284,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenCommitEveryOverPostgres_whenLinkDropped_thenCommittedReportedAndResumeFinishes",
     async () => {
       await asOwner(postgres, POSTGRES_CONFIG, `DROP TABLE IF EXISTS public.${LIVE_TABLE}`);

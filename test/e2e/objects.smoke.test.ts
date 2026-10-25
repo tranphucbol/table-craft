@@ -10,7 +10,7 @@ import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   closeApp,
@@ -178,7 +178,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
     running = null;
     await closeApp(current?.app);
     if (DATABASES_ENABLED) {
-      await postgresOwner(...POSTGRES_CLEANUP);
+      if (!WITHOUT_POSTGRES) await postgresOwner(...POSTGRES_CLEANUP);
       await mysqlOwner(...MYSQL_CLEANUP);
     }
   });
@@ -190,7 +190,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
     return running.page;
   }
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPostgresSchema_whenNewTableDesigned_thenPreviewedAndCreatedWithKeyIndexAndForeignKey",
     async () => {
       await postgresOwner(...POSTGRES_CLEANUP);
@@ -230,7 +230,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPostgresTable_whenColumnAddedRetypedAndDropped_thenOnlyThoseAltersRun",
     async () => {
       await postgresOwner(
@@ -273,7 +273,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPostgresTableAndView_whenRenamed_thenTreeShowsNewNames",
     async () => {
       await postgresOwner(
@@ -309,7 +309,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenReferencedPostgresTable_whenTruncatedAndDroppedWithCascade_thenConfirmedAndDependentsFollow",
     async () => {
       await postgresOwner(
@@ -352,7 +352,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenPostgresChangeWhoseSecondStatementFails_whenApplied_thenErrorShownAndNothingApplied",
     async () => {
       await postgresOwner(...POSTGRES_CLEANUP, `CREATE TABLE public.${TABLE} (id integer PRIMARY KEY)`);

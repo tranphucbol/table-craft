@@ -12,7 +12,7 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import { readZip } from "../support/zipReader.js";
 import {
@@ -163,7 +163,7 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenLongPostgresExport_whenCancelledFromServices_thenCancelledAndNoFileLeft",
     async () => {
       const page = await launch({ id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG });
@@ -195,7 +195,7 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenNetworkStallsMidExport_whenWatchdogFires_thenFailedWithRowsWrittenAndRetrySucceeds",
     async () => {
       proxy = await chaosProxy({ host: POSTGRES_CONFIG.host, port: POSTGRES_CONFIG.port });

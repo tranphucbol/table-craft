@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ElectronApplication, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -153,7 +153,7 @@ describe.runIf(SMOKE_ENABLED)("error location live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenSyntaxErrorOnPostgres_whenRunAllAsksAndSkipped_thenUnderlinedAndRunGoesOn",
     async () => {
       await askThenSkip(POSTGRES, "postgres");
@@ -215,7 +215,7 @@ describe.runIf(SMOKE_ENABLED)("error location live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it.runIf(DATABASES_ENABLED)(
+  it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenContinueOnPostgres_whenRunAll_thenRunsEveryStatementAndSummarises",
     async () => {
       await continuePastErrors(POSTGRES, "postgres");

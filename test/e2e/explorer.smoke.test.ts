@@ -8,7 +8,7 @@
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
@@ -131,6 +131,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
   let running: RunningApp | null = null;
 
   beforeAll(async () => {
+    if (WITHOUT_POSTGRES) return;
     await asOwner([
       `DROP SCHEMA IF EXISTS ${RESTRICTED_SCHEMA} CASCADE`,
       `DROP SCHEMA IF EXISTS ${WIDE_SCHEMA} CASCADE`,
@@ -139,6 +140,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
   });
 
   afterAll(async () => {
+    if (WITHOUT_POSTGRES) return;
     await asOwner([
       `DROP SCHEMA IF EXISTS ${RESTRICTED_SCHEMA} CASCADE`,
       `DROP SCHEMA IF EXISTS ${WIDE_SCHEMA} CASCADE`,
@@ -150,7 +152,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     await closeApp(running?.app);
     running = null;
     // Every scenario expects the fixture's three tables in public.
-    await asOwner([`DROP TABLE IF EXISTS public.${NEW_TABLE}`]);
+    if (!WITHOUT_POSTGRES) await asOwner([`DROP TABLE IF EXISTS public.${NEW_TABLE}`]);
   }, CLOSE_HOOK_TIMEOUT_MS);
 
   async function launch(datasource: Datasource): Promise<Page> {
@@ -168,7 +170,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     return page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgres_whenConnected_thenPublicIsDescribedAndExpanded",
     async () => {
       const page = await launchExplored(POSTGRES);
@@ -181,7 +183,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresOrders_whenExpanded_thenGroupsAndColumnMarkersShow",
     async () => {
       const page = await launchExplored(POSTGRES);
@@ -236,7 +238,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenSystemSchemasHidden_whenToggled_thenPgCatalogAndInformationSchemaComeAndGo",
     async () => {
       const page = await launchExplored(POSTGRES);
@@ -254,7 +256,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenLoadedTree_whenTypingCust_thenSpeedSearchHighlightsAndArrowMovesToTheNextMatch",
     async () => {
       const page = await launchExplored(POSTGRES);
@@ -301,7 +303,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenTableCreatedOutsideTheApp_whenSynchronized_thenItAppearsAndStatusShowsTheNewSync",
     async () => {
       const page = await launchExplored(POSTGRES);
@@ -322,7 +324,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenUserWithoutAccessToOneSchema_whenExpanded_thenThatSchemaFailsAndOthersLoad",
     async () => {
       await asOwner([
@@ -356,7 +358,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenWideSchema_whenExpanded_thenDescribedWithinBudgetAndScrollsToTheEnd",
     async () => {
       const columns = Array.from({ length: WIDE_COLUMNS }, (_, index) => `c${String(index + 1)} integer`).join(", ");
@@ -413,7 +415,7 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenOrdersOnEachDatabase_whenCopyQualifiedName_thenClipboardHoldsThePluginQuoting",
     async () => {
       const expected: readonly [Datasource, string][] = [

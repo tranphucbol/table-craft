@@ -10,7 +10,7 @@ import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, serverSkipped } from "../support/databases.js";
 import { hundredThousandRows, tenThousandRows } from "../support/manyRows.js";
 import {
   activeEditorTab,
@@ -129,7 +129,7 @@ describe.runIf(DATABASES_ENABLED)("closing result live test", () => {
     ["01", MYSQL],
     ["04", POSTGRES],
   ] as const) {
-    it(
+    it.skipIf(serverSkipped(datasource.pluginId))(
       `given${datasource.id}UnfinishedResult_whenRunAgain_thenRunsWithoutBusyError`,
       async () => {
         const page = await launch(datasource);
@@ -215,7 +215,7 @@ describe.runIf(DATABASES_ENABLED)("closing result live test", () => {
     [MYSQL, MYSQL_CONFIG],
     [POSTGRES, POSTGRES_CONFIG],
   ] as const) {
-    it(
+    it.skipIf(serverSkipped(datasource.pluginId))(
       `given${datasource.id}ResultWhoseLinkVanished_whenRunAgain_thenReconnectsWithinTheGrace`,
       async () => {
         proxy = await chaosProxy({ host: config.host, port: config.port });

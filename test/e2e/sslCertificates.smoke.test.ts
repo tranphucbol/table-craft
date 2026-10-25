@@ -7,7 +7,7 @@
  */
 import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_TLS_CONFIG, POSTGRES_TLS_CONFIG, TLS_FILES } from "../support/databases.js";
+import { MYSQL_TLS_CONFIG, POSTGRES_TLS_CONFIG, TLS_FILES, WITHOUT_POSTGRES } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
@@ -81,7 +81,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
     return running.page;
   }
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenPostgresVerifyFullWithCa_whenTestedAndQueried_thenReportsTlsAndRunsEncrypted",
     async () => {
       const page = await launch();
@@ -117,7 +117,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenCaFileWithRequire_whenShown_thenHintsAVerifyMode",
     async () => {
       const page = await launch();
@@ -197,7 +197,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenEncryptedClientKeyNotSaved_whenConnect_thenAsksForPassphrase",
     async () => {
       const profile = newProfile();
@@ -236,7 +236,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
+  it.skipIf(WITHOUT_POSTGRES)(
     "givenMissingClientKey_whenTested_thenErrorNamesTheField",
     async () => {
       const page = await launch();
