@@ -113,13 +113,13 @@ describe("loadPlugins", () => {
 
     const results = await loadPlugins([join(workspace, "builtin")]);
 
-    const reasons = Object.fromEntries(
+    const reasons = new Map<string | undefined, string | null>(
       results.map((result) => [result.manifest?.id, result.status === "unavailable" ? result.reason : null]),
     );
-    expect(reasons["older"]).toBe(
+    expect(reasons.get("older")).toBe(
       `Built for plugin API ${PREVIOUS_MAJOR_API_VERSION}, an older major than this TableCraft's ${API_VERSION}. Install a version of the plugin built for plugin API ${major}.x.`,
     );
-    expect(reasons["newer"]).toContain(`needs TableCraft with plugin API ${major + 1}.0 or later`);
+    expect(reasons.get("newer")).toContain(`needs TableCraft with plugin API ${major + 1}.0 or later`);
   });
 
   it("givenDuplicatePluginId_whenLoaded_thenErrorNamesBothPaths", async () => {
