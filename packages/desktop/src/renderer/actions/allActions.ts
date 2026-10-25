@@ -12,6 +12,7 @@ import { EXPLORER_ACTIONS } from "@table-craft/desktop/renderer/actions/explorer
 import { OBJECT_ACTIONS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { NAMESPACE_ACTIONS } from "@table-craft/desktop/renderer/actions/namespaceActions.js";
 import { NODE_ACTIONS } from "@table-craft/desktop/renderer/actions/nodeActions.js";
+import { SERVER_ACTIONS } from "@table-craft/desktop/renderer/actions/serverActions.js";
 import { KEY_ACTIONS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { KEY_EDIT_ACTIONS } from "@table-craft/desktop/renderer/actions/keyEditActions.js";
 import { NAVIGATION_ACTIONS } from "@table-craft/desktop/renderer/actions/navigationActions.js";
@@ -45,6 +46,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...ROUTINE_ACTIONS,
   ...NAMESPACE_ACTIONS,
   ...NODE_ACTIONS,
+  ...SERVER_ACTIONS,
   ...KEY_ACTIONS,
   ...KEY_EDIT_ACTIONS,
   ...SETTINGS_ACTIONS,

@@ -69,6 +69,8 @@ const exportSource = z.discriminatedUnion("kind", [
 const MAX_INSPECTION_TEXT = 200_000;
 /** Longer than any search a person types; bounds the regular expression the engine compiles. */
 const MAX_FIND_LENGTH = 1_000;
+/** `SLOWLOG GET` keeps 128 entries by default; the Server tab asks for that many. */
+const SLOW_LOG_MAX = 1_000;
 const viewSpec = z.strictObject({
   find: z
     .strictObject({
@@ -319,6 +321,13 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   z.strictObject({ id: requestId, type: z.literal("namespace.targets"), refresh: z.boolean().optional() }),
   z.strictObject({ id: requestId, type: z.literal("namespace.switchStatement"), path: namespacePath }),
   z.strictObject({ id: requestId, type: z.literal("server.nodes") }),
+  z.strictObject({ id: requestId, type: z.literal("server.info"), node: z.string().min(1).nullable() }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("server.slowLog"),
+    node: z.string().min(1).nullable(),
+    limit: z.number().int().positive().max(SLOW_LOG_MAX),
+  }),
   z.strictObject({ id: requestId, type: z.literal("keyspace.databases") }),
   z.strictObject({
     id: requestId,

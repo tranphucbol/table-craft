@@ -11,3 +11,25 @@ export interface ServerNode {
   readonly primaryId: string | null;
   readonly state: string;
 }
+
+/** Mirrors `ServerInfoSection` in plugin-api. */
+export interface ServerInfoSection {
+  readonly title: string;
+  readonly entries: readonly { readonly name: string; readonly value: string }[];
+}
+
+/** Mirrors `ServerInfo` in plugin-api: what one node reports about itself (decision 112). */
+export interface ServerInfo {
+  readonly node: string | null;
+  readonly sections: readonly ServerInfoSection[];
+}
+
+/** Mirrors `SlowCommand` in plugin-api. */
+export interface SlowCommand {
+  readonly id: number;
+  readonly at: string;
+  readonly durationMicros: number;
+  readonly command: string;
+  readonly client: string | null;
+  readonly node: string | null;
+}

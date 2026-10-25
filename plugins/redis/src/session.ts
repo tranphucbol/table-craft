@@ -4,10 +4,13 @@ import {
   type ExecuteOptions,
   type ExecuteResult,
   type ParameterValue,
+  type ServerInfo,
   type ServerNode,
   type Session,
+  type SlowCommand,
 } from "@table-craft/plugin-api";
 import { ErrorReply } from "redis";
+import { CANCELLED_MESSAGE, UNBLOCKED, unblock } from "./cancel.js";
 import type { RedisConfig } from "./config.js";
 import { openConnection, type Connection } from "./connect.js";
 import { docsFromReply, docsKnownTo, SNAPSHOT_DOCS, type CommandDocs } from "./docs.js";
@@ -17,6 +20,8 @@ import { wordsOf } from "./language.js";
 import { commandTableOf, readOnlyRefusal, type CommandTable } from "./readOnly.js";
 import { fannedOutResult, resultOf, utf8OrNull } from "./replies.js";
 import { Router, type Routed } from "./routing.js";
+import { serverInfo, slowLog, type ServerHost } from "./server.js";
+import { RedisSessionMonitor, sessionId } from "./sessions.js";
 import { tokenize } from "./tokens.js";
 
 const CLOSE_GRACE_MS = 3000;
@@ -46,6 +51,10 @@ export class RedisSession implements Session {
   readonly tls = null;
   readonly delimiter: string;
   readonly keyspace: RedisKeyspace;
+  readonly sessions: RedisSessionMonitor;
+  /** The console's own connection as the sessions view lists it: in a cluster, the first primary's. */
+  serverSessionId = "";
+  readonly #server: ServerHost;
   readonly #connection: Connection;
   readonly #router: Router;
   readonly #readOnly: boolean;
@@ -74,10 +83,35 @@ export class RedisSession implements Session {
       onDatabase: (database, work) => this.#onDatabase(database, work),
       hashFieldTtl: () => this.features().then((features) => features.hashFieldTtl),
     });
+    const queued = <T>(work: () => Promise<T>): Promise<T> => this.#onDatabase(this.#database, work);
+    const primaries = () => this.#router.primaries();
+    this.sessions = new RedisSessionMonitor({ mode: connection.mode, primaries, queued });
+    this.#server = {
+      mode: connection.mode,
+      primaries,
+      queued,
+      multiSectionInfo: () => this.features().then((features) => features.multiSectionInfo),
+      clientOf: async (node) => {
+        if (node !== null) return { node, client: await this.#router.clientOf(node) };
+        const [first] = await primaries();
+        if (first === undefined) throw new PluginError("connectionLost", "The cluster has no reachable primary.");
+        return { node: connection.mode === "cluster" ? first.node : null, client: first.client };
+      },
+    };
   }
 
   static async open(config: RedisConfig, options: ConnectOptions): Promise<RedisSession> {
-    return new RedisSession(await openConnection(config, options), config, options);
+    const session = new RedisSession(await openConnection(config, options), config, options);
+    try {
+      const [first] = await session.#router.primaries();
+      if (first === undefined) throw new PluginError("connectionFailed", "The cluster has no reachable primary.");
+      const clientId = String(await first.client.sendCommand(["CLIENT", "ID"]));
+      session.serverSessionId = sessionId(clientId, session.mode === "cluster" ? first.node : null);
+    } catch (cause) {
+      await session.close();
+      throw cause instanceof PluginError ? cause : new PluginError("connectionFailed", errorText(cause), { cause });
+    }
+    return session;
   }
 
   get mode(): Connection["mode"] {
@@ -152,6 +186,25 @@ export class RedisSession implements Session {
     } catch (cause) {
       throw new PluginError("connectionLost", errorText(cause), { cause });
     }
+  }
+
+  /** Unblocks the console's blocking command; one that does not block finishes (decision 22 of plan 058). */
+  async cancel(): Promise<void> {
+    const running = this.#router.running();
+    if (running.length === 0 || this.#closed) return;
+    try {
+      await unblock(this.#connection.open, running);
+    } catch (cause) {
+      throw new PluginError("statementFailed", `Cancel failed: ${errorText(cause)}`, { cause });
+    }
+  }
+
+  serverInfo(node: string | null): Promise<ServerInfo> {
+    return serverInfo(this.#server, node);
+  }
+
+  slowLog(node: string | null, limit: number): Promise<readonly SlowCommand[]> {
+    return slowLog(this.#server, node, limit);
   }
 
   async nodes(): Promise<readonly ServerNode[]> {
@@ -256,6 +309,9 @@ export class RedisSession implements Session {
       return await work();
     } catch (cause) {
       if (cause instanceof PluginError) throw cause;
+      if (cause instanceof ErrorReply && UNBLOCKED.test(cause.message)) {
+        throw new PluginError("cancelled", CANCELLED_MESSAGE, { cause });
+      }
       if (cause instanceof ErrorReply) {
         const message = cause.message.startsWith("CROSSSLOT") ? `${cause.message}; ${CROSSSLOT_HINT}` : cause.message;
         throw new PluginError("statementFailed", message, { cause });

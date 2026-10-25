@@ -15,7 +15,9 @@
     "./readOnly": "./src/readOnly.ts",
     "./complete": "./src/complete.ts",
     "./connect": "./src/connect.ts",
-    "./apply": "./src/apply.ts"
+    "./apply": "./src/apply.ts",
+    "./server": "./src/server.ts",
+    "./sessions": "./src/sessions.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*",

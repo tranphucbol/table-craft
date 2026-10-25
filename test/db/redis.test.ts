@@ -10,7 +10,7 @@ import {
   withWrongPassword,
 } from "../support/databases.js";
 import { REDIS_MANIFEST } from "../support/manifests.js";
-import { REDIS_COMMANDS, REDIS_KEYSPACE } from "../support/redisFixture.js";
+import { REDIS_COMMANDS, REDIS_KEYSPACE, REDIS_STATEMENTS, redisSessions } from "../support/redisFixture.js";
 
 const DATABASES = 16;
 const EDIT_LIST = { text: "edit:list", hex: null };
@@ -45,6 +45,8 @@ describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", 
     wrongPasswordConfig: withWrongPassword(config),
     commands: REDIS_COMMANDS,
     keyspace: REDIS_KEYSPACE,
+    statements: REDIS_STATEMENTS,
+    sessions: redisSessions(config),
   });
 
   describe("standalone", () => {

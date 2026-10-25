@@ -9,7 +9,7 @@ import {
   withWrongPassword,
 } from "../support/databases.js";
 import { REDIS_MANIFEST } from "../support/manifests.js";
-import { REDIS_COMMANDS, REDIS_KEYSPACE } from "../support/redisFixture.js";
+import { REDIS_COMMANDS, REDIS_KEYSPACE, REDIS_STATEMENTS, redisSessions } from "../support/redisFixture.js";
 
 const SLOTS = 16_384;
 const CLUSTERS = [
@@ -41,6 +41,8 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
     wrongPasswordConfig: withWrongPassword(cluster.config),
     commands: REDIS_COMMANDS,
     keyspace: REDIS_KEYSPACE,
+    statements: REDIS_STATEMENTS,
+    sessions: redisSessions(cluster.config),
   });
 
   describe("cluster", () => {

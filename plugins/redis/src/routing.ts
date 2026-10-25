@@ -19,6 +19,12 @@ const COMMAND_OPTIONS = { typeMapping: TYPE_MAPPING };
 const REDIRECTED = /^(MOVED|ASK) /;
 const NODE_FIELDS = { id: 0, address: 1, flags: 2, primary: 3, link: 7, slots: 8 } as const;
 
+/** A connection a console command runs on: the node's address and the server's id for it. */
+export interface RunningOn {
+  readonly address: string;
+  readonly clientId: string;
+}
+
 /** What a command answered: one reply, or one per primary it fanned out to. */
 export type Routed =
   | { readonly fanned: false; readonly reply: unknown }
@@ -72,6 +78,8 @@ export class Router {
   readonly #connection: Connection;
   readonly #table: () => Promise<CommandTable>;
   readonly #replicas = new Map<string, Promise<Client>>();
+  readonly #identities = new WeakMap<Client, Promise<RunningOn>>();
+  readonly #running = new Set<RunningOn>();
 
   constructor(connection: Connection, table: () => Promise<CommandTable>) {
     this.#connection = connection;
@@ -104,21 +112,39 @@ export class Router {
     if (connection.mode === "standalone") {
       if (target !== NODE_AUTO && target !== NODE_ALL_PRIMARIES && target !== connection.address)
         throw unknownNode(target);
-      const reply = await connection.client.sendCommand(args, COMMAND_OPTIONS);
+      const reply = await this.#console(connection.client, args, connection.address);
       return target === NODE_ALL_PRIMARIES
         ? { fanned: true, replies: [{ node: connection.address, reply }] }
         : { fanned: false, reply };
     }
     const table = await this.#table();
     if (target === NODE_ALL_PRIMARIES || (target === NODE_AUTO && FAN_OUT_BY_DEFAULT.has(tableKey(table, words)))) {
-      return { fanned: true, replies: await this.#everyPrimary(args) };
+      const replies = await Promise.all(
+        (await this.primaries()).map(async ({ node, client }) => ({
+          node,
+          reply: await this.#console(client, args, node),
+        })),
+      );
+      return { fanned: true, replies };
     }
-    if (target !== NODE_AUTO)
-      return { fanned: false, reply: await (await this.#nodeClient(target)).sendCommand(args, COMMAND_OPTIONS) };
+    if (target !== NODE_AUTO) return { fanned: false, reply: await this.#console(await this.clientOf(target), args) };
     const firstKey = await this.#firstKey(table, words, args);
-    if (firstKey === null)
-      return { fanned: false, reply: await (await this.#randomPrimary()).sendCommand(args, COMMAND_OPTIONS) };
-    return { fanned: false, reply: await this.onKey(firstKey, args) };
+    if (firstKey === null) return { fanned: false, reply: await this.#console(await this.#randomPrimary(), args) };
+    const client = await connection.cluster.getNodeClientForKey(firstKey);
+    try {
+      return { fanned: false, reply: await this.#console(client, args) };
+    } catch (cause) {
+      if (!REDIRECTED.test(errorText(cause))) throw cause;
+      return {
+        fanned: false,
+        reply: await connection.cluster.sendCommand(firstKey, false, [...args], COMMAND_OPTIONS),
+      };
+    }
+  }
+
+  /** Where the console's command is running now, for a cancel to unblock (decision 22 of plan 058). */
+  running(): readonly RunningOn[] {
+    return [...this.#running];
   }
 
   /** One command on the node that holds `key`; a slot that moved since the map was read is followed. */
@@ -196,24 +222,56 @@ export class Router {
     return await cluster.nodeClient(master);
   }
 
-  async #everyPrimary(args: readonly Buffer[]): Promise<{ node: string; reply: unknown }[]> {
-    return Promise.all(
-      (await this.primaries()).map(async ({ node, client }) => ({
-        node,
-        reply: await client.sendCommand([...args], COMMAND_OPTIONS),
-      })),
-    );
+  /** A console command, remembered while it runs; the connection's id is asked once, before its first. */
+  async #console(client: Client, args: readonly Buffer[], address?: string): Promise<unknown> {
+    let identity = this.#identities.get(client);
+    if (identity === undefined) {
+      identity = this.#identify(client, address);
+      identity.catch(() => this.#identities.delete(client));
+      this.#identities.set(client, identity);
+    }
+    const running = await identity;
+    this.#running.add(running);
+    try {
+      return await client.sendCommand([...args], COMMAND_OPTIONS);
+    } finally {
+      this.#running.delete(running);
+    }
   }
 
-  async #nodeClient(id: string): Promise<Client> {
-    const cluster = this.#cluster();
+  async #identify(client: Client, known: string | undefined): Promise<RunningOn> {
+    const clientId = String(await client.sendCommand(["CLIENT", "ID"]));
+    return { clientId, address: known ?? (await this.#addressOf(client)) };
+  }
+
+  async #addressOf(client: Client): Promise<string> {
+    const connection = this.#connection;
+    if (connection.mode === "standalone") return connection.address;
+    for (const master of connection.cluster.masters)
+      if ((await connection.cluster.nodeClient(master)) === client) return connection.reachable(master.address);
+    for (const [id, replica] of this.#replicas) {
+      if ((await replica) !== client) continue;
+      const node = (await this.nodes()).find((candidate) => candidate.id === id);
+      if (node !== undefined) return node.address;
+    }
+    throw new PluginError("statementFailed", "The node this command was sent to left the cluster. Run it again.");
+  }
+
+  /** The client of a node by its id (`ServerNode.id`), opening a replica's on first use. */
+  async clientOf(id: string): Promise<Client> {
+    const connection = this.#connection;
+    if (connection.mode === "standalone") {
+      if (id !== connection.address) throw unknownNode(id);
+      return connection.client;
+    }
+    const cluster = connection.cluster;
     const master = cluster.masters.find((candidate) => candidate.id === id || candidate.address === id);
     if (master !== undefined) return await cluster.nodeClient(master);
     const node = (await this.nodes()).find((candidate) => candidate.id === id);
-    if (node === undefined || this.#connection.mode !== "cluster") throw unknownNode(id);
+    if (node === undefined) throw unknownNode(id);
     let client = this.#replicas.get(node.id);
     if (client === undefined) {
-      const open = this.#connection.open;
+      const open = connection.open;
       client = open(node.address).then(async (opened) => {
         await opened.sendCommand(["READONLY"]);
         return opened;

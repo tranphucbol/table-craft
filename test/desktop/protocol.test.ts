@@ -97,7 +97,9 @@ import {
   type KeyExpiry,
   type KeyInfo,
   type KeyScan,
+  type ServerInfo,
   type ServerNode,
+  type SlowCommand,
   type SqlParameter,
   type StatementClass,
   type StatementSpan,
@@ -265,6 +267,8 @@ describe("engine protocol", () => {
 
   it("givenServerTypes_whenComparedWithPluginApi_thenIdentical", () => {
     expectTypeOf<protocol.ServerNode>().toEqualTypeOf<ServerNode>();
+    expectTypeOf<protocol.ServerInfo>().toEqualTypeOf<ServerInfo>();
+    expectTypeOf<protocol.SlowCommand>().toEqualTypeOf<SlowCommand>();
     expect(protocol.NODE_ROLES).toEqual(NODE_ROLES);
   });
 

@@ -27,6 +27,7 @@ export type ActionIcon =
   | "close"
   | "database"
   | "services"
+  | "server"
   | "search"
   | "add"
   | "properties"

@@ -85,6 +85,30 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
     );
   });
 
+  it.each([
+    { version: "6.2", config: REDIS6_CONFIG },
+    { version: "7.4", config: REDIS_CONFIG },
+  ])("givenRedis$version_whenServerInfo_thenEverySection", async ({ config }) => {
+    await withRedis(config, async (session) => {
+      const info = await session.serverInfo?.(null);
+      expect(info?.sections.map((section) => section.title)).toEqual(
+        expect.arrayContaining([
+          "Server",
+          "Clients",
+          "Memory",
+          "Persistence",
+          "Stats",
+          "Replication",
+          "CPU",
+          "Keyspace",
+        ]),
+      );
+      expect(info?.sections.find((section) => section.title === "Server")?.entries).toContainEqual(
+        expect.objectContaining({ name: "redis_version" }),
+      );
+    });
+  });
+
   it("givenRedis62_whenSetTtl_thenPlainPexpire", async () => {
     await withRedis(REDIS6_CONFIG, async (session) => {
       const keyspace = session.keyspace;

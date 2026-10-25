@@ -87,6 +87,8 @@ const METHODS = [
   "namespace.targets",
   "namespace.switchStatement",
   "server.nodes",
+  "server.info",
+  "server.slowLog",
   "keyspace.databases",
   "keyspace.scan",
   "keyspace.describe",

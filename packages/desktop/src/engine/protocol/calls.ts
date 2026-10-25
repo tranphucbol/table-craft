@@ -42,7 +42,7 @@ import type {
   KeyType,
   OpenedKey,
 } from "./keyspace.js";
-import type { ServerNode } from "./server.js";
+import type { ServerInfo, ServerNode, SlowCommand } from "./server.js";
 import type { ConditionColumn, OrderTerm, ResultEditable, RowEdit, SubmittedEdits, TableQuery } from "./tables.js";
 import type {
   ErrorAnswer,
@@ -269,6 +269,13 @@ export interface EngineCalls {
   "namespace.switchStatement": { params: { readonly path: readonly string[] }; result: SwitchStatement };
   /** Every server of the datasource, primaries first (decision 114). Needs `nodes`. */
   "server.nodes": { params: Record<never, never>; result: readonly ServerNode[] };
+  /** What `node` (null: the server, or a primary) reports about itself. Needs `serverInfo`. */
+  "server.info": { params: { readonly node: string | null }; result: ServerInfo };
+  /** The newest `limit` slow commands of `node`, or of every primary for null. Needs `serverInfo`. */
+  "server.slowLog": {
+    params: { readonly node: string | null; readonly limit: number };
+    result: readonly SlowCommand[];
+  };
   /** The datasource's databases with their key counts (decision 113). Needs `keyValue`. */
   "keyspace.databases": { params: Record<never, never>; result: KeyDatabases };
   /** One batch of a pass over `database`'s keys; `cursor` null starts the pass. Needs `keyValue`. */

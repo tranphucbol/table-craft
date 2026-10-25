@@ -5,7 +5,15 @@ import { classify, inspect, split } from "./language.js";
 import { RedisSession } from "./session.js";
 
 const PLUGIN_ID = "redis";
-const CAPABILITIES: readonly Capability[] = ["commands", "keepAlive", "keyValue", "nodes"];
+const CAPABILITIES: readonly Capability[] = [
+  "commands",
+  "cancel",
+  "keepAlive",
+  "keyValue",
+  "nodes",
+  "serverInfo",
+  "sessions",
+];
 
 const commandLanguage: CommandLanguage = { split, classify, complete, signatureAt, inspect };
 

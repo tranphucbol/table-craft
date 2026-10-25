@@ -399,6 +399,7 @@ const LONG_BYTES_LENGTH = 48;
 /** Stops a scan pass that never ends, so a broken cursor fails rather than hangs. */
 const MAX_SCAN_BATCHES = 10_000;
 const READ_WINDOW = 100;
+const SLOW_LOG_LIMIT = 5;
 const LONG_BYTES_HEX = "c3";
 const HEX_DIGITS_PER_BYTE = 2;
 
@@ -2692,6 +2693,30 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const session = await connect(plugin, fixture.config);
         await session.close();
         expect(await rejectionCode(session.ping?.() ?? Promise.resolve())).toBe("connectionLost");
+      });
+    });
+
+    describe.runIf(plugin.capabilities.includes("serverInfo"))("serverInfo", () => {
+      it("givenEveryNode_whenServerInfo_thenTitledSectionsWithEntries", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const nodes = (await session.nodes?.()) ?? [];
+          for (const node of [null, ...nodes.map((listed) => listed.id)]) {
+            const info = await session.serverInfo?.(node);
+            expect(info?.sections.length).toBeGreaterThan(0);
+            for (const section of info?.sections ?? []) expect(section.title).not.toBe("");
+            expect(info?.sections.some((section) => section.entries.length > 0)).toBe(true);
+            if (node !== null) expect(info?.node).toBe(node);
+          }
+        });
+      });
+
+      it("givenSlowLog_whenRead_thenAtMostLimitNewestFirst", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const entries = (await session.slowLog?.(null, SLOW_LOG_LIMIT)) ?? [];
+          expect(entries.length).toBeLessThanOrEqual(SLOW_LOG_LIMIT);
+          const times = entries.map((entry) => entry.at);
+          expect(times).toEqual([...times].sort().reverse());
+        });
       });
     });
 

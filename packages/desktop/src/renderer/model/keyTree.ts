@@ -295,6 +295,22 @@ export function loadMoreText(node: Pick<KeyLoadMoreNode, "loaded" | "estimate">)
   return `Scanned ${node.loaded.toLocaleString("en-US")} of ~${node.estimate.toLocaleString("en-US")} · Load more`;
 }
 
+/**
+ * The status bar's keyspace part: `db0 · 48,213 keys`, or for a cluster `cluster · 3 primaries`;
+ * null before the databases are listed.
+ */
+export function keyspaceStatusText(
+  keyspace: DatasourceKeyspace | undefined,
+  nodes: readonly ServerNode[],
+): string | null {
+  const primaries = nodes.filter((node) => node.role === "primary").length;
+  if (nodes.length > 1) return `cluster · ${String(primaries)} ${primaries === 1 ? "primary" : "primaries"}`;
+  const current = keyspace?.databases?.find((database) => database.current);
+  if (current === undefined) return null;
+  const keys = current.keys.toLocaleString("en-US");
+  return `${databaseLabel(current.index)} · ${keys} ${current.keys === 1 ? "key" : "keys"}`;
+}
+
 /** The databases the tree lists: those holding keys and the configured one, or all of them. */
 export function shownDatabases(databases: readonly KeyDatabase[], showEmpty: boolean): readonly KeyDatabase[] {
   return showEmpty ? databases : databases.filter((database) => database.keys > 0 || database.current);

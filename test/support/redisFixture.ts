@@ -85,3 +85,16 @@ export const REDIS_KEYSPACE: KeyspaceFixture = {
     },
   },
 };
+
+/**
+ * A blocking pop that waits `seconds` for a list no one fills. `{bar}` hashes to slot 5061, so in
+ * the fixture clusters it blocks on the first primary, the one a session's `serverSessionId` names.
+ */
+export const REDIS_STATEMENTS = {
+  sleep: (seconds: number) => `BLPOP contract:{bar}:sleep ${String(seconds)}`,
+};
+
+/** The sessions fixture: a second connection lists, and `CLIENT LIST` names the command only. */
+export function redisSessions(config: unknown) {
+  return { monitorConfig: config, sleepQuery: "blpop" };
+}

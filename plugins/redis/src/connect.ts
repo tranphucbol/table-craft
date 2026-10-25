@@ -51,12 +51,22 @@ export interface Cluster {
 
 /** A connection to the server or the cluster, and what the plugin needs to reach a node itself. */
 export type Connection =
-  | { readonly mode: "standalone"; readonly client: Client; readonly address: string; readonly version: string }
+  | {
+      readonly mode: "standalone";
+      readonly client: Client;
+      readonly address: string;
+      readonly version: string;
+      /** Opens a second client to the server, such as the short-lived one a cancel sends from. */
+      readonly open: (address: string) => Promise<Client>;
+    }
   | {
       readonly mode: "cluster";
       readonly cluster: Cluster;
       readonly version: string;
-      /** Opens a plain client to a node at the address the client dials, for a replica the cluster does not hold. */
+      /**
+       * Opens a plain client to a node at the address the client dials, for a replica the cluster
+       * does not hold or a cancel's short-lived connection.
+       */
       readonly open: (address: string) => Promise<Client>;
       /** The address the client dials for an announced one, after Node address map. */
       readonly reachable: (announced: string) => string;
@@ -145,7 +155,8 @@ async function connectStandalone(config: RedisConfig, options: ConnectOptions): 
   try {
     const version = await versionOf(client);
     requireSupported(version);
-    return { mode: "standalone", client, address: `${config.host}:${String(config.port)}`, version };
+    const open = (): Promise<Client> => openStandalone(config, options, config.host, config.port, tls, 0);
+    return { mode: "standalone", client, address: `${config.host}:${String(config.port)}`, version, open };
   } catch (cause) {
     client.destroy();
     throw cause;

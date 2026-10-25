@@ -7,7 +7,8 @@ import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 /**
  * A toolbar button that is an action: its label, icon, tooltip and enabled state come from the
  * registry. `compact` draws the icon alone, the title moving to the tooltip; `reason` replaces the
- * tooltip while the button is off, saying why. A click never takes focus, so Run leaves the caret
+ * tooltip while the button is off, saying why; `hint` replaces it while on, saying what the action
+ * does here. A click never takes focus, so Run leaves the caret
  * where it was (plan 015 decision 8); Tab still reaches the button.
  */
 export function ActionButton({
@@ -16,6 +17,7 @@ export function ActionButton({
   compact = false,
   pressed,
   reason,
+  hint,
   tone,
 }: {
   readonly actionId: string;
@@ -23,6 +25,7 @@ export function ActionButton({
   readonly compact?: boolean;
   readonly pressed?: boolean;
   readonly reason?: string | null;
+  readonly hint?: string;
   /** `warning` marks an action that does more than it looks, as Explain Analyse runs its statement. */
   readonly tone?: "warning";
 }) {
@@ -32,7 +35,7 @@ export function ActionButton({
   const Icon = action.icon === undefined ? null : ACTION_ICONS[action.icon];
   const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
   return (
-    <Tooltip label={!enabled && reason != null ? reason : action.title} shortcut={shortcut} side="bottom">
+    <Tooltip label={!enabled && reason != null ? reason : (hint ?? action.title)} shortcut={shortcut} side="bottom">
       <button
         type="button"
         aria-label={compact ? action.title : undefined}

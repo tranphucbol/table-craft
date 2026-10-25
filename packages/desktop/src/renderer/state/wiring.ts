@@ -27,6 +27,7 @@ import {
 } from "@table-craft/desktop/engine/protocol.js";
 import { followObjectFeatures, useObjects, type ObjectsStore } from "@table-craft/desktop/renderer/state/objects.js";
 import { useScripts, type ScriptsStore } from "@table-craft/desktop/renderer/state/scripts.js";
+import { serverTabOf, useServer, type ServerStore } from "@table-craft/desktop/renderer/state/server.js";
 import { sessionsTabOf, useSessions, type SessionsStore } from "@table-craft/desktop/renderer/state/sessions.js";
 import { keyTabsOf, useKeyTabs, type KeyTabsStore } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { themeOf, useSettings, type SettingsStore } from "@table-craft/desktop/renderer/state/settings.js";
@@ -48,6 +49,7 @@ export interface WiredStores {
   readonly scripts?: ScriptsStore;
   readonly objects?: ObjectsStore;
   readonly sessions?: SessionsStore;
+  readonly server?: ServerStore;
 }
 
 function isImportEvent(event: EngineEvent): event is ImportEvent {
@@ -79,6 +81,7 @@ export function wireStores({
   scripts,
   objects,
   sessions,
+  server,
 }: WiredStores): () => void {
   const offEvents = datasources.onEngineEvent((id, event) => {
     if (isImportEvent(event)) imports?.getState().received(id, event);
@@ -121,6 +124,11 @@ export function wireStores({
       if (sessionsId !== null) {
         tabs.getState().close(sessionsId);
         sessions?.getState().close(sessionsId);
+      }
+      const serverId = server === undefined ? null : serverTabOf(server.getState().tabs, id);
+      if (serverId !== null) {
+        tabs.getState().close(serverId);
+        server?.getState().close(serverId);
       }
     }
   });
@@ -179,6 +187,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     tables: useTables,
     ddl: useDdl,
     sessions: useSessions,
+    server: useServer,
     executions: useExecutions,
     exports: useExports,
     imports: useImports,
