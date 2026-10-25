@@ -35,7 +35,7 @@
     "test:db:oracle": "TABLE_CRAFT_DATABASES=oracle bun run test:db",
     "test:db:mssql": "TABLE_CRAFT_DATABASES=mssql bun run test:db",
     "test:db:all": "TABLE_CRAFT_DATABASES=all bun run test:db",
-    "readme:media": "bun test/db/up.ts && bun run --filter '@table-craft/desktop' build && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_README_MEDIA=1 vitest run test/readme --no-file-parallelism",
+    "readme:media": "TABLE_CRAFT_DATABASES=postgres bun test/db/up.ts && bun run --filter '@table-craft/desktop' build && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_README_MEDIA=1 vitest run test/readme --no-file-parallelism",
     "api:report": "bun scripts/api-report/check.ts --write",
     "api:check": "bun scripts/api-report/check.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/desktop/src/renderer && tsc --noEmit -p test/renderer",

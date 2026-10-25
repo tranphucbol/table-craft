@@ -141,6 +141,8 @@ each declared capability (decision 013). The fixture carries what the suite cann
 | `typeProbe.expected`  | The `type_probe` rows as wire values; every dialect shares `test/support/typeProbe.ts`                                                                                                                                                                              |
 | `catalog`             | Required with `schemaTree`: the fixture's namespace path, an awkward identifier with its expected quoting (`quoted { name, qualified }`), the name of `orders`' check (`ordersCheck`) and `customers`' expected comment (`customersComment`, null without comments) |
 | `scripts`             | Optional; dialect scripts with the statements `split` must return (`SplitCase { text, statements }`), added to the shared ones                                                                                                                                      |
+| `sql`                 | Optional `ContractSql`: the one-row select, the large result, the explain join, the shared scripts, drop-if-exists, the temporary table and `BEGIN` in the dialect's words; each defaults to today's text (decision 100)                                            |
+| `foldName`            | Optional; folds the fixture names the suite compares (Oracle's upper case); `"Line Items"` is never folded                                                                                                                                                          |
 
 ### DatasourcePlugin and Session
 
@@ -251,6 +253,7 @@ interface Column {
   readonly name: string;
   readonly type: string | null; // the database's declared type, when it has one
   readonly origin?: ColumnOrigin | null; // the base column it reads; null for an expression, absent when the driver cannot tell
+  readonly typeClass?: TypeClass; // the plugin's own class, ahead of the name table (decision 101)
 }
 
 interface ColumnOrigin {
@@ -295,6 +298,14 @@ answers `begin`, `end` or `null`, and for the copy extractor `quoteIdentifierWit
 | MySQL      | backslash escapes, `DELIMITER`, `#` comments, `BEGIN … END` bodies; `` `x` ``, `X'…'`, backslash-escaped strings |
 | SQLite     | `BEGIN … END` bodies; `"x"`, `X'…'`                                                                              |
 
+For Oracle and SQL Server plugins the kit also offers, each off by default (decision 100):
+`bracketIdentifiers` (`[a]]b]`, and `quoteIdentifierWith('[')`), `qQuotes` (Oracle `q'[…]'`),
+`nationalStrings` (`N'…'`, and `sqlLiteral`'s `nationalText`) and `batchSeparator`, `go` or
+`slash`. A separator is a whole line outside quotes and comments: `GO`, optionally `GO <n>`
+(`repeat: n` on the span it ends), or `/` alone; it belongs to no statement. Under a separator, a
+routine definition (and under `slash` an anonymous `DECLARE`/`BEGIN` block) runs to the next
+separator line, keeping its own `;`.
+
 A span runs from the statement's first token to its last, so comments around it stay out. A
 `BEGIN … END` body opens only inside `CREATE TRIGGER`, `FUNCTION`, `PROCEDURE` or `EVENT`, so
 `BEGIN;` still starts a transaction. `classify` reads the first keyword (through a `WITH`) into
@@ -316,7 +327,8 @@ transaction open rolls it back.
 as the plugin's dialect, cases keywords as `keywordCase` says (`upper`, `lower`, `preserve`), indents
 by `indentWidth` (1–8) and puts `linesBetweenStatements` (0–5) blank lines between statements. A
 multi-line block comment is kept byte for byte; a MySQL script with `DELIMITER` is refused rather
-than reflowed. `style` picks the layout. `aligned` (decision 061, `sql/layout.ts`) parses the
+than reflowed, and so is a script holding a `GO` or `/` separator line. The dialects are
+`postgresql`, `mysql`, `sqlite`, `plsql` and `transactsql`. `style` picks the layout. `aligned` (decision 061, `sql/layout.ts`) parses the
 dialect lexer's tokens: the first item on the clause keyword's line, the rest lined up under it,
 `AS` in a select list in one column when `alignAliases` is on, `AND`/`OR` right-aligned to the end
 of `WHERE`/`HAVING`/`ON`, calls and lists kept whole, subqueries at the column after `(`. It covers
@@ -332,6 +344,9 @@ marker inside a string, a quoted identifier, a comment, a dollar quote or a `::c
 | PostgreSQL | `:name`, `$1` | `$1`               | `$1 … $1`, one value          |
 | MySQL      | `:name`, `?`  | `?`                | `? … ?`, the value twice      |
 | SQLite     | `:name`, `?`  | `?`                | `? … ?`, the value twice      |
+
+Two more native forms serve Oracle and SQL Server (decision 100): `colonNumbered` binds `:1, :2,
+:3`, one value per occurrence, and `atNumbered` binds `@p1`, one value per name.
 
 A `?` is named `?1`, `?2`… by position within its statement. `bind` rejects `statementFailed` when
 a value is missing. Values are text or `null`; the database converts text as it would a literal.
@@ -400,6 +415,12 @@ fixed by decision 017, so the same row reads the same on every database:
 | `bytea`, `BLOB`, `BINARY`, `VARBINARY`                          | the `bytes` tag                                             |
 
 The `date` tag stays for plugins whose driver only hands back a `Date`.
+
+Each column also has a type class (`TypeClass` in plugin-api: `integer`, `float`, `decimal`,
+`boolean`, `temporal`, `json`, `bytes`, `text`) for display, alignment, local sort and export. A
+plugin may name it in `Column.typeClass`, as SQL Server must for `bit`; otherwise core reads it
+from the type name, which knows the PostgreSQL, MySQL, SQLite, Oracle and SQL Server names that
+mean one thing everywhere (decision 101).
 
 ## Protocol
 
@@ -820,8 +841,8 @@ region, and Windows and Linux show their menu bar.
 ## SQL console
 
 A console is a CodeMirror 6 editor (`renderer/console/Editor.tsx`) above its result tabs. The
-plugin's manifest `highlight` picks the `lang-sql` dialect (`postgresql`, `mysql`, `sqlite`, else
-standard SQL). It has line numbers, bracket matching, line comments (`⌘/`), search (`⌘F`), multiple
+plugin's manifest `highlight` picks the `lang-sql` dialect (`postgresql`, `mysql`, `sqlite`,
+`plsql`, `mssql`, else standard SQL). It has line numbers, bracket matching, line comments (`⌘/`), search (`⌘F`), multiple
 cursors, undo and completion (see Completion and navigation); its colours and font are the editor and syntax tokens, read
 as CSS variables (`renderer/console/editorTheme.ts`). The datasource colour tints the editor's
 border. The editor's accessible name is `SQL console`.
@@ -933,8 +954,8 @@ while a fetch runs, the state label, then the extractor select, Copy, Export Dat
 | `1,284 of 5,000 rows · filtered locally` | A local filter hides rows (decision 050)                       |
 
 **Columns.** The header shows the column name with a type glyph (number, text, date, bool, json,
-bytes) from core's `typeClass`; a column the driver did not type takes the class of its first
-non-null value. The tooltip is `name: type`. Numbers are right-aligned. A column starts as wide as
+bytes) from the plugin's `Column.typeClass` when it names one, else core's `typeClass` of the type
+name (decision 101); a column the driver did not type takes the class of its first non-null value. The tooltip is `name: type`. Numbers are right-aligned. A column starts as wide as
 its header and the widest value loaded so far, capped at `--spacing-column-max`; dragging the
 header's right edge resizes it (at least 40 px) and double-clicking fits it to its loaded values.
 The header context menu holds Sort Ascending, Sort Descending, Clear Sort, Hide Column, Show All

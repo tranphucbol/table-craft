@@ -699,6 +699,14 @@ dialog draws them under SSL, asks for the passphrase only when the key file is e
 the session's `tls` (protocol and cipher) after Test Connection. Through a tunnel `connect` gets the
 configured host as `serverName`, which a `verify-full` check must use instead of `127.0.0.1`.
 
+A plugin's result columns may name their type class (`typeClass`: `integer`, `float`, `decimal`,
+`boolean`, `temporal`, `json`, `bytes` or `text`), which then decides how the grid aligns, sorts
+and exports them ahead of the type name; SQL Server's `bit`, for one, is a boolean.
+
+The shared SQL kit in `@table-craft/plugin-api/sql` also reads Oracle and SQL Server scripts when a
+plugin turns on their dialect options: `[bracketed]` names, `q'[…]'` and `N'…'` strings, `GO` and
+`/` separator lines, and `:1` or `@p1` placeholders.
+
 A plugin depends on `@table-craft/plugin-api` and should pass its contract suite,
 `runPluginContract` from `@table-craft/plugin-api/testing`, which the built-in plugins run against
 real databases. See [Plugin contract](docs/design/specification.md#plugin-contract).
@@ -765,9 +773,10 @@ README GIFs also needs [ffmpeg](https://ffmpeg.org).
 bun install
 bun run desktop                # build and launch the app
 bun run test                   # unit tests and the plugin contract against SQLite
-bun run test:db                # the contract against PostgreSQL and MySQL in Docker
+bun run test:db                # the contract against MySQL in Docker, and TiDB
+bun run test:db:postgres       # the same against PostgreSQL (also :oracle, :mssql, :all)
 bun run test:smoke             # drive the built app with Playwright
-bun run test:smoke:db          # the same against PostgreSQL, MySQL and SQLite
+bun run test:smoke:db          # the same against MySQL, TiDB and SQLite
 bun run test:smoke:headless    # test:smoke in a Linux container, off your screen
 bun run test:smoke:db:headless # test:smoke:db in the same container
 bun run test:smoke:packaged    # drive the packaged app

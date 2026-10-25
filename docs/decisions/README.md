@@ -93,5 +93,8 @@ started, not when it is merged.
 | 096 | [The headless suite runs files in parallel](096-headless-suite-runs-files-in-parallel.md)                                                                              |
 | 097 | [Function specs with server ranges](097-function-specs-with-server-ranges.md)                                                                                          |
 | 098 | [Signature help is answered by the plugin](098-signature-help-is-answered-by-the-plugin.md)                                                                            |
+| 099 | [Normal runs test MySQL and the remote TiDB](099-normal-runs-test-mysql-and-remote-tidb.md)                                                                            |
+| 100 | [Dialect options for Oracle and T-SQL](100-dialect-options-for-oracle-and-t-sql.md)                                                                                    |
+| 101 | [A plugin may name a column's type class](101-a-plugin-may-name-a-column-type-class.md)                                                                                |
 | 106 | [Plugin API 1.0 follows semver](106-plugin-api-1-0-follows-semver.md)                                                                                                  |
 | 107 | [Plugin API compatibility is checked, not promised](107-plugin-api-compatibility-is-checked.md)                                                                        |
