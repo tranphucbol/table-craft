@@ -55,6 +55,7 @@ interface Column {
   readonly name: string;
   readonly origin?: ColumnOrigin | null;
   readonly type: string | null;
+  readonly typeClass?: TypeClass;
 }
 
 interface ColumnDesign {
@@ -608,6 +609,7 @@ type StatementKind = (typeof STATEMENT_KINDS)[number];
 
 interface StatementSpan {
   readonly from: number;
+  readonly repeat?: number;
   readonly sql: string;
   readonly to: number;
 }
@@ -670,6 +672,8 @@ interface Transactions {
   rollback(): Promise<void>;
   setMode(mode: TransactionMode): Promise<void>;
 }
+
+type TypeClass = "integer" | "float" | "decimal" | "boolean" | "temporal" | "json" | "bytes" | "text";
 
 type WireValue = null | boolean | number | string | BigIntValue | BytesValue | JsonValue | DateValue;
 

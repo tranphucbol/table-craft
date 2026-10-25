@@ -8,6 +8,8 @@ API_VERSION: 1.0.0
 ```ts
 const ALREADY_EXPLAIN = "This statement is already an EXPLAIN; run it with Run to see its rows.";
 
+type BatchSeparator = "go" | "slash";
+
 const CREATE_TABLE_AS = "CREATE TABLE \u2026 AS";
 
 interface CallAt {
@@ -38,7 +40,7 @@ interface ExplainableOptions {
   readonly verbs: readonly string[];
 }
 
-const FORMAT_DIALECTS: { readonly postgresql: DialectOptions; readonly mysql: DialectOptions; readonly sqlite: DialectOptions; };
+const FORMAT_DIALECTS: { readonly postgresql: DialectOptions; readonly mysql: DialectOptions; readonly sqlite: DialectOptions; readonly plsql: DialectOptions; readonly transactsql: DialectOptions; };
 
 const FUNCTION_CATEGORIES: readonly [ "string", "numeric", "datetime", "json", "aggregate", "window", "information", "encryption", "locking", "spatial", "xml", "control", "misc", "server" ];
 
@@ -71,6 +73,8 @@ interface GeneratorOptions {
 
 type IdentifierFolding = "lower" | "upper" | "none";
 
+type IdentifierQuote = '"' | "`" | "[";
+
 interface ImporterOptions extends Omit<GeneratorOptions, "updateDefault"> {
   readonly decimal: (column: InferredColumn) => string;
   readonly types: Readonly<Record<Exclude<ImportKind, "decimal">, string>>;
@@ -95,7 +99,7 @@ interface NamespaceTarget {
   readonly kind: "database" | "schema";
 }
 
-type NativePlaceholder = "numbered" | "positional";
+type NativePlaceholder = "numbered" | "positional" | "colonNumbered" | "atNumbered";
 
 interface ParameterOptions {
   readonly dialect: SqlDialectOptions;
@@ -136,17 +140,22 @@ type SimpleSelectItem = { readonly kind: "star"; readonly qualifier: Identifier 
 
 interface SqlDialectOptions {
   readonly backslashEscapes?: boolean;
+  readonly batchSeparator?: BatchSeparator;
   readonly blockKeywords?: readonly string[];
+  readonly bracketIdentifiers?: boolean;
   readonly delimiterCommand?: boolean;
   readonly dollarQuotes?: boolean;
   readonly hashComments?: boolean;
   readonly namespaceStatements?: readonly NamespaceStatementForm[];
+  readonly nationalStrings?: boolean;
   readonly nestedBlockComments?: boolean;
+  readonly qQuotes?: boolean;
 }
 
 interface SqlLiteralOptions {
   readonly backslashEscapes: boolean;
   readonly bytes: (hex: string) => string;
+  readonly nationalText?: boolean;
 }
 
 interface TableDifference {
@@ -208,7 +217,7 @@ function planPropertyValue(value: unknown): string | null;
 
 function planText(rows: readonly Row[]): string;
 
-function quoteIdentifierWith(quote: '"' | "`"): (name: string) => string;
+function quoteIdentifierWith(quote: IdentifierQuote): (name: string) => string;
 
 function referencesClause(key: ForeignKeyDesign, qualifiedTarget: string, name: (identifier: string) => string): string;
 

@@ -9,14 +9,26 @@ API_VERSION: 1.0.0
 interface ContractFixture {
   readonly catalog?: { readonly path: readonly string[]; readonly quoted: { readonly name: string; readonly qualified: string; }; readonly lineItems: string; readonly ordersCheck: string; readonly customersComment: string | null; };
   readonly config: unknown;
+  readonly foldName?: (name: string) => string;
   readonly manifest: PluginManifest;
   readonly namespaceSwitch?: { readonly statement: string; readonly path: readonly string[]; readonly missing?: string; };
   readonly routines?: { readonly expected: readonly Routine[]; readonly function: RoutineCase; readonly nullArgument: RoutineCase; readonly procedureOut: RoutineCase; readonly defaulted?: RoutineCase; };
   readonly scripts?: readonly SplitCase[];
   readonly sessions?: { readonly monitorConfig: unknown; readonly limited?: { readonly config: unknown; readonly note: RegExp; }; };
+  readonly sql?: ContractSql;
   readonly statements?: { readonly sleep?: (seconds: number) => string; readonly write?: string; readonly message?: { readonly sql: string; readonly level: ServerMessage["level"]; readonly code: string | null; }; readonly syntaxError?: { readonly sql: string; readonly offset: number; }; };
   readonly typeProbe: { readonly expected: readonly Row[]; readonly copyTable: string; };
   readonly wrongPasswordConfig?: unknown;
+}
+
+interface ContractSql {
+  readonly begin?: string;
+  readonly dropTableIfExists?: (name: string) => string;
+  readonly explainJoin?: string;
+  readonly largeResult?: string;
+  readonly select?: (expressions: string) => string;
+  readonly sharedScripts?: readonly SplitCase[];
+  readonly temporaryTable?: (name: string, columns: string) => { readonly create: string; readonly name: string; };
 }
 
 const EDIT_PROBE_TABLE = "edit_probe";
@@ -45,6 +57,8 @@ const TYPE_PROBE_COPY_TABLE = "type_probe_copy";
 const TYPE_PROBE_TABLE = "type_probe";
 
 function connectionFormProblems(manifest: PluginManifest, connectionSchema: z.ZodType): string[];
+
+function contractSql(fixture: Pick<ContractFixture, "sql">): Required<ContractSql>;
 
 function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFixture): void;
 ```

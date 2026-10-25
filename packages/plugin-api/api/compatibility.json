@@ -1,3 +1,19 @@
 {
-  "classifications": []
+  "classifications": [
+    {
+      "key": "FORMAT_DIALECTS",
+      "kind": "addition",
+      "reason": "Gains the plsql and transactsql keys; the existing keys and their values are unchanged (decision 100)."
+    },
+    {
+      "key": "NativePlaceholder",
+      "kind": "addition",
+      "reason": "A plugin passes it to sqlParameters; colonNumbered and atNumbered are new choices, and a plugin naming an old value gets the same placeholders (decision 100)."
+    },
+    {
+      "key": "quoteIdentifierWith",
+      "kind": "addition",
+      "reason": "The parameter widens to IdentifierQuote, adding \"[\"; every argument accepted before still is and quotes the same way (decision 100)."
+    }
+  ]
 }
