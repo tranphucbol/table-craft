@@ -108,9 +108,10 @@ export function highlighterOf(highlight: string | null | undefined): Extension {
   return COMMAND_HIGHLIGHTERS[highlight ?? ""] ?? sql({ dialect: dialectOf(highlight), upperCaseKeywords: true });
 }
 
-function placeholderText(): string {
+function placeholderText(highlight: string | null | undefined): string {
   const shortcut = registry.get(ACTION_IDS.run)?.shortcut;
   const chord = shortcut === undefined ? "" : ` ${formatChord(shortcut, currentPlatform())}`;
+  if (keywordDialectOf(highlight) === null) return `Type commands, one a line;${chord} runs the line at the caret`;
   return `Type SQL;${chord} runs the statement at the caret`;
 }
 
@@ -202,7 +203,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           }),
           highlightSelectionMatches(),
           search({ top: false }),
-          placeholder(placeholderText()),
+          placeholder(placeholderText(highlight)),
           languageRef.current.of(highlighterOf(highlight)),
           flashField,
           errorMarks,

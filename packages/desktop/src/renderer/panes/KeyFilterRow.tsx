@@ -15,9 +15,10 @@ const TYPE_OPTIONS = [
 /**
  * A database's filter row (decision 113): a server-side `MATCH` glob, rescanned on Enter, and a
  * type, rescanned on change. Its keys stay its own, so the tree's arrows and speed search do not
- * take them. Keyed by the applied pattern, so a filter set elsewhere resets the field.
+ * take them. Keyed by the applied pattern, so a filter set elsewhere resets the field. Focus
+ * selects the row: with focus in the tree, actions act on the tree's selection.
  */
-export function KeyFilterRow({ node }: { readonly node: KeyFilterNode }) {
+export function KeyFilterRow({ node, onFocus }: { readonly node: KeyFilterNode; readonly onFocus: () => void }) {
   const shown = node.filter.match === NO_KEY_FILTER.match ? "" : node.filter.match;
   const [match, setMatch] = useState(shown);
 
@@ -40,7 +41,11 @@ export function KeyFilterRow({ node }: { readonly node: KeyFilterNode }) {
   }
 
   return (
-    <span className="flex min-w-0 flex-1 items-center gap-cell" onMouseDown={(event) => event.stopPropagation()}>
+    <span
+      className="flex min-w-0 flex-1 items-center gap-cell"
+      onMouseDown={(event) => event.stopPropagation()}
+      onFocus={onFocus}
+    >
       <KeyFilterIcon aria-hidden className="size-icon shrink-0 text-ink-muted" />
       <TextInput
         aria-label="Filter keys"

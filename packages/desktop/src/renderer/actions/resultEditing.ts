@@ -22,6 +22,8 @@ import {
   useKeyTabs,
 } from "@table-craft/desktop/renderer/state/keyTabs.js";
 
+const SQL_TERMINATOR = ";";
+
 /**
  * What the grid's edit actions work on (plan 026): a table tab's rows or the active console's
  * shown result. Both run the same commands, so editing either feels the same.
@@ -34,6 +36,8 @@ export interface EditSurface {
   readonly pending: number;
   /** The preview dialog's sentence for `statements` statements. */
   readonly submitsAs: (statements: number) => string;
+  /** What the preview shows after each statement: `;` for SQL, nothing for commands. */
+  readonly terminator: string;
   readonly beginEdit: (cell: BufferCell, text?: string) => void;
   readonly commitEdit: () => void;
   readonly setCells: (cells: readonly BufferCell[], input: CellInput) => void;
@@ -63,6 +67,7 @@ function tableSurface(id: string): EditSurface | null {
     editing: session.editing,
     panel: session.panel,
     pending: pendingCount(session.buffer),
+    terminator: SQL_TERMINATOR,
     submitsAs: (statements) => `Submit runs ${statementsText(statements)} in one transaction.`,
     beginEdit: (cell, text) => store().beginEdit(id, cell, text),
     commitEdit: () => void store().commitEdit(id),
@@ -100,6 +105,7 @@ function consoleSurface(id: string): EditSurface | null {
     editing: edits.editing,
     panel: edits.panel,
     pending: pendingCount(edits.buffer),
+    terminator: SQL_TERMINATOR,
     submitsAs: (statements) =>
       session.txMode === "auto"
         ? `Submit runs ${statementsText(statements)} in one transaction and commits it.`
@@ -144,6 +150,7 @@ function keySurface(id: string, datasourceReadOnly: boolean): EditSurface | null
     panel: tab.panel,
     pending: pendingKeyCount(tab),
     submitsAs: (commands) => `Submit runs ${commandsText(commands)} as one MULTI; it cannot be undone.`,
+    terminator: "",
     beginEdit: (cell, text) => store().beginEdit(id, cell, text),
     commitEdit: () => void store().commitEdit(id),
     setCells: (cells, input) => store().setCells(id, cells, input),

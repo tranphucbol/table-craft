@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
 import type { EngineError } from "@table-craft/desktop/engine/protocol.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
@@ -207,6 +207,7 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
   const datasource = useConsoleDatasource(tabId);
   const pattern = tab === undefined ? null : formatPatternOf(tab);
   const format = useLayout((state) => (pattern === null ? undefined : state.layout.valueFormats[pattern])) ?? "auto";
+  const onExpired = useCallback(() => void useKeyTabs.getState().reload(tabId), [tabId]);
   if (tab === undefined) return null;
   const color = datasource?.color ?? null;
   const missing = keyMissing(tab);
@@ -248,7 +249,7 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
       {...{ [REGION_ATTRIBUTE]: "tableEditor" }}
       className={cn("flex min-h-0 flex-1 flex-col", color !== null && `border-2 ${TINT_BORDER[color]}`)}
     >
-      <KeyHeader tab={tab} datasourceName={datasource?.name ?? ""} />
+      <KeyHeader tab={tab} datasourceName={datasource?.name ?? ""} onExpired={onExpired} />
       {missing ? (
         <MissingBanner tabId={tabId} tab={tab} canRecreate={!readOnly && tab.lostType !== null} />
       ) : (

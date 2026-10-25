@@ -1,4 +1,5 @@
 import { useEffect, useState, type ComponentType } from "react";
+import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { pathKey } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { datasourceText, syncFailedText, syncText } from "@table-craft/desktop/renderer/model/format.js";
 import { keyspaceStatusText } from "@table-craft/desktop/renderer/model/keyTree.js";
@@ -44,10 +45,8 @@ export const DOT_CLASS = {
 /** The active console's datasource, or the tree's selection when no console is active. */
 export function useActiveDatasourceId(): string | undefined {
   const activeId = useTabs((state) => activeTab(state)?.id ?? null);
-  const consoleDatasource = useConsoles((state) =>
-    activeId === null ? undefined : state.consoles[activeId]?.datasourceId,
-  );
-  return useDatasources((state) => consoleDatasource ?? selectedDatasourceId(state.selection) ?? undefined);
+  const tabDatasource = useConsoleDatasource(activeId ?? "")?.id;
+  return useDatasources((state) => tabDatasource ?? selectedDatasourceId(state.selection) ?? undefined);
 }
 
 function DatasourceStatus() {

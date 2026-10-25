@@ -1,6 +1,6 @@
 import type { Keyspace, Session } from "@table-craft/plugin-api";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
-import { BUG_HINT, EngineFailure } from "@table-craft/desktop/engine/failures.js";
+import { BUG_HINT, EngineFailure, helperRequestFailed } from "@table-craft/desktop/engine/failures.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
 
 const NO_KEYSPACE = "This datasource's plugin does not declare the keyValue capability.";
@@ -16,7 +16,9 @@ function keyspaceOf(session: Session): Keyspace {
 export function keyspaceRoutes(connection: ConnectionContext): RoutesFor<"keyspace"> {
   const { onHelper, openKey } = connection;
   const on = <T>(work: (keyspace: Keyspace) => Promise<T>): Promise<T> =>
-    onHelper((session) => work(keyspaceOf(session)));
+    onHelper((session) => work(keyspaceOf(session))).catch((cause: unknown) => {
+      throw helperRequestFailed(cause);
+    });
   return {
     "keyspace.databases": () =>
       on(async (keyspace) => ({ delimiter: keyspace.delimiter, databases: await keyspace.databases() })),

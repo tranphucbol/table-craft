@@ -73,6 +73,8 @@ export type ModalRequest =
       readonly title: string;
       readonly message: string;
       readonly statements: readonly string[];
+      /** Shown after each statement; absent, `;`. Commands take none. */
+      readonly terminator?: string;
       readonly confirm: string;
     }
   | {

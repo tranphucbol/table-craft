@@ -18,9 +18,21 @@ function useRemainingTtl(tab: KeyTab): number | null {
   return remainingTtl(tab.details, tab.readAt, now);
 }
 
+interface KeyHeaderProps {
+  readonly tab: KeyTab;
+  readonly datasourceName: string;
+  /** Called once when the countdown reaches zero, so the tab rereads the key the server dropped. */
+  readonly onExpired: () => void;
+}
+
 /** The key tab's header (plan 058 decision 18): type, name, live TTL and what the server says of the key. */
-export function KeyHeader({ tab, datasourceName }: { readonly tab: KeyTab; readonly datasourceName: string }) {
+export function KeyHeader({ tab, datasourceName, onExpired }: KeyHeaderProps) {
   const remaining = useRemainingTtl(tab);
+  const expired = remaining === 0;
+  const readAt = tab.readAt;
+  useEffect(() => {
+    if (expired) onExpired();
+  }, [expired, readAt, onExpired]);
   const parts = tab.details === null ? [] : keyInfoParts(tab.details);
   return (
     <div data-testid="key-header" className="flex shrink-0 flex-col gap-1 border-b border-line bg-panel p-gap">

@@ -302,6 +302,17 @@ services:
       TABLE_CRAFT_ORACLE_PORT: "1521"
       TABLE_CRAFT_MSSQL_HOST: mssql
       TABLE_CRAFT_MSSQL_PORT: "1433"
+      TABLE_CRAFT_REDIS_HOST: redis
+      TABLE_CRAFT_REDIS_PORT: "6379"
+      TABLE_CRAFT_REDIS_TLS_HOST: redis-tls
+      TABLE_CRAFT_REDIS_TLS_PORT: "6379"
+      TABLE_CRAFT_REDIS6_HOST: redis-6
+      TABLE_CRAFT_REDIS6_PORT: "6379"
+      # Cluster nodes announce 127.0.0.1; the test configs map them to these names (plan 058).
+      TABLE_CRAFT_REDIS_CLUSTER_HOST: redis-cluster
+      TABLE_CRAFT_REDIS_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS_CLUSTER_PORTS:-47001-47006}
+      TABLE_CRAFT_REDIS6_CLUSTER_HOST: redis-6-cluster
+      TABLE_CRAFT_REDIS6_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS6_CLUSTER_PORTS:-47011-47013}
       TABLE_CRAFT_DATABASES: ${TABLE_CRAFT_DATABASES:-}
       TABLE_CRAFT_EVIDENCE_DIR: ${TABLE_CRAFT_EVIDENCE_DIR:-}
     volumes:
@@ -313,6 +324,7 @@ services:
       - node-modules-postgres:/work/plugins/postgres/node_modules
       - node-modules-mysql:/work/plugins/mysql/node_modules
       - node-modules-sqlite:/work/plugins/sqlite/node_modules
+      - node-modules-redis:/work/plugins/redis/node_modules
       - bun-cache:/root/.bun/install/cache
       - electron-cache:/root/.cache/electron
 
@@ -413,6 +425,7 @@ volumes:
   node-modules-postgres:
   node-modules-mysql:
   node-modules-sqlite:
+  node-modules-redis:
   # Downloads only, shared by every checkout; node_modules stay per checkout.
   bun-cache:
     name: table-craft-e2e-bun-cache

@@ -1,6 +1,6 @@
 import type { Session } from "@table-craft/plugin-api";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
-import { BUG_HINT, EngineFailure } from "@table-craft/desktop/engine/failures.js";
+import { BUG_HINT, EngineFailure, helperRequestFailed } from "@table-craft/desktop/engine/failures.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
 
 const NO_NODES = "This datasource's plugin does not declare the nodes capability.";
@@ -29,10 +29,13 @@ function nodesOf(session: Session) {
 
 /** What a `nodes` datasource's servers are (decision 114), asked on the engine's helper session. */
 export function serverRoutes(connection: ConnectionContext): RoutesFor<"server"> {
-  const { onHelper } = connection;
+  const on = <T>(read: (session: Session) => Promise<T>): Promise<T> =>
+    connection.onHelper(read).catch((cause: unknown) => {
+      throw helperRequestFailed(cause);
+    });
   return {
-    "server.nodes": () => onHelper(nodesOf),
-    "server.info": ({ node }) => onHelper((session) => serverInfoOf(session, node)),
-    "server.slowLog": ({ node, limit }) => onHelper((session) => slowLogOf(session, node, limit)),
+    "server.nodes": () => on(nodesOf),
+    "server.info": ({ node }) => on((session) => serverInfoOf(session, node)),
+    "server.slowLog": ({ node, limit }) => on((session) => slowLogOf(session, node, limit)),
   };
 }

@@ -219,6 +219,21 @@ interface RedisTarget {
   readonly port: number;
   readonly user: string;
   readonly password: string;
+  readonly nodeAddressMap?: string;
+}
+
+/** `announced=host:port` pairs, as the plugin's Node address map field takes them. */
+function addressMapOf(text: string): Record<string, { host: string; port: number }> {
+  const map: Record<string, { host: string; port: number }> = {};
+  for (const entry of text
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")) {
+    const [announced = "", reachable = ""] = entry.split("=");
+    const [host = "", port = ""] = reachable.split(":");
+    map[announced] = { host, port: Number(port) };
+  }
+  return map;
 }
 
 /** Runs `command` (one key at most, the last word) and answers whether the reply is 1. */
@@ -240,6 +255,7 @@ async function redisAnswersOne(
       ? redis.createCluster({
           rootNodes: [{ socket }],
           defaults: { ...credentials, socket: { reconnectStrategy: false } },
+          nodeAddressMap: addressMapOf(target.nodeAddressMap ?? ""),
         })
       : redis.createClient({ socket, ...credentials });
   connection.on("error", () => undefined);

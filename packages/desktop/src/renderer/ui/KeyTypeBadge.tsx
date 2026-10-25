@@ -14,6 +14,13 @@ const BADGES: Readonly<Record<KeyType, { readonly label: string; readonly classN
 };
 
 const OTHER_LABEL_LENGTH = 4;
+const NO_BREAK_SPACE = "\u00a0";
+
+/**
+ * Labels are capitals only, so a normal line box leaves the descender gap under them and the
+ * text sits high; trimming the box to cap height and baseline centres it between equal padding.
+ */
+const CAP_CENTRED = "py-1 leading-none [text-box:trim-both_cap_alphabetic]";
 
 /** The badge's text: the type's short name, or an unknown type's own, cut to four letters. */
 export function keyTypeLabel(info: Pick<KeyInfo, "type" | "typeName">): string {
@@ -29,11 +36,12 @@ export function KeyTypeBadge({ info }: { readonly info: Pick<KeyInfo, "type" | "
     <span
       data-key-type={info?.type ?? undefined}
       className={cn(
-        "inline-flex w-9 shrink-0 items-center justify-center rounded-sm font-mono leading-tight font-semibold text-canvas",
+        "inline-block w-9 shrink-0 rounded-sm text-center font-mono font-semibold text-canvas",
+        CAP_CENTRED,
         info?.type == null ? "invisible" : BADGES[info.type].className,
       )}
     >
-      {label}
+      {label === "" ? NO_BREAK_SPACE : label}
     </span>
   );
 }

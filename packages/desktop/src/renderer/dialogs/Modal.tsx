@@ -114,7 +114,9 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
           />
         </label>
       )}
-      {request.kind === "statements" ? <PreviewStatements statements={request.statements} /> : null}
+      {request.kind === "statements" ? (
+        <PreviewStatements statements={request.statements} terminator={request.terminator ?? ";"} />
+      ) : null}
       <div className="flex justify-end gap-gap">
         {request.kind === "notice" ? (
           request.tone === "info" ? null : (

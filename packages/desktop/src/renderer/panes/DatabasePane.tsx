@@ -359,7 +359,8 @@ interface RowProps {
   readonly selected: boolean;
   readonly positions: readonly number[];
   readonly top: number;
-  readonly onSelect: (row: ExplorerRow) => void;
+  /** `keepFocus` selects the row and leaves focus where it is, in the row's own field say. */
+  readonly onSelect: (row: ExplorerRow, keepFocus?: boolean) => void;
   readonly onToggle: (row: ExplorerRow) => void;
   readonly onActivate: (row: ExplorerRow) => void;
   readonly register: (key: string, element: HTMLLIElement | null) => void;
@@ -439,7 +440,7 @@ function TreeRow({ row, selected, positions, top, onSelect, onToggle, onActivate
           ) : node.kind === "datasource" ? (
             <DatasourceLabel node={node} positions={positions} />
           ) : node.kind === "keyFilter" ? (
-            <KeyFilterRow key={node.filter.match} node={node} />
+            <KeyFilterRow key={node.filter.match} node={node} onFocus={() => onSelect(row, true)} />
           ) : (
             <>
               <NodeIcon node={node} />
@@ -645,11 +646,11 @@ export function DatabasePane() {
     virtualizer.scrollToIndex(rows.indexOf(row), { align: "auto" });
   }
 
-  function selectRow(row: ExplorerRow): void {
+  function selectRow(row: ExplorerRow, keepFocus = false): void {
     const next = selectionOf(row);
     if (next === null) return;
     select(next);
-    elements.current.get(row.key)?.focus();
+    if (!keepFocus) elements.current.get(row.key)?.focus();
   }
 
   function toggle(row: ExplorerRow): void {
@@ -801,9 +802,9 @@ export function DatabasePane() {
                     top={item.start}
                     selected={item.index === selectedIndex}
                     positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
-                    onSelect={(clicked) => {
+                    onSelect={(clicked, keepFocus) => {
                       setQuery(null);
-                      selectRow(clicked);
+                      selectRow(clicked, keepFocus);
                     }}
                     onToggle={toggle}
                     onActivate={activate}

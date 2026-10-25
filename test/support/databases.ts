@@ -243,21 +243,45 @@ export const REDIS_TLS_CONFIG = {
 /** The `limited` ACL user, which may not run MEMORY, OBJECT or CONFIG. */
 export const REDIS_LIMITED_USER = { user: "limited", password: "limited" } as const;
 
+/**
+ * The Node address map that reaches a cluster whose nodes announce 127.0.0.1 from elsewhere: the
+ * headless box names the cluster's compose service instead (plan 058 decision 23).
+ */
+function clusterAddressMap(host: string, ports: string): string {
+  if (host === LOOPBACK) return "";
+  const [first, last] = ports.split("-").map(Number) as [number, number];
+  const entries: string[] = [];
+  for (let port = first; port <= last; port += 1) entries.push(`${LOOPBACK}:${port}=${host}:${port}`);
+  return entries.join(", ");
+}
+
+function clusterConfig(hostVariable: string, portsVariable: string, fallback: string) {
+  const host = hostFromEnv(hostVariable);
+  const value = process.env[portsVariable];
+  const ports = value === undefined || value === "" ? fallback : value;
+  return {
+    mode: "cluster",
+    host,
+    port: firstPortFromEnv(portsVariable, fallback),
+    user: CREDENTIAL,
+    password: CREDENTIAL,
+    nodeAddressMap: clusterAddressMap(host, ports),
+  } as const;
+}
+
 /** Three primaries and three replicas, every node announcing 127.0.0.1 and its own port. */
-export const REDIS_CLUSTER_CONFIG = {
-  mode: "cluster",
-  host: hostFromEnv("TABLE_CRAFT_REDIS_CLUSTER_HOST"),
-  port: firstPortFromEnv("TABLE_CRAFT_REDIS_CLUSTER_PORTS", DEFAULT_REDIS_CLUSTER_PORTS),
-  user: CREDENTIAL,
-  password: CREDENTIAL,
-} as const;
+export const REDIS_CLUSTER_CONFIG = clusterConfig(
+  "TABLE_CRAFT_REDIS_CLUSTER_HOST",
+  "TABLE_CRAFT_REDIS_CLUSTER_PORTS",
+  DEFAULT_REDIS_CLUSTER_PORTS,
+);
 
 /** Three Redis 6.2 primaries without replicas. */
-export const REDIS6_CLUSTER_CONFIG = {
-  ...REDIS_CLUSTER_CONFIG,
-  host: hostFromEnv("TABLE_CRAFT_REDIS6_CLUSTER_HOST"),
-  port: firstPortFromEnv("TABLE_CRAFT_REDIS6_CLUSTER_PORTS", DEFAULT_REDIS6_CLUSTER_PORTS),
-} as const;
+export const REDIS6_CLUSTER_CONFIG = clusterConfig(
+  "TABLE_CRAFT_REDIS6_CLUSTER_HOST",
+  "TABLE_CRAFT_REDIS6_CLUSTER_PORTS",
+  DEFAULT_REDIS6_CLUSTER_PORTS,
+);
 
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };
