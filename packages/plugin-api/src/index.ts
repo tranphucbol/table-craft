@@ -181,6 +181,6 @@ export {
   type JsonValue,
   type WireValue,
 } from "./values.js";
-export { API_VERSION, isCompatible, parseVersion } from "./version.js";
+export { API_VERSION, incompatibility, type Incompatibility, isCompatible, parseVersion } from "./version.js";
 /** Plugins build `connectionSchema` with the zod the contract was compiled against, not their own pick. */
 export { z } from "zod";

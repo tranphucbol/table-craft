@@ -3,8 +3,10 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   API_VERSION,
+  incompatibility,
   isCompatible,
   MANIFEST_FILE,
+  parseVersion,
   pluginManifestSchema,
   type DatasourcePlugin,
   type PluginManifest,
@@ -59,13 +61,22 @@ async function pluginDirectories(root: string): Promise<string[]> {
   }
 }
 
-function incompatibleReason(apiVersion: string): string {
-  return `Built for plugin API ${apiVersion}, but this TableCraft provides ${API_VERSION}. Install a compatible version of the plugin.`;
+function incompatibleReason(apiVersion: string, hostVersion: string): string {
+  const why = incompatibility(apiVersion, hostVersion);
+  const needed = parseVersion(apiVersion);
+  const host = parseVersion(hostVersion);
+  if (why === "newer" && needed !== null) {
+    return `Built for plugin API ${apiVersion}: needs TableCraft with plugin API ${needed.major}.${needed.minor} or later; this TableCraft provides ${hostVersion}. Update the app.`;
+  }
+  if (why === "olderMajor" && host !== null) {
+    return `Built for plugin API ${apiVersion}, an older major than this TableCraft's ${hostVersion}. Install a version of the plugin built for plugin API ${host.major}.x.`;
+  }
+  return `Built for plugin API ${apiVersion}, but this TableCraft provides ${hostVersion}. Install a compatible version of the plugin.`;
 }
 
 type ManifestRead = { ok: true; manifest: PluginManifest } | { ok: false; reason: string };
 
-async function readManifest(directory: string): Promise<ManifestRead> {
+async function readManifest(directory: string, hostVersion: string): Promise<ManifestRead> {
   let text: string;
   try {
     text = await readFile(join(directory, MANIFEST_FILE), "utf8");
@@ -81,9 +92,9 @@ async function readManifest(directory: string): Promise<ManifestRead> {
   }
   const parsed = pluginManifestSchema.safeParse(json);
   const apiVersion = (json as { apiVersion?: unknown } | null)?.apiVersion;
-  if (!parsed.success && typeof apiVersion === "string" && !isCompatible(apiVersion)) {
+  if (!parsed.success && typeof apiVersion === "string" && !isCompatible(apiVersion, hostVersion)) {
     // An older plugin fails the schema for fields its contract never had; the version says why.
-    return { ok: false, reason: incompatibleReason(apiVersion) };
+    return { ok: false, reason: incompatibleReason(apiVersion, hostVersion) };
   }
   if (!parsed.success) {
     const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`);
@@ -155,14 +166,18 @@ async function importPlugin(directory: string, manifest: PluginManifest): Promis
 /**
  * Reads every plugin directory under `roots`, in order, without running any plugin code
  * (decision 005), so main can list plugins and their connection forms (decision 019). Earlier
- * roots win an id clash, so pass the built-in root first.
+ * roots win an id clash, so pass the built-in root first. `hostVersion` is the plugin API the host
+ * provides; only tests pass another.
  */
-export async function discoverPlugins(roots: readonly string[]): Promise<PluginDiscovery[]> {
+export async function discoverPlugins(
+  roots: readonly string[],
+  hostVersion: string = API_VERSION,
+): Promise<PluginDiscovery[]> {
   const results: PluginDiscovery[] = [];
   const claimed = new Map<string, string>();
   for (const root of roots) {
     for (const directory of await pluginDirectories(root)) {
-      const read = await readManifest(directory);
+      const read = await readManifest(directory, hostVersion);
       if (!read.ok) {
         results.push({ status: "unavailable", directory, manifest: null, reason: read.reason });
         continue;
@@ -175,8 +190,9 @@ export async function discoverPlugins(roots: readonly string[]): Promise<PluginD
         continue;
       }
       claimed.set(manifest.id, directory);
-      if (!isCompatible(manifest.apiVersion)) {
-        results.push({ status: "unavailable", directory, manifest, reason: incompatibleReason(manifest.apiVersion) });
+      if (!isCompatible(manifest.apiVersion, hostVersion)) {
+        const reason = incompatibleReason(manifest.apiVersion, hostVersion);
+        results.push({ status: "unavailable", directory, manifest, reason });
         continue;
       }
       results.push({ status: "available", directory, manifest });
@@ -189,9 +205,12 @@ export async function discoverPlugins(roots: readonly string[]): Promise<PluginD
  * Loads every plugin `discoverPlugins` finds available. A broken plugin becomes an
  * `UnavailablePlugin` with a reason; it never stops the others.
  */
-export async function loadPlugins(roots: readonly string[]): Promise<PluginLoadResult[]> {
+export async function loadPlugins(
+  roots: readonly string[],
+  hostVersion: string = API_VERSION,
+): Promise<PluginLoadResult[]> {
   const results: PluginLoadResult[] = [];
-  for (const found of await discoverPlugins(roots)) {
+  for (const found of await discoverPlugins(roots, hostVersion)) {
     results.push(found.status === "available" ? await importPlugin(found.directory, found.manifest) : found);
   }
   return results;

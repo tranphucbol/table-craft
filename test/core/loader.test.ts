@@ -2,13 +2,19 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPlugins, type PluginLoadResult } from "@table-craft/core";
-import { API_VERSION, MANIFEST_FILE } from "@table-craft/plugin-api";
+import { API_VERSION, MANIFEST_FILE, parseVersion } from "@table-craft/plugin-api";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 const ENTRY_FILE = "index.mjs";
-const INCOMPATIBLE_API_VERSION = "0.99.0";
-/** Plan 002 broke the contract by adding `cancel` and `PluginError`; plugins built before it must not load. */
-const PREVIOUS_API_VERSION = "0.1.0";
+const HOST = parseVersion(API_VERSION);
+if (HOST === null) throw new Error(`API_VERSION ${API_VERSION} is not semver.`);
+const { major, minor, patch } = HOST;
+const NEWER_MINOR_API_VERSION = `${major}.${minor + 1}.0`;
+const NEXT_MAJOR_API_VERSION = `${major + 1}.0.0`;
+/** The last 0.x contract; 1.0 is another major (decision 106). */
+const PREVIOUS_MAJOR_API_VERSION = "0.28.0";
+const OLDER_MINOR_API_VERSION = "1.0.0";
+const NEWER_HOST_API_VERSION = "1.3.0";
 const CONNECTION = { fields: [{ key: "path", label: "Path", kind: "text" }] };
 
 function pluginSource(id: string): string {
@@ -74,21 +80,46 @@ describe("loadPlugins", () => {
     expect(byStatus(results, "loaded")).toEqual(["alpha"]);
   });
 
-  it("givenManifestWithIncompatibleApiVersion_whenLoaded_thenPluginUnavailableWithReason", async () => {
-    await writePlugin("builtin", "alpha", { id: "alpha", apiVersion: INCOMPATIBLE_API_VERSION });
+  it("givenPluginBuiltForOlderMinor_whenLoaded_thenAccepted", async () => {
+    await writePlugin("builtin", "alpha", { id: "alpha", apiVersion: OLDER_MINOR_API_VERSION });
 
-    const [result] = await loadPlugins([join(workspace, "builtin")]);
+    const results = await loadPlugins([join(workspace, "builtin")], NEWER_HOST_API_VERSION);
 
-    expect(result).toMatchObject({ status: "unavailable", manifest: { id: "alpha" } });
-    expect(result?.status === "unavailable" && result.reason).toContain(INCOMPATIBLE_API_VERSION);
+    expect(byStatus(results, "loaded")).toEqual(["alpha"]);
   });
 
-  it("givenManifestWithApiVersion010_whenLoaded_thenPluginUnavailable", async () => {
-    await writePlugin("builtin", "alpha", { id: "alpha", apiVersion: PREVIOUS_API_VERSION });
+  it("givenPluginWithHigherPatch_sameMinor_whenLoaded_thenAccepted", async () => {
+    await writePlugin("builtin", "alpha", { id: "alpha", apiVersion: `${major}.${minor}.${patch + 1}` });
+
+    const results = await loadPlugins([join(workspace, "builtin")]);
+
+    expect(byStatus(results, "loaded")).toEqual(["alpha"]);
+  });
+
+  it("givenPluginBuiltForNewerMinor_whenLoaded_thenRefusedNamingAppVersion", async () => {
+    await writePlugin("builtin", "alpha", { id: "alpha", apiVersion: NEWER_MINOR_API_VERSION });
 
     const [result] = await loadPlugins([join(workspace, "builtin")]);
 
     expect(result).toMatchObject({ status: "unavailable", manifest: { id: "alpha" } });
+    expect(result?.status === "unavailable" && result.reason).toBe(
+      `Built for plugin API ${NEWER_MINOR_API_VERSION}: needs TableCraft with plugin API ${major}.${minor + 1} or later; this TableCraft provides ${API_VERSION}. Update the app.`,
+    );
+  });
+
+  it("givenPluginOfOtherMajor_whenLoaded_thenRefused", async () => {
+    await writePlugin("builtin", "older", { id: "older", apiVersion: PREVIOUS_MAJOR_API_VERSION });
+    await writePlugin("builtin", "newer", { id: "newer", apiVersion: NEXT_MAJOR_API_VERSION });
+
+    const results = await loadPlugins([join(workspace, "builtin")]);
+
+    const reasons = Object.fromEntries(
+      results.map((result) => [result.manifest?.id, result.status === "unavailable" ? result.reason : null]),
+    );
+    expect(reasons["older"]).toBe(
+      `Built for plugin API ${PREVIOUS_MAJOR_API_VERSION}, an older major than this TableCraft's ${API_VERSION}. Install a version of the plugin built for plugin API ${major}.x.`,
+    );
+    expect(reasons["newer"]).toContain(`needs TableCraft with plugin API ${major + 1}.0 or later`);
   });
 
   it("givenDuplicatePluginId_whenLoaded_thenErrorNamesBothPaths", async () => {

@@ -19,7 +19,9 @@ its own MessagePort (decision 002).
 
 A plugin is a directory with `table-craft-plugin.json` and an ESM entry exporting a
 `DatasourcePlugin` (decisions 005 to 008). The contract lives in `@table-craft/plugin-api`.
-`API_VERSION` is `0.28.0`; while it is `0.x` the contract is unstable and every minor is a break.
+`API_VERSION` is `1.0.0` and follows semver (decision 106): a host on `1.z` loads a plugin built for
+`1.y` when `y ≤ z`, whatever the patch, and refuses a newer minor or another major. Surface may only
+grow within a major; `bun run api:check` and a frozen 1.0.0 SQLite plugin enforce it (decision 107).
 
 ### Discovery
 
@@ -32,7 +34,7 @@ Each directory ends as `loaded` or `unavailable` with a reason; nothing a plugin
 | No `table-craft-plugin.json` or unreadable JSON                               | the file            |
 | Manifest fails the schema                                                     | every failing field |
 | An earlier directory already claimed the id                                   | both directories    |
-| `apiVersion` not compatible with the host                                     | both versions       |
+| `apiVersion` not compatible with the host                                     | the API it needs    |
 | `entry` resolves outside the plugin directory                                 | the entry           |
 | The entry throws on import, or its default export is not a `DatasourcePlugin` | the error           |
 | The export's `id` or `capabilities` differ from the manifest                  | both values         |
@@ -44,7 +46,7 @@ Each directory ends as `loaded` or `unavailable` with a reason; nothing a plugin
 | `id`           | `^[a-z][a-z0-9-]*$`          | Unique across both roots; datasources refer to it                                                                    |
 | `name`         | string                       | Shown before the entry is ever imported                                                                              |
 | `version`      | semver                       | The plugin's own version                                                                                             |
-| `apiVersion`   | semver                       | The `API_VERSION` it was built against; caret-compatible, so `0.x` needs the same minor                              |
+| `apiVersion`   | semver                       | The `API_VERSION` it was built against; loads on the same major with an equal or later minor                         |
 | `entry`        | relative path                | The ESM module, inside the directory                                                                                 |
 | `capabilities` | `Capability[]`               | Must equal the export's                                                                                              |
 | `highlight`    | string                       | The highlighter the console uses (decision 008)                                                                      |

@@ -654,7 +654,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "0.28.0",
+  "apiVersion": "1.0.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -701,8 +701,25 @@ configured host as `serverName`, which a `verify-full` check must use instead of
 
 A plugin depends on `@table-craft/plugin-api` and should pass its contract suite,
 `runPluginContract` from `@table-craft/plugin-api/testing`, which the built-in plugins run against
-real databases. The plugin API is not stable yet: while it is 0.x, `apiVersion` must match the app's
-minor version exactly. See [Plugin contract](docs/design/specification.md#plugin-contract).
+real databases. See [Plugin contract](docs/design/specification.md#plugin-contract).
+
+### Plugin compatibility
+
+The plugin API follows semver and stays backward compatible within a major version:
+
+- Set `apiVersion` to the version of `@table-craft/plugin-api` you built against. TableCraft with
+  plugin API `1.z` loads a plugin built for `1.y` when `y` is `z` or lower. A plugin built for a
+  newer minor, or another major, is listed as unavailable with the plugin API it needs.
+- A minor version only adds: new exports, new optional fields and methods, new capabilities. New
+  contract tests apply only to plugins that declare what they test.
+- Breaking changes wait for the next major: removing or renaming anything, making something
+  optional required, adding a required member to what a plugin implements or returns, adding a
+  value to what a plugin receives without an opt-in, or changing what a field means.
+- Before removal, a member is marked `@deprecated` with its replacement for at least one major.
+- A new optional method is called only when your plugin has it or declares its capability, never
+  because of your `apiVersion`.
+
+Plugins built for plugin API 0.x must be rebuilt for 1.0.
 
 ## Where your data lives
 

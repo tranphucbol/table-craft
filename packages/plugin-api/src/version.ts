@@ -1,11 +1,10 @@
 /**
- * The plugin contract's version. Unstable while the major is 0: a minor bump is a breaking change,
- * so a plugin is compatible only with the exact minor it was built against.
+ * The plugin contract's version, by semver (decision 106): a host loads a plugin built for the same
+ * major and an older or equal minor. Typed `string` so a bump does not change the API report.
  */
-export const API_VERSION = "0.28.0";
+export const API_VERSION: string = "1.0.0";
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-const UNSTABLE_MAJOR = 0;
 
 interface Version {
   readonly major: number;
@@ -21,11 +20,23 @@ export function parseVersion(text: string): Version | null {
   return { major: Number(major), minor: Number(minor), patch: Number(patch) };
 }
 
-/** Whether a plugin built against `apiVersion` can be loaded by this `API_VERSION`, by caret rules. */
-export function isCompatible(apiVersion: string, hostVersion: string = API_VERSION): boolean {
+/**
+ * Why a plugin built against `apiVersion` cannot load on `hostVersion`: it needs a `newer` host
+ * (a later minor, or a later major), it was built for an `olderMajor`, or the version is `invalid`.
+ * Null when it loads.
+ */
+export type Incompatibility = "newer" | "olderMajor" | "invalid";
+
+export function incompatibility(apiVersion: string, hostVersion: string = API_VERSION): Incompatibility | null {
   const plugin = parseVersion(apiVersion);
   const host = parseVersion(hostVersion);
-  if (plugin === null || host === null || plugin.major !== host.major) return false;
-  if (host.major === UNSTABLE_MAJOR) return plugin.minor === host.minor && plugin.patch <= host.patch;
-  return plugin.minor < host.minor || (plugin.minor === host.minor && plugin.patch <= host.patch);
+  if (plugin === null || host === null) return "invalid";
+  if (plugin.major < host.major) return "olderMajor";
+  if (plugin.major > host.major || plugin.minor > host.minor) return "newer";
+  return null;
+}
+
+/** Whether a plugin built against `apiVersion` can be loaded by this `API_VERSION`, by semver. */
+export function isCompatible(apiVersion: string, hostVersion: string = API_VERSION): boolean {
+  return incompatibility(apiVersion, hostVersion) === null;
 }
