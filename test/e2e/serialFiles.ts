@@ -18,6 +18,8 @@ export const SERIAL_SMOKE_FILES: Readonly<Record<string, string>> = {
   "test/e2e/resultSearch.smoke.test.ts": "expects `tables 6`",
   "test/e2e/sessions.smoke.test.ts": "lists every server session and kills by statement text",
   "test/e2e/settings.smoke.test.ts": "creates `page_probe` and expects `tables 7`",
+  "test/e2e/sqlFiles.smoke.test.ts":
+    "expects a 100 MB script past 2,000 statements within the launch timeout, a rate the parallel files' CPU load starves",
   "test/e2e/sshTunnel.smoke.test.ts": "kills every session of the bastion's `tunnel` user",
   "test/e2e/tableEditor.smoke.test.ts": "edits and resets `orders` and `edit_probe`",
   "test/e2e/titleBar.smoke.test.ts": "holds a row lock on `orders` in an open transaction",
