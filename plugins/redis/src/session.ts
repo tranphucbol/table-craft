@@ -71,6 +71,7 @@ export class RedisSession implements Session {
       configuredDatabase: this.#database,
       router: this.#router,
       onDatabase: (database, work) => this.#onDatabase(database, work),
+      hashFieldTtl: () => this.features().then((features) => features.hashFieldTtl),
     });
   }
 

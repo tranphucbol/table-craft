@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { EXTRACTOR_KINDS, type ExtractorKind } from "@table-craft/desktop/engine/protocol.js";
+import { VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 
 /**
  * Which tool windows are open and how big they are. Per-window UI memory in `localStorage`, not a
@@ -28,6 +29,8 @@ export interface Layout {
   readonly extractor: ExtractorKind;
   /** Whether result grids show the value panel beside their rows (plan 007 decision 15). */
   readonly valuePanel: boolean;
+  /** The value panel's format per key pattern, such as `session:*` → gzip (plan 058 decision 15). */
+  readonly valueFormats: Readonly<Record<string, ValueFormat>>;
 }
 
 /**
@@ -60,6 +63,7 @@ export const DEFAULT_LAYOUT: Layout = {
   openTables: [],
   extractor: "csv",
   valuePanel: false,
+  valueFormats: {},
 };
 
 const MIN_SIZE_PERCENT = 5;
@@ -118,6 +122,15 @@ function isOpenTable(value: unknown): value is OpenTable {
 const isExtractor = (value: unknown): value is ExtractorKind =>
   typeof value === "string" && (EXTRACTOR_KINDS as readonly string[]).includes(value);
 
+function valueFormatsOf(value: unknown): Readonly<Record<string, ValueFormat>> {
+  if (typeof value !== "object" || value === null) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter((entry): entry is [string, ValueFormat] =>
+      (VALUE_FORMATS as readonly unknown[]).includes(entry[1]),
+    ),
+  );
+}
+
 function openConsolesOf(value: unknown): readonly OpenConsole[] {
   return Array.isArray(value) ? value.filter(isOpenConsole) : [];
 }
@@ -143,6 +156,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     openTables,
     extractor,
     valuePanel,
+    valueFormats,
   } = saved as Record<string, unknown>;
   const visibleRead = recordOf(visible, isBoolean, DEFAULT_LAYOUT.visible);
   const sizesRead = recordOf(sizes, isSize, DEFAULT_LAYOUT.sizes);
@@ -157,6 +171,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     openTables: Array.isArray(openTables) ? openTables.filter(isOpenTable) : [],
     extractor: isExtractor(extractor) ? extractor : DEFAULT_LAYOUT.extractor,
     valuePanel: valuePanel === true,
+    valueFormats: valueFormatsOf(valueFormats),
   };
 }
 
@@ -199,6 +214,8 @@ export interface LayoutState {
   readonly setOpenTables: (openTables: readonly OpenTable[]) => void;
   readonly setExtractor: (extractor: ExtractorKind) => void;
   readonly toggleValuePanel: () => void;
+  /** Remembers `format` for keys like `pattern`; Auto forgets it. */
+  readonly setValueFormat: (pattern: string, format: ValueFormat) => void;
 }
 
 /** A layout store over `storage`; the app passes `localStorage`, tests a map. */
@@ -229,6 +246,11 @@ export function createLayoutStore(storage: LayoutStorage) {
         if (extractor !== get().layout.extractor) update({ ...get().layout, extractor });
       },
       toggleValuePanel: () => update({ ...get().layout, valuePanel: !get().layout.valuePanel }),
+      setValueFormat(pattern, format) {
+        const { [pattern]: current, ...rest } = get().layout.valueFormats;
+        if ((current ?? "auto") === format) return;
+        update({ ...get().layout, valueFormats: format === "auto" ? rest : { ...rest, [pattern]: format } });
+      },
     };
   });
 }

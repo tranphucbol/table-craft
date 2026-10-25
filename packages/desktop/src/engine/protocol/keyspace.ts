@@ -1,3 +1,6 @@
+import type { ExecutedStatement } from "./sessions.js";
+import type { WireValue } from "./wire.js";
+
 /** Mirrors `KEY_TYPES` in plugin-api (decision 113). */
 export const KEY_TYPES = ["string", "hash", "list", "set", "zset", "stream", "json", "other"] as const;
 export type KeyType = (typeof KEY_TYPES)[number];
@@ -37,6 +40,33 @@ export interface KeyInfo {
   readonly type: KeyType | null;
   readonly typeName: string | null;
   readonly ttlMs: number | null;
+}
+
+/** Mirrors `KeyDetails` in plugin-api: each fact null when the server would not say. */
+export interface KeyDetails extends KeyInfo {
+  readonly length: number | null;
+  readonly memoryBytes: number | null;
+  readonly encoding: string | null;
+  readonly idleSeconds: number | null;
+}
+
+/** Which part of a key the key tab reads: a `MATCH` glob, a stream id range, a list offset. */
+export interface KeyReadRange {
+  readonly match?: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly offset?: number;
+}
+
+/**
+ * A key opened in its tab (decision 113): the details, then rows in the result store for the
+ * collection types, or the value itself for a string; `readOnly` says why it cannot be edited.
+ */
+export interface OpenedKey {
+  readonly details: KeyDetails;
+  readonly statement: ExecutedStatement | null;
+  readonly value: WireValue | null;
+  readonly readOnly: string | null;
 }
 
 /** Mirrors `KeyExpiry` in plugin-api. */

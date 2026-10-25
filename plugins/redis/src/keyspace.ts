@@ -16,6 +16,7 @@ import {
 } from "@table-craft/plugin-api";
 import { TYPE_MAPPING } from "./connect.js";
 import { bytesOf, keyBytesOf } from "./keyBytes.js";
+import { readKey, type ReadHost } from "./read.js";
 import type { Router } from "./routing.js";
 
 /** The databases a server has when `CONFIG GET databases` is refused, Redis' default. */
@@ -47,6 +48,8 @@ export interface KeyspaceHost {
   readonly router: Router;
   /** Runs `work` with the connection on `database`, one call at a time. */
   onDatabase<T>(database: number, work: () => Promise<T>): Promise<T>;
+  /** Whether the server has per-field hash TTLs (Redis 7.4). */
+  hashFieldTtl(): Promise<boolean>;
 }
 
 /** A `TYPE` reply as a key type; null for `none`, a key that does not exist. */
@@ -197,8 +200,14 @@ export class RedisKeyspace implements Keyspace {
     );
   }
 
-  read(_database: number, _key: KeyName, _request: KeyReadRequest): Promise<KeyContents> {
-    return Promise.reject(notYet("Reading a key"));
+  async read(database: number, key: KeyName, request: KeyReadRequest): Promise<KeyContents> {
+    const [typed] = await this.describe(database, [key]);
+    const host: ReadHost = {
+      // One command a call, not the whole read: the rows are read lazily, after this returns.
+      onKey: (on, bytes, args) => this.#onDatabase(on, () => this.#host.router.onKey(bytes, args)),
+      hashFieldTtl: () => this.#host.hashFieldTtl(),
+    };
+    return readKey(host, database, key, typed ?? { type: null, typeName: null, ttlMs: null }, request);
   }
 
   preview(_key: KeyName, _changes: readonly KeyChange[], _options: KeyApplyOptions): readonly string[] {

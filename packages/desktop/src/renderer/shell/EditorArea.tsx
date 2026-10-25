@@ -8,6 +8,7 @@ import { invoke, registry, useActionEnabled } from "@table-craft/desktop/rendere
 import { Console } from "@table-craft/desktop/renderer/console/Console.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
+import { KeyTab } from "@table-craft/desktop/renderer/keys/KeyTab.js";
 import { sessionsTabLabel, tabLabel } from "@table-craft/desktop/renderer/model/format.js";
 import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { SessionsView } from "@table-craft/desktop/renderer/sessions/SessionsView.js";
@@ -28,6 +29,7 @@ import {
   CloseIcon,
   ConsoleIcon,
   DdlIcon,
+  KeyTabIcon,
   ReadOnlyIcon,
   SessionsIcon,
   TableIcon,
@@ -107,6 +109,7 @@ const TAB_ICONS = {
   table: TableIcon,
   ddl: DdlIcon,
   sessions: SessionsIcon,
+  key: KeyTabIcon,
 } as const satisfies Record<TabKind, unknown>;
 
 function TabIcon({ kind }: { readonly kind: TabKind }) {
@@ -252,6 +255,8 @@ export function EditorArea() {
         <DdlView key={active.id} ddlId={active.id} />
       ) : active.kind === "sessions" ? (
         <SessionsView key={active.id} sessionsId={active.id} />
+      ) : active.kind === "key" ? (
+        <KeyTab key={active.id} tabId={active.id} />
       ) : (
         <Console key={active.id} consoleId={active.id} />
       )}

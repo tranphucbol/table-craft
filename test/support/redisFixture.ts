@@ -39,5 +39,29 @@ export const REDIS_KEYSPACE: KeyspaceFixture = {
   scan: { match: "page:*", count: 5000, batch: 500 },
   typed: { match: "type_probe:*", type: "hash", keys: ["type_probe:hash"] },
   expiring: "user:{42}:session",
-  binary: { hex: "62696e3afffe", match: "bin:*", type: "string" },
+  binary: { hex: "62696e3afffe", match: "bin:*", type: "string", value: "binary key" },
+  hash: {
+    key: "type_probe:hash",
+    rows: [
+      ["name", "Ann"],
+      ["email", "ann@example.com"],
+      ["prefs", '{"theme":"dark","tags":[1,2]}'],
+    ],
+  },
+  zset: {
+    key: "leaderboard",
+    rows: [
+      ["bob", 80],
+      ["ann", 120],
+      ["cid", 200],
+    ],
+  },
+  stream: {
+    key: "type_probe:stream",
+    columns: ["id", "event", "user", "reason"],
+    rows: [
+      ["1700000000000-0", "login", "42", null],
+      ["1700000000001-0", "logout", "42", "idle"],
+    ],
+  },
 };

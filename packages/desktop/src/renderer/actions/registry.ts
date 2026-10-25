@@ -9,6 +9,7 @@ export type ActionCategory =
   | "Console"
   | "Result Grid"
   | "Table Editor"
+  | "Key Editor"
   | "Database"
   | "Editor Tabs"
   | "Tool Windows"

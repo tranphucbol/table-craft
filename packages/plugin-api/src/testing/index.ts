@@ -206,8 +206,20 @@ export interface KeyspaceFixture {
   readonly typed: { readonly match: string; readonly type: KeyType; readonly keys: readonly string[] };
   /** A key with an expiry. */
   readonly expiring: string;
-  /** A key whose name is not valid UTF-8, as lower-case hex, and a glob that finds it. */
-  readonly binary: { readonly hex: string; readonly match: string; readonly type: KeyType };
+  /** A key whose name is not valid UTF-8, as lower-case hex, a glob that finds it, and its value. */
+  readonly binary: { readonly hex: string; readonly match: string; readonly type: KeyType; readonly value: string };
+  /** A hash key and its first two columns' rows, in any order. */
+  readonly hash: KeyRowsFixture;
+  /** A sorted-set key and its member and score cells, in rank order. */
+  readonly zset: KeyRowsFixture;
+  /** A stream key, its columns and its rows, in id order. */
+  readonly stream: KeyRowsFixture & { readonly columns: readonly string[] };
+}
+
+/** A key and the rows reading it gives. */
+export interface KeyRowsFixture {
+  readonly key: string;
+  readonly rows: readonly Row[];
 }
 
 /** One routine call: which routine (from `routines.expected`), its arguments, and the rows it returns. */
@@ -365,6 +377,7 @@ const ROWS_READ_BEFORE_RETURN = 3;
 const LONG_BYTES_LENGTH = 48;
 /** Stops a scan pass that never ends, so a broken cursor fails rather than hangs. */
 const MAX_SCAN_BATCHES = 10_000;
+const READ_WINDOW = 100;
 const LONG_BYTES_HEX = "c3";
 const HEX_DIGITS_PER_BYTE = 2;
 
@@ -2472,7 +2485,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenBinaryKeyName_whenScanAndDescribe_thenHexRoundTrips", async () => {
+      it("givenBinaryKeyName_whenScanAndRead_thenHexRoundTrips", async () => {
         await withSession(plugin, fixture, async (session) => {
           const { binary, database } = keyspaceFixture();
           const found = await scanAll(keyspaceOf(session), { match: binary.match });
@@ -2481,6 +2494,67 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           if (key === undefined) return;
           const [info] = await keyspaceOf(session).describe(database, [key]);
           expect(info?.type).toBe(binary.type);
+          const contents = await keyspaceOf(session).read(database, key, { window: READ_WINDOW });
+          expect(contents.details.key).toEqual(key);
+          expect(contents.value).toBe(binary.value);
+        });
+      });
+
+      /** The key's rows, each cut to its first `width` cells. */
+      async function readRows(session: Session, key: string, width: number) {
+        const contents = await keyspaceOf(session).read(
+          keyspaceFixture().database,
+          { text: key, hex: null },
+          { window: READ_WINDOW },
+        );
+        if (contents.result === null) throw new Error(`${key} read no rows`);
+        const rows = await collect(contents.result.rows);
+        return {
+          contents,
+          columns: contents.result.columns.map((column) => column.name),
+          rows: rows.map((row) => row.slice(0, width)),
+        };
+      }
+
+      it("givenHash_whenRead_thenFieldValueRows", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { hash } = keyspaceFixture();
+          const read = await readRows(session, hash.key, 2);
+          expect(read.columns.slice(0, 2)).toEqual(["field", "value"]);
+          const sorted = (rows: readonly Row[]) =>
+            [...rows].sort((a, b) => JSON.stringify(a[0]).localeCompare(JSON.stringify(b[0])));
+          expect(sorted(read.rows)).toEqual(sorted(hash.rows));
+          expect(read.contents.details).toMatchObject({ type: "hash", length: hash.rows.length });
+        });
+      });
+
+      it("givenZset_whenRead_thenMemberScoreRowsInRankOrder", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { zset } = keyspaceFixture();
+          const read = await readRows(session, zset.key, 3);
+          expect(read.columns).toEqual(["#", "member", "score"]);
+          expect(read.rows.map((row) => row.slice(1))).toEqual(zset.rows);
+          expect(read.rows.map((row) => row[0])).toEqual(zset.rows.map((_, index) => index));
+        });
+      });
+
+      it("givenStream_whenRead_thenIdAndFieldColumns", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { stream } = keyspaceFixture();
+          const read = await readRows(session, stream.key, stream.columns.length);
+          expect(read.columns).toEqual(stream.columns);
+          expect(read.rows).toEqual(stream.rows);
+        });
+      });
+
+      it("givenMissingKey_whenRead_thenNoTypeAndNoContents", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const contents = await keyspaceOf(session).read(
+            keyspaceFixture().database,
+            { text: "table-craft:contract:missing", hex: null },
+            { window: READ_WINDOW },
+          );
+          expect(contents).toMatchObject({ details: { type: null }, result: null, value: null });
         });
       });
     });

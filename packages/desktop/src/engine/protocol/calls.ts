@@ -29,7 +29,16 @@ import type {
   GeneratorStatement,
   ParameterValue,
 } from "./sql.js";
-import type { KeyDatabases, KeyExpiry, KeyInfo, KeyName, KeyScan, KeyType } from "./keyspace.js";
+import type {
+  KeyDatabases,
+  KeyExpiry,
+  KeyInfo,
+  KeyName,
+  KeyReadRange,
+  KeyScan,
+  KeyType,
+  OpenedKey,
+} from "./keyspace.js";
 import type { ServerNode } from "./server.js";
 import type { ConditionColumn, OrderTerm, ResultEditable, RowEdit, SubmittedEdits, TableQuery } from "./tables.js";
 import type {
@@ -273,6 +282,20 @@ export interface EngineCalls {
   "keyspace.describe": {
     params: { readonly database: number; readonly keys: readonly KeyName[] };
     result: readonly KeyInfo[];
+  };
+  /**
+   * Reads `key` on the key tab's session: its rows go to the result store like a statement's, its
+   * value comes back whole up to 1 MiB (decision 113). Needs `keyValue`.
+   */
+  "keyspace.open": {
+    params: {
+      readonly sessionId: string;
+      readonly database: number;
+      readonly key: KeyName;
+      readonly range: KeyReadRange;
+    } & ResultPaging &
+      StatementLimit;
+    result: OpenedKey;
   };
   /** Renames a key; refused when `to` exists unless `overwrite`. Needs `keyValue`. */
   "keyspace.rename": {

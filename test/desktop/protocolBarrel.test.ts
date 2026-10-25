@@ -90,6 +90,7 @@ const METHODS = [
   "keyspace.databases",
   "keyspace.scan",
   "keyspace.describe",
+  "keyspace.open",
   "keyspace.rename",
   "keyspace.expire",
   "keyspace.remove",

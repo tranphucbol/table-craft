@@ -307,6 +307,21 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   z.strictObject({ id: requestId, type: z.literal("keyspace.describe"), database: index, keys: keyNames }),
   z.strictObject({
     id: requestId,
+    type: z.literal("keyspace.open"),
+    sessionId,
+    database: index,
+    key: keyName,
+    range: z.strictObject({
+      match: z.string().min(1).optional(),
+      from: z.string().min(1).optional(),
+      to: z.string().min(1).optional(),
+      offset: z.number().int().nonnegative().optional(),
+    }),
+    ...paging,
+    timeoutSeconds,
+  }),
+  z.strictObject({
+    id: requestId,
     type: z.literal("keyspace.rename"),
     database: index,
     key: keyName,

@@ -90,6 +90,7 @@ import {
   KEY_TYPES,
   type KeyBytes,
   type KeyDatabase,
+  type KeyDetails,
   type KeyExpiry,
   type KeyInfo,
   type KeyScan,
@@ -271,6 +272,7 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.KeyScan>().toEqualTypeOf<KeyScan>();
     expectTypeOf<protocol.KeyInfo>().toEqualTypeOf<KeyInfo>();
     expectTypeOf<protocol.KeyExpiry>().toEqualTypeOf<KeyExpiry>();
+    expectTypeOf<protocol.KeyDetails>().toEqualTypeOf<KeyDetails>();
   });
 
   it("givenCoreErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {

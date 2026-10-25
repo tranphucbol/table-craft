@@ -1,11 +1,87 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Column, WireValue } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { EDITOR_THEME } from "@table-craft/desktop/renderer/console/editorTheme.js";
 import { NULL_TEXT, panelValue } from "@table-craft/desktop/renderer/grid/format.js";
+import { Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { prettyJson } from "@table-craft/desktop/renderer/model/prettyJson.js";
+import {
+  decodeValue,
+  FORMAT_LABELS,
+  VALUE_FORMATS,
+  valueBytes,
+  type DecodedValue,
+  type ValueFormat,
+} from "@table-craft/desktop/renderer/model/valueFormats.js";
+
+const FORMAT_LABEL = "Format";
+const FORMAT_OPTIONS = VALUE_FORMATS.map((format) => ({ value: format, label: FORMAT_LABELS[format] }));
+
+/** How a key tab's value panel reads bytes (plan 058 decision 15); the console's and table's panels have none. */
+export interface ValueFormatChoice {
+  readonly format: ValueFormat;
+  readonly onChange: (format: ValueFormat) => void;
+}
+
+function FormatPicker({ choice }: { readonly choice: ValueFormatChoice }) {
+  return (
+    <span className="ml-auto shrink-0">
+      <Select
+        label={FORMAT_LABEL}
+        testId="value-format"
+        value={choice.format}
+        options={FORMAT_OPTIONS}
+        onChange={(format) => {
+          const picked = VALUE_FORMATS.find((candidate) => candidate === format);
+          if (picked !== undefined) choice.onChange(picked);
+        }}
+      />
+    </span>
+  );
+}
+
+/** `bytes` decoded as `format`; gzip inflates asynchronously, so the first draw may be the previous text. */
+function useDecoded(bytes: Uint8Array, format: ValueFormat): DecodedValue | null {
+  const [decoded, setDecoded] = useState<DecodedValue | null>(null);
+  useEffect(() => {
+    let current = true;
+    void decodeValue(bytes, format).then((next) => {
+      if (current) setDecoded(next);
+    });
+    return () => {
+      current = false;
+    };
+  }, [bytes, format]);
+  return decoded;
+}
+
+function FormattedValue({ bytes, format }: { readonly bytes: Uint8Array; readonly format: ValueFormat }) {
+  const decoded = useDecoded(bytes, format);
+  if (decoded === null) return <p className="p-cell text-ink-muted">Decoding…</p>;
+  const shownAs = decoded.inner === null ? FORMAT_LABELS[decoded.format] : `gzip → ${FORMAT_LABELS[decoded.inner]}`;
+  const json =
+    decoded.error === null && (decoded.format === "json" || decoded.inner === "json" || decoded.format === "msgpack");
+  return (
+    <div data-testid="value-formatted" data-format={decoded.format} className="flex min-h-0 flex-1 flex-col">
+      <p className="shrink-0 px-cell pt-cell text-ink-muted">
+        {format === "auto" ? `Auto: ${shownAs}` : shownAs}
+        {decoded.error === null ? "" : ` · ${decoded.error}`}
+      </p>
+      {json ? (
+        <JsonView text={decoded.text} />
+      ) : (
+        <pre
+          data-testid="value-text"
+          className="min-h-0 flex-1 overflow-auto p-cell break-words whitespace-pre-wrap text-ink select-text"
+        >
+          {decoded.text}
+        </pre>
+      )}
+    </div>
+  );
+}
 
 function JsonView({ text }: { readonly text: string }) {
   const host = useRef<HTMLDivElement>(null);
@@ -112,16 +188,23 @@ export function ValueEditor({
 export function ValuePanel({
   column,
   value,
+  format,
 }: {
   readonly column: Column | null;
   /** `undefined` while the cell's window is loading, or with no cell focused. */
   readonly value: WireValue | undefined;
+  readonly format?: ValueFormatChoice;
 }) {
   const shown = value === undefined ? null : panelValue(value);
+  const formatted = format !== undefined;
+  // A fresh array per draw would re-run the decoding effect after each decode it causes.
+  const bytes = useMemo(() => (formatted ? valueBytes(value) : null), [formatted, value]);
   return (
     <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
-      <PanelHeader column={column} />
-      {shown === null ? (
+      <PanelHeader column={column}>{format === undefined ? null : <FormatPicker choice={format} />}</PanelHeader>
+      {bytes !== null && format !== undefined ? (
+        <FormattedValue bytes={bytes} format={format.format} />
+      ) : shown === null ? (
         <p className="p-cell text-ink-muted">{column === null ? "Select a cell to see its value." : "Loading…"}</p>
       ) : shown.kind === "null" ? (
         <p className="p-cell text-grid-null italic">{NULL_TEXT}</p>

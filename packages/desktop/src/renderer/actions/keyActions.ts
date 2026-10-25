@@ -6,7 +6,10 @@ import { keyIdentity, type KeyFilter } from "@table-craft/desktop/renderer/model
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { formatPattern, VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
+import { canReloadKey, useKeyTabs, type KeyTab, type KeyTarget } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
+import { useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 
@@ -15,6 +18,8 @@ export const KEY_ACTION_IDS = {
   goTo: "key.goTo",
   loadMore: "key.loadMore",
   filter: "key.filter",
+  reload: "key.reload",
+  valueFormat: "key.valueFormat",
   toggleEmptyDatabases: "explorer.toggleEmptyDatabases",
 } as const;
 
@@ -76,9 +81,40 @@ export function revealKey(context: ActionContext, { datasourceId, database, key 
   useCatalog.getState().requestFocus();
 }
 
-/** What opening a key does; the key tab replaces the reveal (plan 058 phase 4). */
-function openKey(context: ActionContext, target: OpenKeyArgs): void {
-  revealKey(context, target);
+const KEY_TAB_PREFIX = "key-";
+let keyTabsOpened = 0;
+
+function sameKey(a: KeyTarget, b: KeyTarget): boolean {
+  return a.datasourceId === b.datasourceId && a.database === b.database && keyIdentity(a.key) === keyIdentity(b.key);
+}
+
+/** Opens the key in a key tab (decision 113), or brings its open tab forward. */
+function openKey(_context: ActionContext, target: OpenKeyArgs): void {
+  const existing = Object.entries(useKeyTabs.getState().tabs).find(([, tab]) => sameKey(tab, target))?.[0];
+  if (existing !== undefined) {
+    useTabs.getState().activate(existing);
+    return;
+  }
+  const tab: Tab = { id: `${KEY_TAB_PREFIX}${String(keyTabsOpened++)}`, kind: "key", title: target.key.text };
+  useTabs.getState().open(tab);
+  void useKeyTabs.getState().open(tab.id, target);
+}
+
+/** The pattern the active key tab's value format is remembered under. */
+export function formatPatternOf(tab: KeyTab | null): string | null {
+  if (tab === null) return null;
+  const delimiter = useKeys.getState().keyspaces[tab.datasourceId]?.delimiter ?? "";
+  return formatPattern(tab.key.text, delimiter);
+}
+
+/** The format the active key tab's value panel reads with. */
+export function valueFormatOf(tab: KeyTab | null): ValueFormat {
+  const pattern = formatPatternOf(tab);
+  return pattern === null ? "auto" : (useLayout.getState().layout.valueFormats[pattern] ?? "auto");
+}
+
+export interface ValueFormatArgs {
+  readonly format: ValueFormat;
 }
 
 async function goToKey(context: ActionContext): Promise<void> {
@@ -193,6 +229,33 @@ export const KEY_ACTIONS: readonly AnyAction[] = [
     available: browsesKeys,
     when: browsesKeys,
     run: goToKey,
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.reload,
+    title: "Reload Key",
+    category: "Key Editor",
+    icon: "rerun",
+    tabKind: "key",
+    when: (context) => context.keyTab !== null && canReloadKey(context.keyTab.status),
+    run: async (context) => {
+      if (context.activeTab !== null && context.keyTab !== null) {
+        await useKeyTabs.getState().reload(context.activeTab.id);
+      }
+    },
+  }),
+  defineAction<ValueFormatArgs | undefined>({
+    id: KEY_ACTION_IDS.valueFormat,
+    title: "Next Value Format",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) => context.keyTab !== null,
+    run: (context, args) => {
+      const pattern = formatPatternOf(context.keyTab);
+      if (pattern === null) return;
+      const current = valueFormatOf(context.keyTab);
+      const next = args?.format ?? VALUE_FORMATS[(VALUE_FORMATS.indexOf(current) + 1) % VALUE_FORMATS.length];
+      if (next !== undefined) useLayout.getState().setValueFormat(pattern, next);
+    },
   }),
   defineAction({
     id: KEY_ACTION_IDS.toggleEmptyDatabases,

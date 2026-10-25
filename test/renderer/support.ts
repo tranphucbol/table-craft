@@ -8,6 +8,7 @@ export const IDLE_CONTEXT: ActionContext = {
   table: null,
   ddl: null,
   sessions: null,
+  keyTab: null,
   result: null,
   datasources: [],
   selection: null,

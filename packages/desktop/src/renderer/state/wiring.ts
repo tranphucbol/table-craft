@@ -28,6 +28,7 @@ import {
 import { followObjectFeatures, useObjects, type ObjectsStore } from "@table-craft/desktop/renderer/state/objects.js";
 import { useScripts, type ScriptsStore } from "@table-craft/desktop/renderer/state/scripts.js";
 import { sessionsTabOf, useSessions, type SessionsStore } from "@table-craft/desktop/renderer/state/sessions.js";
+import { keyTabsOf, useKeyTabs, type KeyTabsStore } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { themeOf, useSettings, type SettingsStore } from "@table-craft/desktop/renderer/state/settings.js";
 import { tablesOf, useTables, type TablesStore } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs, type TabsStore } from "@table-craft/desktop/renderer/state/tabs.js";
@@ -38,6 +39,7 @@ export interface WiredStores {
   readonly tabs: TabsStore;
   readonly catalog?: CatalogStore;
   readonly keys?: KeysStore;
+  readonly keyTabs?: KeyTabsStore;
   readonly tables?: TablesStore;
   readonly ddl?: DdlStore;
   readonly executions?: ExecutionsStore;
@@ -68,6 +70,7 @@ export function wireStores({
   tabs,
   catalog,
   keys,
+  keyTabs,
   tables,
   ddl,
   executions,
@@ -88,6 +91,7 @@ export function wireStores({
     scripts?.getState().detached(id, error);
     consoles.getState().detach(id, error);
     tables?.getState().detach(id, error);
+    keyTabs?.getState().detach(id, error);
     catalog?.getState().clear(id);
     keys?.getState().clear(id);
   });
@@ -108,6 +112,10 @@ export function wireStores({
       for (const ddlId of ddl === undefined ? [] : ddlsOf(ddl.getState().ddls, id)) {
         tabs.getState().close(ddlId);
         ddl?.getState().close(ddlId);
+      }
+      for (const keyId of keyTabs === undefined ? [] : keyTabsOf(keyTabs.getState().tabs, id)) {
+        tabs.getState().close(keyId);
+        keyTabs?.getState().close(keyId);
       }
       const sessionsId = sessions === undefined ? null : sessionsTabOf(sessions.getState().tabs, id);
       if (sessionsId !== null) {
@@ -167,6 +175,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     tabs: useTabs,
     catalog: useCatalog,
     keys: useKeys,
+    keyTabs: useKeyTabs,
     tables: useTables,
     ddl: useDdl,
     sessions: useSessions,

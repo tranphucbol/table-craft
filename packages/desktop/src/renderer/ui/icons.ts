@@ -109,6 +109,7 @@ export {
   Stack as MaterializedViewIcon,
   Columns as ColumnIcon,
   Key as KeyIcon,
+  Key as KeyTabIcon,
   ListDashes as IndexIcon,
   FunctionGlyph as RoutineIcon,
   ListNumbers as SequenceIcon,

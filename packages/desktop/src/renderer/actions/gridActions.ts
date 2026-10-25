@@ -10,6 +10,7 @@ import { formatCell } from "@table-craft/desktop/renderer/grid/format.js";
 import { canFetch, canRun, rowAt, useConsoles, type ResultTab } from "@table-craft/desktop/renderer/state/consoles.js";
 import { findsCells, shownRowCount, type ResultSearch } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { canReload, tableRowCount, useTables } from "@table-craft/desktop/renderer/state/tables.js";
+import { canReloadKey, useKeyTabs } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { reloadTable, settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
@@ -123,6 +124,9 @@ function shown(context: ActionContext): ShownResult | null {
   if (context.table !== null) {
     return { ownerId, result: context.result, host: useTables.getState(), rows: tableRowCount(context.table) };
   }
+  if (context.keyTab !== null) {
+    return { ownerId, result: context.result, host: useKeyTabs.getState(), rows: shownRowCount(context.result) };
+  }
   return null;
 }
 
@@ -130,6 +134,7 @@ function shown(context: ActionContext): ShownResult | null {
 function canRerun(context: ActionContext): boolean {
   if (shown(context) === null) return false;
   if (context.console !== null) return canRun(context.console.status);
+  if (context.keyTab !== null) return canReloadKey(context.keyTab.status);
   return context.table !== null && canReload(context.table.status);
 }
 
@@ -274,6 +279,7 @@ export const GRID_ACTIONS: readonly AnyAction[] = [
       const target = shown(context);
       if (target === null) return;
       if (context.table !== null) await reloadTable(target.ownerId);
+      else if (context.keyTab !== null) await useKeyTabs.getState().reload(target.ownerId);
       else await useConsoles.getState().rerun(target.ownerId, target.result.id);
     },
   }),
