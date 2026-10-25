@@ -352,6 +352,7 @@ export const COMPACT_DENSITY: DensityTokens = {
 
 /** The width the macOS traffic lights take at x = 12 (they end near 72 px), plus a margin. */
 export const TRAFFIC_LIGHT_INSET_PX = 76;
+export const EDITOR_TOOLTIP_RADIUS_PX = 6;
 
 export type DensityId = "comfortable" | "compact";
 

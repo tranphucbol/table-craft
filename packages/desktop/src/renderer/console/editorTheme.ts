@@ -212,9 +212,14 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
   ".cm-tooltip": {
     backgroundColor: "var(--tc-raised)",
     border: "1px solid var(--tc-border)",
+    borderRadius: "var(--tc-editor-tooltip-radius)",
     color: "var(--tc-ink)",
   },
-  ".cm-tooltip-autocomplete > ul": { fontFamily: "var(--tc-font-editor)", fontSize: "var(--tc-font-editor-size)" },
+  ".cm-tooltip-autocomplete > ul": {
+    fontFamily: "var(--tc-font-editor)",
+    fontSize: "var(--tc-font-editor-size)",
+    borderRadius: "inherit",
+  },
   ".cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "center", gap: GLYPH_GAP },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--tc-selection)",

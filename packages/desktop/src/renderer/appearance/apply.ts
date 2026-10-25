@@ -1,4 +1,5 @@
 import {
+  EDITOR_TOOLTIP_RADIUS_PX,
   TRAFFIC_LIGHT_INSET_PX,
   type Appearance,
   type ColorScheme,
@@ -13,6 +14,7 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
   const { colors, fonts, density } = appearance;
   return {
     "--tc-canvas": colors.canvas,
+    "--tc-editor-tooltip-radius": `${EDITOR_TOOLTIP_RADIUS_PX}px`,
     "--tc-panel": colors.panel,
     "--tc-raised": colors.raised,
     "--tc-border": colors.border,

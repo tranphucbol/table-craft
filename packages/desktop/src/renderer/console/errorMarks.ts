@@ -100,7 +100,7 @@ const errorTooltip = hoverTooltip((view, pos) => {
   return {
     pos: mark.from,
     end: mark.to,
-    above: true,
+    above: false,
     create() {
       const dom = document.createElement("div");
       dom.className = ERROR_TOOLTIP_CLASS;
