@@ -33,6 +33,7 @@ const SCHEME_OF_TYPE: Readonly<Record<string, string>> = {
   sqlserver: "sqlserver",
   mssql: "sqlserver",
   azure: "sqlserver",
+  redis: "redis",
 };
 
 /** Each named colour another app offers, to the nearest TableCraft tint (decision 011). */
@@ -91,8 +92,12 @@ function defaults(plugin: PluginInfo): Record<string, ConfigValue> {
 function separateFields(connection: ForeignConnection, plugin: PluginInfo): Record<string, ConfigValue> {
   const parts = plugin.url?.parts ?? {};
   const config: Record<string, ConfigValue> = {};
+  // Another app keeps every part as text, but a part may fill a number field, such as Redis's database index.
+  const numeric = new Set(plugin.fields.filter((field) => field.kind === "number").map((field) => field.key));
   const set = (key: string | undefined, value: ConfigValue | null) => {
-    if (key !== undefined && value !== null && value !== "") config[key] = value;
+    if (key === undefined || value === null || value === "") return;
+    const number = typeof value === "string" && numeric.has(key) ? Number(value) : value;
+    config[key] = Number.isNaN(number) ? value : number;
   };
   set(parts.host, connection.host);
   set(parts.port, connection.port);

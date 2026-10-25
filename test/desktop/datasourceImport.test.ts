@@ -415,6 +415,7 @@ describe("importer", () => {
     ["SQL Server", "sqlserver"],
     ["MSSQL", "sqlserver"],
     ["Azure", "sqlserver"],
+    ["Redis", "redis"],
   ])("givenTableProType%s_whenMapped_thenScheme", (driver, scheme) => {
     const connection: ForeignConnection = {
       app: "tablepro",
@@ -439,6 +440,33 @@ describe("importer", () => {
     const mapped = mapConnection(connection, { plugins: [], existing: [], availability: () => "none" });
 
     expect(mapped.row.warnings).toEqual([`No installed plugin reads ${scheme}: URLs.`]);
+  });
+
+  it("givenRedisDatabaseAsText_whenMapped_thenNumberFieldGetsANumber", async () => {
+    const plugins = await listPlugins([BUILT_IN_PLUGINS]);
+    const connection: ForeignConnection = {
+      app: "tablepro",
+      id: "cache",
+      name: "Cache",
+      folder: null,
+      driver: "Redis",
+      url: null,
+      host: "cache.internal",
+      port: 6380,
+      database: "2",
+      user: null,
+      path: null,
+      ssh: null,
+      ssl: null,
+      color: null,
+      comment: "",
+      readOnly: false,
+      password: { kind: "none" },
+    };
+
+    const mapped = mapConnection(connection, { plugins, existing: [], availability: () => "none" });
+
+    expect(mapped.draft?.config).toMatchObject({ host: "cache.internal", port: 6380, database: 2 });
   });
 
   it("givenSsh_whenMapped_thenWarnedAndUnticked", async () => {
@@ -591,7 +619,7 @@ describe("importer", () => {
       status: "ready",
     });
     expect(row(preview.rows, "Reports PG").warnings).toEqual([expect.stringContaining("Preferred")]);
-    expect(row(preview.rows, "Cache")).toMatchObject({ status: "unsupported" });
+    expect(row(preview.rows, "Cache")).toMatchObject({ pluginId: "redis", status: "ready" });
     await importer.run(
       { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: true, topFolder: false },
       () => undefined,
