@@ -58,7 +58,19 @@ describe("smoke fixture sentinels (smokeFixtures.ts)", () => {
 
   it("givenSentinels_whenListed_thenEverySeededServiceHasOne", () => {
     expect(new Set(SENTINELS.map((sentinel) => sentinel.service))).toEqual(
-      new Set(["postgres", "mysql", "postgres-tls", "mysql-tls", "oracle", "mssql"]),
+      new Set([
+        "postgres",
+        "mysql",
+        "postgres-tls",
+        "mysql-tls",
+        "oracle",
+        "mssql",
+        "redis",
+        "redis-tls",
+        "redis-6",
+        "redis-cluster",
+        "redis-6-cluster",
+      ]),
     );
   });
 

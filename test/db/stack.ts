@@ -17,7 +17,28 @@ import { TIDB_PROFILE, type TidbTarget } from "./tidbTarget.js";
 const DB_DIRECTORY = import.meta.dirname;
 export const COMPOSE_FILE = join(DB_DIRECTORY, "compose.yml");
 
-export type SeededService = "postgres" | "mysql" | "postgres-tls" | "mysql-tls" | "oracle" | "mssql";
+export type SeededService =
+  | "postgres"
+  | "mysql"
+  | "postgres-tls"
+  | "mysql-tls"
+  | "oracle"
+  | "mssql"
+  | "redis"
+  | "redis-tls"
+  | "redis-6"
+  | "redis-cluster"
+  | "redis-6-cluster";
+
+/** What a Redis server reads at start (`redis/*.sh`): its users, its start script and the seeds. */
+const REDIS_STANDALONE_SEED = [
+  "redis/users.sh",
+  "redis/seed.sh",
+  "redis/standalone.sh",
+  "schema/redis.redis",
+  "schema/redis-db1.redis",
+];
+const REDIS_CLUSTER_SEED = ["redis/users.sh", "redis/seed.sh", "redis/cluster.sh", "schema/redis.redis"];
 
 /**
  * What each service reads when its data directory is first made: the initdb scripts, and for the
@@ -31,6 +52,11 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   "mysql-tls": ["tls/mysql.sql", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   oracle: ["schema/oracle"],
   mssql: ["schema/mssql.sql"],
+  redis: REDIS_STANDALONE_SEED,
+  "redis-tls": [...REDIS_STANDALONE_SEED, "tls/ca.crt", "tls/server.crt", "tls/server.key"],
+  "redis-6": REDIS_STANDALONE_SEED,
+  "redis-cluster": REDIS_CLUSTER_SEED,
+  "redis-6-cluster": REDIS_CLUSTER_SEED,
 };
 
 /** The variable `compose.yml` interpolates into each service's `table-craft.seed` label. */
@@ -41,6 +67,11 @@ export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   "mysql-tls": "TABLE_CRAFT_MYSQL_TLS_SEED",
   oracle: "TABLE_CRAFT_ORACLE_SEED",
   mssql: "TABLE_CRAFT_MSSQL_SEED",
+  redis: "TABLE_CRAFT_REDIS_SEED",
+  "redis-tls": "TABLE_CRAFT_REDIS_TLS_SEED",
+  "redis-6": "TABLE_CRAFT_REDIS6_SEED",
+  "redis-cluster": "TABLE_CRAFT_REDIS_CLUSTER_SEED",
+  "redis-6-cluster": "TABLE_CRAFT_REDIS6_CLUSTER_SEED",
 };
 
 const SERVICES = Object.keys(SEED_FILES) as SeededService[];

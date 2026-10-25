@@ -1,0 +1,23 @@
+{
+  "name": "@table-craft/plugin-redis",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Optional redis datasource plugin for table-craft",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./language": "./src/language.ts",
+    "./tokens": "./src/tokens.ts",
+    "./features": "./src/features.ts",
+    "./replies": "./src/replies.ts",
+    "./routing": "./src/routing.ts",
+    "./readOnly": "./src/readOnly.ts",
+    "./complete": "./src/complete.ts",
+    "./connect": "./src/connect.ts"
+  },
+  "dependencies": {
+    "@table-craft/plugin-api": "workspace:*",
+    "redis": "^6.3.0"
+  }
+}

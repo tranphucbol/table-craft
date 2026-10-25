@@ -33,7 +33,7 @@ function textFromEnv(name: string, fallback: string): string {
 }
 
 /** Every server the suites can run against; SQLite is in-process and always runs. */
-export const DATABASE_IDS = ["mysql", "tidb", "postgres", "oracle", "mssql"] as const;
+export const DATABASE_IDS = ["mysql", "tidb", "postgres", "oracle", "mssql", "redis"] as const;
 export type DatabaseId = (typeof DATABASE_IDS)[number];
 export const DATABASES_ENV = "TABLE_CRAFT_DATABASES";
 /** Decision 099: the normal flow tests MySQL and the remote TiDB; every other server is opt-in. */
@@ -197,6 +197,68 @@ export const MYSQL_TLS_CONFIG = {
 export const POSTGRES_TLS_BEHIND_BASTION = { host: "postgres-tls", port: 5432 } as const;
 export const MYSQL_TLS_BEHIND_BASTION = { host: "mysql-tls", port: 3306 } as const;
 
+const DEFAULT_REDIS_PORT = 56379;
+const DEFAULT_REDIS_TLS_PORT = 56380;
+const DEFAULT_REDIS6_PORT = 56362;
+/** Below 55536: a Redis 6.2 node's cluster bus listens on its port plus 10,000. */
+const DEFAULT_REDIS_CLUSTER_PORTS = "47001-47006";
+const DEFAULT_REDIS6_CLUSTER_PORTS = "47011-47013";
+
+/** The first port of a `first-last` range variable, which `compose.yml` publishes one to one. */
+function firstPortFromEnv(name: string, fallback: string): number {
+  const value = process.env[name];
+  const range = value === undefined || value === "" ? fallback : value;
+  return Number(range.split("-")[0]);
+}
+
+const REDIS_STANDALONE = {
+  mode: "standalone",
+  host: hostFromEnv("TABLE_CRAFT_REDIS_HOST"),
+  database: 0,
+  user: CREDENTIAL,
+  password: CREDENTIAL,
+} as const;
+
+/** The `redis` service: Redis 7.4, the ACL user `table_craft`, keys seeded from `schema/redis.redis`. */
+export const REDIS_CONFIG = {
+  ...REDIS_STANDALONE,
+  port: portFromEnv("TABLE_CRAFT_REDIS_PORT", DEFAULT_REDIS_PORT),
+} as const;
+
+/** The `redis-6` service: the oldest server the plugin supports (plan 058 decision 23). */
+export const REDIS6_CONFIG = {
+  ...REDIS_STANDALONE,
+  host: hostFromEnv("TABLE_CRAFT_REDIS6_HOST"),
+  port: portFromEnv("TABLE_CRAFT_REDIS6_PORT", DEFAULT_REDIS6_PORT),
+} as const;
+
+export const REDIS_TLS_CONFIG = {
+  ...REDIS_STANDALONE,
+  host: tlsHostFromEnv("TABLE_CRAFT_REDIS_TLS_HOST"),
+  port: portFromEnv("TABLE_CRAFT_REDIS_TLS_PORT", DEFAULT_REDIS_TLS_PORT),
+  tlsMode: "verify-full",
+  tlsCa: TLS_FILES.ca,
+} as const;
+
+/** The `limited` ACL user, which may not run MEMORY, OBJECT or CONFIG. */
+export const REDIS_LIMITED_USER = { user: "limited", password: "limited" } as const;
+
+/** Three primaries and three replicas, every node announcing 127.0.0.1 and its own port. */
+export const REDIS_CLUSTER_CONFIG = {
+  mode: "cluster",
+  host: hostFromEnv("TABLE_CRAFT_REDIS_CLUSTER_HOST"),
+  port: firstPortFromEnv("TABLE_CRAFT_REDIS_CLUSTER_PORTS", DEFAULT_REDIS_CLUSTER_PORTS),
+  user: CREDENTIAL,
+  password: CREDENTIAL,
+} as const;
+
+/** Three Redis 6.2 primaries without replicas. */
+export const REDIS6_CLUSTER_CONFIG = {
+  ...REDIS_CLUSTER_CONFIG,
+  host: hostFromEnv("TABLE_CRAFT_REDIS6_CLUSTER_HOST"),
+  port: firstPortFromEnv("TABLE_CRAFT_REDIS6_CLUSTER_PORTS", DEFAULT_REDIS6_CLUSTER_PORTS),
+} as const;
+
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };
 }
@@ -204,7 +266,10 @@ export function withWrongPassword<Config extends { readonly password: string }>(
 /** The smoke files' PostgreSQL scenarios skip unless `TABLE_CRAFT_DATABASES` selects it (decision 099). */
 export const WITHOUT_POSTGRES = !databaseEnabled("postgres");
 
+/** The smoke files' Redis scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
+export const WITHOUT_REDIS = !databaseEnabled("redis");
+
 /** Whether a scenario on a datasource of `pluginId` skips, because its server is not selected. */
 export function serverSkipped(pluginId: string): boolean {
-  return pluginId === "postgres" && WITHOUT_POSTGRES;
+  return (pluginId === "postgres" && WITHOUT_POSTGRES) || (pluginId === "redis" && WITHOUT_REDIS);
 }

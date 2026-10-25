@@ -5,6 +5,7 @@ import {
   type CurrentNamespace,
   type EngineError,
   type ErrorAnswer,
+  NODE_AUTO,
   type ExecutedStatement,
   type ExportFormat,
   type ExtractorKind,
@@ -224,6 +225,8 @@ export interface ConsoleSession {
   /** Where failed statements went wrong, in the text as it now stands (decision 082); never written to disk. */
   readonly errorMarks: readonly ErrorMark[];
   readonly question: ErrorQuestion | null;
+  /** Where commands run on a `nodes` datasource (decision 114): `NODE_AUTO`, `NODE_ALL_PRIMARIES` or a node id. */
+  readonly node: string;
 }
 
 export interface Insertion {
@@ -370,6 +373,7 @@ export interface ConsolesState extends ConsoleEdits {
   readonly togglePin: (id: string, resultId: string) => void;
   /** False when the engine refused, which the Output log then explains. */
   readonly setTransactionMode: (id: string, mode: TransactionMode) => Promise<boolean>;
+  readonly setNode: (id: string, node: string) => void;
   readonly commit: (id: string) => Promise<boolean>;
   readonly rollback: (id: string) => Promise<boolean>;
 }
@@ -493,6 +497,7 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
     activeResult: OUTPUT_TAB,
     output: [],
     txMode: "auto",
+    node: NODE_AUTO,
     transactionOpen: false,
     namespace: null,
     lastRun: null,
@@ -631,6 +636,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       const datasourceId = get().consoles[id]?.datasourceId;
       const seconds = datasourceId === undefined ? 0 : statementTimeout(datasourceId);
       return seconds > 0 ? { timeoutSeconds: seconds } : {};
+    }
+
+    /** The Run on choice, sent only when it is not the plugin's own routing. */
+    function nodeOf(id: string): { node?: string } {
+      const node = get().consoles[id]?.node ?? NODE_AUTO;
+      return node === NODE_AUTO ? {} : { node };
     }
 
     /** One statement on its way to the engine: Services lists it now, history once it ends. */
@@ -953,6 +964,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             ...(parameters === undefined ? {} : { parameters }),
             ...paging,
             ...limitOf(id),
+            ...nodeOf(id),
           });
           const moved = namespaceAfter({ namespace, ...(reconnected === undefined ? {} : { reconnected }) });
           logReconnected(id, reconnected);
@@ -1737,6 +1749,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               ...(parameters === undefined ? {} : { parameters }),
               ...paging,
               ...limitOf(id),
+              ...nodeOf(id),
             });
             logReconnected(id, reconnected);
             const kind = statement?.kind ?? "read";
@@ -1843,6 +1856,10 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             result.id === resultId ? { ...result, pinned: !result.pinned } : result,
           ),
         });
+      },
+
+      setNode(id, node) {
+        patch(id, { node });
       },
 
       async setTransactionMode(id, mode) {

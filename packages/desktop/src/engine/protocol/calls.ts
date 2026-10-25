@@ -29,6 +29,7 @@ import type {
   GeneratorStatement,
   ParameterValue,
 } from "./sql.js";
+import type { ServerNode } from "./server.js";
 import type { ConditionColumn, OrderTerm, ResultEditable, RowEdit, SubmittedEdits, TableQuery } from "./tables.js";
 import type {
   ErrorAnswer,
@@ -253,6 +254,8 @@ export interface EngineCalls {
   "namespace.targets": { params: { readonly refresh?: boolean }; result: readonly Namespace[] };
   /** The plugin's statement that switches a session to `path` (decision 060). Needs `currentNamespace`. */
   "namespace.switchStatement": { params: { readonly path: readonly string[] }; result: SwitchStatement };
+  /** Every server of the datasource, primaries first (decision 114). Needs `nodes`. */
+  "server.nodes": { params: Record<never, never>; result: readonly ServerNode[] };
   /** One namespace's objects, from the engine's cache unless `refresh`. Needs `schemaTree`. */
   "catalog.describe": {
     params: { readonly path: readonly string[]; readonly refresh?: boolean };

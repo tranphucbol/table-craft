@@ -7,6 +7,7 @@ import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { Editor } from "@table-craft/desktop/renderer/console/Editor.js";
 import { NamespaceSwitcher } from "@table-craft/desktop/renderer/console/NamespaceSwitcher.js";
 import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js";
+import { RunOnPicker } from "@table-craft/desktop/renderer/console/RunOnPicker.js";
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
@@ -130,6 +131,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         ) : null}
         {capabilities.includes("cancel") ? <ActionButton actionId={ACTION_IDS.cancel} /> : null}
         {capabilities.includes("transactions") ? <TxControls session={session} /> : null}
+        {capabilities.includes("nodes") ? <RunOnPicker session={session} /> : null}
         <span className="shrink-0 text-ink-muted">{session.question === null ? STATUS_TEXT[status] : ASKING_TEXT}</span>
         {error === null ? null : (
           // The room the datasource label leaves, but never none; Output holds the whole error.

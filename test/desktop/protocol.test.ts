@@ -86,6 +86,8 @@ import {
   type ServerSession,
   type ServerSessionState,
   type SessionTarget,
+  NODE_ROLES,
+  type ServerNode,
   type SqlParameter,
   type StatementClass,
   type StatementSpan,
@@ -249,6 +251,11 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.ServerSessionState>().toEqualTypeOf<ServerSessionState>();
     expectTypeOf<protocol.ServerSession>().toEqualTypeOf<ServerSession>();
     expectTypeOf<protocol.SessionTarget>().toEqualTypeOf<SessionTarget>();
+  });
+
+  it("givenServerTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.ServerNode>().toEqualTypeOf<ServerNode>();
+    expect(protocol.NODE_ROLES).toEqual(NODE_ROLES);
   });
 
   it("givenCoreErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {

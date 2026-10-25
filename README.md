@@ -760,11 +760,13 @@ Plugins built for plugin API 0.x must be rebuilt for 1.0.
 
 SQLite and MySQL (with MariaDB and TiDB) ship inside the app and work offline from the first
 launch. PostgreSQL is a plugin TableCraft downloads when you need it, about 190 KB, from npm as
-[`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres);
-Oracle and SQL Server will follow the same way
+[`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres).
+Redis downloads the same way, about 290 KB, as
+[`@tablecraft-app/plugin-redis`](https://www.npmjs.com/package/@tablecraft-app/plugin-redis);
+Oracle and SQL Server will follow
 ([decision 108](docs/decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
 
-- **Data Sources +** lists PostgreSQL with **Download**. Choosing it shows the progress, then the
+- **Data Sources +** lists PostgreSQL and Redis with **Download**. Choosing it shows the progress, then the
   connection form.
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the
