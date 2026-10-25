@@ -244,6 +244,21 @@ describe("datasource service", () => {
     );
   });
 
+  it("givenClusterModeWithoutDatabase_whenSaved_thenSavedSinceTheFormHidesDatabase", async () => {
+    const { service: datasources } = await service();
+    const cluster: DatasourceDraft = {
+      ...PG_DRAFT,
+      name: "Cache",
+      pluginId: "redis",
+      config: { mode: "cluster", host: "127.0.0.1", port: 7001 },
+    };
+
+    await expect(datasources.save(saving(cluster))).resolves.toMatchObject({ name: "Cache" });
+    await expect(
+      datasources.save(saving({ ...cluster, config: { mode: "standalone", host: "127.0.0.1", port: 6379 } })),
+    ).rejects.toThrow("Database is required.");
+  });
+
   it("givenConnectedDatasource_whenDeleted_thenEngineStoppedSecretsClearedAndBroadcast", async () => {
     const { dependencies, changes, service: datasources } = await service();
     const saved = await datasources.save(saving(PG_DRAFT, SECRET));

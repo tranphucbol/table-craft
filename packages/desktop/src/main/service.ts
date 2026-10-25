@@ -210,9 +210,17 @@ export async function createDatasourceService<Target>(
     return plugin;
   }
 
+  /** The form's rule (`fieldVisible`): a field hidden by `visibleWhen` is never sent, so never required. */
+  function shown(plugin: PluginInfo, field: ConnectionField, config: Readonly<Record<string, ConfigValue>>): boolean {
+    const rule = field.visibleWhen;
+    if (rule === undefined) return true;
+    const value = config[rule.key] ?? plugin.fields.find((other) => other.key === rule.key)?.default;
+    return value === rule.equals;
+  }
+
   function checkRequired(plugin: PluginInfo, config: Readonly<Record<string, ConfigValue>>): void {
     for (const field of plugin.fields) {
-      if (field.secret === true || field.required !== true) continue;
+      if (field.secret === true || field.required !== true || !shown(plugin, field, config)) continue;
       const value = config[field.key];
       if (value === undefined || value === "") {
         throw new DatasourceError(`${field.label} is required.`, `Fill in ${field.label} and save again.`);
