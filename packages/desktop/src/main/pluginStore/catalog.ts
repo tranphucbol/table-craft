@@ -14,7 +14,7 @@ export interface CatalogEntry {
 }
 
 /** Packages in this scope, installed through the app, are official: no confirmation (decision 110). */
-export const OFFICIAL_SCOPE = "@table-craft/";
+export const OFFICIAL_SCOPE = "@tablecraft-app/";
 
 export function officialPackage(id: string): string {
   return `${OFFICIAL_SCOPE}plugin-${id}`;

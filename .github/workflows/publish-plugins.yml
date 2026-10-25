@@ -19,7 +19,7 @@ jobs:
     if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Holds NPM_TOKEN: a granular token that can publish only @table-craft/*. Give the environment a
+    # Holds NPM_TOKEN: a granular token that can publish only @tablecraft-app/*. Give the environment a
     # deployment rule for v* tags and, if wanted, required reviewers.
     environment: plugins
     permissions:

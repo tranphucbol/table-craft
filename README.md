@@ -725,7 +725,7 @@ The shared SQL kit in `@table-craft/plugin-api/sql` also reads Oracle and SQL Se
 plugin turns on their dialect options: `[bracketed]` names, `q'[…]'` and `N'…'` strings, `GO` and
 `/` separator lines, and `:1` or `@p1` placeholders.
 
-A plugin depends on `@table-craft/plugin-api` and should pass its contract suite,
+A plugin depends on `@tablecraft-app/plugin-api` and should pass its contract suite,
 `runPluginContract` from `@table-craft/plugin-api/testing`, which the built-in plugins run against
 real databases. See [Plugin contract](docs/design/specification.md#plugin-contract).
 
@@ -733,7 +733,7 @@ real databases. See [Plugin contract](docs/design/specification.md#plugin-contra
 
 The plugin API follows semver and stays backward compatible within a major version:
 
-- Set `apiVersion` to the version of `@table-craft/plugin-api` you built against. TableCraft with
+- Set `apiVersion` to the version of `@tablecraft-app/plugin-api` you built against. TableCraft with
   plugin API `1.z` loads a plugin built for `1.y` when `y` is `z` or lower. A plugin built for a
   newer minor, or another major, is listed as unavailable with the plugin API it needs.
 - A minor version only adds: new exports, new optional fields and methods, new capabilities. New
@@ -751,7 +751,7 @@ Plugins built for plugin API 0.x must be rebuilt for 1.0.
 
 SQLite and MySQL (with MariaDB and TiDB) ship inside the app and work offline from the first
 launch. PostgreSQL is a plugin TableCraft downloads when you need it, about 190 KB, from npm as
-[`@table-craft/plugin-postgres`](https://www.npmjs.com/package/@table-craft/plugin-postgres);
+[`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres);
 Oracle and SQL Server will follow the same way
 ([decision 108](docs/decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
 

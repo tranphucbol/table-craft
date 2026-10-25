@@ -52,7 +52,7 @@ A frozen bundle (507 kB) beats rebuilding old source in every test run, which wo
 ref and a Vite build each time.
 
 The package version is `API_VERSION` rather than the app's: a plugin depends on
-`@table-craft/plugin-api@^1.y` and declares `apiVersion: 1.y`, the same number in both places.
+`@tablecraft-app/plugin-api@^1.y` (the npm name, decision 109) and declares `apiVersion: 1.y`, the same number in both places.
 npm has no `publishConfig.exports`, so the staged `package.json` is written, not overlaid.
 
 ## Consequences

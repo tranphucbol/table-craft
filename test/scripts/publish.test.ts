@@ -11,18 +11,18 @@ import {
 } from "../../scripts/plugins/publish.js";
 
 const PLUGIN_API: PackageTarball = {
-  file: "/p/table-craft-plugin-api-1.0.0.tgz",
-  name: "@table-craft/plugin-api",
+  file: "/p/tablecraft-app-plugin-api-1.0.0.tgz",
+  name: "@tablecraft-app/plugin-api",
   version: "1.0.0",
 };
 const POSTGRES: PackageTarball = {
-  file: "/p/table-craft-plugin-postgres-0.4.0.tgz",
-  name: "@table-craft/plugin-postgres",
+  file: "/p/tablecraft-app-plugin-postgres-0.4.0.tgz",
+  name: "@tablecraft-app/plugin-postgres",
   version: "0.4.0",
 };
 const ORACLE: PackageTarball = {
-  file: "/p/table-craft-plugin-oracle-0.4.0.tgz",
-  name: "@table-craft/plugin-oracle",
+  file: "/p/tablecraft-app-plugin-oracle-0.4.0.tgz",
+  name: "@tablecraft-app/plugin-oracle",
   version: "0.4.0",
 };
 const OK: NpmResult = { status: 0, stdout: "", stderr: "" };
@@ -58,7 +58,7 @@ describe("publishing plugins", () => {
   });
 
   it("givenVersionAlreadyOnTheRegistry_whenPublished_thenSkippedSoARerunIsSafe", () => {
-    const registry = fakeNpm(["@table-craft/plugin-api@1.0.0"]);
+    const registry = fakeNpm(["@tablecraft-app/plugin-api@1.0.0"]);
 
     const outcomes = publishPackages({
       packages: [PLUGIN_API, POSTGRES],
@@ -68,8 +68,8 @@ describe("publishing plugins", () => {
     });
 
     expect(outcomes.map((entry) => [entry.name, entry.status])).toEqual([
-      ["@table-craft/plugin-api", "skipped"],
-      ["@table-craft/plugin-postgres", "published"],
+      ["@tablecraft-app/plugin-api", "skipped"],
+      ["@tablecraft-app/plugin-postgres", "published"],
     ]);
     expect(registry.publishes().map((call) => call[1])).toEqual([POSTGRES.file]);
   });
@@ -121,9 +121,9 @@ describe("publishing plugins", () => {
 
     expect(notes).toContain("### Plugins on npm");
     expect(notes).toContain(
-      "- [`@table-craft/plugin-postgres@0.4.0`](https://www.npmjs.com/package/@table-craft/plugin-postgres/v/0.4.0) (`latest`)",
+      "- [`@tablecraft-app/plugin-postgres@0.4.0`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres/v/0.4.0) (`latest`)",
     );
-    expect(notes).toContain("`@table-craft/plugin-api@1.0.0`");
+    expect(notes).toContain("`@tablecraft-app/plugin-api@1.0.0`");
     expect(notes).toContain("(already published)");
   });
 });

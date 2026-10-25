@@ -12,7 +12,7 @@ export interface PluginFileChoice {
   readonly name: string;
   readonly version: string;
   readonly pluginId: string;
-  /** Published under `@table-craft/`; the confirmation still asks, as for any file. */
+  /** Published under `@tablecraft-app/`; the confirmation still asks, as for any file. */
   readonly official: boolean;
 }
 

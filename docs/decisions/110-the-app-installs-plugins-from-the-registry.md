@@ -8,7 +8,7 @@ Main installs, updates and removes optional plugins (decision 108) from an npm r
 (`main/pluginStore/`). The engine runs them as before (decisions 005, 006); only where they come
 from changes.
 
-- **Pick.** Read the packument (`<registry>/@table-craft%2fplugin-<id>`) and take the newest
+- **Pick.** Read the packument (`<registry>/@tablecraft-app%2fplugin-<id>`) and take the newest
   release (`X.Y.Z`, no pre-release) whose `tableCraft.id` is the plugin's and whose
   `tableCraft.apiVersion` the host accepts (plugin-api's `incompatibility()`, the loader's own
   rule). When only newer API versions exist the error says to update TableCraft.
@@ -29,7 +29,7 @@ from changes.
   serves corporate mirrors. It must be `https://`; plain `http://` only to `127.0.0.1`,
   `localhost` or `[::1]`, which is how the tests serve a loopback registry. Requests go through
   Electron's `net`, so the system proxy applies.
-- **Trust.** Packages of the `@table-craft` scope installed through the catalog are official: no
+- **Trust.** Packages of the `@tablecraft-app` scope installed through the catalog are official: no
   prompt. Install from File (a `.tgz`) always asks decision 006's one-time confirmation in a
   native message box, naming the package and saying when it is not an official TableCraft plugin.
   A file install is never updated from the registry.

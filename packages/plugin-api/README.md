@@ -1,14 +1,14 @@
-# @table-craft/plugin-api
+# @tablecraft-app/plugin-api
 
 The contract between [TableCraft](https://github.com/tranphucbol/table-craft) and its datasource
 plugins: the types a plugin implements, the manifest schema, the shared SQL helpers and the
 contract test suite every built-in plugin passes.
 
-| Entry                             | Holds                                                                                                     |
-| :-------------------------------- | :-------------------------------------------------------------------------------------------------------- |
-| `@table-craft/plugin-api`         | `DatasourcePlugin`, `Session`, `SqlLanguage`, the manifest schema, `PluginError`, `API_VERSION`, and more |
-| `@table-craft/plugin-api/sql`     | The statement splitter, classifier, literal helpers, completer and formatter plugins build `language` on  |
-| `@table-craft/plugin-api/testing` | `runPluginContract(plugin, fixture)`, the contract suite, for Vitest                                      |
+| Entry                                | Holds                                                                                                     |
+| :----------------------------------- | :-------------------------------------------------------------------------------------------------------- |
+| `@tablecraft-app/plugin-api`         | `DatasourcePlugin`, `Session`, `SqlLanguage`, the manifest schema, `PluginError`, `API_VERSION`, and more |
+| `@tablecraft-app/plugin-api/sql`     | The statement splitter, classifier, literal helpers, completer and formatter plugins build `language` on  |
+| `@tablecraft-app/plugin-api/testing` | `runPluginContract(plugin, fixture)`, the contract suite, for Vitest                                      |
 
 ## A plugin
 
@@ -18,7 +18,7 @@ Set the manifest's `apiVersion` to the version of this package you built against
 package and your driver into the module, since TableCraft loads the plugin from its folder alone.
 
 ```ts
-import type { DatasourcePlugin } from "@table-craft/plugin-api";
+import type { DatasourcePlugin } from "@tablecraft-app/plugin-api";
 
 const plugin: DatasourcePlugin = {
   id: "example",

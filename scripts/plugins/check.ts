@@ -13,10 +13,10 @@ import { parseArgs } from "node:util";
 import { loadPlugins } from "@table-craft/core";
 import { API_VERSION, MANIFEST_FILE } from "@table-craft/plugin-api";
 import { officialPackage } from "../../packages/desktop/src/main/pluginStore/catalog.js";
+import { PUBLISHED_NAME } from "../../packages/plugin-api/scripts/build.js";
 import { readPackageTarball, writePackageFiles } from "../../packages/desktop/src/main/pluginStore/tarball.js";
 import { manifestVersion, PACKAGES_DIRECTORY } from "./pack.js";
 
-const PLUGIN_API_NAME = "@table-craft/plugin-api";
 const PACKAGE_FILE = "package.json";
 const TARBALL = ".tgz";
 
@@ -52,7 +52,7 @@ export async function checkPackage(file: string, hostVersion = API_VERSION): Pro
   const json = JSON.parse(packageFile.data.toString("utf8")) as PublishedJson;
   if (typeof json.name !== "string" || typeof json.version !== "string") fail(file, "no name or version");
   const { name, version } = json;
-  if (name === PLUGIN_API_NAME) {
+  if (name === PUBLISHED_NAME) {
     if (version !== hostVersion) fail(file, `plugin-api is ${version}, but this host's API_VERSION is ${hostVersion}`);
     return { file, name, version, pluginId: null };
   }

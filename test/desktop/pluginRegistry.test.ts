@@ -13,7 +13,7 @@ import {
 import { readPackageTarball } from "@table-craft/desktop/main/pluginStore/tarball.js";
 import { paxPath, pluginTarball, release, sha512, startRegistry, tarball } from "../support/pluginRegistry.js";
 
-const PACKAGE = "@table-craft/plugin-postgres";
+const PACKAGE = "@tablecraft-app/plugin-postgres";
 const loopbackFetch: RegistryFetch = (url, init) => fetch(url, init);
 
 function failureOf(run: () => unknown): string {
@@ -113,7 +113,7 @@ describe("plugin tarball", () => {
 describe("plugin registry", () => {
   it("givenScopedPackage_whenPackumentUrl_thenSlashIsEscaped", () => {
     expect(packumentUrl("https://registry.npmjs.org/", PACKAGE)).toBe(
-      "https://registry.npmjs.org/@table-craft%2fplugin-postgres",
+      "https://registry.npmjs.org/@tablecraft-app%2fplugin-postgres",
     );
   });
 

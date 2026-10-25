@@ -13,7 +13,7 @@ import type { PluginsState } from "@table-craft/desktop/preload/bridge.js";
 import { OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
 import { pluginTarball, release, sha512, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
 
-const PACKAGE = "@table-craft/plugin-postgres";
+const PACKAGE = "@tablecraft-app/plugin-postgres";
 const SOURCE_PLUGINS = "plugins";
 
 let profile: string;
@@ -360,12 +360,9 @@ describe("plugin catalog", () => {
         name: string;
         connection?: { url?: { schemes: string[] } };
       };
-      const packageJson = JSON.parse(await readFile(join(SOURCE_PLUGINS, id, "package.json"), "utf8")) as {
-        name: string;
-      };
 
       expect(entry.name).toBe(manifest.name);
-      expect(entry.packageName).toBe(packageJson.name);
+      expect(entry.packageName).toBe(`@tablecraft-app/plugin-${id}`);
       expect(entry.schemes).toEqual(manifest.connection?.url?.schemes ?? []);
     },
   );

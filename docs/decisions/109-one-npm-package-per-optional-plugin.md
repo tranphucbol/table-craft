@@ -4,7 +4,7 @@ Status: Accepted. Plan 057.
 
 ## Decision
 
-Each optional plugin (decision 108) is published as `@table-craft/plugin-<id>`, versioned in
+Each optional plugin (decision 108) is published as `@tablecraft-app/plugin-<id>`, versioned in
 lockstep with the app: the version is the release tag (`packages/desktop/scripts/version.ts`).
 
 - **Contents.** `index.js` (the bundle the app loads, its driver bundled in, no source map),
@@ -13,7 +13,7 @@ lockstep with the app: the version is the release tag (`packages/desktop/scripts
   `table-craft-plugin`, `repository` with the plugin's directory and `publishConfig.access:
 public`. No dependencies and no install scripts. Built-ins are not published.
 - **Pack and check.** `bun run plugins:pack` (`scripts/plugins/pack.ts`) builds the optional
-  plugins, stages and `npm pack`s each, and stages and packs `@table-craft/plugin-api` (versioned
+  plugins, stages and `npm pack`s each, and stages and packs `@tablecraft-app/plugin-api` (versioned
   by `API_VERSION`, decision 107) into `dist/plugin-packages/`. `bun run plugins:check` extracts
   every tarball with the app's own tarball reader and loads it through core's `loadPlugins`
   against the current host.
@@ -46,12 +46,17 @@ the human review of the draft as the gate.
 ## Consequences
 
 **Before the first publishing tag** the npm organisation `table-craft` must exist, and the GitHub
-environment `plugins` needs `NPM_TOKEN` (a granular token limited to `@table-craft/*`), a
+environment `plugins` needs `NPM_TOKEN` (a granular token limited to `@tablecraft-app/*`), a
 deployment rule for `v*` tags and, optionally, a required reviewer.
 
-**The first release after plan 057 must publish `@table-craft/plugin-postgres`** before users
+**The first release after plan 057 must publish `@tablecraft-app/plugin-postgres`** before users
 update, or the upgrade auto-install has nothing to fetch. Publishing the draft publishes both; the
 auto-install retries every start.
 
 **A branch build is versioned `0.0.0-dev.<sha>`.** Its manifest version is `0.0.0`, since the
 manifest schema takes `X.Y.Z` only; nothing from a branch is published.
+
+**The npm scope is `@tablecraft-app`.** `@table-craft` and `@tablecraft` on npm belong to other
+projects, which the first publish found (E404 on every PUT). The workspace packages keep their
+`@table-craft/*` names for imports; `OFFICIAL_SCOPE` in `pluginStore/catalog.ts` names the
+published plugins, and the plugin-api build writes `PUBLISHED_NAME` and rewrites its self-imports.

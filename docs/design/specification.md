@@ -45,7 +45,7 @@ built into the first root and goes through the same loader as a user plugin. Eac
 
 SQLite and MySQL ship in the installer. Every other plugin TableCraft offers is optional
 (`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL) and listed in a compiled-in
-catalog (decision 108). Each release publishes it to npm as `@table-craft/plugin-<id>` at the app's
+catalog (decision 108). Each release publishes it to npm as `@tablecraft-app/plugin-<id>` at the app's
 version, with `"tableCraft": { "id", "apiVersion" }` in its `package.json`, and attaches the
 `.tgz` to the GitHub release (decision 109).
 

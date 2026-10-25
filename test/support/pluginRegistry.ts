@@ -84,7 +84,7 @@ export interface PluginPackage {
 const SOURCE_MANIFEST = (id: string) => join("plugins", id, "table-craft-plugin.json");
 
 export function pluginPackageName(id: string): string {
-  return `@table-craft/plugin-${id}`;
+  return `@tablecraft-app/plugin-${id}`;
 }
 
 /** A plugin `.tgz` laid out as `scripts/plugins/pack.ts` lays it out. */

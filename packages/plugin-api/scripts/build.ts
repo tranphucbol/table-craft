@@ -1,5 +1,5 @@
 /**
- * Stages the publishable `@table-craft/plugin-api` in `packages/plugin-api/release/` (decision 107):
+ * Stages the publishable `@tablecraft-app/plugin-api` in `packages/plugin-api/release/` (decision 107):
  * JavaScript and declarations compiled from `src/` into `dist/`, a `package.json` whose exports
  * point there and whose version is `API_VERSION`, this package's README and the repository's
  * LICENSE. The workspace package stays private and exports TypeScript source; only the staged copy
@@ -33,6 +33,13 @@ const COPIED_FIELDS = [
   "publishConfig",
 ] as const;
 
+const WORKSPACE_NAME = "@table-craft/plugin-api";
+/**
+ * The npm name. The workspace keeps `@table-craft/plugin-api` for imports, but that npm scope
+ * belongs to another project, so the published package lives in the scope the app trusts and
+ * its self-imports are rewritten to match.
+ */
+export const PUBLISHED_NAME = "@tablecraft-app/plugin-api";
 export const RELEASE_DIRECTORY = join(PACKAGE_DIRECTORY, "release");
 
 export class PackageBuildError extends Error {
@@ -57,7 +64,9 @@ function compile(outDir: string): void {
     throw new PackageBuildError(`Cannot read ${BUILD_CONFIG}: ${formatDiagnostics(config?.errors ?? [])}`);
   }
   const program = ts.createProgram(config.fileNames, config.options);
-  const emitted = program.emit();
+  const emitted = program.emit(undefined, (fileName, text, writeByteOrderMark) =>
+    ts.sys.writeFile(fileName, text.replaceAll(WORKSPACE_NAME, PUBLISHED_NAME), writeByteOrderMark),
+  );
   const diagnostics = [...ts.getPreEmitDiagnostics(program), ...emitted.diagnostics];
   if (diagnostics.length > 0 || emitted.emitSkipped) {
     throw new PackageBuildError(`plugin-api does not compile; fix these first:\n${formatDiagnostics(diagnostics)}`);
@@ -66,7 +75,7 @@ function compile(outDir: string): void {
 
 function releaseManifest(): Record<string, unknown> {
   const workspace = JSON.parse(readFileSync(join(PACKAGE_DIRECTORY, PACKAGE_FILE), "utf8")) as Record<string, unknown>;
-  const manifest: Record<string, unknown> = { name: workspace.name, version: API_VERSION };
+  const manifest: Record<string, unknown> = { name: PUBLISHED_NAME, version: API_VERSION };
   for (const field of COPIED_FIELDS) {
     if (workspace[field] !== undefined) manifest[field] = workspace[field];
   }

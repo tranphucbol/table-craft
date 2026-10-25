@@ -11,10 +11,10 @@ import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { PUBLISHED_NAME } from "../../packages/plugin-api/scripts/build.js";
 import { readPackageTarball } from "../../packages/desktop/src/main/pluginStore/tarball.js";
 import { PACKAGES_DIRECTORY } from "./pack.js";
 
-const PLUGIN_API_NAME = "@table-craft/plugin-api";
 const PACKAGE_FILE = "package.json";
 const TARBALL = ".tgz";
 const NOT_FOUND = "E404";
@@ -65,7 +65,7 @@ export function distTagFor(version: string): string {
 
 /** plugin-api first, then the plugins by name. */
 export function publishOrder<T extends PackageTarball>(packages: readonly T[]): T[] {
-  const rank = (entry: T) => (entry.name === PLUGIN_API_NAME ? 0 : 1);
+  const rank = (entry: T) => (entry.name === PUBLISHED_NAME ? 0 : 1);
   return [...packages].sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
 }
 

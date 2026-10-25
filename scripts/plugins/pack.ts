@@ -2,7 +2,7 @@
  * Wraps each optional plugin as the npm package the app downloads (decision 109): the same
  * `index.js` the app would load, its manifest stamped with the release version, a README, the
  * repository's LICENSE and a `package.json` with no dependencies or scripts. Also stages and packs
- * the publishable `@table-craft/plugin-api` (decision 107). Built-in plugins are never packed.
+ * the publishable `@tablecraft-app/plugin-api` (decision 107). Built-in plugins are never packed.
  *
  * `bun scripts/plugins/pack.ts [--out <dir>] [--version <x.y.z>] [--no-build]` writes the `.tgz`
  * files to `dist/plugin-packages/` by default; `scripts/plugins/check.ts` load-checks them and

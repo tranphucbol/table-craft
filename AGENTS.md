@@ -96,10 +96,10 @@ Run from the repository root.
   fail when they differ from the committed ones, and check `API_VERSION` against the reports at
   the last `v*` tag (decision 107); `bun run test` runs the same. `bun run api:report` rewrites the
   reports; commit them with the change
-- `bun run --cwd packages/plugin-api build` - stage the publishable `@table-craft/plugin-api` in
+- `bun run --cwd packages/plugin-api build` - stage the publishable `@tablecraft-app/plugin-api` in
   `packages/plugin-api/release/` (git-ignored). Nothing here publishes it
 - `bun run plugins:pack` / `bun run plugins:check` / `bun run plugins:publish -- --dry-run` -
-  build the optional plugins, pack them and `@table-craft/plugin-api` into `dist/plugin-packages/`,
+  build the optional plugins, pack them and `@tablecraft-app/plugin-api` into `dist/plugin-packages/`,
   load-check every tarball through the real loader, and rehearse the npm publish (decision 109).
   Only `.github/workflows/publish-plugins.yml` publishes, when a release is published; never run
   `plugins:publish` without `--dry-run`, and never push a tag

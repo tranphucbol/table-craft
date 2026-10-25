@@ -42,7 +42,7 @@ describe("plugin packages", () => {
 
     const json = JSON.parse(readFileSync(join(directory, "package.json"), "utf8")) as Record<string, unknown>;
     expect(json).toMatchObject({
-      name: "@table-craft/plugin-sqlite",
+      name: "@tablecraft-app/plugin-sqlite",
       version: VERSION,
       type: "module",
       main: "index.js",
@@ -76,8 +76,8 @@ describe("plugin packages", () => {
 
       const packed = npmPack(stagePlugin("sqlite", VERSION, paths.built, paths.stage), paths.root, "sqlite");
 
-      expect(packed).toMatchObject({ name: "@table-craft/plugin-sqlite", version: VERSION, pluginId: "sqlite" });
-      expect(packed.file).toBe(join(paths.root, `table-craft-plugin-sqlite-${VERSION}.tgz`));
+      expect(packed).toMatchObject({ name: "@tablecraft-app/plugin-sqlite", version: VERSION, pluginId: "sqlite" });
+      expect(packed.file).toBe(join(paths.root, `tablecraft-app-plugin-sqlite-${VERSION}.tgz`));
       expect(packed.integrity).toMatch(/^sha512-/);
       expect(packed.files).toEqual([...PACKED_FILES].sort());
       const entries = readPackageTarball(await readFile(packed.file)).map((file) => file.path);
@@ -96,7 +96,7 @@ describe("plugin packages", () => {
 
       expect(checked).toEqual({
         file: packed.file,
-        name: "@table-craft/plugin-sqlite",
+        name: "@tablecraft-app/plugin-sqlite",
         version: VERSION,
         pluginId: "sqlite",
       });

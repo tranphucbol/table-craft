@@ -170,7 +170,7 @@ describe.runIf(SMOKE_ENABLED)("plugins on demand", () => {
       });
       expect(local.requests).toEqual([
         `/${PACKAGE.replace("/", "%2f")}`,
-        `/tarballs/table-craft-plugin-postgres-1.0.0.tgz`,
+        `/tarballs/tablecraft-app-plugin-postgres-1.0.0.tgz`,
       ]);
     },
     SCENARIO_TIMEOUT_MS,
@@ -205,7 +205,7 @@ describe.runIf(SMOKE_ENABLED)("plugins on demand", () => {
     async () => {
       const folder = mkdtempSync(join(tmpdir(), "table-craft-plugin-file-"));
       scratch.push(folder);
-      const file = join(folder, "table-craft-plugin-postgres-1.0.0.tgz");
+      const file = join(folder, "tablecraft-app-plugin-postgres-1.0.0.tgz");
       writeFileSync(file, builtRelease(POSTGRES, "1.0.0").bytes);
       const { app, page, userDataDir } = await launch(UNREACHABLE_REGISTRY, { datasources: [SAVED_POSTGRES] });
 
