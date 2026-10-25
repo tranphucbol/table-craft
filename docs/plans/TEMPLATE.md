@@ -66,8 +66,12 @@ _A short bolded lead-in per consequence, then the explanation._
 **_This is a behaviour change._** _What used to happen, what will happen, who it breaks, and
 what the escape hatch is._
 
-**_This changes the plugin contract._** _What moves in `@table-craft/plugin-api`, the
-`API_VERSION` bump, and what an existing plugin must do._
+**_This changes the plugin contract._** _What moves in `@table-craft/plugin-api`, and why it
+only adds (decision 106): new members optional, new contract tests gated, no new value in a
+host→plugin enum without an opt-in. The `API_VERSION` minor it takes, only when `bun run
+api:check` reports an addition since the last release tag and main does not already hold that
+minor; never a major without the user. Existing plugins must keep loading, and the frozen plugin
+must keep passing._
 
 **_This crosses the fence._** _Which messages `engine/protocol.ts` gains, in which direction._
 

@@ -773,6 +773,7 @@ bun run test:smoke:db:headless # test:smoke:db in the same container
 bun run test:smoke:packaged    # drive the packaged app
 bun run lint                   # ESLint, including the architecture fences
 bun run typecheck              # every TypeScript program
+bun run api:check              # the plugin API surface against the last release
 bun run format                 # Prettier
 bun run desktop:package        # an installer for this machine
 bun run readme:media           # re-record the GIFs in this README

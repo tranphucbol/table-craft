@@ -83,6 +83,14 @@ Run from the repository root.
   reloads the demo `shop` database in the `test:db` Postgres and drives one scene per GIF. Needs
   Docker, ffmpeg and a display; `README_MEDIA=explain,grid` re-records only those. Re-record after
   a UI change a GIF shows
+- `bun run api:check` - regenerate the plugin-api surface reports (`packages/plugin-api/api/`),
+  fail when they differ from the committed ones, and check `API_VERSION` against the reports at
+  the last `v*` tag (decision 107); `bun run test` runs the same. `bun run api:report` rewrites the
+  reports; commit them with the change
+- `bun run --cwd packages/plugin-api build` - stage the publishable `@table-craft/plugin-api` in
+  `packages/plugin-api/release/` (git-ignored). Nothing here publishes it
+- `bun scripts/frozen-plugin.ts` - rebuild the frozen SQLite plugin in `test/support/frozen-plugins/`
+  only when its API version itself changes before release, never to make a failing run pass
 
 CI (`.github/workflows/ci.yml`) runs `verify` (lint, format, typecheck, test, test:db) and the
 packaged suite on macOS arm64 and x64 (blocking), Windows and Linux (best-effort) on every push.
@@ -127,8 +135,10 @@ packages/plugin-api/       @table-craft/plugin-api: the plugin contract and noth
                            classifier, literal helpers, `sqlCompleter` (scope analysis,
                            completion, resolve), `sqlExplainable` and `sqlFormatter`
                            (its aligned layout in `layout*.ts`) plugins build
-                           `language` from.
-                           Depends only on zod
+                           `language` from. `api/` holds the committed surface reports
+                           and `compatibility.json`; `scripts/build.ts` stages the
+                           publishable package.
+                           Depends only on zod and sql-formatter
 packages/core/             @table-craft/core: plugin loader, session manager, result-set
                            store with open cursors and local sort (`results/`), the copy
                            and export extractors (`results/extract/`), the table
@@ -189,6 +199,8 @@ plugins/<id>/              built-in plugins (@table-craft/plugin-<id>): postgres
                            the EXPLAIN statement and reads the plan (subpath `./explain`)
 scripts/agent-cost/        `report.ts`: steps, context and cost of an agent session, read
                            from the OpenCode session store
+scripts/api-report/        the plugin-api surface report and its check against the last
+                           release (`api:report`, `api:check`, decision 107)
 test/                      Vitest suites, `givenX_whenY_thenZ`
   db/                      compose.yml, the fixture schema per dialect, contract runs per database
   e2e/                     Playwright `_electron` suites and the shared harness;
@@ -197,7 +209,8 @@ test/                      Vitest suites, `givenX_whenY_thenZ`
                            `workers.ts`); `serialFiles.ts` the files run one by one
   renderer/                renderer unit tests, typechecked with the DOM lib; no jsdom
   support/                 fixtures shared across suites (type_probe rows, seeded SQLite, configs);
-                           `plans/` holds real EXPLAIN outputs, byte-exact (prettier skips it)
+                           `plans/` holds real EXPLAIN outputs, byte-exact (prettier skips it);
+                           `frozen-plugins/` the SQLite plugin bundled at API 1.0.0
   readme/                  the README media suite: the demo `shop` seeds, the screencast
                            recorder (CDP frames to ffmpeg) and the pacing overlays; gated
                            by `readme:media`
@@ -220,6 +233,14 @@ docs/evidence/NNN/         screenshots from each plan's live test; untracked (de
 - Built-in plugins load through the same runtime loader as user plugins (decision 005). Never
   import a plugin statically from core or desktop.
 - The UI branches on plugin capabilities, never on plugin ids (decision 007).
+- The plugin API is backward compatible within a major (decision 106). A change to
+  `@table-craft/plugin-api` only adds: new exports, optional fields and methods, capabilities, and
+  contract tests gated on what a plugin declares. Removing, renaming, making something required,
+  adding a value to a host→plugin enum without an opt-in, or changing a meaning needs a new major,
+  which only the user takes; deprecate instead. A plan takes the next minor of `API_VERSION` (and
+  the built-in manifests) only when `bun run api:check` reports an addition since the last release
+  tag and main does not already hold that minor; otherwise none. The host calls a new optional
+  method only when the plugin has it or declares its capability, never by `apiVersion`.
 - SQL knowledge belongs to the plugin (decision 008). The renderer asks the engine for completions
   and statement boundaries; it does not parse SQL itself.
 - Result rows stay in the engine; the renderer sees a handle and windows (decision 009).
