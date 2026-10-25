@@ -51,6 +51,7 @@ import {
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { themeOf, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import {
   ACTION_ICONS,
   CollapsedIcon,
@@ -301,12 +302,20 @@ function DatasourceLabel({
   const { datasource } = node;
   const connection = useDatasources((state) => connectionOf(state, datasource.id));
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource.pluginId));
+  const missing = useDatasources(
+    (state) => plugin === undefined && state.catalog.some((entry) => entry.id === datasource.pluginId),
+  );
   const dot = DOT_CLASS[connection.status];
   const failed = connection.status === "failed";
   return (
     <>
-      <DatabaseIcon aria-hidden className={cn("size-icon shrink-0", failed ? "text-danger" : "text-accent")} />
-      <Highlighted text={datasource.name} positions={positions} />
+      <DatabaseIcon
+        aria-hidden
+        className={cn("size-icon shrink-0", failed ? "text-danger" : missing ? "text-ink-muted" : "text-accent")}
+      />
+      <span className={cn("contents", missing && "text-ink-muted")}>
+        <Highlighted text={datasource.name} positions={positions} />
+      </span>
       {datasource.color === null ? null : (
         <span aria-hidden data-swatch className={cn("size-2.5 shrink-0 rounded-sm", TINT_SWATCH[datasource.color])} />
       )}
@@ -320,6 +329,7 @@ function DatasourceLabel({
       {plugin === undefined || connection.status !== "disconnected" ? null : (
         <span className="truncate text-ink-muted">{plugin.name}</span>
       )}
+      {missing ? <MissingPlugin pluginId={datasource.pluginId} /> : null}
     </>
   );
 }

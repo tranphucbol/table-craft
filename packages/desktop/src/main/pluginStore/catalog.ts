@@ -33,3 +33,8 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
 export function catalogEntry(id: string): CatalogEntry | undefined {
   return PLUGIN_CATALOG.find((entry) => entry.id === id);
 }
+
+/** The downloadable plugin that reads `scheme:` URLs, for an import that finds no installed one. */
+export function catalogEntryForScheme(scheme: string): CatalogEntry | undefined {
+  return PLUGIN_CATALOG.find((entry) => entry.schemes.includes(scheme));
+}

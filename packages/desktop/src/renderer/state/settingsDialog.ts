@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 /** The Settings dialog's pages, in the order its list shows them (plan 013 decision 15). */
-export const SETTINGS_PAGES = ["appearance", "editor", "dataEditor", "advanced"] as const;
+export const SETTINGS_PAGES = ["appearance", "editor", "dataEditor", "plugins", "advanced"] as const;
 export type SettingsPage = (typeof SETTINGS_PAGES)[number];
 
 export interface SettingsDialogState {

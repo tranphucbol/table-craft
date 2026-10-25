@@ -93,11 +93,16 @@ function fakeCredentials(passwords: ReadonlyMap<string, string>, deny: ReadonlyS
   return { reader, asked };
 }
 
-async function setup(home: string, credentials: CredentialReader, platform: NodeJS.Platform = "darwin") {
+async function setup(
+  home: string,
+  credentials: CredentialReader,
+  platform: NodeJS.Platform = "darwin",
+  absent: readonly string[] = [],
+) {
   const files = memoryFiles();
   const cipher = fakeCipher();
   let ids = 0;
-  const plugins = await listPlugins([BUILT_IN_PLUGINS]);
+  const plugins = (await listPlugins([BUILT_IN_PLUGINS])).filter((plugin) => !absent.includes(plugin.id));
   const service = await createDatasourceService({
     store: createDatasourceStore({ directory: PROFILE, files }),
     secrets: await createSecretStore({ directory: PROFILE, files, cipher }),
@@ -368,6 +373,20 @@ describe("importer", () => {
 
     expect(row(rows, "Events")).toMatchObject({ pluginId: null, status: "unsupported", selected: false });
     expect(row(rows, "Events").warnings[0]).toContain("mongodb");
+  });
+
+  it("givenPostgresNotInstalled_whenMapped_thenUnsupportedRowNamesTheDownloadablePlugin", async () => {
+    const { home } = fixture();
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader, "darwin", ["postgres"]);
+
+    const { rows } = ready(await importer.preview({ source: "datagrip" }));
+
+    expect(row(rows, "Shop PG")).toMatchObject({
+      pluginId: "postgres",
+      status: "unsupported",
+      selected: false,
+      warnings: ["No installed plugin reads postgresql: URLs."],
+    });
   });
 
   it("givenDataGripOracleAndSqlServer_whenImported_thenSchemesMapped", async () => {

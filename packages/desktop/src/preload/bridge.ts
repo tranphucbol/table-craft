@@ -308,6 +308,7 @@ export interface ImportRow {
   readonly key: string;
   readonly app: ImportApp;
   readonly name: string;
+  /** Null when no plugin reads it; on an `unsupported` row, a plugin TableCraft can download. */
   readonly pluginId: string | null;
   /** The plugin's name, or the other app's driver when no plugin reads it. */
   readonly pluginName: string;

@@ -5,8 +5,10 @@ import {
   type ConnectionField,
   type DatasourceList,
   type DatasourceView,
+  type CatalogPlugin,
   type EngineExited,
   type PluginInfo,
+  type PluginsState,
 } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import {
@@ -59,6 +61,8 @@ export interface DatasourcesState {
   readonly loaded: boolean;
   readonly datasources: readonly DatasourceView[];
   readonly plugins: readonly PluginInfo[];
+  /** The plugins TableCraft can download, with each one's install progress (decision 110). */
+  readonly catalog: readonly CatalogPlugin[];
   readonly encryption: DatasourceList["encryption"];
   readonly warning: string | null;
   readonly connections: Readonly<Record<string, Connection>>;
@@ -67,6 +71,7 @@ export interface DatasourcesState {
   readonly emptyFolders: readonly string[];
   readonly applyList: (list: DatasourceList) => void;
   readonly setPlugins: (plugins: readonly PluginInfo[]) => void;
+  readonly applyPlugins: (state: PluginsState) => void;
   readonly select: (selection: TreeSelection | null) => void;
   readonly addFolder: (path: string) => void;
   /** Starts the engine if needed, checks it with one session, and resolves with its client. */
@@ -200,6 +205,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       loaded: false,
       datasources: [],
       plugins: [],
+      catalog: [],
       encryption: { available: true, reason: null },
       warning: null,
       connections: {},
@@ -229,6 +235,10 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
 
       setPlugins(plugins) {
         set({ plugins });
+      },
+
+      applyPlugins({ plugins, catalog }) {
+        set({ plugins, catalog });
       },
 
       select(selection) {

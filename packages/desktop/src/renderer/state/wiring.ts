@@ -171,9 +171,10 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
   });
   const offChanged = bridge().onDatasourcesChanged((list) => useDatasources.getState().applyList(list));
   const offExited = bridge().onEngineExited((exited) => useDatasources.getState().engineExited(exited));
+  const offPlugins = bridge().onPluginsChanged((state) => useDatasources.getState().applyPlugins(state));
   void (async () => {
-    const plugins = await bridge().listPlugins();
-    if (plugins.ok) store.setPlugins(plugins.value);
+    const plugins = await bridge().pluginsState();
+    if (plugins.ok) store.applyPlugins(plugins.value);
     const list = await bridge().listDatasources();
     if (list.ok) useDatasources.getState().applyList(list.value);
     onFirstList();
@@ -182,6 +183,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     offWired();
     offChanged();
     offExited();
+    offPlugins();
   };
 }
 
