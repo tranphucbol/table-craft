@@ -1,0 +1,59 @@
+# Decision 109: publishing a TableCraft release publishes the plugin packages CI attached to it,
+# plugin-api first, with npm provenance. Versions already on npm are skipped, so a rerun is safe.
+# Nothing publishes from a branch, a pull request or a draft.
+name: Publish plugins
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-plugins-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: startsWith(github.event.release.tag_name, 'v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Holds NPM_TOKEN: a granular token that can publish only @table-craft/*. Give the environment a
+    # deployment rule for v* tags and, if wanted, required reviewers.
+    environment: plugins
+    permissions:
+      # Appends the published versions to the release notes.
+      contents: write
+      # npm provenance signs each package with this workflow's identity.
+      id-token: write
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - name: Download the packages attached to the release
+        run: gh release download "$TAG" --pattern '*.tgz' --dir plugin-packages --repo "$GITHUB_REPOSITORY"
+      - name: Load-check them against this tag's host
+        run: bun run plugins:check -- --from plugin-packages
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
+        run: bun run plugins:publish -- --from plugin-packages --provenance --dist-tag "$DIST_TAG" --notes published.md
+      - name: Note the published versions in the release
+        run: |
+          gh release view "$TAG" --json body --jq .body --repo "$GITHUB_REPOSITORY" > notes.md
+          if grep -q '^### Plugins on npm' notes.md; then exit 0; fi
+          cat published.md >> notes.md
+          gh release edit "$TAG" --notes-file notes.md --repo "$GITHUB_REPOSITORY"

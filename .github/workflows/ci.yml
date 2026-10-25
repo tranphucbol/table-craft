@@ -1,6 +1,6 @@
 # Plan 014, decisions 15 and 16: verify on Linux, package and smoke-test the packaged app on every
 # target, and on a `v*` tag collect the installers into a draft release with the signed update
-# manifest the installed apps read (decision 044).
+# manifest the installed apps read (decision 044), beside the plugin packages (decision 109).
 name: CI
 
 on:
@@ -144,9 +144,31 @@ jobs:
           path: ${{ matrix.installer }}
           if-no-files-found: error
 
+  # Decision 109: pack every optional plugin and plugin-api, load-check each tarball against this
+  # host, and rehearse the publish with --dry-run. On a tag the tarballs go to the draft release;
+  # publish-plugins.yml publishes exactly those once the release is published. Nothing publishes here.
+  plugins:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: bun run plugins:pack
+      - run: bun run plugins:check
+      - run: bun run plugins:publish -- --dry-run
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v7
+        with:
+          name: plugin-packages
+          path: dist/plugin-packages/*.tgz
+          if-no-files-found: error
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, package, test-db]
+    needs: [verify, package, test-db, plugins]
     runs-on: ubuntu-latest
     # Decision 044: the signing key is the root of every installed app's trust. Keep it in this
     # environment's secrets and give the environment required reviewers.
@@ -164,6 +186,10 @@ jobs:
           pattern: installer-*
           path: installers
           merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: plugin-packages
+          path: plugin-packages
       - name: Sign the update manifest
         env:
           TABLE_CRAFT_UPDATE_SIGNING_KEY: ${{ secrets.TABLE_CRAFT_UPDATE_SIGNING_KEY }}
@@ -171,4 +197,4 @@ jobs:
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" installers/* --draft --generate-notes --repo "$GITHUB_REPOSITORY"
+        run: gh release create "$GITHUB_REF_NAME" installers/* plugin-packages/*.tgz --draft --generate-notes --repo "$GITHUB_REPOSITORY"
