@@ -43,6 +43,13 @@ import {
   type ExecutionOutcome,
 } from "@table-craft/desktop/renderer/state/executions.js";
 import { useExports, type ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
+import { useKeyDeletes } from "@table-craft/desktop/renderer/state/keyDeletes.js";
+import {
+  KeyDeleteLine,
+  keyDeleteActionsOf,
+  keyDeleteLabel,
+  KeyDeletesLine,
+} from "@table-craft/desktop/renderer/panes/keyDeleteLines.js";
 import { resumeLabel, useImports, type ImportEntry } from "@table-craft/desktop/renderer/state/imports.js";
 import {
   IMPORT_STATE_TEXT,
@@ -173,6 +180,10 @@ function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): rea
   if (row.kind === "script") {
     const args = { taskId: row.node.task.taskId };
     return scriptActionsOf(row.node).map((actionId) => ({ actionId, args }));
+  }
+  if (row.kind === "keyDelete") {
+    const args = { taskId: row.node.taskId };
+    return keyDeleteActionsOf(row.node).map((actionId) => ({ actionId, args }));
   }
   if (row.kind === "execution" && row.node.sql !== null) {
     const args = { tabId: row.tabId, executionId: row.node.id };
@@ -462,6 +473,8 @@ function ScriptLine({ entry }: { readonly entry: ScriptEntry }) {
 
 function rowLabel(row: ServiceRow): string {
   if (row.kind === "scripts") return `SQL Scripts, ${String(row.count)}`;
+  if (row.kind === "keyDeletes") return `Key Deletions, ${String(row.count)}`;
+  if (row.kind === "keyDelete") return keyDeleteLabel(row.node);
   if (row.kind === "script") {
     const { task } = row.node;
     return [scriptName(task), scriptStateText(task), scriptProgressText(task)].join(", ");
@@ -503,6 +516,7 @@ export function ServicesPane() {
   const exports = useExports((state) => state.entries);
   const imports = useImports((state) => state.entries);
   const scripts = useScripts((state) => state.entries);
+  const keyDeletes = useKeyDeletes((state) => state.tasks);
   const [selected, setSelected] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSED);
   const elements = useRef(new Map<string, HTMLLIElement>());
@@ -512,8 +526,8 @@ export function ServicesPane() {
     [tabs, consoles, tables, executions, datasources],
   );
   const rows = useMemo(
-    () => serviceRows(tree, collapsed, exports, imports, scripts),
-    [tree, collapsed, exports, imports, scripts],
+    () => serviceRows(tree, collapsed, exports, imports, scripts, keyDeletes),
+    [tree, collapsed, exports, imports, scripts, keyDeletes],
   );
   const running = rows.some((row) => row.kind === "execution" && row.node.outcome === "running");
   const now = useNow(running);
@@ -592,7 +606,9 @@ export function ServicesPane() {
                   ? row.node.outcome
                   : row.kind === "export" || row.kind === "import" || row.kind === "script"
                     ? row.node.task.state
-                    : undefined
+                    : row.kind === "keyDelete"
+                      ? row.node.state
+                      : undefined
             }
             style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(row.depth * INDENT_PX)}px)` }}
             className={cn(
@@ -636,6 +652,10 @@ export function ServicesPane() {
               <ScriptsLine count={row.count} />
             ) : row.kind === "script" ? (
               <ScriptLine entry={row.node} />
+            ) : row.kind === "keyDeletes" ? (
+              <KeyDeletesLine count={row.count} />
+            ) : row.kind === "keyDelete" ? (
+              <KeyDeleteLine task={row.node} />
             ) : (
               <ExecutionLine execution={row.node} now={now} />
             )}

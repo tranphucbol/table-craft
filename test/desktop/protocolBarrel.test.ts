@@ -91,6 +91,8 @@ const METHODS = [
   "keyspace.scan",
   "keyspace.describe",
   "keyspace.open",
+  "keyspace.preview",
+  "keyspace.apply",
   "keyspace.rename",
   "keyspace.expire",
   "keyspace.remove",

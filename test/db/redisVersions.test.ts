@@ -84,4 +84,21 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
       true,
     );
   });
+
+  it("givenRedis62_whenSetTtl_thenPlainPexpire", async () => {
+    await withRedis(REDIS6_CONFIG, async (session) => {
+      const keyspace = session.keyspace;
+      if (keyspace === undefined) throw new Error("no keyspace");
+      const key = { text: "versions:ttl", hex: null };
+      await session.execute("SET versions:ttl 1");
+      try {
+        await keyspace.expire(0, key, { inMs: 60_000 });
+        expect((await keyspace.describe(0, [key]))[0]?.ttlMs).toBeGreaterThan(0);
+        await keyspace.expire(0, key, null);
+        expect((await keyspace.describe(0, [key]))[0]?.ttlMs).toBeNull();
+      } finally {
+        await session.execute("DEL versions:ttl");
+      }
+    });
+  });
 });

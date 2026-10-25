@@ -4,6 +4,7 @@ import type { ConsoleSession } from "@table-craft/desktop/renderer/state/console
 import type { Execution } from "@table-craft/desktop/renderer/state/executions.js";
 import type { ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
 import type { ImportEntry } from "@table-craft/desktop/renderer/state/imports.js";
+import type { KeyDeleteTask } from "@table-craft/desktop/renderer/state/keyDeletes.js";
 import type { ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
 import type { TableSession, TableStatus } from "@table-craft/desktop/renderer/state/tables.js";
 import type { Tab } from "@table-craft/desktop/renderer/state/tabs.js";
@@ -141,6 +142,14 @@ export type ServiceRow =
       readonly depth: 1;
       readonly parent: string;
       readonly node: ScriptEntry;
+    }
+  | { readonly kind: "keyDeletes"; readonly key: string; readonly depth: 0; readonly count: number }
+  | {
+      readonly kind: "keyDelete";
+      readonly key: string;
+      readonly depth: 1;
+      readonly parent: string;
+      readonly node: KeyDeleteTask;
     };
 
 /** The Exports node's key: one node under the datasources, every background export below it (decision 040). */
@@ -151,6 +160,9 @@ export const IMPORTS_ROW_KEY = "imports";
 
 /** The SQL Scripts node's key, after the Imports node (decision 081). */
 export const SCRIPTS_ROW_KEY = "scripts";
+
+/** The Key Deletions node's key, after SQL Scripts (plan 058 decision 17). */
+export const KEY_DELETES_ROW_KEY = "keyDeletes";
 
 export function datasourceRowKey(datasourceId: string): string {
   return `datasource:${datasourceId}`;
@@ -171,6 +183,7 @@ export function serviceRows(
   exports: readonly ExportEntry[] = [],
   imports: readonly ImportEntry[] = [],
   scripts: readonly ScriptEntry[] = [],
+  keyDeletes: readonly KeyDeleteTask[] = [],
 ): readonly ServiceRow[] {
   const rows: ServiceRow[] = [];
   for (const datasource of tree) {
@@ -235,13 +248,29 @@ export function serviceRows(
       }
     }
   }
+  if (keyDeletes.length > 0) {
+    rows.push({ kind: "keyDeletes", key: KEY_DELETES_ROW_KEY, depth: 0, count: keyDeletes.length });
+    if (!collapsed.has(KEY_DELETES_ROW_KEY)) {
+      for (const task of [...keyDeletes].reverse()) {
+        rows.push({
+          kind: "keyDelete",
+          key: `keyDelete:${task.taskId}`,
+          depth: 1,
+          parent: KEY_DELETES_ROW_KEY,
+          node: task,
+        });
+      }
+    }
+  }
   return rows;
 }
 
 /** Whether a line has children to show or hide. */
 export function expandable(row: ServiceRow): boolean {
   if (row.kind === "datasource") return row.node.sessions.length > 0;
-  if (row.kind === "exports" || row.kind === "imports" || row.kind === "scripts") return row.count > 0;
+  if (row.kind === "exports" || row.kind === "imports" || row.kind === "scripts" || row.kind === "keyDeletes") {
+    return row.count > 0;
+  }
   return row.kind === "session" && row.node.executions.length > 0;
 }
 
@@ -285,7 +314,11 @@ export function movedInTree(
     case "ArrowLeft": {
       if (row === undefined) return { selected, collapsed };
       if (expandable(row) && !collapsed.has(row.key)) return { selected, collapsed: new Set(collapsed).add(row.key) };
-      return row.kind === "datasource" || row.kind === "exports" || row.kind === "imports" || row.kind === "scripts"
+      return row.kind === "datasource" ||
+        row.kind === "exports" ||
+        row.kind === "imports" ||
+        row.kind === "scripts" ||
+        row.kind === "keyDeletes"
         ? { selected, collapsed }
         : { selected: row.parent, collapsed };
     }

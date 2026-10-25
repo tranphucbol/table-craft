@@ -132,6 +132,7 @@ export {
   FileArrowDown as ImportIcon,
   FileSql as ScriptIcon,
   Pulse as SessionsIcon,
+  Trash as DeleteIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */

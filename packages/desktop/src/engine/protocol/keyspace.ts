@@ -69,5 +69,41 @@ export interface OpenedKey {
   readonly readOnly: string | null;
 }
 
+/** Mirrors `KeyChange` in plugin-api: one pending change, with what the element held when read. */
+export type KeyChange =
+  | { readonly kind: "setString"; readonly value: KeyBytes; readonly original: KeyBytes | null }
+  | {
+      readonly kind: "setField";
+      readonly field: KeyBytes;
+      readonly value: KeyBytes;
+      readonly original: KeyBytes | null;
+    }
+  | { readonly kind: "deleteField"; readonly field: KeyBytes; readonly original: KeyBytes }
+  | { readonly kind: "setIndex"; readonly index: number; readonly value: KeyBytes; readonly original: KeyBytes }
+  | { readonly kind: "deleteIndex"; readonly index: number; readonly original: KeyBytes }
+  | { readonly kind: "push"; readonly value: KeyBytes }
+  | { readonly kind: "addMember"; readonly member: KeyBytes }
+  | { readonly kind: "deleteMember"; readonly member: KeyBytes }
+  | {
+      readonly kind: "setScore";
+      readonly member: KeyBytes;
+      readonly score: number;
+      readonly original: number | null;
+    }
+  | { readonly kind: "addEntry"; readonly fields: readonly (readonly [KeyBytes, KeyBytes])[] }
+  | { readonly kind: "deleteEntry"; readonly id: string };
+
+/** Mirrors `KeyApplyOptions` in plugin-api. */
+export interface KeyApplyOptions {
+  readonly type: KeyType;
+  readonly guard: boolean;
+  readonly ttlMs?: number;
+}
+
+/** Mirrors `KeyApplied` in plugin-api. */
+export interface KeyApplied {
+  readonly commands: readonly string[];
+}
+
 /** Mirrors `KeyExpiry` in plugin-api. */
 export type KeyExpiry = { readonly inMs: number } | { readonly at: string } | null;

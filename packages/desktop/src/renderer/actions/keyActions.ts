@@ -29,7 +29,7 @@ const GLOB_SPECIAL = /[*?[\]\\]/g;
 const browsesKeys = (context: ActionContext) => context.datasource?.capabilities.includes("keyValue") === true;
 
 /** The database the selection is in, else the datasource's configured one. */
-function contextDatabase(context: ActionContext, datasourceId: string): number {
+export function contextDatabase(context: ActionContext, datasourceId: string): number {
   const { selection } = context;
   if (selection?.kind === "catalog" && selection.id === datasourceId) {
     const row = keyTreeRowOf(selection.key);
@@ -89,7 +89,7 @@ function sameKey(a: KeyTarget, b: KeyTarget): boolean {
 }
 
 /** Opens the key in a key tab (decision 113), or brings its open tab forward. */
-function openKey(_context: ActionContext, target: OpenKeyArgs): void {
+export function openKey(_context: ActionContext, target: OpenKeyArgs): void {
   const existing = Object.entries(useKeyTabs.getState().tabs).find(([, tab]) => sameKey(tab, target))?.[0];
   if (existing !== undefined) {
     useTabs.getState().activate(existing);

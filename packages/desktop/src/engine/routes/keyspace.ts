@@ -24,6 +24,10 @@ export function keyspaceRoutes(connection: ConnectionContext): RoutesFor<"keyspa
       on((keyspace) => keyspace.scan({ database, cursor, match, type: keyType })),
     "keyspace.describe": ({ database, keys }) => on((keyspace) => keyspace.describe(database, keys)),
     "keyspace.open": (request) => openKey(request),
+    "keyspace.preview": ({ key, changes, options }) =>
+      on((keyspace) => Promise.resolve(keyspace.preview(key, changes, options))),
+    "keyspace.apply": ({ database, key, changes, options }) =>
+      on((keyspace) => keyspace.apply(database, key, changes, options)),
     "keyspace.rename": ({ database, key, to, overwrite }) =>
       on(async (keyspace) => {
         await keyspace.rename(database, key, to, overwrite);

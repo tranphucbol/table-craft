@@ -90,6 +90,9 @@ import {
   KEY_TYPES,
   type KeyBytes,
   type KeyDatabase,
+  type KeyApplied,
+  type KeyApplyOptions,
+  type KeyChange,
   type KeyDetails,
   type KeyExpiry,
   type KeyInfo,
@@ -273,6 +276,9 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.KeyInfo>().toEqualTypeOf<KeyInfo>();
     expectTypeOf<protocol.KeyExpiry>().toEqualTypeOf<KeyExpiry>();
     expectTypeOf<protocol.KeyDetails>().toEqualTypeOf<KeyDetails>();
+    expectTypeOf<protocol.KeyChange>().toEqualTypeOf<KeyChange>();
+    expectTypeOf<protocol.KeyApplyOptions>().toEqualTypeOf<KeyApplyOptions>();
+    expectTypeOf<protocol.KeyApplied>().toEqualTypeOf<KeyApplied>();
   });
 
   it("givenCoreErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {

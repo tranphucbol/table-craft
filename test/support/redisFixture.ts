@@ -33,6 +33,8 @@ export const REDIS_COMMANDS: CommandsFixture = {
   confirmByName: "FLUSHDB",
 };
 
+const EDITED_FIELD = { text: "status", hex: null };
+
 /** The seeded keys the keyspace contract scans: `page:0001` … `page:5000` and the type probes. */
 export const REDIS_KEYSPACE: KeyspaceFixture = {
   database: 0,
@@ -63,5 +65,23 @@ export const REDIS_KEYSPACE: KeyspaceFixture = {
       ["1700000000000-0", "login", "42", null],
       ["1700000000001-0", "logout", "42", "idle"],
     ],
+  },
+  edit: {
+    key: "contract:edit",
+    type: "hash",
+    change: (value, original) => ({
+      kind: "setField",
+      field: EDITED_FIELD,
+      value: { text: value, hex: null },
+      original: original === null ? null : { text: original, hex: null },
+    }),
+    valueOf: async (contents) => {
+      if (contents.result === null) return null;
+      for await (const row of contents.result.rows) {
+        const value = row[1];
+        if (row[0] === EDITED_FIELD.text) return typeof value === "string" ? value : JSON.stringify(value);
+      }
+      return null;
+    },
   },
 };

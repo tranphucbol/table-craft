@@ -34,6 +34,30 @@ const keyName = z.strictObject({
     .nullable(),
 });
 const keyNames = z.array(keyName).min(1);
+const keyChange = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("setString"), value: keyName, original: keyName.nullable() }),
+  z.strictObject({ kind: z.literal("setField"), field: keyName, value: keyName, original: keyName.nullable() }),
+  z.strictObject({ kind: z.literal("deleteField"), field: keyName, original: keyName }),
+  z.strictObject({ kind: z.literal("setIndex"), index: z.number().int(), value: keyName, original: keyName }),
+  z.strictObject({ kind: z.literal("deleteIndex"), index: z.number().int(), original: keyName }),
+  z.strictObject({ kind: z.literal("push"), value: keyName }),
+  z.strictObject({ kind: z.literal("addMember"), member: keyName }),
+  z.strictObject({ kind: z.literal("deleteMember"), member: keyName }),
+  z.strictObject({
+    kind: z.literal("setScore"),
+    member: keyName,
+    score: z.number(),
+    original: z.number().nullable(),
+  }),
+  z.strictObject({ kind: z.literal("addEntry"), fields: z.array(z.tuple([keyName, keyName])).min(1) }),
+  z.strictObject({ kind: z.literal("deleteEntry"), id: z.string().min(1) }),
+]);
+const keyChanges = z.array(keyChange).min(1);
+const keyApplyOptions = z.strictObject({
+  type: z.enum(KEY_TYPES),
+  guard: z.boolean(),
+  ttlMs: z.number().int().positive().optional(),
+});
 const taskId = z.string().min(1);
 const sessionTarget = z.strictObject({ id: z.string().min(1), instance: z.string().min(1).nullable() });
 const stallSeconds = z.number().int().min(EXPORT_STALL_SECONDS_RANGE.min).max(EXPORT_STALL_SECONDS_RANGE.max);
@@ -319,6 +343,21 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     }),
     ...paging,
     timeoutSeconds,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.preview"),
+    key: keyName,
+    changes: keyChanges,
+    options: keyApplyOptions,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.apply"),
+    database: index,
+    key: keyName,
+    changes: keyChanges,
+    options: keyApplyOptions,
   }),
   z.strictObject({
     id: requestId,

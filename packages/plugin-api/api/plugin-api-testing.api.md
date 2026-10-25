@@ -54,6 +54,13 @@ const EDIT_PROBE_TABLE = "edit_probe";
 
 const FIXTURE_RELATIONS: readonly [ { readonly name: "customer_totals"; readonly kind: "view"; }, { readonly name: "customers"; readonly kind: "table"; }, { readonly name: "orders"; readonly kind: "table"; }, { readonly name: "edit_probe"; readonly kind: "table"; }, { readonly name: "no_key_probe"; readonly kind: "table"; }, { readonly name: "type_probe"; readonly kind: "table"; }, { readonly name: "Line Items"; readonly kind: "table"; } ];
 
+interface KeyEditFixture {
+  readonly change: (value: string, original: string | null) => KeyChange;
+  readonly key: string;
+  readonly type: KeyType;
+  readonly valueOf: (contents: KeyContents) => Promise<string | null>;
+}
+
 interface KeyRowsFixture {
   readonly key: string;
   readonly rows: readonly Row[];
@@ -62,6 +69,7 @@ interface KeyRowsFixture {
 interface KeyspaceFixture {
   readonly binary: { readonly hex: string; readonly match: string; readonly type: KeyType; readonly value: string; };
   readonly database: number;
+  readonly edit: KeyEditFixture;
   readonly expiring: string;
   readonly hash: KeyRowsFixture;
   readonly scan: { readonly match: string; readonly count: number; readonly batch: number; };

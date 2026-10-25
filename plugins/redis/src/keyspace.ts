@@ -14,6 +14,7 @@ import {
   type Keyspace,
   type KeyType,
 } from "@table-craft/plugin-api";
+import { applyChanges, changeCommands, commandText } from "./apply.js";
 import { TYPE_MAPPING } from "./connect.js";
 import { bytesOf, keyBytesOf } from "./keyBytes.js";
 import { readKey, type ReadHost } from "./read.js";
@@ -46,6 +47,8 @@ export interface KeyspaceHost {
   readonly scanBatch: number;
   readonly configuredDatabase: number;
   readonly router: Router;
+  /** A read-only datasource's keyspace refuses every change (decision 115). */
+  readonly readOnly: boolean;
   /** Runs `work` with the connection on `database`, one call at a time. */
   onDatabase<T>(database: number, work: () => Promise<T>): Promise<T>;
   /** Whether the server has per-field hash TTLs (Redis 7.4). */
@@ -89,10 +92,6 @@ function scanReply(reply: unknown): { cursor: string; keys: Buffer[] } {
     cursor: text(cursor),
     keys: (Array.isArray(keys) ? keys : []).filter((key): key is Buffer => key instanceof Buffer),
   };
-}
-
-function notYet(what: string): PluginError {
-  return new PluginError("statementFailed", `${what} is not available yet.`);
 }
 
 /** The Redis keyspace (decision 113): the tree's databases and scans, and changes to single keys. */
@@ -210,23 +209,20 @@ export class RedisKeyspace implements Keyspace {
     return readKey(host, database, key, typed ?? { type: null, typeName: null, ttlMs: null }, request);
   }
 
-  preview(_key: KeyName, _changes: readonly KeyChange[], _options: KeyApplyOptions): readonly string[] {
-    throw notYet("Previewing changes");
+  preview(key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): readonly string[] {
+    return changeCommands(key, changes, options).map(commandText);
   }
 
-  apply(
-    _database: number,
-    _key: KeyName,
-    _changes: readonly KeyChange[],
-    _options: KeyApplyOptions,
-  ): Promise<KeyApplied> {
-    return Promise.reject(notYet("Changing a key"));
+  apply(database: number, key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): Promise<KeyApplied> {
+    return this.#writing("MULTI", database, async () =>
+      applyChanges(await this.#host.router.clientForKey(bytesOf(key)), key, changes, options),
+    );
   }
 
   async rename(database: number, key: KeyName, to: KeyName, overwrite: boolean): Promise<void> {
     const from = bytesOf(key);
     const target = bytesOf(to);
-    const renamed = await this.#onDatabase(database, () =>
+    const renamed = await this.#writing(overwrite ? "RENAME" : "RENAMENX", database, () =>
       this.#host.router.onKey(from, [overwrite ? "RENAME" : "RENAMENX", from, target]),
     );
     if (!overwrite && Number(renamed) === 0) {
@@ -243,7 +239,7 @@ export class RedisKeyspace implements Keyspace {
           ? ["PEXPIRE", bytes, String(Math.round(expiry.inMs))]
           : ["PEXPIREAT", bytes, String(Date.parse(expiry.at))];
     // PERSIST also answers 0 for a key without an expiry, so only EXISTS tells a missing key apart.
-    const missing = await this.#onDatabase(database, async () => {
+    const missing = await this.#writing(String(args[0]), database, async () => {
       const changed = Number(await this.#host.router.onKey(bytes, args));
       return changed === 0 && Number(await this.#host.router.onKey(bytes, ["EXISTS", bytes])) === 0;
     });
@@ -251,7 +247,7 @@ export class RedisKeyspace implements Keyspace {
   }
 
   async remove(database: number, keys: readonly KeyName[]): Promise<number> {
-    const removed = await this.#onDatabase(database, () =>
+    const removed = await this.#writing("UNLINK", database, () =>
       Promise.all(
         keys.map((key) => {
           const bytes = bytesOf(key);
@@ -260,6 +256,18 @@ export class RedisKeyspace implements Keyspace {
       ),
     );
     return removed.reduce<number>((total, count) => total + Number(count), 0);
+  }
+
+  #writing<T>(command: string, database: number, work: () => Promise<T>): Promise<T> {
+    if (this.#host.readOnly) {
+      return Promise.reject(
+        new PluginError(
+          "statementFailed",
+          `read-only datasource refuses ${command}, which writes. Turn off Read-only on the datasource to change keys.`,
+        ),
+      );
+    }
+    return this.#onDatabase(database, work);
   }
 
   #onDatabase<T>(database: number, work: () => Promise<T>): Promise<T> {

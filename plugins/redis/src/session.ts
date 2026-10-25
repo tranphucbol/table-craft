@@ -70,6 +70,7 @@ export class RedisSession implements Session {
       scanBatch: config.scanBatch,
       configuredDatabase: this.#database,
       router: this.#router,
+      readOnly: options.readOnly,
       onDatabase: (database, work) => this.#onDatabase(database, work),
       hashFieldTtl: () => this.features().then((features) => features.hashFieldTtl),
     });

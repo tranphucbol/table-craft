@@ -1,5 +1,5 @@
 import { decode as decodeMessagePack } from "@msgpack/msgpack";
-import type { WireValue } from "@table-craft/desktop/engine/protocol.js";
+import type { KeyBytes, WireValue } from "@table-craft/desktop/engine/protocol.js";
 
 /** How the value panel reads a key's bytes (plan 058 decision 15). */
 export const VALUE_FORMATS = ["auto", "text", "json", "hex", "base64", "msgpack", "gzip"] as const;
@@ -48,6 +48,12 @@ export function bytesOfHex(hex: string): Uint8Array {
 
 export function hexOf(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(HEX_RADIX).padStart(2, "0")).join("");
+}
+
+/** `bytes` as the engine takes them: the text when they are UTF-8, else their hex. */
+export function keyBytesOf(bytes: Uint8Array): KeyBytes {
+  const text = utf8Text(bytes);
+  return text === null ? { text: "", hex: hexOf(bytes) } : { text, hex: null };
 }
 
 /** A cell's or string key's bytes: text as UTF-8, bytes from their full hex; null for anything else. */

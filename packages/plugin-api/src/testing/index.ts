@@ -24,6 +24,9 @@ import {
   type ImportKind,
   type InsertRow,
   type InsertTarget,
+  type KeyApplied,
+  type KeyChange,
+  type KeyContents,
   type KeyName,
   type KeyType,
   type Keyspace,
@@ -214,6 +217,24 @@ export interface KeyspaceFixture {
   readonly zset: KeyRowsFixture;
   /** A stream key, its columns and its rows, in id order. */
   readonly stream: KeyRowsFixture & { readonly columns: readonly string[] };
+  /** A scratch key the suite creates, changes and removes. */
+  readonly edit: KeyEditFixture;
+}
+
+/** How the suite changes one element of a scratch key and reads it back (decision 115). */
+export interface KeyEditFixture {
+  readonly key: string;
+  readonly type: KeyType;
+  /** A change setting the element to `value`, read as `original` (null: it did not exist). */
+  readonly change: (value: string, original: string | null) => KeyChange;
+  /** The element's value in what `read` returned; null when it is missing. */
+  readonly valueOf: (contents: KeyContents) => Promise<string | null>;
+}
+
+/** The scratch key's element, written and read back through the keyspace. */
+interface ApplyTo {
+  set(value: string, original: string | null, guard: boolean): Promise<KeyApplied>;
+  value(): Promise<string | null>;
 }
 
 /** A key and the rows reading it gives. */
@@ -2555,6 +2576,55 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             { window: READ_WINDOW },
           );
           expect(contents).toMatchObject({ details: { type: null }, result: null, value: null });
+        });
+      });
+
+      /** Runs `use` with the scratch key removed before and after. */
+      async function withScratchKey(use: (keyspace: Keyspace, apply: ApplyTo) => Promise<void>) {
+        const { database, edit } = keyspaceFixture();
+        const key = { text: edit.key, hex: null };
+        await withSession(plugin, fixture, async (session) => {
+          const keyspace = keyspaceOf(session);
+          await keyspace.remove(database, [key]);
+          try {
+            await use(keyspace, {
+              set: (value, original, guard) =>
+                keyspace.apply(database, key, [edit.change(value, original)], { type: edit.type, guard }),
+              value: async () => edit.valueOf(await keyspace.read(database, key, { window: READ_WINDOW })),
+            });
+          } finally {
+            await keyspace.remove(database, [key]);
+          }
+        });
+      }
+
+      it("givenChange_whenApply_thenValueWritten", async () => {
+        await withScratchKey(async (keyspace, scratch) => {
+          const { edit } = keyspaceFixture();
+          const applied = await scratch.set("one", null, true);
+          expect(await scratch.value()).toBe("one");
+          const options = { type: edit.type, guard: true };
+          expect(applied.commands).toEqual(
+            keyspace.preview({ text: edit.key, hex: null }, [edit.change("one", null)], options),
+          );
+        });
+      });
+
+      it("givenChangedSinceRead_whenApplyGuarded_thenConflictAndNothingWritten", async () => {
+        await withScratchKey(async (_keyspace, scratch) => {
+          await scratch.set("one", null, true);
+          await scratch.set("two", "one", false);
+          expect(await rejectionCode(scratch.set("three", "one", true))).toBe("conflict");
+          expect(await scratch.value()).toBe("two");
+        });
+      });
+
+      it("givenChangedSinceRead_whenApplyUnguarded_thenWritten", async () => {
+        await withScratchKey(async (_keyspace, scratch) => {
+          await scratch.set("one", null, true);
+          await scratch.set("two", "one", false);
+          await scratch.set("three", "one", false);
+          expect(await scratch.value()).toBe("three");
         });
       });
     });

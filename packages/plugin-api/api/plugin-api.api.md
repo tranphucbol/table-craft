@@ -366,6 +366,7 @@ interface KeyApplied {
 interface KeyApplyOptions {
   readonly guard: boolean;
   readonly ttlMs?: number;
+  readonly type: KeyType;
 }
 
 interface KeyBytes {

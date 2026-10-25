@@ -9,6 +9,12 @@ import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importA
 import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
+import {
+  KEY_HIDDEN_WHEN_DISABLED,
+  KEY_MENU,
+  KEY_TREE_KINDS,
+  KEYSPACE_MENU,
+} from "@table-craft/desktop/renderer/panes/keyMenus.js";
 import { KEY_ACTION_IDS, type KeyDatabaseArgs } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { ROUTINE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/routineActions.js";
@@ -167,34 +173,6 @@ const COLUMN_MENU = [
   null,
   ACTION_IDS.toggleSystemSchemas,
 ] as const;
-const KEY_MENU = [
-  KEY_ACTION_IDS.open,
-  ACTION_IDS.newConsole,
-  null,
-  ACTION_IDS.synchronize,
-  ACTION_IDS.copyName,
-  KEY_ACTION_IDS.goTo,
-  null,
-  KEY_ACTION_IDS.toggleEmptyDatabases,
-] as const;
-const KEYSPACE_MENU = [
-  ACTION_IDS.newConsole,
-  KEY_ACTION_IDS.goTo,
-  KEY_ACTION_IDS.filter,
-  KEY_ACTION_IDS.loadMore,
-  null,
-  ACTION_IDS.synchronize,
-  null,
-  KEY_ACTION_IDS.toggleEmptyDatabases,
-] as const;
-const KEY_TREE_KINDS: ReadonlySet<ExplorerNode["kind"]> = new Set([
-  "keyDatabase",
-  "keyFilter",
-  "keyFolder",
-  "keyLoadMore",
-  "clusterNodes",
-  "clusterNode",
-]);
 const DOT_CLASS = {
   disconnected: null,
   connecting: "bg-ink-muted animate-pulse",
@@ -242,6 +220,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   ROUTINE_ACTION_IDS.execute,
   KEY_ACTION_IDS.goTo,
   KEY_ACTION_IDS.loadMore,
+  ...KEY_HIDDEN_WHEN_DISABLED,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {

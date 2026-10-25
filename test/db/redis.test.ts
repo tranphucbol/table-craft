@@ -13,6 +13,16 @@ import { REDIS_MANIFEST } from "../support/manifests.js";
 import { REDIS_COMMANDS, REDIS_KEYSPACE } from "../support/redisFixture.js";
 
 const DATABASES = 16;
+const EDIT_LIST = { text: "edit:list", hex: null };
+
+function text(value: string) {
+  return { text: value, hex: null };
+}
+
+function keyspaceOf(session: Session) {
+  if (session.keyspace === undefined) throw new Error("no keyspace");
+  return session.keyspace;
+}
 
 async function withRedis(config: unknown, use: (session: Session) => Promise<void>): Promise<void> {
   const session = await redis.connect(redis.connectionSchema.parse(config), { readOnly: false });
@@ -58,6 +68,72 @@ describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", 
         expect(info?.type).toBe("hash");
         expect((await session.execute("EXISTS db1:config")).reply?.text).toBe("(integer) 0");
       });
+    });
+
+    it("givenListDeletes_whenApply_thenElementsRemovedInOneTransaction", async () => {
+      await withRedis(config, async (session) => {
+        const keyspace = keyspaceOf(session);
+        await session.execute("DEL edit:list");
+        await session.execute("RPUSH edit:list a b c d");
+        try {
+          await keyspace.apply(
+            0,
+            EDIT_LIST,
+            [
+              { kind: "deleteIndex", index: 1, original: text("b") },
+              { kind: "setIndex", index: 3, value: text("D"), original: text("d") },
+              { kind: "deleteIndex", index: 2, original: text("c") },
+              { kind: "push", value: text("e") },
+            ],
+            { type: "list", guard: true },
+          );
+          const values: unknown[] = [];
+          for await (const row of (await session.execute("LRANGE edit:list 0 -1")).rows) values.push(row[1]);
+          expect(values).toEqual(["a", "D", "e"]);
+        } finally {
+          await session.execute("DEL edit:list");
+        }
+      });
+    });
+
+    it("givenFailingCommand_whenApply_thenStatementFailedNamingIt", async () => {
+      await withRedis(config, async (session) => {
+        await session.execute("DEL edit:list");
+        await session.execute("RPUSH edit:list a");
+        try {
+          const applied = keyspaceOf(session).apply(
+            0,
+            EDIT_LIST,
+            [{ kind: "setIndex", index: 5, value: text("x"), original: text("y") }],
+            { type: "list", guard: false },
+          );
+          await expect(applied).rejects.toThrow(/LSET edit:list 5 x failed: ERR index out of range/);
+        } finally {
+          await session.execute("DEL edit:list");
+        }
+      });
+    });
+
+    it("givenReadOnly_whenKeyspaceChanges_thenRefusedAndNothingWritten", async () => {
+      const session = await redis.connect(redis.connectionSchema.parse(config), { readOnly: true });
+      try {
+        const keyspace = keyspaceOf(session);
+        const key = text("type_probe:string");
+        const refused = /read-only datasource refuses \w+/;
+        await expect(
+          keyspace.apply(0, key, [{ kind: "setString", value: text("x"), original: null }], {
+            type: "string",
+            guard: false,
+          }),
+        ).rejects.toThrow(refused);
+        await expect(keyspace.rename(0, key, text("type_probe:renamed"), false)).rejects.toThrow(refused);
+        await expect(keyspace.expire(0, key, { inMs: 1000 })).rejects.toThrow(refused);
+        await expect(keyspace.remove(0, [key])).rejects.toThrow(refused);
+        expect((await session.execute("GET type_probe:string")).reply?.text).toBe('"hello"');
+        expect((await session.execute("PTTL type_probe:string")).reply?.text).toBe("(integer) -1");
+      } finally {
+        await session.close();
+      }
     });
   });
 });

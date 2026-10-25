@@ -1,15 +1,45 @@
 import { create } from "zustand";
 import type {
+  CellInput,
   EngineError,
+  KeyBytes,
   KeyDetails,
   KeyName,
   KeyReadRange,
   KeyType,
+  Row,
   SortKey,
   WireValue,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { carriedLayout } from "@table-craft/desktop/renderer/model/columnLayout.js";
+import {
+  EMPTY_BUFFER,
+  pendingCount,
+  type BufferCell,
+  type EditBuffer,
+} from "@table-craft/desktop/renderer/model/editBuffer.js";
+import {
+  editsRows,
+  keyChangesOf,
+  keyReadOnlyColumns,
+  recreateChanges,
+  stringChanges,
+  type KeyChanges,
+} from "@table-craft/desktop/renderer/model/keyChanges.js";
+import {
+  canEditCell,
+  clampedTo,
+  editCellText,
+  editorAt,
+  withAddedRow,
+  withCells,
+  withDeletes,
+  withDuplicates,
+  withReverted,
+  type CellEditor,
+  type EditTarget,
+} from "@table-craft/desktop/renderer/model/resultEdits.js";
 import { clampSelection } from "@table-craft/desktop/renderer/model/gridSelection.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { NO_EXPORTS, useExports, type ExportStarter } from "@table-craft/desktop/renderer/state/exports.js";
@@ -20,6 +50,7 @@ import {
 } from "@table-craft/desktop/renderer/state/executions.js";
 import {
   resultTabOf,
+  rowAt,
   searchedColumnsChanged,
   shownRowCount,
   type ResultTab,
@@ -34,7 +65,7 @@ export interface KeyTarget {
   readonly key: KeyName;
 }
 
-export type KeyTabStatus = "connecting" | "ready" | "loading" | "failed" | "disconnected";
+export type KeyTabStatus = "connecting" | "ready" | "loading" | "submitting" | "failed" | "disconnected";
 
 /** The filter bar's fields: a MATCH glob for hashes, sets and sorted sets, From and To ids for streams. */
 export interface KeyRangeDraft {
@@ -63,6 +94,21 @@ export interface KeyTab extends KeyTarget {
   readonly result: ResultTab | null;
   readonly applied: KeyRangeDraft;
   readonly draft: KeyRangeDraft;
+  /** Pending changes to the rows (decision 115 of plan 058). */
+  readonly buffer: EditBuffer;
+  readonly editing: CellEditor | null;
+  readonly panel: CellEditor | null;
+  readonly readOnlyColumns: readonly boolean[];
+  /** A string key's pending value; null while it is unchanged. */
+  readonly stringValue: KeyBytes | null;
+  /** The type the key had before it went missing: its last rows stay shown, for Recreate. */
+  readonly lostType: KeyType | null;
+  /** Recreate is pending: Submit writes the last rows back as a new key. */
+  readonly recreating: boolean;
+  /** A guarded submit found the key changed since it was read. */
+  readonly conflict: EngineError | null;
+  /** What the last submit did, for the footer. */
+  readonly notice: string | null;
 }
 
 export interface KeyTabsState {
@@ -84,6 +130,26 @@ export interface KeyTabsState {
   readonly exportTo: KeyTabsHost["exportTo"];
   readonly search: KeyTabsHost["search"];
   readonly findNext: KeyTabsHost["findNext"];
+  readonly beginEdit: (id: string, cell: BufferCell, text?: string) => void;
+  readonly changeEdit: (id: string, text: string) => void;
+  readonly commitEdit: (id: string) => boolean;
+  readonly cancelEdit: (id: string) => void;
+  readonly editPanel: (id: string, cell: BufferCell | null, text?: string) => void;
+  readonly applyPanel: (id: string) => boolean;
+  readonly setCells: (id: string, cells: readonly BufferCell[], input: CellInput) => void;
+  readonly addRow: (id: string) => void;
+  readonly duplicateRows: (id: string, rows: readonly number[]) => void;
+  readonly deleteRows: (id: string, rows: readonly number[]) => void;
+  readonly revert: (id: string, cells: readonly BufferCell[]) => void;
+  readonly revertAll: (id: string) => void;
+  /** A string key's new value; null drops the change. */
+  readonly setStringValue: (id: string, value: KeyBytes | null) => void;
+  /** Makes the last rows of a key that went missing pending, to submit as a new key. */
+  readonly recreate: (id: string) => void;
+  readonly preview: (id: string) => Promise<readonly string[] | null>;
+  /** Applies the pending changes; unguarded only after a conflict, to overwrite. */
+  readonly submit: (id: string, guard?: boolean) => Promise<boolean>;
+  readonly dismissConflict: (id: string) => void;
 }
 
 type ResultWindows = ReturnType<typeof createResultWindows>;
@@ -104,9 +170,14 @@ export interface KeyTabsDependencies {
   readonly executions?: ExecutionReporter;
   readonly exports?: ExportStarter;
   readonly statementTimeout?: (datasourceId: string) => number;
+  /** Whether the datasource is read-only, so its key tabs take no edits. */
+  readonly readOnly?: (datasourceId: string) => boolean;
 }
 
 const LOAD_LABEL = "Read key";
+const SUBMIT_LABEL = "Submit key changes";
+const RECREATE_UNLOADED = "Recreate writes back the rows read last; fetch them all first.";
+const SUBMITTED_NOTICE = "Submitted as one MULTI";
 
 /** Which filter fields a key type reads: streams page by id, the scanned types by MATCH. */
 export function rangeFields(type: KeyType | null): "match" | "ids" | null {
@@ -141,6 +212,14 @@ export function canReloadKey(status: KeyTabStatus): boolean {
   return status !== "connecting" && status !== "loading";
 }
 
+function typeOf(tab: KeyTab): KeyType {
+  return tab.details?.type ?? tab.lostType ?? "other";
+}
+
+function problemError(message: string): EngineError {
+  return { code: "statementFailed", message, hint: "" };
+}
+
 function newTab(target: KeyTarget): KeyTab {
   return {
     ...target,
@@ -155,7 +234,61 @@ function newTab(target: KeyTarget): KeyTab {
     result: null,
     applied: EMPTY_RANGE,
     draft: EMPTY_RANGE,
+    ...NO_EDITS,
+    readOnlyColumns: [],
+    lostType: null,
+    notice: null,
   };
+}
+
+const NO_EDITS = {
+  buffer: EMPTY_BUFFER,
+  editing: null,
+  panel: null,
+  stringValue: null,
+  recreating: false,
+  conflict: null,
+} as const;
+
+/** The key tab as the grid's edit functions see it. */
+export function keyEditTarget(tab: KeyTab): EditTarget {
+  return { result: tab.result, buffer: tab.buffer, editable: null, columns: [], readOnlyColumns: tab.readOnlyColumns };
+}
+
+/** Whether the tab takes edits now: a live, writable key of a type edited row by row or as a string. */
+export function isKeyEditable(tab: KeyTab | undefined, datasourceReadOnly: boolean): tab is KeyTab {
+  if (tab === undefined || datasourceReadOnly || tab.status !== "ready" || tab.readOnly !== null) return false;
+  if (keyMissing(tab) || tab.recreating) return false;
+  if (tab.details?.type === "string") return true;
+  return editsRows(tab.details?.type ?? null) && tab.result !== null && !tab.result.stale;
+}
+
+/** The tab's pending changes as changes to the key; a problem when one cannot be written. */
+export function pendingKeyChanges(tab: KeyTab): KeyChanges {
+  const columns = tab.result?.columns.map((column) => column.name) ?? [];
+  if (tab.recreating && tab.lostType !== null) {
+    const rows: Row[] = [];
+    const count = tab.result?.rowCount ?? 0;
+    for (let row = 0; row < count; row++) {
+      const values = tab.result === null ? undefined : rowAt(tab.result.windows, row);
+      if (values === undefined) return { problem: RECREATE_UNLOADED };
+      rows.push(values);
+    }
+    if (tab.result !== null && !tab.result.complete) return { problem: RECREATE_UNLOADED };
+    return recreateChanges(tab.lostType, columns, rows, tab.value);
+  }
+  const type = tab.details?.type ?? null;
+  if (type === "string") return tab.stringValue === null ? { changes: [] } : stringChanges(tab.stringValue, tab.value);
+  if (type === null || tab.result === null) return { changes: [] };
+  const result = tab.result;
+  return keyChangesOf(type, columns, tab.buffer, (row) => rowAt(result.windows, row));
+}
+
+/** Rows touched, or one for a changed string or a pending Recreate. */
+export function pendingKeyCount(tab: KeyTab): number {
+  if (tab.recreating) return 1;
+  if (tab.stringValue !== null) return 1;
+  return pendingCount(tab.buffer);
 }
 
 export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
@@ -216,6 +349,21 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       return status === "disconnected" || status === "failed" ? status : "ready";
     }
 
+    function editableTab(id: string): KeyTab | null {
+      const current = get().tabs[id];
+      const readOnly = current === undefined ? false : (dependencies.readOnly?.(current.datasourceId) ?? false);
+      return isKeyEditable(current, readOnly) ? current : null;
+    }
+
+    function editBuffer(id: string, change: (target: EditTarget) => EditBuffer): void {
+      const current = editableTab(id);
+      if (current === null || current.result === null) return;
+      const buffer = change(keyEditTarget(current));
+      if (buffer !== current.buffer) {
+        patch(id, { buffer, notice: null, result: clampedTo(current.result, buffer) });
+      }
+    }
+
     function release(id: string, result: ResultTab | null): void {
       if (result === null) return;
       windows.forget(result.id);
@@ -259,6 +407,12 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           return false;
         }
         const previous = latest.result;
+        const lostType = answer.details.type === null ? (latest.details?.type ?? latest.lostType) : null;
+        if (lostType !== null) {
+          // The rows read last stay, for Recreate to write back.
+          patch(id, { details: answer.details, readAt: clock(), lostType, ...NO_EDITS, queryError: null });
+          return true;
+        }
         release(id, previous);
         let result: ResultTab | null = null;
         if (answer.statement !== null) {
@@ -285,6 +439,9 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           applied: draft,
           draft,
           queryError: null,
+          ...NO_EDITS,
+          lostType: null,
+          readOnlyColumns: keyReadOnlyColumns(answer.details.type, result?.columns.map((column) => column.name) ?? []),
         });
         return true;
       } catch (cause) {
@@ -409,6 +566,131 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       async exportTo(...args) {
         return (await windows.exportTo(...args)) !== null;
       },
+
+      beginEdit(id, cell, text) {
+        const current = editableTab(id);
+        const editing = current === null ? null : editorAt(keyEditTarget(current), cell, text);
+        if (editing !== null) patch(id, { editing });
+      },
+
+      changeEdit(id, text) {
+        const editing = get().tabs[id]?.editing;
+        if (editing != null && editing.text !== text) patch(id, { editing: { ...editing, text } });
+      },
+
+      commitEdit(id) {
+        const editing = get().tabs[id]?.editing;
+        if (editing == null) return false;
+        patch(id, { editing: null });
+        if (editing.text !== editing.initial) get().setCells(id, [editing], { kind: "text", text: editing.text });
+        return true;
+      },
+
+      cancelEdit(id) {
+        if (get().tabs[id]?.editing != null) patch(id, { editing: null });
+      },
+
+      editPanel(id, cell, text) {
+        const current = get().tabs[id];
+        if (current === undefined) return;
+        if (cell === null) {
+          if (current.panel !== null) patch(id, { panel: null });
+          return;
+        }
+        const target = keyEditTarget(current);
+        if (editableTab(id) === null || !canEditCell(target, cell)) return;
+        const same = current.panel?.row === cell.row && current.panel.column === cell.column;
+        const initial = same ? current.panel.initial : editCellText(target, cell);
+        patch(id, { panel: { row: cell.row, column: cell.column, text: text ?? initial, initial } });
+      },
+
+      applyPanel(id) {
+        const panel = get().tabs[id]?.panel;
+        if (panel == null) return false;
+        patch(id, { panel: null });
+        if (panel.text !== panel.initial) get().setCells(id, [panel], { kind: "text", text: panel.text });
+        return true;
+      },
+
+      setCells: (id, cells, input) => editBuffer(id, (target) => withCells(target, cells, input)),
+      addRow: (id) => editBuffer(id, withAddedRow),
+      duplicateRows: (id, rows) => editBuffer(id, (target) => withDuplicates(target, rows)),
+      deleteRows: (id, rows) => editBuffer(id, (target) => withDeletes(target, rows)),
+      revert: (id, cells) => editBuffer(id, (target) => withReverted(target, cells)),
+
+      revertAll(id) {
+        if (get().tabs[id] !== undefined) patch(id, { ...NO_EDITS });
+      },
+
+      setStringValue(id, value) {
+        if (editableTab(id) !== null) patch(id, { stringValue: value, notice: null });
+      },
+
+      recreate(id) {
+        const current = get().tabs[id];
+        if (current?.lostType != null && current.status === "ready") patch(id, { recreating: true, notice: null });
+      },
+
+      async preview(id) {
+        const current = get().tabs[id];
+        const client = clients.get(id);
+        if (current === undefined || client === undefined) return null;
+        const pending = pendingKeyChanges(current);
+        if ("problem" in pending) {
+          patch(id, { queryError: problemError(pending.problem) });
+          return null;
+        }
+        const options = { type: typeOf(current), guard: true };
+        try {
+          return await client.call("keyspace.preview", { key: current.key, changes: pending.changes, options });
+        } catch (cause) {
+          patch(id, { error: toError(cause) });
+          return null;
+        }
+      },
+
+      async submit(id, guard = true) {
+        get().commitEdit(id);
+        get().applyPanel(id);
+        const current = get().tabs[id];
+        const client = clients.get(id);
+        if (current === undefined || client === undefined || current.status !== "ready") return false;
+        const pending = pendingKeyChanges(current);
+        if ("problem" in pending) {
+          patch(id, { queryError: problemError(pending.problem) });
+          return false;
+        }
+        if (pending.changes.length === 0) return false;
+        patch(id, { status: "submitting", error: null, queryError: null, conflict: null });
+        const begun = clock();
+        const executionId = executions.start(id, { label: SUBMIT_LABEL, sql: current.key.text, startedAt: begun });
+        const finish = (outcome: "success" | "error", message: string | null) =>
+          executions.finish(id, executionId, { outcome, rowCount: null, message, durationMs: clock() - begun });
+        try {
+          await client.call("keyspace.apply", {
+            database: current.database,
+            key: current.key,
+            changes: pending.changes,
+            options: { type: typeOf(current), guard },
+          });
+          finish("success", null);
+          patch(id, { status: settled(id), ...NO_EDITS, lostType: null });
+          await read(id, current.applied);
+          patch(id, { notice: SUBMITTED_NOTICE });
+          return true;
+        } catch (cause) {
+          const error = toError(cause);
+          finish("error", error.message);
+          patch(id, error.code === "conflict" ? { conflict: error } : { error });
+          return false;
+        } finally {
+          patch(id, { status: settled(id) });
+        }
+      },
+
+      dismissConflict(id) {
+        if (get().tabs[id]?.conflict != null) patch(id, { conflict: null });
+      },
     };
   });
 }
@@ -419,6 +701,7 @@ export const useKeyTabs = createKeyTabsStore({
   connect: (datasourceId) => useDatasources.getState().connect(datasourceId),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),
+  readOnly: (datasourceId) => datasourceById(useDatasources.getState(), datasourceId)?.readOnly === true,
   executions: {
     start: (tabId, start) => useExecutions.getState().start(tabId, start),
     finish: (tabId, executionId, end) => useExecutions.getState().finish(tabId, executionId, end),

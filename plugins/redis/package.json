@@ -14,7 +14,8 @@
     "./routing": "./src/routing.ts",
     "./readOnly": "./src/readOnly.ts",
     "./complete": "./src/complete.ts",
-    "./connect": "./src/connect.ts"
+    "./connect": "./src/connect.ts",
+    "./apply": "./src/apply.ts"
   },
   "dependencies": {
     "@table-craft/plugin-api": "workspace:*",

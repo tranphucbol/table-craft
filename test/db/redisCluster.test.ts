@@ -111,6 +111,22 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
       expect((await session.execute("DEL probe:{7}:a probe:{7}:b")).reply?.text).toBe("(integer) 2");
     });
 
+    it("givenCluster_whenRenameAcrossSlots_thenRefusedWithHashTagHint", async () => {
+      const keyspace = session.keyspace;
+      if (keyspace === undefined) throw new Error("no keyspace");
+      await session.execute("SET rename:{1}:from x");
+      try {
+        const error = await rejection(
+          keyspace.rename(0, { text: "rename:{1}:from", hex: null }, { text: "rename:{2}:to", hex: null }, false),
+        );
+        expect(error.code).toBe("statementFailed");
+        expect(error.message).toContain("CROSSSLOT");
+        expect(error.message).toContain("wrap the common part in `{…}`");
+      } finally {
+        await session.execute("DEL rename:{1}:from");
+      }
+    });
+
     it("givenCluster_whenSelect_thenRefused", async () => {
       const error = await rejection(session.execute("SELECT 1"));
       expect(error.code).toBe("statementFailed");

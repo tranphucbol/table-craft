@@ -9,9 +9,11 @@ import { Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { prettyJson } from "@table-craft/desktop/renderer/model/prettyJson.js";
 import {
   decodeValue,
+  EDITABLE_FORMATS,
   FORMAT_LABELS,
   VALUE_FORMATS,
   valueBytes,
+  type ConcreteFormat,
   type DecodedValue,
   type ValueFormat,
 } from "@table-craft/desktop/renderer/model/valueFormats.js";
@@ -57,19 +59,53 @@ function useDecoded(bytes: Uint8Array, format: ValueFormat): DecodedValue | null
   return decoded;
 }
 
-function FormattedValue({ bytes, format }: { readonly bytes: Uint8Array; readonly format: ValueFormat }) {
+/**
+ * A string key's value edited in its format (plan 058 decision 15). The editor keeps its own text
+ * once mounted, so the decoded text of each pending edit does not move the caret.
+ */
+export interface ValueTextEdit {
+  /** Changes when the value is read again, remounting the editor on the new text. */
+  readonly revision: string;
+  readonly problem: string | null;
+  readonly onChange: (text: string, format: ConcreteFormat) => void;
+}
+
+function FormattedValue({
+  bytes,
+  format,
+  edit,
+}: {
+  readonly bytes: Uint8Array;
+  readonly format: ValueFormat;
+  readonly edit?: ValueTextEdit;
+}) {
   const decoded = useDecoded(bytes, format);
   if (decoded === null) return <p className="p-cell text-ink-muted">Decoding…</p>;
   const shownAs = decoded.inner === null ? FORMAT_LABELS[decoded.format] : `gzip → ${FORMAT_LABELS[decoded.inner]}`;
   const json =
     decoded.error === null && (decoded.format === "json" || decoded.inner === "json" || decoded.format === "msgpack");
+  const editable = edit !== undefined && decoded.error === null && EDITABLE_FORMATS.has(decoded.format);
+  const problem = edit?.problem ?? null;
   return (
     <div data-testid="value-formatted" data-format={decoded.format} className="flex min-h-0 flex-1 flex-col">
       <p className="shrink-0 px-cell pt-cell text-ink-muted">
         {format === "auto" ? `Auto: ${shownAs}` : shownAs}
         {decoded.error === null ? "" : ` · ${decoded.error}`}
+        {edit !== undefined && !editable && decoded.error === null ? " · read-only" : ""}
       </p>
-      {json ? (
+      {problem === null ? null : (
+        <p role="alert" data-testid="value-problem" className="shrink-0 px-cell text-danger">
+          {problem}
+        </p>
+      )}
+      {editable ? (
+        <EditableText
+          key={`${edit.revision}:${format}`}
+          label="Value"
+          text={decoded.text}
+          onChange={(text) => edit.onChange(text, decoded.format)}
+        />
+      ) : json ? (
         <JsonView text={decoded.text} />
       ) : (
         <pre
@@ -147,12 +183,38 @@ export function ValueEditor({
   readonly applyHint: string;
   readonly onChange: (text: string) => void;
 }) {
+  return (
+    <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
+      <PanelHeader column={column}>
+        <span className="ml-auto shrink-0 text-ink-muted">{applyHint} applies</span>
+      </PanelHeader>
+      <EditableText
+        key={column?.name}
+        label={`Value of ${column?.name ?? "the cell"}`}
+        text={json ? prettyJson(text) : text}
+        onChange={onChange}
+      />
+    </aside>
+  );
+}
+
+/** An editor over `text` as it was at mount; `onChange` gets each edit. */
+function EditableText({
+  label,
+  text,
+  onChange,
+}: {
+  readonly label: string;
+  readonly text: string;
+  readonly onChange: (text: string) => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
   useEffect(() => {
     changed.current = onChange;
   });
-  const initial = useRef(json ? prettyJson(text) : text);
+  const initial = useRef(text);
+  const ariaLabel = useRef(label);
   useEffect(() => {
     if (host.current === null) return;
     const created = new EditorView({
@@ -162,7 +224,7 @@ export function ValueEditor({
         extensions: [
           EDITOR_THEME,
           EditorView.lineWrapping,
-          EditorView.contentAttributes.of({ "aria-label": `Value of ${column?.name ?? "the cell"}` }),
+          EditorView.contentAttributes.of({ "aria-label": ariaLabel.current }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) changed.current(update.state.doc.toString());
           }),
@@ -170,15 +232,8 @@ export function ValueEditor({
       }),
     });
     return () => created.destroy();
-  }, [column?.name]);
-  return (
-    <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
-      <PanelHeader column={column}>
-        <span className="ml-auto shrink-0 text-ink-muted">{applyHint} applies</span>
-      </PanelHeader>
-      <div ref={host} data-testid="value-editor" className="min-h-0 flex-1 overflow-hidden" />
-    </aside>
-  );
+  }, []);
+  return <div ref={host} data-testid="value-editor" className="min-h-0 flex-1 overflow-hidden" />;
 }
 
 /**
@@ -189,11 +244,14 @@ export function ValuePanel({
   column,
   value,
   format,
+  edit,
 }: {
   readonly column: Column | null;
   /** `undefined` while the cell's window is loading, or with no cell focused. */
   readonly value: WireValue | undefined;
   readonly format?: ValueFormatChoice;
+  /** Makes the formatted value editable; only with `format`. */
+  readonly edit?: ValueTextEdit;
 }) {
   const shown = value === undefined ? null : panelValue(value);
   const formatted = format !== undefined;
@@ -203,7 +261,7 @@ export function ValuePanel({
     <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
       <PanelHeader column={column}>{format === undefined ? null : <FormatPicker choice={format} />}</PanelHeader>
       {bytes !== null && format !== undefined ? (
-        <FormattedValue bytes={bytes} format={format.format} />
+        <FormattedValue bytes={bytes} format={format.format} edit={edit} />
       ) : shown === null ? (
         <p className="p-cell text-ink-muted">{column === null ? "Select a cell to see its value." : "Loading…"}</p>
       ) : shown.kind === "null" ? (

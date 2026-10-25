@@ -126,6 +126,8 @@ export type KeyChange =
   | { readonly kind: "deleteEntry"; readonly id: string };
 
 export interface KeyApplyOptions {
+  /** The key's type as read, or the type of the key the changes create. */
+  readonly type: KeyType;
   /** Check every change's `original` first and refuse with `conflict` when one differs. */
   readonly guard: boolean;
   /** Milliseconds to live to set with the changes, for a new key; absent leaves the expiry alone. */
@@ -152,7 +154,7 @@ export interface Keyspace {
   scan(request: KeyScanRequest): Promise<KeyScan>;
   /** Type and expiry of each key, in order. */
   describe(database: number, keys: readonly KeyName[]): Promise<readonly KeyInfo[]>;
-  /** Rejects with `statementFailed` when the key does not exist. */
+  /** A key that does not exist reads with a null `details.type` and no contents. */
   read(database: number, key: KeyName, request: KeyReadRequest): Promise<KeyContents>;
   /** The commands `apply` would run for `changes`, numbered by the host. Pure. */
   preview(key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): readonly string[];

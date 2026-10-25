@@ -30,6 +30,9 @@ import type {
   ParameterValue,
 } from "./sql.js";
 import type {
+  KeyApplied,
+  KeyApplyOptions,
+  KeyChange,
   KeyDatabases,
   KeyExpiry,
   KeyInfo,
@@ -296,6 +299,24 @@ export interface EngineCalls {
     } & ResultPaging &
       StatementLimit;
     result: OpenedKey;
+  };
+  /** The commands `keyspace.apply` would run for the changes, unnumbered. Needs `keyValue`. */
+  "keyspace.preview": {
+    params: { readonly key: KeyName; readonly changes: readonly KeyChange[]; readonly options: KeyApplyOptions };
+    result: readonly string[];
+  };
+  /**
+   * Runs the changes to one key as one `MULTI`; guarded, it fails with `conflict` and writes nothing
+   * when an element changed since it was read (decision 115). Needs `keyValue`.
+   */
+  "keyspace.apply": {
+    params: {
+      readonly database: number;
+      readonly key: KeyName;
+      readonly changes: readonly KeyChange[];
+      readonly options: KeyApplyOptions;
+    };
+    result: KeyApplied;
   };
   /** Renames a key; refused when `to` exists unless `overwrite`. Needs `keyValue`. */
   "keyspace.rename": {

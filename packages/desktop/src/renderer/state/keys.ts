@@ -240,6 +240,7 @@ export function createKeysStore(dependencies: KeysDependencies) {
         updateDatabase(id, database, (current) => ({
           ...current,
           keys: current.keys.filter((key) => !gone.has(keyIdentity(key))),
+          info: Object.fromEntries(Object.entries(current.info).filter(([identity]) => !gone.has(identity))),
         }));
       },
 
