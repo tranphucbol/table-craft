@@ -28,6 +28,8 @@
     "test:smoke:db:headless": "bun test/e2e/docker/headless.ts --databases",
     "test:db": "bun test/db/up.ts && vitest run --config vitest.db.config.ts",
     "readme:media": "bun test/db/up.ts && bun run --filter '@table-craft/desktop' build && TABLE_CRAFT_SMOKE=1 TABLE_CRAFT_README_MEDIA=1 vitest run test/readme --no-file-parallelism",
+    "api:report": "bun scripts/api-report/check.ts --write",
+    "api:check": "bun scripts/api-report/check.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p packages/desktop/src/renderer && tsc --noEmit -p test/renderer",
     "desktop": "bun run --filter '@table-craft/desktop' build && bun run --cwd packages/desktop start",
     "desktop:package": "bun run --filter '@table-craft/desktop' build && bun run --cwd packages/desktop package",
