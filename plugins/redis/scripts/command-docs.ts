@@ -21,6 +21,7 @@ interface Argument {
   readonly name: string;
   readonly type: string;
   readonly token?: string;
+  readonly since?: string;
   readonly optional?: true;
   readonly multiple?: true;
   readonly arguments?: readonly Argument[];
@@ -46,10 +47,12 @@ function argumentOf(raw: Reply): Argument {
   const list = Array.isArray(flags) ? flags : [];
   const children = field(raw, "arguments");
   const token = text(field(raw, "token"));
+  const since = text(field(raw, "since"));
   return {
     name: text(field(raw, "name")),
     type: text(field(raw, "type")),
     ...(token === "" ? {} : { token }),
+    ...(since === "" ? {} : { since }),
     ...(list.includes("optional") ? { optional: true } : {}),
     ...(list.includes("multiple") ? { multiple: true } : {}),
     ...(Array.isArray(children) ? { arguments: children.map(argumentOf) } : {}),

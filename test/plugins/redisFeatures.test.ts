@@ -5,7 +5,7 @@ import { featuresOf, lowestVersion } from "@table-craft/plugin-redis/features";
 import { PluginError } from "@table-craft/plugin-api";
 import { afterEach, describe, expect, it } from "vitest";
 
-const OLD_VERSION = "6.0.20";
+const OLD_VERSION = "4.0.14";
 const CRLF = "\r\n";
 
 function bulk(text: string): string {
@@ -28,12 +28,12 @@ function commandsIn(buffer: string): { commands: string[][]; rest: string } {
   }
 }
 
-/** A server that answers like Redis `version` would: `HELLO`, `INFO` and OK to the rest. */
+/** A server that answers like Redis `version` before 6.0 would: no `HELLO`, `INFO`, OK to the rest. */
 function fakeRedis(version: string): Promise<Server> {
   const reply = (args: readonly string[]): string => {
     switch (args[0]?.toUpperCase()) {
       case "HELLO":
-        return `%3${CRLF}${bulk("server")}${bulk("redis")}${bulk("version")}${bulk(version)}${bulk("proto")}:3${CRLF}`;
+        return `-ERR unknown command \`HELLO\`, with args beginning with: \`3\`, ${CRLF}`;
       case "INFO":
         return bulk(`# Server${CRLF}redis_version:${version}${CRLF}redis_mode:standalone${CRLF}`);
       default:
@@ -60,7 +60,7 @@ afterEach(async () => {
 });
 
 describe("redis features", () => {
-  it("givenServer60_whenConnect_thenConnectionFailedNamingTheVersion", async () => {
+  it("givenServer40_whenConnect_thenConnectionFailedNamingTheVersion", async () => {
     server = await fakeRedis(OLD_VERSION);
     const { port } = server.address() as AddressInfo;
     const config = redis.connectionSchema.parse({ mode: "standalone", host: "127.0.0.1", port });
@@ -74,20 +74,23 @@ describe("redis features", () => {
     expect(error).toBeInstanceOf(PluginError);
     expect(error).toMatchObject({
       code: "connectionFailed",
-      message: `Redis 6.2 or later is required (server is ${OLD_VERSION}).`,
+      message: `Redis 5.0 or later is required (server is ${OLD_VERSION}).`,
     });
   });
 
   it("givenMixedVersionCluster_whenFeatures_thenLowestVersionWins", () => {
-    const version = lowestVersion(["7.4.1", "6.2.14", "7.2.0"]);
-    expect(version).toBe("6.2.14");
+    const version = lowestVersion(["7.4.1", "5.0.3", "6.2.14"]);
+    expect(version).toBe("5.0.3");
     expect(featuresOf(version, new Set(["GET"]))).toMatchObject({
-      version: "6.2.14",
+      version: "5.0.3",
+      scanType: false,
+      keepTtl: false,
       commandDocs: false,
       multiSectionInfo: false,
       hashFieldTtl: false,
       expireTime: false,
     });
+    expect(featuresOf("6.2.14", new Set())).toMatchObject({ scanType: true, keepTtl: true, commandDocs: false });
     expect(featuresOf("7.4.1", new Set(["HTTL", "EXPIRETIME"]))).toMatchObject({
       commandDocs: true,
       hashFieldTtl: true,

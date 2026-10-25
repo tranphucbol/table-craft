@@ -273,13 +273,24 @@ async function streamResult(
   let pending: readonly { id: string; fields: [string, unknown][] }[] | null = first;
   let last = first.at(-1)?.id ?? null;
   const rows = batches(async () => {
-    // An exclusive start (`(id`) is Redis 6.2's, the oldest server the plugin supports.
-    const entries = pending ?? (last === null ? [] : await range(`(${last}`));
+    const entries = pending ?? (last === null ? [] : await range(successorId(last)));
     pending = null;
     last = entries.at(-1)?.id ?? last;
     return { rows: entries.map(rowOf), more: entries.length === request.window };
   });
   return { columns: [ID, ...names.map((name) => ({ name, type: null }))], rows, rowsAffected: null };
+}
+
+const MAX_SEQUENCE = 2n ** 64n - 1n;
+
+/**
+ * The first stream id after `id`, where the next window starts: the exclusive `(id` start came in
+ * 6.2, and 5.0 is supported (decision 116).
+ */
+export function successorId(id: string): string {
+  const [ms = "0", sequence = "0"] = id.split("-");
+  const next = BigInt(sequence) + 1n;
+  return next > MAX_SEQUENCE ? `${String(BigInt(ms) + 1n)}-0` : `${ms}-${String(next)}`;
 }
 
 function elementsResult(

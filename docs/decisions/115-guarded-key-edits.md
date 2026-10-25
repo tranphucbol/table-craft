@@ -20,7 +20,7 @@ the end, so indexes stay valid while the changes run. A string set keeps its TTL
 
 Redis has no row identity or transaction log to diff against, and other clients write the same
 keys all the time; a blind write would silently overwrite their changes. `WATCH` plus a re-read
-of only the touched elements is cheap, needs no server-side script, and works on 6.2.
+of only the touched elements is cheap, needs no server-side script, and works on every supported version.
 `MULTI … EXEC` is atomic but does not roll back a command that fails inside it, so the result
 cannot be presented as a transaction the user can undo.
 

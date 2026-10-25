@@ -16,6 +16,7 @@ import {
 } from "@table-craft/plugin-api";
 import { applyChanges, changeCommands, commandText } from "./apply.js";
 import { TYPE_MAPPING } from "./connect.js";
+import type { RedisFeatures } from "./features.js";
 import { bytesOf, keyBytesOf } from "./keyBytes.js";
 import { readKey, type ReadHost } from "./read.js";
 import type { Router } from "./routing.js";
@@ -51,8 +52,10 @@ export interface KeyspaceHost {
   readonly readOnly: boolean;
   /** Runs `work` with the connection on `database`, one call at a time. */
   onDatabase<T>(database: number, work: () => Promise<T>): Promise<T>;
-  /** Whether the server has per-field hash TTLs (Redis 7.4). */
-  hashFieldTtl(): Promise<boolean>;
+  /** `SET … KEEPTTL` (6.0); known at connect, since a preview is synchronous. */
+  readonly keepTtl: boolean;
+  /** What the server can do (decision 116). */
+  features(): Promise<RedisFeatures>;
 }
 
 /** A `TYPE` reply as a key type; null for `none`, a key that does not exist. */
@@ -140,6 +143,7 @@ export class RedisKeyspace implements Keyspace {
     const host = this.#host;
     const count = request.count ?? host.scanBatch;
     const serverType = request.type === null ? null : SERVER_TYPES[request.type];
+    const scanType = serverType !== null && (await host.features()).scanType;
     const args = (cursor: string) => [
       "SCAN",
       cursor,
@@ -147,12 +151,18 @@ export class RedisKeyspace implements Keyspace {
       request.match,
       "COUNT",
       String(count),
-      ...(serverType === null ? [] : ["TYPE", serverType]),
+      ...(scanType ? ["TYPE", serverType] : []),
     ];
+    // Before 6.0 SCAN takes no TYPE: the batch's keys are asked their type and filtered here.
+    const typed = async (keys: Buffer[]): Promise<KeyName[]> => {
+      if (serverType === null || scanType) return keys.map(keyBytesOf);
+      const types = await Promise.all(keys.map((key) => host.router.onKey(key, ["TYPE", key])));
+      return keys.filter((_, index) => text(types[index]) === serverType).map(keyBytesOf);
+    };
     if (host.mode === "standalone") {
       const reply = scanReply(await host.router.anyPrimary(args(request.cursor ?? END_OF_PASS)));
       return {
-        keys: reply.keys.map(keyBytesOf),
+        keys: await typed(reply.keys),
         cursor: reply.cursor === END_OF_PASS ? null : reply.cursor,
         scanned: count,
       };
@@ -170,7 +180,7 @@ export class RedisKeyspace implements Keyspace {
     const reply = scanReply(await primary.client.sendCommand(args(at.cursor), COMMAND_OPTIONS));
     const next = reply.cursor !== END_OF_PASS ? clusterCursor(primary.node, reply.cursor) : primaries[index + 1];
     return {
-      keys: reply.keys.map(keyBytesOf),
+      keys: await typed(reply.keys),
       cursor: next === undefined ? null : typeof next === "string" ? next : clusterCursor(next.node, END_OF_PASS),
       scanned: count,
     };
@@ -204,18 +214,18 @@ export class RedisKeyspace implements Keyspace {
     const host: ReadHost = {
       // One command a call, not the whole read: the rows are read lazily, after this returns.
       onKey: (on, bytes, args) => this.#onDatabase(on, () => this.#host.router.onKey(bytes, args)),
-      hashFieldTtl: () => this.#host.hashFieldTtl(),
+      hashFieldTtl: async () => (await this.#host.features()).hashFieldTtl,
     };
     return readKey(host, database, key, typed ?? { type: null, typeName: null, ttlMs: null }, request);
   }
 
   preview(key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): readonly string[] {
-    return changeCommands(key, changes, options).map(commandText);
+    return changeCommands(key, changes, options, undefined, this.#host.keepTtl ? "keep" : null).map(commandText);
   }
 
   apply(database: number, key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): Promise<KeyApplied> {
     return this.#writing("MULTI", database, async () =>
-      applyChanges(await this.#host.router.clientForKey(bytesOf(key)), key, changes, options),
+      applyChanges(await this.#host.router.clientForKey(bytesOf(key)), key, changes, options, this.#host.keepTtl),
     );
   }
 

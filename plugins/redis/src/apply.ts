@@ -50,12 +50,19 @@ export function commandText(command: Command): string {
   return command.map(argumentText).join(" ");
 }
 
+/**
+ * How a string edit keeps the key's TTL: `KEEPTTL` (6.0), or before 6.0 the TTL read back by a
+ * `PEXPIRE` after the `SET`, null when the key had none (decision 116).
+ */
+export type StringTtl = "keep" | number | null;
+
 /** The commands that make `changes` to the key, in order (decision 115). */
 export function changeCommands(
   key: KeyName,
   changes: readonly KeyChange[],
   options: KeyApplyOptions,
   tombstone = TOMBSTONE,
+  stringTtl: StringTtl = "keep",
 ): Command[] {
   const name = bytesOf(key);
   const sorted = options.type === "zset";
@@ -64,7 +71,10 @@ export function changeCommands(
   for (const change of changes) {
     switch (change.kind) {
       case "setString":
-        commands.push(["SET", name, bytesOf(change.value), "KEEPTTL"]);
+        if (stringTtl === "keep") commands.push(["SET", name, bytesOf(change.value), "KEEPTTL"]);
+        else commands.push(["SET", name, bytesOf(change.value)]);
+        if (typeof stringTtl === "number" && options.ttlMs === undefined)
+          commands.push(["PEXPIRE", name, String(stringTtl)]);
         break;
       case "setField":
         commands.push(["HSET", name, bytesOf(change.field), bytesOf(change.value)]);
@@ -122,6 +132,12 @@ function nowText(reply: unknown): string {
   return reply instanceof Uint8Array ? `is now ${argumentText(Buffer.from(reply))}` : "is gone";
 }
 
+/** The key's TTL in milliseconds, null without one. */
+async function ttlOf(send: (command: Command) => Promise<unknown>, name: Buffer): Promise<number | null> {
+  const ms = Number(await send(["PTTL", name]));
+  return ms > 0 ? ms : null;
+}
+
 /** What differs from `change.original`, or null when the element still holds it. */
 async function differs(send: (command: Command) => Promise<unknown>, name: Buffer, change: KeyChange) {
   switch (change.kind) {
@@ -176,9 +192,9 @@ export async function applyChanges(
   key: KeyName,
   changes: readonly KeyChange[],
   options: KeyApplyOptions,
+  keepTtl = true,
 ): Promise<KeyApplied> {
   const name = bytesOf(key);
-  const commands = changeCommands(key, changes, options, `${TOMBSTONE}:${randomUUID()}`);
   const send = (command: Command) => client.sendCommand([...command], COMMAND_OPTIONS);
   let watching = false;
   let queued = false;
@@ -195,6 +211,9 @@ export async function applyChanges(
         if (detail !== null) throw new ConflictError(key.text, detail);
       }
     }
+    const stringTtl =
+      keepTtl || !changes.some((change) => change.kind === "setString") ? "keep" : await ttlOf(send, name);
+    const commands = changeCommands(key, changes, options, `${TOMBSTONE}:${randomUUID()}`, stringTtl);
     await send(["MULTI"]);
     queued = true;
     for (const command of commands) await send(command);

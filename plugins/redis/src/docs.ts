@@ -1,4 +1,5 @@
 import { COMMAND_DOCS } from "./docs.generated.js";
+import { compareVersions } from "./features.js";
 
 /** One argument of a command as `COMMAND DOCS` describes it, trimmed to what completion uses. */
 export interface DocArgument {
@@ -7,6 +8,8 @@ export interface DocArgument {
   readonly type: string;
   /** The literal word that introduces it, such as `EX` or `MATCH`. */
   readonly token?: string;
+  /** The version that added it, when newer than the command. */
+  readonly since?: string;
   readonly optional?: true;
   readonly multiple?: true;
   readonly arguments?: readonly DocArgument[];
@@ -22,15 +25,32 @@ export interface CommandDoc {
 
 export type CommandDocs = ReadonlyMap<string, CommandDoc>;
 
-/** The 7.4 snapshot, for a 6.2 server (no `COMMAND DOCS`, decision 24) and for completing offline. */
+/** The 7.4 snapshot, for a server before 7.0 (no `COMMAND DOCS`, decision 116) and for completing offline. */
 export const SNAPSHOT_DOCS: CommandDocs = new Map(Object.entries(COMMAND_DOCS));
 
+function argumentsKnownTo(args: readonly DocArgument[], version: string): DocArgument[] {
+  return args
+    .filter((argument) => argument.since === undefined || compareVersions(argument.since, version) <= 0)
+    .map((argument) =>
+      argument.arguments === undefined
+        ? argument
+        : { ...argument, arguments: argumentsKnownTo(argument.arguments, version) },
+    );
+}
+
 /**
- * `docs` narrowed to the commands a server's table lists, by first word, so a 6.2 server is not
- * offered what only the 7.4 snapshot knows (decision 24 of plan 058).
+ * `docs` narrowed to what a server at `version` whose table lists `commands` knows: commands by
+ * first word, subcommands and arguments by the version that added them, so a 5.0 server is not
+ * offered `KEEPTTL` (decision 116).
  */
-export function docsKnownTo(docs: CommandDocs, commands: ReadonlySet<string>): CommandDocs {
-  return new Map([...docs].filter(([key]) => commands.has(key.split(" ")[0] ?? key)));
+export function docsKnownTo(docs: CommandDocs, commands: ReadonlySet<string>, version: string): CommandDocs {
+  const known = new Map<string, CommandDoc>();
+  for (const [key, doc] of docs) {
+    if (!commands.has(key.split(" ")[0] ?? key)) continue;
+    if (doc.since !== "" && compareVersions(doc.since, version) > 0) continue;
+    known.set(key, doc.arguments === undefined ? doc : { ...doc, arguments: argumentsKnownTo(doc.arguments, version) });
+  }
+  return known;
 }
 
 /** Whether `name` is a container whose second word names the command, such as `CONFIG`. */
@@ -90,10 +110,12 @@ function argumentOf(raw: Reply): DocArgument {
   const list = Array.isArray(flags) ? flags.map(textOf) : [];
   const children = field(raw, "arguments");
   const token = textOf(field(raw, "token"));
+  const since = textOf(field(raw, "since"));
   return {
     name: textOf(field(raw, "name")),
     type: textOf(field(raw, "type")),
     ...(token === "" ? {} : { token }),
+    ...(since === "" ? {} : { since }),
     ...(list.includes("optional") ? { optional: true as const } : {}),
     ...(list.includes("multiple") ? { multiple: true as const } : {}),
     ...(Array.isArray(children) ? { arguments: children.map(argumentOf) } : {}),

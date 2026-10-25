@@ -106,4 +106,4 @@ started, not when it is merged.
 | 113 | [A `keyValue` capability and the key tree](113-a-keyvalue-capability-and-the-key-tree.md)                                                                              |
 | 114 | [Commands and server figures may target a node; cluster reachability is the user's map](114-cluster-nodes-are-the-users-map.md)                                        |
 | 115 | [Key edits are guarded, applied as one MULTI, and not undoable](115-guarded-key-edits.md)                                                                              |
-| 116 | [Redis 6.2 is supported through feature probes, not version branches](116-redis-6-2-is-supported-through-feature-probes.md)                                            |
+| 116 | [Redis 5.0 is supported through feature probes, not version branches](116-redis-5-0-is-supported-through-feature-probes.md)                                            |

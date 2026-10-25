@@ -4,6 +4,7 @@ import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { describe, expect, it } from "vitest";
 import {
   databaseEnabled,
+  REDIS5_CONFIG,
   REDIS6_CONFIG,
   REDIS_CONFIG,
   REDIS_TLS_CONFIG,
@@ -36,6 +37,7 @@ async function withRedis(config: unknown, use: (session: Session) => Promise<voi
 const SERVERS = [
   { version: "7.4", config: REDIS_CONFIG },
   { version: "6.2", config: REDIS6_CONFIG },
+  { version: "5.0", config: REDIS5_CONFIG },
 ] as const;
 
 describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", ({ config }) => {

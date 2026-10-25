@@ -21,12 +21,14 @@ Run from the repository root.
   `mssql`, `redis`, or `all`; unset, `mysql,tidb`) picks the servers `test/db/up.ts` starts, by compose
   profile, and the suites that run. `test:db:postgres` (port 55432), `test:db:oracle` (Oracle 23ai
   Free, port 51521, about 2 GB), `test:db:mssql` (SQL Server 2022, port 51433, amd64-emulated),
-  `test:db:redis` and `test:db:all` set it; run the one for a plugin you touch. `redis` selects five
+  `test:db:redis` and `test:db:all` set it; run the one for a plugin you touch. `redis` selects seven
   services (decision 116): `redis` (7.4, port 56379, ACL users `table_craft` and `limited`),
-  `redis-tls` (56380), `redis-6` (6.2, 56362), `redis-cluster` (7.4, three primaries and three
-  replicas on 47001-47006) and `redis-6-cluster` (6.2, three primaries on 47011-47013), each cluster
-  one container running every node (`test/db/redis/cluster.sh`), all seeded by
-  `test/db/redis/seed.sh` from `schema/redis.redis`. SQLite always runs.
+  `redis-tls` (56380), `redis-6` (6.2, 56362), `redis-5` (5.0, 56350, password `table_craft` and
+  no ACL users), `redis-cluster` (7.4, three primaries and three replicas on 47001-47006),
+  `redis-6-cluster` (6.2, three primaries on 47011-47013) and `redis-5-cluster` (5.0, three
+  primaries and three replicas on 47021-47026), each cluster one container running every node
+  (`test/db/redis/cluster.sh`), all seeded by `test/db/redis/seed.sh` from `schema/redis.redis`.
+  SQLite always runs.
   `test/db/up.ts` starts the containers and recreates any whose seed files changed (a
   `table-craft.seed` label holds their hash, `test/db/stack.ts`), so an edit under `schema/` or
   `tls/` reseeds on the next run with no `down`; when a git-ignored `.env` names a remote TiDB
@@ -48,9 +50,10 @@ Run from the repository root.
   `TABLE_CRAFT_MYSQL_PORT`, `TABLE_CRAFT_TIDB_PORT`, `TABLE_CRAFT_SSH_PORT`,
   `TABLE_CRAFT_PG_TLS_PORT`, `TABLE_CRAFT_MYSQL_TLS_PORT`, `TABLE_CRAFT_ORACLE_PORT`,
   `TABLE_CRAFT_MSSQL_PORT`, `TABLE_CRAFT_REDIS_PORT`, `TABLE_CRAFT_REDIS_TLS_PORT`,
-  `TABLE_CRAFT_REDIS6_PORT`, `TABLE_CRAFT_REDIS_CLUSTER_PORTS` and
-  `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` (a range such as `47101-47106`; a 6.2 node's bus port is its
-  port + 10000, so keep cluster ports below 55536) for every `test:db`,
+  `TABLE_CRAFT_REDIS6_PORT`, `TABLE_CRAFT_REDIS5_PORT`, `TABLE_CRAFT_REDIS_CLUSTER_PORTS`,
+  `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` and `TABLE_CRAFT_REDIS5_CLUSTER_PORTS` (a range such as
+  `47101-47106`; a node's bus port is its port + 10000, so keep cluster ports below 55536) for
+  every `test:db`,
   `test:smoke:db` and `docker compose` command so it gets its own containers, and copies the
   main checkout's `.env` into its root (`cp <main checkout>/.env .env`, when the main checkout has
   one) right after the worktree is made, before any test or plan work
@@ -233,8 +236,9 @@ plugins/<id>/              datasource plugins (@table-craft/plugin-<id>): mysql 
                            the EXPLAIN statement and reads the plan (subpath `./explain`).
                            `redis` speaks `commands` and `keyValue` (decisions 112-116):
                            `session.ts`, `routing.ts` (per-node routing), `keyspace.ts`,
-                           `read.ts`, `apply.ts`, `features.ts` (6.2 fallbacks); its
-                           `*.generated.ts` come from `scripts/command-docs.ts`
+                           `read.ts`, `apply.ts`, `features.ts` and `resp2.ts`
+                           (version fallbacks); its `*.generated.ts` come from
+                           `scripts/command-docs.ts`
 scripts/agent-cost/        `report.ts`: steps, context and cost of an agent session, read
                            from the OpenCode session store
 scripts/api-report/        the plugin-api surface report and its check against the last

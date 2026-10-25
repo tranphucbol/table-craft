@@ -8,6 +8,15 @@ import { connectFailure, tlsOptions } from "./tls.js";
 
 const MS_PER_SECOND = 1000;
 const RESP3 = 3;
+const RESP2 = 2;
+/** What a server before 6.0 answers the RESP3 handshake. */
+const NO_HELLO = /unknown command .?HELLO/i;
+
+/** The protocol a connection speaks: RESP3, or RESP2 on a server before 6.0 (decision 116). */
+export type Protocol = typeof RESP2 | typeof RESP3;
+
+export const NO_ACL_USERS =
+  "This server has no ACL users (Redis before 6.0): leave Username empty and use the password.";
 
 /** How every command's reply is decoded: bulk strings as bytes, so binary values survive, maps as `Map`. */
 export const TYPE_MAPPING = { [RESP_TYPES.BLOB_STRING]: Buffer, [RESP_TYPES.MAP]: Map } as const;
@@ -56,6 +65,7 @@ export type Connection =
       readonly client: Client;
       readonly address: string;
       readonly version: string;
+      readonly resp: Protocol;
       /** Opens a second client to the server, such as the short-lived one a cancel sends from. */
       readonly open: (address: string) => Promise<Client>;
     }
@@ -63,6 +73,7 @@ export type Connection =
       readonly mode: "cluster";
       readonly cluster: Cluster;
       readonly version: string;
+      readonly resp: Protocol;
       /**
        * Opens a plain client to a node at the address the client dials, for a replica the cluster
        * does not hold or a cancel's short-lived connection.
@@ -120,6 +131,7 @@ async function openStandalone(
   port: number,
   tls: ConnectionOptions | false,
   database: number,
+  resp: Protocol,
 ): Promise<Client> {
   // Without an error listener node-redis rethrows socket errors; the session reads `isReady` instead.
   const client = createClient({
@@ -127,7 +139,7 @@ async function openStandalone(
     ...credentials(config),
     database,
     name: config.clientName === "" ? undefined : config.clientName,
-    RESP: RESP3,
+    RESP: resp,
     disableOfflineQueue: true,
   }).on("error", () => undefined);
   try {
@@ -139,6 +151,28 @@ async function openStandalone(
   return client;
 }
 
+/**
+ * A client in the newest protocol the server speaks: RESP3, else RESP2 when the server does not
+ * know `HELLO` (before 6.0). A Username there fails, since such a server has no ACL users and
+ * logging in without it would be someone else.
+ */
+async function openNegotiated(
+  config: RedisConfig,
+  options: ConnectOptions,
+  host: string,
+  port: number,
+  tls: ConnectionOptions | false,
+  database: number,
+): Promise<{ client: Client; resp: Protocol }> {
+  try {
+    return { client: await openStandalone(config, options, host, port, tls, database, RESP3), resp: RESP3 };
+  } catch (cause) {
+    if (!NO_HELLO.test(errorMessage(cause))) throw cause;
+    if (config.user !== "") throw new PluginError("connectionFailed", NO_ACL_USERS, { cause });
+    return { client: await openStandalone(config, options, host, port, tls, database, RESP2), resp: RESP2 };
+  }
+}
+
 async function versionOf(client: Client): Promise<string> {
   const info = await client.sendCommand<Buffer | string>(["INFO", "server"]);
   return versionOfInfo(String(info));
@@ -147,16 +181,17 @@ async function versionOf(client: Client): Promise<string> {
 async function connectStandalone(config: RedisConfig, options: ConnectOptions): Promise<Connection> {
   const tls = await tlsOptions(config, options.serverName);
   let client: Client;
+  let resp: Protocol;
   try {
-    client = await openStandalone(config, options, config.host, config.port, tls, config.database);
+    ({ client, resp } = await openNegotiated(config, options, config.host, config.port, tls, config.database));
   } catch (cause) {
-    throw connectFailure(config, options.serverName, cause);
+    throw cause instanceof PluginError ? cause : connectFailure(config, options.serverName, cause);
   }
   try {
     const version = await versionOf(client);
     requireSupported(version);
-    const open = (): Promise<Client> => openStandalone(config, options, config.host, config.port, tls, 0);
-    return { mode: "standalone", client, address: `${config.host}:${String(config.port)}`, version, open };
+    const open = (): Promise<Client> => openStandalone(config, options, config.host, config.port, tls, 0, resp);
+    return { mode: "standalone", client, address: `${config.host}:${String(config.port)}`, version, resp, open };
   } catch (cause) {
     client.destroy();
     throw cause;
@@ -199,11 +234,12 @@ async function clusterFailure(
   options: ConnectOptions,
   tls: ConnectionOptions | false,
   map: ReadonlyMap<string, { host: string; port: number }>,
+  resp: Protocol,
   cause: unknown,
 ): Promise<PluginError> {
   let seed: Client;
   try {
-    seed = await openStandalone(config, options, config.host, config.port, tls, 0);
+    seed = await openStandalone(config, options, config.host, config.port, tls, 0, resp);
   } catch (seedCause) {
     return connectFailure(config, undefined, seedCause);
   }
@@ -252,8 +288,17 @@ async function connectCluster(config: RedisConfig, options: ConnectOptions): Pro
     const target = map.get(announced);
     return target === undefined ? announced : `${target.host}:${String(target.port)}`;
   };
+  // A failed cluster connect hides its cause, so the seed is asked first which protocol it speaks.
+  let resp: Protocol;
+  try {
+    const seed = await openNegotiated(config, options, config.host, config.port, tls, 0);
+    resp = seed.resp;
+    seed.client.destroy();
+  } catch (cause) {
+    throw cause instanceof PluginError ? cause : connectFailure(config, undefined, cause);
+  }
   const cluster = createCluster({
-    RESP: RESP3,
+    RESP: resp,
     rootNodes: [{ socket: { host: config.host, port: config.port } }],
     defaults: {
       ...credentials(config),
@@ -267,7 +312,7 @@ async function connectCluster(config: RedisConfig, options: ConnectOptions): Pro
     await cluster.connect();
   } catch (cause) {
     cluster.destroy();
-    throw await clusterFailure(config, options, tls, map, cause);
+    throw await clusterFailure(config, options, tls, map, resp, cause);
   }
   try {
     const versions = await Promise.all(
@@ -277,16 +322,16 @@ async function connectCluster(config: RedisConfig, options: ConnectOptions): Pro
     requireSupported(version);
     const open = (address: string): Promise<Client> => {
       const [host = "", port = ""] = address.split(/:(?=\d+$)/);
-      return openStandalone(config, options, host, Number(port), tls, 0);
+      return openStandalone(config, options, host, Number(port), tls, 0, resp);
     };
-    return { mode: "cluster", cluster: cluster as unknown as Cluster, version, open, reachable };
+    return { mode: "cluster", cluster: cluster as unknown as Cluster, version, resp, open, reachable };
   } catch (cause) {
     cluster.destroy();
     throw cause;
   }
 }
 
-/** Connects in the configured mode, refusing a server older than 6.2 (decision 116). */
+/** Connects in the configured mode, refusing a server older than 5.0 (decision 116). */
 export function openConnection(config: RedisConfig, options: ConnectOptions): Promise<Connection> {
   return config.mode === "cluster" ? connectCluster(config, options) : connectStandalone(config, options);
 }

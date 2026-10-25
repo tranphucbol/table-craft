@@ -4,6 +4,7 @@ import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   databaseEnabled,
+  REDIS5_CLUSTER_CONFIG,
   REDIS6_CLUSTER_CONFIG,
   REDIS_CLUSTER_CONFIG,
   withWrongPassword,
@@ -15,6 +16,7 @@ const SLOTS = 16_384;
 const CLUSTERS = [
   { version: "7.4", config: REDIS_CLUSTER_CONFIG, primaries: 3, replicas: 3 },
   { version: "6.2", config: REDIS6_CLUSTER_CONFIG, primaries: 3, replicas: 0 },
+  { version: "5.0", config: REDIS5_CLUSTER_CONFIG, primaries: 3, replicas: 3 },
 ] as const;
 
 const OPTIONS = { readOnly: false } as const;

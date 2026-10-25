@@ -17,6 +17,8 @@ import {
   ORACLE_CONFIG,
   POSTGRES_CONFIG,
   POSTGRES_TLS_CONFIG,
+  REDIS5_CLUSTER_CONFIG,
+  REDIS5_CONFIG,
   REDIS6_CLUSTER_CONFIG,
   REDIS6_CONFIG,
   REDIS_CLUSTER_CONFIG,
@@ -37,6 +39,16 @@ export interface Sentinel {
   /** Returns a row when the object exists; for a Redis server, a command that answers 1. */
   readonly sql: string;
 }
+
+const REDIS_SERVICES = [
+  "redis",
+  "redis-tls",
+  "redis-6",
+  "redis-cluster",
+  "redis-6-cluster",
+  "redis-5",
+  "redis-5-cluster",
+] as const satisfies readonly SeededService[];
 
 /**
  * One per seed file: its oldest object, which proves the seed ran, and its newest, which proves it
@@ -72,7 +84,7 @@ export const SENTINELS: readonly Sentinel[] = [
   },
   { service: "oracle", object: "table seed_probe", sql: "SELECT 1 FROM user_tables WHERE table_name = 'SEED_PROBE'" },
   { service: "mssql", object: "table seed_probe", sql: "SELECT 1 FROM sys.tables WHERE name = 'seed_probe'" },
-  ...(["redis", "redis-tls", "redis-6", "redis-cluster", "redis-6-cluster"] as const).map((service) => ({
+  ...REDIS_SERVICES.map((service) => ({
     service,
     object: "key seed:probe",
     sql: "EXISTS seed:probe",
@@ -90,7 +102,7 @@ const SERVICES_OF: Readonly<Record<DatabaseId, readonly SeededService[]>> = {
   postgres: ["postgres", "postgres-tls"],
   oracle: ["oracle"],
   mssql: ["mssql"],
-  redis: ["redis", "redis-tls", "redis-6", "redis-cluster", "redis-6-cluster"],
+  redis: REDIS_SERVICES,
 };
 
 export function servicesOf(databases: readonly DatabaseId[]): SeededService[] {
@@ -236,6 +248,9 @@ function addressMapOf(text: string): Record<string, { host: string; port: number
   return map;
 }
 
+/** Redis 5.0 has no `HELLO`, so the sentinel speaks RESP2 to every version. */
+const SENTINEL_RESP = 2;
+
 /** Runs `command` (one key at most, the last word) and answers whether the reply is 1. */
 async function redisAnswersOne(
   target: RedisTarget,
@@ -249,15 +264,17 @@ async function redisAnswersOne(
     reconnectStrategy: false,
     ...(options.tls === true ? { tls: true, ca: readFileSync(TLS_FILES.ca, "utf8") } : {}),
   };
-  const credentials = { username: target.user, password: target.password };
+  const credentials =
+    target.user === "" ? { password: target.password } : { username: target.user, password: target.password };
   const connection =
     options.cluster === true
       ? redis.createCluster({
+          RESP: SENTINEL_RESP,
           rootNodes: [{ socket }],
           defaults: { ...credentials, socket: { reconnectStrategy: false } },
           nodeAddressMap: addressMapOf(target.nodeAddressMap ?? ""),
         })
-      : redis.createClient({ socket, ...credentials });
+      : redis.createClient({ RESP: SENTINEL_RESP, socket, ...credentials });
   connection.on("error", () => undefined);
   await connection.connect();
   try {
@@ -340,6 +357,10 @@ export const serverQuery: SentinelQuery = (service, sql) => {
       return redisAnswersOne(REDIS_CLUSTER_CONFIG, sql, { cluster: true });
     case "redis-6-cluster":
       return redisAnswersOne(REDIS6_CLUSTER_CONFIG, sql, { cluster: true });
+    case "redis-5":
+      return redisAnswersOne(REDIS5_CONFIG, sql);
+    case "redis-5-cluster":
+      return redisAnswersOne(REDIS5_CLUSTER_CONFIG, sql, { cluster: true });
   }
 };
 

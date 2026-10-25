@@ -1304,7 +1304,7 @@ as are `HELLO`, `RESET` and `QUIT`; `SELECT` sets the console's database in stan
 refused in a cluster.
 
 Completion offers commands with their group, syntax, summary and `since` from `COMMAND DOCS`
-(a committed 7.4 snapshot on 6.2, limited to the server's commands), subcommands, the argument
+(a committed 7.4 snapshot before 7.0, limited to the commands and arguments the server has), subcommands, the argument
 keywords still unused, and key names from `SCAN 0 MATCH <prefix>* COUNT 200` (at most 50, each
 with its type); signature help shows the argument grammar. `classify` marks `FLUSHALL`,
 `FLUSHDB`, `DEL`/`UNLINK` of several keys, `SHUTDOWN`, `CONFIG SET` and the other server-wide

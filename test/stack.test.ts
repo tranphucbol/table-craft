@@ -56,6 +56,8 @@ describe("seed hashes (test/db/stack.ts)", () => {
       "redis-6": "i",
       "redis-cluster": "j",
       "redis-6-cluster": "k",
+      "redis-5": "l",
+      "redis-5-cluster": "m",
     });
 
     expect(env).toEqual({
@@ -70,6 +72,8 @@ describe("seed hashes (test/db/stack.ts)", () => {
       [SEED_ENV["redis-6"]]: "i",
       [SEED_ENV["redis-cluster"]]: "j",
       [SEED_ENV["redis-6-cluster"]]: "k",
+      [SEED_ENV["redis-5"]]: "l",
+      [SEED_ENV["redis-5-cluster"]]: "m",
     });
   });
 
@@ -93,10 +97,12 @@ describe("seed hashes (test/db/stack.ts)", () => {
 
     expect(after["redis-cluster"]).not.toBe(before["redis-cluster"]);
     expect(after["redis-6-cluster"]).not.toBe(before["redis-6-cluster"]);
+    expect(after["redis-5-cluster"]).not.toBe(before["redis-5-cluster"]);
     expect({
       ...after,
       "redis-cluster": before["redis-cluster"],
       "redis-6-cluster": before["redis-6-cluster"],
+      "redis-5-cluster": before["redis-5-cluster"],
     }).toEqual(before);
   });
 });
@@ -149,6 +155,8 @@ describe("database selector (decision 099)", () => {
         "redis-6",
         "redis-cluster",
         "redis-6-cluster",
+        "redis-5",
+        "redis-5-cluster",
       ],
     });
     expect(stackFor(databases, REMOTE_TIDB).profiles).not.toContain("tidb");

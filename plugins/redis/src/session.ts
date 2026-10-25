@@ -14,7 +14,7 @@ import { CANCELLED_MESSAGE, UNBLOCKED, unblock } from "./cancel.js";
 import type { RedisConfig } from "./config.js";
 import { openConnection, type Connection } from "./connect.js";
 import { docsFromReply, docsKnownTo, SNAPSHOT_DOCS, type CommandDocs } from "./docs.js";
-import { featuresOf, type RedisFeatures } from "./features.js";
+import { featuresOf, keepsTtl, type RedisFeatures } from "./features.js";
 import { RedisKeyspace } from "./keyspace.js";
 import { wordsOf } from "./language.js";
 import { commandTableOf, readOnlyRefusal, type CommandTable } from "./readOnly.js";
@@ -80,8 +80,9 @@ export class RedisSession implements Session {
       configuredDatabase: this.#database,
       router: this.#router,
       readOnly: options.readOnly,
+      keepTtl: keepsTtl(connection.version),
       onDatabase: (database, work) => this.#onDatabase(database, work),
-      hashFieldTtl: () => this.features().then((features) => features.hashFieldTtl),
+      features: () => this.features(),
     });
     const queued = <T>(work: () => Promise<T>): Promise<T> => this.#onDatabase(this.#database, work);
     const primaries = () => this.#router.primaries();
@@ -131,14 +132,14 @@ export class RedisSession implements Session {
   }
 
   /**
-   * `COMMAND DOCS` over the 7.4 snapshot, or on 6.2 the snapshot narrowed to the server's commands
-   * (decision 8 of plan 058).
+   * `COMMAND DOCS` over the 7.4 snapshot, or before 7.0 the snapshot narrowed to what the server
+   * knows (decision 116).
    */
   commandDocs(): Promise<CommandDocs> {
     this.#docs ??= this.features().then(async (features) =>
       features.commandDocs
         ? docsFromReply(await this.#send(["COMMAND", "DOCS"]))
-        : docsKnownTo(SNAPSHOT_DOCS, new Set((await this.commandTable()).keys())),
+        : docsKnownTo(SNAPSHOT_DOCS, new Set((await this.commandTable()).keys()), features.version),
     );
     this.#docs.catch(() => (this.#docs = undefined));
     return this.#docs;

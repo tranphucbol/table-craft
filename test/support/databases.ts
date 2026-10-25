@@ -200,9 +200,11 @@ export const MYSQL_TLS_BEHIND_BASTION = { host: "mysql-tls", port: 3306 } as con
 const DEFAULT_REDIS_PORT = 56379;
 const DEFAULT_REDIS_TLS_PORT = 56380;
 const DEFAULT_REDIS6_PORT = 56362;
-/** Below 55536: a Redis 6.2 node's cluster bus listens on its port plus 10,000. */
+/** Below 55536: a Redis node's cluster bus listens on its port plus 10,000. */
 const DEFAULT_REDIS_CLUSTER_PORTS = "47001-47006";
 const DEFAULT_REDIS6_CLUSTER_PORTS = "47011-47013";
+const DEFAULT_REDIS5_PORT = 56350;
+const DEFAULT_REDIS5_CLUSTER_PORTS = "47021-47026";
 
 /** The first port of a `first-last` range variable, which `compose.yml` publishes one to one. */
 function firstPortFromEnv(name: string, fallback: string): number {
@@ -225,11 +227,19 @@ export const REDIS_CONFIG = {
   port: portFromEnv("TABLE_CRAFT_REDIS_PORT", DEFAULT_REDIS_PORT),
 } as const;
 
-/** The `redis-6` service: the oldest server the plugin supports (plan 058 decision 23). */
+/** The `redis-6` service: Redis 6.2, the oldest with RESP3 (plan 058 decision 23). */
 export const REDIS6_CONFIG = {
   ...REDIS_STANDALONE,
   host: hostFromEnv("TABLE_CRAFT_REDIS6_HOST"),
   port: portFromEnv("TABLE_CRAFT_REDIS6_PORT", DEFAULT_REDIS6_PORT),
+} as const;
+
+/** The `redis-5` service: the oldest server the plugin supports, no ACL users (plan 060). */
+export const REDIS5_CONFIG = {
+  ...REDIS_STANDALONE,
+  host: hostFromEnv("TABLE_CRAFT_REDIS5_HOST"),
+  port: portFromEnv("TABLE_CRAFT_REDIS5_PORT", DEFAULT_REDIS5_PORT),
+  user: "",
 } as const;
 
 export const REDIS_TLS_CONFIG = {
@@ -282,6 +292,12 @@ export const REDIS6_CLUSTER_CONFIG = clusterConfig(
   "TABLE_CRAFT_REDIS6_CLUSTER_PORTS",
   DEFAULT_REDIS6_CLUSTER_PORTS,
 );
+
+/** Three Redis 5.0 primaries and three replicas, a password and no ACL users, like QC. */
+export const REDIS5_CLUSTER_CONFIG = {
+  ...clusterConfig("TABLE_CRAFT_REDIS5_CLUSTER_HOST", "TABLE_CRAFT_REDIS5_CLUSTER_PORTS", DEFAULT_REDIS5_CLUSTER_PORTS),
+  user: "",
+} as const;
 
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };

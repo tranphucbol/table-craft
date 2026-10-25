@@ -28,7 +28,9 @@ export type SeededService =
   | "redis-tls"
   | "redis-6"
   | "redis-cluster"
-  | "redis-6-cluster";
+  | "redis-6-cluster"
+  | "redis-5"
+  | "redis-5-cluster";
 
 /** What a Redis server reads at start (`redis/*.sh`): its users, its start script and the seeds. */
 const REDIS_STANDALONE_SEED = [
@@ -57,6 +59,8 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   "redis-6": REDIS_STANDALONE_SEED,
   "redis-cluster": REDIS_CLUSTER_SEED,
   "redis-6-cluster": REDIS_CLUSTER_SEED,
+  "redis-5": REDIS_STANDALONE_SEED,
+  "redis-5-cluster": REDIS_CLUSTER_SEED,
 };
 
 /** The variable `compose.yml` interpolates into each service's `table-craft.seed` label. */
@@ -72,6 +76,8 @@ export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   "redis-6": "TABLE_CRAFT_REDIS6_SEED",
   "redis-cluster": "TABLE_CRAFT_REDIS_CLUSTER_SEED",
   "redis-6-cluster": "TABLE_CRAFT_REDIS6_CLUSTER_SEED",
+  "redis-5": "TABLE_CRAFT_REDIS5_SEED",
+  "redis-5-cluster": "TABLE_CRAFT_REDIS5_CLUSTER_SEED",
 };
 
 const SERVICES = Object.keys(SEED_FILES) as SeededService[];

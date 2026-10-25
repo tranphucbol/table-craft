@@ -1,17 +1,22 @@
 import { PluginError } from "@table-craft/plugin-api";
 
-/** The oldest server the plugin speaks to (decision 116): RESP3, `CLIENT` subcommands, `SCAN … TYPE`. */
-export const MINIMUM_VERSION = "6.2.0";
+/** The oldest server the plugin speaks to (decision 116): streams, `CLIENT ID` and `CLIENT UNBLOCK`. */
+export const MINIMUM_VERSION = "5.0.0";
 
+const VERSION_6 = "6.0.0";
 const VERSION_7 = "7.0.0";
 
 /**
- * What the connected server can do that 6.2 cannot (decision 24 of plan 058). The one place a
- * version is compared; everything else asks a field, so a 6.2 server and a 7.4 one share a path.
+ * What the connected server can do that 5.0 cannot (decision 116). The one place a version is
+ * compared; everything else asks a field, so a 5.0 server and a 7.4 one share a path.
  */
 export interface RedisFeatures {
   /** The lowest version over every primary, as `INFO server` reports it. */
   readonly version: string;
+  /** `SCAN … TYPE` (6.0); else the scan asks `TYPE` per key and filters. */
+  readonly scanType: boolean;
+  /** `SET … KEEPTTL` (6.0); else a string edit sets the TTL it read back after `SET`. */
+  readonly keepTtl: boolean;
   /** `COMMAND DOCS` (7.0); without it completion reads the 7.4 snapshot. */
   readonly commandDocs: boolean;
   /** `COMMAND INFO` lists container subcommands with their flags (7.0); else the snapshot's. */
@@ -62,9 +67,12 @@ export function requireSupported(version: string): void {
  * a command the table lists is probed there, so one renamed or disabled away reads as missing.
  */
 export function featuresOf(version: string, commands: ReadonlySet<string>): RedisFeatures {
+  const six = compareVersions(version, VERSION_6) >= 0;
   const seven = compareVersions(version, VERSION_7) >= 0;
   return {
     version,
+    scanType: six,
+    keepTtl: keepsTtl(version),
     commandDocs: seven,
     subcommandInfo: seven,
     multiSectionInfo: seven,
@@ -73,6 +81,11 @@ export function featuresOf(version: string, commands: ReadonlySet<string>): Redi
     expireOptions: seven,
     hashFieldTtl: commands.has("HTTL"),
   };
+}
+
+/** `SET … KEEPTTL` (6.0), known from the version alone so a preview can ask it synchronously. */
+export function keepsTtl(version: string): boolean {
+  return compareVersions(version, VERSION_6) >= 0;
 }
 
 /** `redis_version` out of an `INFO server` reply. */

@@ -27,7 +27,7 @@ export interface ServerHost {
   queued<T>(work: () => Promise<T>): Promise<T>;
 }
 
-/** `INFO`'s text as titled sections; on 6.2 one `INFO` answers them all and is split here (decision 24). */
+/** `INFO`'s text as titled sections; before 7.0 one `INFO` answers them all and is split here (decision 24). */
 export function infoSections(text: string, wanted: readonly string[] = INFO_SECTIONS): ServerInfoSection[] {
   const sections: { title: string; entries: { name: string; value: string }[] }[] = [];
   for (const raw of text.split("\n")) {

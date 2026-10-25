@@ -1,6 +1,7 @@
 import { NODE_ALL_PRIMARIES, NODE_AUTO, PluginError, type ServerNode } from "@table-craft/plugin-api";
 import { TYPE_MAPPING, type Client, type Connection } from "./connect.js";
 import { keyArguments, tableKey, type CommandTable } from "./readOnly.js";
+import { asResp3 } from "./resp2.js";
 
 /** Keyless commands a cluster console runs on every primary unless a node is picked (decision 11 of plan 058). */
 const FAN_OUT_BY_DEFAULT = new Set([
@@ -16,6 +17,7 @@ const FAN_OUT_BY_DEFAULT = new Set([
 ]);
 
 const COMMAND_OPTIONS = { typeMapping: TYPE_MAPPING };
+const RESP2 = 2;
 const REDIRECTED = /^(MOVED|ASK) /;
 const NODE_FIELDS = { id: 0, address: 1, flags: 2, primary: 3, link: 7, slots: 8 } as const;
 
@@ -137,7 +139,7 @@ export class Router {
       if (!REDIRECTED.test(errorText(cause))) throw cause;
       return {
         fanned: false,
-        reply: await connection.cluster.sendCommand(firstKey, false, [...args], COMMAND_OPTIONS),
+        reply: this.#shaped(args, await connection.cluster.sendCommand(firstKey, false, [...args], COMMAND_OPTIONS)),
       };
     }
   }
@@ -150,13 +152,14 @@ export class Router {
   /** One command on the node that holds `key`; a slot that moved since the map was read is followed. */
   async onKey(key: Buffer, args: readonly (string | Buffer)[]): Promise<unknown> {
     const connection = this.#connection;
-    if (connection.mode === "standalone") return connection.client.sendCommand([...args], COMMAND_OPTIONS);
+    if (connection.mode === "standalone")
+      return this.#shaped(args, await connection.client.sendCommand([...args], COMMAND_OPTIONS));
     const client = await connection.cluster.getNodeClientForKey(key);
     try {
-      return await client.sendCommand([...args], COMMAND_OPTIONS);
+      return this.#shaped(args, await client.sendCommand([...args], COMMAND_OPTIONS));
     } catch (cause) {
       if (!REDIRECTED.test(errorText(cause))) throw cause;
-      return connection.cluster.sendCommand(key, false, [...args], COMMAND_OPTIONS);
+      return this.#shaped(args, await connection.cluster.sendCommand(key, false, [...args], COMMAND_OPTIONS));
     }
   }
 
@@ -185,7 +188,7 @@ export class Router {
   async anyPrimary(args: readonly (string | Buffer)[]): Promise<unknown> {
     const connection = this.#connection;
     const client = connection.mode === "standalone" ? connection.client : await this.#randomPrimary();
-    return client.sendCommand([...args], COMMAND_OPTIONS);
+    return this.#shaped(args, await client.sendCommand([...args], COMMAND_OPTIONS));
   }
 
   /** Closes the replica clients the router opened; the cluster closes its own. */
@@ -207,6 +210,11 @@ export class Router {
     } catch {
       return null; // a call the server finds no keys in, such as EVAL with numkeys 0
     }
+  }
+
+  /** A RESP2 reply in its RESP3 shape, so both protocols render alike (decision 116). */
+  #shaped(args: readonly (string | Buffer)[], reply: unknown): unknown {
+    return this.#connection.resp === RESP2 ? asResp3(args, reply) : reply;
   }
 
   #cluster() {
@@ -233,7 +241,7 @@ export class Router {
     const running = await identity;
     this.#running.add(running);
     try {
-      return await client.sendCommand([...args], COMMAND_OPTIONS);
+      return this.#shaped(args, await client.sendCommand([...args], COMMAND_OPTIONS));
     } finally {
       this.#running.delete(running);
     }

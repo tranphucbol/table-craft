@@ -432,10 +432,11 @@ See [Sessions](docs/design/specification.md#sessions).
 
 ### Redis
 
-The Redis plugin connects to Redis 6.2 or later, **Standalone** or **Cluster** (pick the Mode in the
+The Redis plugin connects to Redis 5.0 or later, **Standalone** or **Cluster** (pick the Mode in the
 connection form; a `redis://` or `rediss://` URL fills a standalone one). A cluster is reached from
 its seed node; when its nodes announce addresses you cannot reach, map each one in **Node address
-map** (`10.0.1.5:6379=127.0.0.1:7001, …`). A cluster cannot go through an SSH tunnel.
+map** (`10.0.1.5:6379=127.0.0.1:7001, …`). A cluster cannot go through an SSH tunnel. Redis 5.0
+has no ACL users: leave Username empty and give the password alone.
 
 - **Key tree.** Each database lists its keys in folders by `:`, with a type badge and TTL. The tree
   scans 10,000 keys at a time behind a **Load more** row, never with `KEYS`; the filter row takes a
@@ -862,7 +863,7 @@ bun run desktop                # build and launch the app
 bun run test                   # unit tests and the plugin contract against SQLite
 bun run test:db                # the contract against MySQL in Docker, and TiDB
 bun run test:db:postgres       # the same against PostgreSQL (also :oracle, :mssql, :all)
-bun run test:db:redis          # the Redis plugin against 7.4 and 6.2, standalone and Cluster
+bun run test:db:redis          # the Redis plugin against 7.4, 6.2 and 5.0, standalone and Cluster
 bun run test:smoke             # drive the built app with Playwright
 bun run test:smoke:db          # the same against MySQL, TiDB and SQLite
 bun run test:smoke:headless    # test:smoke in a Linux container, off your screen
