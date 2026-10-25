@@ -101,3 +101,4 @@ started, not when it is merged.
 | 108 | [SQLite and MySQL ship in the box; other plugins download on demand](108-sqlite-and-mysql-ship-other-plugins-download.md)                                              |
 | 109 | [One npm package per optional plugin, released with the app](109-one-npm-package-per-optional-plugin.md)                                                               |
 | 110 | [The app installs plugins from the npm registry](110-the-app-installs-plugins-from-the-registry.md)                                                                    |
+| 111 | [SQL inspections run in the plugin, live in the editor](111-sql-inspections-run-in-the-plugin.md)                                                                      |

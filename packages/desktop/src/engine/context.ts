@@ -13,7 +13,9 @@ import {
   type CompletionRequest,
   type CompletionResult,
   type Declaration,
+  type InspectionRequest,
   type Namespace,
+  type Problem,
   type NamespaceSwitch,
   type Relation,
   type ResolveRequest,
@@ -326,6 +328,26 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     return language.resolve(request, await completionCatalogOf(current));
   }
 
+  /**
+   * Live problems in `text` (plan 108). A plugin without `inspect`, or one that throws, finds
+   * nothing: inspection decorates the editor and must never fail it.
+   */
+  async function inspect(
+    text: string,
+    current?: readonly string[],
+    disabled?: readonly string[],
+  ): Promise<readonly Problem[]> {
+    const { language } = loadedPlugin(options.plugins, options.datasource.pluginId).plugin;
+    if (language?.inspect === undefined) return [];
+    const request: InspectionRequest = disabled === undefined ? { text } : { text, disabled };
+    try {
+      return await language.inspect(request, await completionCatalogOf(current));
+    } catch (cause) {
+      log?.warn("inspection failed", { message: messageOf(cause) });
+      return [];
+    }
+  }
+
   async function signatureAt(request: CompletionRequest): Promise<SignatureHelp | null> {
     checkedOffset(request.text, request.offset);
     const language = sqlLanguage();
@@ -455,6 +477,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     checkedOffset,
     complete,
     resolve,
+    inspect,
     signatureAt,
     countRows,
     namespaceSwitch,

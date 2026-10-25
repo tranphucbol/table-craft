@@ -47,6 +47,8 @@ export interface Query {
   readonly sources: readonly Source[];
   /** The first select list, which is what a CTE or derived table exposes. */
   readonly select: readonly SelectItem[];
+  /** The select list has an entry with no name to read back, such as `count(*)`, so `select` is incomplete. */
+  readonly opaqueSelect: boolean;
   /** `INSERT INTO t (…)`: the target and the column list's parentheses, as text offsets. */
   readonly insert: { readonly source: RelationSource; readonly from: number; readonly to: number } | null;
   /** The query this one is nested in, whose sources and CTEs it can also see. */
@@ -77,6 +79,7 @@ interface MutableQuery {
   ctes: Cte[];
   sources: Source[];
   select: SelectItem[];
+  opaqueSelect: boolean;
   insert: Query["insert"];
   parent: Query | null;
 }
@@ -85,11 +88,21 @@ const OPEN = "(";
 const CLOSE = ")";
 const DOT = ".";
 const COMMA = ",";
-const NO_GROUP = -1;
+/** The statement's own level, standing where a `(` index would. */
+export const NO_GROUP = -1;
 const QUERY_STARTS = new Set(["SELECT", "WITH"]);
-const RELATION_INTRODUCERS = new Set(["FROM", "JOIN", "UPDATE", "INTO", "STRAIGHT_JOIN"]);
+export const RELATION_INTRODUCERS: ReadonlySet<string> = new Set(["FROM", "JOIN", "UPDATE", "INTO", "STRAIGHT_JOIN"]);
 const RELATION_MODIFIERS = new Set(["LATERAL", "ONLY"]);
-const EXPRESSION_CLAUSES = new Set(["SELECT", "WHERE", "ON", "BY", "HAVING", "SET", "RETURNING", "USING"]);
+export const EXPRESSION_CLAUSES: ReadonlySet<string> = new Set([
+  "SELECT",
+  "WHERE",
+  "ON",
+  "BY",
+  "HAVING",
+  "SET",
+  "RETURNING",
+  "USING",
+]);
 /** Clause keywords that end a FROM list; ON and USING belong to a join inside it. */
 const FROM_LIST_ENDS = new Set([
   "SELECT",
@@ -110,7 +123,13 @@ const FROM_LIST_ENDS = new Set([
   "FOR",
 ]);
 const SELECT_LIST_ENDS = new Set([...FROM_LIST_ENDS, "FROM", "INTO"]);
-const CLAUSE_WORDS = new Set([...FROM_LIST_ENDS, ...RELATION_INTRODUCERS, ...EXPRESSION_CLAUSES, "DELETE", "INSERT"]);
+export const CLAUSE_WORDS: ReadonlySet<string> = new Set([
+  ...FROM_LIST_ENDS,
+  ...RELATION_INTRODUCERS,
+  ...EXPRESSION_CLAUSES,
+  "DELETE",
+  "INSERT",
+]);
 /** Words that end a table reference instead of naming or aliasing it. */
 const NOT_A_NAME = new Set([
   ...CLAUSE_WORDS,
@@ -178,7 +197,7 @@ function insideLiteral(text: string, token: Token, offset: number): boolean {
 }
 
 /** The tokens of one statement, its parentheses matched, read for the queries in it. */
-class Statement {
+export class Statement {
   readonly #text: string;
   readonly tokens: readonly Token[];
   /** For each `(`, the index of its `)`, or the token count when it is never closed. */
@@ -228,6 +247,11 @@ class Statement {
     return { name: raw, quoted: false, from: token.from, to: token.to };
   }
 
+  /** The `(` that `open` sits in, or `NO_GROUP`. */
+  parentOf(open: number): number {
+    return this.#parent.get(open) ?? NO_GROUP;
+  }
+
   closeOf(open: number): number {
     return open === NO_GROUP ? this.tokens.length : (this.#close.get(open) ?? this.tokens.length);
   }
@@ -272,7 +296,7 @@ class Statement {
   query(open: number): Query {
     const known = this.#queries.get(open);
     if (known !== undefined) return known;
-    const query: MutableQuery = { ctes: [], sources: [], select: [], insert: null, parent: null };
+    const query: MutableQuery = { ctes: [], sources: [], select: [], opaqueSelect: false, insert: null, parent: null };
     this.#queries.set(open, query);
     query.parent = open === NO_GROUP ? null : this.query(this.enclosingQuery(this.#parent.get(open) ?? NO_GROUP));
     new QueryReader(this, open, query).read();
@@ -473,6 +497,7 @@ class QueryReader {
     }
     const name = statement.identifier(last);
     if (name !== null) this.#query.select.push({ kind: "named", name });
+    else this.#query.opaqueSelect = true;
   }
 }
 

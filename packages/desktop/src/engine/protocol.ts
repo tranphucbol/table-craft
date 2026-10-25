@@ -9,6 +9,7 @@ export * from "./protocol/datasource.js";
 export * from "./protocol/sessions.js";
 export * from "./protocol/sql.js";
 export * from "./protocol/catalog.js";
+export * from "./protocol/inspection.js";
 export * from "./protocol/objects.js";
 export * from "./protocol/results.js";
 export * from "./protocol/transfer.js";

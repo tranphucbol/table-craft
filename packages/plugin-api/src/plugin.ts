@@ -9,6 +9,7 @@ import type {
   SignatureHelp,
 } from "./completion.js";
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
+import type { InspectionRequest, Problem } from "./inspection.js";
 import type { ObjectEditor } from "./objects.js";
 import type { SessionMonitor } from "./sessions.js";
 import type { TypeClass, WireValue } from "./values.js";
@@ -408,6 +409,12 @@ export interface SqlLanguage {
    * hint (decision 098); null outside a call or in one the dialect does not document.
    */
   signatureAt?(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>;
+  /**
+   * Every problem in `request.text` found without running it, each with its quick fixes (plan 108).
+   * Never rejects for SQL it cannot read: it reports less. A name the catalog cannot answer for (an
+   * empty or undescribed namespace) is not reported unresolved. `sqlInspector` implements it.
+   */
+  inspect?(request: InspectionRequest, catalog: CompletionCatalog): Promise<readonly Problem[]>;
   /**
    * A `statement` over `relation` for the SQL Generator (decision 029): one clause per line, columns
    * in table order, names quoted only where needed; `qualifiedName` is what the introspector names

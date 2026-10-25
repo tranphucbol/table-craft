@@ -46,6 +46,8 @@ import {
   CAPABILITIES,
   COMPLETION_KINDS,
   IMPORT_KINDS,
+  INSPECTION_IDS,
+  PROBLEM_SEVERITIES,
   MANIFEST_FILE,
   OBJECT_KINDS,
   type CatalogObject,
@@ -62,6 +64,11 @@ import {
   type CompletionResult,
   type CompletionScope,
   type Declaration,
+  type InspectionId,
+  type Problem,
+  type ProblemSeverity,
+  type QuickFix,
+  type TextEdit,
   type Explainability,
   type ExplainedPlan,
   type Namespace,
@@ -194,6 +201,16 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.CompletionResult>().toEqualTypeOf<CompletionResult>();
     expectTypeOf<protocol.Declaration>().toEqualTypeOf<Declaration>();
     expect(protocol.COMPLETION_KINDS).toEqual(COMPLETION_KINDS);
+  });
+
+  it("givenInspectionTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.TextEdit>().toEqualTypeOf<TextEdit>();
+    expectTypeOf<protocol.QuickFix>().toEqualTypeOf<QuickFix>();
+    expectTypeOf<protocol.Problem>().toEqualTypeOf<Problem>();
+    expectTypeOf<protocol.ProblemSeverity>().toEqualTypeOf<ProblemSeverity>();
+    expectTypeOf<protocol.InspectionId>().toEqualTypeOf<InspectionId>();
+    expect(protocol.PROBLEM_SEVERITIES).toEqual(PROBLEM_SEVERITIES);
+    expect(protocol.INSPECTION_IDS).toEqual(INSPECTION_IDS);
   });
 
   it("givenImportTypes_whenComparedWithCoreAndPluginApi_thenIdentical", () => {

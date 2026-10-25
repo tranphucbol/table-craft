@@ -9,6 +9,7 @@ import type {
   RoutineCall,
   SignatureHelp,
 } from "./catalog.js";
+import type { Problem } from "./inspection.js";
 import type { AppliedChange, DdlScript, ObjectChange, ObjectFeatures, TableDesign } from "./objects.js";
 import type { FoundMatch, ResultState, ResultWindow, SortKey, ViewSpec, ViewState } from "./results.js";
 import type {
@@ -339,6 +340,20 @@ export interface EngineCalls {
   "completion.signature": {
     params: { readonly text: string; readonly offset: number; readonly scope?: CompletionScope };
     result: SignatureHelp | null;
+  };
+  /**
+   * Every problem in `text` found without running it, with quick fixes (plan 108), read from the
+   * catalog cache like completion. Empty when the plugin has no `inspect`. Needs `sql`.
+   */
+  "inspection.inspect": {
+    params: {
+      readonly text: string;
+      /** The console's namespace, which unqualified names resolve against instead of the catalog's. */
+      readonly current?: readonly string[];
+      /** Inspection ids the user turned off. */
+      readonly disabled?: readonly string[];
+    };
+    result: readonly Problem[];
   };
   /** Where the name at `offset` was declared; null when it names nothing known. Needs `sql`. */
   "navigation.resolve": {

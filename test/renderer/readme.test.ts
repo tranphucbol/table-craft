@@ -103,7 +103,7 @@ function settingAt(path: string): unknown {
 }
 
 function settingPaths(value: unknown, prefix: string): string[] {
-  if (typeof value !== "object" || value === null || "sizePx" in value) return [prefix];
+  if (typeof value !== "object" || value === null || Array.isArray(value) || "sizePx" in value) return [prefix];
   return Object.entries(value).flatMap(([key, child]) => settingPaths(child, prefix ? `${prefix}.${key}` : key));
 }
 
@@ -173,6 +173,10 @@ describe("README", () => {
       if (typeof value === "object" && value !== null && "sizePx" in value) {
         expect(fallback, `Settings row ${path}`).toBe(`\`null\`, ${String(value.sizePx)}`);
         expect(values, `Settings row ${path}`).toContain(rangeText(FONT_SIZE_RANGE));
+        continue;
+      }
+      if (Array.isArray(value)) {
+        expect(fallback, `Settings row ${path}`).toBe(`\`${JSON.stringify(value)}\``);
         continue;
       }
       expect(fallback.replaceAll("`", "").replaceAll(",", ""), `Settings row ${path}`).toBe(String(value));

@@ -1,36 +1,35 @@
-import {
-  switchableTo,
-  type CompletionCatalog,
-  type CompletionItem,
-  type CompletionKind,
-  type CompletionRequest,
-  type CompletionResult,
-  type Declaration,
-  type Namespace,
-  type Relation,
-  type ResolveRequest,
-  type SelectSource,
-  type SignatureHelp,
-  type SqlLanguage,
+import type {
+  CompletionCatalog,
+  CompletionItem,
+  CompletionKind,
+  CompletionRequest,
+  CompletionResult,
+  Declaration,
+  Relation,
+  ResolveRequest,
+  SelectSource,
+  SignatureHelp,
+  SqlLanguage,
 } from "@table-craft/plugin-api";
 import { functionItem, functionName, isAvailable, type FunctionSpec, type ServerIdentity } from "./functions.js";
 import { callAt } from "./signature.js";
 import { parseSimpleSelect, SELECT_READ_ONLY_REASONS, type SimpleSelect } from "./select.js";
+import { scopeAt, type Identifier, type Query, type RelationSource, type ScopeAt, type Source } from "./scope.js";
+import { namespaceSlotAt, type NamespaceSlot, type NamespaceTarget } from "./namespace.js";
 import {
-  scopeAt,
-  type Cte,
-  type Identifier,
-  type Query,
-  type RelationSource,
-  type ScopeAt,
-  type Source,
-} from "./scope.js";
-import { namespaceSlotAt, namespaceTarget, type NamespaceSlot, type NamespaceTarget } from "./namespace.js";
-import { sqlSplitter } from "./splitter.js";
+  levels,
+  nameRules,
+  referenceName,
+  samePath,
+  targetable,
+  visibleCtes,
+  type ColumnInfo,
+  type IdentifierFolding,
+  type Lookup,
+} from "./resolution.js";
 import type { SqlDialectOptions } from "./tokens.js";
 
-/** How a dialect reads unquoted names: PostgreSQL folds them to lower case, MySQL and SQLite compare them as written. */
-export type IdentifierFolding = "lower" | "upper" | "none";
+export type { IdentifierFolding } from "./resolution.js";
 
 /** What the shared completer needs to know about a dialect (decision 028). */
 export interface CompleterOptions {
@@ -113,8 +112,6 @@ const BOOST: Readonly<Record<CompletionKind, number>> = {
   function: 0,
   keyword: -10,
 };
-/** CTEs that read each other stop expanding here, so a recursive one cannot loop. */
-const MAX_EXPANSION_DEPTH = 4;
 const UNQUOTED_WORD = "^[A-Za-z0-9_$]*$";
 const ALIAS_WORD_BREAK = /[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/;
 const FALLBACK_ALIAS = "t";
@@ -122,27 +119,6 @@ const QUOTES = new Set(['"', "`", "["]);
 /** Below every other namespace: `USE mysql` is legitimate but rarely meant. */
 const SYSTEM_NAMESPACE_BOOST = -20;
 const CURRENT_DETAIL = "current";
-
-interface ColumnInfo {
-  readonly name: string;
-  readonly type: string | null;
-}
-
-interface FoundRelation {
-  readonly path: readonly string[];
-  readonly relation: Relation;
-}
-
-function samePath(left: readonly string[] | null, right: readonly string[] | null): boolean {
-  return (
-    left !== null && right !== null && left.length === right.length && left.every((part, at) => part === right[at])
-  );
-}
-
-/** Whether `namespace` is one `target` can switch to (found live, plan 022). */
-function targetable(target: NamespaceTarget, namespace: Namespace): boolean {
-  return switchableTo(target.kind === "database" ? "topLevel" : "schema", namespace);
-}
 
 function relationKind(relation: Relation): CompletionKind {
   return relation.kind === "table" ? "table" : "view";
@@ -153,7 +129,7 @@ export function sqlCompleter(
   options: CompleterOptions,
 ): Pick<SqlLanguage, "complete" | "resolve"> & Required<Pick<SqlLanguage, "selectSource" | "signatureAt">> {
   const reserved = new Set(options.keywords.map((keyword) => keyword.toUpperCase()));
-  const split = sqlSplitter(options.dialect);
+  const { denotes, sameIdentifier, cteNamed, sourceNamed, serverOf, Lookup } = nameRules(options);
   const specs = new Map<string, FunctionSpec[]>();
   for (const spec of options.functions) {
     if (typeof spec === "string") continue;
@@ -161,189 +137,14 @@ export function sqlCompleter(
     specs.set(key, [...(specs.get(key) ?? []), spec]);
   }
 
-  function serverOf(catalog: CompletionCatalog): ServerIdentity | null {
-    const version = catalog.server.version;
-    return version === null || options.server === undefined ? null : options.server(version);
-  }
-
   function specNamed(name: string, server: ServerIdentity | null): FunctionSpec | undefined {
     return specs.get(name.toUpperCase())?.find((spec) => isAvailable(spec, server));
-  }
-
-  function fold(name: string): string {
-    switch (options.identifierFolding) {
-      case "lower":
-        return name.toLowerCase();
-      case "upper":
-        return name.toUpperCase();
-      case "none":
-        return name;
-    }
-  }
-
-  /** Whether a name as written denotes `catalogName`: quoted exactly, unquoted folded, or case-blind where nothing folds. */
-  function denotes(identifier: Identifier, catalogName: string): boolean {
-    if (options.identifierFolding === "none") return identifier.name.toLowerCase() === catalogName.toLowerCase();
-    return (identifier.quoted ? identifier.name : fold(identifier.name)) === catalogName;
-  }
-
-  function sameIdentifier(left: Identifier, right: Identifier): boolean {
-    const key = (identifier: Identifier): string =>
-      options.identifierFolding === "none"
-        ? identifier.name.toLowerCase()
-        : identifier.quoted
-          ? identifier.name
-          : fold(identifier.name);
-    return key(left) === key(right);
   }
 
   function quoted(name: string): string {
     return options.plainIdentifier.test(name) && !reserved.has(name.toUpperCase())
       ? name
       : options.quoteIdentifier(name);
-  }
-
-  /** Every query level from the caret's outwards. */
-  function levels(query: Query): Query[] {
-    const found: Query[] = [];
-    for (let level: Query | null = query; level !== null; level = level.parent) found.push(level);
-    return found;
-  }
-
-  function visibleCtes(query: Query): Cte[] {
-    return levels(query).flatMap((level) => level.ctes);
-  }
-
-  function cteNamed(query: Query, name: Identifier): Cte | undefined {
-    return visibleCtes(query).find((cte) => sameIdentifier(cte.name, name));
-  }
-
-  /** The name a source is referred to by: its alias, else its relation's name. */
-  function referenceName(source: Source): Identifier | null {
-    return source.alias ?? (source.kind === "relation" ? source.name : null);
-  }
-
-  function sourceNamed(query: Query, name: Identifier): Source | undefined {
-    for (const level of levels(query)) {
-      const source = level.sources.find((candidate) => {
-        const reference = referenceName(candidate);
-        return reference !== null && sameIdentifier(reference, name);
-      });
-      if (source !== undefined) return source;
-    }
-    return undefined;
-  }
-
-  class Lookup {
-    readonly #catalog: CompletionCatalog;
-    #namespaces: Promise<readonly Namespace[]> | null = null;
-    #current: readonly string[] | null;
-
-    constructor(catalog: CompletionCatalog) {
-      this.#catalog = catalog;
-      this.#current = catalog.current;
-    }
-
-    get server(): ServerIdentity | null {
-      return serverOf(this.#catalog);
-    }
-
-    get current(): readonly string[] | null {
-      return this.#current;
-    }
-
-    /**
-     * Makes the script's own namespace current: the nearest statement before `offset` that moves
-     * the session's namespace, when one of its targets exists (plan 022 decision 7).
-     */
-    async follow(text: string, offset: number): Promise<void> {
-      const preceding = split(text).filter((span) => span.to < offset);
-      for (let at = preceding.length - 1; at >= 0; at -= 1) {
-        const span = preceding[at];
-        const target = span === undefined ? null : namespaceTarget(span.sql, options.dialect);
-        if (target === null) continue;
-        const namespaces = (await this.namespaces()).filter((namespace) => targetable(target, namespace));
-        for (const candidate of target.candidates) {
-          const found = namespaces.find((namespace) => denotes(candidate, namespace.path.at(-1) ?? ""));
-          if (found !== undefined) {
-            this.#current = found.path;
-            return;
-          }
-        }
-        return;
-      }
-    }
-
-    namespaces(): Promise<readonly Namespace[]> {
-      this.#namespaces ??= this.#catalog.namespaces().catch(() => []);
-      return this.#namespaces;
-    }
-
-    relations(path: readonly string[]): Promise<readonly Relation[]> {
-      return this.#catalog.relations(path).catch(() => []);
-    }
-
-    referencing(path: readonly string[], relation: string) {
-      return this.#catalog.referencing(path, relation).catch(() => []);
-    }
-
-    /** The namespace a qualifier names: its trailing path parts, as written. */
-    async namespace(qualifier: readonly Identifier[]): Promise<Namespace | undefined> {
-      if (qualifier.length === 0) return undefined;
-      const namespaces = await this.namespaces();
-      const matches = (namespace: Namespace): boolean => {
-        const tail = namespace.path.slice(-qualifier.length);
-        return tail.length === qualifier.length && qualifier.every((part, at) => denotes(part, tail[at] ?? ""));
-      };
-      return namespaces.find((namespace) => matches(namespace) && !namespace.system) ?? namespaces.find(matches);
-    }
-
-    async relation(qualifier: readonly Identifier[], name: Identifier): Promise<FoundRelation | null> {
-      const path = qualifier.length === 0 ? this.current : ((await this.namespace(qualifier))?.path ?? null);
-      if (path === null) return null;
-      const relations = await this.relations(path);
-      const relation =
-        relations.find((candidate) => candidate.name === name.name) ??
-        relations.find((candidate) => denotes(name, candidate.name));
-      return relation === undefined ? null : { path, relation };
-    }
-
-    async columnsOf(source: Source, query: Query, depth = 0): Promise<ColumnInfo[]> {
-      if (source.kind === "derived") return this.selectColumns(source.query, depth + 1);
-      if (source.qualifier.length === 0) {
-        const cte = cteNamed(query, source.name);
-        if (cte !== undefined) return this.cteColumns(cte, depth + 1);
-      }
-      const found = await this.relation(source.qualifier, source.name);
-      return found?.relation.columns.map((column) => ({ name: column.name, type: column.type })) ?? [];
-    }
-
-    cteColumns(cte: Cte, depth: number): Promise<ColumnInfo[]> {
-      if (cte.columns !== null)
-        return Promise.resolve(cte.columns.map((column) => ({ name: column.name, type: null })));
-      return this.selectColumns(cte.query, depth);
-    }
-
-    /** A subquery's select list, `*` expanded through its own sources. */
-    async selectColumns(query: Query, depth: number): Promise<ColumnInfo[]> {
-      if (depth > MAX_EXPANSION_DEPTH) return [];
-      const columns: ColumnInfo[] = [];
-      for (const item of query.select) {
-        if (item.kind === "named") {
-          columns.push({ name: item.name.name, type: null });
-          continue;
-        }
-        const sources =
-          item.qualifier === null
-            ? query.sources
-            : query.sources.filter((source) => {
-                const reference = referenceName(source);
-                return reference !== null && item.qualifier !== null && sameIdentifier(reference, item.qualifier);
-              });
-        for (const source of sources) columns.push(...(await this.columnsOf(source, query, depth)));
-      }
-      return columns;
-    }
   }
 
   function item(kind: CompletionKind, label: string, apply: string, detail: string | null): CompletionItem {

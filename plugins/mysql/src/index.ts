@@ -40,6 +40,7 @@ import {
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
+  sqlInspector,
   sqlExplainable,
   sqlFormatter,
   sqlGenerator,
@@ -53,7 +54,9 @@ import {
   type ParameterOptions,
   type SqlDialectOptions,
   type SqlLiteralOptions,
+  type CompleterOptions,
 } from "@table-craft/plugin-api/sql";
+import { MYSQL_RESERVED_WORDS } from "./reserved.js";
 import { insertStatement, MYSQL_IMPORT_TYPES, mysqlDecimal } from "./bulk.js";
 import { syntaxErrorPosition } from "./errorPosition.js";
 import { MYSQL_FUNCTIONS } from "./functions/index.js";
@@ -120,6 +123,16 @@ const { explainable } = sqlExplainable({
   analyzeVerbs: ANALYZE_VERBS,
 });
 
+const COMPLETER: CompleterOptions = {
+  dialect: DIALECT,
+  identifierFolding: "none",
+  plainIdentifier: PLAIN_IDENTIFIER,
+  quoteIdentifier,
+  keywords: KEYWORDS,
+  functions: MYSQL_FUNCTIONS,
+  server: serverIdentity,
+};
+
 const language: SqlLanguage = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
@@ -129,15 +142,8 @@ const language: SqlLanguage = {
   emptyInsert: (table) => `INSERT INTO ${table} () VALUES ()`,
   updateDefault: defaultKeyword,
   savepoint: sqlSavepoints(quoteIdentifier),
-  ...sqlCompleter({
-    dialect: DIALECT,
-    identifierFolding: "none",
-    plainIdentifier: PLAIN_IDENTIFIER,
-    quoteIdentifier,
-    keywords: KEYWORDS,
-    functions: MYSQL_FUNCTIONS,
-    server: serverIdentity,
-  }),
+  ...sqlCompleter(COMPLETER),
+  ...sqlInspector({ ...COMPLETER, reservedWords: MYSQL_RESERVED_WORDS }),
   ...sqlGenerator({
     quoteIdentifier,
     updateDefault: defaultKeyword,

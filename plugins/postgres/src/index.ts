@@ -42,6 +42,7 @@ import {
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
+  sqlInspector,
   sqlExplainable,
   sqlFormatter,
   sqlGenerator,
@@ -54,7 +55,9 @@ import {
   type ParameterOptions,
   type SqlDialectOptions,
   type SqlLiteralOptions,
+  type CompleterOptions,
 } from "@table-craft/plugin-api/sql";
+import { POSTGRES_RESERVED_WORDS } from "./reserved.js";
 import { copyLine, POSTGRES_IMPORT_TYPES, postgresDecimal } from "./bulk.js";
 import { serverErrorPosition } from "./errorPosition.js";
 import { EXPLAIN_VERBS, explainStatement, readPlan } from "./explain.js";
@@ -110,6 +113,15 @@ const { explainable } = sqlExplainable({
   analyzeVerbs: EXPLAIN_VERBS,
 });
 
+const COMPLETER: CompleterOptions = {
+  dialect: DIALECT,
+  identifierFolding: "lower",
+  plainIdentifier: PLAIN_IDENTIFIER,
+  quoteIdentifier,
+  keywords: KEYWORDS,
+  functions: POSTGRES_FUNCTIONS,
+};
+
 const language: SqlLanguage = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
@@ -119,14 +131,8 @@ const language: SqlLanguage = {
   emptyInsert: defaultValuesInsert,
   updateDefault: defaultKeyword,
   savepoint: sqlSavepoints(quoteIdentifier),
-  ...sqlCompleter({
-    dialect: DIALECT,
-    identifierFolding: "lower",
-    plainIdentifier: PLAIN_IDENTIFIER,
-    quoteIdentifier,
-    keywords: KEYWORDS,
-    functions: POSTGRES_FUNCTIONS,
-  }),
+  ...sqlCompleter(COMPLETER),
+  ...sqlInspector({ ...COMPLETER, reservedWords: POSTGRES_RESERVED_WORDS }),
   ...sqlGenerator({
     quoteIdentifier,
     updateDefault: defaultKeyword,

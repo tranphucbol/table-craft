@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { API_VERSION, MANIFEST_FILE } from "@table-craft/plugin-api";
+import { MANIFEST_FILE } from "@table-craft/plugin-api";
 import { afterEach, describe, expect, it } from "vitest";
 import { readPackageTarball } from "@table-craft/desktop/main/pluginStore/tarball.js";
 import { checkPackage, checkPackages, PackageCheckError } from "../../scripts/plugins/check.js";
@@ -47,7 +47,7 @@ describe("plugin packages", () => {
       type: "module",
       main: "index.js",
       license: "MIT",
-      tableCraft: { id: "sqlite", apiVersion: API_VERSION },
+      tableCraft: { id: "sqlite", apiVersion: "1.0.0" },
       repository: { type: "git", directory: "plugins/sqlite" },
     });
     expect(json.keywords).toContain(PLUGIN_KEYWORD);

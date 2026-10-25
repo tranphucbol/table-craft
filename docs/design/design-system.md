@@ -294,6 +294,18 @@ colours are their own tokens, read by the `HighlightStyle` through the CSS varia
 | `colors.statementFlash`        | `--tc-statement-flash`      |                              | `#3d4a2e`          | `#e1f1d3`       | The statement just run, for 900 ms                       |
 | `colors.warning`               | `--tc-warning`              | `text-warning`, `bg-warning` | `#e0a84a`          | `#8a5a00`       | Output warnings (skipped, cancelled), `transaction open` |
 
+Live problems (plan 108) reuse these tokens, no new ones. An error is a `--tc-danger` wavy
+underline, as the server's error mark; a warning is a `--tc-warning` wavy underline; a weak problem
+(a redundant `ASC`) is greyed to `--tc-ink-muted`, its syntax colour included, with a dotted
+underline. Where a server mark covers the same text, only the server mark shows. The gutter keeps
+one column for both: a 7 px dot per line in the worst severity there, `--tc-danger` or
+`--tc-warning`; weak problems get none. Hover lists each message after a filled `Lightbulb` in its
+severity's colour, the fixes as `--tc-accent` links and `More actions… ⌥↩`. Show Context Actions
+(`⌥↩`) opens a list at the caret in the tooltip's `bg-raised` frame: fixes first, each with that
+bulb, a `border-line` rule, then Suppress (`EyeSlash`) and Disable (`Prohibit`) in `text-ink-muted`;
+the chosen row is `--tc-selection`, ↑↓ move, ↵ or Tab apply, Esc closes, and a row click applies
+it without taking focus from the editor.
+
 The toolbar reads left to right: Run (primary), Run All, Explain Plan and Explain Analyse when the
 plugin declares them (plan 012), Cancel when the plugin can cancel, then the transaction controls
 when it declares `transactions`: a `Tx: Auto` / `Tx: Manual` select, Commit (`Check`), Rollback
@@ -382,8 +394,10 @@ Above the grid sit the WHERE and ORDER BY bars: single-line CodeMirror fields on
 and the datasource name · plugin name on the right. The database's message sits under them in
 `text-danger` with the hint muted. A read-only table shows an `h-row` banner in `bg-panel`,
 `text-ink-muted`, `Read-only: <reason>`. The result toolbar gains icon-only `Plus` Add Row,
-`Copy` Duplicate Row, `Trash` Delete Rows, `ArrowUUpLeft` Revert Selected, `FileSql` Preview,
-`CheckCircle` Submit, the `Tx: Auto` label, and `Sigma` Count Rows. The footer (`h-row`,
+`Copy` Duplicate Row, `Trash` Delete Rows, `ArrowUUpLeft` Revert Selected, Preview
+(`PreviewChangesGlyph`: an `Eye` with a solid `text-success` `ArrowFatUp` badge lower right, the eye
+masked around it), Submit (`SubmitGlyph`: a hollow `ArrowFatUp` in `text-success`, as DataGrip
+draws both; `ui/editGlyphs.tsx`), the `Tx: Auto` label, and `Sigma` Count Rows. The footer (`h-row`,
 `text-ink-muted`) holds `3 pending changes`, the counted `12,345 rows`, and the last notice. The
 preview is a 40 rem modal listing the numbered statements in `font-editor`.
 

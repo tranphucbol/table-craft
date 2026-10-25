@@ -24,7 +24,31 @@ export const ERROR_GUTTER_CLASS = "tc-error-gutter";
 export const ERROR_GUTTER_MARKER_CLASS = "tc-error-gutter-marker";
 export const ERROR_TOOLTIP_CLASS = "tc-error-tooltip";
 export const ERROR_HINT_CLASS = "tc-error-hint";
+/** Live problems' underlines (plan 108 decision 7); an error looks as the server's mark does. */
+export const PROBLEM_MARK_CLASSES = {
+  error: "tc-problem-error",
+  warning: "tc-problem-warning",
+  weak: "tc-problem-weak",
+} as const;
+export const WARNING_GUTTER_MARKER_CLASS = "tc-warning-gutter-marker";
+/** The Alt+Enter popup and the problem hover (`intentions.ts`). */
+export const INTENTIONS_CLASS = "tc-intentions";
+export const INTENTION_CLASS = "tc-intention";
+export const INTENTION_GLYPH_CLASS = "tc-intention-glyph";
+export const INTENTION_SEPARATOR_CLASS = "tc-intention-separator";
+export const INTENTION_EMPTY_CLASS = "tc-intention-empty";
+export const PROBLEM_TOOLTIP_CLASS = "tc-problem-tooltip";
+export const PROBLEM_MESSAGE_CLASS = "tc-problem-message";
+export const PROBLEM_FIX_CLASS = "tc-problem-fix";
+export const PROBLEM_CHORD_CLASS = "tc-problem-chord";
 const ERROR_UNDERLINE = "underline wavy var(--tc-danger)";
+const WARNING_UNDERLINE = "underline wavy var(--tc-warning)";
+const WEAK_UNDERLINE = "underline dotted var(--tc-ink-muted)";
+const INTENTIONS_MIN_WIDTH = "220px";
+const INTENTION_PADDING = "2px var(--tc-cell-padding)";
+const INTENTION_SEPARATOR_MARGIN = "2px 0";
+const TOOLTIP_ROW_GAP = "2px";
+const INTENTION_RADIUS = "3px";
 const ERROR_UNDERLINE_OFFSET = "3px";
 const ERROR_DOT_SIZE = "7px";
 const ERROR_GUTTER_PADDING = "0 2px 0 4px";
@@ -53,7 +77,9 @@ const SEMIBOLD = "600";
 const SELECTION_SELECTOR =
   ".cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground";
 
-export const EDITOR_THEME_SPEC = {
+type ThemeSpec = Parameters<typeof EditorView.theme>[0];
+
+export const EDITOR_THEME_SPEC: ThemeSpec = {
   "&": {
     height: "100%",
     backgroundColor: "var(--tc-canvas)",
@@ -85,6 +111,23 @@ export const EDITOR_THEME_SPEC = {
     textDecorationSkipInk: "none",
     textUnderlineOffset: ERROR_UNDERLINE_OFFSET,
   },
+  [`.${PROBLEM_MARK_CLASSES.error}`]: {
+    textDecoration: ERROR_UNDERLINE,
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: ERROR_UNDERLINE_OFFSET,
+  },
+  [`.${PROBLEM_MARK_CLASSES.warning}`]: {
+    textDecoration: WARNING_UNDERLINE,
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: ERROR_UNDERLINE_OFFSET,
+  },
+  // The syntax colours sit on spans inside the mark, so the muted ink has to reach them too.
+  [`.${PROBLEM_MARK_CLASSES.weak}, .${PROBLEM_MARK_CLASSES.weak} *`]: {
+    color: "var(--tc-ink-muted)",
+    textDecoration: WEAK_UNDERLINE,
+    textDecorationSkipInk: "none",
+    textUnderlineOffset: ERROR_UNDERLINE_OFFSET,
+  },
   [`.${ERROR_GUTTER_CLASS} .cm-gutterElement`]: { padding: ERROR_GUTTER_PADDING },
   [`.${ERROR_GUTTER_MARKER_CLASS}`]: {
     display: "inline-block",
@@ -93,6 +136,55 @@ export const EDITOR_THEME_SPEC = {
     borderRadius: "50%",
     backgroundColor: "var(--tc-danger)",
   },
+  [`.${WARNING_GUTTER_MARKER_CLASS}`]: {
+    display: "inline-block",
+    width: ERROR_DOT_SIZE,
+    height: ERROR_DOT_SIZE,
+    borderRadius: "50%",
+    backgroundColor: "var(--tc-warning)",
+  },
+  [`.${PROBLEM_TOOLTIP_CLASS}`]: {
+    display: "flex",
+    flexDirection: "column",
+    gap: TOOLTIP_ROW_GAP,
+    maxWidth: ERROR_TOOLTIP_WIDTH,
+    padding: PANEL_PADDING,
+    fontFamily: "var(--tc-font-ui)",
+    fontSize: "var(--tc-font-ui-size)",
+  },
+  [`.${PROBLEM_MESSAGE_CLASS}`]: { display: "flex", alignItems: "baseline", gap: GLYPH_GAP, whiteSpace: "pre-wrap" },
+  [`.${PROBLEM_FIX_CLASS}`]: {
+    alignSelf: "flex-start",
+    padding: "0",
+    border: "none",
+    background: "none",
+    color: "var(--tc-accent)",
+    font: "inherit",
+    cursor: "pointer",
+  },
+  [`.${PROBLEM_FIX_CLASS}:hover`]: { textDecoration: "underline" },
+  [`.${PROBLEM_CHORD_CLASS}`]: { marginLeft: GLYPH_GAP, color: "var(--tc-ink-muted)" },
+  [`.${INTENTIONS_CLASS}`]: {
+    minWidth: INTENTIONS_MIN_WIDTH,
+    maxWidth: ERROR_TOOLTIP_WIDTH,
+    padding: TOOLTIP_ROW_GAP,
+    fontFamily: "var(--tc-font-ui)",
+    fontSize: "var(--tc-font-ui-size)",
+    outline: "none",
+  },
+  [`.${INTENTION_CLASS}`]: {
+    display: "flex",
+    alignItems: "center",
+    gap: GLYPH_GAP,
+    padding: INTENTION_PADDING,
+    borderRadius: INTENTION_RADIUS,
+    whiteSpace: "nowrap",
+    cursor: "default",
+  },
+  [`.${INTENTION_CLASS}[aria-selected=true]`]: { backgroundColor: "var(--tc-selection)" },
+  [`.${INTENTION_GLYPH_CLASS}`]: { display: "inline-flex", flexShrink: "0" },
+  [`.${INTENTION_SEPARATOR_CLASS}`]: { margin: INTENTION_SEPARATOR_MARGIN, borderTop: "1px solid var(--tc-border)" },
+  [`.${INTENTION_EMPTY_CLASS}`]: { padding: INTENTION_PADDING, color: "var(--tc-ink-muted)" },
   [`.${ERROR_TOOLTIP_CLASS}`]: {
     maxWidth: ERROR_TOOLTIP_WIDTH,
     padding: PANEL_PADDING,

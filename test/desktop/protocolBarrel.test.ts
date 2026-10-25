@@ -6,6 +6,7 @@ import type { EngineMethod, RequestOf, ResultOf } from "@table-craft/desktop/eng
 import * as calls from "@table-craft/desktop/engine/protocol/calls.js";
 import * as catalog from "@table-craft/desktop/engine/protocol/catalog.js";
 import * as datasource from "@table-craft/desktop/engine/protocol/datasource.js";
+import * as inspection from "@table-craft/desktop/engine/protocol/inspection.js";
 import * as objects from "@table-craft/desktop/engine/protocol/objects.js";
 import * as results from "@table-craft/desktop/engine/protocol/results.js";
 import * as sessions from "@table-craft/desktop/engine/protocol/sessions.js";
@@ -20,7 +21,7 @@ const REPOSITORY_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const PROTOCOL_FIXTURE = "packages/desktop/src/engine/protocol/fixture.ts";
 /** A route group only reads its connection when a handler runs, so building one needs none. */
 const NO_CONNECTION = {} as ConnectionContext;
-const AREAS = { calls, catalog, datasource, objects, results, sessions, sql, tables, transfer, wire };
+const AREAS = { calls, catalog, datasource, inspection, objects, results, sessions, sql, tables, transfer, wire };
 
 const METHODS = [
   "session.open",
@@ -76,6 +77,7 @@ const METHODS = [
   "table.orderBy",
   "completion.complete",
   "completion.signature",
+  "inspection.inspect",
   "navigation.resolve",
   "edits.preview",
   "edits.submit",
