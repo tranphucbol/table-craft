@@ -79,3 +79,38 @@ export const SQLITE_PLUGIN: PluginInfo = {
   network: null,
   tls: null,
 };
+
+export const REDIS_PLUGIN: PluginInfo = {
+  id: "redis",
+  name: "Redis",
+  source: "managed",
+  version: "1.0.0",
+  unavailableReason: null,
+  capabilities: ["commands", "keyValue"],
+  fields: [
+    {
+      key: "mode",
+      label: "Mode",
+      kind: "select",
+      default: "standalone",
+      options: [
+        { value: "standalone", label: "Standalone" },
+        { value: "cluster", label: "Cluster" },
+      ],
+    },
+    { key: "host", label: "Host", kind: "text", default: "localhost", required: true },
+    { key: "port", label: "Port", kind: "number", default: 6379 },
+    {
+      key: "database",
+      label: "Database",
+      kind: "number",
+      default: 0,
+      required: true,
+      visibleWhen: { key: "mode", equals: "standalone" },
+    },
+  ],
+  highlight: "redis",
+  url: null,
+  network: null,
+  tls: null,
+};

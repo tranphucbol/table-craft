@@ -180,3 +180,53 @@ describe("formatConnectionUrl", () => {
     }
   });
 });
+
+describe("connection url sets", () => {
+  const KEY_VALUE = pluginManifestSchema.parse({
+    id: "kv",
+    name: "Key value",
+    version: "1.0.0",
+    apiVersion: "1.2.0",
+    entry: "index.js",
+    capabilities: ["commands"],
+    highlight: "redis",
+    connection: {
+      fields: [
+        { key: "host", label: "Host", kind: "text", required: true },
+        { key: "port", label: "Port", kind: "number" },
+        { key: "user", label: "User", kind: "text" },
+        { key: "password", label: "Password", kind: "password", secret: true },
+        {
+          key: "tlsMode",
+          label: "TLS",
+          kind: "select",
+          default: "disable",
+          options: [
+            { value: "disable", label: "Disable" },
+            { value: "require", label: "Require" },
+          ],
+        },
+      ],
+      url: {
+        schemes: ["redis", "rediss"],
+        form: "server",
+        parts: { host: "host", port: "port", user: "user", password: "password" },
+        sets: { rediss: { tlsMode: "require" } },
+      },
+    },
+  });
+
+  it("givenSecureScheme_whenParsed_thenSetsTheFieldsItImplies", () => {
+    expect(parseConnectionUrl(KEY_VALUE, "rediss://cache.example.com:6380").values).toEqual({
+      host: "cache.example.com",
+      port: 6380,
+      tlsMode: "require",
+    });
+    expect(parseConnectionUrl(KEY_VALUE, "redis://cache.example.com").values).toEqual({ host: "cache.example.com" });
+  });
+
+  it("givenConfigHoldingASchemesValues_whenFormatted_thenThatSchemeIsWritten", () => {
+    expect(formatConnectionUrl(KEY_VALUE, { host: "h", tlsMode: "require" })).toBe("rediss://h");
+    expect(formatConnectionUrl(KEY_VALUE, { host: "h", tlsMode: "disable" })).toBe("redis://h");
+  });
+});

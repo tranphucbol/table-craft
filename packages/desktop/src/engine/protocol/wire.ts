@@ -69,7 +69,22 @@ export type Capability =
   | "objects"
   | "serverMessages"
   | "sessions"
-  | "routineCall";
+  | "routineCall"
+  | "commands"
+  | "keyValue"
+  | "nodes"
+  | "serverInfo";
+
+/** Mirrors `CommandReply` in plugin-api: a command's scalar answer, which goes to Output (decision 112). */
+export interface CommandReply {
+  readonly value: WireValue;
+  readonly text: string;
+}
+
+/** Mirrors `NODE_AUTO` in plugin-api: a command runs where its key's slot lives. */
+export const NODE_AUTO = "auto";
+/** Mirrors `NODE_ALL_PRIMARIES` in plugin-api: a command runs on every primary, one result. */
+export const NODE_ALL_PRIMARIES = "allPrimaries";
 
 /** Mirrors `ServerMessageLevel` in plugin-api. */
 export type ServerMessageLevel = "error" | "warning" | "notice" | "info";

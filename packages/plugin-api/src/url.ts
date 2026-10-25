@@ -30,6 +30,7 @@ export interface ConnectionUrlSpec {
         readonly values?: Readonly<Record<string, string>> | undefined;
       }[]
     | undefined;
+  readonly sets?: Readonly<Record<string, Readonly<Record<string, ConnectionValue>>>> | undefined;
 }
 
 interface UrlField {
@@ -155,6 +156,7 @@ function parseServer(form: ConnectionForm, url: ConnectionUrlSpec, text: string)
     );
   }
   const collected = new Collected(form, url);
+  Object.assign(collected.values, url.sets?.[scheme]);
   collected.part("host", decoded(parsed.hostname.replace(/^\[(.*)\]$/, "$1")));
   collected.part("port", parsed.port);
   collected.part("database", decoded(parsed.pathname.replace(LEADING_SLASHES, "")));
@@ -221,12 +223,21 @@ function encodedPath(path: string): string {
 }
 
 /**
- * The connection URL of `config`, in the plugin's first scheme. Never carries a secret field, so
+ * The connection URL of `config`, in the first scheme whose `sets` the config holds, else the first
+ * that sets nothing. Never carries a secret field, so
  * the result is safe to copy, show and log; params equal to their field's default are left out.
  */
 export function formatConnectionUrl(form: ConnectionForm, config: Readonly<Record<string, unknown>>): string {
   const url = urlOf(form);
-  const scheme = url.schemes[0] ?? "";
+  const implied = (candidate: string): boolean => {
+    const sets = url.sets?.[candidate];
+    return sets !== undefined && Object.entries(sets).every(([key, value]) => config[key] === value);
+  };
+  const scheme =
+    url.schemes.find(implied) ??
+    url.schemes.find((candidate) => url.sets?.[candidate] === undefined) ??
+    url.schemes[0] ??
+    "";
   const valueOf = (part: ConnectionUrlPart): string => {
     const key = url.parts[part];
     if (key === undefined || fieldOf(form, key)?.secret === true) return "";

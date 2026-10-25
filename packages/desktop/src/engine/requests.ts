@@ -169,6 +169,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     parameters: z.record(z.string(), z.string().nullable()).optional(),
     ...paging,
     timeoutSeconds,
+    node: z.string().min(1).optional(),
   }),
   z.strictObject({ id: requestId, type: z.literal("statement.cancel"), sessionId }),
   z.strictObject({ id: requestId, type: z.literal("script.split"), text: z.string() }),

@@ -447,7 +447,7 @@ export interface ConsolesDependencies {
   /** Wall-clock time for Output entries; defaults to `Date.now`. */
   readonly clock?: () => number;
   /** Asks before destructive statements run (decision 9); false runs none of the batch. */
-  readonly confirmDestructive?: (statements: readonly ClassifiedStatement[]) => Promise<boolean>;
+  readonly confirmDestructive?: (statements: readonly ClassifiedStatement[], datasourceId: string) => Promise<boolean>;
   /** Asks before Explain Analyse runs a write (plan 012 decision 9); false runs nothing. */
   readonly confirmAnalyse?: (request: AnalyseRequest) => Promise<boolean>;
   /** Asks for a run's parameter values (plan 019 decision 6); null runs nothing. */
@@ -1564,7 +1564,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             outcome = "succeeded";
           } else {
             const destructive = statements.filter((statement) => statement.destructive !== null);
-            const declined = destructive.length > 0 && !(await confirmed(id, () => confirmDestructive(destructive)));
+            const declined =
+              destructive.length > 0 &&
+              !(await confirmed(id, () => confirmDestructive(destructive, current.datasourceId)));
             const bound = declined ? false : await bindValues(id, statements, preset);
             if (bound === false) {
               log(id, { sql: "", message: DECLINED, tone: "warning" });
@@ -1717,7 +1719,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           const declined =
             statement !== undefined &&
             statement.destructive !== null &&
-            !(await confirmed(id, () => confirmDestructive([statement])));
+            !(await confirmed(id, () => confirmDestructive([statement], current.datasourceId)));
           const bound = declined ? false : await bindValues(id, statement === undefined ? [] : [statement]);
           const parameters = bound === false ? undefined : boundAt(bound, 0);
           if (bound === false) {
@@ -1881,18 +1883,32 @@ async function askPendingEditsInDialog({ changes, verb }: PendingEditsRequest): 
   return answer === "submit" || answer === "discard" ? answer : null;
 }
 
-/** The destructive-statement confirmation (decision 9): one dialog for the whole batch. */
-async function askDestructive(statements: readonly ClassifiedStatement[]): Promise<boolean> {
-  const answer = await useModal.getState().ask({
+/**
+ * The destructive-statement confirmation (decision 9): one dialog for the whole batch. A statement
+ * marked `confirmByName`, such as FLUSHDB, makes the user type the datasource's name (decision 112).
+ */
+export function destructiveConfirmation(
+  statements: readonly ClassifiedStatement[],
+  datasourceName: string,
+): ModalRequest {
+  const byName = statements.some((statement) => statement.confirmByName === true);
+  return {
     kind: "confirm",
     title:
       statements.length === 1 ? "Run a destructive statement?" : `Run ${statements.length} destructive statements?`,
-    message: "These statements can change or remove data that cannot be recovered:",
+    message: byName
+      ? `These statements can remove data that cannot be recovered. Type ${datasourceName} to run them:`
+      : "These statements can change or remove data that cannot be recovered:",
     items: statements.map((statement) => ({ label: firstLine(statement.sql), detail: statement.destructive ?? "" })),
     confirm: "Execute",
     destructive: true,
-  });
-  return answer !== null;
+    ...(byName ? { typed: datasourceName } : {}),
+  };
+}
+
+async function askDestructive(statements: readonly ClassifiedStatement[], datasourceId: string): Promise<boolean> {
+  const name = datasourceById(useDatasources.getState(), datasourceId)?.name ?? datasourceId;
+  return (await useModal.getState().ask(destructiveConfirmation(statements, name))) !== null;
 }
 
 export const PARAMETERS_TITLE = "Parameters";

@@ -31,6 +31,10 @@ export interface ClassifiedStatement {
   readonly kind: StatementKind;
   /** Why the console asks before running it, such as `DELETE without WHERE`; null when it need not. */
   readonly destructive: string | null;
+  /** Why the command may weigh on the server; the editor marks it, nothing blocks it (decision 112). */
+  readonly costly?: string | null;
+  /** Confirming it asks for the datasource's name (decision 112). */
+  readonly confirmByName?: boolean;
   /** The placeholders the plugin finds in `sql`, in order. */
   readonly parameters: readonly StatementParameter[];
 }

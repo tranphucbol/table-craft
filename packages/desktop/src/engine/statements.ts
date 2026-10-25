@@ -66,6 +66,8 @@ export function statementRunners(live: LiveContext) {
     options,
     now,
     sqlLanguage,
+    commandLanguage,
+    consoleLanguage,
     results,
     relationOf,
     referencingKeys,
@@ -97,21 +99,28 @@ export function statementRunners(live: LiveContext) {
     parameters: Readonly<Record<string, ParameterValue>> | undefined,
     paging: ResultPaging,
     timeoutSeconds: number,
+    node?: string,
   ): Promise<ExecutedStatement> {
     const open = sessionFor(sessionId);
     let bound: BoundStatement = { sql, params: [] };
     try {
-      if (parameters !== undefined) bound = sqlLanguage().bind(sql, parameters);
+      // A command language has no placeholders (decision 112): the line runs as written.
+      if (parameters !== undefined && commandLanguage() === null) bound = sqlLanguage().bind(sql, parameters);
     } catch (cause) {
       throw statementFailed(cause, options.datasource.readOnly);
     }
+    const executeOptions = node === undefined ? undefined : { node };
     open.running += 1;
     try {
       const { value: summary, reconnected } = await onLiveSession(
         sessionId,
         open,
         timeoutSeconds,
-        (session) => session.execute(bound.sql, bound.params).then((result) => results.put(result, paging)),
+        (session) =>
+          session.execute(bound.sql, bound.params, executeOptions).then(async (result) => {
+            const put = await results.put(result, paging);
+            return result.reply === undefined ? put : { ...put, reply: result.reply };
+          }),
         (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
         (late) => void results.release(late.handle),
       );
@@ -126,7 +135,7 @@ export function statementRunners(live: LiveContext) {
       if (summary.cursorOpen) cursors.set(sessionId, summary.handle);
       // An open cursor keeps the session busy, and no statement that switches returns rows.
       // A statement that switches namespaces, or ends a transaction that may have, is followed by a read.
-      const statement = sqlLanguage().classify(bound.sql);
+      const statement = consoleLanguage().classify(bound.sql);
       const switches = statement.setsNamespace === true;
       const moves = !summary.cursorOpen && (switches || statement.kind === "transaction");
       const namespace = moves ? await namespaceOf(open) : undefined;

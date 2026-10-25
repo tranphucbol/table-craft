@@ -3,7 +3,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirro
 import { MSSQL, MySQL, PLSQL, PostgreSQL, sql, SQLite, StandardSQL, type SQLDialect } from "@codemirror/lang-sql";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
+import { Compartment, EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
 import {
   crosshairCursor,
   Decoration,
@@ -25,6 +25,7 @@ import { registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import { redisLanguage } from "@table-craft/desktop/renderer/console/highlighters/redis.js";
 import { connectedSignature } from "@table-craft/desktop/renderer/console/signatureHint.js";
 import {
   errorMarks,
@@ -90,8 +91,21 @@ const flashField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+/** Command languages the manifest's `highlight` may name instead of a SQL dialect (decision 112). */
+const COMMAND_HIGHLIGHTERS: Readonly<Record<string, Extension>> = { redis: redisLanguage };
+
 export function dialectOf(highlight: string | null | undefined): SQLDialect {
   return DIALECTS[highlight ?? ""] ?? StandardSQL;
+}
+
+/** The SQL dialect whose keywords complete offline; null for a command language. */
+export function keywordDialectOf(highlight: string | null | undefined): SQLDialect | null {
+  return COMMAND_HIGHLIGHTERS[highlight ?? ""] === undefined ? dialectOf(highlight) : null;
+}
+
+/** The editor's language for the manifest's `highlight`: a command language, else a SQL dialect. */
+export function highlighterOf(highlight: string | null | undefined): Extension {
+  return COMMAND_HIGHLIGHTERS[highlight ?? ""] ?? sql({ dialect: dialectOf(highlight), upperCaseKeywords: true });
 }
 
 function placeholderText(): string {
@@ -157,7 +171,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     datasource === undefined ? null : connectionOf(state, datasource.id).status,
   );
   const inspectionSettings = useSettings((state) => state.settings.editor.inspections);
-  const dialectRef = useRef(dialectOf(highlight));
+  const dialectRef = useRef(keywordDialectOf(highlight));
 
   useEffect(() => {
     const host = hostRef.current;
@@ -189,7 +203,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           highlightSelectionMatches(),
           search({ top: false }),
           placeholder(placeholderText()),
-          languageRef.current.of(sql({ dialect: dialectOf(highlight), upperCaseKeywords: true })),
+          languageRef.current.of(highlighterOf(highlight)),
           flashField,
           errorMarks,
           inspections,
@@ -245,10 +259,8 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   }, [consoleId]);
 
   useEffect(() => {
-    dialectRef.current = dialectOf(highlight);
-    viewRef.current?.dispatch({
-      effects: languageRef.current.reconfigure(sql({ dialect: dialectOf(highlight), upperCaseKeywords: true })),
-    });
+    dialectRef.current = keywordDialectOf(highlight);
+    viewRef.current?.dispatch({ effects: languageRef.current.reconfigure(highlighterOf(highlight)) });
   }, [highlight]);
 
   useEffect(() => {

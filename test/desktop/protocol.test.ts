@@ -44,6 +44,9 @@ import {
 } from "@table-craft/core";
 import {
   CAPABILITIES,
+  NODE_ALL_PRIMARIES,
+  NODE_AUTO,
+  type CommandReply,
   COMPLETION_KINDS,
   IMPORT_KINDS,
   INSPECTION_IDS,
@@ -164,8 +167,10 @@ describe("engine protocol", () => {
 
   it("givenExecutedStatement_whenComparedWithCoreSummary_thenCarriesEveryField", () => {
     expectTypeOf<
-      Omit<protocol.ExecutedStatement, "firstWindow" | "transactionOpen" | "namespace" | "reconnected">
+      Omit<protocol.ExecutedStatement, "firstWindow" | "transactionOpen" | "namespace" | "reconnected" | "reply">
     >().toEqualTypeOf<ResultSummary>();
+    expectTypeOf<NonNullable<protocol.ExecutedStatement["reply"]>>().toEqualTypeOf<CommandReply>();
+    expect([protocol.NODE_AUTO, protocol.NODE_ALL_PRIMARIES]).toEqual([NODE_AUTO, NODE_ALL_PRIMARIES]);
   });
 
   it("givenScriptTypes_whenComparedWithPluginApi_thenIdentical", () => {

@@ -63,6 +63,8 @@ export interface EngineCalls {
       readonly sessionId: string;
       readonly sql: string;
       readonly parameters?: Readonly<Record<string, ParameterValue>>;
+      /** Where a command runs on a `nodes` datasource: `auto`, `allPrimaries` or a node id (decision 114). */
+      readonly node?: string;
     } & ResultPaging &
       StatementLimit;
     result: ExecutedStatement;
@@ -420,6 +422,7 @@ export type EngineErrorCode =
   | "statementTimedOut"
   | "connectionLost"
   | "sessionBusy"
+  | "conflict"
   | "exportFailed"
   | "importFailed"
   | "scriptFailed"

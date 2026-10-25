@@ -32,10 +32,12 @@ export function executedText(
     readonly rowCount: number;
     readonly complete: boolean;
     readonly rowsAffected: number | null;
+    readonly reply?: { readonly text: string };
   },
   ms: number,
   kind: StatementKind,
 ): string {
+  if (summary.reply !== undefined) return `→ ${summary.reply.text} · ${formatDuration(ms)}`;
   const took = `in ${formatDuration(ms)}`;
   if (summary.columns.length === 0) {
     if (kind !== "write" || summary.rowsAffected === null) return `completed ${took}`;

@@ -18,6 +18,11 @@ export const PLUGIN_ERROR_CODES = [
    * reconnecting; never a message for the user.
    */
   "sessionBusy",
+  /**
+   * A guarded write found what it was to change already changed by someone else, and wrote
+   * nothing (decision 115); the host offers to reload or to overwrite.
+   */
+  "conflict",
 ] as const;
 
 export type PluginErrorCode = (typeof PLUGIN_ERROR_CODES)[number];
@@ -107,6 +112,20 @@ export class TlsSettingsError extends PluginError {
 /** Structural for the same reason as `isPluginError`. */
 export function isTlsSettingsError(error: unknown): error is TlsSettingsError {
   return isPluginError(error) && (error as { tlsSettings?: unknown }).tlsSettings === true;
+}
+
+/**
+ * A guarded `Keyspace.apply` found `target` changed since it was read (decision 115): `detail`
+ * says what differs, such as `field name is now "Bo"`. Nothing was written.
+ */
+export class ConflictError extends PluginError {
+  constructor(
+    readonly target: string,
+    readonly detail: string,
+    options?: ErrorOptions,
+  ) {
+    super("conflict", `${target} changed since it was read: ${detail}. Reload it, or overwrite the change.`, options);
+  }
 }
 
 /**

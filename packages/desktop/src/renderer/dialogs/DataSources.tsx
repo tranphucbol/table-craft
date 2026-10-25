@@ -30,6 +30,7 @@ import {
   draftFromView,
   draftProblems,
   duplicateDraft,
+  fieldVisible,
   newDraft,
   offersSshTunnel,
   tlsFieldsOf,
@@ -174,13 +175,15 @@ function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
 
 function Fields(props: Omit<FieldProps, "field"> & { readonly fields: readonly ConnectionField[] }) {
   const { fields, ...rest } = props;
-  return fields.map((field) =>
-    field.secret === true ? (
-      <SecretField key={field.key} field={field} {...rest} />
-    ) : (
-      <PlainField key={field.key} field={field} {...rest} />
-    ),
-  );
+  return fields
+    .filter((field) => fieldVisible(field, rest.draft))
+    .map((field) =>
+      field.secret === true ? (
+        <SecretField key={field.key} field={field} {...rest} />
+      ) : (
+        <PlainField key={field.key} field={field} {...rest} />
+      ),
+    );
 }
 
 /** Whether pasted text is one of the plugin's URLs rather than a host name or a plain path. */

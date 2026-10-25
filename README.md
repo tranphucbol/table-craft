@@ -663,16 +663,25 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
 - `serverMessages`: returns the warnings and notices the server left about a statement, which
   Output lists under it and the result tab counts.
 - `sessions`: lists the server's sessions with who blocks whom, and cancels or terminates one, for
-  the [Sessions](#sessions) view; requires `sql` and `schemaTree`.
+  the [Sessions](#sessions) view; requires `sql` or `commands`, and `schemaTree` or `keyValue`.
 - `routineCall`: writes the statements that call a function or procedure with the values from
   [Execute Routine](#execute-a-routine), OUT values included; requires `sql` and `schemaTree`.
+- `commands`: runs one command of a command language such as Redis's and returns its reply; the
+  plugin also supplies the language (splitting, classifying, completion). A plugin declares
+  either `sql` or `commands`, never both.
+- `keyValue`: lists databases and scans keys for the key tree, reads a key into a tab and applies
+  guarded edits to it; requires `commands`.
+- `nodes`: lists the nodes of a cluster, so a console can run a command on one node or on every
+  primary; requires `sql` or `commands`.
+- `serverInfo`: reports the server's statistics and slow log for the Server tab; requires `sql`
+  or `commands`.
 
 ```json
 {
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.1.0",
+  "apiVersion": "1.2.0",
   "entry": "index.js",
   "capabilities": [
     "sql",

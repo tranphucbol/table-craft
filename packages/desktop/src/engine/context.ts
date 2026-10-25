@@ -9,6 +9,7 @@ import {
 import {
   isPluginError,
   switchableTo,
+  type CommandLanguage,
   type CompletionCatalog,
   type CompletionRequest,
   type CompletionResult,
@@ -91,7 +92,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
   function statementKind(request: LoggedRequest): string | null {
     if (typeof request.sql !== "string") return null;
     try {
-      return sqlLanguage().classify(request.sql).kind;
+      return consoleLanguage().classify(request.sql).kind;
     } catch {
       return null;
     }
@@ -120,12 +121,73 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     return language;
   }
 
+  function datasourcePlugin() {
+    return loadedPlugin(options.plugins, options.datasource.pluginId).plugin;
+  }
+
+  /** The command language of a `commands` datasource (decision 112); null for a SQL one. */
+  function commandLanguage(): CommandLanguage | null {
+    return datasourcePlugin().commandLanguage ?? null;
+  }
+
+  /** What splits and classifies the console's text: the SQL language or the command language. */
+  function consoleLanguage(): Pick<SqlLanguage, "split" | "classify"> {
+    return commandLanguage() ?? sqlLanguage();
+  }
+
   function splitScript(text: string): ClassifiedStatement[] {
+    const commands = commandLanguage();
+    if (commands !== null) {
+      return commands.split(text).map((span) => {
+        const { kind, destructive, costly, confirmByName } = commands.classify(span.sql);
+        return {
+          ...span,
+          kind,
+          destructive,
+          parameters: [],
+          ...(costly === undefined ? {} : { costly }),
+          ...(confirmByName === undefined ? {} : { confirmByName }),
+        };
+      });
+    }
     const language = sqlLanguage();
     return language.split(text).map((span) => {
       const { kind, destructive } = language.classify(span.sql);
       return { ...span, kind, destructive, parameters: language.parameters(span.sql) };
     });
+  }
+
+  /**
+   * One session a `commands` datasource answers completion, the key tree and the session monitor
+   * on, opened on first use like the catalog's (decision 022). A failed open is forgotten.
+   */
+  let helper: Promise<Session> | null = null;
+
+  function helperSession(): Promise<Session> {
+    if (helper === null) {
+      const opening = connectDatasource(options, connector);
+      helper = opening;
+      opening.catch(() => {
+        if (helper === opening) helper = null;
+      });
+    }
+    return helper;
+  }
+
+  /** A lost helper session is dropped and the read runs once more on a fresh one. */
+  async function onHelper<T>(read: (session: Session) => Promise<T>): Promise<T> {
+    const opening = helperSession();
+    const session = await opening;
+    try {
+      return await read(session);
+    } catch (cause) {
+      if (!isPluginError(cause) || cause.code !== "connectionLost") throw cause;
+      if (helper === opening) {
+        helper = null;
+        void session.close().catch(() => undefined);
+      }
+      return read(await helperSession());
+    }
   }
 
   function formatText(text: string, format: FormatOptions): string {
@@ -318,12 +380,15 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
 
   async function complete(request: CompletionRequest, current?: readonly string[]): Promise<CompletionResult> {
     checkedOffset(request.text, request.offset);
+    const commands = commandLanguage();
+    if (commands !== null) return commands.complete(request, await helperSession().catch(() => null));
     const language = sqlLanguage();
     return language.complete(request, await completionCatalogOf(current));
   }
 
   async function resolve(request: ResolveRequest, current?: readonly string[]): Promise<Declaration | null> {
     checkedOffset(request.text, request.offset);
+    if (commandLanguage() !== null) return null;
     const language = sqlLanguage();
     return language.resolve(request, await completionCatalogOf(current));
   }
@@ -337,10 +402,11 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     current?: readonly string[],
     disabled?: readonly string[],
   ): Promise<readonly Problem[]> {
-    const { language } = loadedPlugin(options.plugins, options.datasource.pluginId).plugin;
-    if (language?.inspect === undefined) return [];
+    const { language, commandLanguage: commands } = datasourcePlugin();
     const request: InspectionRequest = disabled === undefined ? { text } : { text, disabled };
     try {
+      if (commands !== undefined) return (await commands.inspect?.(request)) ?? [];
+      if (language?.inspect === undefined) return [];
       return await language.inspect(request, await completionCatalogOf(current));
     } catch (cause) {
       log?.warn("inspection failed", { message: messageOf(cause) });
@@ -350,6 +416,10 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
 
   async function signatureAt(request: CompletionRequest): Promise<SignatureHelp | null> {
     checkedOffset(request.text, request.offset);
+    const commands = commandLanguage();
+    if (commands !== null) {
+      return (await commands.signatureAt?.(request, await helperSession().catch(() => null))) ?? null;
+    }
     const language = sqlLanguage();
     if (language.signatureAt === undefined) return null;
     return language.signatureAt(request, await completionCatalogOf(undefined));
@@ -424,6 +494,9 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
   /** The listing, and the catalog's own connection, which is this engine's too. */
   function listServerSessions(): Promise<{ readonly listing: SessionListing; readonly catalog: Session }> {
     requireSessions();
+    if (commandLanguage() !== null) {
+      return onHelper(async (session) => ({ listing: await monitorOf(session).list(), catalog: session }));
+    }
     return introspect(async ({ session }) => ({ listing: await monitorOf(session).list(), catalog: session }));
   }
 
@@ -433,7 +506,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     if (options.datasource.readOnly) {
       throw new EngineFailure({ code: "invalidRequest", message: READ_ONLY_SESSIONS, hint: READ_ONLY_SESSIONS_HINT });
     }
-    const { session } = await catalog();
+    const session = commandLanguage() !== null ? await helperSession() : (await catalog()).session;
     const monitor = monitorOf(session);
     try {
       await (stop === "cancel" ? monitor.cancelSession(target) : monitor.terminateSession(target));
@@ -451,6 +524,9 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     const open = introspection;
     introspection = null;
     if (open !== null) await open.then((entry) => entry.session.close()).catch(() => undefined);
+    const opened = helper;
+    helper = null;
+    if (opened !== null) await opened.then((session) => session.close()).catch(() => undefined);
   }
 
   return {
@@ -462,6 +538,10 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     statementKind,
     logContext,
     sqlLanguage,
+    commandLanguage,
+    consoleLanguage,
+    helperSession,
+    onHelper,
     splitScript,
     formatText,
     results,
