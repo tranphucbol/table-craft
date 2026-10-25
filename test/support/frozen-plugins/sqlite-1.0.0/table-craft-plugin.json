@@ -1,0 +1,27 @@
+{
+  "id": "sqlite",
+  "name": "SQLite",
+  "version": "0.0.0",
+  "apiVersion": "1.0.0",
+  "entry": "index.js",
+  "capabilities": ["sql", "schemaTree", "transactions", "ddl", "explain", "bulkInsert", "objects"],
+  "highlight": "sqlite",
+  "connection": {
+    "fields": [
+      {
+        "key": "path",
+        "label": "File",
+        "kind": "file",
+        "required": true,
+        "placeholder": "/path/to/database.sqlite, or :memory:"
+      }
+    ],
+    "url": {
+      "schemes": ["sqlite", "file"],
+      "form": "file",
+      "parts": {
+        "path": "path"
+      }
+    }
+  }
+}

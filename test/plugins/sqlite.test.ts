@@ -3,9 +3,8 @@ import { isPluginError, type ConnectOptions, type Row } from "@table-craft/plugi
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import sqlite from "@table-craft/plugin-sqlite";
 import { describe, expect, it } from "vitest";
-import { seededSqliteFile } from "../support/sqliteFixture.js";
 import { SQLITE_MANIFEST } from "../support/manifests.js";
-import { TYPE_PROBE_COPY_SQLITE, TYPE_PROBE_EXPECTED, TYPE_PROBE_WRITE } from "../support/typeProbe.js";
+import { sqliteContractFixture } from "../support/sqliteContract.js";
 
 const IN_MEMORY = { path: ":memory:" };
 const BEYOND_SAFE_INTEGER = "9007199254740993";
@@ -28,28 +27,7 @@ async function collect(rows: AsyncIterable<Row>): Promise<Row[]> {
   return collected;
 }
 
-runPluginContract(sqlite, {
-  manifest: SQLITE_MANIFEST,
-  config: { path: seededSqliteFile() },
-  statements: {
-    write: TYPE_PROBE_WRITE,
-    syntaxError: { sql: "SELECT 1 FROM customers ORDER id", offset: "SELECT 1 FROM customers ORDER ".length },
-  },
-  typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_SQLITE },
-  scripts: [
-    {
-      text: "CREATE TRIGGER t AFTER INSERT ON orders BEGIN UPDATE customers SET name = name; END;\nSELECT 1;",
-      statements: ["CREATE TRIGGER t AFTER INSERT ON orders BEGIN UPDATE customers SET name = name; END", "SELECT 1"],
-    },
-  ],
-  catalog: {
-    path: ["main"],
-    quoted: { name: 'odd "name"', qualified: '"main"."odd ""name"""' },
-    lineItems: '"Line Items"',
-    ordersCheck: "orders_total_nonnegative",
-    customersComment: null,
-  },
-});
+runPluginContract(sqlite, sqliteContractFixture(SQLITE_MANIFEST));
 
 describe("sqlite plugin", () => {
   it("givenSqliteSession_whenSelectOne_thenReturnsColumnsAndOneRow", async () => {

@@ -130,7 +130,15 @@ function restrictImports(...groups) {
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "**/dist/**", "node_modules/**", "release/**", "**/release/**", "test/fixtures/**"],
+    ignores: [
+      "dist/**",
+      "**/dist/**",
+      "node_modules/**",
+      "release/**",
+      "**/release/**",
+      "test/fixtures/**",
+      "test/support/frozen-plugins/**",
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
