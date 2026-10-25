@@ -176,6 +176,7 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
         await expect.poll(() => row.getByRole("checkbox").isDisabled()).toBe(true);
         await expect.poll(() => row.textContent()).toContain(`No installed plugin reads ${scheme}: URLs.`);
       }
+      await importRow(page, FOREIGN_DIALECT_SOURCES.sqlServer).scrollIntoViewIfNeeded();
       await captureFoundation(page, "04-import-unsupported");
     },
     SCENARIO_TIMEOUT_MS,
