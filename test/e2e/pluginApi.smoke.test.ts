@@ -54,6 +54,8 @@ const OLDER_MAJOR = "0.28.0";
 
 const QUERY = "SELECT id, name FROM customers ORDER BY id";
 const QUERY_HEADERS = ["id", "name"];
+/** Any count: suites running beside this one add tables to the shared MySQL database. */
+const TABLES = /^tables \d+$/;
 
 interface UserPlugin {
   readonly id: string;
@@ -99,8 +101,8 @@ function explorer(page: Page) {
   return toolWindow(page, "Database");
 }
 
-async function expand(page: Page, name: string): Promise<void> {
-  const target = explorer(page).getByRole("treeitem", { name, exact: true });
+async function expand(page: Page, name: RegExp): Promise<void> {
+  const target = explorer(page).getByRole("treeitem", { name });
   await target.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
   await target.click();
   if ((await target.getAttribute("aria-expanded")) !== "true") await page.keyboard.press("ArrowRight");
@@ -137,7 +139,7 @@ describe.runIf(SMOKE_ENABLED)("plugin API 1.0 live test", () => {
     await runStatement(page, QUERY);
     expect((await gridText(page)).headers).toEqual(expect.arrayContaining(QUERY_HEADERS));
     await expect.poll(() => explorer(page).getByRole("treeitem", { name: namespace }).count()).toBeGreaterThan(0);
-    await expand(page, "tables 6");
+    await expand(page, TABLES);
   }
 
   it(
