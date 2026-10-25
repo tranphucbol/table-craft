@@ -84,12 +84,13 @@ afterEach(async () => {
 });
 
 describe("plugin service", () => {
-  it("givenFreshProfile_whenStarted_thenOnlyTheBuiltInIsInstalledAndTheCatalogOffersPostgres", async () => {
+  it("givenFreshProfile_whenStarted_thenOnlyTheBuiltInIsInstalledAndTheCatalogOffersTheOptionalOnes", async () => {
     const plugins = await started();
 
     expect(plugins.plugins().map((plugin) => [plugin.id, plugin.source])).toEqual([["sqlite", "builtIn"]]);
     expect(plugins.state().catalog).toEqual([
       expect.objectContaining({ id: "postgres", installedVersion: null, install: { status: "idle" } }),
+      expect.objectContaining({ id: "redis", installedVersion: null, install: { status: "idle" } }),
     ]);
   });
 

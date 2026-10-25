@@ -95,6 +95,20 @@ export function statementFailed(cause: unknown, readOnly: boolean, sent?: string
   );
 }
 
+export const CONFLICT_HINT = "Reload to see the other change, or overwrite it with yours.";
+
+/**
+ * A plugin's refusal of a request on the helper session, keyspace or server figures: a typed
+ * failure, while a non-plugin error stays the bug it is.
+ */
+export function helperRequestFailed(cause: unknown): unknown {
+  if (!isPluginError(cause)) return cause;
+  if (cause.code === "conflict") {
+    return new EngineFailure({ code: "conflict", message: cause.message, hint: CONFLICT_HINT }, cause);
+  }
+  return statementFailed(cause, false);
+}
+
 export function explainFailed(cause: unknown, readOnly: boolean): EngineFailure {
   if (isPluginError(cause) && cause.code === "explainUnsupported") {
     return new EngineFailure({

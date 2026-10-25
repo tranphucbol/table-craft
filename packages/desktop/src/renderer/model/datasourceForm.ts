@@ -272,11 +272,22 @@ export function duplicateDraft(
   };
 }
 
+/**
+ * Whether the form draws `field`: always, unless its `visibleWhen` names a select or checkbox that
+ * holds another value (plan 058 decision 3). A hidden field is neither checked nor saved.
+ */
+export function fieldVisible(field: ConnectionField, draft: Pick<FormDraft, "values">): boolean {
+  const rule = field.visibleWhen;
+  if (rule === undefined) return true;
+  return draft.values[rule.key] === rule.equals;
+}
+
 /** What stops the draft from saving, as sentences; empty when it can. */
 export function draftProblems(draft: FormDraft, plugin: PluginInfo | undefined): readonly string[] {
   const problems: string[] = [];
   if (draft.name.trim() === "") problems.push("Name is required.");
   for (const field of plainFieldsOf(plugin)) {
+    if (!fieldVisible(field, draft)) continue;
     const value = draft.values[field.key];
     if (typeof value !== "string") continue;
     if (field.required === true && value.trim() === "") problems.push(`${field.label} is required.`);
@@ -347,6 +358,7 @@ function secondsField(key: string, text: string): Record<string, number> {
 export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined): SaveDatasourceRequest {
   const config: Record<string, ConfigValue> = {};
   for (const field of plainFieldsOf(plugin)) {
+    if (!fieldVisible(field, draft)) continue;
     const value = configValue(field, draft.values[field.key]);
     if (value !== undefined) config[field.key] = value;
   }

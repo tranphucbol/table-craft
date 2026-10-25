@@ -6,6 +6,7 @@ import {
   draftFromView,
   draftProblems,
   duplicateDraft,
+  fieldVisible,
   newDraft,
   offersSshTunnel,
   secretPlaceholder,
@@ -16,7 +17,7 @@ import {
   withoutPassword,
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
 import type { SshSettings } from "@table-craft/desktop/preload/bridge.js";
-import { POSTGRES_PLUGIN, SQLITE_PLUGIN, view } from "./datasourceViews.js";
+import { POSTGRES_PLUGIN, REDIS_PLUGIN, SQLITE_PLUGIN, view } from "./datasourceViews.js";
 
 const SAVED = view({
   id: "pg",
@@ -79,6 +80,26 @@ describe("datasource form", () => {
     const draft = { ...draftFromView(SAVED, POSTGRES_PLUGIN), values: { host: "", port: "abc", user: "u" } };
 
     expect(draftProblems(draft, POSTGRES_PLUGIN)).toEqual(["Host is required.", "Port must be a number."]);
+  });
+
+  it("givenClusterMode_whenDrafted_thenDatabaseHiddenAndNotRequired", () => {
+    const standalone = newDraft("new-0", REDIS_PLUGIN, [], "never");
+    const database = REDIS_PLUGIN.fields.find((field) => field.key === "database");
+    const cluster = { ...standalone, values: { ...standalone.values, mode: "cluster", database: "" } };
+
+    expect(database !== undefined && fieldVisible(database, standalone)).toBe(true);
+    expect(database !== undefined && fieldVisible(database, cluster)).toBe(false);
+    expect(draftProblems({ ...standalone, values: { ...standalone.values, database: "" } }, REDIS_PLUGIN)).toEqual([
+      "Database is required.",
+    ]);
+    expect(draftProblems(cluster, REDIS_PLUGIN)).toEqual([]);
+    expect(
+      toSaveRequest({ ...cluster, values: { ...cluster.values, database: "3" } }, REDIS_PLUGIN).datasource.config,
+    ).toEqual({
+      mode: "cluster",
+      host: "localhost",
+      port: 6379,
+    });
   });
 
   it("givenSavedDatasource_whenDuplicated_thenNewIdlessCopyWithoutStoredSecrets", () => {

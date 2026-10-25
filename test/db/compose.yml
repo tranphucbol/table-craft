@@ -167,6 +167,151 @@ services:
       timeout: 5s
       retries: 30
 
+  # Redis for plans 058 and 060: 7.4, 6.2 and 5.0, standalone and Cluster, each seeded from ./schema/redis.redis
+  # by its own entrypoint once the server answers (Redis has no initdb directory); the
+  # healthchecks wait for the seed's last key. ACL users: `table_craft` (everything) and `limited`
+  # (no MEMORY, OBJECT, CONFIG). A cluster runs its nodes in one container, listening on the very
+  # ports it publishes and announcing 127.0.0.1, so a client on the host follows the announced
+  # addresses as they are and the headless box maps them to `<service>:<port>` (Node address
+  # map). Ports stay below 55536 because a 6.2 node's bus port is its port + 10000.
+  redis:
+    profiles: ["redis"]
+    image: redis:7.4-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS_SEED:-none}
+    entrypoint: ["/bin/sh", "/redis/standalone.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS_PORT:-56379}:6379"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli GET seed:probe | grep -q 1"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  redis-tls:
+    profiles: ["redis"]
+    image: redis:7.4-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS_TLS_SEED:-none}
+    environment:
+      REDIS_TLS: "1"
+    entrypoint: ["/bin/sh", "/redis/standalone.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS_TLS_PORT:-56380}:6379"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+      - ./tls:/tls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --tls --cacert /tls/ca.crt GET seed:probe | grep -q 1"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  redis-6:
+    profiles: ["redis"]
+    image: redis:6.2-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS6_SEED:-none}
+    entrypoint: ["/bin/sh", "/redis/standalone.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS6_PORT:-56362}:6379"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli GET seed:probe | grep -q 1"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  redis-cluster:
+    profiles: ["redis"]
+    image: redis:7.4-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS_CLUSTER_SEED:-none}
+    environment:
+      CLUSTER_PORTS: ${TABLE_CRAFT_REDIS_CLUSTER_PORTS:-47001-47006}
+      CLUSTER_REPLICAS: "1"
+    entrypoint: ["/bin/sh", "/redis/cluster.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS_CLUSTER_PORTS:-47001-47006}:${TABLE_CRAFT_REDIS_CLUSTER_PORTS:-47001-47006}"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/seeded"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
+  redis-6-cluster:
+    profiles: ["redis"]
+    image: redis:6.2-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS6_CLUSTER_SEED:-none}
+    environment:
+      CLUSTER_PORTS: ${TABLE_CRAFT_REDIS6_CLUSTER_PORTS:-47011-47013}
+      CLUSTER_REPLICAS: "0"
+    entrypoint: ["/bin/sh", "/redis/cluster.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS6_CLUSTER_PORTS:-47011-47013}:${TABLE_CRAFT_REDIS6_CLUSTER_PORTS:-47011-47013}"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/seeded"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
+  # Redis 5.0 for plan 060, the oldest version the plugin supports: no ACL users, one password
+  # (users.sh), standalone and a three-primary, three-replica cluster like the QC one.
+  redis-5:
+    profiles: ["redis"]
+    image: redis:5.0-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS5_SEED:-none}
+    environment:
+      REDIS_AUTH: password
+      REDISCLI_AUTH: table_craft
+    entrypoint: ["/bin/sh", "/redis/standalone.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS5_PORT:-56350}:6379"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli GET seed:probe | grep -q 1"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  redis-5-cluster:
+    profiles: ["redis"]
+    image: redis:5.0-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS5_CLUSTER_SEED:-none}
+    environment:
+      REDIS_AUTH: password
+      REDISCLI_AUTH: table_craft
+      CLUSTER_PORTS: ${TABLE_CRAFT_REDIS5_CLUSTER_PORTS:-47021-47026}
+      CLUSTER_REPLICAS: "1"
+    entrypoint: ["/bin/sh", "/redis/cluster.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS5_CLUSTER_PORTS:-47021-47026}:${TABLE_CRAFT_REDIS5_CLUSTER_PORTS:-47021-47026}"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/seeded"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
   # The headless box the smoke and live tests run in (plan 031), on this project's network so it
   # reaches the databases by service name. Only `--profile e2e` starts it.
   e2e:
@@ -201,6 +346,21 @@ services:
       TABLE_CRAFT_ORACLE_PORT: "1521"
       TABLE_CRAFT_MSSQL_HOST: mssql
       TABLE_CRAFT_MSSQL_PORT: "1433"
+      TABLE_CRAFT_REDIS_HOST: redis
+      TABLE_CRAFT_REDIS_PORT: "6379"
+      TABLE_CRAFT_REDIS_TLS_HOST: redis-tls
+      TABLE_CRAFT_REDIS_TLS_PORT: "6379"
+      TABLE_CRAFT_REDIS6_HOST: redis-6
+      TABLE_CRAFT_REDIS6_PORT: "6379"
+      # Cluster nodes announce 127.0.0.1; the test configs map them to these names (plan 058).
+      TABLE_CRAFT_REDIS_CLUSTER_HOST: redis-cluster
+      TABLE_CRAFT_REDIS_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS_CLUSTER_PORTS:-47001-47006}
+      TABLE_CRAFT_REDIS6_CLUSTER_HOST: redis-6-cluster
+      TABLE_CRAFT_REDIS6_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS6_CLUSTER_PORTS:-47011-47013}
+      TABLE_CRAFT_REDIS5_HOST: redis-5
+      TABLE_CRAFT_REDIS5_PORT: "6379"
+      TABLE_CRAFT_REDIS5_CLUSTER_HOST: redis-5-cluster
+      TABLE_CRAFT_REDIS5_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS5_CLUSTER_PORTS:-47021-47026}
       TABLE_CRAFT_DATABASES: ${TABLE_CRAFT_DATABASES:-}
       TABLE_CRAFT_EVIDENCE_DIR: ${TABLE_CRAFT_EVIDENCE_DIR:-}
     volumes:
@@ -212,6 +372,7 @@ services:
       - node-modules-postgres:/work/plugins/postgres/node_modules
       - node-modules-mysql:/work/plugins/mysql/node_modules
       - node-modules-sqlite:/work/plugins/sqlite/node_modules
+      - node-modules-redis:/work/plugins/redis/node_modules
       - bun-cache:/root/.bun/install/cache
       - electron-cache:/root/.cache/electron
 
@@ -312,6 +473,7 @@ volumes:
   node-modules-postgres:
   node-modules-mysql:
   node-modules-sqlite:
+  node-modules-redis:
   # Downloads only, shared by every checkout; node_modules stay per checkout.
   bun-cache:
     name: table-craft-e2e-bun-cache

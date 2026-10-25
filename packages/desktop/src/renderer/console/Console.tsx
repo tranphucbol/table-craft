@@ -7,6 +7,7 @@ import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { Editor } from "@table-craft/desktop/renderer/console/Editor.js";
 import { NamespaceSwitcher } from "@table-craft/desktop/renderer/console/NamespaceSwitcher.js";
 import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js";
+import { RunOnPicker } from "@table-craft/desktop/renderer/console/RunOnPicker.js";
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
@@ -32,6 +33,8 @@ const STATUS_TEXT = {
 } as const;
 
 const ASKING_TEXT = "Waiting on the failed statement…";
+/** Redis runs one command at a time; only a blocking one can be stopped (decision 22 of plan 058). */
+const COMMAND_CANCEL_HINT = "Cancel stops blocking commands only";
 
 const DISK_CHANGE_TEXT = {
   changed: "The file changed on disk.",
@@ -128,8 +131,14 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         {capabilities.includes("explainAnalyze") ? (
           <ActionButton actionId={EXPLAIN_ACTION_IDS.explainAnalyze} compact tone="warning" />
         ) : null}
-        {capabilities.includes("cancel") ? <ActionButton actionId={ACTION_IDS.cancel} /> : null}
+        {capabilities.includes("cancel") ? (
+          <ActionButton
+            actionId={ACTION_IDS.cancel}
+            hint={capabilities.includes("commands") ? COMMAND_CANCEL_HINT : undefined}
+          />
+        ) : null}
         {capabilities.includes("transactions") ? <TxControls session={session} /> : null}
+        {capabilities.includes("nodes") ? <RunOnPicker session={session} /> : null}
         <span className="shrink-0 text-ink-muted">{session.question === null ? STATUS_TEXT[status] : ASKING_TEXT}</span>
         {error === null ? null : (
           // The room the datasource label leaves, but never none; Output holds the whole error.

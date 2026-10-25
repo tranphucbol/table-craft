@@ -1,11 +1,137 @@
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Column, WireValue } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { EDITOR_THEME } from "@table-craft/desktop/renderer/console/editorTheme.js";
 import { NULL_TEXT, panelValue } from "@table-craft/desktop/renderer/grid/format.js";
+import { Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { prettyJson } from "@table-craft/desktop/renderer/model/prettyJson.js";
+import {
+  decodeValue,
+  EDITABLE_FORMATS,
+  FORMAT_LABELS,
+  VALUE_FORMATS,
+  valueBytes,
+  type ConcreteFormat,
+  type DecodedValue,
+  type ValueFormat,
+} from "@table-craft/desktop/renderer/model/valueFormats.js";
+
+const FORMAT_LABEL = "Format";
+const FORMAT_OPTIONS = VALUE_FORMATS.map((format) => ({ value: format, label: FORMAT_LABELS[format] }));
+
+/** How a key tab's value panel reads bytes (plan 058 decision 15); the console's and table's panels have none. */
+export interface ValueFormatChoice {
+  readonly format: ValueFormat;
+  readonly onChange: (format: ValueFormat) => void;
+}
+
+function FormatPicker({ choice }: { readonly choice: ValueFormatChoice }) {
+  return (
+    <span className="ml-auto shrink-0">
+      <Select
+        label={FORMAT_LABEL}
+        testId="value-format"
+        value={choice.format}
+        options={FORMAT_OPTIONS}
+        onChange={(format) => {
+          const picked = VALUE_FORMATS.find((candidate) => candidate === format);
+          if (picked !== undefined) choice.onChange(picked);
+        }}
+      />
+    </span>
+  );
+}
+
+/** `bytes` decoded as `format`; gzip inflates asynchronously, so the first draw may be the previous text. */
+/** A decode with what it decoded, so a reader can tell a stale one from the current one. */
+interface Decoded {
+  readonly value: DecodedValue;
+  readonly bytes: Uint8Array;
+  readonly format: ValueFormat;
+}
+
+function useDecoded(bytes: Uint8Array, format: ValueFormat): Decoded | null {
+  const [decoded, setDecoded] = useState<Decoded | null>(null);
+  useEffect(() => {
+    let current = true;
+    void decodeValue(bytes, format).then((value) => {
+      if (current) setDecoded({ value, bytes, format });
+    });
+    return () => {
+      current = false;
+    };
+  }, [bytes, format]);
+  return decoded;
+}
+
+/**
+ * A string key's value edited in its format (plan 058 decision 15). The editor keeps its own text
+ * once mounted, so the decoded text of each pending edit does not move the caret.
+ */
+export interface ValueTextEdit {
+  /** Changes when the value is read again, remounting the editor on the new text. */
+  readonly revision: string;
+  readonly problem: string | null;
+  readonly onChange: (text: string, format: ConcreteFormat) => void;
+}
+
+function FormattedValue({
+  bytes,
+  format,
+  edit,
+}: {
+  readonly bytes: Uint8Array;
+  readonly format: ValueFormat;
+  readonly edit?: ValueTextEdit;
+}) {
+  const latest = useDecoded(bytes, format);
+  const editorKey = edit === undefined ? null : `${edit.revision}:${format}`;
+  const [mountedKey, setMountedKey] = useState(editorKey);
+  const fresh = latest !== null && latest.bytes === bytes && latest.format === format;
+  // The editor mounts on the text it is given, so a new read or format waits for its own decode:
+  // mounting on the previous one showed the old value after a submit (found live, plan 060).
+  if (editorKey !== mountedKey && fresh) setMountedKey(editorKey);
+  if (latest === null || editorKey !== mountedKey) return <p className="p-cell text-ink-muted">Decoding…</p>;
+  const decoded = latest.value;
+  const shownAs = decoded.inner === null ? FORMAT_LABELS[decoded.format] : `gzip → ${FORMAT_LABELS[decoded.inner]}`;
+  const json =
+    decoded.error === null && (decoded.format === "json" || decoded.inner === "json" || decoded.format === "msgpack");
+  const editable = edit !== undefined && decoded.error === null && EDITABLE_FORMATS.has(decoded.format);
+  const problem = edit?.problem ?? null;
+  return (
+    <div data-testid="value-formatted" data-format={decoded.format} className="flex min-h-0 flex-1 flex-col">
+      <p className="shrink-0 px-cell pt-cell text-ink-muted">
+        {format === "auto" ? `Auto: ${shownAs}` : shownAs}
+        {decoded.error === null ? "" : ` · ${decoded.error}`}
+        {edit !== undefined && !editable && decoded.error === null ? " · read-only" : ""}
+      </p>
+      {problem === null ? null : (
+        <p role="alert" data-testid="value-problem" className="shrink-0 px-cell text-danger">
+          {problem}
+        </p>
+      )}
+      {editable ? (
+        <EditableText
+          key={mountedKey}
+          label="Value"
+          text={decoded.text}
+          onChange={(text) => edit.onChange(text, decoded.format)}
+        />
+      ) : json ? (
+        <JsonView text={decoded.text} />
+      ) : (
+        <pre
+          data-testid="value-text"
+          className="min-h-0 flex-1 overflow-auto p-cell break-words whitespace-pre-wrap text-ink select-text"
+        >
+          {decoded.text}
+        </pre>
+      )}
+    </div>
+  );
+}
 
 function JsonView({ text }: { readonly text: string }) {
   const host = useRef<HTMLDivElement>(null);
@@ -71,12 +197,38 @@ export function ValueEditor({
   readonly applyHint: string;
   readonly onChange: (text: string) => void;
 }) {
+  return (
+    <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
+      <PanelHeader column={column}>
+        <span className="ml-auto shrink-0 text-ink-muted">{applyHint} applies</span>
+      </PanelHeader>
+      <EditableText
+        key={column?.name}
+        label={`Value of ${column?.name ?? "the cell"}`}
+        text={json ? prettyJson(text) : text}
+        onChange={onChange}
+      />
+    </aside>
+  );
+}
+
+/** An editor over `text` as it was at mount; `onChange` gets each edit. */
+function EditableText({
+  label,
+  text,
+  onChange,
+}: {
+  readonly label: string;
+  readonly text: string;
+  readonly onChange: (text: string) => void;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const changed = useRef(onChange);
   useEffect(() => {
     changed.current = onChange;
   });
-  const initial = useRef(json ? prettyJson(text) : text);
+  const initial = useRef(text);
+  const ariaLabel = useRef(label);
   useEffect(() => {
     if (host.current === null) return;
     const created = new EditorView({
@@ -86,7 +238,7 @@ export function ValueEditor({
         extensions: [
           EDITOR_THEME,
           EditorView.lineWrapping,
-          EditorView.contentAttributes.of({ "aria-label": `Value of ${column?.name ?? "the cell"}` }),
+          EditorView.contentAttributes.of({ "aria-label": ariaLabel.current }),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) changed.current(update.state.doc.toString());
           }),
@@ -94,15 +246,8 @@ export function ValueEditor({
       }),
     });
     return () => created.destroy();
-  }, [column?.name]);
-  return (
-    <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
-      <PanelHeader column={column}>
-        <span className="ml-auto shrink-0 text-ink-muted">{applyHint} applies</span>
-      </PanelHeader>
-      <div ref={host} data-testid="value-editor" className="min-h-0 flex-1 overflow-hidden" />
-    </aside>
-  );
+  }, []);
+  return <div ref={host} data-testid="value-editor" className="min-h-0 flex-1 overflow-hidden" />;
 }
 
 /**
@@ -112,16 +257,26 @@ export function ValueEditor({
 export function ValuePanel({
   column,
   value,
+  format,
+  edit,
 }: {
   readonly column: Column | null;
   /** `undefined` while the cell's window is loading, or with no cell focused. */
   readonly value: WireValue | undefined;
+  readonly format?: ValueFormatChoice;
+  /** Makes the formatted value editable; only with `format`. */
+  readonly edit?: ValueTextEdit;
 }) {
   const shown = value === undefined ? null : panelValue(value);
+  const formatted = format !== undefined;
+  // A fresh array per draw would re-run the decoding effect after each decode it causes.
+  const bytes = useMemo(() => (formatted ? valueBytes(value) : null), [formatted, value]);
   return (
     <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
-      <PanelHeader column={column} />
-      {shown === null ? (
+      <PanelHeader column={column}>{format === undefined ? null : <FormatPicker choice={format} />}</PanelHeader>
+      {bytes !== null && format !== undefined ? (
+        <FormattedValue bytes={bytes} format={format.format} edit={edit} />
+      ) : shown === null ? (
         <p className="p-cell text-ink-muted">{column === null ? "Select a cell to see its value." : "Loading…"}</p>
       ) : shown.kind === "null" ? (
         <p className="p-cell text-grid-null italic">{NULL_TEXT}</p>

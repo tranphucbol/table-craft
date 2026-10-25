@@ -17,6 +17,7 @@ import { appearanceOf } from "@table-craft/desktop/renderer/appearance/tokens.js
 import { useExecutions, type ExecutionsStore } from "@table-craft/desktop/renderer/state/executions.js";
 import { useExports, type ExportsStore } from "@table-craft/desktop/renderer/state/exports.js";
 import { useImports, type ImportsStore } from "@table-craft/desktop/renderer/state/imports.js";
+import { useKeys, type KeysStore } from "@table-craft/desktop/renderer/state/keys.js";
 import {
   IMPORT_EVENT_TYPES,
   SCRIPT_EVENT_TYPES,
@@ -26,7 +27,9 @@ import {
 } from "@table-craft/desktop/engine/protocol.js";
 import { followObjectFeatures, useObjects, type ObjectsStore } from "@table-craft/desktop/renderer/state/objects.js";
 import { useScripts, type ScriptsStore } from "@table-craft/desktop/renderer/state/scripts.js";
+import { serverTabOf, useServer, type ServerStore } from "@table-craft/desktop/renderer/state/server.js";
 import { sessionsTabOf, useSessions, type SessionsStore } from "@table-craft/desktop/renderer/state/sessions.js";
+import { keyTabsOf, useKeyTabs, type KeyTabsStore } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { themeOf, useSettings, type SettingsStore } from "@table-craft/desktop/renderer/state/settings.js";
 import { tablesOf, useTables, type TablesStore } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs, type TabsStore } from "@table-craft/desktop/renderer/state/tabs.js";
@@ -36,6 +39,8 @@ export interface WiredStores {
   readonly consoles: ConsolesStore;
   readonly tabs: TabsStore;
   readonly catalog?: CatalogStore;
+  readonly keys?: KeysStore;
+  readonly keyTabs?: KeyTabsStore;
   readonly tables?: TablesStore;
   readonly ddl?: DdlStore;
   readonly executions?: ExecutionsStore;
@@ -44,6 +49,7 @@ export interface WiredStores {
   readonly scripts?: ScriptsStore;
   readonly objects?: ObjectsStore;
   readonly sessions?: SessionsStore;
+  readonly server?: ServerStore;
 }
 
 function isImportEvent(event: EngineEvent): event is ImportEvent {
@@ -65,6 +71,8 @@ export function wireStores({
   consoles,
   tabs,
   catalog,
+  keys,
+  keyTabs,
   tables,
   ddl,
   executions,
@@ -73,6 +81,7 @@ export function wireStores({
   scripts,
   objects,
   sessions,
+  server,
 }: WiredStores): () => void {
   const offEvents = datasources.onEngineEvent((id, event) => {
     if (isImportEvent(event)) imports?.getState().received(id, event);
@@ -85,7 +94,9 @@ export function wireStores({
     scripts?.getState().detached(id, error);
     consoles.getState().detach(id, error);
     tables?.getState().detach(id, error);
+    keyTabs?.getState().detach(id, error);
     catalog?.getState().clear(id);
+    keys?.getState().clear(id);
   });
   const offRemoved = datasources.onRemoved((ids) => {
     for (const id of ids) {
@@ -105,14 +116,23 @@ export function wireStores({
         tabs.getState().close(ddlId);
         ddl?.getState().close(ddlId);
       }
+      for (const keyId of keyTabs === undefined ? [] : keyTabsOf(keyTabs.getState().tabs, id)) {
+        tabs.getState().close(keyId);
+        keyTabs?.getState().close(keyId);
+      }
       const sessionsId = sessions === undefined ? null : sessionsTabOf(sessions.getState().tabs, id);
       if (sessionsId !== null) {
         tabs.getState().close(sessionsId);
         sessions?.getState().close(sessionsId);
       }
+      const serverId = server === undefined ? null : serverTabOf(server.getState().tabs, id);
+      if (serverId !== null) {
+        tabs.getState().close(serverId);
+        server?.getState().close(serverId);
+      }
     }
   });
-  const offAttached = catalog === undefined ? () => undefined : followAttaches(datasources, catalog);
+  const offAttached = catalog === undefined ? () => undefined : followAttaches(datasources, catalog, keys);
   const offRedescribes = catalog === undefined || ddl === undefined ? () => undefined : followRedescribes(ddl, catalog);
   const offClosed = executions === undefined ? () => undefined : dropClosedExecutions(tabs, executions);
   const offFeatures = objects === undefined ? () => undefined : followObjectFeatures(datasources, objects);
@@ -138,15 +158,17 @@ export function dropClosedExecutions(tabs: TabsStore, executions: ExecutionsStor
 
 /**
  * However a datasource got connected (a console, Connect, expanding its node), its tree opens on
- * the current namespace, described (plan 005, decision 7).
+ * the current namespace, described (plan 005, decision 7), or on the configured database's keys.
  */
-function followAttaches(datasources: DatasourcesStore, catalog: CatalogStore): () => void {
+function followAttaches(datasources: DatasourcesStore, catalog: CatalogStore, keys?: KeysStore): () => void {
   return datasources.subscribe((state, previous) => {
     for (const [id, connection] of Object.entries(state.connections)) {
       if (connection.status !== "connected" || previous.connections[id]?.status === "connected") continue;
       const datasource = state.datasources.find((candidate) => candidate.id === id);
       if (datasource === undefined) continue;
-      if (!capabilitiesOf(state.plugins, datasource.pluginId).includes("schemaTree")) continue;
+      const capabilities = capabilitiesOf(state.plugins, datasource.pluginId);
+      if (capabilities.includes("keyValue")) void keys?.getState().expandDatasource(id);
+      if (!capabilities.includes("schemaTree")) continue;
       void catalog.getState().expandDatasource(id);
     }
   });
@@ -160,9 +182,12 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     consoles: useConsoles,
     tabs: useTabs,
     catalog: useCatalog,
+    keys: useKeys,
+    keyTabs: useKeyTabs,
     tables: useTables,
     ddl: useDdl,
     sessions: useSessions,
+    server: useServer,
     executions: useExecutions,
     exports: useExports,
     imports: useImports,

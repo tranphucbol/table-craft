@@ -33,7 +33,7 @@ function textFromEnv(name: string, fallback: string): string {
 }
 
 /** Every server the suites can run against; SQLite is in-process and always runs. */
-export const DATABASE_IDS = ["mysql", "tidb", "postgres", "oracle", "mssql"] as const;
+export const DATABASE_IDS = ["mysql", "tidb", "postgres", "oracle", "mssql", "redis"] as const;
 export type DatabaseId = (typeof DATABASE_IDS)[number];
 export const DATABASES_ENV = "TABLE_CRAFT_DATABASES";
 /** Decision 099: the normal flow tests MySQL and the remote TiDB; every other server is opt-in. */
@@ -197,6 +197,108 @@ export const MYSQL_TLS_CONFIG = {
 export const POSTGRES_TLS_BEHIND_BASTION = { host: "postgres-tls", port: 5432 } as const;
 export const MYSQL_TLS_BEHIND_BASTION = { host: "mysql-tls", port: 3306 } as const;
 
+const DEFAULT_REDIS_PORT = 56379;
+const DEFAULT_REDIS_TLS_PORT = 56380;
+const DEFAULT_REDIS6_PORT = 56362;
+/** Below 55536: a Redis node's cluster bus listens on its port plus 10,000. */
+const DEFAULT_REDIS_CLUSTER_PORTS = "47001-47006";
+const DEFAULT_REDIS6_CLUSTER_PORTS = "47011-47013";
+const DEFAULT_REDIS5_PORT = 56350;
+const DEFAULT_REDIS5_CLUSTER_PORTS = "47021-47026";
+
+/** The first port of a `first-last` range variable, which `compose.yml` publishes one to one. */
+function firstPortFromEnv(name: string, fallback: string): number {
+  const value = process.env[name];
+  const range = value === undefined || value === "" ? fallback : value;
+  return Number(range.split("-")[0]);
+}
+
+const REDIS_STANDALONE = {
+  mode: "standalone",
+  host: hostFromEnv("TABLE_CRAFT_REDIS_HOST"),
+  database: 0,
+  user: CREDENTIAL,
+  password: CREDENTIAL,
+} as const;
+
+/** The `redis` service: Redis 7.4, the ACL user `table_craft`, keys seeded from `schema/redis.redis`. */
+export const REDIS_CONFIG = {
+  ...REDIS_STANDALONE,
+  port: portFromEnv("TABLE_CRAFT_REDIS_PORT", DEFAULT_REDIS_PORT),
+} as const;
+
+/** The `redis-6` service: Redis 6.2, the oldest with RESP3 (plan 058 decision 23). */
+export const REDIS6_CONFIG = {
+  ...REDIS_STANDALONE,
+  host: hostFromEnv("TABLE_CRAFT_REDIS6_HOST"),
+  port: portFromEnv("TABLE_CRAFT_REDIS6_PORT", DEFAULT_REDIS6_PORT),
+} as const;
+
+/** The `redis-5` service: the oldest server the plugin supports, no ACL users (plan 060). */
+export const REDIS5_CONFIG = {
+  ...REDIS_STANDALONE,
+  host: hostFromEnv("TABLE_CRAFT_REDIS5_HOST"),
+  port: portFromEnv("TABLE_CRAFT_REDIS5_PORT", DEFAULT_REDIS5_PORT),
+  user: "",
+} as const;
+
+export const REDIS_TLS_CONFIG = {
+  ...REDIS_STANDALONE,
+  host: tlsHostFromEnv("TABLE_CRAFT_REDIS_TLS_HOST"),
+  port: portFromEnv("TABLE_CRAFT_REDIS_TLS_PORT", DEFAULT_REDIS_TLS_PORT),
+  tlsMode: "verify-full",
+  tlsCa: TLS_FILES.ca,
+} as const;
+
+/** The `limited` ACL user, which may not run MEMORY, OBJECT or CONFIG. */
+export const REDIS_LIMITED_USER = { user: "limited", password: "limited" } as const;
+
+/**
+ * The Node address map that reaches a cluster whose nodes announce 127.0.0.1 from elsewhere: the
+ * headless box names the cluster's compose service instead (plan 058 decision 23).
+ */
+function clusterAddressMap(host: string, ports: string): string {
+  if (host === LOOPBACK) return "";
+  const [first, last] = ports.split("-").map(Number) as [number, number];
+  const entries: string[] = [];
+  for (let port = first; port <= last; port += 1) entries.push(`${LOOPBACK}:${port}=${host}:${port}`);
+  return entries.join(", ");
+}
+
+function clusterConfig(hostVariable: string, portsVariable: string, fallback: string) {
+  const host = hostFromEnv(hostVariable);
+  const value = process.env[portsVariable];
+  const ports = value === undefined || value === "" ? fallback : value;
+  return {
+    mode: "cluster",
+    host,
+    port: firstPortFromEnv(portsVariable, fallback),
+    user: CREDENTIAL,
+    password: CREDENTIAL,
+    nodeAddressMap: clusterAddressMap(host, ports),
+  } as const;
+}
+
+/** Three primaries and three replicas, every node announcing 127.0.0.1 and its own port. */
+export const REDIS_CLUSTER_CONFIG = clusterConfig(
+  "TABLE_CRAFT_REDIS_CLUSTER_HOST",
+  "TABLE_CRAFT_REDIS_CLUSTER_PORTS",
+  DEFAULT_REDIS_CLUSTER_PORTS,
+);
+
+/** Three Redis 6.2 primaries without replicas. */
+export const REDIS6_CLUSTER_CONFIG = clusterConfig(
+  "TABLE_CRAFT_REDIS6_CLUSTER_HOST",
+  "TABLE_CRAFT_REDIS6_CLUSTER_PORTS",
+  DEFAULT_REDIS6_CLUSTER_PORTS,
+);
+
+/** Three Redis 5.0 primaries and three replicas, a password and no ACL users, like QC. */
+export const REDIS5_CLUSTER_CONFIG = {
+  ...clusterConfig("TABLE_CRAFT_REDIS5_CLUSTER_HOST", "TABLE_CRAFT_REDIS5_CLUSTER_PORTS", DEFAULT_REDIS5_CLUSTER_PORTS),
+  user: "",
+} as const;
+
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };
 }
@@ -204,7 +306,10 @@ export function withWrongPassword<Config extends { readonly password: string }>(
 /** The smoke files' PostgreSQL scenarios skip unless `TABLE_CRAFT_DATABASES` selects it (decision 099). */
 export const WITHOUT_POSTGRES = !databaseEnabled("postgres");
 
+/** The smoke files' Redis scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
+export const WITHOUT_REDIS = !databaseEnabled("redis");
+
 /** Whether a scenario on a datasource of `pluginId` skips, because its server is not selected. */
 export function serverSkipped(pluginId: string): boolean {
-  return pluginId === "postgres" && WITHOUT_POSTGRES;
+  return (pluginId === "postgres" && WITHOUT_POSTGRES) || (pluginId === "redis" && WITHOUT_REDIS);
 }

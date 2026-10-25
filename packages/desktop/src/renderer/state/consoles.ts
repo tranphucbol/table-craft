@@ -5,6 +5,7 @@ import {
   type CurrentNamespace,
   type EngineError,
   type ErrorAnswer,
+  NODE_AUTO,
   type ExecutedStatement,
   type ExportFormat,
   type ExtractorKind,
@@ -224,6 +225,8 @@ export interface ConsoleSession {
   /** Where failed statements went wrong, in the text as it now stands (decision 082); never written to disk. */
   readonly errorMarks: readonly ErrorMark[];
   readonly question: ErrorQuestion | null;
+  /** Where commands run on a `nodes` datasource (decision 114): `NODE_AUTO`, `NODE_ALL_PRIMARIES` or a node id. */
+  readonly node: string;
 }
 
 export interface Insertion {
@@ -370,6 +373,7 @@ export interface ConsolesState extends ConsoleEdits {
   readonly togglePin: (id: string, resultId: string) => void;
   /** False when the engine refused, which the Output log then explains. */
   readonly setTransactionMode: (id: string, mode: TransactionMode) => Promise<boolean>;
+  readonly setNode: (id: string, node: string) => void;
   readonly commit: (id: string) => Promise<boolean>;
   readonly rollback: (id: string) => Promise<boolean>;
 }
@@ -447,7 +451,7 @@ export interface ConsolesDependencies {
   /** Wall-clock time for Output entries; defaults to `Date.now`. */
   readonly clock?: () => number;
   /** Asks before destructive statements run (decision 9); false runs none of the batch. */
-  readonly confirmDestructive?: (statements: readonly ClassifiedStatement[]) => Promise<boolean>;
+  readonly confirmDestructive?: (statements: readonly ClassifiedStatement[], datasourceId: string) => Promise<boolean>;
   /** Asks before Explain Analyse runs a write (plan 012 decision 9); false runs nothing. */
   readonly confirmAnalyse?: (request: AnalyseRequest) => Promise<boolean>;
   /** Asks for a run's parameter values (plan 019 decision 6); null runs nothing. */
@@ -493,6 +497,7 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
     activeResult: OUTPUT_TAB,
     output: [],
     txMode: "auto",
+    node: NODE_AUTO,
     transactionOpen: false,
     namespace: null,
     lastRun: null,
@@ -631,6 +636,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       const datasourceId = get().consoles[id]?.datasourceId;
       const seconds = datasourceId === undefined ? 0 : statementTimeout(datasourceId);
       return seconds > 0 ? { timeoutSeconds: seconds } : {};
+    }
+
+    /** The Run on choice, sent only when it is not the plugin's own routing. */
+    function nodeOf(id: string): { node?: string } {
+      const node = get().consoles[id]?.node ?? NODE_AUTO;
+      return node === NODE_AUTO ? {} : { node };
     }
 
     /** One statement on its way to the engine: Services lists it now, history once it ends. */
@@ -953,6 +964,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             ...(parameters === undefined ? {} : { parameters }),
             ...paging,
             ...limitOf(id),
+            ...nodeOf(id),
           });
           const moved = namespaceAfter({ namespace, ...(reconnected === undefined ? {} : { reconnected }) });
           logReconnected(id, reconnected);
@@ -1564,7 +1576,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             outcome = "succeeded";
           } else {
             const destructive = statements.filter((statement) => statement.destructive !== null);
-            const declined = destructive.length > 0 && !(await confirmed(id, () => confirmDestructive(destructive)));
+            const declined =
+              destructive.length > 0 &&
+              !(await confirmed(id, () => confirmDestructive(destructive, current.datasourceId)));
             const bound = declined ? false : await bindValues(id, statements, preset);
             if (bound === false) {
               log(id, { sql: "", message: DECLINED, tone: "warning" });
@@ -1717,7 +1731,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           const declined =
             statement !== undefined &&
             statement.destructive !== null &&
-            !(await confirmed(id, () => confirmDestructive([statement])));
+            !(await confirmed(id, () => confirmDestructive([statement], current.datasourceId)));
           const bound = declined ? false : await bindValues(id, statement === undefined ? [] : [statement]);
           const parameters = bound === false ? undefined : boundAt(bound, 0);
           if (bound === false) {
@@ -1735,6 +1749,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               ...(parameters === undefined ? {} : { parameters }),
               ...paging,
               ...limitOf(id),
+              ...nodeOf(id),
             });
             logReconnected(id, reconnected);
             const kind = statement?.kind ?? "read";
@@ -1843,6 +1858,10 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         });
       },
 
+      setNode(id, node) {
+        patch(id, { node });
+      },
+
       async setTransactionMode(id, mode) {
         const current = get().consoles[id];
         if (current === undefined) return false;
@@ -1881,18 +1900,32 @@ async function askPendingEditsInDialog({ changes, verb }: PendingEditsRequest): 
   return answer === "submit" || answer === "discard" ? answer : null;
 }
 
-/** The destructive-statement confirmation (decision 9): one dialog for the whole batch. */
-async function askDestructive(statements: readonly ClassifiedStatement[]): Promise<boolean> {
-  const answer = await useModal.getState().ask({
+/**
+ * The destructive-statement confirmation (decision 9): one dialog for the whole batch. A statement
+ * marked `confirmByName`, such as FLUSHDB, makes the user type the datasource's name (decision 112).
+ */
+export function destructiveConfirmation(
+  statements: readonly ClassifiedStatement[],
+  datasourceName: string,
+): ModalRequest {
+  const byName = statements.some((statement) => statement.confirmByName === true);
+  return {
     kind: "confirm",
     title:
       statements.length === 1 ? "Run a destructive statement?" : `Run ${statements.length} destructive statements?`,
-    message: "These statements can change or remove data that cannot be recovered:",
+    message: byName
+      ? `These statements can remove data that cannot be recovered. Type ${datasourceName} to run them:`
+      : "These statements can change or remove data that cannot be recovered:",
     items: statements.map((statement) => ({ label: firstLine(statement.sql), detail: statement.destructive ?? "" })),
     confirm: "Execute",
     destructive: true,
-  });
-  return answer !== null;
+    ...(byName ? { typed: datasourceName } : {}),
+  };
+}
+
+async function askDestructive(statements: readonly ClassifiedStatement[], datasourceId: string): Promise<boolean> {
+  const name = datasourceById(useDatasources.getState(), datasourceId)?.name ?? datasourceId;
+  return (await useModal.getState().ask(destructiveConfirmation(statements, name))) !== null;
 }
 
 export const PARAMETERS_TITLE = "Parameters";

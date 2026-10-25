@@ -2,7 +2,7 @@
 
 # TableCraft
 
-A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL and SQLite.
+A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite and Redis.
 Connections, a database explorer, SQL consoles with schema-aware completion, a result grid, a table
 data editor, DDL and SQL generation, query history and EXPLAIN plans, in one Electron app. Databases
 are reached through datasource plugins loaded at runtime.
@@ -26,6 +26,8 @@ are reached through datasource plugins loaded at runtime.
 - [Themes, fonts and density](#settings-and-appearance): Dark, Light, High contrast, 43
   [ported themes](#themes) such as Gruvbox, Nord and Solarized, or your own theme file, three font
   roles, and a compact layout.
+- [Redis, standalone and Cluster](#redis): a key tree that scans instead of blocking, typed key
+  tabs with guarded edits, a `redis-cli` console with completion from the server, and a Server tab.
 - [Plugins for any database](#plugins): PostgreSQL, MySQL and SQLite are plugins, loaded the same
   way yours would be. SQLite and MySQL come in the box; PostgreSQL downloads the first time you
   need it.
@@ -428,6 +430,36 @@ grant to ask for.
 
 See [Sessions](docs/design/specification.md#sessions).
 
+### Redis
+
+The Redis plugin connects to Redis 5.0 or later, **Standalone** or **Cluster** (pick the Mode in the
+connection form; a `redis://` or `rediss://` URL fills a standalone one). A cluster is reached from
+its seed node; when its nodes announce addresses you cannot reach, map each one in **Node address
+map** (`10.0.1.5:6379=127.0.0.1:7001, …`). A cluster cannot go through an SSH tunnel. Redis 5.0
+has no ACL users: leave Username empty and give the password alone.
+
+- **Key tree.** Each database lists its keys in folders by `:`, with a type badge and TTL. The tree
+  scans 10,000 keys at a time behind a **Load more** row, never with `KEYS`; the filter row takes a
+  `MATCH` pattern and a type. **Go to Key…** opens a key by name, and Search Everywhere has a Keys
+  tab.
+- **Key tabs.** A hash, list, set, sorted set or stream opens in the result grid with its own
+  columns; a string opens in a value editor that reads it as Text, JSON, Hex, Base64, MessagePack or
+  gzip. The header counts the TTL down and shows length, memory and encoding. Edit cells, add and
+  delete rows, preview the commands, and submit them as one `MULTI`; if another client changed the
+  key since you read it, you choose to reload or overwrite.
+- **Key actions.** New Key…, Rename, Delete, Set TTL…, Remove TTL and Delete Keys Under Folder…
+  (a cancellable task in Services).
+- **Console.** One command per line with `redis-cli` quoting. Completion and signature help come
+  from the server's command docs, and key names complete from a scan. `FLUSHDB` and `FLUSHALL` ask
+  you to type the data source's name; `KEYS` and other heavy reads are underlined, with a fix such as
+  **Use SCAN**. In a cluster, **Run on** sends a command to one node or every primary.
+- **Server tab.** `INFO` as cards with auto-refresh, every node of a cluster at a glance, and the
+  slow log. **Show Sessions…** lists `CLIENT LIST` and unblocks or kills a client.
+
+See [Command consoles](docs/design/specification.md#command-consoles),
+[Key browser](docs/design/specification.md#key-browser) and
+[Server tab](docs/design/specification.md#server-tab).
+
 ### Explain
 
 **Explain Plan** (`⇧⌘E`) shows the plan of the statement at the caret as a tree with estimated rows
@@ -663,16 +695,25 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
 - `serverMessages`: returns the warnings and notices the server left about a statement, which
   Output lists under it and the result tab counts.
 - `sessions`: lists the server's sessions with who blocks whom, and cancels or terminates one, for
-  the [Sessions](#sessions) view; requires `sql` and `schemaTree`.
+  the [Sessions](#sessions) view; requires `sql` or `commands`, and `schemaTree` or `keyValue`.
 - `routineCall`: writes the statements that call a function or procedure with the values from
   [Execute Routine](#execute-a-routine), OUT values included; requires `sql` and `schemaTree`.
+- `commands`: runs one command of a command language such as Redis's and returns its reply; the
+  plugin also supplies the language (splitting, classifying, completion). A plugin declares
+  either `sql` or `commands`, never both.
+- `keyValue`: lists databases and scans keys for the key tree, reads a key into a tab and applies
+  guarded edits to it; requires `commands`.
+- `nodes`: lists the nodes of a cluster, so a console can run a command on one node or on every
+  primary; requires `sql` or `commands`.
+- `serverInfo`: reports the server's statistics and slow log for the Server tab; requires `sql`
+  or `commands`.
 
 ```json
 {
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.1.0",
+  "apiVersion": "1.2.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -751,11 +792,13 @@ Plugins built for plugin API 0.x must be rebuilt for 1.0.
 
 SQLite and MySQL (with MariaDB and TiDB) ship inside the app and work offline from the first
 launch. PostgreSQL is a plugin TableCraft downloads when you need it, about 190 KB, from npm as
-[`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres);
-Oracle and SQL Server will follow the same way
+[`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres).
+Redis downloads the same way, about 290 KB, as
+[`@tablecraft-app/plugin-redis`](https://www.npmjs.com/package/@tablecraft-app/plugin-redis);
+Oracle and SQL Server will follow
 ([decision 108](docs/decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
 
-- **Data Sources +** lists PostgreSQL with **Download**. Choosing it shows the progress, then the
+- **Data Sources +** lists PostgreSQL and Redis with **Download**. Choosing it shows the progress, then the
   connection form.
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the
@@ -805,8 +848,8 @@ Updates…** or install a plugin.
 ## Not in v1
 
 - Planned for v1.1: saved query files.
-- Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, Redis and
-  MongoDB plugins, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
+- Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, a MongoDB
+  plugin, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
   Kubernetes integration.
 
 ## Development
@@ -820,6 +863,7 @@ bun run desktop                # build and launch the app
 bun run test                   # unit tests and the plugin contract against SQLite
 bun run test:db                # the contract against MySQL in Docker, and TiDB
 bun run test:db:postgres       # the same against PostgreSQL (also :oracle, :mssql, :all)
+bun run test:db:redis          # the Redis plugin against 7.4, 6.2 and 5.0, standalone and Cluster
 bun run test:smoke             # drive the built app with Playwright
 bun run test:smoke:db          # the same against MySQL, TiDB and SQLite
 bun run test:smoke:headless    # test:smoke in a Linux container, off your screen

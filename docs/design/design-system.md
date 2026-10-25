@@ -274,6 +274,27 @@ The speed search field floats at the tree's top right, `border-line` on `bg-rais
 `border-danger text-danger` when nothing matches. Synchronize, Collapse All and Copy use the
 Phosphor `ArrowsClockwise`, `ArrowsInLineVertical` and `CopySimple` glyphs.
 
+### Key tree
+
+Plan 058. A `keyValue` datasource's rows add no tokens. A key's type badge (`ui/KeyTypeBadge.tsx`)
+stands where a catalog row draws its icon: a `w-9` `rounded-sm` box, `font-mono font-semibold` in `text-canvas` on a
+datasource tint, invisible until the key is described.
+
+| Type        | Badge                                        | Background     |
+| ----------- | -------------------------------------------- | -------------- |
+| string      | `STR`                                        | `bg-ds-green`  |
+| hash        | `HASH`                                       | `bg-ds-blue`   |
+| list        | `LIST`                                       | `bg-ds-orange` |
+| set         | `SET`                                        | `bg-ds-red`    |
+| zset        | `ZSET`                                       | `bg-ds-violet` |
+| stream      | `STRM`                                       | `bg-ds-yellow` |
+| JSON, other | `JSON`, the module type's first four letters | `bg-ink-muted` |
+
+A database row carries `DatabaseIcon`, a folder and the Cluster nodes group `FolderIcon`, a node
+`ServerNodeIcon` (HardDrives) and the filter row `KeyFilterIcon` (Funnel), all `text-ink-muted`;
+details (`6 keys`, a folder's count, a key's TTL) are `text-ink-muted`. The filter row is an
+`<input>` on `bg-canvas` with a `border-line` frame and the type `Select` beside it.
+
 ## SQL console
 
 Plan 006. The CodeMirror editor takes its theme from the same variables (`console/editorTheme.ts`):
@@ -400,6 +421,24 @@ masked around it), Submit (`SubmitGlyph`: a hollow `ArrowFatUp` in `text-success
 draws both; `ui/editGlyphs.tsx`), the `Tx: Auto` label, and `Sigma` Count Rows. The footer (`h-row`,
 `text-ink-muted`) holds `3 pending changes`, the counted `12,345 rows`, and the last notice. The
 preview is a 40 rem modal listing the numbered statements in `font-editor`.
+
+### Key tab and Server tab
+
+Plan 058. A key tab carries `KeyTabIcon` (Key) and the tint border, and reuses the table editor's
+toolbar glyphs and edit tints; `Submit runs as one MULTI · not undoable` stands where the table
+editor shows `Tx: Auto`. The header is one `h-tab` row on `bg-panel`: the type badge, the name in
+`font-editor`, then `text-ink-muted` parts separated by `·` (datasource · db, TTL ticking each
+second, length, memory, encoding, idle). The filter bar matches the WHERE bar. A missing key, a
+conflict or a refused read is an `h-row` banner on `bg-panel` with `text-danger` (missing,
+conflict) or `text-ink-muted` (read-only) and plain text buttons. A string's value editor fills
+the tab: the value panel with its format picker (`Select`) in the header, the decoded format and
+any problem on one `text-ink-muted` line, and the CodeMirror editor in `font-editor`.
+
+A Server tab carries `ServerTabIcon` (Cpu). Its toolbar holds the Info and Slow log toggle buttons
+(`aria-pressed`, `bg-selection` when on), the node and refresh `Select`s. Cards are `bg-panel`
+boxes with a `border-line` frame in a wrapping grid, the title in `font-semibold`, headline
+figures as name and right-aligned value in `font-grid`, the rest folded in a `details` (`N more`). The Overview and Slow log
+are tables in `font-grid` at the grid's row height under a sticky `bg-panel` header.
 
 ## DDL and SQL generation
 

@@ -15,7 +15,8 @@ export const INSPECTION_TYPING_DELAY_MS = 400;
 /** A longer console, a pasted dump, is not inspected: every keystroke would re-check all of it. */
 export const INSPECTION_MAX_TEXT = 200_000;
 /** Inspecting goes through the plugin's SQL language, so a plugin without one has nothing to ask. */
-const SQL_CAPABILITY = "sql";
+/** The console languages whose plugins inspect: SQL, and a store's commands (decision 112). */
+const INSPECTED_CAPABILITIES = ["sql", "commands"] as const;
 
 export type InspectParams = EngineCalls["inspection.inspect"]["params"];
 export type InspectCall = (params: InspectParams) => Promise<readonly Problem[]>;
@@ -116,7 +117,7 @@ export function inspectionSource(target: InspectionTarget): Extension {
   return ViewPlugin.define((view) => new InspectionRunner(view, target));
 }
 
-/** The datasource's engine while it is connected and its plugin speaks SQL; null otherwise. */
+/** The datasource's engine while it is connected and its plugin speaks SQL or commands; null otherwise. */
 export function connectedInspector(datasourceId: () => string | undefined): () => InspectCall | null {
   return () => {
     const id = datasourceId();
@@ -124,7 +125,8 @@ export function connectedInspector(datasourceId: () => string | undefined): () =
     const datasources = useDatasources.getState();
     if (connectionOf(datasources, id).status !== "connected") return null;
     const pluginId = datasourceById(datasources, id)?.pluginId ?? "";
-    if (!capabilitiesOf(datasources.plugins, pluginId).includes(SQL_CAPABILITY)) return null;
+    const capabilities = capabilitiesOf(datasources.plugins, pluginId);
+    if (!INSPECTED_CAPABILITIES.some((capability) => capabilities.includes(capability))) return null;
     return async (params) => (await datasources.connect(id)).call("inspection.inspect", params);
   };
 }

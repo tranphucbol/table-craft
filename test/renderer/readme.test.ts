@@ -208,6 +208,8 @@ describe("README", () => {
   });
 
   it("givenPluginsSection_whenCapabilitiesListed_thenTheyEqualCapabilities", () => {
+    // The sample is a SQL plugin's manifest; `commands` excludes `sql`, and PostgreSQL has no nodes.
+    const NOT_IN_SQL_SAMPLE: readonly string[] = ["commands", "keyValue", "nodes", "serverInfo"];
     const plugins = section("Plugins");
     const listed = [...plugins.matchAll(/^- `(\w+)`:/gm)].map((match) => match[1]);
     const manifest = JSON.parse(/```json\n([\s\S]*?)```/.exec(plugins)?.[1] ?? "null") as {
@@ -216,7 +218,7 @@ describe("README", () => {
     };
 
     expect(listed).toEqual([...CAPABILITIES]);
-    expect(manifest.capabilities).toEqual([...CAPABILITIES]);
+    expect(manifest.capabilities).toEqual(CAPABILITIES.filter((capability) => !NOT_IN_SQL_SAMPLE.includes(capability)));
     expect(manifest.apiVersion).toBe(API_VERSION);
   });
 

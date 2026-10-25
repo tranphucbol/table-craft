@@ -15,6 +15,14 @@ import { editsOf, editTargetOf, isConsoleEditable } from "@table-craft/desktop/r
 import { activeResultOf, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { shownHeld } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { isEditable, useTables } from "@table-craft/desktop/renderer/state/tables.js";
+import {
+  isKeyEditable,
+  keyEditTarget,
+  pendingKeyCount,
+  useKeyTabs,
+} from "@table-craft/desktop/renderer/state/keyTabs.js";
+
+const SQL_TERMINATOR = ";";
 
 /**
  * What the grid's edit actions work on (plan 026): a table tab's rows or the active console's
@@ -28,6 +36,8 @@ export interface EditSurface {
   readonly pending: number;
   /** The preview dialog's sentence for `statements` statements. */
   readonly submitsAs: (statements: number) => string;
+  /** What the preview shows after each statement: `;` for SQL, nothing for commands. */
+  readonly terminator: string;
   readonly beginEdit: (cell: BufferCell, text?: string) => void;
   readonly commitEdit: () => void;
   readonly setCells: (cells: readonly BufferCell[], input: CellInput) => void;
@@ -57,6 +67,7 @@ function tableSurface(id: string): EditSurface | null {
     editing: session.editing,
     panel: session.panel,
     pending: pendingCount(session.buffer),
+    terminator: SQL_TERMINATOR,
     submitsAs: (statements) => `Submit runs ${statementsText(statements)} in one transaction.`,
     beginEdit: (cell, text) => store().beginEdit(id, cell, text),
     commitEdit: () => void store().commitEdit(id),
@@ -94,6 +105,7 @@ function consoleSurface(id: string): EditSurface | null {
     editing: edits.editing,
     panel: edits.panel,
     pending: pendingCount(edits.buffer),
+    terminator: SQL_TERMINATOR,
     submitsAs: (statements) =>
       session.txMode === "auto"
         ? `Submit runs ${statementsText(statements)} in one transaction and commits it.`
@@ -121,10 +133,53 @@ function consoleSurface(id: string): EditSurface | null {
   };
 }
 
-/** The active tab's edit surface: its table, or its console's shown result once asked about. */
+function commandsText(commands: number): string {
+  return `${formatCount(commands)} ${commands === 1 ? "command" : "commands"}`;
+}
+
+/** A key tab (plan 058 decision 16): its rows, its string value, or the Recreate it holds. */
+function keySurface(id: string, datasourceReadOnly: boolean): EditSurface | null {
+  const store = useKeyTabs.getState;
+  const tab = store().tabs[id];
+  if (tab === undefined) return null;
+  const recreating = tab.recreating && !datasourceReadOnly && tab.status === "ready";
+  return {
+    target: keyEditTarget(tab),
+    editable: recreating || isKeyEditable(tab, datasourceReadOnly),
+    editing: tab.editing,
+    panel: tab.panel,
+    pending: pendingKeyCount(tab),
+    submitsAs: (commands) => `Submit runs ${commandsText(commands)} as one MULTI; it cannot be undone.`,
+    terminator: "",
+    beginEdit: (cell, text) => store().beginEdit(id, cell, text),
+    commitEdit: () => void store().commitEdit(id),
+    setCells: (cells, input) => store().setCells(id, cells, input),
+    addRow: () => store().addRow(id),
+    duplicateRows: (rows) => store().duplicateRows(id, rows),
+    deleteRows: (rows) => store().deleteRows(id, rows),
+    revert: (cells) => store().revert(id, cells),
+    revertAll: () => store().revertAll(id),
+    applyPanel: () => void store().applyPanel(id),
+    preview: () => store().preview(id),
+    submit: () => store().submit(id),
+    selectLastRow: () => {
+      const latest = store().tabs[id];
+      const result = latest?.result;
+      if (latest === undefined || result == null) return;
+      const row = gridRowCount(latest.buffer, shownHeld(result)) - 1;
+      store().select(id, result.id, selectCell({ row, column: result.selection?.focus.column ?? 0 }));
+      focusRegion("grid");
+    },
+  };
+}
+
+/** The active tab's edit surface: its table, its key, or its console's shown result once asked about. */
 export function editSurfaceOf(context: ActionContext): EditSurface | null {
   const tab = context.activeTab;
   if (tab?.kind === "table" && context.table !== null) return tableSurface(tab.id);
+  if (tab?.kind === "key" && context.keyTab !== null) {
+    return keySurface(tab.id, context.datasource?.view.readOnly === true);
+  }
   if (tab?.kind === "console" && context.console !== null) return consoleSurface(tab.id);
   return null;
 }

@@ -24,6 +24,12 @@ import {
   type ImportKind,
   type InsertRow,
   type InsertTarget,
+  type KeyApplied,
+  type KeyChange,
+  type KeyContents,
+  type KeyName,
+  type KeyType,
+  type Keyspace,
   type PlanNode,
   type PluginErrorCode,
   type Problem,
@@ -76,7 +82,8 @@ export interface ContractFixture {
      */
     readonly syntaxError?: { readonly sql: string; readonly offset: number };
   };
-  readonly typeProbe: {
+  /** Required when the plugin declares `sql`. */
+  readonly typeProbe?: {
     /** The rows of `SELECT * FROM type_probe ORDER BY id`, as wire values. */
     readonly expected: readonly Row[];
     /**
@@ -109,10 +116,19 @@ export interface ContractFixture {
     /** A switch to a namespace that does not exist, where the dialect rejects one. */
     readonly missing?: string;
   };
-  /** Required when the plugin declares `sessions`, which also needs `statements.sleep` and `write`. */
+  /** Required when the plugin declares `commands` (decision 112). */
+  readonly commands?: CommandsFixture;
+  /** Required when the plugin declares `keyValue` (decision 113). */
+  readonly keyspace?: KeyspaceFixture;
+  /**
+   * Required when the plugin declares `sessions`, which also needs `statements.sleep`, and
+   * `statements.write` where it declares `transactions`.
+   */
   readonly sessions?: {
     /** Connects as an account that sees every session and may stop any, such as a superuser. */
     readonly monitorConfig: unknown;
+    /** What a listing shows as the sleeping statement's query; the statement itself by default. */
+    readonly sleepQuery?: string;
     /** An account that sees only its own sessions, and what the listing's note must say about it. */
     readonly limited?: { readonly config: unknown; readonly note: RegExp };
   };
@@ -154,6 +170,77 @@ export interface ContractSql {
   readonly temporaryTable?: (name: string, columns: string) => { readonly create: string; readonly name: string };
   /** Opens a transaction explicitly in auto-commit mode. */
   readonly begin?: string;
+}
+
+/** A command and the result tab it opens: column names and rows as wire values. */
+export interface CommandRows {
+  readonly command: string;
+  readonly columns: readonly string[];
+  readonly rows: readonly Row[];
+}
+
+/** What a `commands` plugin's console runs against the fixture database (decision 112). */
+export interface CommandsFixture {
+  /** Scripts the language splits, and the commands it must find in each. */
+  readonly scripts: readonly SplitCase[];
+  /** A command answered with one scalar, and the text Output shows for the reply. */
+  readonly scalar: { readonly command: string; readonly text: string };
+  /** A command answered with an array. */
+  readonly array: CommandRows;
+  /** A command answered with a map. */
+  readonly map: CommandRows;
+  /** A command answering bytes that are not UTF-8, and those bytes in hex. */
+  readonly binary: { readonly command: string; readonly hex: string };
+  /** A write a read-only session refuses, and the command name the refusal carries. */
+  readonly write: { readonly command: string; readonly name: string };
+  /** A command classified costly, and the text of the first quick fix its problem offers. */
+  readonly costly: { readonly command: string; readonly fixed: string };
+  /** A command classified destructive and confirmed by the datasource's name. */
+  readonly confirmByName: string;
+}
+
+/** The keys a `keyValue` plugin's fixture database carries (decision 113). */
+export interface KeyspaceFixture {
+  /** The database the fixture keys live in. */
+  readonly database: number;
+  /** A glob, and how many keys it matches: enough for many scan batches. */
+  readonly scan: { readonly match: string; readonly count: number; readonly batch: number };
+  /** A glob and a type, and the names of the keys of that type it matches. */
+  readonly typed: { readonly match: string; readonly type: KeyType; readonly keys: readonly string[] };
+  /** A key with an expiry. */
+  readonly expiring: string;
+  /** A key whose name is not valid UTF-8, as lower-case hex, a glob that finds it, and its value. */
+  readonly binary: { readonly hex: string; readonly match: string; readonly type: KeyType; readonly value: string };
+  /** A hash key and its first two columns' rows, in any order. */
+  readonly hash: KeyRowsFixture;
+  /** A sorted-set key and its member and score cells, in rank order. */
+  readonly zset: KeyRowsFixture;
+  /** A stream key, its columns and its rows, in id order. */
+  readonly stream: KeyRowsFixture & { readonly columns: readonly string[] };
+  /** A scratch key the suite creates, changes and removes. */
+  readonly edit: KeyEditFixture;
+}
+
+/** How the suite changes one element of a scratch key and reads it back (decision 115). */
+export interface KeyEditFixture {
+  readonly key: string;
+  readonly type: KeyType;
+  /** A change setting the element to `value`, read as `original` (null: it did not exist). */
+  readonly change: (value: string, original: string | null) => KeyChange;
+  /** The element's value in what `read` returned; null when it is missing. */
+  readonly valueOf: (contents: KeyContents) => Promise<string | null>;
+}
+
+/** The scratch key's element, written and read back through the keyspace. */
+interface ApplyTo {
+  set(value: string, original: string | null, guard: boolean): Promise<KeyApplied>;
+  value(): Promise<string | null>;
+}
+
+/** A key and the rows reading it gives. */
+export interface KeyRowsFixture {
+  readonly key: string;
+  readonly rows: readonly Row[];
 }
 
 /** One routine call: which routine (from `routines.expected`), its arguments, and the rows it returns. */
@@ -309,6 +396,10 @@ export function contractSql(fixture: Pick<ContractFixture, "sql">): Required<Con
 const ROWS_READ_BEFORE_RETURN = 3;
 /** Longer than `BYTES_PREVIEW_LENGTH` and within every fixture's `payload` column (MySQL's is `VARBINARY(64)`). */
 const LONG_BYTES_LENGTH = 48;
+/** Stops a scan pass that never ends, so a broken cursor fails rather than hangs. */
+const MAX_SCAN_BATCHES = 10_000;
+const READ_WINDOW = 100;
+const SLOW_LOG_LIMIT = 5;
 const LONG_BYTES_HEX = "c3";
 const HEX_DIGITS_PER_BYTE = 2;
 
@@ -371,6 +462,16 @@ async function collect(rows: AsyncIterable<Row>): Promise<Row[]> {
   const collected: Row[] = [];
   for await (const row of rows) collected.push(row);
   return collected;
+}
+
+function typeProbeOf(fixture: ContractFixture): NonNullable<ContractFixture["typeProbe"]> {
+  if (fixture.typeProbe === undefined) throw new Error("A plugin that declares sql needs fixture.typeProbe.");
+  return fixture.typeProbe;
+}
+
+function commandsOf(fixture: ContractFixture): CommandsFixture {
+  if (fixture.commands === undefined) throw new Error("A plugin that declares commands needs fixture.commands.");
+  return fixture.commands;
 }
 
 function catalogPathOf(fixture: ContractFixture): readonly string[] {
@@ -525,6 +626,17 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
   const fold = (name: string): string => (name === LINE_ITEMS_TABLE ? name : (fixture.foldName?.(name) ?? name));
   const selectOne = dialectSql.select("1 AS one");
   const dropIfExists = dialectSql.dropTableIfExists;
+
+  /** Shows `session` still answers: a one-row SELECT, or the fixture's scalar command. */
+  async function expectAlive(session: Session): Promise<void> {
+    if (plugin.capabilities.includes("commands")) {
+      const { command, text } = commandsOf(fixture).scalar;
+      expect((await session.execute(command)).reply?.text).toBe(text);
+      return;
+    }
+    expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
+  }
+
   describe(`plugin contract: ${plugin.id}`, () => {
     it("givenPlugin_whenInspected_thenDeclaresOnlyKnownCapabilities", () => {
       for (const capability of plugin.capabilities) expect(CAPABILITIES).toContain(capability);
@@ -558,6 +670,29 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
     it("givenPlugin_whenInspected_thenHasLanguageExactlyWhenSqlDeclared", () => {
       expect(plugin.language !== undefined).toBe(plugin.capabilities.includes("sql"));
+    });
+
+    it("givenPlugin_whenInspected_thenHasCommandLanguageExactlyWhenCommandsDeclared", () => {
+      const commands = plugin.capabilities.includes("commands");
+      if (commands) expect(plugin.capabilities).not.toContain("sql");
+      expect(plugin.commandLanguage !== undefined).toBe(commands);
+    });
+
+    it("givenSession_whenInspected_thenHasKeyspaceExactlyWhenKeyValueDeclared", async () => {
+      const keyValue = plugin.capabilities.includes("keyValue");
+      if (keyValue) expect(plugin.capabilities).toContain("commands");
+      await withSession(plugin, fixture, (session) => {
+        expect(session.keyspace !== undefined).toBe(keyValue);
+        return Promise.resolve();
+      });
+    });
+
+    it("givenSession_whenInspected_thenHasNodesAndServerInfoExactlyWhenDeclared", async () => {
+      await withSession(plugin, fixture, (session) => {
+        expect(session.nodes !== undefined).toBe(plugin.capabilities.includes("nodes"));
+        expect(session.serverInfo !== undefined).toBe(plugin.capabilities.includes("serverInfo"));
+        return Promise.resolve();
+      });
     });
 
     it("givenSession_whenInspected_thenHasTransactionsExactlyWhenDeclared", async () => {
@@ -629,7 +764,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
     it("givenSession_whenInspected_thenHasSessionMonitorExactlyWhenSessionsDeclared", async () => {
       const declared = plugin.capabilities.includes("sessions");
-      if (declared) expect(plugin.capabilities).toContain("sql");
+      if (declared) {
+        expect(plugin.capabilities.includes("sql") || plugin.capabilities.includes("commands")).toBe(true);
+        expect(plugin.capabilities.includes("schemaTree") || plugin.capabilities.includes("keyValue")).toBe(true);
+      }
       await withSession(plugin, fixture, (session) => {
         expect(session.sessions !== undefined).toBe(declared);
         expect(typeof session.serverSessionId === "string").toBe(declared);
@@ -734,7 +872,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withSession(plugin, fixture, async (session) => {
           const result = await session.execute(`SELECT * FROM ${TYPE_PROBE_TABLE} ORDER BY id`);
           expect(result.columns.map((column) => column.name)).toEqual(TYPE_PROBE_COLUMNS.map(fold));
-          expect(await collect(result.rows)).toEqual(fixture.typeProbe.expected);
+          expect(await collect(result.rows)).toEqual(typeProbeOf(fixture).expected);
         });
       });
 
@@ -824,7 +962,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         it("givenTimestamp_whenSelected_thenTextIsUnshiftedByClientTimeZone", async () => {
           const momentColumn = TYPE_PROBE_COLUMNS.indexOf("moment");
           const dayColumn = TYPE_PROBE_COLUMNS.indexOf("day");
-          const expected = fixture.typeProbe.expected.find((row) => row[0] === PROBE_ROW_ID);
+          const expected = typeProbeOf(fixture).expected.find((row) => row[0] === PROBE_ROW_ID);
           await withSession(plugin, fixture, async (session) => {
             const result = await session.execute(
               `SELECT day, moment FROM ${TYPE_PROBE_TABLE} WHERE id = ${PROBE_ROW_ID}`,
@@ -915,7 +1053,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const rows = await collect(source.rows);
           const names = source.columns.map((column) => dialect.quoteIdentifier(column.name)).join(", ");
           await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
-          await run(session, fixture.typeProbe.copyTable);
+          await run(session, typeProbeOf(fixture).copyTable);
           try {
             for (const row of rows) {
               const values = row.map((value, index) => dialect.literal(value, source.columns[index]?.type ?? null));
@@ -925,7 +1063,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
               );
             }
             expect(await run(session, `SELECT * FROM ${TYPE_PROBE_COPY_TABLE} ORDER BY id`)).toEqual(
-              fixture.typeProbe.expected,
+              typeProbeOf(fixture).expected,
             );
           } finally {
             await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
@@ -943,7 +1081,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const payloadType = probe.columns[1]?.type ?? null;
           await collect(probe.rows);
           await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
-          await run(session, fixture.typeProbe.copyTable);
+          await run(session, typeProbeOf(fixture).copyTable);
           try {
             const payload = dialect.literal({ kind: "bytes", preview: whole, length: LONG_BYTES_LENGTH }, payloadType);
             await run(
@@ -1042,7 +1180,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       /** The copy table as the engine targets it: named and typed by the introspector. */
       async function copyTarget(session: Session): Promise<InsertTarget> {
         await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
-        await run(session, fixture.typeProbe.copyTable);
+        await run(session, typeProbeOf(fixture).copyTable);
         const introspector = session.introspector;
         if (introspector === undefined) {
           const probe = await session.execute(`SELECT * FROM ${TYPE_PROBE_COPY_TABLE}`);
@@ -1073,12 +1211,12 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenBulkInsert_whenTypeProbeTextInserted_thenReadBackEqual", async () => {
         await withCopy(async (session, target) => {
-          const rows = fixture.typeProbe.expected.map((row) => row.map(exportedText));
+          const rows = typeProbeOf(fixture).expected.map((row) => row.map(exportedText));
 
           await insertRowsOf(session)(target, rows);
 
           expect(await run(session, `SELECT * FROM ${TYPE_PROBE_COPY_TABLE} ORDER BY id`)).toEqual(
-            fixture.typeProbe.expected,
+            typeProbeOf(fixture).expected,
           );
         });
       });
@@ -2185,6 +2323,313 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       );
     });
 
+    describe.runIf(plugin.capabilities.includes("commands"))("commands", () => {
+      function language(): NonNullable<DatasourcePlugin["commandLanguage"]> {
+        if (plugin.commandLanguage === undefined)
+          throw new Error("A plugin that declares commands has no commandLanguage.");
+        return plugin.commandLanguage;
+      }
+
+      async function rowsOf(command: string, session: Session): Promise<{ columns: string[]; rows: Row[] }> {
+        const result = await session.execute(command);
+        return { columns: result.columns.map((column) => column.name), rows: await collect(result.rows) };
+      }
+
+      it("givenCommands_whenSplit_thenOneSpanPerLineSkippingComments", () => {
+        for (const script of commandsOf(fixture).scripts) {
+          const spans = language().split(script.text);
+          expect(spans.map((span) => span.sql)).toEqual(script.statements);
+          for (const span of spans) expect(script.text.slice(span.from, span.to)).toBe(span.sql);
+        }
+      });
+
+      it("givenScalarCommand_whenExecute_thenReplyAndNoColumns", async () => {
+        const { command, text } = commandsOf(fixture).scalar;
+        await withSession(plugin, fixture, async (session) => {
+          const result = await session.execute(command);
+          expect(result.reply?.text).toBe(text);
+          expect(result.columns).toEqual([]);
+          expect(await collect(result.rows)).toEqual([]);
+        });
+      });
+
+      it("givenArrayCommand_whenExecute_thenIndexValueRows", async () => {
+        const { command, columns, rows } = commandsOf(fixture).array;
+        await withSession(plugin, fixture, async (session) => {
+          expect(await rowsOf(command, session)).toEqual({ columns, rows });
+        });
+      });
+
+      it("givenMapReply_whenExecute_thenKeyValueRows", async () => {
+        const { command, columns, rows } = commandsOf(fixture).map;
+        await withSession(plugin, fixture, async (session) => {
+          expect(await rowsOf(command, session)).toEqual({ columns, rows });
+        });
+      });
+
+      it("givenBinaryValue_whenExecute_thenBytesValue", async () => {
+        const { command, hex } = commandsOf(fixture).binary;
+        await withSession(plugin, fixture, async (session) => {
+          const result = await session.execute(command, [], { fullBytes: true });
+          expect(result.reply?.value).toEqual({
+            kind: "bytes",
+            preview: hex,
+            length: hex.length / HEX_DIGITS_PER_BYTE,
+          });
+        });
+      });
+
+      it("givenReadOnly_whenWriteCommand_thenStatementFailedNamingIt", async () => {
+        const { command, name } = commandsOf(fixture).write;
+        await withSession(
+          plugin,
+          fixture,
+          async (session) => {
+            const failure = await session.execute(command).then(
+              () => undefined,
+              (error: unknown) => error,
+            );
+            expect(isPluginError(failure) ? failure.code : failure).toBe("statementFailed");
+            expect(failure instanceof Error ? failure.message : "").toContain(name);
+          },
+          READ_ONLY,
+        );
+      });
+
+      it("givenFlushdb_whenClassify_thenDestructiveConfirmByName", () => {
+        const classified = language().classify(commandsOf(fixture).confirmByName);
+        expect(classified.destructive).not.toBeNull();
+        expect(classified.confirmByName).toBe(true);
+      });
+
+      it("givenKeysPattern_whenClassify_thenCostlyWithScanFix", async () => {
+        const { command, fixed } = commandsOf(fixture).costly;
+        expect(language().classify(command).costly).toMatch(/\S/);
+        const problems = (await language().inspect?.({ text: command })) ?? [];
+        const fix = problems[0]?.fixes[0];
+        expect(fix).toBeDefined();
+        let text = command;
+        for (const edit of [...(fix?.edits ?? [])].sort((a, b) => b.from - a.from)) {
+          text = text.slice(0, edit.from) + edit.insert + text.slice(edit.to);
+        }
+        expect(text).toBe(fixed);
+      });
+
+      it("givenCommand_whenComplete_thenNeverRejects", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          for (const text of ["", "h", "HGET ", '"unterminated', "# only a comment"]) {
+            const result = await language().complete({ text, offset: text.length }, session);
+            expect(result.from).toBeLessThanOrEqual(text.length);
+          }
+          const offline = await language().complete({ text: "h", offset: 1 }, null);
+          expect(offline.to).toBe(1);
+        });
+      });
+    });
+
+    describe.runIf(plugin.capabilities.includes("keyValue"))("keyValue", () => {
+      function keyspaceFixture(): KeyspaceFixture {
+        if (fixture.keyspace === undefined) throw new Error("keyValue needs fixture.keyspace");
+        return fixture.keyspace;
+      }
+
+      function keyspaceOf(session: Session): Keyspace {
+        if (session.keyspace === undefined) throw new Error("keyValue needs session.keyspace");
+        return session.keyspace;
+      }
+
+      /** Every key of one pass, and how many batches it took. */
+      async function scanAll(
+        keyspace: Keyspace,
+        request: { match: string; type?: KeyType; count?: number },
+      ): Promise<{ keys: KeyName[]; batches: number }> {
+        const keys: KeyName[] = [];
+        let cursor: string | null = null;
+        let batches = 0;
+        do {
+          const scan = await keyspace.scan({
+            database: keyspaceFixture().database,
+            cursor,
+            match: request.match,
+            type: request.type ?? null,
+            ...(request.count === undefined ? {} : { count: request.count }),
+          });
+          keys.push(...scan.keys);
+          cursor = scan.cursor;
+          batches += 1;
+        } while (cursor !== null && batches < MAX_SCAN_BATCHES);
+        expect(cursor).toBeNull();
+        return { keys, batches };
+      }
+
+      it("givenKeyspace_whenDatabases_thenFixtureDatabaseCountedAndOneCurrent", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const databases = await keyspaceOf(session).databases();
+          const own = databases.find((database) => database.index === keyspaceFixture().database);
+          expect(own?.keys).toBeGreaterThanOrEqual(keyspaceFixture().scan.count);
+          expect(databases.filter((database) => database.current)).toHaveLength(1);
+          expect(keyspaceOf(session).delimiter).not.toBe("");
+        });
+      });
+
+      it("givenKeyspace_whenScanToEnd_thenEveryFixtureKeyOnceAndCursorNull", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { match, count, batch } = keyspaceFixture().scan;
+          const { keys, batches } = await scanAll(keyspaceOf(session), { match, count: batch });
+          const names = keys.map((key) => key.text);
+          expect(new Set(names).size).toBe(count);
+          expect(names).toHaveLength(count);
+          expect(batches).toBeGreaterThan(1);
+        });
+      });
+
+      it("givenMatchAndType_whenScan_thenOnlyMatchingKeys", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { match, type, keys } = keyspaceFixture().typed;
+          const found = await scanAll(keyspaceOf(session), { match, type });
+          expect(found.keys.map((key) => key.text).sort()).toEqual([...keys].sort());
+        });
+      });
+
+      it("givenKeys_whenDescribe_thenTypeExpiryAndMissingInOrder", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { typed, expiring, database } = keyspaceFixture();
+          const [first = ""] = typed.keys;
+          const names = [first, expiring, "table-craft:contract:missing"];
+          const infos = await keyspaceOf(session).describe(
+            database,
+            names.map((text) => ({ text, hex: null })),
+          );
+          expect(infos.map((info) => info.key.text)).toEqual(names);
+          expect(infos[0]).toMatchObject({ type: typed.type, ttlMs: null });
+          expect(infos[1]?.ttlMs).toBeGreaterThan(0);
+          expect(infos[2]).toMatchObject({ type: null, typeName: null, ttlMs: null });
+        });
+      });
+
+      it("givenBinaryKeyName_whenScanAndRead_thenHexRoundTrips", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { binary, database } = keyspaceFixture();
+          const found = await scanAll(keyspaceOf(session), { match: binary.match });
+          const key = found.keys.find((candidate) => candidate.hex === binary.hex);
+          expect(key?.text).toMatch(/\\x[0-9a-f]{2}/);
+          if (key === undefined) return;
+          const [info] = await keyspaceOf(session).describe(database, [key]);
+          expect(info?.type).toBe(binary.type);
+          const contents = await keyspaceOf(session).read(database, key, { window: READ_WINDOW });
+          expect(contents.details.key).toEqual(key);
+          expect(contents.value).toBe(binary.value);
+        });
+      });
+
+      /** The key's rows, each cut to its first `width` cells. */
+      async function readRows(session: Session, key: string, width: number) {
+        const contents = await keyspaceOf(session).read(
+          keyspaceFixture().database,
+          { text: key, hex: null },
+          { window: READ_WINDOW },
+        );
+        if (contents.result === null) throw new Error(`${key} read no rows`);
+        const rows = await collect(contents.result.rows);
+        return {
+          contents,
+          columns: contents.result.columns.map((column) => column.name),
+          rows: rows.map((row) => row.slice(0, width)),
+        };
+      }
+
+      it("givenHash_whenRead_thenFieldValueRows", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { hash } = keyspaceFixture();
+          const read = await readRows(session, hash.key, 2);
+          expect(read.columns.slice(0, 2)).toEqual(["field", "value"]);
+          const sorted = (rows: readonly Row[]) =>
+            [...rows].sort((a, b) => JSON.stringify(a[0]).localeCompare(JSON.stringify(b[0])));
+          expect(sorted(read.rows)).toEqual(sorted(hash.rows));
+          expect(read.contents.details).toMatchObject({ type: "hash", length: hash.rows.length });
+        });
+      });
+
+      it("givenZset_whenRead_thenMemberScoreRowsInRankOrder", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { zset } = keyspaceFixture();
+          const read = await readRows(session, zset.key, 3);
+          expect(read.columns).toEqual(["#", "member", "score"]);
+          expect(read.rows.map((row) => row.slice(1))).toEqual(zset.rows);
+          expect(read.rows.map((row) => row[0])).toEqual(zset.rows.map((_, index) => index));
+        });
+      });
+
+      it("givenStream_whenRead_thenIdAndFieldColumns", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { stream } = keyspaceFixture();
+          const read = await readRows(session, stream.key, stream.columns.length);
+          expect(read.columns).toEqual(stream.columns);
+          expect(read.rows).toEqual(stream.rows);
+        });
+      });
+
+      it("givenMissingKey_whenRead_thenNoTypeAndNoContents", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const contents = await keyspaceOf(session).read(
+            keyspaceFixture().database,
+            { text: "table-craft:contract:missing", hex: null },
+            { window: READ_WINDOW },
+          );
+          expect(contents).toMatchObject({ details: { type: null }, result: null, value: null });
+        });
+      });
+
+      /** Runs `use` with the scratch key removed before and after. */
+      async function withScratchKey(use: (keyspace: Keyspace, apply: ApplyTo) => Promise<void>) {
+        const { database, edit } = keyspaceFixture();
+        const key = { text: edit.key, hex: null };
+        await withSession(plugin, fixture, async (session) => {
+          const keyspace = keyspaceOf(session);
+          await keyspace.remove(database, [key]);
+          try {
+            await use(keyspace, {
+              set: (value, original, guard) =>
+                keyspace.apply(database, key, [edit.change(value, original)], { type: edit.type, guard }),
+              value: async () => edit.valueOf(await keyspace.read(database, key, { window: READ_WINDOW })),
+            });
+          } finally {
+            await keyspace.remove(database, [key]);
+          }
+        });
+      }
+
+      it("givenChange_whenApply_thenValueWritten", async () => {
+        await withScratchKey(async (keyspace, scratch) => {
+          const { edit } = keyspaceFixture();
+          const applied = await scratch.set("one", null, true);
+          expect(await scratch.value()).toBe("one");
+          const options = { type: edit.type, guard: true };
+          expect(applied.commands).toEqual(
+            keyspace.preview({ text: edit.key, hex: null }, [edit.change("one", null)], options),
+          );
+        });
+      });
+
+      it("givenChangedSinceRead_whenApplyGuarded_thenConflictAndNothingWritten", async () => {
+        await withScratchKey(async (_keyspace, scratch) => {
+          await scratch.set("one", null, true);
+          await scratch.set("two", "one", false);
+          expect(await rejectionCode(scratch.set("three", "one", true))).toBe("conflict");
+          expect(await scratch.value()).toBe("two");
+        });
+      });
+
+      it("givenChangedSinceRead_whenApplyUnguarded_thenWritten", async () => {
+        await withScratchKey(async (_keyspace, scratch) => {
+          await scratch.set("one", null, true);
+          await scratch.set("two", "one", false);
+          await scratch.set("three", "one", false);
+          expect(await scratch.value()).toBe("three");
+        });
+      });
+    });
+
     describe.runIf(plugin.capabilities.includes("cancel"))("cancel", () => {
       function sleepSql(): string {
         const sleep = fixture.statements?.sleep;
@@ -2212,7 +2657,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenIdleSession_whenCancelled_thenResolvesAndSessionWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await session.cancel?.();
-          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
+          await expectAlive(session);
         });
       });
 
@@ -2225,7 +2670,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenCancelledStatement_whenNextStatementRun_thenSessionStillWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await runAndCancel(session);
-          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
+          await expectAlive(session);
         });
       });
     });
@@ -2238,9 +2683,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           async (session) => {
             await session.ping?.();
             await session.ping?.();
-            if (plugin.capabilities.includes("sql")) {
-              expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
-            }
+            await expectAlive(session);
           },
           { readOnly: false, keepAliveInitialDelayMs: KEEPALIVE_DELAY_MS },
         );
@@ -2250,6 +2693,30 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const session = await connect(plugin, fixture.config);
         await session.close();
         expect(await rejectionCode(session.ping?.() ?? Promise.resolve())).toBe("connectionLost");
+      });
+    });
+
+    describe.runIf(plugin.capabilities.includes("serverInfo"))("serverInfo", () => {
+      it("givenEveryNode_whenServerInfo_thenTitledSectionsWithEntries", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const nodes = (await session.nodes?.()) ?? [];
+          for (const node of [null, ...nodes.map((listed) => listed.id)]) {
+            const info = await session.serverInfo?.(node);
+            expect(info?.sections.length).toBeGreaterThan(0);
+            for (const section of info?.sections ?? []) expect(section.title).not.toBe("");
+            expect(info?.sections.some((section) => section.entries.length > 0)).toBe(true);
+            if (node !== null) expect(info?.node).toBe(node);
+          }
+        });
+      });
+
+      it("givenSlowLog_whenRead_thenAtMostLimitNewestFirst", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const entries = (await session.slowLog?.(null, SLOW_LOG_LIMIT)) ?? [];
+          expect(entries.length).toBeLessThanOrEqual(SLOW_LOG_LIMIT);
+          const times = entries.map((entry) => entry.at);
+          expect(times).toEqual([...times].sort().reverse());
+        });
       });
     });
 
@@ -2328,7 +2795,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withMonitor(async (monitor) => {
           await withSleeper(async (sleeper) => {
             const row = await present(monitor, idOf(sleeper), (listed) => listed.state === "active");
-            expect(row.query).toContain(sleepSql());
+            expect(row.query).toContain(sessionsFixture().sleepQuery ?? sleepSql());
             expect(row.queryMs).not.toBeNull();
           });
         });
@@ -2344,7 +2811,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             // MySQL's SLEEP answers 1 when killed rather than failing; either way it stops early.
             expect(["cancelled", "resolved"]).toContain(await running);
             expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
-            expect(await collect((await sleeper.execute(selectOne)).rows)).toEqual([[1]]);
+            await expectAlive(sleeper);
           });
         });
       });
@@ -2372,7 +2839,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenLockWait_whenList_thenBlockedByFilled", async () => {
+      it.runIf(plugin.capabilities.includes("transactions"))("givenLockWait_whenList_thenBlockedByFilled", async () => {
         const write = fixture.statements?.write;
         if (write === undefined) throw new Error("A plugin that declares sessions needs fixture.statements.write.");
         const holder = await connect(plugin, fixture.config);

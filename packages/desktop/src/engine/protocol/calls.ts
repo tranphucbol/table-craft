@@ -29,6 +29,20 @@ import type {
   GeneratorStatement,
   ParameterValue,
 } from "./sql.js";
+import type {
+  KeyApplied,
+  KeyApplyOptions,
+  KeyChange,
+  KeyDatabases,
+  KeyExpiry,
+  KeyInfo,
+  KeyName,
+  KeyReadRange,
+  KeyScan,
+  KeyType,
+  OpenedKey,
+} from "./keyspace.js";
+import type { ServerInfo, ServerNode, SlowCommand } from "./server.js";
 import type { ConditionColumn, OrderTerm, ResultEditable, RowEdit, SubmittedEdits, TableQuery } from "./tables.js";
 import type {
   ErrorAnswer,
@@ -63,6 +77,8 @@ export interface EngineCalls {
       readonly sessionId: string;
       readonly sql: string;
       readonly parameters?: Readonly<Record<string, ParameterValue>>;
+      /** Where a command runs on a `nodes` datasource: `auto`, `allPrimaries` or a node id (decision 114). */
+      readonly node?: string;
     } & ResultPaging &
       StatementLimit;
     result: ExecutedStatement;
@@ -251,6 +267,79 @@ export interface EngineCalls {
   "namespace.targets": { params: { readonly refresh?: boolean }; result: readonly Namespace[] };
   /** The plugin's statement that switches a session to `path` (decision 060). Needs `currentNamespace`. */
   "namespace.switchStatement": { params: { readonly path: readonly string[] }; result: SwitchStatement };
+  /** Every server of the datasource, primaries first (decision 114). Needs `nodes`. */
+  "server.nodes": { params: Record<never, never>; result: readonly ServerNode[] };
+  /** What `node` (null: the server, or a primary) reports about itself. Needs `serverInfo`. */
+  "server.info": { params: { readonly node: string | null }; result: ServerInfo };
+  /** The newest `limit` slow commands of `node`, or of every primary for null. Needs `serverInfo`. */
+  "server.slowLog": {
+    params: { readonly node: string | null; readonly limit: number };
+    result: readonly SlowCommand[];
+  };
+  /** The datasource's databases with their key counts (decision 113). Needs `keyValue`. */
+  "keyspace.databases": { params: Record<never, never>; result: KeyDatabases };
+  /** One batch of a pass over `database`'s keys; `cursor` null starts the pass. Needs `keyValue`. */
+  "keyspace.scan": {
+    params: {
+      readonly database: number;
+      readonly cursor: string | null;
+      readonly match: string;
+      readonly keyType: KeyType | null;
+    };
+    result: KeyScan;
+  };
+  /** Type and expiry of each key, in order. Needs `keyValue`. */
+  "keyspace.describe": {
+    params: { readonly database: number; readonly keys: readonly KeyName[] };
+    result: readonly KeyInfo[];
+  };
+  /**
+   * Reads `key` on the key tab's session: its rows go to the result store like a statement's, its
+   * value comes back whole up to 1 MiB (decision 113). Needs `keyValue`.
+   */
+  "keyspace.open": {
+    params: {
+      readonly sessionId: string;
+      readonly database: number;
+      readonly key: KeyName;
+      readonly range: KeyReadRange;
+    } & ResultPaging &
+      StatementLimit;
+    result: OpenedKey;
+  };
+  /** The commands `keyspace.apply` would run for the changes, unnumbered. Needs `keyValue`. */
+  "keyspace.preview": {
+    params: { readonly key: KeyName; readonly changes: readonly KeyChange[]; readonly options: KeyApplyOptions };
+    result: readonly string[];
+  };
+  /**
+   * Runs the changes to one key as one `MULTI`; guarded, it fails with `conflict` and writes nothing
+   * when an element changed since it was read (decision 115). Needs `keyValue`.
+   */
+  "keyspace.apply": {
+    params: {
+      readonly database: number;
+      readonly key: KeyName;
+      readonly changes: readonly KeyChange[];
+      readonly options: KeyApplyOptions;
+    };
+    result: KeyApplied;
+  };
+  /** Renames a key; refused when `to` exists unless `overwrite`. Needs `keyValue`. */
+  "keyspace.rename": {
+    params: { readonly database: number; readonly key: KeyName; readonly to: KeyName; readonly overwrite: boolean };
+    result: null;
+  };
+  /** Sets or removes a key's expiry. Needs `keyValue`. */
+  "keyspace.expire": {
+    params: { readonly database: number; readonly key: KeyName; readonly expiry: KeyExpiry };
+    result: null;
+  };
+  /** Removes the keys and says how many existed. Needs `keyValue`. */
+  "keyspace.remove": {
+    params: { readonly database: number; readonly keys: readonly KeyName[] };
+    result: number;
+  };
   /** One namespace's objects, from the engine's cache unless `refresh`. Needs `schemaTree`. */
   "catalog.describe": {
     params: { readonly path: readonly string[]; readonly refresh?: boolean };
@@ -420,6 +509,7 @@ export type EngineErrorCode =
   | "statementTimedOut"
   | "connectionLost"
   | "sessionBusy"
+  | "conflict"
   | "exportFailed"
   | "importFailed"
   | "scriptFailed"

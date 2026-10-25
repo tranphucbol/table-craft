@@ -44,6 +44,9 @@ import {
 } from "@table-craft/core";
 import {
   CAPABILITIES,
+  NODE_ALL_PRIMARIES,
+  NODE_AUTO,
+  type CommandReply,
   COMPLETION_KINDS,
   IMPORT_KINDS,
   INSPECTION_IDS,
@@ -83,6 +86,20 @@ import {
   type ServerSession,
   type ServerSessionState,
   type SessionTarget,
+  NODE_ROLES,
+  KEY_TYPES,
+  type KeyBytes,
+  type KeyDatabase,
+  type KeyApplied,
+  type KeyApplyOptions,
+  type KeyChange,
+  type KeyDetails,
+  type KeyExpiry,
+  type KeyInfo,
+  type KeyScan,
+  type ServerInfo,
+  type ServerNode,
+  type SlowCommand,
   type SqlParameter,
   type StatementClass,
   type StatementSpan,
@@ -164,8 +181,10 @@ describe("engine protocol", () => {
 
   it("givenExecutedStatement_whenComparedWithCoreSummary_thenCarriesEveryField", () => {
     expectTypeOf<
-      Omit<protocol.ExecutedStatement, "firstWindow" | "transactionOpen" | "namespace" | "reconnected">
+      Omit<protocol.ExecutedStatement, "firstWindow" | "transactionOpen" | "namespace" | "reconnected" | "reply">
     >().toEqualTypeOf<ResultSummary>();
+    expectTypeOf<NonNullable<protocol.ExecutedStatement["reply"]>>().toEqualTypeOf<CommandReply>();
+    expect([protocol.NODE_AUTO, protocol.NODE_ALL_PRIMARIES]).toEqual([NODE_AUTO, NODE_ALL_PRIMARIES]);
   });
 
   it("givenScriptTypes_whenComparedWithPluginApi_thenIdentical", () => {
@@ -244,6 +263,26 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.ServerSessionState>().toEqualTypeOf<ServerSessionState>();
     expectTypeOf<protocol.ServerSession>().toEqualTypeOf<ServerSession>();
     expectTypeOf<protocol.SessionTarget>().toEqualTypeOf<SessionTarget>();
+  });
+
+  it("givenServerTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.ServerNode>().toEqualTypeOf<ServerNode>();
+    expectTypeOf<protocol.ServerInfo>().toEqualTypeOf<ServerInfo>();
+    expectTypeOf<protocol.SlowCommand>().toEqualTypeOf<SlowCommand>();
+    expect(protocol.NODE_ROLES).toEqual(NODE_ROLES);
+  });
+
+  it("givenKeyspaceTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expect(protocol.KEY_TYPES).toEqual(KEY_TYPES);
+    expectTypeOf<protocol.KeyBytes>().toEqualTypeOf<KeyBytes>();
+    expectTypeOf<protocol.KeyDatabase>().toEqualTypeOf<KeyDatabase>();
+    expectTypeOf<protocol.KeyScan>().toEqualTypeOf<KeyScan>();
+    expectTypeOf<protocol.KeyInfo>().toEqualTypeOf<KeyInfo>();
+    expectTypeOf<protocol.KeyExpiry>().toEqualTypeOf<KeyExpiry>();
+    expectTypeOf<protocol.KeyDetails>().toEqualTypeOf<KeyDetails>();
+    expectTypeOf<protocol.KeyChange>().toEqualTypeOf<KeyChange>();
+    expectTypeOf<protocol.KeyApplyOptions>().toEqualTypeOf<KeyApplyOptions>();
+    expectTypeOf<protocol.KeyApplied>().toEqualTypeOf<KeyApplied>();
   });
 
   it("givenCoreErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {

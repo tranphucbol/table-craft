@@ -9,8 +9,16 @@ import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importA
 import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
+import {
+  KEY_HIDDEN_WHEN_DISABLED,
+  KEY_MENU,
+  KEY_TREE_KINDS,
+  KEYSPACE_MENU,
+} from "@table-craft/desktop/renderer/panes/keyMenus.js";
+import { KEY_ACTION_IDS, type KeyDatabaseArgs } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { ROUTINE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/routineActions.js";
+import { SERVER_ACTION_IDS } from "@table-craft/desktop/renderer/actions/serverActions.js";
 import { SESSIONS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
 import { TABLE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/tableActions.js";
@@ -25,6 +33,10 @@ import {
   type ExplorerRow,
 } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { connectionText } from "@table-craft/desktop/renderer/model/format.js";
+import { keyIdentity, undescribedKeys } from "@table-craft/desktop/renderer/model/keyTree.js";
+import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
+import { KeyFilterRow } from "@table-craft/desktop/renderer/panes/KeyFilterRow.js";
+import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import {
   currentMatch,
   SPEED_SEARCH_MAX_LENGTH,
@@ -81,10 +93,12 @@ const DATASOURCE_MENU = [
   HISTORY_ACTION_IDS.reopen,
   SCRIPT_ACTION_IDS.run,
   SESSIONS_ACTION_IDS.show,
+  SERVER_ACTION_IDS.show,
   ACTION_IDS.connect,
   ACTION_IDS.disconnect,
   ACTION_IDS.synchronize,
   OBJECT_ACTION_IDS.newDatabase,
+  KEY_ACTION_IDS.goTo,
   null,
   ACTION_IDS.datasourceProperties,
   ACTION_IDS.duplicateDatasource,
@@ -205,7 +219,11 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   OBJECT_ACTION_IDS.truncate,
   OBJECT_ACTION_IDS.drop,
   SESSIONS_ACTION_IDS.show,
+  SERVER_ACTION_IDS.show,
   ROUTINE_ACTION_IDS.execute,
+  KEY_ACTION_IDS.goTo,
+  KEY_ACTION_IDS.loadMore,
+  ...KEY_HIDDEN_WHEN_DISABLED,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {
@@ -288,6 +306,8 @@ function menuOf(node: ExplorerNode): readonly (string | null)[] {
   if (node.kind === "relation") return RELATION_MENU;
   if (node.kind === "column") return COLUMN_MENU;
   if (node.kind === "routine") return ROUTINE_MENU;
+  if (node.kind === "keyEntry") return KEY_MENU;
+  if (KEY_TREE_KINDS.has(node.kind)) return KEYSPACE_MENU;
   if (node.kind === "namespace" || node.kind === "objectGroup") return NAMESPACE_MENU;
   return CATALOG_MENU;
 }
@@ -339,7 +359,8 @@ interface RowProps {
   readonly selected: boolean;
   readonly positions: readonly number[];
   readonly top: number;
-  readonly onSelect: (row: ExplorerRow) => void;
+  /** `keepFocus` selects the row and leaves focus where it is, in the row's own field say. */
+  readonly onSelect: (row: ExplorerRow, keepFocus?: boolean) => void;
   readonly onToggle: (row: ExplorerRow) => void;
   readonly onActivate: (row: ExplorerRow) => void;
   readonly register: (key: string, element: HTMLLIElement | null) => void;
@@ -418,6 +439,8 @@ function TreeRow({ row, selected, positions, top, onSelect, onToggle, onActivate
             </>
           ) : node.kind === "datasource" ? (
             <DatasourceLabel node={node} positions={positions} />
+          ) : node.kind === "keyFilter" ? (
+            <KeyFilterRow key={node.filter.match} node={node} onFocus={() => onSelect(row, true)} />
           ) : (
             <>
               <NodeIcon node={node} />
@@ -531,6 +554,8 @@ export function DatabasePane() {
   const query = useCatalog((state) => state.speedSearch);
   const setQuery = useCatalog((state) => state.setSpeedSearch);
   const showSystem = useLayout((state) => state.layout.showSystemSchemas);
+  const showEmptyDatabases = useLayout((state) => state.layout.showEmptyDatabases);
+  const keyspaces = useKeys((state) => state.keyspaces);
   const elements = useRef(new Map<string, HTMLLIElement>());
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
@@ -543,9 +568,15 @@ export function DatabasePane() {
         expanded,
         collapsedFolders,
         showSystem,
-        canExpand: (datasource) => capabilitiesOf(plugins, datasource.pluginId).includes("schemaTree"),
+        canExpand: (datasource) => {
+          const capabilities = capabilitiesOf(plugins, datasource.pluginId);
+          return capabilities.includes("schemaTree") || capabilities.includes("keyValue");
+        },
+        keyspaces,
+        browsesKeys: (datasource) => capabilitiesOf(plugins, datasource.pluginId).includes("keyValue"),
+        showEmptyDatabases,
       }),
-    [tree, catalogs, expanded, collapsedFolders, showSystem, plugins],
+    [tree, catalogs, expanded, collapsedFolders, showSystem, plugins, keyspaces, showEmptyDatabases],
   );
   const matches = useMemo(
     () =>
@@ -567,6 +598,17 @@ export function DatabasePane() {
     overscan: OVERSCAN_ROWS,
   });
   useEffect(() => virtualizer.measure(), [virtualizer, rowHeightPx]);
+  const virtualItems = virtualizer.getVirtualItems();
+  const undescribed = undescribedKeys(virtualItems.map((item) => rows[item.index]));
+  const undescribedSignature = undescribed.map(({ datasourceId, database, keys }) =>
+    JSON.stringify([datasourceId, database, keys.map(keyIdentity)]),
+  );
+  useEffect(() => {
+    for (const { datasourceId, database, keys } of undescribed)
+      void useKeys.getState().describe(datasourceId, database, keys);
+    // The signature names what `undescribed` holds; the array itself is new every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undescribedSignature.join("\n")]);
 
   // A catalog node that stopped being a row (its datasource detached, system schemas hidden)
   // hands the selection to its datasource, as DataGrip does.
@@ -604,11 +646,11 @@ export function DatabasePane() {
     virtualizer.scrollToIndex(rows.indexOf(row), { align: "auto" });
   }
 
-  function selectRow(row: ExplorerRow): void {
+  function selectRow(row: ExplorerRow, keepFocus = false): void {
     const next = selectionOf(row);
     if (next === null) return;
     select(next);
-    elements.current.get(row.key)?.focus();
+    if (!keepFocus) elements.current.get(row.key)?.focus();
   }
 
   function toggle(row: ExplorerRow): void {
@@ -622,7 +664,10 @@ export function DatabasePane() {
       return;
     }
     if (node.kind === "folder") catalog.toggleFolder(node.path);
-    else if (node.kind === "datasource") void catalog.expandDatasource(node.datasource.id);
+    else if (node.kind === "datasource" && capabilitiesOf(plugins, node.datasource.pluginId).includes("keyValue")) {
+      void useKeys.getState().expandDatasource(node.datasource.id);
+    } else if (node.kind === "datasource") void catalog.expandDatasource(node.datasource.id);
+    else if (node.kind === "keyDatabase") void useKeys.getState().expandDatabase(node.datasourceId, node.database);
     else if (node.kind === "namespace") void catalog.expandNamespace(node.datasourceId, node.namespace);
     else catalog.setExpanded(row.key, true);
   }
@@ -633,6 +678,14 @@ export function DatabasePane() {
     else if (node.kind === "relation") {
       const args: OpenTableArgs = { datasourceId: node.datasourceId, path: node.path, relation: node.relation.name };
       invoke(TABLE_ACTION_IDS.openData, args);
+    } else if (node.kind === "keyEntry") {
+      const args: OpenKeyArgs = { datasourceId: node.datasourceId, database: node.database, key: node.key };
+      invoke(KEY_ACTION_IDS.open, args);
+    } else if (node.kind === "keyLoadMore") {
+      const args: KeyDatabaseArgs = { datasourceId: node.datasourceId, database: node.database };
+      invoke(KEY_ACTION_IDS.loadMore, args);
+    } else if (node.kind === "keyFilter") {
+      elements.current.get(row.key)?.querySelector("input")?.focus();
     } else if (row.expandable) toggle(row);
   }
 
@@ -739,7 +792,7 @@ export function DatabasePane() {
                 }
               }}
             >
-              {virtualizer.getVirtualItems().map((item) => {
+              {virtualItems.map((item) => {
                 const row = rows[item.index];
                 if (row === undefined) return null;
                 return (
@@ -749,9 +802,9 @@ export function DatabasePane() {
                     top={item.start}
                     selected={item.index === selectedIndex}
                     positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
-                    onSelect={(clicked) => {
+                    onSelect={(clicked, keepFocus) => {
                       setQuery(null);
-                      selectRow(clicked);
+                      selectRow(clicked, keepFocus);
                     }}
                     onToggle={toggle}
                     onActivate={activate}

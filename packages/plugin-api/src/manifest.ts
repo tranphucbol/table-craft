@@ -41,6 +41,13 @@ export const connectionFieldSchema = z.strictObject({
     .optional(),
   group: z.enum(CONNECTION_FIELD_GROUPS).optional(),
   secret: z.boolean().optional(),
+  /**
+   * Draw the field only while the `select` or `checkbox` named by `key` holds `equals` (plan 058);
+   * a hidden field is neither checked nor required.
+   */
+  visibleWhen: z
+    .strictObject({ key: z.string().regex(FIELD_KEY), equals: z.union([z.string(), z.boolean()]) })
+    .optional(),
 });
 
 export type ConnectionField = z.infer<typeof connectionFieldSchema>;
@@ -75,6 +82,16 @@ export const connectionUrlSchema = z.strictObject({
         key: z.string().regex(FIELD_KEY),
         values: z.record(z.string(), z.string()).optional(),
       }),
+    )
+    .optional(),
+  /**
+   * Field values a scheme implies, keyed by scheme, such as `rediss` setting the TLS mode (plan
+   * 058). A pasted URL fills them; a written URL takes the first scheme whose values the config holds.
+   */
+  sets: z
+    .record(
+      z.string().regex(URL_SCHEME),
+      z.record(z.string().regex(FIELD_KEY), z.union([z.string(), z.number(), z.boolean()])),
     )
     .optional(),
 });
@@ -158,6 +175,39 @@ function tlsFieldsDeclared(connection: {
   });
 }
 
+/** Every `visibleWhen` names another field of the form, a `select` or a `checkbox`. */
+function visibilityFieldsDeclared(connection: { readonly fields: readonly ConnectionField[] }): boolean {
+  return connection.fields.every((field) => {
+    const condition = field.visibleWhen;
+    if (condition === undefined) return true;
+    const source = connection.fields.find((candidate) => candidate.key === condition.key);
+    return (
+      source !== undefined &&
+      source !== field &&
+      (source.kind === "select" || source.kind === "checkbox") &&
+      typeof condition.equals === (source.kind === "checkbox" ? "boolean" : "string")
+    );
+  });
+}
+
+/** Every scheme `url.sets` keys is one of `url.schemes`, and every value it sets is a declared field's. */
+function urlSetsDeclared(connection: {
+  readonly fields: readonly ConnectionField[];
+  readonly url?: ConnectionUrl | undefined;
+}): boolean {
+  const url = connection.url;
+  if (url?.sets === undefined) return true;
+  return Object.entries(url.sets).every(
+    ([scheme, values]) =>
+      url.schemes.includes(scheme) &&
+      Object.keys(values).every((key) => connection.fields.some((field) => field.key === key)),
+  );
+}
+
+function includesAny(capabilities: readonly string[], ...wanted: readonly string[]): boolean {
+  return wanted.some((capability) => capabilities.includes(capability));
+}
+
 export const pluginManifestSchema = z
   .strictObject({
     id: z.string().regex(PLUGIN_ID, { message: "expected lower-case letters, digits and dashes" }),
@@ -186,8 +236,33 @@ export const pluginManifestSchema = z
         message:
           "tls names a field the form does not declare or one of the wrong kind: mode a select offering every verify mode, files of kind file, the passphrase a secret password",
         path: ["tls"],
+      })
+      .refine(visibilityFieldsDeclared, {
+        message:
+          "visibleWhen names a field the form does not declare, the field itself, or one that is not a select or checkbox, or compares it with a value of the wrong type",
+        path: ["fields"],
+      })
+      .refine(urlSetsDeclared, {
+        message: "url.sets names a scheme the url does not list, or a field the form does not declare",
+        path: ["url"],
       }),
   })
+  // A console speaks one language: SQL statements or a store's commands (decision 112).
+  .refine((manifest) => !(manifest.capabilities.includes("commands") && manifest.capabilities.includes("sql")), {
+    message: "the commands and sql capabilities exclude each other",
+    path: ["capabilities"],
+  })
+  // The key tree's edits and actions are previewed and confirmed as commands (decision 113).
+  .refine((manifest) => !manifest.capabilities.includes("keyValue") || manifest.capabilities.includes("commands"), {
+    message: "the keyValue capability requires commands",
+    path: ["capabilities"],
+  })
+  .refine(
+    (manifest) =>
+      !includesAny(manifest.capabilities, "nodes", "serverInfo") ||
+      includesAny(manifest.capabilities, "sql", "commands"),
+    { message: "the nodes and serverInfo capabilities require sql or commands", path: ["capabilities"] },
+  )
   // A definition is read through the introspector, which only `schemaTree` promises (decision 029).
   .refine((manifest) => !manifest.capabilities.includes("ddl") || manifest.capabilities.includes("schemaTree"), {
     message: "the ddl capability requires schemaTree",
@@ -219,13 +294,17 @@ export const pluginManifestSchema = z
       (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
     { message: "the objects capability requires sql and schemaTree", path: ["capabilities"] },
   )
-  // A listed session's query opens in a console, and the engine lists sessions on its introspection
-  // session, which only a schemaTree plugin opens (decision 088).
+  // A listed session's query opens in a console, and the engine lists sessions on its catalog or
+  // key-tree session (decision 088, plan 058).
   .refine(
     (manifest) =>
       !manifest.capabilities.includes("sessions") ||
-      (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
-    { message: "the sessions capability requires sql and schemaTree", path: ["capabilities"] },
+      (includesAny(manifest.capabilities, "sql", "commands") &&
+        includesAny(manifest.capabilities, "schemaTree", "keyValue")),
+    {
+      message: "the sessions capability requires sql or commands, and schemaTree or keyValue",
+      path: ["capabilities"],
+    },
   )
   // A call runs in a console and is built from the routine the introspector describes (decision 090).
   .refine(

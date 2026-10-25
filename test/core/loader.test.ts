@@ -37,6 +37,7 @@ interface PluginFiles {
   readonly id: string;
   readonly apiVersion?: string;
   readonly source?: string;
+  readonly capabilities?: readonly string[];
 }
 
 let workspace: string;
@@ -58,7 +59,7 @@ async function writePlugin(root: string, directoryName: string, files: PluginFil
     version: "1.0.0",
     apiVersion: files.apiVersion ?? API_VERSION,
     entry: ENTRY_FILE,
-    capabilities: ["sql"],
+    capabilities: files.capabilities ?? ["sql"],
     highlight: "sql",
     connection: CONNECTION,
   };
@@ -164,6 +165,26 @@ describe("loadPlugins", () => {
     const [result] = await loadPlugins([join(workspace, "builtin")]);
 
     expect(result?.status === "unavailable" && result.reason).toContain("language");
+  });
+
+  it("givenCommandsPluginWithoutCommandLanguage_whenLoaded_thenUnavailable", async () => {
+    const source = pluginSource("mute").replace('capabilities: ["sql"]', 'capabilities: ["commands"]');
+    await writePlugin("builtin", "mute", { id: "mute", source, capabilities: ["commands"] });
+
+    const [result] = await loadPlugins([join(workspace, "builtin")]);
+
+    expect(result?.status === "unavailable" && result.reason).toContain("commandLanguage");
+  });
+
+  it("givenCommandsPluginWithCommandLanguage_whenLoaded_thenLoaded", async () => {
+    const source = pluginSource("kv")
+      .replace('capabilities: ["sql"]', 'capabilities: ["commands"]')
+      .replace("  language: {", "  commandLanguage: {\n    complete: async () => ({ from: 0, to: 0, items: [] }),");
+    await writePlugin("builtin", "kv", { id: "kv", source, capabilities: ["commands"] });
+
+    const [result] = await loadPlugins([join(workspace, "builtin")]);
+
+    expect(result?.status).toBe("loaded");
   });
 
   it("givenDirectoryWithoutManifest_whenLoaded_thenUnavailableWithReason", async () => {

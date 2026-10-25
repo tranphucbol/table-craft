@@ -18,6 +18,12 @@ import {
   type FolderNode,
   type TreeNode,
 } from "@table-craft/desktop/renderer/model/datasourceTree.js";
+import {
+  EMPTY_KEYSPACE,
+  keyspaceRows,
+  type DatasourceKeyspace,
+  type KeyTreeNode,
+} from "@table-craft/desktop/renderer/model/keyTree.js";
 
 /** One namespace's catalog in the renderer: the last one read, and whether a read is running or failed. */
 export interface NamespaceState {
@@ -150,7 +156,7 @@ export type CatalogNode =
   | RoutineNode
   | SequenceNode;
 
-export type ExplorerNode = FolderNode | DatasourceNode | CatalogNode | LoadingNode | ErrorNode;
+export type ExplorerNode = FolderNode | DatasourceNode | CatalogNode | KeyTreeNode | LoadingNode | ErrorNode;
 
 export interface ExplorerRow {
   readonly node: ExplorerNode;
@@ -171,8 +177,14 @@ export interface ExplorerInput {
   /** Collapsed folder paths; folders start expanded. */
   readonly collapsedFolders: ReadonlySet<string>;
   readonly showSystem: boolean;
-  /** Whether the datasource's plugin can list its schemas (`schemaTree`, decision 007). */
+  /** Whether the datasource's plugin can list its schemas (`schemaTree`) or its keys (`keyValue`, decision 007). */
   readonly canExpand: (datasource: DatasourceView) => boolean;
+  /** Key-value datasources' keyspaces (decision 113); absent, none. */
+  readonly keyspaces?: Readonly<Record<string, DatasourceKeyspace>>;
+  /** Whether the datasource lists keys rather than namespaces (`keyValue`). */
+  readonly browsesKeys?: (datasource: DatasourceView) => boolean;
+  /** Whether a keyspace lists its empty databases too (Show Empty Databases). */
+  readonly showEmptyDatabases?: boolean;
 }
 
 export function pathKey(path: readonly string[]): string {
@@ -183,6 +195,11 @@ const CATALOG_KEY_PREFIX = "cat:";
 
 function catalogKey(datasourceId: string, ...parts: readonly unknown[]): string {
   return `${CATALOG_KEY_PREFIX}${JSON.stringify([datasourceId, ...parts])}`;
+}
+
+/** A key-tree row's key; catalog-prefixed, so a detach forgets it with the rest. */
+export function keyTreeKey(datasourceId: string, ...parts: readonly unknown[]): string {
+  return catalogKey(datasourceId, ...parts);
 }
 
 /** Every catalog key of `datasourceId` starts with this, so a detach can forget them all. */
@@ -260,6 +277,18 @@ export function columnNameOf(key: string): string | null {
   if (!Array.isArray(parts) || parts[1] !== "column") return null;
   const name: unknown = parts[COLUMN_NAME_PART];
   return typeof name === "string" ? name : null;
+}
+
+/** The kind and database a key-tree row's key names, or null for any other key. */
+export function keyTreeRowOf(
+  key: string,
+): { readonly kind: string; readonly database: number; readonly rest: readonly unknown[] } | null {
+  if (!key.startsWith(`${CATALOG_KEY_PREFIX}[`)) return null;
+  const parts: unknown = JSON.parse(key.slice(CATALOG_KEY_PREFIX.length));
+  if (!Array.isArray(parts)) return null;
+  const [, kind, database, ...rest] = parts as unknown[];
+  if (typeof kind !== "string" || !kind.startsWith("key") || typeof database !== "number") return null;
+  return { kind, database, rest };
 }
 
 function isPrefix(prefix: readonly string[], path: readonly string[]): boolean {
@@ -451,6 +480,16 @@ function datasourceRows(builder: Builder, node: DatasourceNode, depth: number): 
   const { datasource } = node;
   const expandable = builder.input.canExpand(datasource);
   if (!push(builder, node, depth, nodeKey(node), datasource.name, expandable)) return;
+  if (builder.input.browsesKeys?.(datasource) === true) {
+    const sink = {
+      push: (child: ExplorerNode, at: number, key: string, label: string, opens: boolean) =>
+        push(builder, child, at, key, label, opens),
+      keyOf: (...parts: readonly unknown[]) => catalogKey(datasource.id, ...parts),
+    };
+    const keyspace = builder.input.keyspaces?.[datasource.id] ?? EMPTY_KEYSPACE;
+    keyspaceRows(sink, datasource.id, keyspace, { showEmpty: builder.input.showEmptyDatabases === true }, depth + 1);
+    return;
+  }
   const catalog = builder.input.catalogs[datasource.id] ?? EMPTY_CATALOG;
   if (catalog.namespaces !== null) {
     namespaceRows(builder, datasource.id, catalog, catalog.namespaces, null, depth + 1);
@@ -512,6 +551,8 @@ export function objectNameOf(node: ExplorerNode): string | null {
     case "foreignKey":
     case "index":
       return node.relation;
+    case "keyEntry":
+      return node.key.text;
     default:
       return null;
   }

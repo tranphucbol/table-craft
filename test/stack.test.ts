@@ -10,7 +10,7 @@ const DB_DIRECTORY = join(import.meta.dirname, "db");
 
 function copyOfSeeds(): string {
   const directory = mkdtempSync(join(tmpdir(), "table-craft-seeds-"));
-  for (const folder of ["schema", "tls"])
+  for (const folder of ["schema", "tls", "redis"])
     cpSync(join(DB_DIRECTORY, folder), join(directory, folder), { recursive: true });
   return directory;
 }
@@ -44,7 +44,21 @@ describe("seed hashes (test/db/stack.ts)", () => {
   });
 
   it("givenHashes_whenTurnedIntoEnv_thenOneLabelVariablePerService", () => {
-    const env = seedEnv({ postgres: "a", mysql: "b", "postgres-tls": "c", "mysql-tls": "d", oracle: "e", mssql: "f" });
+    const env = seedEnv({
+      postgres: "a",
+      mysql: "b",
+      "postgres-tls": "c",
+      "mysql-tls": "d",
+      oracle: "e",
+      mssql: "f",
+      redis: "g",
+      "redis-tls": "h",
+      "redis-6": "i",
+      "redis-cluster": "j",
+      "redis-6-cluster": "k",
+      "redis-5": "l",
+      "redis-5-cluster": "m",
+    });
 
     expect(env).toEqual({
       [SEED_ENV.postgres]: "a",
@@ -53,6 +67,13 @@ describe("seed hashes (test/db/stack.ts)", () => {
       [SEED_ENV["mysql-tls"]]: "d",
       [SEED_ENV.oracle]: "e",
       [SEED_ENV.mssql]: "f",
+      [SEED_ENV.redis]: "g",
+      [SEED_ENV["redis-tls"]]: "h",
+      [SEED_ENV["redis-6"]]: "i",
+      [SEED_ENV["redis-cluster"]]: "j",
+      [SEED_ENV["redis-6-cluster"]]: "k",
+      [SEED_ENV["redis-5"]]: "l",
+      [SEED_ENV["redis-5-cluster"]]: "m",
     });
   });
 
@@ -65,6 +86,24 @@ describe("seed hashes (test/db/stack.ts)", () => {
 
     expect(after.oracle).not.toBe(before.oracle);
     expect({ ...after, oracle: before.oracle }).toEqual(before);
+  });
+
+  it("givenRedisClusterScriptEdited_whenHashed_thenOnlyTheClustersChange", () => {
+    const directory = copyOfSeeds();
+    const before = seedHashes(directory);
+
+    appendFileSync(join(directory, "redis", "cluster.sh"), "\n# edited\n");
+    const after = seedHashes(directory);
+
+    expect(after["redis-cluster"]).not.toBe(before["redis-cluster"]);
+    expect(after["redis-6-cluster"]).not.toBe(before["redis-6-cluster"]);
+    expect(after["redis-5-cluster"]).not.toBe(before["redis-5-cluster"]);
+    expect({
+      ...after,
+      "redis-cluster": before["redis-cluster"],
+      "redis-6-cluster": before["redis-6-cluster"],
+      "redis-5-cluster": before["redis-5-cluster"],
+    }).toEqual(before);
   });
 });
 
@@ -81,7 +120,7 @@ describe("database selector (decision 099)", () => {
       services: ["mysql", "mysql-tls"],
     });
     expect(describeSelection(databases, {})).toBe(
-      `Databases: mysql, tidb (from ${DATABASES_ENV} unset, the normal flow); not started: postgres, oracle, mssql`,
+      `Databases: mysql, tidb (from ${DATABASES_ENV} unset, the normal flow); not started: postgres, oracle, mssql, redis`,
     );
   });
 
@@ -103,8 +142,22 @@ describe("database selector (decision 099)", () => {
     const databases = selectedDatabases({ [DATABASES_ENV]: "all" });
 
     expect(stackFor(databases, LOCAL_TIDB)).toEqual({
-      profiles: ["mysql", "tidb", "postgres", "oracle", "mssql"].flatMap((profile) => ["--profile", profile]),
-      services: ["mysql", "mysql-tls", "postgres", "postgres-tls", "oracle", "mssql"],
+      profiles: ["mysql", "tidb", "postgres", "oracle", "mssql", "redis"].flatMap((profile) => ["--profile", profile]),
+      services: [
+        "mysql",
+        "mysql-tls",
+        "postgres",
+        "postgres-tls",
+        "oracle",
+        "mssql",
+        "redis",
+        "redis-tls",
+        "redis-6",
+        "redis-cluster",
+        "redis-6-cluster",
+        "redis-5",
+        "redis-5-cluster",
+      ],
     });
     expect(stackFor(databases, REMOTE_TIDB).profiles).not.toContain("tidb");
   });
@@ -115,7 +168,7 @@ describe("database selector (decision 099)", () => {
 
   it("givenUnknownDatabaseInSelector_whenUp_thenErrorNamesKnownIds", () => {
     expect(() => selectedDatabases({ [DATABASES_ENV]: "mysql,sybase" })).toThrow(
-      `${DATABASES_ENV} names sybase, which is not a test database; list any of mysql, tidb, postgres, oracle, mssql, all, separated by commas.`,
+      `${DATABASES_ENV} names sybase, which is not a test database; list any of mysql, tidb, postgres, oracle, mssql, redis, all, separated by commas.`,
     );
   });
 });

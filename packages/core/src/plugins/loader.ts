@@ -134,6 +134,15 @@ function hasLanguage(plugin: DatasourcePlugin): boolean {
   return LANGUAGE_METHODS.every((method) => typeof language?.[method] === "function");
 }
 
+const COMMAND_LANGUAGE_METHODS = ["split", "classify", "complete"] as const;
+type CommandLanguageMethod = (typeof COMMAND_LANGUAGE_METHODS)[number];
+
+/** `commandLanguage` is the console's split, classify and completion for a command plugin (decision 112). */
+function hasCommandLanguage(plugin: DatasourcePlugin): boolean {
+  const language = plugin.commandLanguage as Partial<Record<CommandLanguageMethod, unknown>> | undefined;
+  return COMMAND_LANGUAGE_METHODS.every((method) => typeof language?.[method] === "function");
+}
+
 function sameCapabilities(manifest: PluginManifest, plugin: DatasourcePlugin): boolean {
   const declared = new Set<string>(manifest.capabilities);
   return declared.size === plugin.capabilities.length && plugin.capabilities.every((name) => declared.has(name));
@@ -166,6 +175,9 @@ async function importPlugin(directory: string, manifest: PluginManifest): Promis
     return unavailable(
       "declares sql but exports no language with split, classify, quoteIdentifier and literal; add one (plugin-api/sql helps).",
     );
+  }
+  if (plugin.capabilities.includes("commands") && !hasCommandLanguage(plugin)) {
+    return unavailable("declares commands but exports no commandLanguage with split, classify and complete; add one.");
   }
   return { status: "loaded", directory, manifest, plugin };
 }

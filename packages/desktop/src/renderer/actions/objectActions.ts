@@ -22,6 +22,9 @@ import { featuresOf } from "@table-craft/desktop/renderer/state/objects.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
+import { selectedKey } from "@table-craft/desktop/renderer/actions/keyActions.js";
+import { deleteKey, renameKey } from "@table-craft/desktop/renderer/actions/keyEditActions.js";
+import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 
 export const OBJECT_ACTION_IDS = {
   newTable: "explorer.newTable",
@@ -34,6 +37,11 @@ export const OBJECT_ACTION_IDS = {
 } as const;
 
 const OBJECTS = "objects";
+
+/** The tree's selected key, when its datasource takes changes: Rename and Drop act on keys too (plan 058). */
+function writableKey(context: ActionContext): OpenKeyArgs | null {
+  return context.datasource?.view.readOnly === true ? null : selectedKey(context);
+}
 const NEW_TABLE_NAME = "new_table";
 const ROW_COUNT_WHERE = "";
 
@@ -439,10 +447,16 @@ export const OBJECT_ACTIONS: readonly AnyAction[] = [
     shortcut: "Shift+F6",
     shortcutRegion: "database",
     when: (context) => {
+      if (writableKey(context) !== null) return true;
       const target = selectedObject(context);
       return target !== null && target.features.renamable.includes(target.object.kind);
     },
     run: async (context) => {
+      const key = writableKey(context);
+      if (key !== null) {
+        await renameKey(context, key);
+        return;
+      }
       const target = selectedObject(context);
       if (target !== null && target.features.renamable.includes(target.object.kind)) await rename(context, target);
     },
@@ -465,10 +479,16 @@ export const OBJECT_ACTIONS: readonly AnyAction[] = [
     shortcut: "Mod+Backspace",
     shortcutRegion: "database",
     when: (context) => {
+      if (writableKey(context) !== null) return true;
       const target = selectedObject(context);
       return target !== null && target.features.droppable.includes(target.object.kind);
     },
     run: async (context) => {
+      const key = writableKey(context);
+      if (key !== null) {
+        await deleteKey(key);
+        return;
+      }
       const target = selectedObject(context);
       if (target !== null && target.features.droppable.includes(target.object.kind)) {
         await destroy(context, target, "drop");

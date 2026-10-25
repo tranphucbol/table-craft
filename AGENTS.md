@@ -4,9 +4,9 @@ TableCraft (this repository, `table-craft`) is a desktop database IDE in the spi
 DataGrip: connections, a database explorer, SQL consoles, a result grid and a table data editor.
 Users read "TableCraft"; identifiers keep `table-craft` (decision 037). It is a Bun workspace
 written in TypeScript, shipped as an Electron app. Databases are reached through datasource
-plugins loaded at runtime; PostgreSQL, MySQL and SQLite ship as built-in plugins. Read
-`docs/design/specification.md` for the v1 scope and `docs/decisions/` before changing the process
-model, the plugin contract, or where data lives.
+plugins loaded at runtime; MySQL and SQLite ship in the box, PostgreSQL and Redis download on
+demand. Read `docs/design/specification.md` for the v1 scope and `docs/decisions/` before changing
+the process model, the plugin contract, or where data lives.
 
 ## Commands
 
@@ -18,10 +18,17 @@ Run from the repository root.
   from `test/db/schema/`, plus the TiDB 4 suite (`test/db/tidb.test.ts`, port 54000, root with no
   password; an amd64 image, emulated on Apple silicon, and heavy). That is the normal flow
   (decision 099): `TABLE_CRAFT_DATABASES` (comma list of `mysql`, `tidb`, `postgres`, `oracle`,
-  `mssql`, or `all`; unset, `mysql,tidb`) picks the servers `test/db/up.ts` starts, by compose
+  `mssql`, `redis`, or `all`; unset, `mysql,tidb`) picks the servers `test/db/up.ts` starts, by compose
   profile, and the suites that run. `test:db:postgres` (port 55432), `test:db:oracle` (Oracle 23ai
-  Free, port 51521, about 2 GB), `test:db:mssql` (SQL Server 2022, port 51433, amd64-emulated) and
-  `test:db:all` set it; run the one for a plugin you touch. SQLite always runs.
+  Free, port 51521, about 2 GB), `test:db:mssql` (SQL Server 2022, port 51433, amd64-emulated),
+  `test:db:redis` and `test:db:all` set it; run the one for a plugin you touch. `redis` selects seven
+  services (decision 116): `redis` (7.4, port 56379, ACL users `table_craft` and `limited`),
+  `redis-tls` (56380), `redis-6` (6.2, 56362), `redis-5` (5.0, 56350, password `table_craft` and
+  no ACL users), `redis-cluster` (7.4, three primaries and three replicas on 47001-47006),
+  `redis-6-cluster` (6.2, three primaries on 47011-47013) and `redis-5-cluster` (5.0, three
+  primaries and three replicas on 47021-47026), each cluster one container running every node
+  (`test/db/redis/cluster.sh`), all seeded by `test/db/redis/seed.sh` from `schema/redis.redis`.
+  SQLite always runs.
   `test/db/up.ts` starts the containers and recreates any whose seed files changed (a
   `table-craft.seed` label holds their hash, `test/db/stack.ts`), so an edit under `schema/` or
   `tls/` reseeds on the next run with no `down`; when a git-ignored `.env` names a remote TiDB
@@ -41,8 +48,12 @@ Run from the repository root.
   CA, server and client certificates in `test/db/tls/` (`generate.sh` remakes them).
   A second checkout (a parallel worktree) sets `COMPOSE_PROJECT_NAME`, `TABLE_CRAFT_PG_PORT`,
   `TABLE_CRAFT_MYSQL_PORT`, `TABLE_CRAFT_TIDB_PORT`, `TABLE_CRAFT_SSH_PORT`,
-  `TABLE_CRAFT_PG_TLS_PORT`, `TABLE_CRAFT_MYSQL_TLS_PORT`, `TABLE_CRAFT_ORACLE_PORT` and
-  `TABLE_CRAFT_MSSQL_PORT` for every `test:db`,
+  `TABLE_CRAFT_PG_TLS_PORT`, `TABLE_CRAFT_MYSQL_TLS_PORT`, `TABLE_CRAFT_ORACLE_PORT`,
+  `TABLE_CRAFT_MSSQL_PORT`, `TABLE_CRAFT_REDIS_PORT`, `TABLE_CRAFT_REDIS_TLS_PORT`,
+  `TABLE_CRAFT_REDIS6_PORT`, `TABLE_CRAFT_REDIS5_PORT`, `TABLE_CRAFT_REDIS_CLUSTER_PORTS`,
+  `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` and `TABLE_CRAFT_REDIS5_CLUSTER_PORTS` (a range such as
+  `47101-47106`; a node's bus port is its port + 10000, so keep cluster ports below 55536) for
+  every `test:db`,
   `test:smoke:db` and `docker compose` command so it gets its own containers, and copies the
   main checkout's `.env` into its root (`cp <main checkout>/.env .env`, when the main checkout has
   one) right after the worktree is made, before any test or plan work
@@ -57,8 +68,8 @@ Run from the repository root.
   the screen, keyboard or clipboard. Agents and plan sessions run live tests here, with the same
   compose variables and `TABLE_CRAFT_EVIDENCE_DIR`; paths narrow the run like `vitest run`
   (`bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts`) and `-` arguments go to
-  Vitest. `test:smoke:db:headless:postgres`, `:oracle`, `:mssql` and `:all` add that server to
-  `mysql,tidb`, and the first line names the selected set. Files run `TABLE_CRAFT_SMOKE_WORKERS`
+  Vitest. `test:smoke:db:headless:postgres`, `:oracle`, `:mssql`, `:redis` and `:all` add that
+  server to `mysql,tidb`, and the first line names the selected set. Files run `TABLE_CRAFT_SMOKE_WORKERS`
   at a time, one display each (decision 096): unset, 3 on a Docker VM of 8 GiB or more and 1
   below, shared with headless runs already on the VM, as the first line of the run says. The
   files in `SERIAL_SMOKE_FILES` (`test/e2e/serialFiles.ts`) run after, one by one; a file that
@@ -215,14 +226,19 @@ packages/desktop/          @table-craft/desktop, the Electron app
                            settings, `appearance/` applies them as CSS variables,
                            `dialogs/Settings.tsx` edits them
 plugins/<id>/              datasource plugins (@table-craft/plugin-<id>): mysql and
-                           sqlite built in, postgres optional (`BUILT_IN_PLUGINS`,
+                           sqlite built in, postgres and redis optional (`BUILT_IN_PLUGINS`,
                            `OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, decision 108;
                            an optional one builds to `dist/optional-plugins/`, loads in
                            development runs and downloads from npm). Each depends on
                            plugin-api and its driver alone, and ships a
                            `table-craft-plugin.json` beside `src/`; its
                            `introspect.ts` answers `schemaTree`, its `explain.ts` builds
-                           the EXPLAIN statement and reads the plan (subpath `./explain`)
+                           the EXPLAIN statement and reads the plan (subpath `./explain`).
+                           `redis` speaks `commands` and `keyValue` (decisions 112-116):
+                           `session.ts`, `routing.ts` (per-node routing), `keyspace.ts`,
+                           `read.ts`, `apply.ts`, `features.ts` and `resp2.ts`
+                           (version fallbacks); its `*.generated.ts` come from
+                           `scripts/command-docs.ts`
 scripts/agent-cost/        `report.ts`: steps, context and cost of an agent session, read
                            from the OpenCode session store
 scripts/api-report/        the plugin-api surface report and its check against the last

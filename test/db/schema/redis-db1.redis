@@ -1,0 +1,3 @@
+# Database 1 of the standalone Redis servers (plan 058); the cluster has database 0 only.
+SET db1:greeting "hi"
+HSET db1:config mode "test"

@@ -7,3 +7,4 @@ test/support/plans/
 test/support/frozen-plugins/
 packages/plugin-api/api/*.api.md
 packages/desktop/scripts/palettes/
+plugins/redis/src/*.generated.ts

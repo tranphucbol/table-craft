@@ -75,6 +75,37 @@ describe("pluginManifestSchema", () => {
     expect(parses(["sql", "schemaTree", "sessions"])).toBe(true);
   });
 
+  it("givenCommandsWithSql_whenParsed_thenRejected", () => {
+    const parses = (capabilities: string[]): boolean =>
+      pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
+    expect(parses(["commands", "sql"])).toBe(false);
+    expect(parses(["commands"])).toBe(true);
+  });
+
+  it("givenKeyValueWithoutCommands_whenParsed_thenRejected", () => {
+    const parses = (capabilities: string[]): boolean =>
+      pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
+    expect(parses(["keyValue"])).toBe(false);
+    expect(parses(["sql", "keyValue"])).toBe(false);
+    expect(parses(["commands", "keyValue"])).toBe(true);
+  });
+
+  it("givenNodesOrServerInfoWithoutALanguage_whenParsed_thenRejected", () => {
+    const parses = (capabilities: string[]): boolean =>
+      pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
+    expect(parses(["nodes"])).toBe(false);
+    expect(parses(["serverInfo"])).toBe(false);
+    expect(parses(["commands", "nodes", "serverInfo"])).toBe(true);
+    expect(parses(["sql", "serverInfo"])).toBe(true);
+  });
+
+  it("givenSessionsOverCommandsAndKeyValue_whenParsed_thenAccepted", () => {
+    const parses = (capabilities: string[]): boolean =>
+      pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
+    expect(parses(["commands", "sessions"])).toBe(false);
+    expect(parses(["commands", "keyValue", "sessions"])).toBe(true);
+  });
+
   it("givenRoutineCallWithoutSchemaTree_whenParsed_thenRejected", () => {
     const parses = (capabilities: string[]): boolean =>
       pluginManifestSchema.safeParse({ ...VALID_MANIFEST, capabilities }).success;
@@ -240,5 +271,55 @@ describe("pluginManifestSchema url", () => {
     expect(parses(["sqlite"])).toBe(true);
     expect(parses(["SQLite"])).toBe(false);
     expect(parses([])).toBe(false);
+  });
+
+  it("givenSetsNamingUnlistedSchemeOrUndeclaredField_whenParsed_thenRejected", () => {
+    const TLS = { key: "tls", label: "TLS", kind: "checkbox" };
+    const parses = (sets: unknown): boolean =>
+      pluginManifestSchema.safeParse({
+        ...VALID_MANIFEST,
+        connection: { fields: [HOST, TLS], url: { schemes: ["redis", "rediss"], form: "server", parts: {}, sets } },
+      }).success;
+
+    expect(parses({ rediss: { tls: true } })).toBe(true);
+    expect(parses({ secure: { tls: true } })).toBe(false);
+    expect(parses({ rediss: { encrypt: true } })).toBe(false);
+  });
+});
+
+describe("pluginManifestSchema visibleWhen", () => {
+  const MODE = {
+    key: "mode",
+    label: "Mode",
+    kind: "select",
+    options: [
+      { value: "standalone", label: "Standalone" },
+      { value: "cluster", label: "Cluster" },
+    ],
+  };
+  const parses = (fields: readonly unknown[]): boolean =>
+    pluginManifestSchema.safeParse({ ...VALID_MANIFEST, connection: { fields } }).success;
+
+  it("givenConditionOnASelect_whenParsed_thenAccepted", () => {
+    const database = {
+      key: "database",
+      label: "Database",
+      kind: "number",
+      visibleWhen: { key: "mode", equals: "standalone" },
+    };
+    expect(parses([MODE, database])).toBe(true);
+  });
+
+  it("givenConditionOnMissingOrSelfOrTextField_whenParsed_thenRejected", () => {
+    expect(parses([{ ...HOST, visibleWhen: { key: "mode", equals: "cluster" } }])).toBe(false);
+    expect(parses([{ ...MODE, visibleWhen: { key: "mode", equals: "cluster" } }])).toBe(false);
+    expect(parses([HOST, { ...USER, visibleWhen: { key: "host", equals: "x" } }])).toBe(false);
+  });
+
+  it("givenConditionOfTheWrongType_whenParsed_thenRejected", () => {
+    const flag = { key: "flag", label: "Flag", kind: "checkbox" };
+    expect(parses([flag, { ...HOST, visibleWhen: { key: "flag", equals: "yes" } }])).toBe(false);
+    expect(parses([flag, { ...HOST, visibleWhen: { key: "flag", equals: true } }])).toBe(true);
+    expect(parses([MODE, { ...HOST, visibleWhen: { key: "mode", equals: true } }])).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import type { ResultState, ResultWindow } from "./results.js";
-import type { Capability, Column, TypeClass } from "./wire.js";
+import type { Capability, Column, CommandReply, TypeClass } from "./wire.js";
 
 /** Mirrors `ServerSessionState` in plugin-api. */
 export type ServerSessionState = "active" | "idle" | "idleInTransaction" | "blocked" | "other";
@@ -82,6 +82,8 @@ export interface ExecutedStatement extends ResultState {
   readonly namespace?: CurrentNamespace;
   /** Present when the engine replaced a lost session before running the statement (decision 054). */
   readonly reconnected?: Reconnection;
+  /** A command's scalar answer (decision 112): Output shows it and no result tab opens. */
+  readonly reply?: CommandReply;
 }
 
 /** A lost session the engine replaced with a new one under the same `sessionId`. */

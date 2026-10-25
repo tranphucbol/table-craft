@@ -14,6 +14,41 @@
       "key": "quoteIdentifierWith",
       "kind": "addition",
       "reason": "The parameter widens to IdentifierQuote, adding \"[\"; every argument accepted before still is and quotes the same way (decision 100)."
+    },
+    {
+      "key": "CAPABILITIES",
+      "kind": "addition",
+      "reason": "Gains commands, keyValue, nodes and serverInfo at the end; a plugin declares capabilities, so a plugin built for 1.1 never names the new ones and the host only reads them when declared (decisions 112-114)."
+    },
+    {
+      "key": "PLUGIN_ERROR_CODES",
+      "kind": "addition",
+      "reason": "Gains conflict at the end; plugins raise these codes and the host reads them, so the set only widens what a plugin may return (decision 115)."
+    },
+    {
+      "key": "connectionFieldSchema",
+      "kind": "addition",
+      "reason": "Gains the optional visibleWhen; every field valid before still parses the same (decision 112)."
+    },
+    {
+      "key": "connectionUrlSchema",
+      "kind": "addition",
+      "reason": "Gains the optional sets; every url spec valid before still parses and formats the same (decision 112)."
+    },
+    {
+      "key": "pluginManifestSchema",
+      "kind": "addition",
+      "reason": "Widens through CAPABILITIES, visibleWhen and sets above; every manifest valid before still parses the same."
+    },
+    {
+      "key": "ContractFixture.sessions",
+      "kind": "addition",
+      "reason": "Gains the optional sleepQuery; a plugin supplies the fixture, so the shape only widens what it may pass."
+    },
+    {
+      "key": "ContractFixture.typeProbe",
+      "kind": "addition",
+      "reason": "Becomes optional, required only with sql; a plugin supplies the fixture, so every fixture valid before still is (decision 112)."
     }
   ]
 }

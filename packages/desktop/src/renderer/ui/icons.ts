@@ -18,6 +18,7 @@ import {
   Code,
   Funnel,
   Gauge,
+  Cpu,
   Sigma,
   TreeView,
   CheckCircle,
@@ -92,6 +93,8 @@ export {
   CircleNotch as SpinnerIcon,
   Database as DatabaseIcon,
   HardDrives as ServicesIcon,
+  HardDrives as ServerNodeIcon,
+  Funnel as KeyFilterIcon,
   Minus as HideIcon,
   Terminal as ConsoleIcon,
   X as CloseIcon,
@@ -107,6 +110,8 @@ export {
   Stack as MaterializedViewIcon,
   Columns as ColumnIcon,
   Key as KeyIcon,
+  Key as KeyTabIcon,
+  Cpu as ServerTabIcon,
   ListDashes as IndexIcon,
   FunctionGlyph as RoutineIcon,
   ListNumbers as SequenceIcon,
@@ -129,6 +134,7 @@ export {
   FileArrowDown as ImportIcon,
   FileSql as ScriptIcon,
   Pulse as SessionsIcon,
+  Trash as DeleteIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */
@@ -152,6 +158,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   close: X,
   database: Database,
   services: HardDrives,
+  server: Cpu,
   search: MagnifyingGlass,
   add: Plus,
   properties: SlidersHorizontal,

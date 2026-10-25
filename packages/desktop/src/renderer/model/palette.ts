@@ -30,6 +30,8 @@ export interface SearchProvider {
   readonly id: string;
   readonly title: string;
   search(query: string): readonly SearchItem[];
+  /** Whether its tab shows; absent, always. The Keys tab shows only beside a key-value datasource. */
+  shown?(): boolean;
 }
 
 export interface PaletteTab {
@@ -38,7 +40,10 @@ export interface PaletteTab {
 }
 
 export function paletteTabs(providers: readonly SearchProvider[]): readonly PaletteTab[] {
-  return [{ id: ALL_TAB, title: "All" }, ...providers.map(({ id, title }) => ({ id, title }))];
+  return [
+    { id: ALL_TAB, title: "All" },
+    ...providers.filter((provider) => provider.shown?.() !== false).map(({ id, title }) => ({ id, title })),
+  ];
 }
 
 export function recentRank(recent: readonly string[], item: SearchItem): number {

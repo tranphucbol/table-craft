@@ -282,6 +282,7 @@ export const TABLE_ACTIONS: readonly AnyAction[] = [
         title: "Pending changes",
         message: surface.submitsAs(statements.length),
         statements,
+        terminator: surface.terminator,
         confirm: "Submit",
       });
       if (answer !== null) await surface.submit();

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import { useActionAvailable } from "@table-craft/desktop/renderer/actions/index.js";
@@ -7,11 +8,6 @@ import { MAIN_MENU_ANCHOR_ATTRIBUTE, WINDOW_ACTION_IDS } from "@table-craft/desk
 import { tabCaption, windowTitle } from "@table-craft/desktop/renderer/model/windowTitle.js";
 import { DatasourceWidget } from "@table-craft/desktop/renderer/shell/DatasourceWidget.js";
 import { UpdateButton } from "@table-craft/desktop/renderer/shell/UpdateButton.js";
-import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
-import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
-import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
-import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { activeTab, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
@@ -20,15 +16,7 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 /** The active tab and the name of its datasource, which the toolbar and the window are titled by. */
 function useActiveCaption() {
   const tab = useTabs((state) => activeTab(state));
-  const id = tab?.id ?? "";
-  const consoleDatasource = useConsoles((state) => state.consoles[id]?.datasourceId);
-  const tableDatasource = useTables((state) => state.tables[id]?.datasourceId);
-  const ddlDatasource = useDdl((state) => state.ddls[id]?.datasourceId);
-  const sessionsDatasource = useSessions((state) => state.tabs[id]?.datasourceId);
-  const name = useDatasources(
-    (state) =>
-      datasourceById(state, consoleDatasource ?? tableDatasource ?? ddlDatasource ?? sessionsDatasource)?.name ?? null,
-  );
+  const name = useConsoleDatasource(tab?.id ?? "")?.name ?? null;
   return { tab, name };
 }
 

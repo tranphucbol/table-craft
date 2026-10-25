@@ -130,6 +130,8 @@ export interface ConnectionField {
   readonly options?: readonly { readonly value: string; readonly label: string }[] | undefined;
   readonly group?: "general" | "advanced" | undefined;
   readonly secret?: boolean | undefined;
+  /** Drawn only while the named select or checkbox holds `equals` (plan 058). */
+  readonly visibleWhen?: { readonly key: string; readonly equals: string | boolean } | undefined;
 }
 
 export type ConfigValue = string | number | boolean;
@@ -146,6 +148,7 @@ export interface ConnectionUrlSpec {
         readonly values?: Readonly<Record<string, string>> | undefined;
       }[]
     | undefined;
+  readonly sets?: Readonly<Record<string, Readonly<Record<string, ConfigValue>>>> | undefined;
 }
 
 /** What a pasted connection URL fills in; `secrets` is what the user pasted, for the secret fields. */

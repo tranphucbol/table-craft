@@ -12,10 +12,13 @@ import {
   type SearchProvider,
 } from "@table-craft/desktop/renderer/model/palette.js";
 import { ACTIONS_PROVIDER_ID, actionsProvider } from "@table-craft/desktop/renderer/palette/providers.js";
+import { keysProvider } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 import { tablesProvider } from "@table-craft/desktop/renderer/palette/tablesProvider.js";
+import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
-import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
@@ -28,6 +31,15 @@ const PROVIDERS: readonly SearchProvider[] = [
       const open: OpenTableArgs = { datasourceId: args.datasourceId, path: args.path, relation: args.name };
       invoke(TABLE_ACTION_IDS.openTable, open);
     },
+  }),
+  keysProvider({
+    keyspaces: () => useKeys.getState().keyspaces,
+    datasources: () => useDatasources.getState().datasources,
+    browsesKeys: () => {
+      const { datasources, plugins } = useDatasources.getState();
+      return datasources.some((datasource) => capabilitiesOf(plugins, datasource.pluginId).includes("keyValue"));
+    },
+    open: (args) => invoke(KEY_ACTION_IDS.open, args),
   }),
 ];
 const MODE_TITLE: Readonly<Record<PaletteMode, string>> = {

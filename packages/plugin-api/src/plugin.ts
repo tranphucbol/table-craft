@@ -10,6 +10,7 @@ import type {
 } from "./completion.js";
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { InspectionRequest, Problem } from "./inspection.js";
+import type { Keyspace } from "./keyspace.js";
 import type { ObjectEditor } from "./objects.js";
 import type { SessionMonitor } from "./sessions.js";
 import type { TypeClass, WireValue } from "./values.js";
@@ -33,6 +34,10 @@ export const CAPABILITIES = [
   "serverMessages",
   "sessions",
   "routineCall",
+  "commands",
+  "keyValue",
+  "nodes",
+  "serverInfo",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -85,6 +90,19 @@ export interface ExecuteResult {
    * the plugin declares `serverMessages`.
    */
   readonly messages?: readonly ServerMessage[];
+  /**
+   * A command's one-value answer, such as a status, a number or a string (decision 112): the
+   * console shows it in Output and opens no result. Only a `commands` plugin sets it, and then
+   * `columns` and `rows` are empty.
+   */
+  readonly reply?: CommandReply;
+}
+
+/** A scalar reply to a command (decision 112). */
+export interface CommandReply {
+  readonly value: WireValue;
+  /** The reply as the server's own client prints it: `"Ann"`, `(integer) 5`, `(nil)`, `OK`. */
+  readonly text: string;
 }
 
 /** How serious a `ServerMessage` is, from the server's own word for it. */
@@ -132,6 +150,60 @@ export interface ExecuteOptions {
    * preview. For an export, which writes values whole (decision 040); a grid never asks.
    */
   readonly fullBytes?: boolean;
+  /**
+   * Where a command runs, for a plugin that declares `nodes` (decision 114): `NODE_AUTO` (absent
+   * means the same) lets the plugin route it, `NODE_ALL_PRIMARIES` runs it on every primary and
+   * leads each row with a `node` column, and anything else is a `ServerNode.id`.
+   */
+  readonly node?: string;
+}
+
+/** `ExecuteOptions.node`: the plugin routes the command by its keys (decision 114). */
+export const NODE_AUTO = "auto";
+/** `ExecuteOptions.node`: the command runs once on every primary (decision 114). */
+export const NODE_ALL_PRIMARIES = "allPrimaries";
+
+export const NODE_ROLES = ["primary", "replica"] as const;
+
+export type NodeRole = (typeof NODE_ROLES)[number];
+
+/** One server of the datasource (decision 114); a standalone server is one primary. */
+export interface ServerNode {
+  /** Stable while the cluster is: Redis' node id, or the address of a standalone server. */
+  readonly id: string;
+  /** `host:port`, as the client reaches it. */
+  readonly address: string;
+  readonly role: NodeRole;
+  /** Inclusive hash-slot ranges a primary serves; empty for a replica and a standalone server. */
+  readonly slots: readonly (readonly [number, number])[];
+  /** The primary a replica follows; null for a primary. */
+  readonly primaryId: string | null;
+  /** The server's word for its health, such as `connected` or `fail`. */
+  readonly state: string;
+}
+
+/** A titled group of a server's figures, such as Redis' `# Memory` section of `INFO` (decision 114). */
+export interface ServerInfoSection {
+  readonly title: string;
+  readonly entries: readonly { readonly name: string; readonly value: string }[];
+}
+
+/** One slow-log entry: when, for how long, what ran, and from where. */
+export interface SlowCommand {
+  readonly id: number;
+  /** ISO-8601. */
+  readonly at: string;
+  readonly durationMicros: number;
+  readonly command: string;
+  readonly client: string | null;
+  readonly node: string | null;
+}
+
+/** What `Session.serverInfo` reads about one node. */
+export interface ServerInfo {
+  /** The node, or null for a standalone server. */
+  readonly node: string | null;
+  readonly sections: readonly ServerInfoSection[];
 }
 
 /** Kinds a file importer infers from a column's text, narrowest first within each family (plan 021). */
@@ -221,6 +293,20 @@ export interface Session {
    * not say, and the host then matches by id alone.
    */
   readonly serverInstance?: string;
+  /** Present exactly when the plugin declares `keyValue` (decision 113). */
+  readonly keyspace?: Keyspace;
+  /**
+   * Present exactly when the plugin declares `nodes` (decision 114): every server of the
+   * datasource, primaries first; one entry for a single server.
+   */
+  nodes?(): Promise<readonly ServerNode[]>;
+  /**
+   * Present exactly when the plugin declares `serverInfo`: what `node` (a `ServerNode.id`, or null
+   * for the one server or a primary of the plugin's choice) reports about itself.
+   */
+  serverInfo?(node: string | null): Promise<ServerInfo>;
+  /** Present exactly when the plugin declares `serverInfo`: the newest `limit` slow commands, of every primary for a null `node`. */
+  slowLog?(node: string | null, limit: number): Promise<readonly SlowCommand[]>;
   /**
    * Settles in bounded time even when the network is gone: a graceful goodbye that does not
    * answer within a few seconds gives way to dropping the socket (decision 040).
@@ -309,6 +395,13 @@ export interface StatementClass {
    * `SET search_path` (plan 022); the host then asks `Session.currentNamespace` again.
    */
   readonly setsNamespace?: boolean;
+  /**
+   * Why the statement may be slow or heavy for the server, such as `KEYS walks every key`; the
+   * editor marks it and never blocks the run (decision 112). Null or absent when it is not.
+   */
+  readonly costly?: string | null;
+  /** With `destructive`: confirming it asks for the datasource's name, not just OK (decision 112). */
+  readonly confirmByName?: boolean;
 }
 
 export const KEYWORD_CASES = ["upper", "lower", "preserve"] as const;
@@ -521,12 +614,34 @@ export interface Transactions {
   readonly open: boolean;
 }
 
+/**
+ * The console language of a datasource that speaks commands, not SQL (decision 112): one command
+ * per line, as the server's own client reads them.
+ */
+export interface CommandLanguage {
+  /** Every command in `text`, in order; comments and blank lines belong to none. */
+  split(text: string): readonly StatementSpan[];
+  classify(command: string): StatementClass;
+  /**
+   * What fits at the caret. `session` is a connection the host keeps for such questions, null
+   * when it cannot open one; the plugin then completes from what it knows offline. Never rejects
+   * for text it cannot read.
+   */
+  complete(request: CompletionRequest, session: Session | null): Promise<CompletionResult>;
+  /** The command the caret is in and the argument it is at, for the parameter hint (decision 098). */
+  signatureAt?(request: CompletionRequest, session: Session | null): Promise<SignatureHelp | null>;
+  /** Problems in `request.text` found without running it, such as a costly command, with quick fixes. */
+  inspect?(request: InspectionRequest): Promise<readonly Problem[]>;
+}
+
 /** The default export of a plugin's entry module (decision 005). */
 export interface DatasourcePlugin {
   readonly id: string;
   readonly capabilities: readonly Capability[];
   /** Present exactly when the plugin declares `sql`. */
   readonly language?: SqlLanguage;
+  /** Present exactly when the plugin declares `commands` (decision 112). */
+  readonly commandLanguage?: CommandLanguage;
   /** Validates the configuration `connect` receives; the host parses before it calls. */
   readonly connectionSchema: z.ZodType;
   /** Rejects with a `PluginError` coded `connectionFailed` when the database cannot be reached. */

@@ -23,9 +23,11 @@ import { createFileConsoles } from "@table-craft/desktop/renderer/state/fileCons
 import { useLayout, type OpenConsole } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { bridgeSqlFiles } from "@table-craft/desktop/renderer/state/sqlFiles.js";
+import { useServer } from "@table-craft/desktop/renderer/state/server.js";
 import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { pendingTables, tablesOf, useTables } from "@table-craft/desktop/renderer/state/tables.js";
+import { useKeyTabs } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 
 const CONSOLE_ID_PREFIX = "console-";
@@ -341,6 +343,8 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
     if (tab.kind === "console") useConsoles.getState().close(tab.id);
     else if (tab.kind === "table") useTables.getState().close(tab.id);
     else if (tab.kind === "sessions") useSessions.getState().close(tab.id);
+    else if (tab.kind === "key") useKeyTabs.getState().close(tab.id);
+    else if (tab.kind === "server") useServer.getState().close(tab.id);
     else useDdl.getState().close(tab.id);
   }
 }

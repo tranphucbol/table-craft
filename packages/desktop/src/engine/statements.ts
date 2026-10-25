@@ -34,6 +34,7 @@ import type {
   ConditionColumn,
   ExecutedStatement,
   ExplainedStatement,
+  OpenedKey,
   ParameterValue,
   RequestOf,
   ResultEditable,
@@ -42,6 +43,8 @@ import type {
   TableQuery,
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
+
+const NO_KEYSPACE = "This datasource's plugin does not declare the keyValue capability.";
 
 /** A result column the catalog does not know, described from what the driver reported. */
 function reportedColumn(column: Column, index: number): ColumnMeta {
@@ -66,6 +69,8 @@ export function statementRunners(live: LiveContext) {
     options,
     now,
     sqlLanguage,
+    commandLanguage,
+    consoleLanguage,
     results,
     relationOf,
     referencingKeys,
@@ -97,21 +102,28 @@ export function statementRunners(live: LiveContext) {
     parameters: Readonly<Record<string, ParameterValue>> | undefined,
     paging: ResultPaging,
     timeoutSeconds: number,
+    node?: string,
   ): Promise<ExecutedStatement> {
     const open = sessionFor(sessionId);
     let bound: BoundStatement = { sql, params: [] };
     try {
-      if (parameters !== undefined) bound = sqlLanguage().bind(sql, parameters);
+      // A command language has no placeholders (decision 112): the line runs as written.
+      if (parameters !== undefined && commandLanguage() === null) bound = sqlLanguage().bind(sql, parameters);
     } catch (cause) {
       throw statementFailed(cause, options.datasource.readOnly);
     }
+    const executeOptions = node === undefined ? undefined : { node };
     open.running += 1;
     try {
       const { value: summary, reconnected } = await onLiveSession(
         sessionId,
         open,
         timeoutSeconds,
-        (session) => session.execute(bound.sql, bound.params).then((result) => results.put(result, paging)),
+        (session) =>
+          session.execute(bound.sql, bound.params, executeOptions).then(async (result) => {
+            const put = await results.put(result, paging);
+            return result.reply === undefined ? put : { ...put, reply: result.reply };
+          }),
         (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
         (late) => void results.release(late.handle),
       );
@@ -126,7 +138,7 @@ export function statementRunners(live: LiveContext) {
       if (summary.cursorOpen) cursors.set(sessionId, summary.handle);
       // An open cursor keeps the session busy, and no statement that switches returns rows.
       // A statement that switches namespaces, or ends a transaction that may have, is followed by a read.
-      const statement = sqlLanguage().classify(bound.sql);
+      const statement = consoleLanguage().classify(bound.sql);
       const switches = statement.setsNamespace === true;
       const moves = !summary.cursorOpen && (switches || statement.kind === "transaction");
       const namespace = moves ? await namespaceOf(open) : undefined;
@@ -201,6 +213,54 @@ export function statementRunners(live: LiveContext) {
     });
     const referencing = await referencingKeys(request.path, request.relation);
     return { statement, sql, editable, columns, foreignKeys: relation.foreignKeys, referencing };
+  }
+
+  /** Reads a key on the key tab's session; its rows are held like a statement's (decision 113). */
+  async function openKey(request: RequestOf<"keyspace.open">): Promise<OpenedKey> {
+    const open = sessionFor(request.sessionId);
+    const readOnly = options.datasource.readOnly;
+    open.running += 1;
+    try {
+      const { value: read } = await onLiveSession(
+        request.sessionId,
+        open,
+        request.timeoutSeconds ?? 0,
+        async (session) => {
+          if (session.keyspace === undefined) {
+            throw new EngineFailure({ code: "invalidRequest", message: NO_KEYSPACE, hint: BUG_HINT });
+          }
+          const contents = await session.keyspace.read(request.database, request.key, {
+            ...request.range,
+            window: request.pageRows,
+          });
+          const summary = contents.result === null ? null : await results.put(contents.result, request);
+          return { contents, summary };
+        },
+        (cause) => (cause instanceof EngineFailure ? cause : statementFailed(cause, readOnly)),
+        (late) => void (late.summary === null ? undefined : results.release(late.summary.handle)),
+      );
+      const { contents, summary } = read;
+      if (summary !== null) {
+        if (sessions.get(request.sessionId) !== open) {
+          await results.release(summary.handle);
+          sessionFor(request.sessionId);
+        }
+        handles.set(summary.handle, request.sessionId);
+        if (summary.cursorOpen) cursors.set(request.sessionId, summary.handle);
+      }
+      return {
+        details: contents.details,
+        value: contents.value,
+        readOnly: contents.readOnly,
+        statement:
+          summary === null
+            ? null
+            : { ...summary, firstWindow: results.window(summary.handle, 0), transactionOpen: false },
+      };
+    } finally {
+      open.running -= 1;
+      open.lastUsed = now();
+    }
   }
 
   /** Whether a console result can be edited (decision 056); remembers an editable one for `edits.*`. */
@@ -374,6 +434,7 @@ export function statementRunners(live: LiveContext) {
     runStatement,
     explainStatement,
     queryTable,
+    openKey,
     resultEditable,
     tableFor,
     editStatements,

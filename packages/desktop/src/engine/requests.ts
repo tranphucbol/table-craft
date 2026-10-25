@@ -2,6 +2,7 @@ import { EXPORT_FORMATS, EXTRACTOR_KINDS, IMPORT_ENCODINGS, IMPORT_ESCAPES } fro
 import {
   FORMAT_STYLES,
   GENERATED_STATEMENTS,
+  KEY_TYPES,
   KEYWORD_CASES,
   OBJECT_KINDS,
   TRANSACTION_MODES,
@@ -25,6 +26,38 @@ const index = z.number().int().nonnegative();
 const extractor = z.enum(EXTRACTOR_KINDS);
 const columns = z.array(index);
 const relation = z.string().min(1);
+const keyName = z.strictObject({
+  text: z.string(),
+  hex: z
+    .string()
+    .regex(/^(?:[0-9a-f]{2})+$/)
+    .nullable(),
+});
+const keyNames = z.array(keyName).min(1);
+const keyChange = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("setString"), value: keyName, original: keyName.nullable() }),
+  z.strictObject({ kind: z.literal("setField"), field: keyName, value: keyName, original: keyName.nullable() }),
+  z.strictObject({ kind: z.literal("deleteField"), field: keyName, original: keyName }),
+  z.strictObject({ kind: z.literal("setIndex"), index: z.number().int(), value: keyName, original: keyName }),
+  z.strictObject({ kind: z.literal("deleteIndex"), index: z.number().int(), original: keyName }),
+  z.strictObject({ kind: z.literal("push"), value: keyName }),
+  z.strictObject({ kind: z.literal("addMember"), member: keyName }),
+  z.strictObject({ kind: z.literal("deleteMember"), member: keyName }),
+  z.strictObject({
+    kind: z.literal("setScore"),
+    member: keyName,
+    score: z.number(),
+    original: z.number().nullable(),
+  }),
+  z.strictObject({ kind: z.literal("addEntry"), fields: z.array(z.tuple([keyName, keyName])).min(1) }),
+  z.strictObject({ kind: z.literal("deleteEntry"), id: z.string().min(1) }),
+]);
+const keyChanges = z.array(keyChange).min(1);
+const keyApplyOptions = z.strictObject({
+  type: z.enum(KEY_TYPES),
+  guard: z.boolean(),
+  ttlMs: z.number().int().positive().optional(),
+});
 const taskId = z.string().min(1);
 const sessionTarget = z.strictObject({ id: z.string().min(1), instance: z.string().min(1).nullable() });
 const stallSeconds = z.number().int().min(EXPORT_STALL_SECONDS_RANGE.min).max(EXPORT_STALL_SECONDS_RANGE.max);
@@ -36,6 +69,8 @@ const exportSource = z.discriminatedUnion("kind", [
 const MAX_INSPECTION_TEXT = 200_000;
 /** Longer than any search a person types; bounds the regular expression the engine compiles. */
 const MAX_FIND_LENGTH = 1_000;
+/** `SLOWLOG GET` keeps 128 entries by default; the Server tab asks for that many. */
+const SLOW_LOG_MAX = 1_000;
 const viewSpec = z.strictObject({
   find: z
     .strictObject({
@@ -169,6 +204,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     parameters: z.record(z.string(), z.string().nullable()).optional(),
     ...paging,
     timeoutSeconds,
+    node: z.string().min(1).optional(),
   }),
   z.strictObject({ id: requestId, type: z.literal("statement.cancel"), sessionId }),
   z.strictObject({ id: requestId, type: z.literal("script.split"), text: z.string() }),
@@ -284,6 +320,75 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   z.strictObject({ id: requestId, type: z.literal("catalog.namespaces"), refresh: z.boolean().optional() }),
   z.strictObject({ id: requestId, type: z.literal("namespace.targets"), refresh: z.boolean().optional() }),
   z.strictObject({ id: requestId, type: z.literal("namespace.switchStatement"), path: namespacePath }),
+  z.strictObject({ id: requestId, type: z.literal("server.nodes") }),
+  z.strictObject({ id: requestId, type: z.literal("server.info"), node: z.string().min(1).nullable() }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("server.slowLog"),
+    node: z.string().min(1).nullable(),
+    limit: z.number().int().positive().max(SLOW_LOG_MAX),
+  }),
+  z.strictObject({ id: requestId, type: z.literal("keyspace.databases") }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.scan"),
+    database: index,
+    cursor: z.string().nullable(),
+    match: z.string().min(1),
+    keyType: z.enum(KEY_TYPES).nullable(),
+  }),
+  z.strictObject({ id: requestId, type: z.literal("keyspace.describe"), database: index, keys: keyNames }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.open"),
+    sessionId,
+    database: index,
+    key: keyName,
+    range: z.strictObject({
+      match: z.string().min(1).optional(),
+      from: z.string().min(1).optional(),
+      to: z.string().min(1).optional(),
+      offset: z.number().int().nonnegative().optional(),
+    }),
+    ...paging,
+    timeoutSeconds,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.preview"),
+    key: keyName,
+    changes: keyChanges,
+    options: keyApplyOptions,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.apply"),
+    database: index,
+    key: keyName,
+    changes: keyChanges,
+    options: keyApplyOptions,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.rename"),
+    database: index,
+    key: keyName,
+    to: keyName,
+    overwrite: z.boolean(),
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.expire"),
+    database: index,
+    key: keyName,
+    expiry: z
+      .union([
+        z.strictObject({ inMs: z.number().int().positive() }),
+        z.strictObject({ at: z.iso.datetime({ offset: true }) }),
+      ])
+      .nullable(),
+  }),
+  z.strictObject({ id: requestId, type: z.literal("keyspace.remove"), database: index, keys: keyNames }),
   z.strictObject({
     id: requestId,
     type: z.literal("catalog.describe"),

@@ -31,7 +31,8 @@ const COMPLETE_EVENT = "input.complete";
 export type CompleteCall = (params: EngineCalls["completion.complete"]["params"]) => Promise<CompletionResult>;
 
 export interface CompletionTarget {
-  readonly dialect: () => SQLDialect;
+  /** The SQL dialect whose keywords complete offline; null for a command language, which has none. */
+  readonly dialect: () => SQLDialect | null;
   /** The engine to ask, or null while the datasource is not connected: completion never connects. */
   readonly engine: () => CompleteCall | null;
   /** The relation a table editor's WHERE or ORDER BY bar filters (plan 009 decision 16). */
@@ -101,7 +102,10 @@ export function toEditorResult(result: CompletionResult): EditorCompletionResult
  */
 export function engineCompletionSource(target: CompletionTarget): CompletionSource {
   let latest = 0;
-  const keywords = (context: CompletionContext) => keywordCompletionSource(target.dialect(), true)(context);
+  const keywords = (context: CompletionContext) => {
+    const dialect = target.dialect();
+    return dialect === null ? null : keywordCompletionSource(dialect, true)(context);
+  };
   return async (context) => {
     const call = target.engine();
     if (call === null) return keywords(context);

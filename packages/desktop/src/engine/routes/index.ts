@@ -18,6 +18,8 @@ import { navigationRoutes } from "@table-craft/desktop/engine/routes/navigation.
 import { tableRoutes } from "@table-craft/desktop/engine/routes/table.js";
 import { editsRoutes } from "@table-craft/desktop/engine/routes/edits.js";
 import { sessionsRoutes } from "@table-craft/desktop/engine/routes/sessions.js";
+import { keyspaceRoutes } from "@table-craft/desktop/engine/routes/keyspace.js";
+import { serverRoutes } from "@table-craft/desktop/engine/routes/server.js";
 
 /** One function per method prefix; each builds its prefix's handlers over a connection. */
 export const ROUTE_GROUPS = [
@@ -39,6 +41,8 @@ export const ROUTE_GROUPS = [
   tableRoutes,
   editsRoutes,
   sessionsRoutes,
+  serverRoutes,
+  keyspaceRoutes,
 ] as const;
 
 export function routesOf(connection: ConnectionContext): Routes {
@@ -61,5 +65,7 @@ export function routesOf(connection: ConnectionContext): Routes {
     ...tableRoutes(connection),
     ...editsRoutes(connection),
     ...sessionsRoutes(connection),
+    ...serverRoutes(connection),
+    ...keyspaceRoutes(connection),
   };
 }
