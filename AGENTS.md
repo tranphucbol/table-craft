@@ -206,7 +206,7 @@ docs/design/               specification.md, design-system.md
 docs/decisions/            one numbered file per durable decision
 docs/media/                the README's GIFs, recorded by `readme:media` and nothing else
 docs/plans/                one plan per feature with its Live test section; untracked
-                           except TEMPLATE.md (decision 035)
+                           except TEMPLATE.md and ROADMAP-must-have.md (decision 035)
 docs/evidence/NNN/         screenshots from each plan's live test; untracked (decision 035)
 ```
 
@@ -251,7 +251,8 @@ or a named constant over a comment.
   row to `docs/decisions/README.md`.
 - `docs/plans/` holds implementation plans. Start from `docs/plans/TEMPLATE.md`. A plan is done
   when its phases are green and its Live test section, with screenshots in `docs/evidence/NNN/`,
-  is filled in. Plans and evidence stay out of git; never commit them (decision 035). A plan
+  is filled in. Plans and evidence stay out of git; never commit them (decision 035). The one exception is `ROADMAP-must-have.md`, which the
+  coordinator commits when its logs change. A plan
   worked in its own worktree starts by copying the main checkout's `.env` there, so its TiDB
   suites use the remote server; `.env` is git-ignored and never committed.
 - `README.md` is for users. `test/renderer/readme.test.ts` checks it against the code: images,

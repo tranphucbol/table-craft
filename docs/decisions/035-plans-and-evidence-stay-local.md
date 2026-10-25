@@ -22,3 +22,9 @@ plan's PNGs.
 - A plan written in one checkout is not visible in another clone; hand it over through the session
   that implements it.
 - A plan is still done only when its Live test section is filled in.
+
+## Amendment: the must-have roadmap is tracked
+
+`docs/plans/ROADMAP-must-have.md` is tracked so the tracks, reserved branches, decisions and ports,
+and the dispatch and merge logs of the plans in [069](069-the-must-have-release-amends-the-v1-scope.md)
+are visible from any clone. The plans it names and their evidence stay local.
