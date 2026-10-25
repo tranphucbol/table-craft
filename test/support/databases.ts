@@ -32,6 +32,40 @@ function textFromEnv(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
+/** Every server the suites can run against; SQLite is in-process and always runs. */
+export const DATABASE_IDS = ["mysql", "tidb", "postgres", "oracle", "mssql"] as const;
+export type DatabaseId = (typeof DATABASE_IDS)[number];
+export const DATABASES_ENV = "TABLE_CRAFT_DATABASES";
+/** Decision 099: the normal flow tests MySQL and the remote TiDB; every other server is opt-in. */
+export const DEFAULT_DATABASES: readonly DatabaseId[] = ["mysql", "tidb"];
+const EVERY_DATABASE = "all";
+
+function isDatabaseId(id: string): id is DatabaseId {
+  return (DATABASE_IDS as readonly string[]).includes(id);
+}
+
+/** The servers `TABLE_CRAFT_DATABASES` selects, a comma list or `all`, in `DATABASE_IDS` order. */
+export function selectedDatabases(env: NodeJS.ProcessEnv = process.env): readonly DatabaseId[] {
+  const ids = (env[DATABASES_ENV] ?? "")
+    .split(",")
+    .map((id) => id.trim().toLowerCase())
+    .filter((id) => id !== "");
+  if (ids.length === 0) return DEFAULT_DATABASES;
+  if (ids.includes(EVERY_DATABASE)) return DATABASE_IDS;
+  const unknown = ids.filter((id) => !isDatabaseId(id));
+  if (unknown.length > 0) {
+    throw new Error(
+      `${DATABASES_ENV} names ${unknown.join(", ")}, which is not a test database; ` +
+        `list any of ${[...DATABASE_IDS, EVERY_DATABASE].join(", ")}, separated by commas.`,
+    );
+  }
+  return DATABASE_IDS.filter((id) => ids.includes(id));
+}
+
+export function databaseEnabled(id: DatabaseId, env: NodeJS.ProcessEnv = process.env): boolean {
+  return selectedDatabases(env).includes(id);
+}
+
 export const POSTGRES_CONFIG = {
   host: hostFromEnv("TABLE_CRAFT_PG_HOST"),
   port: portFromEnv("TABLE_CRAFT_PG_PORT", DEFAULT_POSTGRES_PORT),
@@ -43,6 +77,27 @@ export const POSTGRES_CONFIG = {
 export const MYSQL_CONFIG = {
   host: hostFromEnv("TABLE_CRAFT_MYSQL_HOST"),
   port: portFromEnv("TABLE_CRAFT_MYSQL_PORT", DEFAULT_MYSQL_PORT),
+  database: CREDENTIAL,
+  user: CREDENTIAL,
+  password: CREDENTIAL,
+} as const;
+
+const DEFAULT_ORACLE_PORT = 51521;
+const DEFAULT_MSSQL_PORT = 51433;
+
+/** The `oracle` service's application user, in the image's default pluggable database. */
+export const ORACLE_CONFIG = {
+  host: hostFromEnv("TABLE_CRAFT_ORACLE_HOST"),
+  port: portFromEnv("TABLE_CRAFT_ORACLE_PORT", DEFAULT_ORACLE_PORT),
+  serviceName: "FREEPDB1",
+  user: CREDENTIAL,
+  password: CREDENTIAL,
+} as const;
+
+/** The login `test/db/schema/mssql.sql` creates; `sa` is only the seed's. */
+export const MSSQL_CONFIG = {
+  host: hostFromEnv("TABLE_CRAFT_MSSQL_HOST"),
+  port: portFromEnv("TABLE_CRAFT_MSSQL_PORT", DEFAULT_MSSQL_PORT),
   database: CREDENTIAL,
   user: CREDENTIAL,
   password: CREDENTIAL,
@@ -144,4 +199,12 @@ export const MYSQL_TLS_BEHIND_BASTION = { host: "mysql-tls", port: 3306 } as con
 
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };
+}
+
+/** The smoke files' PostgreSQL scenarios skip unless `TABLE_CRAFT_DATABASES` selects it (decision 099). */
+export const WITHOUT_POSTGRES = !databaseEnabled("postgres");
+
+/** Whether a scenario on a datasource of `pluginId` skips, because its server is not selected. */
+export function serverSkipped(pluginId: string): boolean {
+  return pluginId === "postgres" && WITHOUT_POSTGRES;
 }

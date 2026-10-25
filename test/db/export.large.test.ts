@@ -10,7 +10,7 @@ import type { PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportTask } from "@table-craft/desktop/engine/protocol.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
 import { execute, exportHarness, openSession, startExport } from "../support/engineExports.js";
 import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
@@ -44,7 +44,7 @@ const DIGITS =
 const MYSQL_PLACES = ["g", "f", "e", "c", "b", "a"] as const;
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly plugin: PluginLoadResult;
   readonly config: object;
   readonly rows: string;
@@ -135,84 +135,94 @@ async function unzip(args: readonly string[]): Promise<string> {
 }
 
 for (const target of TARGETS) {
-  describe.runIf(ENABLED)(`large export: ${target.name}`, { timeout: LARGE_TEST_TIMEOUT_MS }, () => {
-    const cleanup: (() => Promise<void>)[] = [];
-    afterEach(async () => {
-      for (const step of cleanup.splice(0).reverse()) await step();
-    });
-
-    interface Run {
-      readonly done: ExportTask;
-      readonly path: string;
-      readonly size: number;
-      readonly memory: { readonly baseline: number; readonly peak: number };
-    }
-
-    async function exportLarge(format: "csv" | "xlsx"): Promise<Run> {
-      const directory = await mkdtemp(join(tmpdir(), "table-craft-large-"));
-      cleanup.push(() => rm(directory, { recursive: true, force: true }));
-      const engine = exportHarness(
-        { id: target.name, pluginId: target.name, config: { ...target.config }, readOnly: false, keepAliveSeconds: 0 },
-        [target.plugin],
-      );
-      cleanup.push(() => engine.close());
-      const sessionId = await openSession(engine.connection);
-      const { handle } = await execute(engine.connection, sessionId, target.rows);
-      const path = join(directory, `large.${format}`);
-
-      const rss = sampleRss();
-      const task = await startExport(engine.connection, {
-        source: { kind: "result", handle, columns: [0, 1, 2] },
-        format,
-        path,
+  describe.runIf(ENABLED && databaseEnabled(target.name))(
+    `large export: ${target.name}`,
+    { timeout: LARGE_TEST_TIMEOUT_MS },
+    () => {
+      const cleanup: (() => Promise<void>)[] = [];
+      afterEach(async () => {
+        for (const step of cleanup.splice(0).reverse()) await step();
       });
-      const done = await engine.finished(task.taskId);
-      const memory = rss.stop();
-      expect(await readdir(directory)).toEqual([`large.${format}`]);
-      return { done, path, size: (await stat(path)).size, memory };
-    }
 
-    async function report(format: string, run: Run, extra: object): Promise<void> {
-      if (REPORT === undefined) return;
-      await appendFile(
-        REPORT,
-        `${JSON.stringify({
-          database: target.name,
+      interface Run {
+        readonly done: ExportTask;
+        readonly path: string;
+        readonly size: number;
+        readonly memory: { readonly baseline: number; readonly peak: number };
+      }
+
+      async function exportLarge(format: "csv" | "xlsx"): Promise<Run> {
+        const directory = await mkdtemp(join(tmpdir(), "table-craft-large-"));
+        cleanup.push(() => rm(directory, { recursive: true, force: true }));
+        const engine = exportHarness(
+          {
+            id: target.name,
+            pluginId: target.name,
+            config: { ...target.config },
+            readOnly: false,
+            keepAliveSeconds: 0,
+          },
+          [target.plugin],
+        );
+        cleanup.push(() => engine.close());
+        const sessionId = await openSession(engine.connection);
+        const { handle } = await execute(engine.connection, sessionId, target.rows);
+        const path = join(directory, `large.${format}`);
+
+        const rss = sampleRss();
+        const task = await startExport(engine.connection, {
+          source: { kind: "result", handle, columns: [0, 1, 2] },
           format,
-          rows: run.done.rows,
-          bytes: run.size,
-          elapsedMs: run.done.elapsedMs,
-          rssBaselineMiB: Math.round(run.memory.baseline / MEBIBYTE),
-          rssPeakMiB: Math.round(run.memory.peak / MEBIBYTE),
-          ...extra,
-        })}\n`,
-      );
-    }
+          path,
+        });
+        const done = await engine.finished(task.taskId);
+        const memory = rss.stop();
+        expect(await readdir(directory)).toEqual([`large.${format}`]);
+        return { done, path, size: (await stat(path)).size, memory };
+      }
 
-    it("givenMultiGigabyteResult_whenExportedAsCsv_thenFileCompleteAndMemoryFlat", async () => {
-      const run = await exportLarge("csv");
-      const [actual, expected] = [await fileHash(run.path), expectedHash()];
-      await report("csv", run, { sha256: actual, expectedSha256: expected });
+      async function report(format: string, run: Run, extra: object): Promise<void> {
+        if (REPORT === undefined) return;
+        await appendFile(
+          REPORT,
+          `${JSON.stringify({
+            database: target.name,
+            format,
+            rows: run.done.rows,
+            bytes: run.size,
+            elapsedMs: run.done.elapsedMs,
+            rssBaselineMiB: Math.round(run.memory.baseline / MEBIBYTE),
+            rssPeakMiB: Math.round(run.memory.peak / MEBIBYTE),
+            ...extra,
+          })}\n`,
+        );
+      }
 
-      expect(run.done).toMatchObject({ state: "done", rows: ROWS, origin: "rerun", bytes: run.size });
-      expect(run.size).toBeGreaterThanOrEqual(MIN_BYTES);
-      expect(actual).toBe(expected);
-      expect(run.memory.peak - run.memory.baseline).toBeLessThan(MAX_RSS_GROWTH_BYTES);
-    });
+      it("givenMultiGigabyteResult_whenExportedAsCsv_thenFileCompleteAndMemoryFlat", async () => {
+        const run = await exportLarge("csv");
+        const [actual, expected] = [await fileHash(run.path), expectedHash()];
+        await report("csv", run, { sha256: actual, expectedSha256: expected });
 
-    it("givenMultiGigabyteResult_whenExportedAsXlsx_thenEverySheetIntactAndMemoryFlat", async () => {
-      const run = await exportLarge("xlsx");
-      const tested = await unzip(["-tq", run.path]);
-      const sheets = (await unzip(["-l", run.path])).match(SHEET_ENTRY) ?? [];
-      const last = await sheetTail(run.path, XLSX_SHEETS);
-      await report("xlsx", run, { sheets: run.done.sheets, unzipTest: tested.trim() });
+        expect(run.done).toMatchObject({ state: "done", rows: ROWS, origin: "rerun", bytes: run.size });
+        expect(run.size).toBeGreaterThanOrEqual(MIN_BYTES);
+        expect(actual).toBe(expected);
+        expect(run.memory.peak - run.memory.baseline).toBeLessThan(MAX_RSS_GROWTH_BYTES);
+      });
 
-      expect(run.done).toMatchObject({ state: "done", rows: ROWS, sheets: XLSX_SHEETS, bytes: run.size });
-      expect(tested).toContain("No errors detected");
-      expect(sheets).toHaveLength(XLSX_SHEETS);
-      expect(last).toContain(`<v>${String(ROWS)}</v>`);
-      expect(last.trimEnd().endsWith("</worksheet>")).toBe(true);
-      expect(run.memory.peak - run.memory.baseline).toBeLessThan(MAX_RSS_GROWTH_BYTES);
-    });
-  });
+      it("givenMultiGigabyteResult_whenExportedAsXlsx_thenEverySheetIntactAndMemoryFlat", async () => {
+        const run = await exportLarge("xlsx");
+        const tested = await unzip(["-tq", run.path]);
+        const sheets = (await unzip(["-l", run.path])).match(SHEET_ENTRY) ?? [];
+        const last = await sheetTail(run.path, XLSX_SHEETS);
+        await report("xlsx", run, { sheets: run.done.sheets, unzipTest: tested.trim() });
+
+        expect(run.done).toMatchObject({ state: "done", rows: ROWS, sheets: XLSX_SHEETS, bytes: run.size });
+        expect(tested).toContain("No errors detected");
+        expect(sheets).toHaveLength(XLSX_SHEETS);
+        expect(last).toContain(`<v>${String(ROWS)}</v>`);
+        expect(last.trimEnd().endsWith("</worksheet>")).toBe(true);
+        expect(run.memory.peak - run.memory.baseline).toBeLessThan(MAX_RSS_GROWTH_BYTES);
+      });
+    },
+  );
 }

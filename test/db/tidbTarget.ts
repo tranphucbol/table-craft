@@ -91,8 +91,3 @@ export async function resolveTidbTarget(processEnv: NodeJS.ProcessEnv = process.
     description: `TiDB: remote ${host}:${port} as ${credentials.user}, in scratch databases only`,
   };
 }
-
-/** `docker compose` arguments that start the local TiDB too, unless the remote one answers. */
-export function composeProfiles(target: TidbTarget): readonly string[] {
-  return target.remote ? [] : ["--profile", TIDB_PROFILE];
-}

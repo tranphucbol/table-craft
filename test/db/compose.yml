@@ -1,14 +1,18 @@
 # The databases `bun run test:db` runs the plugin contract against, seeded from ./schema.
 # Ports sit far from the defaults so a developer's own server keeps 5432 and 3306. Parallel
 # worktrees each set COMPOSE_PROJECT_NAME, TABLE_CRAFT_PG_PORT, TABLE_CRAFT_MYSQL_PORT,
-# TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT, TABLE_CRAFT_PG_TLS_PORT and TABLE_CRAFT_MYSQL_TLS_PORT so one
-# checkout's `up` never recreates the containers another checkout is testing against.
+# TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT, TABLE_CRAFT_PG_TLS_PORT, TABLE_CRAFT_MYSQL_TLS_PORT,
+# TABLE_CRAFT_ORACLE_PORT and TABLE_CRAFT_MSSQL_PORT so one checkout's `up` never recreates the
+# containers another checkout is testing against.
+# Every database service sits behind a profile named after the database (decision 099):
+# `TABLE_CRAFT_DATABASES` (default `mysql,tidb`) picks the profiles `stack.ts` passes.
 # Each seeded service is labelled with the hash of its seed (`stack.ts`), so `bun test/db/up.ts`
 # and the headless runner recreate, and so reseed, exactly the containers whose seed changed.
 name: table-craft-test-db
 
 services:
   postgres:
+    profiles: ["postgres"]
     image: postgres:17-alpine
     labels:
       table-craft.seed: ${TABLE_CRAFT_PG_SEED:-none}
@@ -31,6 +35,7 @@ services:
       retries: 60
 
   mysql:
+    profiles: ["mysql"]
     image: mysql:8.4
     labels:
       table-craft.seed: ${TABLE_CRAFT_MYSQL_SEED:-none}
@@ -79,6 +84,7 @@ services:
   # TLS-only servers for plan 037, signed by the test CA in ./tls (every key there is test-only).
   # The image refuses a key file the postgres user does not own, so the entrypoint copies it first.
   postgres-tls:
+    profiles: ["postgres"]
     image: postgres:17-alpine
     labels:
       table-craft.seed: ${TABLE_CRAFT_PG_TLS_SEED:-none}
@@ -111,6 +117,7 @@ services:
       retries: 60
 
   mysql-tls:
+    profiles: ["mysql"]
     image: mysql:8.4
     labels:
       table-craft.seed: ${TABLE_CRAFT_MYSQL_TLS_SEED:-none}
@@ -149,6 +156,7 @@ services:
   # The bastion plan 036 tunnels through: it reaches the databases by service name, so a tunnel
   # targets postgres:5432 and mysql:3306 wherever the test runs. Keys in ./ssh are test-only.
   ssh:
+    profiles: ["mysql", "postgres"]
     build: ./ssh
     image: table-craft-ssh:local
     ports:
@@ -189,6 +197,11 @@ services:
       TABLE_CRAFT_TIDB_PASSWORD: ${TABLE_CRAFT_TIDB_PASSWORD:-}
       TABLE_CRAFT_SSH_HOST: ssh
       TABLE_CRAFT_SSH_PORT: "22"
+      TABLE_CRAFT_ORACLE_HOST: oracle
+      TABLE_CRAFT_ORACLE_PORT: "1521"
+      TABLE_CRAFT_MSSQL_HOST: mssql
+      TABLE_CRAFT_MSSQL_PORT: "1433"
+      TABLE_CRAFT_DATABASES: ${TABLE_CRAFT_DATABASES:-}
       TABLE_CRAFT_EVIDENCE_DIR: ${TABLE_CRAFT_EVIDENCE_DIR:-}
     volumes:
       - ../..:/work
@@ -217,6 +230,79 @@ services:
       interval: 1s
       timeout: 5s
       retries: 120
+
+  # Oracle Database 23ai Free, arm64-native; no free 19c image exists, so plan 054 keeps to 19c
+  # syntax. The image runs ./schema/oracle once, as SYS, after it has made the TABLE_CRAFT user.
+  oracle:
+    profiles: ["oracle"]
+    image: gvenzl/oracle-free:23-slim-faststart
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_ORACLE_SEED:-none}
+    environment:
+      ORACLE_PASSWORD: table_craft
+      APP_USER: table_craft
+      APP_USER_PASSWORD: table_craft
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_ORACLE_PORT:-51521}:1521"
+    volumes:
+      - ./schema/oracle:/container-entrypoint-initdb.d:ro
+    healthcheck:
+      # The seeded table, not the image's healthcheck.sh: the listener opens before the seed runs.
+      test:
+        [
+          "CMD-SHELL",
+          "printf 'WHENEVER SQLERROR EXIT 1\\nSELECT 1 FROM seed_probe;\\n' | sqlplus -s -L table_craft/table_craft@//127.0.0.1/FREEPDB1",
+        ]
+      interval: 2s
+      timeout: 10s
+      retries: 150
+
+  # SQL Server 2022, amd64 only, so emulated on Apple silicon; plan 055 keeps to 2017 syntax. The
+  # image has no initdb directory: `mssql-seed` runs ./schema/mssql.sql once the server answers, and
+  # the healthcheck waits for its sentinel. The data directory stays on the container's own layer,
+  # since SQL Server needs O_DIRECT, which tmpfs lacks.
+  mssql:
+    profiles: ["mssql"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_MSSQL_SEED:-none}
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: TableCraft_sa1
+      MSSQL_PID: Developer
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_MSSQL_PORT:-51433}:1433"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -C -b -S 127.0.0.1 -U table_craft -P table_craft -d table_craft -Q 'SELECT 1 FROM seed_probe'",
+        ]
+      interval: 2s
+      timeout: 10s
+      retries: 150
+
+  mssql-seed:
+    profiles: ["mssql"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_MSSQL_SEED:-none}
+    depends_on:
+      mssql:
+        condition: service_started
+    volumes:
+      - ./schema/mssql.sql:/seed/mssql.sql:ro
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        for attempt in $$(seq 1 150); do
+        /opt/mssql-tools18/bin/sqlcmd -C -b -S mssql -U sa -P TableCraft_sa1 -Q 'SELECT 1' >/dev/null 2>&1 && break;
+        sleep 2; done;
+        exec /opt/mssql-tools18/bin/sqlcmd -C -b -S mssql -U sa -P TableCraft_sa1 -i /seed/mssql.sql
+    restart: "no"
 
 volumes:
   node-modules:

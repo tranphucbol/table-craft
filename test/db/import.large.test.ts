@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
 import { execute, exportHarness, openSession, startImport } from "../support/engineExports.js";
 import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
@@ -37,7 +37,7 @@ const MEBIBYTE = 1024 ** 2;
 const TABLE = "table_craft_import_large";
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly plugin: PluginLoadResult;
   readonly config: object;
   readonly path: readonly string[];
@@ -133,62 +133,71 @@ describe.runIf(ENABLED)("large import", { timeout: LARGE_TEST_TIMEOUT_MS }, () =
   });
 
   for (const target of TARGETS) {
-    it(`givenMultiGigabyteCsv_whenImportedInto_${target.name}_thenCountAndChecksumMatchAndMemoryFlat`, async () => {
-      const engine = exportHarness(
-        { id: target.name, pluginId: target.name, config: { ...target.config }, readOnly: false, keepAliveSeconds: 0 },
-        [target.plugin],
-      );
-      cleanup.push(() => engine.close());
-      const sessionId = await openSession(engine.connection);
-      const run = async (sql: string) => (await execute(engine.connection, sessionId, sql)).firstWindow.rows;
-      await run(`DROP TABLE IF EXISTS ${TABLE}`);
-      await run(target.create);
-      cleanup.push(async () => void (await run(`DROP TABLE IF EXISTS ${TABLE}`)));
-      const size = (await stat(file)).size;
-
-      const rss = sampleRss();
-      const task = await startImport(engine.connection, {
-        file,
-        format: CSV_FORMAT,
-        target: {
-          kind: "table",
-          path: target.path,
-          relation: TABLE,
-          mapping: [
-            { column: "id", field: 0 },
-            { column: "label", field: 1 },
-            { column: "payload", field: 2 },
-          ],
-        },
-        transaction: { mode: "all" },
-        errors: { mode: "stop" },
-      });
-      const done = await engine.imported(task.taskId);
-      const memory = rss.stop();
-      const [row] = await run(target.checksum);
-      const [rows, distinct, sum] = row as readonly string[];
-      if (REPORT !== undefined) {
-        await appendFile(
-          REPORT,
-          `${JSON.stringify({
-            database: target.name,
-            rows: done.written,
-            bytes: size,
-            elapsedMs: done.elapsedMs,
-            mibPerSecond: Math.round((size / MEBIBYTE / (done.elapsedMs / 1_000)) * 10) / 10,
-            rssBaselineMiB: Math.round(memory.baseline / MEBIBYTE),
-            rssPeakMiB: Math.round(memory.peak / MEBIBYTE),
-            checksum: sum,
-            expectedChecksum: String(checksum),
-          })}\n`,
+    it.skipIf(!databaseEnabled(target.name))(
+      `givenMultiGigabyteCsv_whenImportedInto_${target.name}_thenCountAndChecksumMatchAndMemoryFlat`,
+      async () => {
+        const engine = exportHarness(
+          {
+            id: target.name,
+            pluginId: target.name,
+            config: { ...target.config },
+            readOnly: false,
+            keepAliveSeconds: 0,
+          },
+          [target.plugin],
         );
-      }
+        cleanup.push(() => engine.close());
+        const sessionId = await openSession(engine.connection);
+        const run = async (sql: string) => (await execute(engine.connection, sessionId, sql)).firstWindow.rows;
+        await run(`DROP TABLE IF EXISTS ${TABLE}`);
+        await run(target.create);
+        cleanup.push(async () => void (await run(`DROP TABLE IF EXISTS ${TABLE}`)));
+        const size = (await stat(file)).size;
 
-      expect(size).toBeGreaterThanOrEqual(MIN_BYTES);
-      expect(done).toMatchObject({ state: "done", written: ROWS, committed: ROWS, rejected: 0, bytes: size });
-      expect([rows, distinct]).toEqual([String(ROWS), String(ROWS)]);
-      expect(sum).toBe(String(checksum));
-      expect(memory.peak - memory.baseline).toBeLessThan(MAX_RSS_GROWTH_BYTES);
-    });
+        const rss = sampleRss();
+        const task = await startImport(engine.connection, {
+          file,
+          format: CSV_FORMAT,
+          target: {
+            kind: "table",
+            path: target.path,
+            relation: TABLE,
+            mapping: [
+              { column: "id", field: 0 },
+              { column: "label", field: 1 },
+              { column: "payload", field: 2 },
+            ],
+          },
+          transaction: { mode: "all" },
+          errors: { mode: "stop" },
+        });
+        const done = await engine.imported(task.taskId);
+        const memory = rss.stop();
+        const [row] = await run(target.checksum);
+        const [rows, distinct, sum] = row as readonly string[];
+        if (REPORT !== undefined) {
+          await appendFile(
+            REPORT,
+            `${JSON.stringify({
+              database: target.name,
+              rows: done.written,
+              bytes: size,
+              elapsedMs: done.elapsedMs,
+              mibPerSecond: Math.round((size / MEBIBYTE / (done.elapsedMs / 1_000)) * 10) / 10,
+              rssBaselineMiB: Math.round(memory.baseline / MEBIBYTE),
+              rssPeakMiB: Math.round(memory.peak / MEBIBYTE),
+              checksum: sum,
+              expectedChecksum: String(checksum),
+            })}\n`,
+          );
+        }
+
+        expect(size).toBeGreaterThanOrEqual(MIN_BYTES);
+        expect(done).toMatchObject({ state: "done", written: ROWS, committed: ROWS, rejected: 0, bytes: size });
+        expect([rows, distinct]).toEqual([String(ROWS), String(ROWS)]);
+        expect(sum).toBe(String(checksum));
+        expect(memory.peak - memory.baseline).toBeLessThan(MAX_RSS_GROWTH_BYTES);
+      },
+    );
   }
 });

@@ -10,7 +10,7 @@ import type {
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
 import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 import { tenThousandRows } from "../support/manyRows.js";
 
@@ -20,7 +20,7 @@ const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP }
 const RUNS_IN_A_ROW = 3;
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly pluginId: string;
   readonly loaded: PluginLoadResult;
   readonly config: DatasourceConfig["config"];
@@ -53,7 +53,7 @@ function resultOf<T>(response: EngineResponse): T {
 }
 
 for (const target of TARGETS) {
-  describe(`cursor close ordering: ${target.name}`, () => {
+  describe.skipIf(!databaseEnabled(target.name))(`cursor close ordering: ${target.name}`, () => {
     const cleanup: (() => Promise<unknown>)[] = [];
     afterEach(async () => {
       for (const step of cleanup.splice(0).reverse()) await step().catch(() => undefined);

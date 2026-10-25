@@ -15,6 +15,8 @@ import {
   POSTGRES_BEHIND_BASTION,
   POSTGRES_CONFIG,
   SSH_BASTION,
+  databaseEnabled,
+  type DatabaseId,
 } from "../support/databases.js";
 import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
@@ -35,7 +37,7 @@ const KEY_AUTH: SshEndpoint = {
 };
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly plugin: DatasourcePlugin;
   readonly manifest: PluginManifest;
   readonly config: Readonly<Record<string, unknown>>;
@@ -62,55 +64,57 @@ async function firstValue(session: Session, sql: string): Promise<unknown> {
   return rows[0]?.[0];
 }
 
-describe.each(TARGETS)("$name through the SSH bastion", (target) => {
-  const connector = (ssh: SshEndpoint, offers: HostKeyOffer[] = []) =>
-    createConnector({
-      plugins: [loaded(target)],
-      pluginId: target.name,
-      config: target.config,
-      ssh,
-      verifyHostKey: (offer) => {
-        offers.push(offer);
-        return Promise.resolve();
-      },
+for (const target of TARGETS) {
+  describe.skipIf(!databaseEnabled(target.name))(`${target.name} through the SSH bastion`, () => {
+    const connector = (ssh: SshEndpoint, offers: HostKeyOffer[] = []) =>
+      createConnector({
+        plugins: [loaded(target)],
+        pluginId: target.name,
+        config: target.config,
+        ssh,
+        verifyHostKey: (offer) => {
+          offers.push(offer);
+          return Promise.resolve();
+        },
+      });
+
+    it("givenSshPasswordAuth_whenConnect_thenQueriesRunThroughTunnel", async () => {
+      const offers: HostKeyOffer[] = [];
+      const tunnel = connector(PASSWORD_AUTH, offers);
+      try {
+        const session = await tunnel.connect({ readOnly: false });
+        try {
+          expect(String(await firstValue(session, "SELECT 40 + 2"))).toBe("42");
+        } finally {
+          await session.close();
+        }
+        expect(offers.map((offer) => offer.fingerprint)).toEqual([SSH_BASTION.fingerprint]);
+        expect(tunnel.hop).toMatchObject({ host: SSH_BASTION.host, user: SSH_BASTION.user });
+      } finally {
+        await tunnel.close();
+      }
     });
 
-  it("givenSshPasswordAuth_whenConnect_thenQueriesRunThroughTunnel", async () => {
-    const offers: HostKeyOffer[] = [];
-    const tunnel = connector(PASSWORD_AUTH, offers);
-    try {
-      const session = await tunnel.connect({ readOnly: false });
+    it("givenKeyWithPassphrase_whenConnect_thenTunnelOpens", async () => {
+      const tunnel = connector(KEY_AUTH);
       try {
-        expect(String(await firstValue(session, "SELECT 40 + 2"))).toBe("42");
+        const sessions = await Promise.all([tunnel.connect({ readOnly: true }), tunnel.connect({ readOnly: true })]);
+        for (const session of sessions) expect(String(await firstValue(session, "SELECT 7"))).toBe("7");
+        await Promise.all(sessions.map((session) => session.close()));
       } finally {
-        await session.close();
+        await tunnel.close();
       }
-      expect(offers.map((offer) => offer.fingerprint)).toEqual([SSH_BASTION.fingerprint]);
-      expect(tunnel.hop).toMatchObject({ host: SSH_BASTION.host, user: SSH_BASTION.user });
-    } finally {
-      await tunnel.close();
-    }
-  });
+    });
 
-  it("givenKeyWithPassphrase_whenConnect_thenTunnelOpens", async () => {
-    const tunnel = connector(KEY_AUTH);
-    try {
-      const sessions = await Promise.all([tunnel.connect({ readOnly: true }), tunnel.connect({ readOnly: true })]);
-      for (const session of sessions) expect(String(await firstValue(session, "SELECT 7"))).toBe("7");
-      await Promise.all(sessions.map((session) => session.close()));
-    } finally {
-      await tunnel.close();
-    }
+    it("givenWrongPassword_whenConnect_thenSshAuthFailed", async () => {
+      const tunnel = connector({ ...PASSWORD_AUTH, password: "not-the-password" });
+      try {
+        const failure: unknown = await tunnel.connect({ readOnly: false }).catch((cause: unknown) => cause);
+        expect(failure).toBeInstanceOf(TunnelError);
+        expect(failure).toMatchObject({ code: "sshAuthFailed" });
+      } finally {
+        await tunnel.close();
+      }
+    });
   });
-
-  it("givenWrongPassword_whenConnect_thenSshAuthFailed", async () => {
-    const tunnel = connector({ ...PASSWORD_AUTH, password: "not-the-password" });
-    try {
-      const failure: unknown = await tunnel.connect({ readOnly: false }).catch((cause: unknown) => cause);
-      expect(failure).toBeInstanceOf(TunnelError);
-      expect(failure).toMatchObject({ code: "sshAuthFailed" });
-    } finally {
-      await tunnel.close();
-    }
-  });
-});
+}

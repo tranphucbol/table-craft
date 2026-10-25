@@ -9,7 +9,7 @@ import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import type { ImportTask } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
 import {
   execute,
   exportHarness,
@@ -38,7 +38,7 @@ const TABLE = "table_craft_import_chaos";
 const PAYLOAD_HEX_CHARS = 64;
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly plugin: PluginLoadResult;
   readonly config: { readonly host: string; readonly port: number };
   readonly path: readonly string[];
@@ -83,167 +83,171 @@ async function writeCsv(path: string): Promise<void> {
 }
 
 for (const target of TARGETS) {
-  describe(`import chaos: ${target.name}`, { timeout: CHAOS_TEST_TIMEOUT_MS }, () => {
-    const cleanup: (() => Promise<void>)[] = [];
-    afterEach(async () => {
-      for (const step of cleanup.splice(0).reverse()) await step();
-    });
+  describe.skipIf(!databaseEnabled(target.name))(
+    `import chaos: ${target.name}`,
+    { timeout: CHAOS_TEST_TIMEOUT_MS },
+    () => {
+      const cleanup: (() => Promise<void>)[] = [];
+      afterEach(async () => {
+        for (const step of cleanup.splice(0).reverse()) await step();
+      });
 
-    interface Rig {
-      readonly proxy: ChaosProxy;
-      readonly engine: ExportHarness;
-      /** Counts on a direct connection, past the proxy, so what the server kept is read as it is. */
-      readonly count: () => Promise<{ rows: number; distinct: number }>;
-      readonly start: (transaction: object, stallSeconds?: number) => Promise<ImportTask>;
-    }
+      interface Rig {
+        readonly proxy: ChaosProxy;
+        readonly engine: ExportHarness;
+        /** Counts on a direct connection, past the proxy, so what the server kept is read as it is. */
+        readonly count: () => Promise<{ rows: number; distinct: number }>;
+        readonly start: (transaction: object, stallSeconds?: number) => Promise<ImportTask>;
+      }
 
-    async function rig(): Promise<Rig> {
-      const folder = await mkdtemp(join(tmpdir(), "table-craft-import-chaos-"));
-      cleanup.push(() => rm(folder, { recursive: true, force: true }));
-      const file = join(folder, "rows.csv");
-      await writeCsv(file);
-      const direct = exportHarness(
-        {
-          id: `${target.name}-direct`,
-          pluginId: target.name,
-          config: target.config,
-          readOnly: false,
-          keepAliveSeconds: 0,
-        },
-        [target.plugin],
-      );
-      cleanup.push(() => direct.close());
-      const sessionId = await openSession(direct.connection);
-      const run = async (sql: string) => (await execute(direct.connection, sessionId, sql)).firstWindow.rows;
-      await run(`DROP TABLE IF EXISTS ${TABLE}`);
-      await run(target.create);
-      cleanup.push(async () => void (await run(`DROP TABLE IF EXISTS ${TABLE}`)));
-      const proxy = await chaosProxy(target.config);
-      cleanup.push(() => proxy.close());
-      const engine = exportHarness(
-        {
-          id: target.name,
-          pluginId: target.name,
-          config: { ...target.config, host: proxy.host, port: proxy.port },
-          readOnly: false,
-          keepAliveSeconds: 10,
-        },
-        [target.plugin],
-      );
-      cleanup.push(() => engine.close());
-      // The introspection link stays open for the engine's life; open it first so link counts see only the import's.
-      resultOf(await engine.connection.handle({ id: 2, type: "catalog.namespaces" }));
-      return {
-        proxy,
-        engine,
-        count: async () => {
-          const [row] = await run(`SELECT COUNT(*), COUNT(DISTINCT id) FROM ${TABLE}`);
-          const [rows, distinct] = (row as unknown[]).map((value) => Number(value));
-          return { rows: rows ?? -1, distinct: distinct ?? -1 };
-        },
-        start: (transaction, stallSeconds) =>
-          startImport(
-            engine.connection,
-            {
-              file,
-              format: CSV_FORMAT,
-              target: {
-                kind: "table",
-                path: target.path,
-                relation: TABLE,
-                mapping: [
-                  { column: "id", field: 0 },
-                  { column: "label", field: 1 },
-                  { column: "payload", field: 2 },
-                ],
+      async function rig(): Promise<Rig> {
+        const folder = await mkdtemp(join(tmpdir(), "table-craft-import-chaos-"));
+        cleanup.push(() => rm(folder, { recursive: true, force: true }));
+        const file = join(folder, "rows.csv");
+        await writeCsv(file);
+        const direct = exportHarness(
+          {
+            id: `${target.name}-direct`,
+            pluginId: target.name,
+            config: target.config,
+            readOnly: false,
+            keepAliveSeconds: 0,
+          },
+          [target.plugin],
+        );
+        cleanup.push(() => direct.close());
+        const sessionId = await openSession(direct.connection);
+        const run = async (sql: string) => (await execute(direct.connection, sessionId, sql)).firstWindow.rows;
+        await run(`DROP TABLE IF EXISTS ${TABLE}`);
+        await run(target.create);
+        cleanup.push(async () => void (await run(`DROP TABLE IF EXISTS ${TABLE}`)));
+        const proxy = await chaosProxy(target.config);
+        cleanup.push(() => proxy.close());
+        const engine = exportHarness(
+          {
+            id: target.name,
+            pluginId: target.name,
+            config: { ...target.config, host: proxy.host, port: proxy.port },
+            readOnly: false,
+            keepAliveSeconds: 10,
+          },
+          [target.plugin],
+        );
+        cleanup.push(() => engine.close());
+        // The introspection link stays open for the engine's life; open it first so link counts see only the import's.
+        resultOf(await engine.connection.handle({ id: 2, type: "catalog.namespaces" }));
+        return {
+          proxy,
+          engine,
+          count: async () => {
+            const [row] = await run(`SELECT COUNT(*), COUNT(DISTINCT id) FROM ${TABLE}`);
+            const [rows, distinct] = (row as unknown[]).map((value) => Number(value));
+            return { rows: rows ?? -1, distinct: distinct ?? -1 };
+          },
+          start: (transaction, stallSeconds) =>
+            startImport(
+              engine.connection,
+              {
+                file,
+                format: CSV_FORMAT,
+                target: {
+                  kind: "table",
+                  path: target.path,
+                  relation: TABLE,
+                  mapping: [
+                    { column: "id", field: 0 },
+                    { column: "label", field: 1 },
+                    { column: "payload", field: 2 },
+                  ],
+                },
+                transaction,
+                errors: { mode: "stop" },
               },
-              transaction,
-              errors: { mode: "stop" },
-            },
-            stallSeconds,
-          ),
-      };
-    }
+              stallSeconds,
+            ),
+        };
+      }
 
-    it("givenAllOrNothing_whenLinkDies_thenNothingCommitted", async () => {
-      const { proxy, engine, count, start } = await rig();
-      proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
-      const task = await start({ mode: "all" });
-      const moving = await engine.importing(task.taskId, 1);
+      it("givenAllOrNothing_whenLinkDies_thenNothingCommitted", async () => {
+        const { proxy, engine, count, start } = await rig();
+        proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
+        const task = await start({ mode: "all" });
+        const moving = await engine.importing(task.taskId, 1);
 
-      proxy.reset();
-      const done = await engine.imported(task.taskId);
+        proxy.reset();
+        const done = await engine.imported(task.taskId);
 
-      expect(moving.state).toBe("running");
-      expect(done).toMatchObject({ state: "failed", committed: 0, ambiguous: false, error: { reason: "target" } });
-      expect(done.written).toBeGreaterThan(0);
-      expect(done.error?.message).toContain("Nothing was imported: the transaction was rolled back.");
-      expect(await count()).toEqual({ rows: 0, distinct: 0 });
-    });
+        expect(moving.state).toBe("running");
+        expect(done).toMatchObject({ state: "failed", committed: 0, ambiguous: false, error: { reason: "target" } });
+        expect(done.written).toBeGreaterThan(0);
+        expect(done.error?.message).toContain("Nothing was imported: the transaction was rolled back.");
+        expect(await count()).toEqual({ rows: 0, distinct: 0 });
+      });
 
-    it("givenCommitEvery_whenLinkDies_thenCommittedReportedAndResumeFinishes", async () => {
-      const { proxy, engine, count, start } = await rig();
-      proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
-      const task = await start({ mode: "every", rows: COMMIT_EVERY });
-      // Committed, not written: resetting while the COMMIT is in flight makes the outcome honestly ambiguous.
-      await engine.committing(task.taskId, FIRST_COMMITS);
+      it("givenCommitEvery_whenLinkDies_thenCommittedReportedAndResumeFinishes", async () => {
+        const { proxy, engine, count, start } = await rig();
+        proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
+        const task = await start({ mode: "every", rows: COMMIT_EVERY });
+        // Committed, not written: resetting while the COMMIT is in flight makes the outcome honestly ambiguous.
+        await engine.committing(task.taskId, FIRST_COMMITS);
 
-      proxy.reset();
-      const failed = await engine.imported(task.taskId);
-      const kept = await count();
-      proxy.bytesPerSecond = 0;
-      const resumed = resultOf<ImportTask>(
-        await engine.connection.handle({ id: 9, type: "import.resume", taskId: task.taskId, stallSeconds: 120 }),
-      );
-      const done = await engine.imported(resumed.taskId);
+        proxy.reset();
+        const failed = await engine.imported(task.taskId);
+        const kept = await count();
+        proxy.bytesPerSecond = 0;
+        const resumed = resultOf<ImportTask>(
+          await engine.connection.handle({ id: 9, type: "import.resume", taskId: task.taskId, stallSeconds: 120 }),
+        );
+        const done = await engine.imported(resumed.taskId);
 
-      expect(failed).toMatchObject({ state: "failed", ambiguous: false });
-      expect(failed.committed % COMMIT_EVERY).toBe(0);
-      expect(failed.committed).toBeGreaterThanOrEqual(COMMIT_EVERY);
-      expect(failed.resumeFrom).toBe(failed.committed + 1);
-      expect(failed.error?.message).toContain(
-        `${failed.committed.toLocaleString("en-US")} rows are committed; resume from row ${failed.resumeFrom.toLocaleString("en-US")}.`,
-      );
-      expect(kept).toEqual({ rows: failed.committed, distinct: failed.committed });
-      expect(resumed.resumeFrom).toBe(failed.resumeFrom);
-      expect(done).toMatchObject({ state: "done", committed: ROWS - failed.committed });
-      expect(await count()).toEqual({ rows: ROWS, distinct: ROWS });
-    });
+        expect(failed).toMatchObject({ state: "failed", ambiguous: false });
+        expect(failed.committed % COMMIT_EVERY).toBe(0);
+        expect(failed.committed).toBeGreaterThanOrEqual(COMMIT_EVERY);
+        expect(failed.resumeFrom).toBe(failed.committed + 1);
+        expect(failed.error?.message).toContain(
+          `${failed.committed.toLocaleString("en-US")} rows are committed; resume from row ${failed.resumeFrom.toLocaleString("en-US")}.`,
+        );
+        expect(kept).toEqual({ rows: failed.committed, distinct: failed.committed });
+        expect(resumed.resumeFrom).toBe(failed.resumeFrom);
+        expect(done).toMatchObject({ state: "done", committed: ROWS - failed.committed });
+        expect(await count()).toEqual({ rows: ROWS, distinct: ROWS });
+      });
 
-    it("givenStall_whenImporting_thenStalledWithinTimeoutAndLinkReleased", async () => {
-      const { proxy, engine, count, start } = await rig();
-      const links = proxy.openLinks;
-      proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
-      const task = await start({ mode: "all" }, STALL_SECONDS);
-      await engine.importing(task.taskId, 1);
+      it("givenStall_whenImporting_thenStalledWithinTimeoutAndLinkReleased", async () => {
+        const { proxy, engine, count, start } = await rig();
+        const links = proxy.openLinks;
+        proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
+        const task = await start({ mode: "all" }, STALL_SECONDS);
+        await engine.importing(task.taskId, 1);
 
-      const stalledAt = Date.now();
-      proxy.stall();
-      const done = await engine.imported(task.taskId);
-      const waited = Date.now() - stalledAt;
-      proxy.resume();
+        const stalledAt = Date.now();
+        proxy.stall();
+        const done = await engine.imported(task.taskId);
+        const waited = Date.now() - stalledAt;
+        proxy.resume();
 
-      expect(done).toMatchObject({ state: "failed", committed: 0, error: { code: "timedOut", reason: "stalled" } });
-      expect(waited).toBeLessThan((STALL_SECONDS + 10) * 1_000);
-      expect(await released(proxy, links)).toBe(links);
-      expect(await count()).toEqual({ rows: 0, distinct: 0 });
-    });
+        expect(done).toMatchObject({ state: "failed", committed: 0, error: { code: "timedOut", reason: "stalled" } });
+        expect(waited).toBeLessThan((STALL_SECONDS + 10) * 1_000);
+        expect(await released(proxy, links)).toBe(links);
+        expect(await count()).toEqual({ rows: 0, distinct: 0 });
+      });
 
-    it("givenCancel_whenImporting_thenRolledBackAndConnectionReleased", async () => {
-      const { proxy, engine, count, start } = await rig();
-      const links = proxy.openLinks;
-      proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
-      const task = await start({ mode: "all" });
-      await engine.importing(task.taskId, 1);
-      const during = proxy.openLinks;
+      it("givenCancel_whenImporting_thenRolledBackAndConnectionReleased", async () => {
+        const { proxy, engine, count, start } = await rig();
+        const links = proxy.openLinks;
+        proxy.bytesPerSecond = SLOW_BYTES_PER_SECOND;
+        const task = await start({ mode: "all" });
+        await engine.importing(task.taskId, 1);
+        const during = proxy.openLinks;
 
-      await engine.connection.handle({ id: 9, type: "import.cancel", taskId: task.taskId });
-      const done = await engine.imported(task.taskId);
+        await engine.connection.handle({ id: 9, type: "import.cancel", taskId: task.taskId });
+        const done = await engine.imported(task.taskId);
 
-      expect(during).toBe(links + 1);
-      expect(done).toMatchObject({ state: "cancelled", committed: 0, error: { code: "cancelled" } });
-      expect(await released(proxy, links)).toBe(links);
-      expect(await count()).toEqual({ rows: 0, distinct: 0 });
-    });
-  });
+        expect(during).toBe(links + 1);
+        expect(done).toMatchObject({ state: "cancelled", committed: 0, error: { code: "cancelled" } });
+        expect(await released(proxy, links)).toBe(links);
+        expect(await count()).toEqual({ rows: 0, distinct: 0 });
+      });
+    },
+  );
 }

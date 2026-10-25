@@ -18,7 +18,7 @@ import type {
   SwitchStatement,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
-import { TIDB_CONFIG, TIDB_DATABASE, tidbScratchDatabase } from "../support/databases.js";
+import { databaseEnabled, TIDB_CONFIG, TIDB_DATABASE, tidbScratchDatabase } from "../support/databases.js";
 import { MYSQL_MANIFEST } from "../support/manifests.js";
 import { tenThousandRows } from "../support/manyRows.js";
 
@@ -116,7 +116,7 @@ async function withOrderEvents(session: Session): Promise<void> {
   await run(`INSERT INTO ${EVENTS_TABLE} VALUES (1, 10, 'new'), (2, 20, 'done'), (3, 10, 'done')`);
 }
 
-describe("tidb 4", () => {
+describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
   const cleanup: (() => Promise<unknown>)[] = [];
   afterEach(async () => {
     for (const step of cleanup.splice(0).reverse()) await step().catch(() => undefined);

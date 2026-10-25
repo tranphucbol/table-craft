@@ -6,7 +6,7 @@ import { CSV_FORMAT, TSV_FORMAT, type PluginLoadResult } from "@table-craft/core
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportFormat, ImportPreview } from "@table-craft/desktop/engine/protocol.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
+import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
 import {
   execute,
   exportHarness,
@@ -42,7 +42,7 @@ const STOP = { mode: "stop" } as const;
 const PRESETS: Readonly<Record<"csv" | "tsv", typeof CSV_FORMAT>> = { csv: CSV_FORMAT, tsv: TSV_FORMAT };
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly plugin: PluginLoadResult;
   readonly config: object;
   readonly path: readonly string[];
@@ -64,7 +64,7 @@ const TARGETS: readonly Target[] = [
 ];
 
 for (const target of TARGETS) {
-  describe(`import: ${target.name}`, () => {
+  describe.skipIf(!databaseEnabled(target.name))(`import: ${target.name}`, () => {
     const cleanup: (() => Promise<void>)[] = [];
     afterEach(async () => {
       for (const step of cleanup.splice(0).reverse()) await step();

@@ -33,7 +33,63 @@ jobs:
       - run: bun run format:check
       - run: bun run typecheck
       - run: bun run test
+      # Decision 099: MySQL and TiDB only; every other server has its own job below.
       - run: bun run test:db
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      postgres: ${{ steps.filter.outputs.postgres }}
+      oracle: ${{ steps.filter.outputs.oracle }}
+      mssql: ${{ steps.filter.outputs.mssql }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            postgres:
+              - "plugins/postgres/**"
+              - "packages/plugin-api/src/testing/**"
+              - "test/db/schema/postgres*"
+            oracle:
+              - "plugins/oracle/**"
+              - "packages/plugin-api/src/testing/**"
+              - "test/db/schema/oracle*/**"
+              - "test/db/schema/oracle*"
+            mssql:
+              - "plugins/mssql/**"
+              - "packages/plugin-api/src/testing/**"
+              - "test/db/schema/mssql*"
+
+  # Decision 099: one job per opt-in server, run when its plugin, the contract suite or its seed
+  # changes. PostgreSQL also runs on a tag, so a release is checked against it.
+  test-db:
+    name: test:db (${{ matrix.database }})
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [postgres, oracle, mssql]
+    if: >-
+      needs.changes.outputs.postgres == 'true' || needs.changes.outputs.oracle == 'true' ||
+      needs.changes.outputs.mssql == 'true' || startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Skip unless this server's paths changed
+        id: wanted
+        run: echo "run=${{ needs.changes.outputs[matrix.database] == 'true' || (matrix.database == 'postgres' && startsWith(github.ref, 'refs/tags/')) }}" >> "$GITHUB_OUTPUT"
+      - if: steps.wanted.outputs.run == 'true'
+        uses: actions/checkout@v7
+      - if: steps.wanted.outputs.run == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - if: steps.wanted.outputs.run == 'true'
+        run: bun install --frozen-lockfile
+      - if: steps.wanted.outputs.run == 'true'
+        run: bun run test:db:${{ matrix.database }}
 
   package:
     name: package (${{ matrix.name }})
@@ -90,7 +146,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [verify, package]
+    needs: [verify, package, test-db]
     runs-on: ubuntu-latest
     # Decision 044: the signing key is the root of every installed app's trust. Keep it in this
     # environment's secrets and give the environment required reviewers.

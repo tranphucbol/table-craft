@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { SENTINELS, servicesMissingSentinels, staleServices, type SentinelQuery } from "./smokeFixtures.js";
+import {
+  SENTINELS,
+  sentinelsFor,
+  servicesMissingSentinels,
+  servicesOf,
+  smokeSelectionProblem,
+  staleServices,
+  type SentinelQuery,
+} from "./smokeFixtures.js";
 
 const NEWEST_POSTGRES = "SELECT 1 FROM pg_proc p JOIN pg_namespace n";
 
@@ -50,7 +58,27 @@ describe("smoke fixture sentinels (smokeFixtures.ts)", () => {
 
   it("givenSentinels_whenListed_thenEverySeededServiceHasOne", () => {
     expect(new Set(SENTINELS.map((sentinel) => sentinel.service))).toEqual(
-      new Set(["postgres", "mysql", "postgres-tls", "mysql-tls"]),
+      new Set(["postgres", "mysql", "postgres-tls", "mysql-tls", "oracle", "mssql"]),
+    );
+  });
+
+  it("givenServiceNotSelected_whenSeedStale_thenNotChecked", async () => {
+    const asked = new Set<string>();
+    const query: SentinelQuery = (service) => {
+      asked.add(service);
+      return Promise.resolve(service !== "postgres" && service !== "oracle");
+    };
+
+    const sentinels = sentinelsFor(servicesOf(["mysql", "tidb"]));
+
+    expect(await staleServices(query, sentinels)).toEqual([]);
+    expect([...asked].sort()).toEqual(["mysql", "mysql-tls"]);
+  });
+
+  it("givenSmokeSelectionWithoutMysql_whenChecked_thenNamesWhatItNeeds", () => {
+    expect(smokeSelectionProblem(["mysql", "tidb", "postgres"])).toBeNull();
+    expect(smokeSelectionProblem(["postgres"])).toBe(
+      "TABLE_CRAFT_DATABASES leaves out mysql, tidb, which every smoke run needs; add to mysql,tidb instead",
     );
   });
 });

@@ -10,6 +10,8 @@ import {
   POSTGRES_TLS_CONFIG,
   SSH_BASTION,
   TLS_FILES,
+  databaseEnabled,
+  type DatabaseId,
 } from "../support/databases.js";
 import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
@@ -19,7 +21,7 @@ const MISSING_KEY = "/nonexistent/table-craft/client.key";
 const TLS_PROTOCOL = /^TLSv1\.[23]$/;
 
 interface Target {
-  readonly name: string;
+  readonly name: DatabaseId;
   readonly plugin: DatasourcePlugin;
   readonly manifest: PluginManifest;
   readonly config: Readonly<Record<string, unknown>>;
@@ -53,128 +55,130 @@ async function firstValue(session: Session, sql: string): Promise<unknown> {
   return rows[0]?.[0];
 }
 
-describe.each(TARGETS)("$name over TLS", (target) => {
-  const connect = (overrides: Readonly<Record<string, unknown>>, serverName?: string) =>
-    target.plugin.connect(
-      { ...target.config, ...overrides },
-      serverName === undefined ? { readOnly: false } : { readOnly: false, serverName },
-    );
+for (const target of TARGETS) {
+  describe.skipIf(!databaseEnabled(target.name))(`${target.name} over TLS`, () => {
+    const connect = (overrides: Readonly<Record<string, unknown>>, serverName?: string) =>
+      target.plugin.connect(
+        { ...target.config, ...overrides },
+        serverName === undefined ? { readOnly: false } : { readOnly: false, serverName },
+      );
 
-  async function connectsAndQueries(overrides: Readonly<Record<string, unknown>>, serverName?: string) {
-    const session = await connect(overrides, serverName);
-    try {
-      expect(await firstValue(session, "SELECT note FROM tls_probe")).toBe("reached over TLS");
-      return session.tls;
-    } finally {
-      await session.close();
-    }
-  }
-
-  async function failure(overrides: Readonly<Record<string, unknown>>, serverName?: string): Promise<PluginError> {
-    const cause: unknown = await connect(overrides, serverName).then(
-      async (session) => {
-        await session.close();
-        return null;
-      },
-      (error: unknown) => error,
-    );
-    expect(cause).toBeInstanceOf(PluginError);
-    expect(cause).toMatchObject({ code: "connectionFailed" });
-    return cause as PluginError;
-  }
-
-  it("givenRequire_whenConnected_thenTlsDescribed", async () => {
-    const tls = await connectsAndQueries({ sslMode: "require" });
-    expect(tls?.protocol).toMatch(TLS_PROTOCOL);
-    expect(tls?.cipher).not.toBe("");
-  });
-
-  it("givenVerifyFullWithCa_whenConnect_thenConnects", async () => {
-    await connectsAndQueries({ sslMode: "verify-full", sslRootCert: TLS_FILES.ca });
-  });
-
-  it("givenVerifyCaWithCa_whenConnect_thenConnects", async () => {
-    await connectsAndQueries({ sslMode: "verify-ca", sslRootCert: TLS_FILES.ca });
-  });
-
-  it("givenVerifyFullWithoutCa_whenConnect_thenAsksForCaFile", async () => {
-    const error = await failure({ sslMode: "verify-full" });
-    expect(error.message).toContain("not signed by a CA this system trusts");
-    expect(error.message).toContain("SSL root certificate");
-  });
-
-  it("givenWrongCa_whenVerifyCa_thenFailsNamingCertificate", async () => {
-    const error = await failure({ sslMode: "verify-ca", sslRootCert: TLS_FILES.wrongCa });
-    expect(error.message).toContain(`not signed by the CA in ${TLS_FILES.wrongCa}`);
-  });
-
-  it("givenWrongHostName_whenVerifyFull_thenFailsNamingHost", async () => {
-    const error = await failure({ sslMode: "verify-full", sslRootCert: TLS_FILES.ca }, WRONG_HOST_NAME);
-    expect(error.message).toContain(`not valid for host ${WRONG_HOST_NAME}`);
-  });
-
-  it("givenWrongHostName_whenVerifyCa_thenConnects", async () => {
-    await connectsAndQueries({ sslMode: "verify-ca", sslRootCert: TLS_FILES.ca }, WRONG_HOST_NAME);
-  });
-
-  it("givenClientCertUser_whenCertAndKey_thenAuthenticates", async () => {
-    await connectsAndQueries({
-      ...CERT_USER,
-      sslMode: "verify-full",
-      sslRootCert: TLS_FILES.ca,
-      sslKey: TLS_FILES.clientKey,
-    });
-  });
-
-  it("givenEncryptedKey_whenPassphrase_thenAuthenticates", async () => {
-    await connectsAndQueries({
-      ...CERT_USER,
-      sslMode: "require",
-      sslKey: TLS_FILES.encryptedClientKey,
-      sslKeyPassphrase: TLS_FILES.keyPassphrase,
-    });
-  });
-
-  it("givenEncryptedKeyWithoutPassphrase_whenConnect_thenSaysPassphrase", async () => {
-    const error = await failure({ ...CERT_USER, sslMode: "require", sslKey: TLS_FILES.encryptedClientKey });
-    expect(error.message).toContain(`Cannot decrypt the Client key ${TLS_FILES.encryptedClientKey}`);
-  });
-
-  it("givenMissingKeyFile_whenConnect_thenErrorNamesField", async () => {
-    const error = await failure({ ...CERT_USER, sslMode: "require", sslKey: MISSING_KEY });
-    expect(error.message).toBe(`Cannot read the Client key ${MISSING_KEY}: the file does not exist.`);
-  });
-
-  it("givenTunnelAndVerifyFull_whenConnect_thenChecksConfiguredHost", async () => {
-    const loaded: LoadedPlugin = {
-      status: "loaded",
-      directory: `plugins/${target.name}`,
-      manifest: target.manifest,
-      plugin: target.plugin,
-    };
-    const tunnel = createConnector({
-      plugins: [loaded],
-      pluginId: target.name,
-      config: { ...target.config, ...target.behindBastion, sslMode: "verify-full", sslRootCert: TLS_FILES.ca },
-      ssh: {
-        host: SSH_BASTION.host,
-        port: SSH_BASTION.port,
-        user: SSH_BASTION.user,
-        auth: "password",
-        password: SSH_BASTION.password,
-      },
-      verifyHostKey: () => Promise.resolve(),
-    });
-    try {
-      const session = await tunnel.connect({ readOnly: false });
+    async function connectsAndQueries(overrides: Readonly<Record<string, unknown>>, serverName?: string) {
+      const session = await connect(overrides, serverName);
       try {
         expect(await firstValue(session, "SELECT note FROM tls_probe")).toBe("reached over TLS");
-        expect(session.tls?.protocol).toMatch(TLS_PROTOCOL);
+        return session.tls;
       } finally {
         await session.close();
       }
-    } finally {
-      await tunnel.close();
     }
+
+    async function failure(overrides: Readonly<Record<string, unknown>>, serverName?: string): Promise<PluginError> {
+      const cause: unknown = await connect(overrides, serverName).then(
+        async (session) => {
+          await session.close();
+          return null;
+        },
+        (error: unknown) => error,
+      );
+      expect(cause).toBeInstanceOf(PluginError);
+      expect(cause).toMatchObject({ code: "connectionFailed" });
+      return cause as PluginError;
+    }
+
+    it("givenRequire_whenConnected_thenTlsDescribed", async () => {
+      const tls = await connectsAndQueries({ sslMode: "require" });
+      expect(tls?.protocol).toMatch(TLS_PROTOCOL);
+      expect(tls?.cipher).not.toBe("");
+    });
+
+    it("givenVerifyFullWithCa_whenConnect_thenConnects", async () => {
+      await connectsAndQueries({ sslMode: "verify-full", sslRootCert: TLS_FILES.ca });
+    });
+
+    it("givenVerifyCaWithCa_whenConnect_thenConnects", async () => {
+      await connectsAndQueries({ sslMode: "verify-ca", sslRootCert: TLS_FILES.ca });
+    });
+
+    it("givenVerifyFullWithoutCa_whenConnect_thenAsksForCaFile", async () => {
+      const error = await failure({ sslMode: "verify-full" });
+      expect(error.message).toContain("not signed by a CA this system trusts");
+      expect(error.message).toContain("SSL root certificate");
+    });
+
+    it("givenWrongCa_whenVerifyCa_thenFailsNamingCertificate", async () => {
+      const error = await failure({ sslMode: "verify-ca", sslRootCert: TLS_FILES.wrongCa });
+      expect(error.message).toContain(`not signed by the CA in ${TLS_FILES.wrongCa}`);
+    });
+
+    it("givenWrongHostName_whenVerifyFull_thenFailsNamingHost", async () => {
+      const error = await failure({ sslMode: "verify-full", sslRootCert: TLS_FILES.ca }, WRONG_HOST_NAME);
+      expect(error.message).toContain(`not valid for host ${WRONG_HOST_NAME}`);
+    });
+
+    it("givenWrongHostName_whenVerifyCa_thenConnects", async () => {
+      await connectsAndQueries({ sslMode: "verify-ca", sslRootCert: TLS_FILES.ca }, WRONG_HOST_NAME);
+    });
+
+    it("givenClientCertUser_whenCertAndKey_thenAuthenticates", async () => {
+      await connectsAndQueries({
+        ...CERT_USER,
+        sslMode: "verify-full",
+        sslRootCert: TLS_FILES.ca,
+        sslKey: TLS_FILES.clientKey,
+      });
+    });
+
+    it("givenEncryptedKey_whenPassphrase_thenAuthenticates", async () => {
+      await connectsAndQueries({
+        ...CERT_USER,
+        sslMode: "require",
+        sslKey: TLS_FILES.encryptedClientKey,
+        sslKeyPassphrase: TLS_FILES.keyPassphrase,
+      });
+    });
+
+    it("givenEncryptedKeyWithoutPassphrase_whenConnect_thenSaysPassphrase", async () => {
+      const error = await failure({ ...CERT_USER, sslMode: "require", sslKey: TLS_FILES.encryptedClientKey });
+      expect(error.message).toContain(`Cannot decrypt the Client key ${TLS_FILES.encryptedClientKey}`);
+    });
+
+    it("givenMissingKeyFile_whenConnect_thenErrorNamesField", async () => {
+      const error = await failure({ ...CERT_USER, sslMode: "require", sslKey: MISSING_KEY });
+      expect(error.message).toBe(`Cannot read the Client key ${MISSING_KEY}: the file does not exist.`);
+    });
+
+    it("givenTunnelAndVerifyFull_whenConnect_thenChecksConfiguredHost", async () => {
+      const loaded: LoadedPlugin = {
+        status: "loaded",
+        directory: `plugins/${target.name}`,
+        manifest: target.manifest,
+        plugin: target.plugin,
+      };
+      const tunnel = createConnector({
+        plugins: [loaded],
+        pluginId: target.name,
+        config: { ...target.config, ...target.behindBastion, sslMode: "verify-full", sslRootCert: TLS_FILES.ca },
+        ssh: {
+          host: SSH_BASTION.host,
+          port: SSH_BASTION.port,
+          user: SSH_BASTION.user,
+          auth: "password",
+          password: SSH_BASTION.password,
+        },
+        verifyHostKey: () => Promise.resolve(),
+      });
+      try {
+        const session = await tunnel.connect({ readOnly: false });
+        try {
+          expect(await firstValue(session, "SELECT note FROM tls_probe")).toBe("reached over TLS");
+          expect(session.tls?.protocol).toMatch(TLS_PROTOCOL);
+        } finally {
+          await session.close();
+        }
+      } finally {
+        await tunnel.close();
+      }
+    });
   });
-});
+}

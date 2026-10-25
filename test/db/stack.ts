@@ -8,25 +8,29 @@
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { servicesMissingSentinels } from "../support/smokeFixtures.js";
-import { composeProfiles, type TidbTarget } from "./tidbTarget.js";
+import { DATABASE_IDS, type DatabaseId, DATABASES_ENV, selectedDatabases } from "../support/databases.js";
+import { sentinelsFor, servicesMissingSentinels, servicesOf } from "../support/smokeFixtures.js";
+import { TIDB_PROFILE, type TidbTarget } from "./tidbTarget.js";
 
 const DB_DIRECTORY = import.meta.dirname;
 export const COMPOSE_FILE = join(DB_DIRECTORY, "compose.yml");
 
-export type SeededService = "postgres" | "mysql" | "postgres-tls" | "mysql-tls";
+export type SeededService = "postgres" | "mysql" | "postgres-tls" | "mysql-tls" | "oracle" | "mssql";
 
 /**
  * What each service reads when its data directory is first made: the initdb scripts, and for the
- * TLS servers the certificates and `pg_hba.conf`, which they load once at start.
+ * TLS servers the certificates and `pg_hba.conf`, which they load once at start. A directory
+ * stands for every file under it.
  */
 const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   postgres: ["schema/postgres.sql"],
   mysql: ["schema/mysql.sql"],
   "postgres-tls": ["tls/postgres.sql", "tls/pg_hba.conf", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   "mysql-tls": ["tls/mysql.sql", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
+  oracle: ["schema/oracle"],
+  mssql: ["schema/mssql.sql"],
 };
 
 /** The variable `compose.yml` interpolates into each service's `table-craft.seed` label. */
@@ -35,15 +39,27 @@ export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   mysql: "TABLE_CRAFT_MYSQL_SEED",
   "postgres-tls": "TABLE_CRAFT_PG_TLS_SEED",
   "mysql-tls": "TABLE_CRAFT_MYSQL_TLS_SEED",
+  oracle: "TABLE_CRAFT_ORACLE_SEED",
+  mssql: "TABLE_CRAFT_MSSQL_SEED",
 };
 
 const SERVICES = Object.keys(SEED_FILES) as SeededService[];
+
+/** A one-shot service that seeds a server with no initdb directory, recreated with it. */
+const SEEDER_OF: Partial<Readonly<Record<SeededService, string>>> = { mssql: "mssql-seed" };
+
+function seedFiles(directory: string, path: string): string[] {
+  if (!statSync(join(directory, path)).isDirectory()) return [path];
+  return readdirSync(join(directory, path))
+    .sort()
+    .flatMap((entry) => seedFiles(directory, `${path}/${entry}`));
+}
 
 /** SHA-256 per seeded service over its seed files, in order, each prefixed by its path. */
 export function seedHashes(directory: string = DB_DIRECTORY): Readonly<Record<SeededService, string>> {
   const entries = SERVICES.map((service) => {
     const hash = createHash("sha256");
-    for (const file of SEED_FILES[service]) {
+    for (const file of SEED_FILES[service].flatMap((path) => seedFiles(directory, path))) {
       hash.update(`${file}\0`);
       hash.update(readFileSync(join(directory, file)));
       hash.update("\0");
@@ -64,24 +80,57 @@ function compose(args: readonly string[], env: NodeJS.ProcessEnv): void {
   if (status !== 0) process.exit(status ?? 1);
 }
 
+export interface Stack {
+  /** `--profile` arguments for every `docker compose` call of the run. */
+  readonly profiles: readonly string[];
+  /** The seeded services those profiles start, the only ones checked for a stale seed. */
+  readonly services: readonly SeededService[];
+}
+
 /**
- * `docker compose up -d --wait` with the seed labels set, leaving TiDB out when `target` is remote,
- * then recreates any seeded service whose sentinel objects are gone (`smokeFixtures.ts`): one
- * whose label is current but whose data is not, such as a container a suite damaged. Returns the
- * environment the rest of the run should pass to compose and the suites. Exits the process when
- * compose fails, as the scripts that call it would.
+ * What a run over `databases` starts: one profile per selected database, and the local TiDB
+ * container only when TiDB is selected and the remote one did not answer.
+ */
+export function stackFor(databases: readonly DatabaseId[], target: TidbTarget): Stack {
+  const profiles = databases.flatMap((id) => {
+    if (id !== "tidb") return [id];
+    return target.remote ? [] : [TIDB_PROFILE];
+  });
+  return {
+    profiles: profiles.flatMap((profile) => ["--profile", profile]),
+    services: servicesOf(databases),
+  };
+}
+
+/** The run's first line: which servers it uses and why. */
+export function describeSelection(databases: readonly DatabaseId[], env: NodeJS.ProcessEnv = process.env): string {
+  const from = (env[DATABASES_ENV] ?? "").trim() === "" ? `${DATABASES_ENV} unset, the normal flow` : DATABASES_ENV;
+  const left = DATABASE_IDS.filter((id) => !databases.includes(id));
+  return `Databases: ${databases.join(", ")} (from ${from}); not started: ${left.length > 0 ? left.join(", ") : "none"}`;
+}
+
+/**
+ * `docker compose up -d --wait` over the selected databases' profiles with the seed labels set,
+ * leaving TiDB out when `target` is remote, then recreates any selected seeded service whose
+ * sentinel objects are gone (`smokeFixtures.ts`): one whose label is current but whose data is
+ * not, such as a container a suite damaged. Returns the environment the rest of the run should
+ * pass to compose and the suites. Exits the process when compose fails, as the scripts that call
+ * it would.
  */
 export async function upDatabases(
   target: TidbTarget,
   base: NodeJS.ProcessEnv = process.env,
+  databases: readonly DatabaseId[] = selectedDatabases(base),
 ): Promise<NodeJS.ProcessEnv> {
   const env = { ...base, ...target.env, ...seedEnv() };
-  const profiles = composeProfiles(target);
+  const { profiles, services } = stackFor(databases, target);
+  if (profiles.length === 0) return env;
   compose([...profiles, "up", "-d", "--wait"], env);
-  const stale = await servicesMissingSentinels();
+  const stale = await servicesMissingSentinels(undefined, sentinelsFor(services));
   if (stale.length > 0) {
     console.log(`Reseeding ${stale.join(", ")}: their seed objects are missing.`);
-    compose([...profiles, "up", "-d", "--wait", "--force-recreate", ...stale], env);
+    const recreated = stale.flatMap((service) => [service, ...(SEEDER_OF[service] ?? [])]);
+    compose([...profiles, "up", "-d", "--wait", "--force-recreate", ...recreated], env);
   }
   return env;
 }

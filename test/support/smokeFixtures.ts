@@ -7,9 +7,22 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import type { SeededService } from "../db/stack.js";
-import { MYSQL_CONFIG, MYSQL_TLS_CONFIG, POSTGRES_CONFIG, POSTGRES_TLS_CONFIG, TLS_FILES } from "./databases.js";
+import {
+  type DatabaseId,
+  DATABASES_ENV,
+  DEFAULT_DATABASES,
+  MSSQL_CONFIG,
+  MYSQL_CONFIG,
+  MYSQL_TLS_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  POSTGRES_TLS_CONFIG,
+  selectedDatabases,
+  TLS_FILES,
+} from "./databases.js";
 
 const CONNECT_TIMEOUT_MS = 5_000;
+const MS_PER_SECOND = 1_000;
 const UP_COMMAND = "bun test/db/up.ts";
 
 export interface Sentinel {
@@ -52,7 +65,31 @@ export const SENTINELS: readonly Sentinel[] = [
     object: "table tls_probe",
     sql: "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'table_craft' AND TABLE_NAME = 'tls_probe'",
   },
+  { service: "oracle", object: "table seed_probe", sql: "SELECT 1 FROM user_tables WHERE table_name = 'SEED_PROBE'" },
+  { service: "mssql", object: "table seed_probe", sql: "SELECT 1 FROM sys.tables WHERE name = 'seed_probe'" },
 ];
+
+/**
+ * The seeded services each database brings up, under the compose profile of the same name
+ * (`test/db/compose.yml`), which also starts the unseeded `ssh` bastion for MySQL and PostgreSQL
+ * and `mssql-seed`. TiDB has no seed: the suites make their own scratch databases on it.
+ */
+const SERVICES_OF: Readonly<Record<DatabaseId, readonly SeededService[]>> = {
+  mysql: ["mysql", "mysql-tls"],
+  tidb: [],
+  postgres: ["postgres", "postgres-tls"],
+  oracle: ["oracle"],
+  mssql: ["mssql"],
+};
+
+export function servicesOf(databases: readonly DatabaseId[]): SeededService[] {
+  return databases.flatMap((id) => SERVICES_OF[id]);
+}
+
+/** The sentinels of `services` only: a server the run did not select is neither asked nor reported. */
+export function sentinelsFor(services: readonly SeededService[]): readonly Sentinel[] {
+  return SENTINELS.filter((sentinel) => services.includes(sentinel.service));
+}
 
 /** Asks one server whether `sql` returns a row; throws when the server cannot be reached. */
 export type SentinelQuery = (service: SeededService, sql: string) => Promise<boolean>;
@@ -151,7 +188,50 @@ async function mysqlHasRow(config: Record<string, unknown>, sql: string): Promis
   }
 }
 
-const serverQuery: SentinelQuery = (service, sql) => {
+/** node-oracledb in thin mode, the driver plan 054's plugin will use. */
+async function oracleHasRow(sql: string): Promise<boolean> {
+  const { default: oracledb } = await import("oracledb");
+  const { host, port, serviceName, user, password } = ORACLE_CONFIG;
+  const connection = await oracledb.getConnection({
+    user,
+    password,
+    connectString: `${host}:${String(port)}/${serviceName}`,
+    connectTimeout: CONNECT_TIMEOUT_MS / MS_PER_SECOND,
+  });
+  try {
+    return ((await connection.execute(sql)).rows ?? []).length > 0;
+  } finally {
+    await connection.close();
+  }
+}
+
+/** tedious, the driver plan 055's plugin will use; the test server's certificate is self-signed. */
+async function mssqlHasRow(sql: string): Promise<boolean> {
+  const { Connection, Request } = await import("tedious");
+  const { host, port, database, user, password } = MSSQL_CONFIG;
+  const connection = new Connection({
+    server: host,
+    authentication: { type: "default", options: { userName: user, password } },
+    options: { port, database, trustServerCertificate: true, connectTimeout: CONNECT_TIMEOUT_MS },
+  });
+  await new Promise<void>((resolve, reject) => {
+    connection.on("connect", (error) => (error === undefined ? resolve() : reject(error)));
+    connection.connect();
+  });
+  try {
+    let rows = 0;
+    await new Promise<void>((resolve, reject) => {
+      const request = new Request(sql, (error) => (error === undefined || error === null ? resolve() : reject(error)));
+      request.on("row", () => (rows += 1));
+      connection.execSql(request);
+    });
+    return rows > 0;
+  } finally {
+    connection.close();
+  }
+}
+
+export const serverQuery: SentinelQuery = (service, sql) => {
   const tls = { ca: readFileSync(TLS_FILES.ca, "utf8") };
   switch (service) {
     case "postgres":
@@ -162,15 +242,29 @@ const serverQuery: SentinelQuery = (service, sql) => {
       return postgresHasRow({ ...POSTGRES_TLS_CONFIG, ssl: tls }, sql);
     case "mysql-tls":
       return mysqlHasRow({ ...MYSQL_TLS_CONFIG, ssl: tls }, sql);
+    case "oracle":
+      return oracleHasRow(sql);
+    case "mssql":
+      return mssqlHasRow(sql);
   }
 };
 
 /** Set once the check passed: every Vitest project runs the global setup in the one main process. */
 const CHECKED_ENV = "TABLE_CRAFT_SMOKE_FIXTURES_CHECKED";
 
+/** The smoke files take MySQL and TiDB as given and skip only the opt-in servers' scenarios. */
+export function smokeSelectionProblem(databases: readonly DatabaseId[]): string | null {
+  const missing = DEFAULT_DATABASES.filter((id) => !databases.includes(id));
+  if (missing.length === 0) return null;
+  return `${DATABASES_ENV} leaves out ${missing.join(", ")}, which every smoke run needs; add to ${DEFAULT_DATABASES.join(",")} instead`;
+}
+
 export async function setup(): Promise<void> {
   if (process.env[CHECKED_ENV] === "1") return;
-  const problems = await staleServices(serverQuery);
+  const databases = selectedDatabases();
+  const selection = smokeSelectionProblem(databases);
+  if (selection !== null) throw new Error(selection);
+  const problems = await staleServices(serverQuery, sentinelsFor(servicesOf(databases)));
   if (problems.length > 0) throw new Error(`The test databases are not ready:\n- ${problems.join("\n- ")}`);
   process.env[CHECKED_ENV] = "1";
 }

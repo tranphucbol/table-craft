@@ -6,7 +6,7 @@
 import { createRequire } from "node:module";
 import { randomBytes } from "node:crypto";
 import { resolveTidbTarget } from "../db/tidbTarget.js";
-import { TIDB_SCRATCH_PREFIX, tidbConfigFromEnv } from "./databases.js";
+import { databaseEnabled, TIDB_SCRATCH_PREFIX, tidbConfigFromEnv } from "./databases.js";
 
 const DATABASE_ENV = "TABLE_CRAFT_TIDB_DATABASE";
 const RADIX = 36;
@@ -51,6 +51,7 @@ async function dropStale(connection: Connection, now: number): Promise<void> {
 export async function setup(): Promise<() => Promise<void>> {
   // Every Vitest project runs the global setup in the one main process; the first database serves all.
   if (process.env[DATABASE_ENV]?.startsWith(TIDB_SCRATCH_PREFIX) === true) return () => Promise.resolve();
+  if (!databaseEnabled("tidb")) return () => Promise.resolve();
   // In the headless box the remote settings are not passed in; compose already points it.
   const target = await resolveTidbTarget();
   Object.assign(process.env, target.env);
