@@ -1,0 +1,20 @@
+# The Redis fixture (plan 058), as redis-cli commands: one per line, redis-cli quoting, # comments.
+# Applied to every standalone server (`redis-cli < redis.redis`) and, through `redis-cli -c`, to
+# every cluster, so no command here may touch keys of two hash slots. `redis-db1.redis` adds the
+# standalone servers' database 1. `redis/seed.sh` applies it, then adds `page:0001` … `page:5000`
+# for the key tree's paging and `seed:probe`, which the healthchecks wait for.
+SET type_probe:string "hello"
+HSET type_probe:hash name "Ann" email "ann@example.com" prefs "{\"theme\":\"dark\",\"tags\":[1,2]}"
+RPUSH type_probe:list "a" "b" "c"
+SADD type_probe:set "red" "green" "blue"
+ZADD type_probe:zset 1 "one" 2 "two" 3 "three"
+XADD type_probe:stream 1700000000000-0 event "login" user "42"
+XADD type_probe:stream 1700000000001-0 event "logout" user "42" reason "idle"
+SET type_probe:binary "\xff\xfe\x00\x01"
+SET "bin:\xff\xfe" "binary key"
+HSET user:{42}:profile name "Ann" email "ann@example.com" prefs "{\"theme\":\"dark\"}"
+SET user:{42}:session "token-42"
+EXPIRE user:{42}:session 31536000
+HSET user:{43}:profile name "Bob" email "bob@example.com"
+ZADD leaderboard 120 "ann" 80 "bob" 200 "cid"
+RPUSH queue:email "welcome:42" "reset:43"
