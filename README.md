@@ -516,30 +516,31 @@ Settings live in `settings.json` in your [profile folder](#where-your-data-lives
 dialog writes it; you can also edit it by hand, and a field that is missing or out of range falls
 back to its default without affecting the others.
 
-| Field                                  | Values                                                                                        | Default       |
-| :------------------------------------- | :-------------------------------------------------------------------------------------------- | :------------ |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`   | `system`      |
-| `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
-| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                   | `false`       |
-| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                             | `null`, 13    |
-| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                             | `null`, 13    |
-| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                             | `null`, 12    |
-| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                         | `aligned`     |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                | `upper`       |
-| `editor.format.indentWidth`            | 1–8 spaces                                                                                    | 2             |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                               | 1             |
-| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                | `true`        |
-| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                            | `true`        |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                            | 0             |
-| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                            | 5             |
-| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure | `ask`         |
-| `data.nullText`                        | 1–16 characters                                                                               | `<null>`      |
-| `data.groupDigits`                     | `true`, `false`                                                                               | `false`       |
-| `data.pageRows`                        | 10–10,000                                                                                     | 500           |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                          | 100,000       |
-| `log.level`                            | `info`, `debug`                                                                               | `info`        |
-| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                             | 120           |
-| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                | `true`        |
+| Field                                  | Values                                                                                         | Default                      |
+| :------------------------------------- | :--------------------------------------------------------------------------------------------- | :--------------------------- |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`    | `system`                     |
+| `appearance.density`                   | `comfortable`, `compact`                                                                       | `comfortable`                |
+| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                    | `false`                      |
+| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 13                   |
+| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 13                   |
+| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 12                   |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                          | `aligned`                    |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                 | `upper`                      |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                     | 2                            |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                | 1                            |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                 | `true`                       |
+| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                             | `true`                       |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                             | 0                            |
+| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                             | 5                            |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure  | `ask`                        |
+| `data.nullText`                        | 1–16 characters                                                                                | `<null>`                     |
+| `data.groupDigits`                     | `true`, `false`                                                                                | `false`                      |
+| `data.pageRows`                        | 10–10,000                                                                                      | 500                          |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                           | 100,000                      |
+| `log.level`                            | `info`, `debug`                                                                                | `info`                       |
+| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                              | 120                          |
+| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                 | `true`                       |
+| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from | `https://registry.npmjs.org` |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then
@@ -750,6 +751,7 @@ Everything is stored in one profile folder:
 | `update-swap.log`      | The last macOS update's swap, logged and removed at the next launch       |
 | `themes/`              | Your themes                                                               |
 | `plugins/`             | Your plugins                                                              |
+| `managed-plugins/`     | Plugins TableCraft downloaded, one folder per version                     |
 
 Passwords are never written to `datasources.json` or to the log, and there is no plaintext fallback:
 where the keychain cannot encrypt, _Forever_ is disabled. Apart from the databases you connect to,

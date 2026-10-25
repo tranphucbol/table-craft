@@ -33,6 +33,7 @@ const CHOSEN: Settings = {
   data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
   log: { level: "debug" },
   updates: { checkAutomatically: false },
+  plugins: { registryUrl: "http://127.0.0.1:4873" },
 };
 
 function store(files = memoryFiles()) {
