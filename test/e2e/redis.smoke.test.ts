@@ -43,12 +43,31 @@ import {
   setWindowSize,
   sqlEditor,
   toolWindow,
-  treeNode,
   waitUntilReady,
   type Datasource,
   type RunningApp,
 } from "./harness.js";
 import { builtRelease } from "./pluginFixtures.js";
+import {
+  attributes,
+  BASIC_COMPLETION,
+  dialog,
+  editKeyCell,
+  expand,
+  explorer,
+  keyButton,
+  keyCell,
+  keyHeaders,
+  keyTab,
+  onRedis,
+  openKey,
+  outputLog,
+  runCommand,
+  scanned,
+  showFromDatasourceMenu,
+  treeRow,
+  treeRows,
+} from "./redisLive.js";
 
 const captureWindow = evidenceFor("058");
 
@@ -57,117 +76,12 @@ const REDIS6: Datasource = { id: "redis6", pluginId: "redis", config: REDIS6_CON
 const CLUSTER: Datasource = { id: "cluster", pluginId: "redis", config: REDIS_CLUSTER_CONFIG };
 const CLUSTER6: Datasource = { id: "cluster6", pluginId: "redis", config: REDIS6_CLUSTER_CONFIG };
 
-const BASIC_COMPLETION = "Control+Space";
 const NO_OPTIONAL_ROOT = { TABLE_CRAFT_DEVELOPMENT_PLUGINS: "0" };
 const EDIT_KEY = "live:edit";
 const TTL_KEY = "live:ttl";
 const DELETE_PREFIX = "live:del:";
 const DELETE_COUNT = 30;
 const TTL_SECONDS = 3;
-
-/** Runs `commands` on `config` through the plugin, outside the app. */
-async function onRedis(config: object, commands: readonly string[]): Promise<void> {
-  const session = await redis.connect(config, { readOnly: false });
-  try {
-    for (const command of commands) await session.execute(command);
-  } finally {
-    await session.close();
-  }
-}
-
-/** The DOM element as far as `attributes` needs it; this program has no DOM lib. */
-interface AttributeElement {
-  getAttribute(name: string): string | null;
-}
-
-/** One attribute of every element `locator` matches, read in one snapshot. */
-async function attributes(locator: ReturnType<Page["locator"]>, name: string): Promise<string[]> {
-  return locator.evaluateAll(
-    (elements: readonly AttributeElement[], attribute: string) =>
-      elements.map((element) => element.getAttribute(attribute) ?? ""),
-    name,
-  );
-}
-
-function explorer(page: Page) {
-  return toolWindow(page, "Database");
-}
-
-function treeRows(page: Page, kind: string) {
-  return explorer(page).locator(`[role="treeitem"][data-kind="${kind}"]`);
-}
-
-function treeRow(page: Page, kind: string, label: string | RegExp) {
-  return treeRows(page, kind).filter({ hasText: label });
-}
-
-/** Expands a collapsed tree row by selecting it and pressing →. */
-async function expand(page: Page, row: ReturnType<typeof treeRow>): Promise<void> {
-  await row.first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-  if ((await row.first().getAttribute("aria-expanded")) === "true") return;
-  await row.first().click();
-  await page.keyboard.press("ArrowRight");
-  await expect.poll(() => row.first().getAttribute("aria-expanded")).toBe("true");
-}
-
-function keyTab(page: Page) {
-  return page.getByTestId("key-tab");
-}
-
-function keyCell(page: Page, row: number, column: number) {
-  return keyTab(page).locator(`[role="gridcell"][data-row="${String(row)}"][data-col="${String(column)}"]`);
-}
-
-function keyButton(page: Page, name: string) {
-  return keyTab(page).getByRole("button", { name, exact: true });
-}
-
-function outputLog(page: Page) {
-  return page.getByRole("log", { name: "Output" });
-}
-
-function dialog(page: Page) {
-  return page.getByRole("dialog");
-}
-
-/** Opens `key` in a key tab through Go to Key…. */
-async function openKey(page: Page, key: string): Promise<void> {
-  await findAction(page, "Go to Key");
-  const modal = dialog(page);
-  await modal.getByLabel("Key name", { exact: true }).fill(key);
-  await modal.getByLabel("Key name", { exact: true }).press("Enter");
-  await expect.poll(() => keyTab(page).getByTestId("key-name").textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(key);
-  await expect.poll(() => keyTab(page).getAttribute("data-key-type"), { timeout: LAUNCH_TIMEOUT_MS }).not.toBeNull();
-}
-
-async function keyHeaders(page: Page): Promise<string[]> {
-  await keyTab(page).getByRole("columnheader").first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-  return keyTab(page).getByRole("columnheader").allTextContents();
-}
-
-/** Writes `text` into a key tab cell through the inline editor. */
-async function editKeyCell(page: Page, row: number, column: number, text: string): Promise<void> {
-  await keyCell(page, row, column).click();
-  await page.keyboard.press("Enter");
-  const field = keyTab(page).locator("[data-editing] input");
-  await field.waitFor();
-  await field.fill(text);
-  await field.press("Enter");
-  await expect.poll(() => field.count()).toBe(0);
-}
-
-/** Runs one console command and waits for its Output line to contain `expected`. */
-async function runCommand(page: Page, command: string, expected: string | RegExp): Promise<void> {
-  await sqlEditor(page).fill(command);
-  await runAllButton(page).click();
-  await expect.poll(() => outputLog(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toMatch(expected);
-  await waitUntilReady(page);
-}
-
-async function showFromDatasourceMenu(page: Page, datasource: string, item: RegExp): Promise<void> {
-  await treeNode(page, datasource).first().click({ button: "right" });
-  await page.getByRole("menuitem", { name: item }).click();
-}
 
 describe.runIf(DATABASES_ENABLED)("redis live test", () => {
   let running: RunningApp | null = null;
@@ -200,12 +114,6 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
     return running.page;
-  }
-
-  /** Waits for the key tree's current database and its first pass of keys. */
-  async function scanned(page: Page, label: RegExp): Promise<void> {
-    await treeRow(page, "keyDatabase", label).first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-    await treeRows(page, "keyFolder").first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
   }
 
   it.skipIf(WITHOUT_REDIS)(

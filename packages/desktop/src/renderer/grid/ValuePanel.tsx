@@ -45,12 +45,19 @@ function FormatPicker({ choice }: { readonly choice: ValueFormatChoice }) {
 }
 
 /** `bytes` decoded as `format`; gzip inflates asynchronously, so the first draw may be the previous text. */
-function useDecoded(bytes: Uint8Array, format: ValueFormat): DecodedValue | null {
-  const [decoded, setDecoded] = useState<DecodedValue | null>(null);
+/** A decode with what it decoded, so a reader can tell a stale one from the current one. */
+interface Decoded {
+  readonly value: DecodedValue;
+  readonly bytes: Uint8Array;
+  readonly format: ValueFormat;
+}
+
+function useDecoded(bytes: Uint8Array, format: ValueFormat): Decoded | null {
+  const [decoded, setDecoded] = useState<Decoded | null>(null);
   useEffect(() => {
     let current = true;
-    void decodeValue(bytes, format).then((next) => {
-      if (current) setDecoded(next);
+    void decodeValue(bytes, format).then((value) => {
+      if (current) setDecoded({ value, bytes, format });
     });
     return () => {
       current = false;
@@ -79,8 +86,15 @@ function FormattedValue({
   readonly format: ValueFormat;
   readonly edit?: ValueTextEdit;
 }) {
-  const decoded = useDecoded(bytes, format);
-  if (decoded === null) return <p className="p-cell text-ink-muted">Decoding…</p>;
+  const latest = useDecoded(bytes, format);
+  const editorKey = edit === undefined ? null : `${edit.revision}:${format}`;
+  const [mountedKey, setMountedKey] = useState(editorKey);
+  const fresh = latest !== null && latest.bytes === bytes && latest.format === format;
+  // The editor mounts on the text it is given, so a new read or format waits for its own decode:
+  // mounting on the previous one showed the old value after a submit (found live, plan 060).
+  if (editorKey !== mountedKey && fresh) setMountedKey(editorKey);
+  if (latest === null || editorKey !== mountedKey) return <p className="p-cell text-ink-muted">Decoding…</p>;
+  const decoded = latest.value;
   const shownAs = decoded.inner === null ? FORMAT_LABELS[decoded.format] : `gzip → ${FORMAT_LABELS[decoded.inner]}`;
   const json =
     decoded.error === null && (decoded.format === "json" || decoded.inner === "json" || decoded.format === "msgpack");
@@ -100,7 +114,7 @@ function FormattedValue({
       )}
       {editable ? (
         <EditableText
-          key={`${edit.revision}:${format}`}
+          key={mountedKey}
           label="Value"
           text={decoded.text}
           onChange={(text) => edit.onChange(text, decoded.format)}
