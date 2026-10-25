@@ -117,13 +117,13 @@ function PluginPicker({ plugins, onPick }: { plugins: readonly PluginInfo[]; onP
               type="button"
               disabled={plugin.unavailableReason !== null}
               title={plugin.unavailableReason ?? undefined}
-              className="flex h-row w-full items-center gap-cell rounded px-gap text-left hover:bg-raised disabled:opacity-50"
+              className="flex min-h-row w-full items-center gap-cell rounded px-gap text-left hover:bg-raised disabled:opacity-50"
               onClick={() => onPick(plugin)}
             >
-              <DatabaseIcon aria-hidden className="size-icon text-accent" />
-              {plugin.name}
+              <DatabaseIcon aria-hidden className="size-icon shrink-0 text-accent" />
+              <span className="shrink-0">{plugin.name}</span>
               {plugin.unavailableReason === null ? null : (
-                <span className="truncate text-ink-muted">{plugin.unavailableReason}</span>
+                <span className="text-ink-muted">{plugin.unavailableReason}</span>
               )}
             </button>
           </li>
