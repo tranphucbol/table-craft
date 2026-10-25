@@ -122,7 +122,8 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
   }
 
   for (const dialect of DIALECTS) {
-    it.skipIf(serverSkipped(dialect.datasource().pluginId))(
+    const scenario = it.skipIf(serverSkipped(dialect.datasource().pluginId));
+    scenario(
       `givenOneLineQuery_on_${dialect.label}_whenModAltL_thenOneClausePerLineAndOneUndoRestores`,
       async () => {
         const page = await launch(dialect.datasource());
@@ -142,7 +143,7 @@ describe.runIf(DATABASES_ENABLED)("Reformat Code and query parameters live test"
       SCENARIO_TIMEOUT_MS,
     );
 
-    it(
+    scenario(
       `givenNamedAndDialectPlaceholders_on_${dialect.label}_whenRun_thenDialogAsksAndValuesAreBound`,
       async () => {
         const plugin = dialect.plugin;

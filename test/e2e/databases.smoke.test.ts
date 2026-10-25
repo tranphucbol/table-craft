@@ -130,7 +130,7 @@ describe.runIf(DATABASES_ENABLED)("desktop against real databases", () => {
       SCENARIO_TIMEOUT_MS,
     );
 
-    it.runIf(target.sleepSql !== undefined)(
+    it.runIf(target.sleepSql !== undefined && !serverSkipped(target.datasource().pluginId))(
       "givenSleepingStatement_whenCancelButtonClicked_thenCancelledWellBeforeItEnds",
       async () => {
         const { page } = await open(target.datasource());

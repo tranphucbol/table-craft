@@ -121,7 +121,8 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
   }
 
   for (const dialect of DIALECTS) {
-    it.skipIf(serverSkipped(dialect.pluginId))(
+    const scenario = it.skipIf(serverSkipped(dialect.pluginId));
+    scenario(
       `given${dialect.name}SleepPastTimeout_whenRun_thenTimedOutAndSessionStillRuns`,
       async () => {
         const profile = newProfile();
@@ -144,7 +145,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
       SCENARIO_TIMEOUT_MS,
     );
 
-    it(
+    scenario(
       `given${dialect.name}ConnectionDroppedWhileIdle_whenRun_thenReconnectsAndRuns`,
       async () => {
         proxy = await chaosProxy({ host: dialect.config.host, port: dialect.config.port });
@@ -167,7 +168,7 @@ describe.runIf(DATABASES_ENABLED)("connection hardening live test", () => {
       SCENARIO_TIMEOUT_MS,
     );
 
-    it(
+    scenario(
       `given${dialect.name}StatementInFlight_whenNetworkBlackholed_thenLostWithinKeepAliveWindow`,
       async () => {
         proxy = await chaosProxy({ host: dialect.config.host, port: dialect.config.port });

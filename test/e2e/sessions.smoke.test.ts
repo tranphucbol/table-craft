@@ -20,6 +20,7 @@ import {
   TIDB_CONFIG,
   TIDB_DATABASE,
   WITHOUT_POSTGRES,
+  serverSkipped,
 } from "../support/databases.js";
 import {
   activeEditorTab,
@@ -223,7 +224,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     { name: "pg", datasource: POSTGRES, sleep: PG_SLEEP },
     { name: "mysql", datasource: MYSQL_ROOT, sleep: MYSQL_SLEEP },
   ]) {
-    it(
+    it.skipIf(serverSkipped(target.datasource.pluginId))(
       `givenSleepInConsoleOn${target.name}_whenShowSessionsThenCancel_thenActiveRowThenIdle`,
       async () => {
         const page = await launch(target.datasource);
