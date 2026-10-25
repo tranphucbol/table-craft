@@ -128,6 +128,31 @@ export interface ContractFixture {
     /** A call that leaves a parameter to its default; omitted where the dialect has no defaults. */
     readonly defaulted?: RoutineCase;
   };
+  /** The statements whose text differs by dialect; each defaults to the text PostgreSQL, MySQL and SQLite accept. */
+  readonly sql?: ContractSql;
+  /**
+   * How the database stores an unquoted fixture name, such as Oracle's upper case; identity by
+   * default. `LINE_ITEMS_TABLE` is quoted in every dialect and never folded.
+   */
+  readonly foldName?: (name: string) => string;
+}
+
+/** Dialect-specific text the suite runs; every member is optional (decision 100). */
+export interface ContractSql {
+  /** A one-row query of `expressions`; Oracle adds `FROM DUAL`. */
+  readonly select?: (expressions: string) => string;
+  /** At least 100,000 rows; built from `select` by default. */
+  readonly largeResult?: string;
+  /** A join over `orders` and `customers` that plans with more than one step. */
+  readonly explainJoin?: string;
+  /** Replaces the scripts every other dialect splits the same way. */
+  readonly sharedScripts?: readonly SplitCase[];
+  /** Drops table `name` where it exists and does nothing where it does not. */
+  readonly dropTableIfExists?: (name: string) => string;
+  /** Creates a session-scoped table from `name`, and the name later statements reach it by. */
+  readonly temporaryTable?: (name: string, columns: string) => { readonly create: string; readonly name: string };
+  /** Opens a transaction explicitly in auto-commit mode. */
+  readonly begin?: string;
 }
 
 /** One routine call: which routine (from `routines.expected`), its arguments, and the rows it returns. */
@@ -247,11 +272,31 @@ const PROBE_ROW_ID = 1;
 /** Far from UTC either way, so a driver that parses timestamps as local time shifts them visibly. */
 const DISTANT_TIME_ZONE = "Pacific/Kiritimati";
 
-const DIGITS = Array.from({ length: 10 }, (_, digit) => `SELECT ${digit} AS n`).join(" UNION ALL ");
-/** 100,000 rows, more than any driver buffers in one fetch, in SQL every database accepts. */
-const LARGE_RESULT_SQL =
-  `SELECT a.n + 10 * b.n + 100 * c.n + 1000 * d.n + 10000 * e.n AS n FROM ` +
-  ["a", "b", "c", "d", "e"].map((alias) => `(${DIGITS}) ${alias}`).join(" CROSS JOIN ");
+const DIGIT_COUNT = 10;
+/** 100,000 rows, more than any driver buffers in one fetch. */
+function largeResultSql(select: (expressions: string) => string): string {
+  const digits = Array.from({ length: DIGIT_COUNT }, (_, digit) => select(`${digit} AS n`)).join(" UNION ALL ");
+  return (
+    `SELECT a.n + 10 * b.n + 100 * c.n + 1000 * d.n + 10000 * e.n AS n FROM ` +
+    ["a", "b", "c", "d", "e"].map((alias) => `(${digits}) ${alias}`).join(" CROSS JOIN ")
+  );
+}
+
+/** The statements the suite runs for `fixture`, each default filled in. */
+export function contractSql(fixture: Pick<ContractFixture, "sql">): Required<ContractSql> {
+  const select = fixture.sql?.select ?? ((expressions: string) => `SELECT ${expressions}`);
+  return {
+    select,
+    largeResult: fixture.sql?.largeResult ?? largeResultSql(select),
+    explainJoin: fixture.sql?.explainJoin ?? EXPLAIN_JOIN,
+    sharedScripts: fixture.sql?.sharedScripts ?? SHARED_SCRIPTS,
+    dropTableIfExists: fixture.sql?.dropTableIfExists ?? ((name: string) => `DROP TABLE IF EXISTS ${name}`),
+    temporaryTable:
+      fixture.sql?.temporaryTable ??
+      ((name: string, columns: string) => ({ create: `CREATE TEMPORARY TABLE ${name} (${columns})`, name })),
+    begin: fixture.sql?.begin ?? "BEGIN",
+  };
+}
 const ROWS_READ_BEFORE_RETURN = 3;
 /** Longer than `BYTES_PREVIEW_LENGTH` and within every fixture's `payload` column (MySQL's is `VARBINARY(64)`). */
 const LONG_BYTES_LENGTH = 48;
@@ -467,6 +512,10 @@ function connectionUrlProblems(manifest: PluginManifest): string[] {
  * Call it from a Vitest file; it registers one `describe` block.
  */
 export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFixture): void {
+  const dialectSql = contractSql(fixture);
+  const fold = (name: string): string => (name === LINE_ITEMS_TABLE ? name : (fixture.foldName?.(name) ?? name));
+  const selectOne = dialectSql.select("1 AS one");
+  const dropIfExists = dialectSql.dropTableIfExists;
   describe(`plugin contract: ${plugin.id}`, () => {
     it("givenPlugin_whenInspected_thenDeclaresOnlyKnownCapabilities", () => {
       for (const capability of plugin.capabilities) expect(CAPABILITIES).toContain(capability);
@@ -601,15 +650,15 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
     describe.runIf(plugin.capabilities.includes("sql"))("sql", () => {
       it("givenSession_whenSelectLiterals_thenReturnsColumnsAndOneRow", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const result = await session.execute("SELECT 1 AS one, 'two' AS two");
-          expect(result.columns.map((column) => column.name)).toEqual(["one", "two"]);
+          const result = await session.execute(dialectSql.select("1 AS one, 'two' AS two"));
+          expect(result.columns.map((column) => column.name)).toEqual(["one", "two"].map(fold));
           expect(await collect(result.rows)).toEqual([[1, "two"]]);
         });
       });
 
       it("givenStatementWithoutRows_whenExecuted_thenReturnsNoColumns", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const result = await session.execute(`CREATE TEMPORARY TABLE ${PROBE_TABLE} (n INTEGER)`);
+          const result = await session.execute(dialectSql.temporaryTable(PROBE_TABLE, "n INTEGER").create);
           expect(result.columns).toEqual([]);
           expect(await collect(result.rows)).toEqual([]);
         });
@@ -617,8 +666,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenInsert_whenExecuted_thenReportsRowsAffected", async () => {
         await withSession(plugin, fixture, async (session) => {
-          await session.execute(`CREATE TEMPORARY TABLE ${PROBE_TABLE} (n INTEGER)`);
-          const result = await session.execute(`INSERT INTO ${PROBE_TABLE} (n) VALUES (1), (2)`);
+          const probe = dialectSql.temporaryTable(PROBE_TABLE, "n INTEGER");
+          await session.execute(probe.create);
+          const result = await session.execute(`INSERT INTO ${probe.name} (n) VALUES (1), (2)`);
           expect(result.rowsAffected).toBe(PROBE_ROWS);
         });
       });
@@ -657,7 +707,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             fixture,
             async (session) => {
               expect(await rejectionCode(session.execute(write))).toBe("statementFailed");
-              expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+              expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
             },
             READ_ONLY,
           );
@@ -667,14 +717,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenFailedStatement_whenNextStatementRun_thenSessionStillWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await rejectionCode(session.execute("SELEC 1"));
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
 
       it("givenTypeProbe_whenSelected_thenCellsMatchExpectedWireValues", async () => {
         await withSession(plugin, fixture, async (session) => {
           const result = await session.execute(`SELECT * FROM ${TYPE_PROBE_TABLE} ORDER BY id`);
-          expect(result.columns.map((column) => column.name)).toEqual(TYPE_PROBE_COLUMNS);
+          expect(result.columns.map((column) => column.name)).toEqual(TYPE_PROBE_COLUMNS.map(fold));
           expect(await collect(result.rows)).toEqual(fixture.typeProbe.expected);
         });
       });
@@ -729,7 +779,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
                 ["Ada Lovelace"],
               ]);
             }
-            expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+            expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
           });
         });
 
@@ -777,13 +827,13 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenLargeResult_whenIteratorReturnedEarly_thenCursorClosedAndSessionUsable", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const result = await session.execute(LARGE_RESULT_SQL);
+          const result = await session.execute(dialectSql.largeResult);
           const iterator = result.rows[Symbol.asyncIterator]();
           for (let read = 0; read < ROWS_READ_BEFORE_RETURN; read += 1) {
             expect((await iterator.next()).done).toBe(false);
           }
           await iterator.return?.();
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
     });
@@ -800,14 +850,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         return spans.map((span) => span.sql);
       }
 
-      it.each([...SHARED_SCRIPTS, ...(fixture.scripts ?? [])])(
+      it.each([...dialectSql.sharedScripts, ...(fixture.scripts ?? [])])(
         "givenScript_whenSplit_thenStatementsMatch: $text",
         ({ text, statements }) => {
           expect(statementsOf(text)).toEqual(statements);
         },
       );
 
-      it.each([...SHARED_SCRIPTS, ...(fixture.scripts ?? [])])(
+      it.each([...dialectSql.sharedScripts, ...(fixture.scripts ?? [])])(
         "givenScriptInPieces_whenSplitStreamed_thenSameStatementsAsSplit: $text",
         ({ text }) => {
           const stream = language().splitStream?.();
@@ -822,7 +872,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       );
 
       it("givenSplitScript_whenEachStatementExecuted_thenEachSucceeds", async () => {
-        const statements = statementsOf("SELECT 'a;b' AS s;\n-- between\nSELECT 2 AS n;");
+        const statements = statementsOf(
+          `${dialectSql.select("'a;b' AS s")};\n-- between\n${dialectSql.select("2 AS n")};`,
+        );
         await withSession(plugin, fixture, async (session) => {
           for (const sql of statements) await collect((await session.execute(sql)).rows);
         });
@@ -838,7 +890,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenAwkwardIdentifier_whenQuotedAndSelected_thenNameReadsBack", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const result = await session.execute(`SELECT 1 AS ${language().quoteIdentifier(AWKWARD_IDENTIFIER)}`);
+          const result = await session.execute(
+            dialectSql.select(`1 AS ${language().quoteIdentifier(AWKWARD_IDENTIFIER)}`),
+          );
           await collect(result.rows);
           expect(result.columns.map((column) => column.name)).toEqual([AWKWARD_IDENTIFIER]);
         });
@@ -851,21 +905,21 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const source = await session.execute(`SELECT * FROM ${TYPE_PROBE_TABLE} ORDER BY id`);
           const rows = await collect(source.rows);
           const names = source.columns.map((column) => dialect.quoteIdentifier(column.name)).join(", ");
-          await run(session, `DROP TABLE IF EXISTS ${TYPE_PROBE_COPY_TABLE}`);
+          await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
           await run(session, fixture.typeProbe.copyTable);
           try {
             for (const row of rows) {
               const values = row.map((value, index) => dialect.literal(value, source.columns[index]?.type ?? null));
               await run(
                 session,
-                `INSERT INTO ${dialect.quoteIdentifier(TYPE_PROBE_COPY_TABLE)} (${names}) VALUES (${values.join(", ")})`,
+                `INSERT INTO ${dialect.quoteIdentifier(fold(TYPE_PROBE_COPY_TABLE))} (${names}) VALUES (${values.join(", ")})`,
               );
             }
             expect(await run(session, `SELECT * FROM ${TYPE_PROBE_COPY_TABLE} ORDER BY id`)).toEqual(
               fixture.typeProbe.expected,
             );
           } finally {
-            await run(session, `DROP TABLE IF EXISTS ${TYPE_PROBE_COPY_TABLE}`);
+            await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
           }
         });
       });
@@ -879,13 +933,13 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const probe = await session.execute(`SELECT id, payload FROM ${TYPE_PROBE_TABLE} ORDER BY id`);
           const payloadType = probe.columns[1]?.type ?? null;
           await collect(probe.rows);
-          await run(session, `DROP TABLE IF EXISTS ${TYPE_PROBE_COPY_TABLE}`);
+          await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
           await run(session, fixture.typeProbe.copyTable);
           try {
             const payload = dialect.literal({ kind: "bytes", preview: whole, length: LONG_BYTES_LENGTH }, payloadType);
             await run(
               session,
-              `INSERT INTO ${dialect.quoteIdentifier(TYPE_PROBE_COPY_TABLE)} (id, payload) VALUES (${PROBE_ROW_ID}, ${payload})`,
+              `INSERT INTO ${dialect.quoteIdentifier(fold(TYPE_PROBE_COPY_TABLE))} (id, payload) VALUES (${PROBE_ROW_ID}, ${payload})`,
             );
             const select = `SELECT payload FROM ${TYPE_PROBE_COPY_TABLE}`;
             expect(await run(session, select, { fullBytes: true })).toEqual([
@@ -901,7 +955,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
               ],
             ]);
           } finally {
-            await run(session, `DROP TABLE IF EXISTS ${TYPE_PROBE_COPY_TABLE}`);
+            await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
           }
         });
       });
@@ -938,8 +992,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             expect(source).toEqual({
               kind: "table",
               path: catalogPathOf(fixture),
-              relation: TYPE_PROBE_TABLE,
-              columns: ["id", null],
+              relation: fold(TYPE_PROBE_TABLE),
+              columns: [fold("id"), null],
             });
           });
         },
@@ -978,7 +1032,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       /** The copy table as the engine targets it: named and typed by the introspector. */
       async function copyTarget(session: Session): Promise<InsertTarget> {
-        await run(session, `DROP TABLE IF EXISTS ${TYPE_PROBE_COPY_TABLE}`);
+        await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
         await run(session, fixture.typeProbe.copyTable);
         const introspector = session.introspector;
         if (introspector === undefined) {
@@ -988,11 +1042,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         }
         const path = catalogPathOf(fixture);
         const relation = (await introspector.describe(path)).relations.find(
-          (candidate) => candidate.name === TYPE_PROBE_COPY_TABLE,
+          (candidate) => candidate.name === fold(TYPE_PROBE_COPY_TABLE),
         );
         if (relation === undefined) throw new Error(`${TYPE_PROBE_COPY_TABLE} was not described.`);
         return {
-          table: introspector.qualifiedName(path, TYPE_PROBE_COPY_TABLE),
+          table: introspector.qualifiedName(path, fold(TYPE_PROBE_COPY_TABLE)),
           columns: relation.columns.map((column) => ({ name: column.name, type: column.type })),
         };
       }
@@ -1003,7 +1057,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             await use(session, await copyTarget(session));
           } finally {
             await session.transactions?.rollback();
-            await run(session, `DROP TABLE IF EXISTS ${TYPE_PROBE_COPY_TABLE}`);
+            await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
           }
         });
       }
@@ -1023,7 +1077,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenBulkInsert_whenBatchRefused_thenNothingOfItAndTransactionUsable", async () => {
         await withCopy(async (session, target) => {
           const insert = insertRowsOf(session);
-          const row = (id: string): InsertRow => target.columns.map((column) => (column.name === "id" ? id : null));
+          const row = (id: string): InsertRow =>
+            target.columns.map((column) => (column.name === fold("id") ? id : null));
           await session.transactions?.setMode("manual");
 
           await insert(target, [row("1")]);
@@ -1044,7 +1099,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const texts = AWKWARD_TEXTS;
           const rows = texts.map((text, index) =>
             target.columns.map((column) =>
-              column.name === "id" ? String(index + 1) : column.name === "unicode_text" ? text : null,
+              column.name === fold("id") ? String(index + 1) : column.name === fold("unicode_text") ? text : null,
             ),
           );
 
@@ -1065,7 +1120,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             type: dialect.importType?.({ kind, integerDigits: 7, scale: 3 }) ?? "",
           }));
           const create = dialect.createTable?.(IMPORT_PROBE_TABLE, columns) ?? "";
-          await run(session, `DROP TABLE IF EXISTS ${IMPORT_PROBE_TABLE}`);
+          await run(session, dropIfExists(IMPORT_PROBE_TABLE));
           try {
             expect(dialect.classify(create).kind).toBe("ddl");
             await run(session, create);
@@ -1074,7 +1129,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             ]);
             expect(await run(session, `SELECT COUNT(*) AS n FROM ${IMPORT_PROBE_TABLE}`)).toHaveLength(1);
           } finally {
-            await run(session, `DROP TABLE IF EXISTS ${IMPORT_PROBE_TABLE}`);
+            await run(session, dropIfExists(IMPORT_PROBE_TABLE));
           }
         });
       });
@@ -1181,7 +1236,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       async function dropAll(session: Session): Promise<void> {
         const introspector = introspectorOf(session);
         for (const table of [OBJECT_CHILD_TABLE, OBJECT_RENAMED_TABLE, OBJECT_PARENT_TABLE]) {
-          await run(session, `DROP TABLE IF EXISTS ${introspector.qualifiedName(path(), table)}`);
+          await run(session, dropIfExists(introspector.qualifiedName(path(), fold(table))));
         }
       }
 
@@ -1407,7 +1462,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await session.execute(INSERT_TRANSACTION_ROW);
           expect(transactions.open).toBe(false);
           await session.execute(DELETE_TRANSACTION_ROW);
-          await session.execute("BEGIN");
+          await session.execute(dialectSql.begin);
           expect(transactions.open).toBe(true);
           await session.execute(INSERT_TRANSACTION_ROW);
           await session.execute("ROLLBACK");
@@ -1435,7 +1490,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await transactions.commit();
           await transactions.rollback();
           expect(transactions.open).toBe(false);
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
     });
@@ -1444,8 +1499,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenEditProbe_whenEditsRoundTrip_thenRowsMatch", async () => {
         const dialect = plugin.language;
         if (dialect === undefined) throw new Error("A plugin that declares sql needs language.");
-        const table = dialect.quoteIdentifier(EDIT_PROBE_TABLE);
-        const name = (column: string): string => dialect.quoteIdentifier(column);
+        const table = dialect.quoteIdentifier(fold(EDIT_PROBE_TABLE));
+        const name = (column: string): string => dialect.quoteIdentifier(fold(column));
         const text = (value: string): string => dialect.literal(value, EDIT_PROBE_TEXT_TYPE);
         const key = (id: Row[number]): string => `${name("id")} = ${dialect.literal(id, EDIT_PROBE_KEY_TYPE)}`;
         await withSession(plugin, fixture, async (session) => {
@@ -1459,8 +1514,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           };
           const qtyDefault =
             (await session.introspector?.describe(catalogPathOf(fixture)))?.relations
-              .find((relation) => relation.name === EDIT_PROBE_TABLE)
-              ?.columns.find((column) => column.name === "qty")?.default ?? String(EDIT_PROBE_DEFAULT_QTY);
+              .find((relation) => relation.name === fold(EDIT_PROBE_TABLE))
+              ?.columns.find((column) => column.name === fold("qty"))?.default ?? String(EDIT_PROBE_DEFAULT_QTY);
           const before = await read();
           await transactions.setMode("manual");
           try {
@@ -1523,7 +1578,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       }
 
       function relation(catalog: NamespaceCatalog, name: string): Relation {
-        const found = catalog.relations.find((candidate) => candidate.name === name);
+        const found = catalog.relations.find((candidate) => candidate.name === fold(name));
         if (found === undefined) throw new Error(`The fixture namespace has no relation ${name}.`);
         return found;
       }
@@ -1544,10 +1599,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const names = catalog.relations.map((candidate) => candidate.name);
         expect(names).toEqual([...names].sort());
         expect(catalog.relations.map(({ name, kind }) => ({ name, kind }))).toEqual(
-          expect.arrayContaining(FIXTURE_RELATIONS.map((expected) => ({ ...expected }))),
+          expect.arrayContaining(FIXTURE_RELATIONS.map((expected) => ({ ...expected, name: fold(expected.name) }))),
         );
         const probe = relation(catalog, TYPE_PROBE_TABLE);
-        expect(probe.columns.map((column) => column.name)).toEqual(TYPE_PROBE_COLUMNS);
+        expect(probe.columns.map((column) => column.name)).toEqual(TYPE_PROBE_COLUMNS.map(fold));
         expect(probe.columns.map((column) => column.position)).toEqual(TYPE_PROBE_COLUMNS.map((_, index) => index + 1));
         for (const column of probe.columns) expect(column.type).toMatch(/\S/);
       });
@@ -1556,19 +1611,19 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const orders = relation(await describeFixture(), "orders");
         expect(orders.foreignKeys).toHaveLength(1);
         expect(orders.foreignKeys[0]).toMatchObject({
-          columns: ["customer_id"],
-          target: { path: catalogFixture().path, relation: "customers", columns: ["id"] },
+          columns: [fold("customer_id")],
+          target: { path: catalogFixture().path, relation: fold("customers"), columns: [fold("id")] },
         });
         expect(orders.foreignKeys[0]?.onDelete).toMatch(/\S/);
-        const customerId = orders.columns.find((column) => column.name === "customer_id");
+        const customerId = orders.columns.find((column) => column.name === fold("customer_id"));
         expect(customerId?.nullable).toBe(false);
       });
 
       it("givenOrders_whenDescribed_thenIndexOrdersPlacedAtIdxIsListed", async () => {
         const orders = relation(await describeFixture(), "orders");
         expect(orders.indexes).toContainEqual({
-          name: ORDERS_INDEX,
-          columns: ["placed_at"],
+          name: fold(ORDERS_INDEX),
+          columns: [fold("placed_at")],
           unique: false,
           primary: false,
         });
@@ -1577,9 +1632,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenCustomers_whenDescribed_thenIdIsPrimaryKeyAndEmailIsUnique", async () => {
         const customers = relation(await describeFixture(), "customers");
         expect(customers.comment).toBe(catalogFixture().customersComment);
-        expect(customers.primaryKey?.columns).toEqual(["id"]);
-        expect(customers.uniqueKeys.map((key) => key.columns)).toEqual([["email"]]);
-        expect(customers.columns.find((column) => column.name === "email")?.nullable).toBe(false);
+        expect(customers.primaryKey?.columns).toEqual([fold("id")]);
+        expect(customers.uniqueKeys.map((key) => key.columns)).toEqual([[fold("email")]]);
+        expect(customers.columns.find((column) => column.name === fold("email"))?.nullable).toBe(false);
       });
 
       it("givenUnknownNamespace_whenDescribed_thenRejectsWithIntrospectionFailed", async () => {
@@ -1600,7 +1655,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenIntrospection_whenStatementRunAfter_thenSessionStillWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await session.introspector?.describe(catalogFixture().path);
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
     });
@@ -1639,9 +1694,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             const offered = result.items.map(({ label, kind }) => ({ label, kind }));
             expect(offered).toEqual(
               expect.arrayContaining([
-                { label: "orders", kind: "table" },
-                { label: "customers", kind: "table" },
-                { label: "customer_totals", kind: "view" },
+                { label: fold("orders"), kind: "table" },
+                { label: fold("customers"), kind: "table" },
+                { label: fold("customer_totals"), kind: "view" },
               ]),
             );
           });
@@ -1651,7 +1706,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await withCompletion(async (language, catalog) => {
             const result = await language.complete(at("SELECT o.| FROM orders o", "|"), catalog);
             const columns = result.items.filter((item) => item.kind === "column");
-            expect(columns.map((item) => item.label)).toEqual(["id", "customer_id", "total", "placed_at"]);
+            expect(columns.map((item) => item.label)).toEqual(["id", "customer_id", "total", "placed_at"].map(fold));
             for (const column of columns) expect(column.detail).toMatch(/\S/);
           });
         });
@@ -1708,7 +1763,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await withCompletion(async (language, catalog) => {
             const text = "SELECT * FROM customers";
             const declaration = await language.resolve({ text, offset: text.indexOf("customers") + 2 }, catalog);
-            expect(declaration).toEqual({ kind: "relation", path: expected.path, relation: "customers" });
+            expect(declaration).toEqual({ kind: "relation", path: expected.path, relation: fold("customers") });
           });
         });
       },
@@ -1732,11 +1787,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenTable_whenReadingDefinition_thenIncludesColumnsKeysAndCheck", async () => {
         const definition = await definitionOf("orders");
-        for (const column of ["id", "customer_id", "total", "placed_at"]) expect(definition).toContain(column);
+        for (const column of ["id", "customer_id", "total", "placed_at"]) expect(definition).toContain(fold(column));
         expect(definition).toMatch(/PRIMARY KEY/i);
         expect(definition).toContain(catalogFixture().ordersCheck);
         expect(definition).toMatch(/CHECK/i);
-        expect(definition).toContain(ORDERS_INDEX);
+        expect(definition).toContain(fold(ORDERS_INDEX));
         expect(definition.trimEnd().endsWith(";")).toBe(true);
       });
 
@@ -1755,7 +1810,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const comment = catalogFixture().customersComment;
         const definition = await definitionOf("customers");
         if (comment !== null) expect(definition).toContain(comment);
-        expect(definition).toContain("email");
+        expect(definition).toContain(fold("email"));
       });
 
       it("givenUnknownRelation_whenReadingDefinition_thenDefinitionNotFound", async () => {
@@ -1790,9 +1845,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             if (introspector === undefined) throw new Error("A schemaTree session needs an introspector.");
             const catalog = await introspector.describe(path);
             await use(session, (statement, name) => {
-              const relation = catalog.relations.find((candidate) => candidate.name === name);
+              const relation = catalog.relations.find((candidate) => candidate.name === fold(name));
               if (relation === undefined) throw new Error(`The fixture namespace has no relation ${name}.`);
-              const sql = language.generate(statement, relation, introspector.qualifiedName(path, name));
+              const sql = language.generate(statement, relation, introspector.qualifiedName(path, fold(name)));
               const spans = language.split(sql);
               expect(spans).toHaveLength(1);
               return spans[0]?.sql ?? "";
@@ -1804,7 +1859,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await withGenerator(async (session, generated) => {
             const result = await session.execute(generated("select", LINE_ITEMS_TABLE));
             await collect(result.rows);
-            expect(result.columns.map((column) => column.name)).toEqual(["id", "sku"]);
+            expect(result.columns.map((column) => column.name)).toEqual(["id", "sku"].map(fold));
           });
         });
 
@@ -1847,7 +1902,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             });
           } finally {
             await withSession(plugin, fixture, async (session) => {
-              await collect((await session.execute(`DROP TABLE IF EXISTS ${DROP_PROBE_TABLE}`)).rows);
+              await collect((await session.execute(dropIfExists(DROP_PROBE_TABLE))).rows);
             });
           }
         });
@@ -1874,10 +1929,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenSelect_whenExplained_thenTreeWithAnOperation", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const plan = await explained(session, EXPLAIN_JOIN, false);
+          const plan = await explained(session, dialectSql.explainJoin, false);
           expect(plan.analyzed).toBe(false);
           expect(plan.statement).toMatch(/^EXPLAIN\b/i);
-          expect(plan.statement).toContain(EXPLAIN_JOIN);
+          expect(plan.statement).toContain(dialectSql.explainJoin);
           expect(plan.raw).toMatch(/\S/);
           const nodes = planNodes(plan.roots);
           expect(nodes.length).toBeGreaterThan(1);
@@ -1915,18 +1970,18 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
 
       it("givenExplainStatement_whenExplainable_thenRefused", () => {
-        expect(explainable()(`EXPLAIN ${EXPLAIN_JOIN}`, { analyze: false }).ok).toBe(false);
+        expect(explainable()(`EXPLAIN ${dialectSql.explainJoin}`, { analyze: false }).ok).toBe(false);
       });
 
       it("givenReadAndWrite_whenExplainable_thenWritesOnlyForTheWrite", () => {
-        expect(explainable()(EXPLAIN_JOIN, { analyze: false })).toEqual({ ok: true, writes: false });
+        expect(explainable()(dialectSql.explainJoin, { analyze: false })).toEqual({ ok: true, writes: false });
         expect(explainable()(EXPLAIN_UPDATE, { analyze: false })).toEqual({ ok: true, writes: true });
       });
 
       it.runIf(!plugin.capabilities.includes("explainAnalyze"))(
         "givenNoExplainAnalyze_whenAnalyseExplainable_thenRefused",
         () => {
-          expect(explainable()(EXPLAIN_JOIN, { analyze: true }).ok).toBe(false);
+          expect(explainable()(dialectSql.explainJoin, { analyze: true }).ok).toBe(false);
         },
       );
     });
@@ -1939,7 +1994,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenSelect_whenAnalysed_thenActualRowsPresent", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const plan = await analysed(session, EXPLAIN_JOIN);
+          const plan = await analysed(session, dialectSql.explainJoin);
           expect(plan.analyzed).toBe(true);
           expect(planNodes(plan.roots).some((node) => node.actualRows !== null && node.loops !== null)).toBe(true);
         });
@@ -1988,7 +2043,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenQuietStatement_whenExecuted_thenNoMessages", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const result = await session.execute("SELECT 1 AS n");
+          const result = await session.execute(dialectSql.select("1 AS n"));
           await collect(result.rows);
           expect(result.messages).toEqual([]);
         });
@@ -1997,7 +2052,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenStatementWithWarnings_whenNextStatementRuns_thenItsMessagesAreItsOwn", async () => {
         await withSession(plugin, fixture, async (session) => {
           await collect((await session.execute(messageCase().sql)).rows);
-          const quiet = await session.execute("SELECT 1 AS n");
+          const quiet = await session.execute(dialectSql.select("1 AS n"));
           await collect(quiet.rows);
           expect(quiet.messages).toEqual([]);
         });
@@ -2035,7 +2090,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withSession(plugin, fixture, async (session) => {
           await collect((await session.execute(statement)).rows);
           expect(await current(session)).toEqual(path);
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
 
@@ -2111,7 +2166,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenIdleSession_whenCancelled_thenResolvesAndSessionWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await session.cancel?.();
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
 
@@ -2124,7 +2179,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenCancelledStatement_whenNextStatementRun_thenSessionStillWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await runAndCancel(session);
-          expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+          expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
     });
@@ -2138,7 +2193,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             await session.ping?.();
             await session.ping?.();
             if (plugin.capabilities.includes("sql")) {
-              expect(await collect((await session.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+              expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
             }
           },
           { readOnly: false, keepAliveInitialDelayMs: KEEPALIVE_DELAY_MS },
@@ -2243,7 +2298,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             // MySQL's SLEEP answers 1 when killed rather than failing; either way it stops early.
             expect(["cancelled", "resolved"]).toContain(await running);
             expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
-            expect(await collect((await sleeper.execute("SELECT 1 AS one")).rows)).toEqual([[1]]);
+            expect(await collect((await sleeper.execute(selectOne)).rows)).toEqual([[1]]);
           });
         });
       });
