@@ -144,6 +144,8 @@ export interface ImportFixtureOptions {
   readonly platform: NodeJS.Platform;
   /** The database password every fixture connection uses. */
   readonly password: string;
+  /** Adds an Oracle and a SQL Server data source to the `shop` project, which no built-in plugin reads. */
+  readonly oracleAndSqlServer?: boolean;
 }
 
 /** DataGrip's uuids in the fixture, by the connection each names. */
@@ -155,7 +157,12 @@ export const DATAGRIP_IDS = {
   events: "1a6b2c3d-0000-4000-8000-000000000005",
   bastion: "1a6b2c3d-0000-4000-8000-000000000006",
   global: "1a6b2c3d-0000-4000-8000-000000000007",
+  ledgerOracle: "1a6b2c3d-0000-4000-8000-000000000008",
+  billingSqlServer: "1a6b2c3d-0000-4000-8000-000000000009",
 } as const;
+
+/** The connections `oracleAndSqlServer` adds, by name. */
+export const FOREIGN_DIALECT_SOURCES = { oracle: "Ledger Oracle", sqlServer: "Billing SQL Server" } as const;
 
 export const DATAGRIP_CONFIG = "DataGrip2025.3";
 export const SHOP_PROJECT = "shop";
@@ -268,6 +275,20 @@ export function writeImportFixture(home: string, options: ImportFixtureOptions):
           `      <ssh-properties>\n        <enabled>true</enabled>\n        <ssh-config-id>${SSH_CONFIG_ID}</ssh-config-id>\n      </ssh-properties>`,
         ),
       ),
+      ...(options.oracleAndSqlServer === true
+        ? [
+            dataSource(
+              DATAGRIP_IDS.ledgerOracle,
+              FOREIGN_DIALECT_SOURCES.oracle,
+              shared("oracle", "jdbc:oracle:thin:@//oracle.internal:1521/FREEPDB1"),
+            ),
+            dataSource(
+              DATAGRIP_IDS.billingSqlServer,
+              FOREIGN_DIALECT_SOURCES.sqlServer,
+              shared("sqlserver.ms", "jdbc:sqlserver://mssql.internal:1433;databaseName=billing"),
+            ),
+          ]
+        : []),
     ]),
   );
   write(
@@ -283,6 +304,12 @@ export function writeImportFixture(home: string, options: ImportFixtureOptions):
       ),
       dataSource(DATAGRIP_IDS.events, "Events", local("events")),
       dataSource(DATAGRIP_IDS.bastion, "Prod via bastion", local("app")),
+      ...(options.oracleAndSqlServer === true
+        ? [
+            dataSource(DATAGRIP_IDS.ledgerOracle, FOREIGN_DIALECT_SOURCES.oracle, local("ledger")),
+            dataSource(DATAGRIP_IDS.billingSqlServer, FOREIGN_DIALECT_SOURCES.sqlServer, local("sa")),
+          ]
+        : []),
     ]),
   );
   write(

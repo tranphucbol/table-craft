@@ -1,5 +1,5 @@
-import type { ResultState, ResultWindow, TypeClass } from "./results.js";
-import type { Capability, Column } from "./wire.js";
+import type { ResultState, ResultWindow } from "./results.js";
+import type { Capability, Column, TypeClass } from "./wire.js";
 
 /** Mirrors `ServerSessionState` in plugin-api. */
 export type ServerSessionState = "active" | "idle" | "idleInTransaction" | "blocked" | "other";

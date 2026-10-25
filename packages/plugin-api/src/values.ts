@@ -33,6 +33,12 @@ export interface DateValue {
  */
 export type WireValue = null | boolean | number | string | BigIntValue | BytesValue | JsonValue | DateValue;
 
+/**
+ * What a column's values are. The grid sorts, aligns and draws its header glyph by this. The host
+ * reads it from the type name unless the plugin names it on the `Column` (decision 101).
+ */
+export type TypeClass = "integer" | "float" | "decimal" | "boolean" | "temporal" | "json" | "bytes" | "text";
+
 const HEX_RADIX = 16;
 const HEX_BYTE_WIDTH = 2;
 const BYTE_VALUES = 256;

@@ -1,6 +1,6 @@
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { MySQL, PostgreSQL, sql, SQLite, StandardSQL, type SQLDialect } from "@codemirror/lang-sql";
+import { MSSQL, MySQL, PLSQL, PostgreSQL, sql, SQLite, StandardSQL, type SQLDialect } from "@codemirror/lang-sql";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
@@ -49,6 +49,8 @@ const DIALECTS: Readonly<Record<string, SQLDialect>> = {
   postgresql: PostgreSQL,
   mysql: MySQL,
   sqlite: SQLite,
+  plsql: PLSQL,
+  mssql: MSSQL,
 };
 
 export const EDITOR_LABEL = "SQL console";

@@ -1,7 +1,7 @@
 import type { Column, WireValue } from "@table-craft/plugin-api";
 import type { ExportEncoder } from "@table-craft/core/export/runner.js";
 import { zipWriter, type ZipOptions } from "@table-craft/core/export/zip.js";
-import { typeClass, type TypeClass } from "@table-craft/core/results/compare.js";
+import { columnTypeClass, type TypeClass } from "@table-craft/core/results/compare.js";
 import { bytesText } from "@table-craft/core/results/extract/text.js";
 
 /** Rows in one Excel sheet, the header included (Excel's limit). */
@@ -133,7 +133,7 @@ export function xlsxEncoder(columns: readonly Column[], options: XlsxOptions = {
   const zip = zipWriter(options);
   const encoder = new TextEncoder();
   const letters = columns.map((_, index) => columnLetters(index));
-  const numeric = columns.map((column) => NUMERIC_CLASSES.has(typeClass(column.type)));
+  const numeric = columns.map((column) => NUMERIC_CLASSES.has(columnTypeClass(column)));
   let sheets = 0;
   let sheetRow = 0;
   let truncatedCells = 0;

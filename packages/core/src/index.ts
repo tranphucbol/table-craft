@@ -55,7 +55,14 @@ export {
   type PluginLoadResult,
   type UnavailablePlugin,
 } from "./plugins/loader.js";
-export { compareCodePoints, compareValues, inferredTypeClass, typeClass, type TypeClass } from "./results/compare.js";
+export {
+  columnTypeClass,
+  compareCodePoints,
+  compareValues,
+  inferredTypeClass,
+  typeClass,
+  type TypeClass,
+} from "./results/compare.js";
 export {
   RESULT_FETCH_ALL_CAP,
   RESULT_PAGE_ROWS,

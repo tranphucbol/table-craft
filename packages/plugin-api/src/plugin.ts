@@ -11,7 +11,7 @@ import type {
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { ObjectEditor } from "./objects.js";
 import type { SessionMonitor } from "./sessions.js";
-import type { WireValue } from "./values.js";
+import type { TypeClass, WireValue } from "./values.js";
 
 /**
  * What a plugin can do. The UI branches on these, never on a plugin id (decision 007), and a
@@ -45,6 +45,11 @@ export interface Column {
   readonly name: string;
   /** The type the database reports, verbatim; null when it reports none. */
   readonly type: string | null;
+  /**
+   * What the values are, when the type name alone does not say: Oracle's `NUMBER` is an integer
+   * at scale 0 and a decimal otherwise. Absent, the host reads the class from `type` (decision 101).
+   */
+  readonly typeClass?: TypeClass;
   /**
    * The base-table column the driver says the value is read from (plan 026): null for an
    * expression, absent when the driver does not say. A console result is editable only where the

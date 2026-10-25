@@ -37,10 +37,14 @@ export type WireValue =
 
 export type Row = readonly WireValue[];
 
+/** Mirrors `TypeClass` in plugin-api: what a column holds, for its header glyph. */
+export type TypeClass = "integer" | "float" | "decimal" | "boolean" | "temporal" | "json" | "bytes" | "text";
+
 /** Mirrors `Column` in plugin-api. */
 export interface Column {
   readonly name: string;
   readonly type: string | null;
+  readonly typeClass?: TypeClass;
   readonly origin?: ColumnOrigin | null;
 }
 

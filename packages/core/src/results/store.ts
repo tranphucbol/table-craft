@@ -1,6 +1,11 @@
 import type { Column, ExecuteResult, Row, ServerMessage } from "@table-craft/plugin-api";
 import { CoreError } from "@table-craft/core/errors.js";
-import { compareValues, inferredTypeClass, typeClass, type TypeClass } from "@table-craft/core/results/compare.js";
+import {
+  columnTypeClass,
+  compareValues,
+  inferredTypeClass,
+  type TypeClass,
+} from "@table-craft/core/results/compare.js";
 import {
   computeView,
   matchesIn,
@@ -154,7 +159,9 @@ export class ResultStore {
       throw cause;
     }
     stored.classes = result.columns.map((column, index) =>
-      column.type === null ? inferredTypeClass(stored.rows.map((row) => row[index] ?? null)) : typeClass(column.type),
+      column.typeClass === undefined && column.type === null
+        ? inferredTypeClass(stored.rows.map((row) => row[index] ?? null))
+        : columnTypeClass(column),
     );
     const handle = `${HANDLE_PREFIX}${this.#nextHandle++}`;
     this.#results.set(handle, stored);

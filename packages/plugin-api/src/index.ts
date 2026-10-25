@@ -179,6 +179,7 @@ export {
   type BytesValue,
   type DateValue,
   type JsonValue,
+  type TypeClass,
   type WireValue,
 } from "./values.js";
 export { API_VERSION, incompatibility, type Incompatibility, isCompatible, parseVersion } from "./version.js";

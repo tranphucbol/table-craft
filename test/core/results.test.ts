@@ -283,4 +283,16 @@ describe("ResultStore", () => {
 
     expect(summary.typeClasses).toEqual(["integer", "text"]);
   });
+
+  it("givenPluginNamedTypeClass_whenPut_thenItWinsOverNameAndValues", async () => {
+    const store = new ResultStore();
+    const columns: readonly Column[] = [
+      { name: "flag", type: "BIT", typeClass: "boolean" },
+      { name: "n", type: null, typeClass: "decimal" },
+    ];
+
+    const summary = await store.put(resultFrom(columns, [[true, 2]]));
+
+    expect(summary.typeClasses).toEqual(["boolean", "decimal"]);
+  });
 });

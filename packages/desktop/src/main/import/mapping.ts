@@ -28,6 +28,10 @@ const SCHEME_OF_TYPE: Readonly<Record<string, string>> = {
   redshift: "postgresql",
   cockroachdb: "postgresql",
   sqlite: "sqlite",
+  oracle: "oracle",
+  sqlserver: "sqlserver",
+  mssql: "sqlserver",
+  azure: "sqlserver",
 };
 
 /** Each named colour another app offers, to the nearest TableCraft tint (decision 011). */

@@ -22,7 +22,8 @@ import {
   readTableProBundle,
   TableProBundleError,
 } from "@table-craft/desktop/main/import/tablepro.js";
-import type { ImportEnvironment } from "@table-craft/desktop/main/import/types.js";
+import { mapConnection } from "@table-craft/desktop/main/import/mapping.js";
+import type { ForeignConnection, ImportEnvironment } from "@table-craft/desktop/main/import/types.js";
 import { listPlugins } from "@table-craft/desktop/main/plugins.js";
 import { createSecretStore } from "@table-craft/desktop/main/secrets.js";
 import { createDatasourceService } from "@table-craft/desktop/main/service.js";
@@ -33,6 +34,7 @@ import {
   DATAGRIP_IDS,
   dataGripService,
   encryptTableProBundle,
+  FOREIGN_DIALECT_SOURCES,
   writeImportFixture,
   writeKdbx,
   writeMainKey,
@@ -52,7 +54,9 @@ afterEach(() => {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true });
 });
 
-function fixture(options: { passwords?: "keepass" | "native"; platform?: NodeJS.Platform } = {}): ImportFixture {
+function fixture(
+  options: { passwords?: "keepass" | "native"; platform?: NodeJS.Platform; oracleAndSqlServer?: boolean } = {},
+): ImportFixture {
   const home = mkdtempSync(join(tmpdir(), "tc-import-"));
   homes.push(home);
   return writeImportFixture(home, {
@@ -61,6 +65,7 @@ function fixture(options: { passwords?: "keepass" | "native"; platform?: NodeJS.
     passwords: options.passwords ?? "native",
     platform: options.platform ?? "darwin",
     password: SECRET,
+    oracleAndSqlServer: options.oracleAndSqlServer,
   });
 }
 
@@ -362,6 +367,58 @@ describe("importer", () => {
 
     expect(row(rows, "Events")).toMatchObject({ pluginId: null, status: "unsupported", selected: false });
     expect(row(rows, "Events").warnings[0]).toContain("mongodb");
+  });
+
+  it("givenDataGripOracleAndSqlServer_whenImported_thenSchemesMapped", async () => {
+    const { home } = fixture({ oracleAndSqlServer: true });
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader);
+
+    const { rows } = ready(await importer.preview({ source: "datagrip" }));
+
+    expect(row(rows, FOREIGN_DIALECT_SOURCES.oracle)).toMatchObject({
+      pluginId: null,
+      pluginName: "oracle",
+      status: "unsupported",
+      selected: false,
+      warnings: ["No installed plugin reads oracle: URLs."],
+    });
+    expect(row(rows, FOREIGN_DIALECT_SOURCES.sqlServer)).toMatchObject({
+      pluginId: null,
+      pluginName: "sqlserver.ms",
+      status: "unsupported",
+      warnings: ["No installed plugin reads sqlserver: URLs."],
+    });
+  });
+
+  it.each([
+    ["Oracle", "oracle"],
+    ["SQL Server", "sqlserver"],
+    ["MSSQL", "sqlserver"],
+    ["Azure", "sqlserver"],
+  ])("givenTableProType%s_whenMapped_thenScheme", (driver, scheme) => {
+    const connection: ForeignConnection = {
+      app: "tablepro",
+      id: driver,
+      name: driver,
+      folder: null,
+      driver,
+      url: null,
+      host: "db.internal",
+      port: null,
+      database: null,
+      user: null,
+      path: null,
+      ssh: null,
+      ssl: null,
+      color: null,
+      comment: "",
+      readOnly: false,
+      password: { kind: "none" },
+    };
+
+    const mapped = mapConnection(connection, { plugins: [], existing: [], availability: () => "none" });
+
+    expect(mapped.row.warnings).toEqual([`No installed plugin reads ${scheme}: URLs.`]);
   });
 
   it("givenSsh_whenMapped_thenWarnedAndUnticked", async () => {

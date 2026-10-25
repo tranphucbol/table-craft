@@ -1,4 +1,4 @@
-import { compareCodePoints, compareValues, inferredTypeClass, typeClass } from "@table-craft/core";
+import { columnTypeClass, compareCodePoints, compareValues, inferredTypeClass, typeClass } from "@table-craft/core";
 import type { WireValue } from "@table-craft/plugin-api";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +24,45 @@ describe("typeClass", () => {
     [null, "text"],
   ] as const)("givenTypeName_%s_whenClassified_then%s", (name, expected) => {
     expect(typeClass(name)).toBe(expected);
+  });
+
+  it("givenOracleAndMssqlTypeNames_whenClassified_thenExpectedClass", () => {
+    const expected = {
+      "NUMBER(10,2)": "decimal",
+      NUMBER: "decimal",
+      "VARCHAR2(40)": "text",
+      NVARCHAR2: "text",
+      "NCHAR(2)": "text",
+      "NVARCHAR(MAX)": "text",
+      NTEXT: "text",
+      CLOB: "text",
+      NCLOB: "text",
+      UNIQUEIDENTIFIER: "text",
+      XML: "text",
+      BINARY_FLOAT: "float",
+      BINARY_DOUBLE: "float",
+      "RAW(16)": "bytes",
+      BLOB: "bytes",
+      IMAGE: "bytes",
+      BIT: "bytes",
+      "DATETIME2(7)": "temporal",
+      DATETIMEOFFSET: "temporal",
+      SMALLDATETIME: "temporal",
+      "TIMESTAMP(6) WITH TIME ZONE": "temporal",
+      MONEY: "decimal",
+      SMALLMONEY: "decimal",
+    } as const;
+
+    const classified = Object.fromEntries(Object.keys(expected).map((name) => [name, typeClass(name)]));
+
+    expect(classified).toEqual(expected);
+  });
+
+  it("givenColumnTypeClass_whenClassified_thenOverridesName", () => {
+    expect(columnTypeClass({ type: "BIT", typeClass: "boolean" })).toBe("boolean");
+    expect(columnTypeClass({ type: "NUMBER(10)", typeClass: "integer" })).toBe("integer");
+    expect(columnTypeClass({ type: null, typeClass: "json" })).toBe("json");
+    expect(columnTypeClass({ type: "BIT" })).toBe("bytes");
   });
 });
 

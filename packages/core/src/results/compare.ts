@@ -1,10 +1,6 @@
-import type { WireValue } from "@table-craft/plugin-api";
+import type { Column, TypeClass, WireValue } from "@table-craft/plugin-api";
 
-/**
- * What a column's values are, read from the type name its plugin reports. The grid sorts and
- * draws its header glyph by this; anything unrecognised is text.
- */
-export type TypeClass = "integer" | "float" | "decimal" | "boolean" | "temporal" | "json" | "bytes" | "text";
+export type { TypeClass };
 
 const TYPE_CLASSES: ReadonlyMap<string, TypeClass> = new Map<string, TypeClass>([
   ...(
@@ -25,17 +21,32 @@ const TYPE_CLASSES: ReadonlyMap<string, TypeClass> = new Map<string, TypeClass>(
       "oid",
     ] as const
   ).map((name) => [name, "integer"] as const),
-  ...(["float", "float4", "float8", "double", "double precision", "real"] as const).map(
-    (name) => [name, "float"] as const,
-  ),
-  ...(["numeric", "decimal"] as const).map((name) => [name, "decimal"] as const),
+  ...(
+    ["float", "float4", "float8", "double", "double precision", "real", "binary_float", "binary_double"] as const
+  ).map((name) => [name, "float"] as const),
+  ...(["numeric", "decimal", "number", "money", "smallmoney"] as const).map((name) => [name, "decimal"] as const),
   ...(["bool", "boolean"] as const).map((name) => [name, "boolean"] as const),
-  ...(["date", "time", "timetz", "timestamp", "timestamptz", "datetime", "interval"] as const).map(
-    (name) => [name, "temporal"] as const,
-  ),
+  ...(
+    [
+      "date",
+      "time",
+      "timetz",
+      "timestamp",
+      "timestamptz",
+      "timestamp with time zone",
+      "datetime",
+      "datetime2",
+      "datetimeoffset",
+      "smalldatetime",
+      "interval",
+    ] as const
+  ).map((name) => [name, "temporal"] as const),
   ...(["json", "jsonb"] as const).map((name) => [name, "json"] as const),
-  ...(["bytea", "blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary", "bit"] as const).map(
-    (name) => [name, "bytes"] as const,
+  ...(
+    ["bytea", "blob", "tinyblob", "mediumblob", "longblob", "binary", "varbinary", "bit", "raw", "image"] as const
+  ).map((name) => [name, "bytes"] as const),
+  ...(["varchar2", "nvarchar2", "nchar", "nvarchar", "ntext", "clob", "nclob", "uniqueidentifier", "xml"] as const).map(
+    (name) => [name, "text"] as const,
   ),
 ]);
 
@@ -51,6 +62,11 @@ function baseTypeName(columnType: string): string {
 export function typeClass(columnType: string | null): TypeClass {
   if (columnType === null) return "text";
   return TYPE_CLASSES.get(baseTypeName(columnType)) ?? "text";
+}
+
+/** The class the plugin names on the column, else the one its type name reads as. */
+export function columnTypeClass(column: Pick<Column, "type" | "typeClass">): TypeClass {
+  return column.typeClass ?? typeClass(column.type);
 }
 
 /**

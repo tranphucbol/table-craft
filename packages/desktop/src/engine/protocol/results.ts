@@ -7,9 +7,6 @@ export interface ResultWindow {
   readonly matches?: readonly number[];
 }
 
-/** Mirrors `TypeClass` in core: what a column holds, for its header glyph. */
-export type TypeClass = "integer" | "float" | "decimal" | "boolean" | "temporal" | "json" | "bytes" | "text";
-
 /** Mirrors `ResultState` in core: how far a result has been read, and whether more can be. */
 export interface ResultState {
   readonly rowCount: number;

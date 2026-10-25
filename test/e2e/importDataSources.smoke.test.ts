@@ -14,7 +14,13 @@ import { join } from "node:path";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { MYSQL_CONFIG, POSTGRES_CONFIG } from "../support/databases.js";
-import { DATAGRIP_IDS, dataGripService, writeImportFixture, type ImportFixture } from "../support/import/fixtures.js";
+import {
+  DATAGRIP_IDS,
+  dataGripService,
+  FOREIGN_DIALECT_SOURCES,
+  writeImportFixture,
+  type ImportFixture,
+} from "../support/import/fixtures.js";
 import {
   answerSecretPrompt,
   CLOSE_HOOK_TIMEOUT_MS,
@@ -35,19 +41,21 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("035");
+const captureFoundation = evidenceFor("053");
 
 const PASSWORD = MYSQL_CONFIG.password;
 const HOME_PREFIX = "table-craft-import-home-";
 const SECRET_TOOL = "secret-tool";
 const SECRET_SERVICE_READY = process.platform === "linux" && spawnSync(SECRET_TOOL, ["--version"]).error === undefined;
 
-function fixture(passwords: "keepass" | "native"): ImportFixture {
+function fixture(passwords: "keepass" | "native", options: { oracleAndSqlServer?: boolean } = {}): ImportFixture {
   return writeImportFixture(mkdtempSync(join(tmpdir(), HOME_PREFIX)), {
     mysql: { host: MYSQL_CONFIG.host, port: MYSQL_CONFIG.port },
     postgres: { host: POSTGRES_CONFIG.host, port: POSTGRES_CONFIG.port },
     passwords,
     platform: process.platform,
     password: PASSWORD,
+    oracleAndSqlServer: options.oracleAndSqlServer,
   });
 }
 
@@ -150,6 +158,27 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await captureWindow(page, "import-duplicates");
     },
     SCENARIO_TIMEOUT_MS * 2,
+  );
+
+  it(
+    "givenDataGripOracleAndSqlServer_whenPreviewed_thenUnsupportedByName",
+    async () => {
+      const home = fixture("native", { oracleAndSqlServer: true });
+      const { page } = await launch(home.home);
+
+      await previewDataGrip(page);
+      for (const [name, scheme] of [
+        [FOREIGN_DIALECT_SOURCES.oracle, "oracle"],
+        [FOREIGN_DIALECT_SOURCES.sqlServer, "sqlserver"],
+      ] as const) {
+        const row = importRow(page, name);
+        await expect.poll(() => row.getAttribute("data-status")).toBe("unsupported");
+        await expect.poll(() => row.getByRole("checkbox").isDisabled()).toBe(true);
+        await expect.poll(() => row.textContent()).toContain(`No installed plugin reads ${scheme}: URLs.`);
+      }
+      await captureFoundation(page, "04-import-unsupported");
+    },
+    SCENARIO_TIMEOUT_MS,
   );
 
   it(
