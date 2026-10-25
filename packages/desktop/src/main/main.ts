@@ -291,7 +291,11 @@ function broadcast(
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
 }
 
-const pluginRoots = [paths.builtInPlugins, join(app.getPath(USER_DATA), USER_PLUGINS_DIR)];
+/** `0` leaves the development optional plugins out, so a test sees what a packaged app sees (decision 108). */
+const DEVELOPMENT_PLUGINS_ENV = "TABLE_CRAFT_DEVELOPMENT_PLUGINS";
+const developmentPlugins =
+  paths.developmentPlugins !== null && process.env[DEVELOPMENT_PLUGINS_ENV] !== "0" ? [paths.developmentPlugins] : [];
+const pluginRoots = () => [paths.builtInPlugins, ...developmentPlugins, join(app.getPath(USER_DATA), USER_PLUGINS_DIR)];
 
 const hostKeyQuestions = new Map<number, (trust: boolean) => void>();
 let nextHostKeyQuestion = 1;
@@ -683,7 +687,7 @@ void app.whenReady().then(async () => {
       .warn("history file unreadable; moved aside", { file: HISTORY_FILE, movedTo: history.recoveredFrom });
   }
   app.on("will-quit", () => history.close());
-  const installed = await discoverInstalled(pluginRoots);
+  const installed = await discoverInstalled(pluginRoots());
   installedPlugins = installed.plugins;
   logPlugins(installed.report);
   // safeStorage answers only once the app is ready.
@@ -691,7 +695,7 @@ void app.whenReady().then(async () => {
     store: createDatasourceStore({ directory, files }),
     secrets: protectedSecrets(await createSecretStore({ directory, files, cipher })),
     hosts,
-    plugins: installed.plugins,
+    plugins: () => installedPlugins,
     ephemeral,
     newId: randomUUID,
     consoles,

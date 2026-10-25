@@ -97,11 +97,12 @@ async function setup(home: string, credentials: CredentialReader, platform: Node
   const files = memoryFiles();
   const cipher = fakeCipher();
   let ids = 0;
+  const plugins = await listPlugins([BUILT_IN_PLUGINS]);
   const service = await createDatasourceService({
     store: createDatasourceStore({ directory: PROFILE, files }),
     secrets: await createSecretStore({ directory: PROFILE, files, cipher }),
-    hosts: createHostRegistry({ pluginRoots: [], dependencies: fakeHostDependencies(), onExit: () => undefined }),
-    plugins: await listPlugins([BUILT_IN_PLUGINS]),
+    hosts: createHostRegistry({ pluginRoots: () => [], dependencies: fakeHostDependencies(), onExit: () => undefined }),
+    plugins: () => plugins,
     ephemeral: null,
     newId: () => `id-${String(++ids)}`,
     consoles: createConsoleFiles({ directory: PROFILE, files }),

@@ -6,6 +6,11 @@ export interface AppPaths {
   readonly preload: string;
   readonly rendererIndex: string;
   readonly builtInPlugins: string;
+  /**
+   * The optional plugins `vite.plugins.config.ts` builds for development runs and smoke tests
+   * (decision 108); null when packaged, where they come from npm instead.
+   */
+  readonly developmentPlugins: string | null;
   /** The window and dock icon; a packaged macOS app takes its `.icns` from the bundle instead. */
   readonly icon: string;
 }
@@ -23,6 +28,8 @@ const PRELOAD = "preload/preload.cjs";
 const RENDERER_INDEX = "renderer/index.html";
 /** Where `vite.plugins.config.ts` builds the built-in plugins. */
 const DEVELOPMENT_PLUGINS = "resources/plugins";
+/** Where `vite.plugins.config.ts` builds the optional plugins; never packaged. */
+const DEVELOPMENT_OPTIONAL_PLUGINS = "optional-plugins";
 /** Where electron-builder's `extraResources` puts them, outside the archive. */
 const PACKAGED_PLUGINS = "plugins";
 /** `build/icon.png` beside `dist/`; `extraResources` copies it to the resources directory. */
@@ -36,6 +43,7 @@ export function appPaths(input: AppPathsInput): AppPaths {
     preload: dist(PRELOAD),
     rendererIndex: dist(RENDERER_INDEX),
     builtInPlugins: input.isPackaged ? join(input.resourcesPath, PACKAGED_PLUGINS) : dist(DEVELOPMENT_PLUGINS),
+    developmentPlugins: input.isPackaged ? null : dist(DEVELOPMENT_OPTIONAL_PLUGINS),
     icon: input.isPackaged ? join(input.resourcesPath, PACKAGED_ICON) : dist(DEVELOPMENT_ICON),
   };
 }

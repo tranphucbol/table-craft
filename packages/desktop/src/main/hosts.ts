@@ -20,6 +20,7 @@ import {
   type EngineProbed,
   type HostKeyOffer,
   type HostKeyVerdict,
+  type PluginRoot,
   type ProbeResult,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
@@ -52,7 +53,8 @@ export interface HostDependencies<Target> {
 }
 
 export interface HostRegistryOptions<Target> {
-  readonly pluginRoots: readonly string[];
+  /** Read at every engine boot, so a plugin installed meanwhile is in the next engine (decision 110). */
+  readonly pluginRoots: () => readonly PluginRoot[];
   readonly dependencies: HostDependencies<Target>;
   /** `clean` is false when the engine died without being asked to, which the tree shows as failed. */
   readonly onExit: (datasourceId: string, code: number, clean: boolean) => void;
@@ -89,7 +91,7 @@ interface RunningHost {
   stopping: boolean;
 }
 
-function boot(mode: EngineMode, datasource: DatasourceConfig, pluginRoots: readonly string[]): EngineBoot {
+function boot(mode: EngineMode, datasource: DatasourceConfig, pluginRoots: readonly PluginRoot[]): EngineBoot {
   return { kind: ENGINE_BOOT_MESSAGE, mode, datasource, pluginRoots };
 }
 
@@ -166,7 +168,7 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
       });
     });
     host = { process, exited, stopping: false };
-    process.postMessage(boot("serve", datasource, options.pluginRoots));
+    process.postMessage(boot("serve", datasource, options.pluginRoots()));
     hosts.set(datasource.id, host);
     return host;
   }
@@ -241,7 +243,7 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
           },
         });
       });
-      process.postMessage(boot("probe", datasource, options.pluginRoots));
+      process.postMessage(boot("probe", datasource, options.pluginRoots()));
     });
   }
 

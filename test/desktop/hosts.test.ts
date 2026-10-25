@@ -17,7 +17,7 @@ function registry(hostKeys?: (offer: HostKeyOffer) => Promise<HostKeyVerdict>) {
   const dependencies = fakeHostDependencies();
   const exits: [string, number, boolean][] = [];
   const hosts = createHostRegistry({
-    pluginRoots: ["/plugins"],
+    pluginRoots: () => ["/plugins"],
     dependencies,
     onExit: (id, code, clean) => exits.push([id, code, clean]),
     ...(hostKeys === undefined ? {} : { hostKeys }),
@@ -146,7 +146,7 @@ function loggedRegistry() {
   const forwarded: [unknown, string][] = [];
   const protectedConfigs: unknown[] = [];
   const hosts = createHostRegistry({
-    pluginRoots: ["/plugins"],
+    pluginRoots: () => ["/plugins"],
     dependencies,
     onExit: () => {},
     now: () => 0,

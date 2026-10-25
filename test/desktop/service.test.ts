@@ -43,13 +43,14 @@ async function service(
   const dependencies = fakeHostDependencies();
   const changes: DatasourceList[] = [];
   let ids = 0;
-  const hosts = createHostRegistry({ pluginRoots: [], dependencies, onExit: () => undefined });
+  const hosts = createHostRegistry({ pluginRoots: () => [], dependencies, onExit: () => undefined });
   const history = openQueryHistory(":memory:");
+  const plugins = await listPlugins([BUILT_IN_PLUGINS]);
   const created = await createDatasourceService({
     store: createDatasourceStore({ directory: DIRECTORY, files }),
     secrets: await createSecretStore({ directory: DIRECTORY, files, cipher }),
     hosts,
-    plugins: await listPlugins([BUILT_IN_PLUGINS]),
+    plugins: () => plugins,
     ephemeral: options.ephemeral ?? null,
     newId: () => `id-${String(++ids)}`,
     consoles: createConsoleFiles({ directory: DIRECTORY, files }),

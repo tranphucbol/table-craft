@@ -6,10 +6,12 @@ directories:
   buildResources: build
 
 # Decision 033: the bundles go into app.asar; the built-in plugins ship beside it as real files.
-# Vite inlines every runtime dependency, so no node_modules ships.
+# Vite inlines every runtime dependency, so no node_modules ships. Optional plugins (decision 108)
+# are downloaded from npm and never ship.
 files:
   - dist/**
   - "!dist/resources/**"
+  - "!dist/optional-plugins/**"
   - "!**/*.map"
   - "!node_modules/**"
 extraResources:

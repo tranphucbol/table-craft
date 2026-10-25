@@ -84,12 +84,15 @@ export interface ServerMessage {
 /** `serve` answers renderer ports until the last closes; `probe` tests one connection and exits. */
 export type EngineMode = "serve" | "probe";
 
+/** A folder whose subfolders are plugins, or one plugin's folder (decision 110). */
+export type PluginRoot = string | { readonly directory: string };
+
 export interface EngineBoot {
   readonly kind: typeof ENGINE_BOOT_MESSAGE;
   readonly mode: EngineMode;
   readonly datasource: DatasourceConfig;
-  /** Directories whose subdirectories are plugins, in precedence order (decision 005). */
-  readonly pluginRoots: readonly string[];
+  /** Where plugins are, in precedence order (decision 005); mirrors `PluginRoot` in core. */
+  readonly pluginRoots: readonly PluginRoot[];
 }
 
 /**

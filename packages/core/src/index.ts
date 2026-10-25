@@ -53,6 +53,7 @@ export {
   type LoadedPlugin,
   type PluginDiscovery,
   type PluginLoadResult,
+  type PluginRoot,
   type UnavailablePlugin,
 } from "./plugins/loader.js";
 export {
