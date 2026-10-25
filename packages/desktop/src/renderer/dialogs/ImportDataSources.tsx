@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   BridgeFailure,
   ImportPreview,
@@ -27,6 +27,7 @@ import {
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 
 type ReadyPreview = Extract<ImportPreview, { status: "ready" }>;
 
@@ -139,6 +140,9 @@ function RowsTable({
                       {note}
                     </span>
                   ))}
+                  {row.status === "unsupported" && row.pluginId !== null ? (
+                    <MissingPlugin pluginId={row.pluginId} />
+                  ) : null}
                 </td>
               </tr>
             );
@@ -195,7 +199,26 @@ function Wizard() {
 
   useEffect(() => bridge().onImportProgress(setProgress), []);
 
+  const lastRequest = useRef<ImportPreviewRequest | null>(null);
+  // Installing a missing plugin from a row reads the source again, so its rows become importable.
+  useEffect(() => {
+    if (step.kind !== "choose") return;
+    const missing = new Set(
+      step.preview.rows.flatMap((row) => (row.status === "unsupported" && row.pluginId !== null ? [row.pluginId] : [])),
+    );
+    if (missing.size === 0) return;
+    return useDatasources.subscribe((state) => {
+      const request = lastRequest.current;
+      const installed = state.plugins.some((plugin) => missing.has(plugin.id) && plugin.unavailableReason === null);
+      if (installed && request !== null) {
+        missing.clear();
+        void preview(request);
+      }
+    });
+  }, [step]);
+
   async function preview(request: ImportPreviewRequest): Promise<void> {
+    lastRequest.current = request;
     setBusy(true);
     setFailure(null);
     let answer: InvokeResult<ImportPreview>;

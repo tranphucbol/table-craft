@@ -329,6 +329,8 @@ describe("diagnostics", () => {
   const plugin: PluginInfo = {
     id: "postgres",
     name: "PostgreSQL",
+    source: "managed",
+    version: "1.0.0",
     unavailableReason: null,
     capabilities: [],
     highlight: "postgresql",

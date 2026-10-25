@@ -1,4 +1,4 @@
-# 108: SQL inspections run in the plugin, live in the editor
+# 111: SQL inspections run in the plugin, live in the editor
 
 Status: Accepted
 

@@ -98,13 +98,19 @@ Run from the repository root.
   reports; commit them with the change
 - `bun run --cwd packages/plugin-api build` - stage the publishable `@table-craft/plugin-api` in
   `packages/plugin-api/release/` (git-ignored). Nothing here publishes it
+- `bun run plugins:pack` / `bun run plugins:check` / `bun run plugins:publish -- --dry-run` -
+  build the optional plugins, pack them and `@table-craft/plugin-api` into `dist/plugin-packages/`,
+  load-check every tarball through the real loader, and rehearse the npm publish (decision 109).
+  Only `.github/workflows/publish-plugins.yml` publishes, when a release is published; never run
+  `plugins:publish` without `--dry-run`, and never push a tag
 - `bun scripts/frozen-plugin.ts` - rebuild the frozen SQLite plugin in `test/support/frozen-plugins/`
   only when its API version itself changes before release, never to make a failing run pass
 
 CI (`.github/workflows/ci.yml`) runs `verify` (lint, format, typecheck, test, test:db) and the
 packaged suite on macOS arm64 and x64 (blocking), Windows and Linux (best-effort) on every push,
 plus `test:db:postgres`, `:oracle` and `:mssql` when `plugins/<id>/**`, the contract suite or
-`test/db/schema/<id>*` changed (PostgreSQL also on a tag).
+`test/db/schema/<id>*` changed (PostgreSQL also on a tag), and `plugins` (pack, check, publish
+`--dry-run`), whose tarballs a tag attaches to the draft release.
 
 Bun is the toolchain only. Electron runs Node, so nothing under `packages/*/src` or
 `plugins/*/src` may use `Bun.*` APIs, and drivers must be Node-compatible (decision 001).
@@ -179,7 +185,11 @@ packages/desktop/          @table-craft/desktop, the Electron app
                            in `<userData>/themes/` (`settings.ts`, `themes.ts`, decision
                            032), the invoke channels (`ipc.ts`); the window chrome per
                            platform, theme and density (`chrome.ts`, decision 034) and
-                           the menu popup with its lone-Alt watcher (`menuPopup.ts`)
+                           the menu popup with its lone-Alt watcher (`menuPopup.ts`).
+                           `pluginStore/` installs optional plugins from the npm
+                           registry into `<userData>/managed-plugins/` (decision 110):
+                           catalog, registry client, tarball reader, managed folder,
+                           installer, background updates and the `plugins.*` channels
   src/preload/             contextBridge; hands the engine port to the renderer and relays
                            menu clicks. `menu.ts` declares the native menu as data
   src/engine/              the utilityProcess (decision 091). `protocol.ts` is the only
@@ -204,15 +214,21 @@ packages/desktop/          @table-craft/desktop, the Electron app
                            feeds the Services tree; `state/settings.ts` holds the
                            settings, `appearance/` applies them as CSS variables,
                            `dialogs/Settings.tsx` edits them
-plugins/<id>/              built-in plugins (@table-craft/plugin-<id>): postgres, mysql,
-                           sqlite. Each depends on plugin-api and its driver alone, and
-                           ships a `table-craft-plugin.json` beside `src/`; its
+plugins/<id>/              datasource plugins (@table-craft/plugin-<id>): mysql and
+                           sqlite built in, postgres optional (`BUILT_IN_PLUGINS`,
+                           `OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, decision 108;
+                           an optional one builds to `dist/optional-plugins/`, loads in
+                           development runs and downloads from npm). Each depends on
+                           plugin-api and its driver alone, and ships a
+                           `table-craft-plugin.json` beside `src/`; its
                            `introspect.ts` answers `schemaTree`, its `explain.ts` builds
                            the EXPLAIN statement and reads the plan (subpath `./explain`)
 scripts/agent-cost/        `report.ts`: steps, context and cost of an agent session, read
                            from the OpenCode session store
 scripts/api-report/        the plugin-api surface report and its check against the last
                            release (`api:report`, `api:check`, decision 107)
+scripts/plugins/           `pack.ts`, `check.ts`, `publish.ts`: the npm packages of the
+                           optional plugins and plugin-api (decision 109)
 test/                      Vitest suites, `givenX_whenY_thenZ`
   db/                      compose.yml, the fixture schema per dialect, contract runs per database
   e2e/                     Playwright `_electron` suites and the shared harness;
@@ -222,11 +238,15 @@ test/                      Vitest suites, `givenX_whenY_thenZ`
   renderer/                renderer unit tests, typechecked with the DOM lib; no jsdom
   support/                 fixtures shared across suites (type_probe rows, seeded SQLite, configs);
                            `plans/` holds real EXPLAIN outputs, byte-exact (prettier skips it);
-                           `frozen-plugins/` the SQLite plugin bundled at API 1.0.0
+                           `frozen-plugins/` the SQLite plugin bundled at API 1.0.0;
+                           `pluginRegistry.ts` a loopback npm registry, so no test
+                           reaches the real one
   readme/                  the README media suite: the demo `shop` seeds, the screencast
                            recorder (CDP frames to ffmpeg) and the pacing overlays; gated
                            by `readme:media`
-.github/workflows/         ci.yml: verify, package per platform, draft release on a v* tag
+.github/workflows/         ci.yml: verify, package per platform, plugin packages, draft
+                           release on a v* tag; publish-plugins.yml: npm publish when a
+                           release is published
 docs/design/               specification.md, design-system.md
 docs/decisions/            one numbered file per durable decision
 docs/media/                the README's GIFs, recorded by `readme:media` and nothing else

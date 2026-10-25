@@ -21,6 +21,7 @@ import {
   OVERLAY_CLASS,
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { PluginPicker } from "@table-craft/desktop/renderer/dialogs/PluginPicker.js";
 import { SECRET_MODE_LABEL, SecretField } from "@table-craft/desktop/renderer/dialogs/SecretField.js";
 import { SshSection } from "@table-craft/desktop/renderer/dialogs/SshSection.js";
 import {
@@ -41,6 +42,7 @@ import { useDataSourcesDialog, type DialogTarget } from "@table-craft/desktop/re
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS, DatabaseIcon, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const NEW_KEY_PREFIX = "new-";
@@ -103,34 +105,6 @@ function initialState(
   if (plugin === undefined) return { edits: {}, added: [], selected: null, choosingPlugin: true };
   const draft = newDraft(nextKey(), plugin, names, defaultMode, target.folder);
   return { edits: { [draft.key]: draft }, added: [draft.key], selected: draft.key, choosingPlugin: false };
-}
-
-function PluginPicker({ plugins, onPick }: { plugins: readonly PluginInfo[]; onPick: (plugin: PluginInfo) => void }) {
-  return (
-    <div className="flex flex-col gap-gap p-gap">
-      <h3 className="font-semibold">New data source</h3>
-      <p className="text-ink-muted">Choose the kind of database.</p>
-      <ul aria-label="Database kinds" className="flex flex-col gap-1">
-        {plugins.map((plugin) => (
-          <li key={plugin.id}>
-            <button
-              type="button"
-              disabled={plugin.unavailableReason !== null}
-              title={plugin.unavailableReason ?? undefined}
-              className="flex min-h-row w-full items-center gap-cell rounded px-gap text-left hover:bg-raised disabled:opacity-50"
-              onClick={() => onPick(plugin)}
-            >
-              <DatabaseIcon aria-hidden className="size-icon shrink-0 text-accent" />
-              <span className="shrink-0">{plugin.name}</span>
-              {plugin.unavailableReason === null ? null : (
-                <span className="text-ink-muted">{plugin.unavailableReason}</span>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
 }
 
 interface FieldProps {
@@ -471,6 +445,7 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
 function Editor({ target }: { readonly target: DialogTarget }) {
   const datasources = useDatasources((state) => state.datasources);
   const plugins = useDatasources((state) => state.plugins);
+  const catalog = useDatasources((state) => state.catalog);
   const emptyFolders = useDatasources((state) => state.emptyFolders);
   const encryption = useDatasources((state) => state.encryption);
   const defaultMode: SecretMode = encryption.available ? "forever" : "untilRestart";
@@ -675,6 +650,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
           {current === undefined ? (
             <PluginPicker
               plugins={plugins}
+              catalog={catalog}
               onPick={(picked) => {
                 const folder = target.kind === "new" ? target.folder : "";
                 addDraft(newDraft(nextKey(), picked, names, defaultMode, folder));
@@ -688,6 +664,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                 {plugin?.unavailableReason == null ? null : (
                   <span className="text-danger">{plugin.unavailableReason}</span>
                 )}
+                <MissingPlugin pluginId={current.pluginId} />
               </div>
               <DraftForm
                 key={current.key}

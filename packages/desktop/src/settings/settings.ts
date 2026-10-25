@@ -114,6 +114,11 @@ export interface UpdateSettings {
   readonly checkAutomatically: boolean;
 }
 
+export interface PluginSettings {
+  /** The npm registry downloadable plugins come from (decision 110); https, or http on this machine. */
+  readonly registryUrl: string;
+}
+
 export interface Settings {
   readonly version: typeof SETTINGS_VERSION;
   readonly appearance: AppearanceSettings;
@@ -122,6 +127,23 @@ export interface Settings {
   readonly data: DataSettings;
   readonly log: LogSettings;
   readonly updates: UpdateSettings;
+  readonly plugins: PluginSettings;
+}
+
+export const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
+const LOOPBACK_HOSTS: readonly string[] = ["127.0.0.1", "localhost", "[::1]"];
+
+/** Null when plugins may be downloaded from `url`: https anywhere, plain http only from this machine. */
+export function registryUrlError(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "Enter a registry address such as https://registry.npmjs.org.";
+  }
+  if (parsed.protocol === "https:") return null;
+  if (parsed.protocol === "http:" && LOOPBACK_HOSTS.includes(parsed.hostname)) return null;
+  return "The registry address must start with https:// (plain http only for this machine).";
 }
 
 export type FontRole = keyof FontSettings;
@@ -181,6 +203,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   updates: {
     checkAutomatically: true,
+  },
+  plugins: {
+    registryUrl: DEFAULT_REGISTRY_URL,
   },
 };
 
@@ -328,6 +353,7 @@ export function readSettings(input: unknown): Settings {
   const console = record(root.console);
   const log = record(root.log);
   const updates = record(root.updates);
+  const plugins = record(root.plugins);
   const defaults = DEFAULT_SETTINGS;
   const pageRows = inRange(data.pageRows, PAGE_ROWS_RANGE) ? data.pageRows : defaults.data.pageRows;
   const fetchAllCap =
@@ -387,6 +413,12 @@ export function readSettings(input: unknown): Settings {
         typeof updates.checkAutomatically === "boolean"
           ? updates.checkAutomatically
           : defaults.updates.checkAutomatically,
+    },
+    plugins: {
+      registryUrl:
+        typeof plugins.registryUrl === "string" && registryUrlError(plugins.registryUrl) === null
+          ? plugins.registryUrl
+          : defaults.plugins.registryUrl,
     },
   };
 }

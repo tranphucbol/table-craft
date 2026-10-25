@@ -135,6 +135,17 @@ describe("loadPlugins", () => {
     expect(duplicate?.status === "unavailable" && duplicate.reason).toContain(second);
   });
 
+  it("givenDirectoryRoot_whenLoaded_thenThatOnePluginIsReadAndEarlierRootsStillWin", async () => {
+    await writePlugin("builtin", "alpha", { id: "alpha" });
+    const managed = await writePlugin("managed", "beta", { id: "beta" });
+    const clash = await writePlugin("managed", "alpha-again", { id: "alpha" });
+
+    const results = await loadPlugins([join(workspace, "builtin"), { directory: managed }, { directory: clash }]);
+
+    expect(byStatus(results, "loaded")).toEqual(["alpha", "beta"]);
+    expect(results.find((result) => result.directory === clash)?.status).toBe("unavailable");
+  });
+
   it("givenEntryThatThrowsOnImport_whenLoaded_thenOtherPluginsStillLoad", async () => {
     await writePlugin("builtin", "broken", { id: "broken", source: 'throw new Error("boom");\n' });
     await writePlugin("builtin", "working", { id: "working" });

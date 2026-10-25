@@ -44,7 +44,8 @@ export interface DatasourceServiceOptions<Target> {
   readonly store: DatasourceStore;
   readonly secrets: SecretStore;
   readonly hosts: HostRegistry<Target>;
-  readonly plugins: readonly PluginInfo[];
+  /** Read on every use, so a plugin installed while the app runs is usable at once (decision 110). */
+  readonly plugins: () => readonly PluginInfo[];
   readonly ephemeral: EphemeralDatasource | null;
   readonly newId: () => string;
   /** Deleting a datasource deletes its saved consoles (plan 006, decision 18). */
@@ -157,7 +158,7 @@ export async function createDatasourceService<Target>(
   const loaded = await store.load();
   let datasources: Datasource[] = [...loaded.datasources];
   let warning = loaded.warning;
-  const pluginOf = (pluginId: string) => options.plugins.find((plugin) => plugin.id === pluginId);
+  const pluginOf = (pluginId: string) => options.plugins().find((plugin) => plugin.id === pluginId);
   const ephemeral =
     options.ephemeral === null ? null : ephemeralRecord(options.ephemeral, pluginOf(options.ephemeral.pluginId));
 
@@ -457,7 +458,7 @@ export async function createDatasourceService<Target>(
 
   return {
     list,
-    plugins: () => options.plugins,
+    plugins: () => options.plugins(),
     save,
     importMany,
     delete: remove,

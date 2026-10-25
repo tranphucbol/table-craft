@@ -3,6 +3,7 @@ import { z } from "@table-craft/plugin-api";
 import { ConsoleFileError, type ConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
 import { draftSchema } from "@table-craft/desktop/main/datasources.js";
 import { logWriteRequest } from "@table-craft/desktop/main/log/schema.js";
+import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import { SecretStoreError } from "@table-craft/desktop/main/secrets.js";
 import { SqlFileError, type SqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { settingsSchema, type SettingsService } from "@table-craft/desktop/main/settings.js";
@@ -20,8 +21,10 @@ import {
   type ImportRunRequest,
   type ImportSource,
   type ImportSummary,
+  type InstallFileResult,
   type InvokeResult,
   type MenuPoint,
+  type PluginsState,
   type SaveDatasourceRequest,
   type UpdateState,
   type WindowState,
@@ -99,6 +102,7 @@ const menuPoint = z.strictObject({
   y: z.number().int().nonnegative(),
 }) satisfies z.ZodType<MenuPoint>;
 const noRequest = z.undefined();
+const pluginRequest = z.strictObject({ pluginId: z.string().min(1) });
 const importPreviewRequest = z.union([
   z.strictObject({ source: z.enum(IMPORT_APPS) }),
   z.strictObject({ source: z.literal("file"), path: z.string().min(1), passphrase: z.string().optional() }),
@@ -142,6 +146,16 @@ export interface IpcOptions<Sender> {
   readonly logs: LogChannels<Sender>;
   readonly updates: UpdateChannels;
   readonly importer: ImportChannels<Sender>;
+  readonly plugins: PluginChannels<Sender>;
+}
+
+/** Downloaded plugins behind the `plugins.*` channels (decision 110); package names never come from the renderer. */
+export interface PluginChannels<Sender> {
+  state(): PluginsState;
+  install(pluginId: string): Promise<PluginsState>;
+  /** Main shows the file dialog and the trust confirmation (decision 006) in the sender's window. */
+  installFile(sender: Sender): Promise<InstallFileResult>;
+  remove(pluginId: string): Promise<PluginsState>;
 }
 
 /** The importer behind the `import.*` channels (plan 035); progress goes to the asking window. */
@@ -178,7 +192,8 @@ function failureOf(cause: unknown): BridgeFailure | null {
     cause instanceof DatasourceError ||
     cause instanceof SecretStoreError ||
     cause instanceof ConsoleFileError ||
-    cause instanceof SqlFileError
+    cause instanceof SqlFileError ||
+    cause instanceof PluginInstallError
   ) {
     return { message: cause.message, hint: cause.hint };
   }
@@ -220,6 +235,11 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   const { service } = options;
   handle(INVOKE_CHANNELS.listDatasources, noRequest, () => service.list());
   handle(INVOKE_CHANNELS.listPlugins, noRequest, () => service.plugins());
+  const { plugins } = options;
+  handle(INVOKE_CHANNELS.pluginsState, noRequest, () => plugins.state());
+  handle(INVOKE_CHANNELS.installPlugin, pluginRequest, ({ pluginId }) => plugins.install(pluginId));
+  handle(INVOKE_CHANNELS.installPluginFile, noRequest, (_request, sender) => plugins.installFile(sender));
+  handle(INVOKE_CHANNELS.removePlugin, pluginRequest, ({ pluginId }) => plugins.remove(pluginId));
   handle(INVOKE_CHANNELS.saveDatasource, saveRequest, (request) => service.save(request));
   handle(INVOKE_CHANNELS.deleteDatasource, idRequest, async ({ id }) => {
     await service.delete(id);

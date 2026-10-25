@@ -33,6 +33,8 @@ export const CHANNELS = {
   hostKeyPrompt: "table-craft:ssh.host-key-prompt",
   /** Main to a window: a File → Recent Files item was picked; the payload is its absolute path (plan 041). */
   openRecentFile: "table-craft:sql-files.open-recent",
+  /** Main to every window: a plugin was installed, removed or is downloading; the payload is a `PluginsState`. */
+  pluginsChanged: "table-craft:plugins.changed",
 } as const;
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
@@ -44,6 +46,10 @@ export const INVOKE_CHANNELS = {
   parseDatasourceUrl: "table-craft:datasources.parse-url",
   datasourceUrl: "table-craft:datasources.url",
   listPlugins: "table-craft:plugins.list",
+  pluginsState: "table-craft:plugins.state",
+  installPlugin: "table-craft:plugins.install",
+  installPluginFile: "table-craft:plugins.install-file",
+  removePlugin: "table-craft:plugins.remove",
   connectEngine: "table-craft:engine.connect",
   disconnectEngine: "table-craft:engine.disconnect",
   chooseFile: "table-craft:dialog.choose-file",
@@ -149,10 +155,20 @@ export interface ParsedUrl {
   readonly ignored: readonly string[];
 }
 
+/**
+ * Where an installed plugin came from (decision 110): inside the app, the development build's
+ * optional plugins, downloaded or installed from a file into `<userData>/managed-plugins/`, or a
+ * folder the user put in `<userData>/plugins/`.
+ */
+export type PluginSource = "builtIn" | "development" | "managed" | "user";
+
 /** An installed plugin as the Data Sources dialog lists it; read from its manifest only. */
 export interface PluginInfo {
   readonly id: string;
   readonly name: string;
+  readonly source: PluginSource;
+  /** The manifest's version; null when the manifest is unreadable. */
+  readonly version: string | null;
   /** Null when the plugin can be used; otherwise why not, in a sentence. */
   readonly unavailableReason: string | null;
   readonly capabilities: readonly Capability[];
@@ -177,6 +193,35 @@ export interface PluginInfo {
     readonly keyPassphrase?: string | undefined;
   } | null;
 }
+
+/** One downloadable plugin's install, pushed on every progress step (decision 110). */
+export type PluginInstallState =
+  | { readonly status: "idle" }
+  | { readonly status: "installing"; readonly received: number; readonly total: number | null }
+  | { readonly status: "failed"; readonly message: string; readonly hint: string };
+
+/** A plugin TableCraft can download, from the catalog compiled into the app. */
+export interface CatalogPlugin {
+  readonly id: string;
+  readonly name: string;
+  readonly packageName: string;
+  /** The URL schemes it reads, so the import can offer it for a connection no plugin reads. */
+  readonly schemes: readonly string[];
+  readonly approximateBytes: number;
+  /** The version loaded from any root; null when the plugin is not installed. */
+  readonly installedVersion: string | null;
+  readonly install: PluginInstallState;
+}
+
+export interface PluginsState {
+  readonly plugins: readonly PluginInfo[];
+  readonly catalog: readonly CatalogPlugin[];
+}
+
+/** Install from File: what was installed, or nothing when the user cancelled the dialog or the confirmation. */
+export type InstallFileResult =
+  | { readonly status: "installed"; readonly pluginId: string; readonly version: string }
+  | { readonly status: "cancelled" };
 
 /** The SSH tunnel's settings as `datasources.json` holds them (decision 070); its secrets are in `secretModes`. */
 export interface SshSettings {
@@ -263,6 +308,7 @@ export interface ImportRow {
   readonly key: string;
   readonly app: ImportApp;
   readonly name: string;
+  /** Null when no plugin reads it; on an `unsupported` row, a plugin TableCraft can download. */
   readonly pluginId: string | null;
   /** The plugin's name, or the other app's driver when no plugin reads it. */
   readonly pluginName: string;
@@ -524,6 +570,14 @@ export interface TableCraftBridge {
   /** The saved data source as a connection URL, without its secrets, for Copy as URL. */
   datasourceUrl(id: string): Promise<InvokeResult<string>>;
   listPlugins(): Promise<InvokeResult<readonly PluginInfo[]>>;
+  pluginsState(): Promise<InvokeResult<PluginsState>>;
+  /** Downloads the catalog plugin's newest compatible version; resolves once it is installed or failed. */
+  installPlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  /** The native open dialog for a `.tgz`, then the trust confirmation (decision 006), then the install. */
+  installPluginFile(): Promise<InvokeResult<InstallFileResult>>;
+  /** Refused while a saved data source uses the plugin. */
+  removePlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  onPluginsChanged(listener: (state: PluginsState) => void): () => void;
   /**
    * Starts or reuses the datasource's engine. On `connected`, the port arrives as a window
    * message of kind `ENGINE_PORT_WINDOW_MESSAGE` naming the datasource. `secrets` carries what

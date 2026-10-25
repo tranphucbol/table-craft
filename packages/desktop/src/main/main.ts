@@ -52,7 +52,8 @@ import { FILE_ATTACHMENTS_FILE, createFileAttachments } from "@table-craft/deskt
 import { createSqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { createLoneAlt, menuButtonAnchor, popupApplicationMenu } from "@table-craft/desktop/main/menuPopup.js";
 import { appPaths } from "@table-craft/desktop/main/paths.js";
-import { discoverInstalled, type PluginReport } from "@table-craft/desktop/main/plugins.js";
+import { createPluginStore, type PluginStore } from "@table-craft/desktop/main/pluginStore/electron.js";
+import type { PluginReport } from "@table-craft/desktop/main/plugins.js";
 import { createSecretStore, type Cipher, type SecretStore } from "@table-craft/desktop/main/secrets.js";
 import { createDatasourceService } from "@table-craft/desktop/main/service.js";
 import {
@@ -80,6 +81,7 @@ import {
   UPDATE_SCOPE,
   type Updater,
 } from "@table-craft/desktop/main/update/updater.js";
+import { DEFAULT_REGISTRY_URL } from "@table-craft/desktop/settings/settings.js";
 import { DENSITIES, resolveTheme, type DensityTokens, type Theme } from "@table-craft/desktop/appearance/themes.js";
 import { ENGINE_PORT_MESSAGE, type DatasourceConfig, type HostKeyOffer } from "@table-craft/desktop/engine/protocol.js";
 import { DEFAULT_LOG_LEVEL, enabled, LOG_READ_LIMIT, type LogRecord } from "@table-craft/desktop/log/record.js";
@@ -90,7 +92,7 @@ import {
   type DatasourceList,
   type EngineExited,
   type HostKeyPrompt,
-  type PluginInfo,
+  type PluginsState,
   type SettingsChanged,
   type UpdateState,
   type WindowState,
@@ -105,7 +107,6 @@ const APP_NAME = UPDATE_TEST_BUILD ? "TableCraft Update Test" : "TableCraft";
 const USER_DATA_DIRECTORY = UPDATE_TEST_BUILD ? "table-craft-update-test" : "table-craft";
 const WINDOW_WIDTH = 1200;
 const WINDOW_HEIGHT = 800;
-const USER_PLUGINS_DIR = "plugins";
 /** macOS reads TablePro's folders from its preferences with this tool (plan 035). */
 const DEFAULTS_TOOL = "/usr/bin/defaults";
 /** Host keys the user trusted in TableCraft (decision 071); `~/.ssh/known_hosts` is only read. */
@@ -155,7 +156,7 @@ const primaryInstance = app.requestSingleInstanceLock();
 if (!primaryInstance) app.exit(0);
 
 let settingsService: SettingsService | null = null;
-let installedPlugins: readonly PluginInfo[] = [];
+let pluginStore: PluginStore | null = null;
 
 function mirrorToTerminal(record: LogRecord): void {
   if (!enabled(record.level, MIRROR_LEVEL)) return;
@@ -196,7 +197,8 @@ app.on("child-process-gone", (_event, details) => {
 /** Every secret a config carries is redacted from the log from now on (plan 017 decision 5). */
 function protectConfig(datasource: DatasourceConfig): void {
   const config = typeof datasource.config === "object" && datasource.config !== null ? datasource.config : {};
-  const fields = installedPlugins.find((plugin) => plugin.id === datasource.pluginId)?.fields ?? [];
+  const fields =
+    (pluginStore?.service.plugins() ?? []).find((plugin) => plugin.id === datasource.pluginId)?.fields ?? [];
   const secret = new Set(
     fields.filter((field) => field.secret === true || field.kind === "password").map((f) => f.key),
   );
@@ -286,12 +288,13 @@ const cipher: Cipher = {
 
 function broadcast(
   channel: string,
-  payload: DatasourceList | EngineExited | SettingsChanged | UpdateState | readonly LogRecord[],
+  payload: DatasourceList | EngineExited | SettingsChanged | UpdateState | PluginsState | readonly LogRecord[],
 ): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
 }
 
-const pluginRoots = [paths.builtInPlugins, join(app.getPath(USER_DATA), USER_PLUGINS_DIR)];
+let savedDatasources: () => readonly Datasource[] = () => [];
+const pluginRoots = () => pluginStore?.service.roots() ?? [paths.builtInPlugins];
 
 const hostKeyQuestions = new Map<number, (trust: boolean) => void>();
 let nextHostKeyQuestion = 1;
@@ -452,6 +455,7 @@ function createWindow(settings: SettingsService): void {
   window.once("ready-to-show", () => {
     window.show();
     updateSchedule?.start();
+    pluginStore?.startBackground();
   });
   closeGuard.guard(window);
   void window.loadFile(paths.rendererIndex);
@@ -487,14 +491,6 @@ async function chooseSqlFiles(contents: WebContents, title: string): Promise<rea
 
 function menuTarget(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
-}
-
-function logPlugins(report: readonly PluginReport[]): void {
-  const plugins = mainLog.child("plugins");
-  for (const plugin of report) {
-    if (plugin.status === "available") plugins.info("plugin found", { ...plugin });
-    else plugins.warn("plugin unavailable", { ...plugin });
-  }
 }
 
 /** Pushes written records to every window's Log tool window, one message per turn rather than per record. */
@@ -555,7 +551,7 @@ async function exportDiagnostics(sender: WebContents, inputs: DiagnosticsInputs)
     about: inputs.about(),
     settings: await files.readText(inputs.settingsPath),
     datasources: inputs.datasources(),
-    plugins: installedPlugins,
+    plugins: pluginStore?.service.plugins() ?? [],
     runs: inputs.runs(),
     redactor: logHub.redactor,
   });
@@ -683,15 +679,26 @@ void app.whenReady().then(async () => {
       .warn("history file unreadable; moved aside", { file: HISTORY_FILE, movedTo: history.recoveredFrom });
   }
   app.on("will-quit", () => history.close());
-  const installed = await discoverInstalled(pluginRoots);
-  installedPlugins = installed.plugins;
-  logPlugins(installed.report);
+  const plugins = createPluginStore({
+    userData: directory,
+    builtInRoot: paths.builtInPlugins,
+    developmentRoot: paths.developmentPlugins,
+    packaged: app.isPackaged,
+    environment: process.env,
+    registryUrl: () => settingsService?.snapshot().settings.plugins.registryUrl ?? DEFAULT_REGISTRY_URL,
+    checkAutomatically: () => settingsService?.snapshot().settings.updates.checkAutomatically ?? true,
+    datasources: () => savedDatasources(),
+    onChanged: (state) => broadcast(CHANNELS.pluginsChanged, state),
+    log: mainLog.child("plugins"),
+  });
+  pluginStore = plugins;
+  await plugins.start();
   // safeStorage answers only once the app is ready.
   const service = await createDatasourceService<WebContents>({
     store: createDatasourceStore({ directory, files }),
     secrets: protectedSecrets(await createSecretStore({ directory, files, cipher })),
     hosts,
-    plugins: installed.plugins,
+    plugins: () => plugins.service.plugins(),
     ephemeral,
     newId: randomUUID,
     consoles,
@@ -699,6 +706,7 @@ void app.whenReady().then(async () => {
     onChanged: (list) => broadcast(CHANNELS.datasourcesChanged, list),
     readKeyFile: (path) => files.readText(expandHome(path)).catch(() => null),
   });
+  savedDatasources = () => service.list().datasources;
   const importer = createImporter({
     environment: {
       platform: process.platform,
@@ -723,6 +731,7 @@ void app.whenReady().then(async () => {
       applyWindowAppearance(settings);
       broadcast(CHANNELS.settingsChanged, changed);
       for (const listener of settingsListeners) listener(changed.settings);
+      plugins.setAutomatic(changed.settings.updates.checkAutomatically);
     },
   });
   settingsService = settings;
@@ -794,7 +803,7 @@ void app.whenReady().then(async () => {
       },
       exportDiagnostics: (sender) =>
         exportDiagnostics(sender, {
-          about: () => aboutReport(installed.report),
+          about: () => aboutReport(plugins.service.report()),
           settingsPath: join(directory, SETTINGS_FILE),
           datasources: () => service.list().datasources,
           runs: () => history.recentRuns(DIAGNOSTICS_HISTORY_RUNS),
@@ -809,6 +818,7 @@ void app.whenReady().then(async () => {
         }),
       cancel: () => importer.cancel(),
     },
+    plugins: plugins.channels,
     updates: {
       state: () => updates.state(),
       check: () => updates.check("manual"),
@@ -844,6 +854,7 @@ app.on("before-quit", () => closeGuard.beforeQuit());
 app.on("will-quit", (event) => {
   hosts.closeAll();
   updateSchedule?.stop();
+  pluginStore?.stop();
   const pending = updater;
   if (pending !== null && (installRequested || pending.holdsFiles())) {
     // The swap or the cleanup is asynchronous; quitting waits for it, then exits for good.

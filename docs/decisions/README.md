@@ -98,4 +98,7 @@ started, not when it is merged.
 | 101 | [A plugin may name a column's type class](101-a-plugin-may-name-a-column-type-class.md)                                                                                |
 | 106 | [Plugin API 1.0 follows semver](106-plugin-api-1-0-follows-semver.md)                                                                                                  |
 | 107 | [Plugin API compatibility is checked, not promised](107-plugin-api-compatibility-is-checked.md)                                                                        |
-| 108 | [SQL inspections run in the plugin, live in the editor](108-sql-inspections-run-in-the-plugin.md)                                                                      |
+| 108 | [SQLite and MySQL ship in the box; other plugins download on demand](108-sqlite-and-mysql-ship-other-plugins-download.md)                                              |
+| 109 | [One npm package per optional plugin, released with the app](109-one-npm-package-per-optional-plugin.md)                                                               |
+| 110 | [The app installs plugins from the npm registry](110-the-app-installs-plugins-from-the-registry.md)                                                                    |
+| 111 | [SQL inspections run in the plugin, live in the editor](111-sql-inspections-run-in-the-plugin.md)                                                                      |

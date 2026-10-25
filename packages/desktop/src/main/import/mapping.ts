@@ -1,6 +1,7 @@
 import { ConnectionUrlError, parseConnectionUrl, type ConnectionForm } from "@table-craft/plugin-api";
 import { normalizeFolder } from "@table-craft/desktop/main/datasources.js";
 import { urlScheme, withoutJdbc } from "@table-craft/desktop/main/import/jdbc.js";
+import { catalogEntryForScheme } from "@table-craft/desktop/main/pluginStore/catalog.js";
 import type { ForeignApp, ForeignConnection, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
 import {
   DATASOURCE_COLORS,
@@ -228,7 +229,8 @@ export function mapConnection(connection: ForeignConnection, context: MappingCon
     return {
       row: {
         ...base,
-        pluginId: null,
+        // A plugin TableCraft can download keeps its id, so the preview can offer to install it.
+        pluginId: scheme === null ? null : (catalogEntryForScheme(scheme)?.id ?? null),
         pluginName: connection.driver ?? scheme ?? "Unknown",
         target: connection.url === null ? "" : withoutJdbc(connection.url),
         password: "notNeeded",

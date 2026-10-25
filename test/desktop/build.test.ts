@@ -4,7 +4,7 @@ import { MANIFEST_FILE } from "@table-craft/plugin-api";
 import type { UserConfig } from "vite";
 import engineConfig from "../../packages/desktop/vite.engine.config.js";
 import mainConfig from "../../packages/desktop/vite.main.config.js";
-import { BUILT_IN_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
+import { BUILT_IN_PLUGINS, OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
 import { COMMONJS_GLOBALS } from "../../packages/desktop/vite.shared.js";
 
 const PLUGINS_ROOT = new URL("../../plugins/", import.meta.url);
@@ -24,13 +24,18 @@ async function pluginDirectories(): Promise<string[]> {
 }
 
 describe("desktop build", () => {
-  it("givenPluginDirectories_whenComparedWithBuiltInList_thenEveryPluginIsBuilt", async () => {
-    expect([...BUILT_IN_PLUGINS].sort()).toEqual((await pluginDirectories()).sort());
+  it("givenPluginDirectories_whenComparedWithBothLists_thenEveryPluginIsBuiltOnce", async () => {
+    expect([...BUILT_IN_PLUGINS, ...OPTIONAL_PLUGINS].sort()).toEqual((await pluginDirectories()).sort());
   });
 
-  it("givenBuildScript_whenRead_thenBuildsEveryBuiltInPlugin", async () => {
+  it("givenPluginLists_whenRead_thenSqliteAndMysqlBuiltInAndPostgresOptional", () => {
+    expect([...BUILT_IN_PLUGINS].sort()).toEqual(["mysql", "sqlite"]);
+    expect(OPTIONAL_PLUGINS).toContain("postgres");
+  });
+
+  it("givenBuildScript_whenRead_thenBuildsEveryPlugin", async () => {
     const manifest = JSON.parse(await readFile(DESKTOP_PACKAGE, "utf8")) as { scripts: { build: string } };
-    for (const id of BUILT_IN_PLUGINS) {
+    for (const id of [...BUILT_IN_PLUGINS, ...OPTIONAL_PLUGINS]) {
       expect(manifest.scripts.build).toContain(`--config vite.plugins.config.ts --mode ${id}`);
     }
   });

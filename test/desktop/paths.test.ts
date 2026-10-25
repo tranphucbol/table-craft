@@ -15,6 +15,7 @@ describe("app paths", () => {
       preload: join(REPOSITORY_DIST, "preload", "preload.cjs"),
       rendererIndex: join(REPOSITORY_DIST, "renderer", "index.html"),
       builtInPlugins: join(REPOSITORY_DIST, "resources", "plugins"),
+      developmentPlugins: join(REPOSITORY_DIST, "optional-plugins"),
       icon: join("/repo", "packages", "desktop", "build", "icon.png"),
     });
   });
@@ -27,6 +28,7 @@ describe("app paths", () => {
       preload: join(ASAR_DIST, "preload", "preload.cjs"),
       rendererIndex: join(ASAR_DIST, "renderer", "index.html"),
       builtInPlugins: join(RESOURCES, "plugins"),
+      developmentPlugins: null,
       icon: join(RESOURCES, "icon.png"),
     });
   });

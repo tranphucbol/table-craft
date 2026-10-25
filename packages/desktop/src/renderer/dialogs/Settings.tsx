@@ -17,6 +17,8 @@ import {
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { InspectionFields } from "@table-craft/desktop/renderer/dialogs/InspectionSettings.js";
+import { PluginsPage } from "@table-craft/desktop/renderer/dialogs/PluginsPage.js";
+import { FieldError, SectionTitle, update, useDraft } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { ThemePicker } from "@table-craft/desktop/renderer/dialogs/ThemePicker.js";
 import { installedFontFamilies, type FontFamilies } from "@table-craft/desktop/renderer/settings/fonts.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
@@ -65,6 +67,7 @@ const PAGE_TITLES: Readonly<Record<SettingsPage, string>> = {
   appearance: "Appearance",
   editor: "Editor",
   dataEditor: "Data Editor",
+  plugins: "Plugins",
   advanced: "Advanced",
 };
 
@@ -93,9 +96,6 @@ const FONT_LABELS: Readonly<Record<FontRole, string>> = {
 /** The `<select>` value standing for the built-in stack, which no installed family can be named. */
 const BUILT_IN_FAMILY = "";
 const WHOLE_NUMBER = /^\d+$/;
-function update(patch: (current: Settings) => Settings): void {
-  void useSettings.getState().update(patch);
-}
 
 /** Each page's Restore Defaults puts back only what that page shows. */
 const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> = {
@@ -118,31 +118,9 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
     ...withFont(current, "grid", DEFAULT_SETTINGS.appearance.fonts.grid),
     data: DEFAULT_SETTINGS.data,
   }),
+  plugins: (current) => ({ ...current, plugins: DEFAULT_SETTINGS.plugins }),
   advanced: (current) => ({ ...current, log: DEFAULT_SETTINGS.log }),
 };
-
-function SectionTitle({ children }: { readonly children: string }) {
-  return <h3 className="col-span-2 mt-gap border-b border-line pb-1 font-semibold text-ink-muted">{children}</h3>;
-}
-
-function FieldError({ id, error }: { readonly id: string; readonly error: string | null }) {
-  if (error === null) return null;
-  return (
-    <p id={id} role="alert" className="col-start-2 text-danger">
-      {error}
-    </p>
-  );
-}
-
-/**
- * What a text field shows: the user's text while it differs from the saved value only because it
- * is not valid yet, otherwise the saved value, so Restore Defaults and other windows show through.
- */
-function useDraft<T>(value: T, show: (value: T) => string) {
-  const [draft, setDraft] = useState<{ readonly text: string; readonly basis: T } | null>(null);
-  const text = draft !== null && draft.basis === value ? draft.text : show(value);
-  return { text, edit: (next: string, basis: T) => setDraft({ text: next, basis }) };
-}
 
 interface NumberFieldProps {
   readonly label: string;
@@ -728,6 +706,7 @@ const PAGES: Readonly<Record<SettingsPage, () => ReactNode>> = {
   appearance: AppearancePage,
   editor: EditorPage,
   dataEditor: DataEditorPage,
+  plugins: PluginsPage,
   advanced: AdvancedPage,
 };
 

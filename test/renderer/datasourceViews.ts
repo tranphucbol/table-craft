@@ -43,6 +43,8 @@ const POSTGRES_FIELDS: readonly ConnectionField[] = [
 export const POSTGRES_PLUGIN: PluginInfo = {
   id: "postgres",
   name: "PostgreSQL",
+  source: "managed",
+  version: "1.0.0",
   unavailableReason: null,
   capabilities: ["sql", "cancel", "schemaTree"],
   fields: POSTGRES_FIELDS,
@@ -67,6 +69,8 @@ export const POSTGRES_PLUGIN: PluginInfo = {
 export const SQLITE_PLUGIN: PluginInfo = {
   id: "sqlite",
   name: "SQLite",
+  source: "builtIn",
+  version: "1.0.0",
   unavailableReason: null,
   capabilities: ["sql"],
   fields: [{ key: "path", label: "File", kind: "file", required: true }],

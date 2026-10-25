@@ -38,6 +38,12 @@ export interface AvailablePlugin {
 
 export type PluginDiscovery = AvailablePlugin | UnavailablePlugin;
 
+/**
+ * Where plugins are found: a folder whose subfolders are plugins, or one plugin folder, such as a
+ * downloaded plugin's current version (decision 110).
+ */
+export type PluginRoot = string | { readonly directory: string };
+
 const MISSING_FILE = "ENOENT";
 
 function describe(error: unknown): string {
@@ -48,7 +54,8 @@ function isMissing(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === MISSING_FILE;
 }
 
-async function pluginDirectories(root: string): Promise<string[]> {
+async function pluginDirectories(root: PluginRoot): Promise<string[]> {
+  if (typeof root !== "string") return [root.directory];
   try {
     const entries = await readdir(root, { withFileTypes: true });
     return entries
@@ -170,7 +177,7 @@ async function importPlugin(directory: string, manifest: PluginManifest): Promis
  * provides; only tests pass another.
  */
 export async function discoverPlugins(
-  roots: readonly string[],
+  roots: readonly PluginRoot[],
   hostVersion: string = API_VERSION,
 ): Promise<PluginDiscovery[]> {
   const results: PluginDiscovery[] = [];
@@ -206,7 +213,7 @@ export async function discoverPlugins(
  * `UnavailablePlugin` with a reason; it never stops the others.
  */
 export async function loadPlugins(
-  roots: readonly string[],
+  roots: readonly PluginRoot[],
   hostVersion: string = API_VERSION,
 ): Promise<PluginLoadResult[]> {
   const results: PluginLoadResult[] = [];
