@@ -7,7 +7,12 @@ import {
 } from "@table-craft/desktop/main/settings.js";
 import type { ThemeFolder } from "@table-craft/desktop/main/themes.js";
 import type { SettingsChanged } from "@table-craft/desktop/preload/bridge.js";
-import { DEFAULT_SETTINGS, readSettings, type Settings } from "@table-craft/desktop/settings/settings.js";
+import {
+  DEFAULT_SETTINGS,
+  readSettings,
+  withInspection,
+  type Settings,
+} from "@table-craft/desktop/settings/settings.js";
 import { memoryFiles } from "../support/memoryFiles.js";
 
 const DIRECTORY = "/profile";
@@ -28,6 +33,7 @@ const CHOSEN: Settings = {
   },
   editor: {
     format: { style: "standard", keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0, alignAliases: false },
+    inspections: { enabled: false, disabled: ["SqlRedundantAlias", "AcmeOwnCheck"] },
   },
   console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30, runAllOnError: "continue" },
   data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
@@ -146,6 +152,31 @@ describe("settings document", () => {
 
     expect(read.editor.format).toEqual({ ...CHOSEN.editor.format, style: "aligned", alignAliases: true });
     expect(readSettings({ ...CHOSEN, editor: {} }).editor.format).toEqual(DEFAULT_SETTINGS.editor.format);
+  });
+
+  it("givenInspectionsMissingOrMalformed_whenRead_thenOnByDefaultAndOnlyIdsKept", () => {
+    const read = (inspections: unknown) => readSettings({ ...CHOSEN, editor: { inspections } }).editor.inspections;
+
+    expect(readSettings({ ...CHOSEN, editor: {} }).editor.inspections).toEqual({ enabled: true, disabled: [] });
+    expect(read({ enabled: "no", disabled: "SqlResolve" })).toEqual({ enabled: true, disabled: [] });
+    expect(
+      read({ enabled: false, disabled: ["SqlResolve", 7, "", "not an id", "SqlResolve", "AcmeOwnCheck"] }),
+    ).toEqual({ enabled: false, disabled: ["SqlResolve", "AcmeOwnCheck"] });
+  });
+
+  it("givenInspectionToggled_whenWritten_thenListedOnceOrRemovedAndAcceptedByTheWriteSchema", () => {
+    const off = withInspection(DEFAULT_SETTINGS, "SqlRedundantAlias", false);
+    const twice = withInspection(off, "SqlRedundantAlias", false);
+
+    expect(twice.editor.inspections).toEqual({ enabled: true, disabled: ["SqlRedundantAlias"] });
+    expect(withInspection(twice, "SqlRedundantAlias", true).editor.inspections.disabled).toEqual([]);
+    expect(settingsSchema.safeParse(twice).success).toBe(true);
+    expect(
+      settingsSchema.safeParse({
+        ...twice,
+        editor: { ...twice.editor, inspections: { enabled: true, disabled: ["SqlResolve", "SqlResolve"] } },
+      }).success,
+    ).toBe(false);
   });
 
   it("givenNoSystemTitleBarField_whenRead_thenFalse", () => {

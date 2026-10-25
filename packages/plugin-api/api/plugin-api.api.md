@@ -269,6 +269,8 @@ type GeneratedStatement = (typeof GENERATED_STATEMENTS)[number];
 
 const IMPORT_KINDS: readonly [ "boolean", "integer", "bigint", "decimal", "double", "date", "timestamp", "text" ];
 
+const INSPECTION_IDS: readonly [ "SqlSyntax", "SqlResolve", "SqlAmbiguousColumn", "SqlReservedWordAsName", "SqlInsertValues", "SqlWithoutWhere", "SqlNullComparison", "SqlConstantCondition", "SqlUnusedCte", "SqlDuplicateAlias", "SqlRedundantOrderingDirection", "SqlRedundantAlias", "SqlRedundantElseNull" ];
+
 type ImportKind = (typeof IMPORT_KINDS)[number];
 
 interface IncomingForeignKey {
@@ -304,6 +306,13 @@ type InsertRow = readonly ParameterValue[];
 interface InsertTarget {
   readonly columns: readonly Column[];
   readonly table: string;
+}
+
+type InspectionId = (typeof INSPECTION_IDS)[number];
+
+interface InspectionRequest {
+  readonly disabled?: readonly string[];
+  readonly text: string;
 }
 
 interface Introspector {
@@ -386,6 +395,8 @@ const PARAMETER_STYLES: readonly [ "named", "numbered", "positional" ];
 
 const PLUGIN_ERROR_CODES: readonly [ "cancelled", "connectionFailed", "statementFailed", "introspectionFailed", "definitionNotFound", "explainUnsupported", "connectionLost", "sessionBusy" ];
 
+const PROBLEM_SEVERITIES: readonly [ "error", "warning", "weak" ];
+
 type ParameterStyle = (typeof PARAMETER_STYLES)[number];
 
 type ParameterValue = string | null;
@@ -428,6 +439,23 @@ interface PluginErrorOptions extends ErrorOptions {
 }
 
 type PluginManifest = z.infer<typeof pluginManifestSchema>;
+
+interface Problem {
+  readonly fixes: readonly QuickFix[];
+  readonly from: number;
+  readonly inspection: string;
+  readonly message: string;
+  readonly severity: ProblemSeverity;
+  readonly to: number;
+}
+
+type ProblemSeverity = (typeof PROBLEM_SEVERITIES)[number];
+
+interface QuickFix {
+  readonly caret?: number;
+  readonly edits: readonly TextEdit[];
+  readonly title: string;
+}
 
 const ROUTINE_PARAMETER_MODES: readonly [ "in", "out", "inout", "variadic" ];
 
@@ -577,6 +605,7 @@ interface SqlLanguage {
   format(text: string, options: FormatOptions): string;
   generate(statement: GeneratedStatement, relation: Relation, qualifiedName: string): string;
   importType?(column: InferredColumn): string;
+  inspect?(request: InspectionRequest, catalog: CompletionCatalog): Promise<readonly Problem[]>;
   literal(value: WireValue, columnType: string | null): string;
   readonly namespaceSwitch?: NamespaceSwitch;
   readonly objects?: ObjectEditor;
@@ -641,6 +670,12 @@ interface TableDesign {
   readonly name: string;
   readonly primaryKey: readonly string[];
   readonly primaryKeyName: string | null;
+}
+
+interface TextEdit {
+  readonly from: number;
+  readonly insert: string;
+  readonly to: number;
 }
 
 type TlsFieldRole = (typeof TLS_FIELD_ROLES)[number];

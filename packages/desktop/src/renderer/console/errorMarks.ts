@@ -1,8 +1,13 @@
-import { RangeSet, StateEffect, StateField, type ChangeDesc, type Extension, type Text } from "@codemirror/state";
-import { Decoration, EditorView, gutter, GutterMarker, hoverTooltip, type DecorationSet } from "@codemirror/view";
 import {
-  ERROR_GUTTER_CLASS,
-  ERROR_GUTTER_MARKER_CLASS,
+  StateEffect,
+  StateField,
+  type ChangeDesc,
+  type EditorState,
+  type Extension,
+  type Text,
+} from "@codemirror/state";
+import { Decoration, EditorView, hoverTooltip, type DecorationSet } from "@codemirror/view";
+import {
   ERROR_HINT_CLASS,
   ERROR_MARK_CLASS,
   ERROR_TOOLTIP_CLASS,
@@ -69,8 +74,16 @@ const marksField = StateField.define<MarksState>({
 
 /** The marks as the editor holds them now. */
 export function errorMarksOf(view: EditorView): readonly ErrorMark[] {
-  return view.state.field(marksField).marks;
+  return errorMarksIn(view.state);
 }
+
+/** The marks `state` holds; none when the state has no mark field, as in a test of another extension. */
+export function errorMarksIn(state: EditorState): readonly ErrorMark[] {
+  return state.field(marksField, false)?.marks ?? NO_MARKS.marks;
+}
+
+/** The field itself, for an extension that recomputes when the marks change. */
+export const errorMarksField = marksField;
 
 /** Whether `update` moved or dropped marks by editing the text, so the console should hear of it. */
 export function marksChanged(update: {
@@ -80,40 +93,6 @@ export function marksChanged(update: {
 }): boolean {
   return update.docChanged && update.state.field(marksField).marks !== update.startState.field(marksField).marks;
 }
-
-class ErrorGutterMarker extends GutterMarker {
-  constructor(private readonly message: string) {
-    super();
-  }
-
-  override eq(other: GutterMarker): boolean {
-    return other instanceof ErrorGutterMarker && other.message === this.message;
-  }
-
-  override toDOM(): Node {
-    const dot = document.createElement("span");
-    dot.className = ERROR_GUTTER_MARKER_CLASS;
-    dot.title = this.message;
-    return dot;
-  }
-}
-
-const errorGutter = gutter({
-  class: ERROR_GUTTER_CLASS,
-  markers(view) {
-    const { doc } = view.state;
-    const lines = new Map<number, string>();
-    for (const mark of errorMarksOf(view)) {
-      if (mark.from > doc.length) continue;
-      const line = doc.lineAt(mark.from).from;
-      if (!lines.has(line)) lines.set(line, mark.message);
-    }
-    return RangeSet.of(
-      [...lines].map(([line, message]) => new ErrorGutterMarker(message).range(line)),
-      true,
-    );
-  },
-});
 
 const errorTooltip = hoverTooltip((view, pos) => {
   const mark = errorMarksOf(view).find((candidate) => candidate.from <= pos && pos <= candidate.to);
@@ -137,5 +116,8 @@ const errorTooltip = hoverTooltip((view, pos) => {
   };
 });
 
-/** The wavy underline, gutter dot and hover message of each failed statement's error (decision 082). */
-export const errorMarks: Extension = [marksField, errorGutter, errorTooltip];
+/**
+ * The wavy underline and hover message of each failed statement's error (decision 082); the gutter
+ * dot is drawn with the live problems' (`inspections.ts`), one column for both.
+ */
+export const errorMarks: Extension = [marksField, errorTooltip];

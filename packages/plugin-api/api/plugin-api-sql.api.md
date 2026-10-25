@@ -80,6 +80,10 @@ interface ImporterOptions extends Omit<GeneratorOptions, "updateDefault"> {
   readonly types: Readonly<Record<Exclude<ImportKind, "decimal">, string>>;
 }
 
+interface InspectorOptions extends CompleterOptions {
+  readonly reservedWords: ReadonlySet<string>;
+}
+
 const NOTHING_TO_CHANGE = "The design matches the table; there is nothing to run.";
 
 const NOTHING_TO_EXPLAIN = "There is no statement to explain; put the caret in one.";
@@ -234,6 +238,8 @@ function sqlFormatter(options: FormatterOptions): Pick<SqlLanguage, "format">;
 function sqlGenerator(options: GeneratorOptions): Pick<SqlLanguage, "generate">;
 
 function sqlImporter(options: ImporterOptions): Required<Pick<SqlLanguage, "importType" | "createTable">>;
+
+function sqlInspector(options: InspectorOptions): Required<Pick<SqlLanguage, "inspect">>;
 
 function sqlLiteral(value: WireValue, options: SqlLiteralOptions): string;
 

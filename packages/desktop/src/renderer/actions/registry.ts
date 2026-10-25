@@ -70,7 +70,8 @@ export type ActionIcon =
   | "findNext"
   | "findPrevious"
   | "sessions"
-  | "terminate";
+  | "terminate"
+  | "quickFix";
 
 export interface Action<A = void> {
   readonly id: string;

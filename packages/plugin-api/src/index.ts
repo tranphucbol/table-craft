@@ -32,6 +32,16 @@ export {
   type SignatureHelp,
 } from "./completion.js";
 export {
+  INSPECTION_IDS,
+  type InspectionId,
+  type InspectionRequest,
+  type Problem,
+  PROBLEM_SEVERITIES,
+  type ProblemSeverity,
+  type QuickFix,
+  type TextEdit,
+} from "./inspection.js";
+export {
   DefinitionNotFoundError,
   type ErrorPosition,
   errorPositionOf,

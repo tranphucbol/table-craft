@@ -1,4 +1,5 @@
 export { SQL_KEYWORDS, sqlCompleter, type CompleterOptions, type IdentifierFolding } from "./complete.js";
+export { sqlInspector, type InspectorOptions } from "./inspect.js";
 export {
   FUNCTION_CATEGORIES,
   functionInfo,

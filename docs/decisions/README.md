@@ -98,3 +98,4 @@ started, not when it is merged.
 | 101 | [A plugin may name a column's type class](101-a-plugin-may-name-a-column-type-class.md)                                                                                |
 | 106 | [Plugin API 1.0 follows semver](106-plugin-api-1-0-follows-semver.md)                                                                                                  |
 | 107 | [Plugin API compatibility is checked, not promised](107-plugin-api-compatibility-is-checked.md)                                                                        |
+| 108 | [SQL inspections run in the plugin, live in the editor](108-sql-inspections-run-in-the-plugin.md)                                                                      |

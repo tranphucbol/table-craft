@@ -59,6 +59,7 @@ import {
   FolderSimple,
   Function as FunctionGlyph,
   Key,
+  Lightbulb,
   ListDashes,
   ListNumbers,
   Lock,
@@ -84,6 +85,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react";
 import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
+import { PreviewChangesGlyph, SubmitGlyph } from "@table-craft/desktop/renderer/ui/editGlyphs.js";
 
 /** Every glyph the app draws, in one family (Phosphor), so this file is the audit. */
 export {
@@ -120,6 +122,9 @@ export {
   Check as CurrentIcon,
   XCircle as ErrorIcon,
   Prohibit as CancelledIcon,
+  Lightbulb as QuickFixIcon,
+  EyeSlash as SuppressIcon,
+  Prohibit as DisableInspectionIcon,
   Export as ExportIcon,
   FileArrowDown as ImportIcon,
   FileSql as ScriptIcon,
@@ -168,8 +173,8 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   sortDescending: SortDescending,
   hide: EyeSlash,
   revert: ArrowUUpLeft,
-  preview: FileSql,
-  submit: CheckCircle,
+  preview: PreviewChangesGlyph,
+  submit: SubmitGlyph,
   count: Sigma,
   filter: Funnel,
   goTo: ArrowSquareOut,
@@ -192,4 +197,5 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   findPrevious: CaretUp,
   sessions: Pulse,
   terminate: Power,
+  quickFix: Lightbulb,
 };

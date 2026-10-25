@@ -16,6 +16,7 @@ import {
   OVERLAY_CLASS,
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { InspectionFields } from "@table-craft/desktop/renderer/dialogs/InspectionSettings.js";
 import { ThemePicker } from "@table-craft/desktop/renderer/dialogs/ThemePicker.js";
 import { installedFontFamilies, type FontFamilies } from "@table-craft/desktop/renderer/settings/fonts.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
@@ -569,6 +570,8 @@ function EditorPage() {
       </p>
       <SectionTitle>Formatting</SectionTitle>
       <FormattingFields />
+      <SectionTitle>Inspections</SectionTitle>
+      <InspectionFields />
       <SectionTitle>Running</SectionTitle>
       <ParametersField />
       <StatementTimeoutField />

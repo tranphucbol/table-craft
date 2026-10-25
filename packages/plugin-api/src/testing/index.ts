@@ -26,6 +26,7 @@ import {
   type InsertTarget,
   type PlanNode,
   type PluginErrorCode,
+  type Problem,
   type PluginManifest,
   type Introspector,
   type NamespaceCatalog,
@@ -224,6 +225,14 @@ export const TYPE_PROBE_COLUMNS = [
 
 /** A fixture table whose name needs quoting in every dialect, for completion's quoting. */
 export const LINE_ITEMS_TABLE = "Line Items";
+/** SQL no inspector can read, which must still resolve with fixes whose edits stay inside the text. */
+const INSPECTION_GARBAGE = [
+  ")))(((",
+  "SELECT FROM WHERE ((( ' \" /* ",
+  "WITH WITH AS AS ( SELECT",
+  "UPDATE SET WHERE",
+  ". , ;",
+];
 
 /** The relations every fixture database carries, sorted by name as `describe` returns them. */
 export const FIXTURE_RELATIONS = [
@@ -1764,6 +1773,43 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             const text = "SELECT * FROM customers";
             const declaration = await language.resolve({ text, offset: text.indexOf("customers") + 2 }, catalog);
             expect(declaration).toEqual({ kind: "relation", path: expected.path, relation: fold("customers") });
+          });
+        });
+
+        describe.runIf(plugin.language?.inspect !== undefined)("inspect", () => {
+          async function inspect(text: string, catalog: CompletionCatalog): Promise<readonly Problem[]> {
+            const inspector = plugin.language?.inspect?.bind(plugin.language);
+            if (inspector === undefined) throw new Error("This block runs only when language.inspect exists.");
+            return inspector({ text }, catalog);
+          }
+
+          it("givenGarbage_whenInspecting_thenResolvesWithEditsInsideTheText", async () => {
+            await withCompletion(async (_language, catalog) => {
+              for (const text of INSPECTION_GARBAGE) {
+                for (const problem of await inspect(text, catalog)) {
+                  for (const edit of problem.fixes.flatMap((fix) => fix.edits)) {
+                    expect(0 <= edit.from && edit.from <= edit.to && edit.to <= text.length).toBe(true);
+                  }
+                }
+              }
+            });
+          });
+
+          it("givenFixtureQuery_whenInspecting_thenNothingUnresolved", async () => {
+            await withCompletion(async (_language, catalog) => {
+              const text = "SELECT o.id, c.name FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = 1";
+              expect((await inspect(text, catalog)).map((problem) => problem.message)).toEqual([]);
+            });
+          });
+
+          it("givenMisspelledTable_whenInspecting_thenUnresolvedWithFixToFixtureTable", async () => {
+            await withCompletion(async (_language, catalog) => {
+              const text = "SELECT * FROM ordrs WHERE id = 1";
+              const problem = (await inspect(text, catalog)).find((found) => found.inspection === "SqlResolve");
+              expect(text.slice(problem?.from, problem?.to)).toBe("ordrs");
+              const edit = problem?.fixes[0]?.edits[0];
+              expect(edit?.insert.toLowerCase()).toBe("orders");
+            });
           });
         });
       },

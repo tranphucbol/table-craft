@@ -33,6 +33,7 @@ import {
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
+  sqlInspector,
   sqlExplainable,
   sqlFormatter,
   sqlGenerator,
@@ -45,7 +46,9 @@ import {
   type ParameterOptions,
   type SqlDialectOptions,
   type SqlLiteralOptions,
+  type CompleterOptions,
 } from "@table-craft/plugin-api/sql";
+import { SQLITE_RESERVED_WORDS } from "./reserved.js";
 import { sqliteErrorPosition } from "./errorPosition.js";
 import { SQLITE_FUNCTIONS } from "./functions.js";
 import { EXPLAIN_VERBS, explainStatement, readPlanRows } from "./explain.js";
@@ -81,6 +84,15 @@ const KEYWORDS: readonly string[] = [...SQL_KEYWORDS, "GLOB", "PRAGMA"];
 /** No `explainAnalyze`: SQLite's `EXPLAIN QUERY PLAN` only plans, and nothing else reports run times. */
 const { explainable } = sqlExplainable({ dialect: DIALECT, name: "SQLite", verbs: EXPLAIN_VERBS, analyzeVerbs: [] });
 
+const COMPLETER: CompleterOptions = {
+  dialect: DIALECT,
+  identifierFolding: "none",
+  plainIdentifier: PLAIN_IDENTIFIER,
+  quoteIdentifier,
+  keywords: KEYWORDS,
+  functions: SQLITE_FUNCTIONS,
+};
+
 const language: SqlLanguage = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
@@ -90,14 +102,8 @@ const language: SqlLanguage = {
   emptyInsert: defaultValuesInsert,
   updateDefault,
   savepoint: sqlSavepoints(quoteIdentifier),
-  ...sqlCompleter({
-    dialect: DIALECT,
-    identifierFolding: "none",
-    plainIdentifier: PLAIN_IDENTIFIER,
-    quoteIdentifier,
-    keywords: KEYWORDS,
-    functions: SQLITE_FUNCTIONS,
-  }),
+  ...sqlCompleter(COMPLETER),
+  ...sqlInspector({ ...COMPLETER, reservedWords: SQLITE_RESERVED_WORDS }),
   ...sqlGenerator({ quoteIdentifier, updateDefault, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
   explainable,
   ...sqlFormatter({ dialect: "sqlite", lexer: DIALECT, parameters: PARAMETERS.styles }),

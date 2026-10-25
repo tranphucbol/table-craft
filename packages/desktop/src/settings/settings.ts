@@ -68,8 +68,17 @@ export interface FormatSettings {
   readonly alignAliases: boolean;
 }
 
+/** Live SQL inspections in the console (plan 108 decision 6). */
+export interface InspectionSettings {
+  /** The master switch: off, the console asks for no problems at all. */
+  readonly enabled: boolean;
+  /** Inspection ids, such as `SqlRedundantAlias`, the plugin skips. */
+  readonly disabled: readonly string[];
+}
+
 export interface EditorSettings {
   readonly format: FormatSettings;
+  readonly inspections: InspectionSettings;
 }
 
 /** Mirrors `ON_ERROR_CHOICES` in the engine protocol (decision 083). */
@@ -152,6 +161,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   editor: {
     format: { style: "aligned", keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1, alignAliases: true },
+    inspections: { enabled: true, disabled: [] },
   },
   console: {
     parameters: true,
@@ -276,6 +286,35 @@ function readFormat(value: unknown, fallback: FormatSettings): FormatSettings {
   };
 }
 
+/** Longer than any inspection id; guards a hand-edited file. */
+const INSPECTION_ID_MAX_LENGTH = 64;
+const INSPECTION_ID = /^\w+$/;
+
+/**
+ * Ids are kept even when this build does not know them, since a newer plugin may report its own;
+ * anything that cannot be an id is dropped, and repeats are dropped.
+ */
+function readInspections(value: unknown, fallback: InspectionSettings): InspectionSettings {
+  const inspections = record(value);
+  const ids = Array.isArray(inspections.disabled)
+    ? inspections.disabled.filter(
+        (id): id is string => typeof id === "string" && id.length <= INSPECTION_ID_MAX_LENGTH && INSPECTION_ID.test(id),
+      )
+    : fallback.disabled;
+  return {
+    enabled: typeof inspections.enabled === "boolean" ? inspections.enabled : fallback.enabled,
+    disabled: [...new Set(ids)],
+  };
+}
+
+/** `settings` with inspection `id` turned on or off; the master switch is left as it is. */
+export function withInspection(settings: Settings, id: string, enabled: boolean): Settings {
+  const { inspections } = settings.editor;
+  const others = inspections.disabled.filter((disabled) => disabled !== id);
+  const disabled = enabled ? others : [...others, id];
+  return { ...settings, editor: { ...settings.editor, inspections: { ...inspections, disabled } } };
+}
+
 /**
  * A settings document from anything, each field on its own: a field that is missing, of the wrong
  * type or out of range reads as its default, and the others are kept (plan 013 decision 1).
@@ -310,7 +349,10 @@ export function readSettings(input: unknown): Settings {
       systemTitleBar:
         typeof appearance.systemTitleBar === "boolean" ? appearance.systemTitleBar : defaults.appearance.systemTitleBar,
     },
-    editor: { format: readFormat(editor.format, defaults.editor.format) },
+    editor: {
+      format: readFormat(editor.format, defaults.editor.format),
+      inspections: readInspections(editor.inspections, defaults.editor.inspections),
+    },
     console: {
       parameters: typeof console.parameters === "boolean" ? console.parameters : defaults.console.parameters,
       statementTimeoutSeconds: inRange(console.statementTimeoutSeconds, STATEMENT_TIMEOUT_SECONDS_RANGE)

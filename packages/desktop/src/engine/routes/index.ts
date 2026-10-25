@@ -13,6 +13,7 @@ import { catalogRoutes } from "@table-craft/desktop/engine/routes/catalog.js";
 import { namespaceRoutes } from "@table-craft/desktop/engine/routes/namespace.js";
 import { routineRoutes } from "@table-craft/desktop/engine/routes/routine.js";
 import { completionRoutes } from "@table-craft/desktop/engine/routes/completion.js";
+import { inspectionRoutes } from "@table-craft/desktop/engine/routes/inspection.js";
 import { navigationRoutes } from "@table-craft/desktop/engine/routes/navigation.js";
 import { tableRoutes } from "@table-craft/desktop/engine/routes/table.js";
 import { editsRoutes } from "@table-craft/desktop/engine/routes/edits.js";
@@ -33,6 +34,7 @@ export const ROUTE_GROUPS = [
   namespaceRoutes,
   routineRoutes,
   completionRoutes,
+  inspectionRoutes,
   navigationRoutes,
   tableRoutes,
   editsRoutes,
@@ -54,6 +56,7 @@ export function routesOf(connection: ConnectionContext): Routes {
     ...namespaceRoutes(connection),
     ...routineRoutes(connection),
     ...completionRoutes(connection),
+    ...inspectionRoutes(connection),
     ...navigationRoutes(connection),
     ...tableRoutes(connection),
     ...editsRoutes(connection),

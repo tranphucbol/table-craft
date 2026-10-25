@@ -19,6 +19,7 @@ import {
 } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
+import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
@@ -32,6 +33,13 @@ import {
   setErrorMarks,
 } from "@table-craft/desktop/renderer/console/errorMarks.js";
 import { insertionAt, replacementAt } from "@table-craft/desktop/renderer/console/insertion.js";
+import {
+  connectedInspector,
+  inspectionSource,
+  refreshInspections,
+} from "@table-craft/desktop/renderer/console/inspectionSource.js";
+import { inspections } from "@table-craft/desktop/renderer/console/inspections.js";
+import { intentions, type IntentionTarget } from "@table-craft/desktop/renderer/console/intentions.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import {
   DRAG_OBJECT_TYPE,
@@ -42,7 +50,9 @@ import type { ErrorMark } from "@table-craft/desktop/renderer/model/errorLocatio
 import type { TextSpan } from "@table-craft/desktop/renderer/model/statementAt.js";
 import { AUTOFOCUS_ATTRIBUTE } from "@table-craft/desktop/renderer/shell/focus.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
-import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { connectionOf, pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import { withInspection } from "@table-craft/desktop/settings/settings.js";
 
 /** The manifest's `highlight` names one of these; anything else gets standard SQL (plan 006 decision 1). */
 const DIALECTS: Readonly<Record<string, SQLDialect>> = {
@@ -90,6 +100,26 @@ function placeholderText(): string {
   return `Type SQL;${chord} runs the statement at the caret`;
 }
 
+function chordOf(actionId: string): string {
+  const shortcut = registry.get(actionId)?.shortcut;
+  return shortcut === undefined ? "" : formatChord(shortcut, currentPlatform());
+}
+
+/** The Alt+Enter popup's reach outside the editor: the splitter for a suppression, and the settings. */
+function intentionTarget(datasourceId: () => string | undefined): IntentionTarget {
+  return {
+    statements: (text) => {
+      const id = datasourceId();
+      const datasources = useDatasources.getState();
+      if (id === undefined || connectionOf(datasources, id).status !== "connected") return null;
+      return datasources.connect(id).then((client) => client.call("script.split", { text }));
+    },
+    disable: (inspection) =>
+      void useSettings.getState().update((current) => withInspection(current, inspection, false)),
+    chord: () => chordOf(ERROR_ACTION_IDS.showIntentions),
+  };
+}
+
 /** Inserts the dropped object's qualified name, asked of its datasource's engine, where it was dropped. */
 async function insertQualifiedName(view: EditorView, object: DraggedObject, at: number): Promise<void> {
   let text: string;
@@ -122,6 +152,11 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const insertion = useConsoles((state) => state.consoles[consoleId]?.insertion ?? null);
   const replacement = useConsoles((state) => state.consoles[consoleId]?.replacement ?? null);
   const marks = useConsoles((state) => state.consoles[consoleId]?.errorMarks ?? NO_MARKS);
+  const namespace = useConsoles((state) => state.consoles[consoleId]?.namespace ?? null);
+  const status = useDatasources((state) =>
+    datasource === undefined ? null : connectionOf(state, datasource.id).status,
+  );
+  const inspectionSettings = useSettings((state) => state.settings.editor.inspections);
   const dialectRef = useRef(dialectOf(highlight));
 
   useEffect(() => {
@@ -157,6 +192,13 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           languageRef.current.of(sql({ dialect: dialectOf(highlight), upperCaseKeywords: true })),
           flashField,
           errorMarks,
+          inspections,
+          inspectionSource({
+            engine: connectedInspector(datasourceId),
+            current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
+            settings: () => useSettings.getState().settings.editor.inspections,
+          }),
+          intentions(intentionTarget(datasourceId)),
           EDITOR_THEME,
           keymap.of([
             ...completionKeymap,
@@ -221,6 +263,10 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     if (view === null || errorMarksOf(view) === marks) return;
     view.dispatch({ effects: setErrorMarks.of(marks) });
   }, [marks]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshInspections.of(null) });
+  }, [namespace, status, inspectionSettings]);
 
   useEffect(() => {
     const view = viewRef.current;

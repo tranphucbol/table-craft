@@ -278,6 +278,14 @@ the run asks above the results: **Skip** it, **Skip All** failures from now on, 
 went on ends with `12 run, 2 failed.` in Output. In an open transaction PostgreSQL refuses every
 later statement until it is rolled back, and Output says so.
 
+While you type, the console checks SQL the way DataGrip does, without running anything: an empty
+`WHERE`, a reserved word used as a table name or an unknown column is underlined in red, a
+`DELETE` without `WHERE` or `= NULL` in amber, and a redundant `ASC` or alias is greyed out. Hover
+a mark for its message and fixes; `⌥↩` (Show Context Actions) at the caret lists them, with
+**Suppress for statement**, which writes a `-- noinspection <Id>` line above it, and **Disable
+inspection**. `F2` / `⇧F2` visit these too, errors first. Settings → Editor → Inspections turns each
+check, or all of them, off. The checks know your tables once the data source is connected.
+
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
 back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
 under it, `AS` lined up, `AND`/`OR` under `WHERE`; other statements keep the standard layout. A statement with `:name`, `?` or (on PostgreSQL) `$1` placeholders asks for their values
@@ -470,6 +478,7 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Explain Plan              | `⇧⌘E`   | `Ctrl+Shift+E`         |
 | Next Error                | `F2`    | `F2`                   |
 | Previous Error            | `⇧F2`   | `Shift+F2`             |
+| Show Context Actions      | `⌥↩`    | `Alt+Enter`            |
 | Commit                    | `⌥⇧⌘↩`  | `Ctrl+Alt+Shift+Enter` |
 | Reformat Code             | `⌥⌘L`   | `Ctrl+Alt+L`           |
 | New Console               | `⇧⌘L`   | `Ctrl+Shift+L`         |
@@ -529,6 +538,8 @@ back to its default without affecting the others.
 | `editor.format.indentWidth`            | 1–8 spaces                                                                                    | 2             |
 | `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                               | 1             |
 | `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                | `true`        |
+| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                        | `true`        |
+| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                           | `[]`          |
 | `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                            | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                            | 0             |
 | `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                            | 5             |

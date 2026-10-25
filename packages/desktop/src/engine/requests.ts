@@ -32,6 +32,8 @@ const exportSource = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("result"), handle, columns, shownOnly: z.boolean().optional() }),
   z.strictObject({ kind: z.literal("table"), path: namespacePath, relation, columns: z.array(z.string().min(1)) }),
 ]);
+/** Matches the renderer's `INSPECTION_MAX_TEXT` (plan 108): longer consoles are not inspected live. */
+const MAX_INSPECTION_TEXT = 200_000;
 /** Longer than any search a person types; bounds the regular expression the engine compiles. */
 const MAX_FIND_LENGTH = 1_000;
 const viewSpec = z.strictObject({
@@ -351,6 +353,13 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     offset: index,
     scope: z.strictObject({ path: namespacePath, relation }).optional(),
     current: namespacePath.optional(),
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("inspection.inspect"),
+    text: z.string().max(MAX_INSPECTION_TEXT),
+    current: namespacePath.optional(),
+    disabled: z.array(z.string().min(1)).optional(),
   }),
   z.strictObject({
     id: requestId,
