@@ -27,7 +27,8 @@ are reached through datasource plugins loaded at runtime.
   [ported themes](#themes) such as Gruvbox, Nord and Solarized, or your own theme file, three font
   roles, and a compact layout.
 - [Plugins for any database](#plugins): PostgreSQL, MySQL and SQLite are plugins, loaded the same
-  way yours would be.
+  way yours would be. SQLite and MySQL come in the box; PostgreSQL downloads the first time you
+  need it.
 
 ## Install
 
@@ -120,7 +121,9 @@ bun run desktop:package    # an installer for this machine in packages/desktop/r
 ## Quick start
 
 1. Press `⌘N` (`Ctrl+N`) in the Database pane, or pick **New Data Source…** from the data source
-   widget in the toolbar, and choose PostgreSQL, MySQL or SQLite.
+   widget in the toolbar, and choose PostgreSQL, MySQL or SQLite. PostgreSQL shows **Download**
+   the first time: TableCraft fetches its plugin, then opens the form
+   ([Databases in the box and on demand](#databases-in-the-box-and-on-demand)).
 2. Fill in the connection, click **Test Connection**, then **OK**. The data source appears in the
    Database tree.
 3. Select it and press `⇧⌘L` (`Ctrl+Shift+L`) to open a console. Type a query and press `⌘↩`
@@ -199,7 +202,9 @@ file…** reads a DataGrip `dataSources.xml` or a TablePro `.tablepro` export in
 
 The next step lists every connection with its type, address, user, folder and where its password
 comes from. MySQL, MariaDB and TiDB open in the MySQL plugin, PostgreSQL in the PostgreSQL plugin,
-SQLite in the SQLite plugin; anything else is listed as not supported. A connection that needs an
+SQLite in the SQLite plugin; anything else is listed as not supported. A PostgreSQL connection
+found before its plugin is installed offers **Install** in its row and maps once the plugin
+arrives. A connection that needs an
 SSH tunnel, or one already in TableCraft, starts unticked; ticking a duplicate imports a copy named
 `<name> (2)`, never overwriting the one you have. Folders and colours come along, under a
 `DataGrip` or `TablePro` folder unless you turn that off.
@@ -621,7 +626,8 @@ from each other. The palettes and their licences are listed in
 ## Plugins
 
 A plugin is a folder with a `table-craft-plugin.json` manifest and an ES module. The built-in
-plugins ship inside the app; your own go in `plugins/<id>/` in the
+plugins ship inside the app, others TableCraft offers
+[download on demand](#databases-in-the-box-and-on-demand); your own go in `plugins/<id>/` in the
 [profile folder](#where-your-data-lives) and load the same way. A plugin that fails to load is
 listed as unavailable with the reason; the app keeps running.
 
@@ -730,6 +736,31 @@ The plugin API follows semver and stays backward compatible within a major versi
 
 Plugins built for plugin API 0.x must be rebuilt for 1.0.
 
+### Databases in the box and on demand
+
+SQLite and MySQL (with MariaDB and TiDB) ship inside the app and work offline from the first
+launch. PostgreSQL is a plugin TableCraft downloads when you need it, about 190 KB, from npm as
+[`@table-craft/plugin-postgres`](https://www.npmjs.com/package/@table-craft/plugin-postgres);
+Oracle and SQL Server will follow the same way
+([decision 108](docs/decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
+
+- **Data Sources +** lists PostgreSQL with **Download**. Choosing it shows the progress, then the
+  connection form.
+- A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
+  After an update from a version that had PostgreSQL built in, TableCraft installs it in the
+  background on the first start, with no question.
+- **Settings → Plugins** lists the built-in plugins, the downloaded ones with their version,
+  **Update** and **Remove** (refused while a data source uses the plugin, naming it), and your
+  own. With **Check for updates automatically** on, downloaded plugins are checked once a day and
+  a newer compatible version is used from the next connection.
+- Offline, or behind a firewall: every release attaches the plugin `.tgz` files. Choose **Install
+  from File…** in Settings → Plugins; TableCraft asks before installing any file.
+- Behind a corporate npm mirror, set its address in Settings → Plugins (`plugins.registryUrl`).
+
+TableCraft installs the newest release its plugin API accepts, refuses a download whose sha512
+does not match the registry's, and keeps each version in `managed-plugins/` in the profile folder
+([decision 110](docs/decisions/110-the-app-installs-plugins-from-the-registry.md)).
+
 ## Where your data lives
 
 Everything is stored in one profile folder:
@@ -755,9 +786,10 @@ Everything is stored in one profile folder:
 
 Passwords are never written to `datasources.json` or to the log, and there is no plaintext fallback:
 where the keychain cannot encrypt, _Forever_ is disabled. Apart from the databases you connect to,
-TableCraft talks only to GitHub, to [check for updates](#updates), and sends nothing about you
-there; turn **Check for updates automatically** off and it asks only when you choose **Help → Check
-for Updates…**.
+TableCraft talks only to GitHub, to [check for updates](#updates), and to the npm registry, to
+[download plugins](#databases-in-the-box-and-on-demand), and sends nothing about you to either;
+turn **Check for updates automatically** off and it asks only when you choose **Help → Check for
+Updates…** or install a plugin.
 
 ## Not in v1
 

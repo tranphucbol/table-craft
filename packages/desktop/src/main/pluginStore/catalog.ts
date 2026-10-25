@@ -1,6 +1,6 @@
 /**
  * The official plugins TableCraft can download (decision 108), compiled in so the Data Sources
- * dialog lists them offline. `test/desktop/pluginStore/catalog.test.ts` pins it to
+ * dialog lists them offline. `test/desktop/pluginStore.test.ts` pins it to
  * `OPTIONAL_PLUGINS` and to each plugin's manifest; plans 054 and 055 add Oracle and SQL Server.
  */
 export interface CatalogEntry {

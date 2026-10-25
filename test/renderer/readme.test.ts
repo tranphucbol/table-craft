@@ -1,7 +1,9 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { API_VERSION, CAPABILITIES } from "@table-craft/plugin-api";
+import { API_VERSION, CAPABILITIES, MANIFEST_FILE } from "@table-craft/plugin-api";
+import { PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js";
+import { BUILT_IN_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
 import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js";
 import { formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import {
@@ -65,6 +67,18 @@ function section(title: string): string {
   expect(start, `README has a "## ${title}" section`).toBeGreaterThanOrEqual(0);
   const end = README.indexOf("\n## ", start + 1);
   return README.slice(start, end === -1 ? undefined : end);
+}
+
+function subsection(title: string): string {
+  const start = README.indexOf(`\n### ${title}\n`);
+  expect(start, `README has a "### ${title}" section`).toBeGreaterThanOrEqual(0);
+  const end = README.slice(start + 1).search(/\n##? /);
+  return README.slice(start, end === -1 ? undefined : start + 1 + end);
+}
+
+function manifestName(pluginId: string): string {
+  const manifest = JSON.parse(readFileSync(join(ROOT, "plugins", pluginId, MANIFEST_FILE), "utf8")) as { name: string };
+  return manifest.name;
 }
 
 function tableRows(markdown: string): string[][] {
@@ -200,6 +214,18 @@ describe("README", () => {
     expect(listed).toEqual([...CAPABILITIES]);
     expect(manifest.capabilities).toEqual([...CAPABILITIES]);
     expect(manifest.apiVersion).toBe(API_VERSION);
+  });
+
+  it("givenDatabasesSection_whenRead_thenItNamesTheBuiltInsAndEveryDownloadablePlugin", () => {
+    const databases = subsection("Databases in the box and on demand");
+    const [boxed = ""] = databases.split("ship inside the app");
+    const builtIn = BUILT_IN_PLUGINS.map((id) => manifestName(id));
+
+    for (const name of builtIn) expect(boxed, `${name} ships in the box`).toContain(name);
+    for (const entry of PLUGIN_CATALOG) {
+      expect(boxed, `${entry.name} downloads`).not.toContain(entry.name);
+      expect(databases).toContain(`\`${entry.packageName}\``);
+    }
   });
 
   it("givenDevelopmentSection_whenScriptsListed_thenEveryScriptExists", () => {

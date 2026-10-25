@@ -5,8 +5,8 @@ This document describes what the app does; `docs/decisions/` records why.
 
 ## Scope
 
-v1 is listed in decision 014. In short: PostgreSQL, MySQL and SQLite through built-in runtime
-plugins; connections with encrypted secrets; a database explorer; SQL consoles with autocomplete
+v1 is listed in decision 014. In short: PostgreSQL, MySQL and SQLite through runtime plugins
+(SQLite and MySQL in the installer, PostgreSQL downloaded on demand, decision 108); connections with encrypted secrets; a database explorer; SQL consoles with autocomplete
 and auto or manual commit; a virtualized result grid with export; CSV and TSV import; a table data editor; DDL;
 query history; EXPLAIN; configurable themes, fonts and density.
 
@@ -25,9 +25,11 @@ grow within a major; `bun run api:check` and a frozen 1.0.0 SQLite plugin enforc
 
 ### Discovery
 
-The engine loads plugins from `<app>/resources/plugins/*` and then `<userData>/plugins/*`. A
-built-in plugin is built into the first root and goes through the same loader as a user plugin.
-Each directory ends as `loaded` or `unavailable` with a reason; nothing a plugin does stops the app.
+The engine loads plugins from, in order: `<app>/resources/plugins/*` (built-ins); in a development
+run only, `dist/optional-plugins/*`; each downloaded plugin's current version,
+`<userData>/managed-plugins/<id>/<version>/`; then `<userData>/plugins/*`. A built-in plugin is
+built into the first root and goes through the same loader as a user plugin. Each directory ends as
+`loaded` or `unavailable` with a reason; nothing a plugin does stops the app.
 
 | Failure                                                                       | Reason names        |
 | ----------------------------------------------------------------------------- | ------------------- |
@@ -38,6 +40,34 @@ Each directory ends as `loaded` or `unavailable` with a reason; nothing a plugin
 | `entry` resolves outside the plugin directory                                 | the entry           |
 | The entry throws on import, or its default export is not a `DatasourcePlugin` | the error           |
 | The export's `id` or `capabilities` differ from the manifest                  | both values         |
+
+### Distribution
+
+SQLite and MySQL ship in the installer. Every other plugin TableCraft offers is optional
+(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL) and listed in a compiled-in
+catalog (decision 108). Each release publishes it to npm as `@table-craft/plugin-<id>` at the app's
+version, with `"tableCraft": { "id", "apiVersion" }` in its `package.json`, and attaches the
+`.tgz` to the GitHub release (decision 109).
+
+Main installs one from the registry in `plugins.registryUrl` (default
+`https://registry.npmjs.org`, `https://` only, plain `http://` only to this machine): the newest
+release the host's API accepts, its sha512 `dist.integrity` checked before unpacking, every entry
+inside `package/`, staged and checked before `current.json` points at it (decision 110). A new
+plugin is used by the next engine that starts, with no restart.
+
+| Where               | What the user sees                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Data Sources **+**  | installed kinds, then catalog entries with "Download (about N KB)"; a download shows progress, then the form             |
+| Database pane       | a datasource whose plugin is missing, greyed, with Install (Retry after a failure)                                       |
+| Import Data Sources | an unsupported row whose scheme a catalog plugin reads offers Install, then maps again                                   |
+| Settings → Plugins  | built-ins (locked), downloaded (version, Update, Remove, refused while used), user plugins, Install from File…, registry |
+
+On start, a saved datasource whose plugin is missing and in the catalog installs it in the
+background with no prompt, so users upgrading from a version with PostgreSQL built in keep it.
+Packaged, with `updates.checkAutomatically`, plugins installed from the registry are checked daily
+and a newer compatible version becomes current for the next engine; older versions are pruned at
+the next start. Install from File asks decision 006's confirmation and is never updated from the
+registry. Offline, an install fails with a hint to use Install from File with the release's `.tgz`.
 
 ### Manifest
 
