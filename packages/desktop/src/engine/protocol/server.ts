@@ -18,7 +18,7 @@ export interface ServerInfoSection {
   readonly entries: readonly { readonly name: string; readonly value: string }[];
 }
 
-/** Mirrors `ServerInfo` in plugin-api: what one node reports about itself (decision 112). */
+/** Mirrors `ServerInfo` in plugin-api: what one node reports about itself (decision 114). */
 export interface ServerInfo {
   readonly node: string | null;
   readonly sections: readonly ServerInfoSection[];

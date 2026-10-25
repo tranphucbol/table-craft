@@ -94,7 +94,7 @@ export interface KeyTab extends KeyTarget {
   readonly result: ResultTab | null;
   readonly applied: KeyRangeDraft;
   readonly draft: KeyRangeDraft;
-  /** Pending changes to the rows (decision 115 of plan 058). */
+  /** Pending changes to the rows (decision 115). */
   readonly buffer: EditBuffer;
   readonly editing: CellEditor | null;
   readonly panel: CellEditor | null;

@@ -182,7 +182,7 @@ export interface ServerNode {
   readonly state: string;
 }
 
-/** A titled group of a server's figures, such as Redis' `# Memory` section of `INFO` (decision 112). */
+/** A titled group of a server's figures, such as Redis' `# Memory` section of `INFO` (decision 114). */
 export interface ServerInfoSection {
   readonly title: string;
   readonly entries: readonly { readonly name: string; readonly value: string }[];

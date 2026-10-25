@@ -2,7 +2,7 @@
 
 # TableCraft
 
-A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL and SQLite.
+A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite and Redis.
 Connections, a database explorer, SQL consoles with schema-aware completion, a result grid, a table
 data editor, DDL and SQL generation, query history and EXPLAIN plans, in one Electron app. Databases
 are reached through datasource plugins loaded at runtime.
@@ -26,6 +26,8 @@ are reached through datasource plugins loaded at runtime.
 - [Themes, fonts and density](#settings-and-appearance): Dark, Light, High contrast, 43
   [ported themes](#themes) such as Gruvbox, Nord and Solarized, or your own theme file, three font
   roles, and a compact layout.
+- [Redis, standalone and Cluster](#redis): a key tree that scans instead of blocking, typed key
+  tabs with guarded edits, a `redis-cli` console with completion from the server, and a Server tab.
 - [Plugins for any database](#plugins): PostgreSQL, MySQL and SQLite are plugins, loaded the same
   way yours would be. SQLite and MySQL come in the box; PostgreSQL downloads the first time you
   need it.
@@ -428,6 +430,35 @@ grant to ask for.
 
 See [Sessions](docs/design/specification.md#sessions).
 
+### Redis
+
+The Redis plugin connects to Redis 6.2 or later, **Standalone** or **Cluster** (pick the Mode in the
+connection form; a `redis://` or `rediss://` URL fills a standalone one). A cluster is reached from
+its seed node; when its nodes announce addresses you cannot reach, map each one in **Node address
+map** (`10.0.1.5:6379=127.0.0.1:7001, …`). A cluster cannot go through an SSH tunnel.
+
+- **Key tree.** Each database lists its keys in folders by `:`, with a type badge and TTL. The tree
+  scans 10,000 keys at a time behind a **Load more** row, never with `KEYS`; the filter row takes a
+  `MATCH` pattern and a type. **Go to Key…** opens a key by name, and Search Everywhere has a Keys
+  tab.
+- **Key tabs.** A hash, list, set, sorted set or stream opens in the result grid with its own
+  columns; a string opens in a value editor that reads it as Text, JSON, Hex, Base64, MessagePack or
+  gzip. The header counts the TTL down and shows length, memory and encoding. Edit cells, add and
+  delete rows, preview the commands, and submit them as one `MULTI`; if another client changed the
+  key since you read it, you choose to reload or overwrite.
+- **Key actions.** New Key…, Rename, Delete, Set TTL…, Remove TTL and Delete Keys Under Folder…
+  (a cancellable task in Services).
+- **Console.** One command per line with `redis-cli` quoting. Completion and signature help come
+  from the server's command docs, and key names complete from a scan. `FLUSHDB` and `FLUSHALL` ask
+  you to type the data source's name; `KEYS` and other heavy reads are underlined, with a fix such as
+  **Use SCAN**. In a cluster, **Run on** sends a command to one node or every primary.
+- **Server tab.** `INFO` as cards with auto-refresh, every node of a cluster at a glance, and the
+  slow log. **Show Sessions…** lists `CLIENT LIST` and unblocks or kills a client.
+
+See [Command consoles](docs/design/specification.md#command-consoles),
+[Key browser](docs/design/specification.md#key-browser) and
+[Server tab](docs/design/specification.md#server-tab).
+
 ### Explain
 
 **Explain Plan** (`⇧⌘E`) shows the plan of the statement at the caret as a tree with estimated rows
@@ -816,8 +847,8 @@ Updates…** or install a plugin.
 ## Not in v1
 
 - Planned for v1.1: saved query files.
-- Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, Redis and
-  MongoDB plugins, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
+- Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, a MongoDB
+  plugin, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
   Kubernetes integration.
 
 ## Development
@@ -831,6 +862,7 @@ bun run desktop                # build and launch the app
 bun run test                   # unit tests and the plugin contract against SQLite
 bun run test:db                # the contract against MySQL in Docker, and TiDB
 bun run test:db:postgres       # the same against PostgreSQL (also :oracle, :mssql, :all)
+bun run test:db:redis          # the Redis plugin against 7.4 and 6.2, standalone and Cluster
 bun run test:smoke             # drive the built app with Playwright
 bun run test:smoke:db          # the same against MySQL, TiDB and SQLite
 bun run test:smoke:headless    # test:smoke in a Linux container, off your screen
