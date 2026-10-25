@@ -1,5 +1,5 @@
 import redis from "@table-craft/plugin-redis";
-import { PluginError } from "@table-craft/plugin-api";
+import { PluginError, type Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,7 +10,18 @@ import {
   withWrongPassword,
 } from "../support/databases.js";
 import { REDIS_MANIFEST } from "../support/manifests.js";
-import { REDIS_COMMANDS } from "../support/redisFixture.js";
+import { REDIS_COMMANDS, REDIS_KEYSPACE } from "../support/redisFixture.js";
+
+const DATABASES = 16;
+
+async function withRedis(config: unknown, use: (session: Session) => Promise<void>): Promise<void> {
+  const session = await redis.connect(redis.connectionSchema.parse(config), { readOnly: false });
+  try {
+    await use(session);
+  } finally {
+    await session.close();
+  }
+}
 
 const SERVERS = [
   { version: "7.4", config: REDIS_CONFIG },
@@ -23,6 +34,31 @@ describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", 
     config,
     wrongPasswordConfig: withWrongPassword(config),
     commands: REDIS_COMMANDS,
+    keyspace: REDIS_KEYSPACE,
+  });
+
+  describe("standalone", () => {
+    it("givenNodes_whenStandalone_thenOnePrimary", async () => {
+      await withRedis(config, async (session) => {
+        const nodes = (await session.nodes?.()) ?? [];
+        expect(nodes).toEqual([
+          expect.objectContaining({ role: "primary", slots: [], primaryId: null, state: "connected" }),
+        ]);
+      });
+    });
+
+    it("givenOtherDatabase_whenKeyspaceReads_thenConsoleKeepsItsOwn", async () => {
+      await withRedis(config, async (session) => {
+        const keyspace = session.keyspace;
+        if (keyspace === undefined) throw new Error("no keyspace");
+        const databases = await keyspace.databases();
+        expect(databases.length).toBeGreaterThanOrEqual(DATABASES);
+        expect(databases[1]).toMatchObject({ index: 1, keys: 2, current: false });
+        const [info] = await keyspace.describe(1, [{ text: "db1:config", hex: null }]);
+        expect(info?.type).toBe("hash");
+        expect((await session.execute("EXISTS db1:config")).reply?.text).toBe("(integer) 0");
+      });
+    });
   });
 });
 

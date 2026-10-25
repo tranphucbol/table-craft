@@ -17,6 +17,7 @@ import { appearanceOf } from "@table-craft/desktop/renderer/appearance/tokens.js
 import { useExecutions, type ExecutionsStore } from "@table-craft/desktop/renderer/state/executions.js";
 import { useExports, type ExportsStore } from "@table-craft/desktop/renderer/state/exports.js";
 import { useImports, type ImportsStore } from "@table-craft/desktop/renderer/state/imports.js";
+import { useKeys, type KeysStore } from "@table-craft/desktop/renderer/state/keys.js";
 import {
   IMPORT_EVENT_TYPES,
   SCRIPT_EVENT_TYPES,
@@ -36,6 +37,7 @@ export interface WiredStores {
   readonly consoles: ConsolesStore;
   readonly tabs: TabsStore;
   readonly catalog?: CatalogStore;
+  readonly keys?: KeysStore;
   readonly tables?: TablesStore;
   readonly ddl?: DdlStore;
   readonly executions?: ExecutionsStore;
@@ -65,6 +67,7 @@ export function wireStores({
   consoles,
   tabs,
   catalog,
+  keys,
   tables,
   ddl,
   executions,
@@ -86,6 +89,7 @@ export function wireStores({
     consoles.getState().detach(id, error);
     tables?.getState().detach(id, error);
     catalog?.getState().clear(id);
+    keys?.getState().clear(id);
   });
   const offRemoved = datasources.onRemoved((ids) => {
     for (const id of ids) {
@@ -112,7 +116,7 @@ export function wireStores({
       }
     }
   });
-  const offAttached = catalog === undefined ? () => undefined : followAttaches(datasources, catalog);
+  const offAttached = catalog === undefined ? () => undefined : followAttaches(datasources, catalog, keys);
   const offRedescribes = catalog === undefined || ddl === undefined ? () => undefined : followRedescribes(ddl, catalog);
   const offClosed = executions === undefined ? () => undefined : dropClosedExecutions(tabs, executions);
   const offFeatures = objects === undefined ? () => undefined : followObjectFeatures(datasources, objects);
@@ -138,15 +142,17 @@ export function dropClosedExecutions(tabs: TabsStore, executions: ExecutionsStor
 
 /**
  * However a datasource got connected (a console, Connect, expanding its node), its tree opens on
- * the current namespace, described (plan 005, decision 7).
+ * the current namespace, described (plan 005, decision 7), or on the configured database's keys.
  */
-function followAttaches(datasources: DatasourcesStore, catalog: CatalogStore): () => void {
+function followAttaches(datasources: DatasourcesStore, catalog: CatalogStore, keys?: KeysStore): () => void {
   return datasources.subscribe((state, previous) => {
     for (const [id, connection] of Object.entries(state.connections)) {
       if (connection.status !== "connected" || previous.connections[id]?.status === "connected") continue;
       const datasource = state.datasources.find((candidate) => candidate.id === id);
       if (datasource === undefined) continue;
-      if (!capabilitiesOf(state.plugins, datasource.pluginId).includes("schemaTree")) continue;
+      const capabilities = capabilitiesOf(state.plugins, datasource.pluginId);
+      if (capabilities.includes("keyValue")) void keys?.getState().expandDatasource(id);
+      if (!capabilities.includes("schemaTree")) continue;
       void catalog.getState().expandDatasource(id);
     }
   });
@@ -160,6 +166,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     consoles: useConsoles,
     tabs: useTabs,
     catalog: useCatalog,
+    keys: useKeys,
     tables: useTables,
     ddl: useDdl,
     sessions: useSessions,

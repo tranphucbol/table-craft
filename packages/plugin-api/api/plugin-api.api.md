@@ -422,7 +422,7 @@ interface KeyScan {
 }
 
 interface KeyScanRequest {
-  readonly count: number;
+  readonly count?: number;
   readonly cursor: string | null;
   readonly database: number;
   readonly match: string;

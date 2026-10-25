@@ -18,6 +18,8 @@ export interface Layout {
   readonly hidden: Readonly<Record<ToolWindowId, boolean>> | null;
   /** Whether the Database pane lists system namespaces such as `pg_catalog` (plan 005). */
   readonly showSystemSchemas: boolean;
+  /** Whether a key-value datasource lists its empty databases too (decision 113). */
+  readonly showEmptyDatabases: boolean;
   /** The console tabs open at the last change, in tab order, reopened at launch (plan 006). */
   readonly openConsoles: readonly OpenConsole[];
   /** The table tabs open at the last change, reopened disconnected at launch (plan 008 decision 2). */
@@ -53,6 +55,7 @@ export const DEFAULT_LAYOUT: Layout = {
   sizes: { database: 22, services: 28, log: 30 },
   hidden: null,
   showSystemSchemas: false,
+  showEmptyDatabases: false,
   openConsoles: [],
   openTables: [],
   extractor: "csv",
@@ -130,8 +133,17 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     return DEFAULT_LAYOUT;
   }
   if (typeof saved !== "object" || saved === null) return DEFAULT_LAYOUT;
-  const { visible, sizes, hidden, showSystemSchemas, openConsoles, openTables, extractor, valuePanel } =
-    saved as Record<string, unknown>;
+  const {
+    visible,
+    sizes,
+    hidden,
+    showSystemSchemas,
+    showEmptyDatabases,
+    openConsoles,
+    openTables,
+    extractor,
+    valuePanel,
+  } = saved as Record<string, unknown>;
   const visibleRead = recordOf(visible, isBoolean, DEFAULT_LAYOUT.visible);
   const sizesRead = recordOf(sizes, isSize, DEFAULT_LAYOUT.sizes);
   if (visibleRead === null || sizesRead === null) return DEFAULT_LAYOUT;
@@ -140,6 +152,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     sizes: sizesRead,
     hidden: recordOf(hidden, isBoolean, DEFAULT_LAYOUT.visible),
     showSystemSchemas: showSystemSchemas === true,
+    showEmptyDatabases: showEmptyDatabases === true,
     openConsoles: openConsolesOf(openConsoles),
     openTables: Array.isArray(openTables) ? openTables.filter(isOpenTable) : [],
     extractor: isExtractor(extractor) ? extractor : DEFAULT_LAYOUT.extractor,
@@ -181,6 +194,7 @@ export interface LayoutState {
   readonly hideAll: () => void;
   readonly resize: (id: ToolWindowId, percent: number) => void;
   readonly toggleSystemSchemas: () => void;
+  readonly toggleEmptyDatabases: () => void;
   readonly setOpenConsoles: (openConsoles: readonly OpenConsole[]) => void;
   readonly setOpenTables: (openTables: readonly OpenTable[]) => void;
   readonly setExtractor: (extractor: ExtractorKind) => void;
@@ -202,6 +216,7 @@ export function createLayoutStore(storage: LayoutStorage) {
       hideAll: () => update(hiddenAll(get().layout)),
       resize: (id, percent) => update(resized(get().layout, id, percent)),
       toggleSystemSchemas: () => update({ ...get().layout, showSystemSchemas: !get().layout.showSystemSchemas }),
+      toggleEmptyDatabases: () => update({ ...get().layout, showEmptyDatabases: !get().layout.showEmptyDatabases }),
       setOpenConsoles(openConsoles) {
         if (JSON.stringify(openConsoles) === JSON.stringify(get().layout.openConsoles)) return;
         update({ ...get().layout, openConsoles });

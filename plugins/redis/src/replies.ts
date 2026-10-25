@@ -8,7 +8,7 @@ import {
   type WireValueOptions,
 } from "@table-craft/plugin-api";
 
-/** The replica of a reply node-redis decodes with bulk strings as `Buffer` and maps as `Map`. */
+/** A reply as node-redis decodes it here: bulk strings as `Buffer`, maps as `Map`. */
 export type Reply = unknown;
 
 const UTF8 = new TextDecoder("utf-8", { fatal: true });

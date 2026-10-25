@@ -29,6 +29,7 @@ import type {
   GeneratorStatement,
   ParameterValue,
 } from "./sql.js";
+import type { KeyDatabases, KeyExpiry, KeyInfo, KeyName, KeyScan, KeyType } from "./keyspace.js";
 import type { ServerNode } from "./server.js";
 import type { ConditionColumn, OrderTerm, ResultEditable, RowEdit, SubmittedEdits, TableQuery } from "./tables.js";
 import type {
@@ -256,6 +257,38 @@ export interface EngineCalls {
   "namespace.switchStatement": { params: { readonly path: readonly string[] }; result: SwitchStatement };
   /** Every server of the datasource, primaries first (decision 114). Needs `nodes`. */
   "server.nodes": { params: Record<never, never>; result: readonly ServerNode[] };
+  /** The datasource's databases with their key counts (decision 113). Needs `keyValue`. */
+  "keyspace.databases": { params: Record<never, never>; result: KeyDatabases };
+  /** One batch of a pass over `database`'s keys; `cursor` null starts the pass. Needs `keyValue`. */
+  "keyspace.scan": {
+    params: {
+      readonly database: number;
+      readonly cursor: string | null;
+      readonly match: string;
+      readonly keyType: KeyType | null;
+    };
+    result: KeyScan;
+  };
+  /** Type and expiry of each key, in order. Needs `keyValue`. */
+  "keyspace.describe": {
+    params: { readonly database: number; readonly keys: readonly KeyName[] };
+    result: readonly KeyInfo[];
+  };
+  /** Renames a key; refused when `to` exists unless `overwrite`. Needs `keyValue`. */
+  "keyspace.rename": {
+    params: { readonly database: number; readonly key: KeyName; readonly to: KeyName; readonly overwrite: boolean };
+    result: null;
+  };
+  /** Sets or removes a key's expiry. Needs `keyValue`. */
+  "keyspace.expire": {
+    params: { readonly database: number; readonly key: KeyName; readonly expiry: KeyExpiry };
+    result: null;
+  };
+  /** Removes the keys and says how many existed. Needs `keyValue`. */
+  "keyspace.remove": {
+    params: { readonly database: number; readonly keys: readonly KeyName[] };
+    result: number;
+  };
   /** One namespace's objects, from the engine's cache unless `refresh`. Needs `schemaTree`. */
   "catalog.describe": {
     params: { readonly path: readonly string[]; readonly refresh?: boolean };

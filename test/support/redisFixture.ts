@@ -1,4 +1,4 @@
-import type { CommandsFixture } from "@table-craft/plugin-api/testing";
+import type { CommandsFixture, KeyspaceFixture } from "@table-craft/plugin-api/testing";
 
 /** What the commands contract runs against the seeded Redis servers, standalone and cluster (plan 058). */
 export const REDIS_COMMANDS: CommandsFixture = {
@@ -31,4 +31,13 @@ export const REDIS_COMMANDS: CommandsFixture = {
   write: { command: "SET type_probe:write 1", name: "SET" },
   costly: { command: "KEYS user:*", fixed: "SCAN 0 MATCH user:* COUNT 1000" },
   confirmByName: "FLUSHDB",
+};
+
+/** The seeded keys the keyspace contract scans: `page:0001` … `page:5000` and the type probes. */
+export const REDIS_KEYSPACE: KeyspaceFixture = {
+  database: 0,
+  scan: { match: "page:*", count: 5000, batch: 500 },
+  typed: { match: "type_probe:*", type: "hash", keys: ["type_probe:hash"] },
+  expiring: "user:{42}:session",
+  binary: { hex: "62696e3afffe", match: "bin:*", type: "string" },
 };

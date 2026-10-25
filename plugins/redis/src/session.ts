@@ -12,6 +12,7 @@ import type { RedisConfig } from "./config.js";
 import { openConnection, type Connection } from "./connect.js";
 import { docsFromReply, docsKnownTo, SNAPSHOT_DOCS, type CommandDocs } from "./docs.js";
 import { featuresOf, type RedisFeatures } from "./features.js";
+import { RedisKeyspace } from "./keyspace.js";
 import { wordsOf } from "./language.js";
 import { commandTableOf, readOnlyRefusal, type CommandTable } from "./readOnly.js";
 import { fannedOutResult, resultOf, utf8OrNull } from "./replies.js";
@@ -44,12 +45,14 @@ export class RedisSession implements Session {
   readonly serverVersion: string;
   readonly tls = null;
   readonly delimiter: string;
+  readonly keyspace: RedisKeyspace;
   readonly #connection: Connection;
   readonly #router: Router;
   readonly #readOnly: boolean;
   #database: number;
   #running = false;
   #closed = false;
+  #queue: Promise<unknown> = Promise.resolve();
   #table: Promise<CommandTable> | undefined;
   #docs: Promise<CommandDocs> | undefined;
   #features: Promise<RedisFeatures> | undefined;
@@ -61,6 +64,14 @@ export class RedisSession implements Session {
     this.serverVersion = connection.version;
     this.delimiter = config.keyDelimiter;
     this.#router = new Router(connection, () => this.commandTable());
+    this.keyspace = new RedisKeyspace({
+      mode: connection.mode,
+      delimiter: config.keyDelimiter,
+      scanBatch: config.scanBatch,
+      configuredDatabase: this.#database,
+      router: this.#router,
+      onDatabase: (database, work) => this.#onDatabase(database, work),
+    });
   }
 
   static async open(config: RedisConfig, options: ConnectOptions): Promise<RedisSession> {
@@ -147,7 +158,11 @@ export class RedisSession implements Session {
   }
 
   /** Keys starting with `prefix`, at most 50, for completing a key argument (decision 8 of plan 058). */
-  async suggestKeys(prefix: string): Promise<KeySuggestion[]> {
+  suggestKeys(prefix: string): Promise<KeySuggestion[]> {
+    return this.#onDatabase(this.#database, () => this.#suggestKeys(prefix));
+  }
+
+  async #suggestKeys(prefix: string): Promise<KeySuggestion[]> {
     const pattern = `${prefix.replace(/[*?[\]\\]/g, (char) => `\\${char}`)}*`;
     const routed = await this.#router.run(
       ["SCAN", "0", "MATCH", pattern, "COUNT", KEY_COMPLETION_SCAN].map((word) => Buffer.from(word)),
@@ -204,6 +219,30 @@ export class RedisSession implements Session {
     if (name === "SELECT" && this.#connection.mode === "cluster") {
       throw new PluginError("statementFailed", "SELECT is not allowed in a cluster: it has database 0 only.");
     }
+  }
+
+  /**
+   * Keyspace work, one call at a time: on another database than the session's, the connection
+   * selects it for the call and selects the session's own back after, so a console keeps its
+   * `SELECT`.
+   */
+  #onDatabase<T>(database: number, work: () => Promise<T>): Promise<T> {
+    const run = this.#queue.then(async () => {
+      this.#checkOpen();
+      return this.#failures(async () => {
+        const connection = this.#connection;
+        const home = this.#database;
+        if (connection.mode === "cluster" || database === home) return work();
+        await connection.client.sendCommand(["SELECT", String(database)]);
+        try {
+          return await work();
+        } finally {
+          await connection.client.sendCommand(["SELECT", String(home)]);
+        }
+      });
+    });
+    this.#queue = run.catch(() => undefined);
+    return run;
   }
 
   #run(args: readonly Buffer[], words: readonly string[], node: string | undefined): Promise<Routed> {

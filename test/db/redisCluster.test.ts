@@ -9,7 +9,7 @@ import {
   withWrongPassword,
 } from "../support/databases.js";
 import { REDIS_MANIFEST } from "../support/manifests.js";
-import { REDIS_COMMANDS } from "../support/redisFixture.js";
+import { REDIS_COMMANDS, REDIS_KEYSPACE } from "../support/redisFixture.js";
 
 const SLOTS = 16_384;
 const CLUSTERS = [
@@ -40,6 +40,7 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
     config: cluster.config,
     wrongPasswordConfig: withWrongPassword(cluster.config),
     commands: REDIS_COMMANDS,
+    keyspace: REDIS_KEYSPACE,
   });
 
   describe("cluster", () => {
@@ -69,6 +70,25 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
       const rows = await rowsOf(result);
       expect(rows).toHaveLength(cluster.primaries);
       expect(rows.reduce((sum, row) => sum + Number(row[1]), 0)).toBeGreaterThanOrEqual(5014);
+    });
+
+    it("givenCluster_whenScan_thenKeysFromEveryPrimary", async () => {
+      const keyspace = session.keyspace;
+      if (keyspace === undefined) throw new Error("no keyspace");
+      const [database] = await keyspace.databases();
+      expect(database).toMatchObject({ index: 0, current: true });
+      expect(database?.keys).toBeGreaterThanOrEqual(5014);
+      const cursors = new Set<string>();
+      let cursor: string | null = null;
+      do {
+        const scan = await keyspace.scan({ database: 0, cursor, match: "page:*", type: null, count: 500 });
+        cursor = scan.cursor;
+        if (cursor !== null) cursors.add(cursor.split(" ")[0] ?? "");
+      } while (cursor !== null);
+      expect(cursors.size).toBe(cluster.primaries);
+      await expect(keyspace.scan({ database: 1, cursor: null, match: "*", type: null })).rejects.toThrow(
+        "database 0 only",
+      );
     });
 
     it("givenPickedNode_whenDbsize_thenThatNodeAlone", async () => {

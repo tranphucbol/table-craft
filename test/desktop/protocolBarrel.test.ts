@@ -7,6 +7,7 @@ import * as calls from "@table-craft/desktop/engine/protocol/calls.js";
 import * as catalog from "@table-craft/desktop/engine/protocol/catalog.js";
 import * as datasource from "@table-craft/desktop/engine/protocol/datasource.js";
 import * as inspection from "@table-craft/desktop/engine/protocol/inspection.js";
+import * as keyspace from "@table-craft/desktop/engine/protocol/keyspace.js";
 import * as objects from "@table-craft/desktop/engine/protocol/objects.js";
 import * as results from "@table-craft/desktop/engine/protocol/results.js";
 import * as sessions from "@table-craft/desktop/engine/protocol/sessions.js";
@@ -27,6 +28,7 @@ const AREAS = {
   catalog,
   datasource,
   inspection,
+  keyspace,
   objects,
   results,
   server,
@@ -85,6 +87,12 @@ const METHODS = [
   "namespace.targets",
   "namespace.switchStatement",
   "server.nodes",
+  "keyspace.databases",
+  "keyspace.scan",
+  "keyspace.describe",
+  "keyspace.rename",
+  "keyspace.expire",
+  "keyspace.remove",
   "routine.call",
   "table.query",
   "table.count",

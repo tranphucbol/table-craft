@@ -92,6 +92,8 @@ export {
   CircleNotch as SpinnerIcon,
   Database as DatabaseIcon,
   HardDrives as ServicesIcon,
+  HardDrives as ServerNodeIcon,
+  Funnel as KeyFilterIcon,
   Minus as HideIcon,
   Terminal as ConsoleIcon,
   X as CloseIcon,

@@ -37,8 +37,11 @@ export interface KeyScanRequest {
   /** A glob, as `SCAN … MATCH` takes it; `*` for every key. */
   readonly match: string;
   readonly type: KeyType | null;
-  /** The batch the server is asked to look at per round trip, not a promise of how many keys come back. */
-  readonly count: number;
+  /**
+   * The batch the server is asked to look at per round trip, not a promise of how many keys come
+   * back; absent, the datasource's own setting.
+   */
+  readonly count?: number;
 }
 
 export interface KeyScan {

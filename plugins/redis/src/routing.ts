@@ -118,17 +118,41 @@ export class Router {
     const firstKey = await this.#firstKey(table, words, args);
     if (firstKey === null)
       return { fanned: false, reply: await (await this.#randomPrimary()).sendCommand(args, COMMAND_OPTIONS) };
-    const client = await connection.cluster.getNodeClientForKey(firstKey);
+    return { fanned: false, reply: await this.onKey(firstKey, args) };
+  }
+
+  /** One command on the node that holds `key`; a slot that moved since the map was read is followed. */
+  async onKey(key: Buffer, args: readonly (string | Buffer)[]): Promise<unknown> {
+    const connection = this.#connection;
+    if (connection.mode === "standalone") return connection.client.sendCommand([...args], COMMAND_OPTIONS);
+    const client = await connection.cluster.getNodeClientForKey(key);
     try {
-      return { fanned: false, reply: await client.sendCommand(args, COMMAND_OPTIONS) };
+      return await client.sendCommand([...args], COMMAND_OPTIONS);
     } catch (cause) {
-      // The slot moved since the map was read: let node-redis follow the redirection.
       if (!REDIRECTED.test(errorText(cause))) throw cause;
-      return {
-        fanned: false,
-        reply: await connection.cluster.sendCommand(firstKey, false, [...args], COMMAND_OPTIONS),
-      };
+      return connection.cluster.sendCommand(key, false, [...args], COMMAND_OPTIONS);
     }
+  }
+
+  /** The client of the node that holds `key`, for commands that must share one connection. */
+  async clientForKey(key: Buffer): Promise<Client> {
+    const connection = this.#connection;
+    return connection.mode === "standalone" ? connection.client : connection.cluster.getNodeClientForKey(key);
+  }
+
+  /** Every primary with its reachable address, by address; the one server when standalone. */
+  async primaries(): Promise<{ readonly node: string; readonly client: Client }[]> {
+    const connection = this.#connection;
+    if (connection.mode === "standalone") return [{ node: connection.address, client: connection.client }];
+    const masters = [...connection.cluster.masters].sort((a, b) =>
+      a.address.localeCompare(b.address, "en", { numeric: true }),
+    );
+    return Promise.all(
+      masters.map(async (master) => ({
+        node: connection.reachable(master.address),
+        client: await connection.cluster.nodeClient(master),
+      })),
+    );
   }
 
   /** One command on a random primary, routed by nothing: for the plugin's own questions. */
@@ -173,15 +197,11 @@ export class Router {
   }
 
   async #everyPrimary(args: readonly Buffer[]): Promise<{ node: string; reply: unknown }[]> {
-    const cluster = this.#cluster();
-    if (this.#connection.mode !== "cluster") return [];
-    const reachable = this.#connection.reachable;
-    const masters = [...cluster.masters].sort((a, b) => a.address.localeCompare(b.address, "en", { numeric: true }));
     return Promise.all(
-      masters.map(async (master) => {
-        const client = await cluster.nodeClient(master);
-        return { node: reachable(master.address), reply: await client.sendCommand(args, COMMAND_OPTIONS) };
-      }),
+      (await this.primaries()).map(async ({ node, client }) => ({
+        node,
+        reply: await client.sendCommand([...args], COMMAND_OPTIONS),
+      })),
     );
   }
 

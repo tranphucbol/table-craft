@@ -1,12 +1,16 @@
 import type { ReactNode } from "react";
 import { GROUP_LABELS, type ExplorerNode, type ExplorerRow } from "@table-craft/desktop/renderer/model/explorerTree.js";
+import { ttlText } from "@table-craft/desktop/renderer/model/keyTree.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { KeyTypeBadge, keyTypeLabel } from "@table-craft/desktop/renderer/ui/KeyTypeBadge.js";
 import {
   ColumnIcon,
   DatabaseIcon,
   FolderIcon,
   IndexIcon,
+  KeyFilterIcon,
   KeyIcon,
+  ServerNodeIcon,
   MaterializedViewIcon,
   NotNullIcon,
   RoutineIcon,
@@ -91,9 +95,24 @@ export function NodeIcon({ node }: { readonly node: ExplorerNode }) {
       return <SpinnerIcon aria-hidden className={cn(ICON_CLASS, "animate-spin text-ink-muted")} />;
     case "error":
       return <WarningIcon aria-hidden className={cn(ICON_CLASS, "text-danger")} />;
+    case "keyDatabase":
+      return <DatabaseIcon aria-hidden className={cn(ICON_CLASS, "text-ink-muted")} />;
+    case "keyFolder":
+    case "clusterNodes":
+      return <FolderIcon aria-hidden className={cn(ICON_CLASS, "text-ink-muted")} />;
+    case "keyEntry":
+      return <KeyTypeBadge info={node.info} />;
+    case "keyFilter":
+      return <KeyFilterIcon aria-hidden className={cn(ICON_CLASS, "text-ink-muted")} />;
+    case "clusterNode":
+      return <ServerNodeIcon aria-hidden className={cn(ICON_CLASS, "text-ink-muted")} />;
     default:
       return null;
   }
+}
+
+function keyCount(count: number): string {
+  return `${count.toLocaleString("en-US")} ${count === 1 ? "key" : "keys"}`;
 }
 
 /** What a catalog row shows after its name: a count, a type, the columns a key covers. */
@@ -129,6 +148,13 @@ export function NodeDetail({ node }: { readonly node: ExplorerNode }) {
       return <Detail>{routineArguments(node.routine.signature)}</Detail>;
     case "error":
       return <Detail>{node.error.hint}</Detail>;
+    case "keyDatabase":
+      return <Detail>{keyCount(node.summary.keys)}</Detail>;
+    case "keyFolder":
+    case "clusterNodes":
+      return <Detail>{node.count.toLocaleString("en-US")}</Detail>;
+    case "keyEntry":
+      return node.info === null ? null : <Detail>{ttlText(node.info.ttlMs)}</Detail>;
     default:
       return null;
   }
@@ -157,6 +183,12 @@ export function nodeAriaLabel(row: ExplorerRow): string {
       return `${text} ${node.column.type}${node.primary ? ", primary key" : ""}${node.foreign ? ", foreign key" : ""}${node.column.nullable ? "" : ", not null"}`;
     case "routine":
       return `${text} ${routineArguments(node.routine.signature)}`;
+    case "keyDatabase":
+      return `${text} ${keyCount(node.summary.keys)}`;
+    case "keyFolder":
+      return `${text} ${String(node.count)}`;
+    case "keyEntry":
+      return node.info === null ? text : `${keyTypeLabel(node.info)} ${text}, ${ttlText(node.info.ttlMs)}`;
     default:
       return text;
   }
@@ -170,6 +202,7 @@ export function nodeTitle(node: ExplorerNode): string | undefined {
   if (node.kind === "relation") return node.relation.comment ?? undefined;
   if (node.kind === "column") return node.column.comment ?? undefined;
   if (node.kind === "routine") return node.routine.returns === null ? "procedure" : `returns ${node.routine.returns}`;
+  if (node.kind === "keyEntry") return node.key.text;
   return undefined;
 }
 

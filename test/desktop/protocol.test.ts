@@ -87,6 +87,12 @@ import {
   type ServerSessionState,
   type SessionTarget,
   NODE_ROLES,
+  KEY_TYPES,
+  type KeyBytes,
+  type KeyDatabase,
+  type KeyExpiry,
+  type KeyInfo,
+  type KeyScan,
   type ServerNode,
   type SqlParameter,
   type StatementClass,
@@ -256,6 +262,15 @@ describe("engine protocol", () => {
   it("givenServerTypes_whenComparedWithPluginApi_thenIdentical", () => {
     expectTypeOf<protocol.ServerNode>().toEqualTypeOf<ServerNode>();
     expect(protocol.NODE_ROLES).toEqual(NODE_ROLES);
+  });
+
+  it("givenKeyspaceTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expect(protocol.KEY_TYPES).toEqual(KEY_TYPES);
+    expectTypeOf<protocol.KeyBytes>().toEqualTypeOf<KeyBytes>();
+    expectTypeOf<protocol.KeyDatabase>().toEqualTypeOf<KeyDatabase>();
+    expectTypeOf<protocol.KeyScan>().toEqualTypeOf<KeyScan>();
+    expectTypeOf<protocol.KeyInfo>().toEqualTypeOf<KeyInfo>();
+    expectTypeOf<protocol.KeyExpiry>().toEqualTypeOf<KeyExpiry>();
   });
 
   it("givenCoreErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {

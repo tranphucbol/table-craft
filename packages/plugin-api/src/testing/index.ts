@@ -24,6 +24,9 @@ import {
   type ImportKind,
   type InsertRow,
   type InsertTarget,
+  type KeyName,
+  type KeyType,
+  type Keyspace,
   type PlanNode,
   type PluginErrorCode,
   type Problem,
@@ -197,9 +200,14 @@ export interface CommandsFixture {
 export interface KeyspaceFixture {
   /** The database the fixture keys live in. */
   readonly database: number;
-  /** A glob matching every fixture key, and how many keys it matches. */
-  readonly match: string;
-  readonly count: number;
+  /** A glob, and how many keys it matches: enough for many scan batches. */
+  readonly scan: { readonly match: string; readonly count: number; readonly batch: number };
+  /** A glob and a type, and the names of the keys of that type it matches. */
+  readonly typed: { readonly match: string; readonly type: KeyType; readonly keys: readonly string[] };
+  /** A key with an expiry. */
+  readonly expiring: string;
+  /** A key whose name is not valid UTF-8, as lower-case hex, and a glob that finds it. */
+  readonly binary: { readonly hex: string; readonly match: string; readonly type: KeyType };
 }
 
 /** One routine call: which routine (from `routines.expected`), its arguments, and the rows it returns. */
@@ -355,6 +363,8 @@ export function contractSql(fixture: Pick<ContractFixture, "sql">): Required<Con
 const ROWS_READ_BEFORE_RETURN = 3;
 /** Longer than `BYTES_PREVIEW_LENGTH` and within every fixture's `payload` column (MySQL's is `VARBINARY(64)`). */
 const LONG_BYTES_LENGTH = 48;
+/** Stops a scan pass that never ends, so a broken cursor fails rather than hangs. */
+const MAX_SCAN_BATCHES = 10_000;
 const LONG_BYTES_HEX = "c3";
 const HEX_DIGITS_PER_BYTE = 2;
 
@@ -2378,6 +2388,99 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           }
           const offline = await language().complete({ text: "h", offset: 1 }, null);
           expect(offline.to).toBe(1);
+        });
+      });
+    });
+
+    describe.runIf(plugin.capabilities.includes("keyValue"))("keyValue", () => {
+      function keyspaceFixture(): KeyspaceFixture {
+        if (fixture.keyspace === undefined) throw new Error("keyValue needs fixture.keyspace");
+        return fixture.keyspace;
+      }
+
+      function keyspaceOf(session: Session): Keyspace {
+        if (session.keyspace === undefined) throw new Error("keyValue needs session.keyspace");
+        return session.keyspace;
+      }
+
+      /** Every key of one pass, and how many batches it took. */
+      async function scanAll(
+        keyspace: Keyspace,
+        request: { match: string; type?: KeyType; count?: number },
+      ): Promise<{ keys: KeyName[]; batches: number }> {
+        const keys: KeyName[] = [];
+        let cursor: string | null = null;
+        let batches = 0;
+        do {
+          const scan = await keyspace.scan({
+            database: keyspaceFixture().database,
+            cursor,
+            match: request.match,
+            type: request.type ?? null,
+            ...(request.count === undefined ? {} : { count: request.count }),
+          });
+          keys.push(...scan.keys);
+          cursor = scan.cursor;
+          batches += 1;
+        } while (cursor !== null && batches < MAX_SCAN_BATCHES);
+        expect(cursor).toBeNull();
+        return { keys, batches };
+      }
+
+      it("givenKeyspace_whenDatabases_thenFixtureDatabaseCountedAndOneCurrent", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const databases = await keyspaceOf(session).databases();
+          const own = databases.find((database) => database.index === keyspaceFixture().database);
+          expect(own?.keys).toBeGreaterThanOrEqual(keyspaceFixture().scan.count);
+          expect(databases.filter((database) => database.current)).toHaveLength(1);
+          expect(keyspaceOf(session).delimiter).not.toBe("");
+        });
+      });
+
+      it("givenKeyspace_whenScanToEnd_thenEveryFixtureKeyOnceAndCursorNull", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { match, count, batch } = keyspaceFixture().scan;
+          const { keys, batches } = await scanAll(keyspaceOf(session), { match, count: batch });
+          const names = keys.map((key) => key.text);
+          expect(new Set(names).size).toBe(count);
+          expect(names).toHaveLength(count);
+          expect(batches).toBeGreaterThan(1);
+        });
+      });
+
+      it("givenMatchAndType_whenScan_thenOnlyMatchingKeys", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { match, type, keys } = keyspaceFixture().typed;
+          const found = await scanAll(keyspaceOf(session), { match, type });
+          expect(found.keys.map((key) => key.text).sort()).toEqual([...keys].sort());
+        });
+      });
+
+      it("givenKeys_whenDescribe_thenTypeExpiryAndMissingInOrder", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { typed, expiring, database } = keyspaceFixture();
+          const [first = ""] = typed.keys;
+          const names = [first, expiring, "table-craft:contract:missing"];
+          const infos = await keyspaceOf(session).describe(
+            database,
+            names.map((text) => ({ text, hex: null })),
+          );
+          expect(infos.map((info) => info.key.text)).toEqual(names);
+          expect(infos[0]).toMatchObject({ type: typed.type, ttlMs: null });
+          expect(infos[1]?.ttlMs).toBeGreaterThan(0);
+          expect(infos[2]).toMatchObject({ type: null, typeName: null, ttlMs: null });
+        });
+      });
+
+      it("givenBinaryKeyName_whenScanAndDescribe_thenHexRoundTrips", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const { binary, database } = keyspaceFixture();
+          const found = await scanAll(keyspaceOf(session), { match: binary.match });
+          const key = found.keys.find((candidate) => candidate.hex === binary.hex);
+          expect(key?.text).toMatch(/\\x[0-9a-f]{2}/);
+          if (key === undefined) return;
+          const [info] = await keyspaceOf(session).describe(database, [key]);
+          expect(info?.type).toBe(binary.type);
         });
       });
     });

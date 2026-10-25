@@ -14,5 +14,6 @@ export * from "./protocol/objects.js";
 export * from "./protocol/results.js";
 export * from "./protocol/transfer.js";
 export * from "./protocol/tables.js";
+export * from "./protocol/keyspace.js";
 export * from "./protocol/server.js";
 export * from "./protocol/calls.js";

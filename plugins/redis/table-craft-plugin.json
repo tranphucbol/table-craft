@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "apiVersion": "1.2.0",
   "entry": "index.js",
-  "capabilities": ["commands", "keepAlive", "nodes"],
+  "capabilities": ["commands", "keepAlive", "keyValue", "nodes"],
   "highlight": "redis",
   "connection": {
     "fields": [
