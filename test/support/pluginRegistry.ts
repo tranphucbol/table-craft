@@ -14,6 +14,8 @@ const BLOCK = 512;
 const NAME_BYTES = 100;
 const END_BLOCKS = 2;
 const LOOPBACK = "127.0.0.1";
+/** Asked for this, registry.npmjs.org leaves custom fields such as `tableCraft` out, and so does this fixture. */
+const ABBREVIATED_PACKUMENT = "application/vnd.npm.install-v1+json";
 
 export interface TarEntry {
   readonly path: string;
@@ -157,7 +159,7 @@ export async function startRegistry(
   let delayMs = 0;
   let base = "";
 
-  function packument(name: string): unknown {
+  function packument(name: string, abbreviated: boolean): unknown {
     const releases = published.get(name) ?? [];
     const versions = Object.fromEntries(
       releases.map((entry) => [
@@ -165,7 +167,7 @@ export async function startRegistry(
         {
           name,
           version: entry.version,
-          tableCraft: { id: entry.pluginId, apiVersion: entry.apiVersion },
+          ...(abbreviated ? {} : { tableCraft: { id: entry.pluginId, apiVersion: entry.apiVersion } }),
           dist: {
             tarball: `${base}/tarballs/${tarballFile(name, entry.version)}`,
             integrity: entry.integrity ?? sha512(entry.bytes),
@@ -197,7 +199,10 @@ export async function startRegistry(
       }
       const name = decodeURIComponent(path.slice(1));
       if (!published.has(name)) return response.writeHead(404, { "content-type": "application/json" }).end("{}");
-      return response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(packument(name)));
+      const abbreviated = (request.headers.accept ?? "").includes(ABBREVIATED_PACKUMENT);
+      return response
+        .writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify(packument(name, abbreviated)));
     };
     if (delayMs === 0) answer();
     else setTimeout(answer, delayMs);

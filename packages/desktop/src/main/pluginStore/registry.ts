@@ -10,7 +10,11 @@ import { registryUrlError } from "@table-craft/desktop/settings/settings.js";
 
 /** Far above any plugin bundle (PostgreSQL's is under 1 MB); stops a hostile mirror filling the disk. */
 export const MAX_TARBALL_BYTES = 64 * 1024 * 1024;
-const PACKUMENT_ACCEPT = "application/vnd.npm.install-v1+json; q=1.0, application/json; q=0.8";
+/**
+ * The full packument. npm's abbreviated one (`application/vnd.npm.install-v1+json`) keeps only the
+ * fields an installer needs and drops `tableCraft`, so every version would look like no plugin.
+ */
+const PACKUMENT_ACCEPT = "application/json";
 const SHA512 = "sha512-";
 const NOT_FOUND = 404;
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)$/;
