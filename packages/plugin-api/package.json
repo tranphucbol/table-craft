@@ -1,9 +1,21 @@
 {
   "name": "@table-craft/plugin-api",
   "version": "0.0.0",
-  "description": "The datasource plugin contract for table-craft",
+  "private": true,
+  "description": "The datasource plugin contract for TableCraft",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tranphucbol/table-craft.git",
+    "directory": "packages/plugin-api"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "bun scripts/build.ts"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./sql": "./src/sql/index.ts",
