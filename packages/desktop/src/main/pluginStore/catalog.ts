@@ -9,7 +9,7 @@ export interface CatalogEntry {
   readonly packageName: string;
   /** The URL schemes its manifest reads, so the import can offer it for a foreign connection. */
   readonly schemes: readonly string[];
-  /** The unpacked bundle, rounded; what the download entry shows. */
+  /** The packed `.tgz` (`bun run plugins:pack` prints it), rounded up; what the download entry shows. */
   readonly approximateBytes: number;
 }
 
@@ -26,7 +26,7 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     name: "PostgreSQL",
     packageName: officialPackage("postgres"),
     schemes: ["postgresql", "postgres"],
-    approximateBytes: 800_000,
+    approximateBytes: 190_000,
   },
 ];
 

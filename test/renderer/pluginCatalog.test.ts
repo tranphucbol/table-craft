@@ -4,6 +4,7 @@ import {
   downloadLabel,
   installText,
   missingPlugin,
+  missingText,
   pickerEntries,
   pluginVersionText,
 } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
@@ -52,6 +53,21 @@ describe("plugin catalog", () => {
     expect(installText(entry({ status: "installing", received: 0, total: null }))).toBe("Installing PostgreSQL…");
     expect(installText(entry({ status: "installing", received: 400, total: 1000 }))).toBe("Installing PostgreSQL… 40%");
     expect(installText(entry({ status: "failed", message: "No connection.", hint: "Retry." }))).toBe("No connection.");
+  });
+
+  it("givenEachInstallState_whenShownInTheDatabasePane_thenShortTextAndTheWholeStoryAsTooltip", () => {
+    expect(missingText(entry())).toEqual({
+      text: "Plugin missing",
+      title: "The PostgreSQL plugin is not installed. Install downloads it; Settings → Plugins manages plugins.",
+    });
+    expect(missingText(entry({ status: "installing", received: 400, total: 1000 }))).toEqual({
+      text: "Installing… 40%",
+      title: "Installing PostgreSQL… 40%",
+    });
+    expect(missingText(entry({ status: "failed", message: "No connection.", hint: "Retry." }))).toEqual({
+      text: "Install failed",
+      title: "No connection. Retry.",
+    });
   });
 
   it("givenApproximateSize_whenLabelled_thenAboutThatMuch", () => {

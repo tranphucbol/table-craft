@@ -3,7 +3,8 @@
  * build, so the bundles in `app.asar`, the plugins in `<resources>/plugins` and the bundled drivers
  * are what run. Plan 015 adds the title bar check CI runs on every platform, so Windows and Linux
  * show the main-menu button and the caption-button overlay; plan 036 connects through the compose
- * SSH bastion once, since ssh2 is inlined with its native modules stubbed. Runs only when
+ * SSH bastion once, since ssh2 is inlined with its native modules stubbed. PostgreSQL is not in the
+ * bundle (plan 057), so its scenarios seed the built plugin into the profile's managed folder. Runs only when
  * `TABLE_CRAFT_APP_EXECUTABLE` names that app:
  *
  *   bun run test:smoke:packaged        # SQLite only, as CI runs it
@@ -56,12 +57,15 @@ import {
   themePickerTrigger,
 } from "./harness.js";
 import type { RunningApp, SavedDatasource } from "./harness.js";
+import { seedManagedPlugin } from "./pluginFixtures.js";
 import { DAILY_LOOP_STEPS, dailyLoop, stubSaveDialog } from "./workflows.js";
 
 const captureWindow = evidenceFor("014");
 const captureTunnel = evidenceFor("036");
 const LOOP_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
-const BUILT_IN_KINDS = ["MySQL", "PostgreSQL", "SQLite"];
+const BUILT_IN_KINDS = ["MySQL", "SQLite"];
+/** Downloaded on demand (plan 057): absent from the bundle, offered in the picker. */
+const DOWNLOADABLE_KINDS = ["postgres"];
 /** Not the default on a light-mode host, so the relaunched window shows it was kept. */
 const CHOSEN_THEME = "Dark";
 const CHOSEN_THEME_ID = "dark";
@@ -154,6 +158,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
 
   async function launchSaved(datasources: readonly SavedDatasource[], userDataDir = newProfile()): Promise<RunningApp> {
     seedDatasources(userDataDir, datasources);
+    if (datasources.some((saved) => saved.pluginId === "postgres")) seedManagedPlugin(userDataDir, "postgres");
     running = await launchApp(null, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await toolWindow(running.page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
@@ -161,17 +166,21 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
   }
 
   it(
-    "givenPackagedApp_whenLaunched_thenAllBuiltInPluginsAvailable",
+    "givenPackagedApp_whenLaunched_thenBuiltInPluginsAvailableAndPostgresOfferedForDownload",
     async () => {
       const { app, page } = await launchSaved([]);
       expect(await app.evaluate(({ app: electron }) => electron.isPackaged)).toBe(true);
 
       await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
 
-      const kinds = dataSourcesDialog(page).getByRole("list", { name: "Database kinds" }).getByRole("button");
+      const list = dataSourcesDialog(page).getByRole("list", { name: "Database kinds" });
+      const kinds = list.locator("button:not([data-download])");
       await expect.poll(() => kinds.count(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(BUILT_IN_KINDS.length);
       expect([...(await kinds.allTextContents())].sort()).toEqual(BUILT_IN_KINDS);
       for (const kind of await kinds.all()) expect(await kind.isEnabled()).toBe(true);
+      const downloads = list.locator("button[data-download]");
+      const offered = await Promise.all((await downloads.all()).map((button) => button.getAttribute("data-download")));
+      expect(offered).toEqual(DOWNLOADABLE_KINDS);
       await captureWindow(page, "packaged-plugins");
     },
     SCENARIO_TIMEOUT_MS,

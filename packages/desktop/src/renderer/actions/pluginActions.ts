@@ -34,12 +34,15 @@ function showPlugins(): void {
   useSettingsDialog.getState().show("plugins");
 }
 
-/** Downloads a catalog plugin; its progress and any failure show where it was asked for. */
+/**
+ * Downloads a catalog plugin; its progress and any failure show where it was asked for, so only a
+ * plugin outside the catalog gets a notice. The answer can arrive before the failed state's
+ * broadcast, so the catalog's state cannot tell whether the failure is already on screen.
+ */
 async function install(pluginId: string): Promise<void> {
   const answer = await bridge().installPlugin(pluginId);
   if (answer.ok) return;
-  const entry = useDatasources.getState().catalog.find((candidate) => candidate.id === pluginId);
-  if (entry?.install.status !== "failed") {
+  if (!useDatasources.getState().catalog.some((candidate) => candidate.id === pluginId)) {
     await notice(`Could not install ${nameOf(pluginId)}`, answer.error.message, answer.error.hint);
   }
 }

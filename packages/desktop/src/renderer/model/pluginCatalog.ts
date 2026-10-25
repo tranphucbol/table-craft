@@ -1,4 +1,9 @@
-import type { CatalogPlugin, PluginInfo, PluginSource } from "@table-craft/desktop/preload/bridge.js";
+import type {
+  CatalogPlugin,
+  PluginInfo,
+  PluginInstallState,
+  PluginSource,
+} from "@table-craft/desktop/preload/bridge.js";
 import { formatBytes } from "@table-craft/desktop/renderer/model/format.js";
 
 const PERCENT = 100;
@@ -51,9 +56,31 @@ export function installText(entry: CatalogPlugin): string | null {
   const { install } = entry;
   if (install.status === "idle") return null;
   if (install.status === "failed") return install.message;
-  if (install.total === null || install.total === 0) return `Installing ${entry.name}…`;
-  const percent = Math.min(PERCENT, Math.floor((install.received / install.total) * PERCENT));
-  return `Installing ${entry.name}… ${String(percent)}%`;
+  return `Installing ${entry.name}…${percentText(install)}`;
+}
+
+function percentText(install: Extract<PluginInstallState, { status: "installing" }>): string {
+  if (install.total === null || install.total === 0) return "";
+  return ` ${String(Math.min(PERCENT, Math.floor((install.received / install.total) * PERCENT)))}%`;
+}
+
+export interface MissingText {
+  /** Short enough to sit beside a data source's name in the Database pane. */
+  readonly text: string;
+  readonly title: string;
+}
+
+/** What a data source whose plugin is missing shows: a short state, with the whole story as its tooltip. */
+export function missingText(entry: CatalogPlugin): MissingText {
+  const { install } = entry;
+  if (install.status === "failed") return { text: "Install failed", title: `${install.message} ${install.hint}` };
+  if (install.status === "installing") {
+    return { text: `Installing…${percentText(install)}`, title: installText(entry) ?? "" };
+  }
+  return {
+    text: "Plugin missing",
+    title: `The ${entry.name} plugin is not installed. Install downloads it; Settings → Plugins manages plugins.`,
+  };
 }
 
 /** "PostgreSQL 1.4.0 · Downloaded". */
