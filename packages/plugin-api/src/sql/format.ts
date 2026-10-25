@@ -1,10 +1,22 @@
 import type { FormatOptions, ParameterStyle, SqlLanguage } from "@table-craft/plugin-api";
-import { formatDialect, mysql, postgresql, sqlite, type DialectOptions, type ParamTypes } from "sql-formatter";
+import {
+  formatDialect,
+  mysql,
+  plsql,
+  postgresql,
+  sqlite,
+  transactsql,
+  type DialectOptions,
+  type ParamTypes,
+} from "sql-formatter";
 import { formatAligned } from "./layout.js";
-import { Lexer, wordOf, type SqlDialectOptions } from "./tokens.js";
+import { Lexer, separatorLineAt, wordOf, type SqlDialectOptions } from "./tokens.js";
 
-/** The `sql-formatter` dialects the built-in plugins use (decision 042). */
-export const FORMAT_DIALECTS = { postgresql, mysql, sqlite } as const satisfies Record<string, DialectOptions>;
+/** The `sql-formatter` dialects plugins may name (decisions 042 and 100). */
+export const FORMAT_DIALECTS = { postgresql, mysql, sqlite, plsql, transactsql } as const satisfies Record<
+  string,
+  DialectOptions
+>;
 
 export type FormatDialect = keyof typeof FORMAT_DIALECTS;
 
@@ -18,6 +30,7 @@ export interface FormatterOptions {
 
 const DELIMITER_COMMAND = "DELIMITER";
 const DELIMITER_REFUSAL = "a DELIMITER line changes what ends a statement; reformat the statements between them.";
+const SEPARATOR_REFUSAL = "a batch separator line splits the script; reformat the batches between them.";
 const UNREADABLE = "the text is not SQL the formatter can read.";
 const NAMED_PREFIX = ":";
 const NUMBERED_PREFIX = "$";
@@ -42,6 +55,16 @@ function hasDelimiterCommand(text: string, dialect: SqlDialectOptions): boolean 
   for (let token = lexer.next(); token !== null; token = lexer.next()) {
     if (token.kind === "word" && wordOf(text, token) === DELIMITER_COMMAND && startsALine(text, token.from))
       return true;
+  }
+  return false;
+}
+
+function hasSeparatorLine(text: string, dialect: SqlDialectOptions): boolean {
+  const separator = dialect.batchSeparator;
+  if (separator === undefined) return false;
+  const lexer = new Lexer(text, dialect);
+  for (let token = lexer.next(); token !== null; token = lexer.next()) {
+    if (separatorLineAt(text, token, separator) !== null) return true;
   }
   return false;
 }
@@ -119,6 +142,7 @@ export function sqlFormatter(options: FormatterOptions): Pick<SqlLanguage, "form
       if (options.lexer.delimiterCommand === true && hasDelimiterCommand(text, options.lexer)) {
         throw new Error(DELIMITER_REFUSAL);
       }
+      if (hasSeparatorLine(text, options.lexer)) throw new Error(SEPARATOR_REFUSAL);
       if (format.style === "standard") return standard(text, format);
       return formatAligned(text, format, options.lexer, (statement) => standard(statement, format));
     },

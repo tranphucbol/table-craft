@@ -6,11 +6,21 @@ export interface SqlLiteralOptions {
   readonly backslashEscapes: boolean;
   /** A bytes literal from lower-case hex, such as `X'dead'` or `'\xdead'::bytea`. */
   readonly bytes: (hex: string) => string;
+  /** Text holding a non-ASCII character is written `N'…'`, which SQL Server and Oracle need to keep it whole. */
+  readonly nationalText?: boolean;
 }
 
-/** Quotes an identifier with `quote`, doubling any `quote` inside it, as SQL and MySQL both read it. */
-export function quoteIdentifierWith(quote: '"' | "`"): (name: string) => string {
-  return (name) => `${quote}${name.replaceAll(quote, quote + quote)}${quote}`;
+export type IdentifierQuote = '"' | "`" | "[";
+
+const CLOSING_QUOTE: Readonly<Record<IdentifierQuote, string>> = { '"': '"', "`": "`", "[": "]" };
+
+/**
+ * Quotes an identifier with `quote`, doubling the closing quote inside it: `"a""b"`, `` `a``b` ``
+ * or SQL Server's `[a]]b]`.
+ */
+export function quoteIdentifierWith(quote: IdentifierQuote): (name: string) => string {
+  const close = CLOSING_QUOTE[quote];
+  return (name) => `${quote}${name.replaceAll(close, close + close)}${close}`;
 }
 
 /** The standard savepoint statements, which PostgreSQL, MySQL and SQLite all accept (plan 026). */
@@ -44,11 +54,15 @@ const BACKSLASH_ESCAPES: ReadonlyMap<string, string> = new Map([
   ["\u001a", "\\Z"],
 ]);
 
+const NATIONAL_PREFIX = "N";
+const NON_ASCII = /[\u0080-\uffff]/;
+
 function quoteString(text: string, options: SqlLiteralOptions): string {
+  const prefix = options.nationalText === true && NON_ASCII.test(text) ? NATIONAL_PREFIX : "";
   if (options.backslashEscapes) {
-    return `'${Array.from(text, (char) => BACKSLASH_ESCAPES.get(char) ?? char).join("")}'`;
+    return `${prefix}'${Array.from(text, (char) => BACKSLASH_ESCAPES.get(char) ?? char).join("")}'`;
   }
-  return `'${text.replaceAll("'", "''")}'`;
+  return `${prefix}'${text.replaceAll("'", "''")}'`;
 }
 
 const BYTES_PER_HEX_DIGIT = 0.5;

@@ -10,6 +10,21 @@ const MYSQL: SqlDialectOptions = {
 };
 const POSTGRES: SqlDialectOptions = { dollarQuotes: true, nestedBlockComments: true, blockKeywords: ["BEGIN"] };
 
+const TSQL: SqlDialectOptions = { bracketIdentifiers: true, batchSeparator: "go", nationalStrings: true };
+const ORACLE: SqlDialectOptions = { batchSeparator: "slash", qQuotes: true, nationalStrings: true };
+
+const TSQL_SCRIPT = [
+  "SELECT [a;b], N'x;y' FROM t;",
+  "GO",
+  "CREATE PROCEDURE p AS",
+  "  SELECT 1;",
+  "  SELECT 2;",
+  "GO 2",
+  "SELECT 3",
+].join("\n");
+
+const ORACLE_SCRIPT = ["SELECT q'[a;b]' FROM dual;", "BEGIN", "  NULL;", "END;", "/", "SELECT 2 FROM dual"].join("\n");
+
 const MYSQL_SCRIPT = [
   "SELECT 'a;b' AS s; -- first",
   "# hash comment;",
@@ -49,12 +64,14 @@ describe("sqlStatementStream", () => {
   it.each([
     ["mysql", MYSQL, MYSQL_SCRIPT],
     ["postgres", POSTGRES, POSTGRES_SCRIPT],
+    ["tsql", TSQL, TSQL_SCRIPT],
+    ["oracle", ORACLE, ORACLE_SCRIPT],
   ] as const)("givenChunkSplitInsideStatement_whenStreaming_thenSameSpansAsWholeSplit: %s", (_name, options, text) => {
     const whole = sqlSplitter(options)(text);
 
     for (const size of [1, 2, 3, 7, 16, 64, text.length]) {
       const statements = streamed(options, piecesOf(text, size));
-      expect(statements.map(({ from, to, sql }) => ({ from, to, sql }))).toEqual(whole);
+      expect(statements.map(({ line: _line, column: _column, ...span }) => span)).toEqual(whole);
       for (const statement of statements) {
         expect({ line: statement.line, column: statement.column }).toEqual(located(text, statement.from));
       }

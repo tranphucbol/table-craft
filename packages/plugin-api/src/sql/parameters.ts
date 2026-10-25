@@ -8,8 +8,26 @@ import {
 } from "@table-craft/plugin-api";
 import { Lexer, type SqlDialectOptions, type Token } from "./tokens.js";
 
-/** How a driver spells the placeholders it binds: `$1` once per value, or `?` once per occurrence. */
-export type NativePlaceholder = "numbered" | "positional";
+/**
+ * How a driver spells the placeholders it binds: `$1` once per value (node-postgres), `?` once per
+ * occurrence (mysql2, SQLite), `:1` once per occurrence (node-oracledb, which binds an array by
+ * position of occurrence), or `@p1` once per value (tedious, which binds by name).
+ */
+export type NativePlaceholder = "numbered" | "positional" | "colonNumbered" | "atNumbered";
+
+interface NativeForm {
+  /** One value per distinct name, reused wherever the name repeats; else one per occurrence. */
+  readonly perName: boolean;
+  /** The placeholder for the value at `number`, counting from 1. */
+  readonly spell: (number: number) => string;
+}
+
+const NATIVE_FORMS: Readonly<Record<NativePlaceholder, NativeForm>> = {
+  numbered: { perName: true, spell: (number) => `$${String(number)}` },
+  positional: { perName: false, spell: () => "?" },
+  colonNumbered: { perName: false, spell: (number) => `:${String(number)}` },
+  atNumbered: { perName: true, spell: (number) => `@p${String(number)}` },
+};
 
 /** What `sqlParameters` needs to know about a dialect (decision 043). */
 export interface ParameterOptions {
@@ -80,6 +98,7 @@ export function sqlParameters(options: ParameterOptions): Pick<SqlLanguage, "par
 
   const bind = (statement: string, values: Readonly<Record<string, ParameterValue>>): BoundStatement => {
     const found = parameters(statement);
+    const form = NATIVE_FORMS[options.native];
     const params: ParameterValue[] = [];
     const numbers = new Map<string, number>();
     let sql = "";
@@ -87,18 +106,13 @@ export function sqlParameters(options: ParameterOptions): Pick<SqlLanguage, "par
     for (const parameter of found) {
       if (!Object.hasOwn(values, parameter.name)) throw missingValue(parameter.name);
       const value = values[parameter.name] ?? null;
-      let placeholder = POSITIONAL_MARK;
-      if (options.native === "numbered") {
-        let number = numbers.get(parameter.name);
-        if (number === undefined) {
-          params.push(value);
-          number = params.length;
-          numbers.set(parameter.name, number);
-        }
-        placeholder = `$${String(number)}`;
-      } else {
+      let number = form.perName ? numbers.get(parameter.name) : undefined;
+      if (number === undefined) {
         params.push(value);
+        number = params.length;
+        numbers.set(parameter.name, number);
       }
+      const placeholder = form.spell(number);
       sql += statement.slice(at, parameter.from) + placeholder;
       at = parameter.to;
     }

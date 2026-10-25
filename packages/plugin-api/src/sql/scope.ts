@@ -151,8 +151,16 @@ const DIGIT = /^[0-9]/;
 const BLOCK_COMMENT_END = "*/";
 const LINE_COMMENT_STARTS = ["--", "#"];
 
+const BRACKET_OPEN = "[";
+const BRACKET_CLOSE = "]";
+
+/** The character that closes a quoted name or string opened by `open`: `]` for SQL Server's `[`. */
+export function closingQuote(open: string): string {
+  return open === BRACKET_OPEN ? BRACKET_CLOSE : open;
+}
+
 export function unquote(raw: string): string {
-  const quote = raw.charAt(0);
+  const quote = closingQuote(raw.charAt(0));
   const inner = raw.length >= 2 && raw.endsWith(quote) ? raw.slice(1, -1) : raw.slice(1);
   return inner.replaceAll(quote + quote, quote);
 }

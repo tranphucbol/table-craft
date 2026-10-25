@@ -1,4 +1,5 @@
 import { FORMAT_STYLES, type FormatOptions, type SqlLanguage } from "@table-craft/plugin-api";
+import { sqlFormatter } from "@table-craft/plugin-api/sql";
 import mysqlPlugin from "@table-craft/plugin-mysql";
 import postgresPlugin from "@table-craft/plugin-postgres";
 import sqlitePlugin from "@table-craft/plugin-sqlite";
@@ -79,5 +80,83 @@ describe("format: optimizer hints", () => {
     expect(mysql.format(HINTED, { ...DEFAULTS, style })).toMatch(
       /^SELECT\s+\/\*\+ USE_INDEX\(order_events_202601, order_events_shop_id\) \*\//,
     );
+  });
+});
+
+describe("format: the PL/SQL and T-SQL dialects (decision 100)", () => {
+  const tsql = sqlFormatter({
+    dialect: "transactsql",
+    lexer: { bracketIdentifiers: true, batchSeparator: "go", nationalStrings: true },
+    parameters: ["named"],
+  });
+  const plsql = sqlFormatter({
+    dialect: "plsql",
+    lexer: { batchSeparator: "slash", qQuotes: true, nationalStrings: true },
+    parameters: ["named"],
+  });
+  const TSQL_STATEMENT =
+    "select [o].[id], c.name as [Customer Name], N'café' as label from dbo.orders o join dbo.customers c on c.id = o.customer_id where o.total > :min order by o.id";
+  const PLSQL_STATEMENT =
+    "select o.id, c.name as customer, q'[it's]' as label from orders o join customers c on c.id = o.customer_id where o.total > :min order by o.id";
+
+  it("givenPlsqlAndTransactsql_whenFormatted_thenGoldenMatches", () => {
+    expect(tsql.format(TSQL_STATEMENT, { ...DEFAULTS, style: "aligned" })).toBe(
+      [
+        "SELECT [o].[id],",
+        "       c.name  AS [Customer Name],",
+        "       N'café' AS label",
+        "FROM dbo.orders o",
+        "     JOIN dbo.customers c ON c.id = o.customer_id",
+        "WHERE o.total > :min",
+        "ORDER BY o.id",
+      ].join("\n"),
+    );
+    expect(tsql.format(TSQL_STATEMENT, DEFAULTS)).toBe(
+      [
+        "SELECT",
+        "  [o].[id],",
+        "  c.name AS [Customer Name],",
+        "  N'café' AS label",
+        "FROM",
+        "  dbo.orders o",
+        "  JOIN dbo.customers c ON c.id = o.customer_id",
+        "WHERE",
+        "  o.total > :min",
+        "ORDER BY",
+        "  o.id",
+      ].join("\n"),
+    );
+    expect(plsql.format(PLSQL_STATEMENT, { ...DEFAULTS, style: "aligned" })).toBe(
+      [
+        "SELECT o.id,",
+        "       c.name    AS customer,",
+        "       q'[it's]' AS label",
+        "FROM orders o",
+        "     JOIN customers c ON c.id = o.customer_id",
+        "WHERE o.total > :min",
+        "ORDER BY o.id",
+      ].join("\n"),
+    );
+    expect(plsql.format(PLSQL_STATEMENT, DEFAULTS)).toBe(
+      [
+        "SELECT",
+        "  o.id,",
+        "  c.name AS customer,",
+        "  q'[it's]' AS label",
+        "FROM",
+        "  orders o",
+        "  JOIN customers c ON c.id = o.customer_id",
+        "WHERE",
+        "  o.total > :min",
+        "ORDER BY",
+        "  o.id",
+      ].join("\n"),
+    );
+  });
+
+  it("givenBatchSeparatorLine_whenFormatted_thenRefused", () => {
+    expect(() => tsql.format("select 1\nGO\nselect 2", DEFAULTS)).toThrow(/batch separator/);
+    expect(() => plsql.format("begin null; end;\n/", DEFAULTS)).toThrow(/batch separator/);
+    expect(tsql.format("select 'GO'", DEFAULTS)).toBe("SELECT\n  'GO'");
   });
 });

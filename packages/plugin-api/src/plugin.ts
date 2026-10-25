@@ -265,6 +265,11 @@ export interface StatementSpan {
   readonly to: number;
   /** `text.slice(from, to)`: the statement without its delimiter. */
   readonly sql: string;
+  /**
+   * How many times the script asks for the statement to run: SQL Server's `GO 3` after it
+   * (decision 100). Absent means once. The host never repeats a statement; a plugin may.
+   */
+  readonly repeat?: number;
 }
 
 /**

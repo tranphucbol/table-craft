@@ -26,6 +26,8 @@ export interface ClassifiedStatement {
   readonly from: number;
   readonly to: number;
   readonly sql: string;
+  /** Mirrors `StatementSpan.repeat`: SQL Server's `GO 3` count; the console runs the statement once. */
+  readonly repeat?: number;
   readonly kind: StatementKind;
   /** Why the console asks before running it, such as `DELETE without WHERE`; null when it need not. */
   readonly destructive: string | null;

@@ -100,4 +100,20 @@ describe("parameters", () => {
     const { parameters } = sqlParameters({ dialect: {}, styles: [], native: "positional" });
     expect(parameters("SELECT :a, ?, $1")).toEqual([]);
   });
+
+  it("givenColonNumbered_whenBind_thenColonPlaceholders", () => {
+    const { bind } = sqlParameters({ dialect: {}, styles: ["named", "positional"], native: "colonNumbered" });
+    expect(bind("SELECT :a, ?, :a FROM dual", { ":a": "x", "?1": "y" })).toEqual({
+      sql: "SELECT :1, :2, :3 FROM dual",
+      params: ["x", "y", "x"],
+    });
+  });
+
+  it("givenAtNumbered_whenBind_thenAtPlaceholders", () => {
+    const { bind } = sqlParameters({ dialect: { bracketIdentifiers: true }, styles: ["named"], native: "atNumbered" });
+    expect(bind("SELECT :a, [:b], :b, :a", { ":a": "x", ":b": "2" })).toEqual({
+      sql: "SELECT @p1, [:b], @p2, @p1",
+      params: ["x", "2"],
+    });
+  });
 });

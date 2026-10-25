@@ -16,6 +16,18 @@ describe("sql literals", () => {
     expect(quoteIdentifierWith("`")("a`b")).toBe("`a``b`");
   });
 
+  it("givenBracketQuote_whenNameHasBracket_thenDoubled", () => {
+    expect(quoteIdentifierWith("[")("a]b[c")).toBe("[a]]b[c]");
+  });
+
+  it("givenNationalText_whenLiteral_thenNPrefixOnlyBeyondAscii", () => {
+    const national: SqlLiteralOptions = { ...STANDARD, nationalText: true };
+    expect(sqlLiteral("thành phố", national)).toBe("N'thành phố'");
+    expect(sqlLiteral("plain", national)).toBe("'plain'");
+    expect(sqlLiteral({ kind: "json", text: '{"a": "€"}' }, national)).toBe(`N'{"a": "€"}'`);
+    expect(sqlLiteral("thành phố", STANDARD)).toBe("'thành phố'");
+  });
+
   it("givenQuoteAndBackslash_whenStandardLiteral_thenOnlyQuoteDoubled", () => {
     expect(sqlLiteral("it's \\n", STANDARD)).toBe("'it''s \\n'");
   });

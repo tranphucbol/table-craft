@@ -1,5 +1,13 @@
 import type { StatementSpan, StatementStream, StreamedStatement } from "@table-craft/plugin-api";
-import { DEFAULT_DELIMITER, Lexer, wordOf, type SqlDialectOptions, type Token } from "./tokens.js";
+import {
+  DEFAULT_DELIMITER,
+  Lexer,
+  separatorLineAt,
+  wordOf,
+  type BatchSeparator,
+  type SqlDialectOptions,
+  type Token,
+} from "./tokens.js";
 
 const DELIMITER_COMMAND = "DELIMITER";
 /** A body only opens inside a statement that defines a routine, so a column called `begin` stays a column. */
@@ -9,6 +17,16 @@ const CASE = "CASE";
 const END = "END";
 /** `END IF`, `END LOOP` and the like close a construct the splitter never counted as opened. */
 const UNCOUNTED_END_TARGETS = new Set(["IF", "LOOP", "WHILE", "REPEAT"]);
+/** Words that may stand between `CREATE` and the kind of routine: `CREATE OR REPLACE EDITIONABLE PROCEDURE`. */
+const ROUTINE_HEAD_WORDS = new Set(["OR", "REPLACE", "ALTER", "EDITIONABLE", "NONEDITIONABLE"]);
+const ALTER = "ALTER";
+/** What `sqlcmd` and SQL*Plus send whole up to the separator line, `;` included. */
+const SEPARATED_ROUTINES: Readonly<Record<BatchSeparator, ReadonlySet<string>>> = {
+  go: new Set(["PROCEDURE", "PROC", "FUNCTION", "TRIGGER"]),
+  slash: new Set(["PROCEDURE", "FUNCTION", "TRIGGER", "PACKAGE", "TYPE"]),
+};
+/** An Oracle anonymous block, which also runs to the `/` line. */
+const ANONYMOUS_BLOCK_STARTS = new Set(["DECLARE", "BEGIN"]);
 const LINE_BREAK = /\r?\n/;
 const NEWLINE = "\n";
 /**
@@ -27,10 +45,24 @@ interface Statement {
   depth: number;
   /** An `END` was seen inside a body; the next token decides whether it closes one. */
   pendingEnd: boolean;
+  /** Only `CREATE`, `ALTER` and the words of `ROUTINE_HEAD_WORDS` so far. */
+  routineHead: boolean;
+  /** Under a batch separator: `;` does not end this statement, the separator line does. */
+  toSeparator: boolean;
 }
 
 function freshStatement(from: number): Statement {
-  return { from, to: from, words: 0, isCreate: false, definesRoutine: false, depth: 0, pendingEnd: false };
+  return {
+    from,
+    to: from,
+    words: 0,
+    isCreate: false,
+    definesRoutine: false,
+    depth: 0,
+    pendingEnd: false,
+    routineHead: false,
+    toSeparator: false,
+  };
 }
 
 /** Where a later scan may start: between statements, under the delimiter then in force. */
@@ -48,6 +80,7 @@ type Scanner = (text: string, delimiter: string, final: boolean) => Scan;
 
 function scanner(options: SqlDialectOptions): Scanner {
   const blockKeywords = new Set((options.blockKeywords ?? []).map((keyword) => keyword.toUpperCase()));
+  const separator = options.batchSeparator;
 
   return (text, startDelimiter, final) => {
     const spans: StatementSpan[] = [];
@@ -56,9 +89,11 @@ function scanner(options: SqlDialectOptions): Scanner {
     let statement: Statement | null = null;
     let checkpoint: Checkpoint = { offset: 0, delimiter };
 
-    const flush = (end: number): void => {
-      if (statement !== null)
-        spans.push({ from: statement.from, to: statement.to, sql: text.slice(statement.from, statement.to) });
+    const flush = (end: number, repeat?: number): void => {
+      if (statement !== null) {
+        const span = { from: statement.from, to: statement.to, sql: text.slice(statement.from, statement.to) };
+        spans.push(repeat === undefined ? span : { ...span, repeat });
+      }
       statement = null;
       checkpoint = { offset: end, delimiter };
     };
@@ -83,11 +118,19 @@ function scanner(options: SqlDialectOptions): Scanner {
 
     for (let token = lexer.next(delimiter); token !== null; token = lexer.next(delimiter)) {
       if (token.kind === "comment") continue;
+      const line = separator === undefined ? null : separatorLineAt(text, token, separator);
+      if (line !== null) {
+        flush(line.to, line.repeat);
+        lexer.position = line.to;
+        continue;
+      }
       if (token.kind === "delimiter") {
         const current: Statement | null = statement;
         if (current !== null) resolvePendingEnd(current, token);
-        if (current === null || current.depth === 0 || delimiter !== DEFAULT_DELIMITER) flush(token.to);
-        else current.to = token.to;
+        const insideBody =
+          current !== null && (current.toSeparator || (current.depth > 0 && delimiter === DEFAULT_DELIMITER));
+        if (insideBody) current.to = token.to;
+        else flush(token.to);
         continue;
       }
       if (statement === null) {
@@ -105,7 +148,13 @@ function scanner(options: SqlDialectOptions): Scanner {
       current.words += 1;
       if (current.words === 1) {
         current.isCreate = word === CREATE;
+        current.routineHead = current.isCreate || (separator === "go" && word === ALTER);
+        current.toSeparator = separator === "slash" && ANONYMOUS_BLOCK_STARTS.has(word);
         continue;
+      }
+      if (current.routineHead && separator !== undefined) {
+        current.routineHead = ROUTINE_HEAD_WORDS.has(word);
+        if (SEPARATED_ROUTINES[separator].has(word)) current.toSeparator = true;
       }
       if (current.depth > 0) {
         if (word === END) current.pendingEnd = true;
@@ -177,7 +226,7 @@ export function sqlStatementStream(options: SqlDialectOptions = {}): () => State
         }
         cursorColumn += span.from - cursor;
         cursor = span.from;
-        return { from: base + span.from, to: base + span.to, sql: span.sql, line: cursorLine, column: cursorColumn };
+        return { ...span, from: base + span.from, to: base + span.to, line: cursorLine, column: cursorColumn };
       });
     };
 

@@ -32,13 +32,14 @@ export {
   type NamespaceSlot,
   type NamespaceTarget,
 } from "./namespace.js";
-export { type NamespaceStatementForm, type SqlDialectOptions } from "./tokens.js";
+export { type BatchSeparator, type NamespaceStatementForm, type SqlDialectOptions } from "./tokens.js";
 export {
   defaultKeyword,
   defaultValuesInsert,
   quoteIdentifierWith,
   sqlSavepoints,
   sqlLiteral,
+  type IdentifierQuote,
   type SqlLiteralOptions,
 } from "./literals.js";
 export {

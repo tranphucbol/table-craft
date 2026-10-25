@@ -1,5 +1,5 @@
 import { PluginError, type NamespaceSwitch } from "@table-craft/plugin-api";
-import { unquote, type Identifier } from "./scope.js";
+import { closingQuote, unquote, type Identifier } from "./scope.js";
 import {
   Lexer,
   significantTokens,
@@ -125,7 +125,7 @@ function tokensAround(text: string, offset: number, dialect: SqlDialectOptions):
 }
 
 function closes(raw: string): boolean {
-  return raw.length >= 2 && raw.endsWith(raw.charAt(0));
+  return raw.length >= 2 && raw.endsWith(closingQuote(raw.charAt(0)));
 }
 
 /** The names of `name , name ,` from `at` to the end; null when the tokens are not such a list. */

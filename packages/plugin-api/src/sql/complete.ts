@@ -118,7 +118,7 @@ const MAX_EXPANSION_DEPTH = 4;
 const UNQUOTED_WORD = "^[A-Za-z0-9_$]*$";
 const ALIAS_WORD_BREAK = /[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/;
 const FALLBACK_ALIAS = "t";
-const QUOTES = new Set(['"', "`"]);
+const QUOTES = new Set(['"', "`", "["]);
 /** Below every other namespace: `USE mysql` is legitimate but rarely meant. */
 const SYSTEM_NAMESPACE_BOOST = -20;
 const CURRENT_DETAIL = "current";
