@@ -64,8 +64,8 @@ const captureWindow = evidenceFor("014");
 const captureTunnel = evidenceFor("036");
 const LOOP_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
 const BUILT_IN_KINDS = ["MySQL", "SQLite"];
-/** Downloaded on demand (plan 057): absent from the bundle, offered in the picker. */
-const DOWNLOADABLE_KINDS = ["postgres"];
+/** Downloaded on demand (plans 057 and 058): absent from the bundle, offered in the picker. */
+const DOWNLOADABLE_KINDS = ["postgres", "redis"];
 /** Not the default on a light-mode host, so the relaunched window shows it was kept. */
 const CHOSEN_THEME = "Dark";
 const CHOSEN_THEME_ID = "dark";
@@ -166,7 +166,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
   }
 
   it(
-    "givenPackagedApp_whenLaunched_thenBuiltInPluginsAvailableAndPostgresOfferedForDownload",
+    "givenPackagedApp_whenLaunched_thenBuiltInPluginsAvailableAndOptionalOnesOfferedForDownload",
     async () => {
       const { app, page } = await launchSaved([]);
       expect(await app.evaluate(({ app: electron }) => electron.isPackaged)).toBe(true);
