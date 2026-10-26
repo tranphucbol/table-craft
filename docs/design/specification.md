@@ -668,9 +668,11 @@ carries none, since binding rewrote the text (decision 082).
 
 One window, laid out the way DataGrip is (`datagrip-inventory.md` §1): the main toolbar as its
 title bar (see Window and main toolbar), a left stripe and the Database tool window, the editor's tabs in the middle, the Services tool window at
-the bottom, an empty right stripe, and a status bar. Which tool windows are open and their sizes
-persist in the renderer's `localStorage` under `table-craft.layout.v1`; a value that does not parse
-falls back to the default layout.
+the bottom, an empty right stripe, and a status bar. Which tool windows are open, their sizes, and
+the share of a console tab the SQL editor takes above its results (one split for every console,
+50% at first, kept between 10% and 90%, saved only when dragged) persist in the renderer's
+`localStorage` under `table-craft.layout.v1`; a value that does not parse falls back to the default
+layout.
 
 Each console tab belongs to one datasource and owns a session on that datasource's engine; closing
 the tab sends `session.close`. The tab reads `console [name]`, and a datasource's colour tints its

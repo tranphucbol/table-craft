@@ -87,7 +87,7 @@ export function ResultTabs({ consoleId, session }: { readonly consoleId: string;
   const showResult = useConsoles((state) => state.showResult);
   const active = activeTabOf(session);
   return (
-    <div className="flex min-h-0 flex-1 basis-1/2 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div
         role="tablist"
         aria-label="Results"

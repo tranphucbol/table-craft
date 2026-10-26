@@ -1,3 +1,4 @@
+import { Group, Panel, type Layout } from "react-resizable-panels";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { EXPLAIN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/explainActions.js";
@@ -19,9 +20,24 @@ import {
   type ErrorQuestion,
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { MIN_CONSOLE_PANE_PERCENT, useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+
+/** Panel ids are also the DOM ids and test ids the library sets, so they must not clash with the Shell's `editor`. */
+const EDITOR_PANEL = "console-editor";
+const RESULTS_PANEL = "console-results";
+const MIN_PANE_SIZE = String(MIN_CONSOLE_PANE_PERCENT);
+/** The library's panels scroll by default; the editor and the result tabs scroll themselves. */
+const PANEL_STYLE = { overflow: "hidden" } as const;
+
+/** Only a drag is remembered; the sizes the library settles on at mount or a window resize are not. */
+function persistConsoleEditor(layout: Layout, meta: { readonly isUserInteraction: boolean }): void {
+  const size = layout[EDITOR_PANEL];
+  if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeConsoleEditor(size);
+}
 
 const STATUS_TEXT = {
   connecting: "Connecting…",
@@ -111,6 +127,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const session = useConsoles((state) => state.consoles[consoleId]);
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
+  const editorSize = useLayout((state) => state.layout.consoleEditor);
   if (session === undefined) return null;
   const { status } = session;
   // While the run asks about a failure, the banner shows it; the toolbar has no room for both.
@@ -199,16 +216,24 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         )}
       </div>
       {session.diskChanged === null ? null : <DiskChangedBanner change={session.diskChanged} />}
-      <div
-        className={cn(
-          "min-h-0 flex-1 basis-1/2 overflow-hidden border-b border-line",
-          color !== null && `border-2 ${TINT_BORDER[color]}`,
-        )}
-      >
-        <Editor consoleId={consoleId} />
-      </div>
-      {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
-      <ResultTabs consoleId={consoleId} session={session} />
+      <Group orientation="vertical" className="min-h-0 flex-1" onLayoutChanged={persistConsoleEditor}>
+        <Panel
+          id={EDITOR_PANEL}
+          defaultSize={String(editorSize)}
+          minSize={MIN_PANE_SIZE}
+          className="flex flex-col"
+          style={PANEL_STYLE}
+        >
+          <div className={cn("min-h-0 flex-1 overflow-hidden", color !== null && `border-2 ${TINT_BORDER[color]}`)}>
+            <Editor consoleId={consoleId} />
+          </div>
+        </Panel>
+        <Handle axis="horizontal" />
+        <Panel id={RESULTS_PANEL} minSize={MIN_PANE_SIZE} className="flex flex-col" style={PANEL_STYLE}>
+          {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
+          <ResultTabs consoleId={consoleId} session={session} />
+        </Panel>
+      </Group>
     </div>
   );
 }

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   createLayoutStore,
+  DEFAULT_CONSOLE_EDITOR_PERCENT,
   DEFAULT_LAYOUT,
   LAYOUT_STORAGE_KEY,
   loadLayout,
   memoryStorage,
+  MIN_CONSOLE_PANE_PERCENT,
 } from "@table-craft/desktop/renderer/state/layout.js";
 
 describe("layout", () => {
@@ -94,5 +96,51 @@ describe("layout", () => {
 
     expect(once.visible.log).toBe(true);
     expect(store.getState().layout).toBe(once);
+  });
+
+  it("givenNoSavedConsoleSplit_whenLoaded_thenEditorTakesHalf", () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({ visible: DEFAULT_LAYOUT.visible, sizes: DEFAULT_LAYOUT.sizes }),
+    );
+
+    expect(loadLayout(storage).consoleEditor).toBe(DEFAULT_CONSOLE_EDITOR_PERCENT);
+  });
+
+  it("givenConsoleSplitResized_whenRelaunched_thenRemembered", () => {
+    const storage = memoryStorage();
+    createLayoutStore(storage).getState().resizeConsoleEditor(72.5);
+
+    expect(createLayoutStore(storage).getState().layout.consoleEditor).toBe(72.5);
+  });
+
+  it("givenExtremeConsoleSplit_whenResized_thenClamped", () => {
+    const store = createLayoutStore(memoryStorage());
+
+    store.getState().resizeConsoleEditor(99);
+    expect(store.getState().layout.consoleEditor).toBe(100 - MIN_CONSOLE_PANE_PERCENT);
+    store.getState().resizeConsoleEditor(1);
+    expect(store.getState().layout.consoleEditor).toBe(MIN_CONSOLE_PANE_PERCENT);
+  });
+
+  it("givenSavedConsoleSplitOutOfRange_whenLoaded_thenHalfAndTheRestKept", () => {
+    const storage = memoryStorage();
+    const sizes = { ...DEFAULT_LAYOUT.sizes, database: 35 };
+    storage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify({ visible: DEFAULT_LAYOUT.visible, sizes, consoleEditor: 97 }));
+
+    const loaded = loadLayout(storage);
+
+    expect(loaded.consoleEditor).toBe(DEFAULT_CONSOLE_EDITOR_PERCENT);
+    expect(loaded.sizes.database).toBe(35);
+  });
+
+  it("givenUnchangedConsoleSplit_whenResized_thenLayoutKept", () => {
+    const store = createLayoutStore(memoryStorage());
+    const before = store.getState().layout;
+
+    store.getState().resizeConsoleEditor(DEFAULT_CONSOLE_EDITOR_PERCENT);
+
+    expect(store.getState().layout).toBe(before);
   });
 });

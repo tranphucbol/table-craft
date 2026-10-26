@@ -257,7 +257,8 @@ PostgreSQL's `RAISE NOTICE`); the result tab shows how many warnings there were.
 `UPDATE` or `DELETE` without a `WHERE`, `DROP` and `TRUNCATE` are listed in a confirmation before
 anything runs. Switch
 **Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**. Consoles
-are saved as files as you type.
+are saved as files as you type. Drag the line between the editor and its results to give either
+more room; every console keeps the split you last dragged to, across launches.
 
 **Open File…** (`⌘O`) opens `.sql` files from anywhere on disk, such as the migrations in your
 project, as file consoles on the data source you are in; each file remembers its data source and
