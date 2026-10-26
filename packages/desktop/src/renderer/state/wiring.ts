@@ -214,6 +214,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 const MORE_CONTRAST_QUERY = "(prefers-contrast: more)";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 /** The part of a `MediaQueryList` the appearance follows. */
 export interface MediaQuery {
@@ -229,8 +230,8 @@ export interface AppearanceTarget {
 
 /**
  * Keeps the window's look in step with the settings (decision 032): applies them now, again on
- * every change, and whenever the OS's scheme or contrast preference changes, which a `"system"`
- * theme follows (plan 013 decision 8). Returns the unsubscribe.
+ * every change, and whenever the OS's scheme, contrast or motion preference changes, which a
+ * `"system"` theme (plan 013 decision 8) and a `"system"` motion (plan 109) follow. Returns the unsubscribe.
  */
 export function installAppearance(
   store: SettingsStore = useSettings,
@@ -238,12 +239,17 @@ export function installAppearance(
 ): () => void {
   const dark = target.matchMedia(DARK_QUERY);
   const contrast = target.matchMedia(MORE_CONTRAST_QUERY);
+  const reducedMotion = target.matchMedia(REDUCED_MOTION_QUERY);
   const readSystem = () =>
-    store.getState().setSystem({ prefersDark: dark.matches, prefersMoreContrast: contrast.matches });
+    store.getState().setSystem({
+      prefersDark: dark.matches,
+      prefersMoreContrast: contrast.matches,
+      prefersReducedMotion: reducedMotion.matches,
+    });
   const apply = () => {
     const state = store.getState();
     const { theme } = themeOf(state);
-    target.apply(appearanceOf(state.settings, theme), theme.colorScheme);
+    target.apply(appearanceOf(state.settings, theme, state.system), theme.colorScheme);
   };
   readSystem();
   apply();
@@ -259,10 +265,12 @@ export function installAppearance(
   });
   dark.addEventListener("change", readSystem);
   contrast.addEventListener("change", readSystem);
+  reducedMotion.addEventListener("change", readSystem);
   return () => {
     offStore();
     dark.removeEventListener("change", readSystem);
     contrast.removeEventListener("change", readSystem);
+    reducedMotion.removeEventListener("change", readSystem);
   };
 }
 

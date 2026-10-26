@@ -28,8 +28,8 @@ type SettingsBridge = Pick<TableCraftBridge, "readSettings" | "writeSettings" | 
 export interface SettingsState {
   readonly settings: Settings;
   readonly themes: readonly UserThemeEntry[];
-  /** What `prefers-color-scheme` and `prefers-contrast` say; a `"system"` theme follows it. */
-  readonly system: SystemAppearance;
+  /** What the OS's media queries say; a `"system"` theme and a `"system"` motion follow it. */
+  readonly system: SystemPreferences;
   /** Why `settings.json` was set aside, or why a save failed; shown once, until dismissed. */
   readonly notice: string | null;
   /**
@@ -41,7 +41,7 @@ export interface SettingsState {
   readonly load: () => Promise<void>;
   /** Main saved settings or reread the themes, in this window or another. */
   readonly changed: (changed: SettingsChanged) => void;
-  readonly setSystem: (system: SystemAppearance) => void;
+  readonly setSystem: (system: SystemPreferences) => void;
   /** Draws `choice` without choosing it; `null` goes back to the chosen theme. */
   readonly preview: (choice: ThemeChoice | null) => void;
   /**
@@ -59,7 +59,15 @@ export interface SettingsStoreOptions {
   readonly log: (message: string, cause: unknown) => void;
 }
 
-const DARK_SYSTEM: SystemAppearance = { prefersDark: true, prefersMoreContrast: false };
+/**
+ * The theme's system appearance plus `prefers-reduced-motion`, which only the renderer reads
+ * (plan 109 decision 11), so main's `SystemAppearance` stays as it is.
+ */
+export interface SystemPreferences extends SystemAppearance {
+  readonly prefersReducedMotion: boolean;
+}
+
+const DARK_SYSTEM: SystemPreferences = { prefersDark: true, prefersMoreContrast: false, prefersReducedMotion: false };
 
 function failureText(answer: InvokeResult<unknown>): string | null {
   return answer.ok ? null : `${answer.error.message} ${answer.error.hint}`;
@@ -104,7 +112,11 @@ export function createSettingsStore(options: SettingsStoreOptions) {
       },
       setSystem(system) {
         const current = get().system;
-        if (current.prefersDark === system.prefersDark && current.prefersMoreContrast === system.prefersMoreContrast) {
+        if (
+          current.prefersDark === system.prefersDark &&
+          current.prefersMoreContrast === system.prefersMoreContrast &&
+          current.prefersReducedMotion === system.prefersReducedMotion
+        ) {
           return;
         }
         set({ system });

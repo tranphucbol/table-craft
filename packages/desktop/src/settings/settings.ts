@@ -9,6 +9,7 @@ import {
   type DensityId,
   type UserThemeId,
 } from "@table-craft/desktop/appearance/themes.js";
+import { isMotionChoice, type MotionChoice } from "@table-craft/desktop/appearance/motion.js";
 
 export const SETTINGS_VERSION = 1;
 
@@ -30,6 +31,8 @@ export interface AppearanceSettings {
   readonly theme: ThemeChoice;
   readonly density: DensityId;
   readonly fonts: FontSettings;
+  /** How much the window animates (plan 109); `system` follows `prefers-reduced-motion`. */
+  readonly motion: MotionChoice;
   /** Frame the window with the operating system's title bar; main reads it at window creation. */
   readonly systemTitleBar: boolean;
 }
@@ -188,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
       editor: { family: null, sizePx: 13 },
       grid: { family: null, sizePx: 12 },
     },
+    motion: "system",
     systemTitleBar: false,
   },
   editor: {
@@ -383,6 +387,7 @@ export function readSettings(input: unknown): Settings {
         editor: readFont(fonts.editor, defaults.appearance.fonts.editor),
         grid: readFont(fonts.grid, defaults.appearance.fonts.grid),
       },
+      motion: isMotionChoice(appearance.motion) ? appearance.motion : defaults.appearance.motion,
       systemTitleBar:
         typeof appearance.systemTitleBar === "boolean" ? appearance.systemTitleBar : defaults.appearance.systemTitleBar,
     },

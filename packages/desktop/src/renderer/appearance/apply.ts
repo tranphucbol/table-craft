@@ -11,7 +11,7 @@ function kebab(name: string): string {
 
 /** The CSS variables `app.css` maps onto Tailwind's theme. */
 export function appearanceVariables(appearance: Appearance): Readonly<Record<string, string>> {
-  const { colors, fonts, density } = appearance;
+  const { colors, fonts, density, motion } = appearance;
   return {
     "--tc-canvas": colors.canvas,
     "--tc-editor-tooltip-radius": `${EDITOR_TOOLTIP_RADIUS_PX}px`,
@@ -68,6 +68,14 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-picker-list-height": `${density.pickerListHeightPx}px`,
     "--tc-plan-details-width": `${density.planDetailsWidthPx}px`,
     "--tc-plan-bar-height": `${density.planBarHeightPx}px`,
+    "--tc-motion-fast": `${motion.fastMs}ms`,
+    "--tc-motion-base": `${motion.baseMs}ms`,
+    "--tc-motion-slow": `${motion.slowMs}ms`,
+    "--tc-motion-flash": `${motion.flashMs}ms`,
+    "--tc-motion-shift": `${motion.shiftPx}px`,
+    "--tc-motion-enter-scale": String(motion.enterScale),
+    "--tc-motion-progress": motion.progress,
+    "--tc-motion-ambient": motion.ambient,
   };
 }
 

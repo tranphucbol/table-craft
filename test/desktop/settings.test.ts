@@ -29,6 +29,7 @@ const CHOSEN: Settings = {
       editor: { family: "Fira Code", sizePx: 15 },
       grid: { family: "Menlo", sizePx: 11 },
     },
+    motion: "reduced",
     systemTitleBar: true,
   },
   editor: {
@@ -206,6 +207,26 @@ describe("settings document", () => {
       readSettings({ ...CHOSEN, appearance: { ...appearance, systemTitleBar: "yes" } }).appearance.systemTitleBar,
     ).toBe(false);
     expect(readSettings(CHOSEN).appearance.systemTitleBar).toBe(true);
+  });
+
+  it("givenMotionMissing_whenRead_thenSystem", () => {
+    const { motion: _omitted, ...appearance } = CHOSEN.appearance;
+
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.motion).toBe("system");
+  });
+
+  it("givenMotionUnknown_whenRead_thenSystemAndOtherFieldsKept", () => {
+    const read = readSettings({ ...CHOSEN, appearance: { ...CHOSEN.appearance, motion: "minimal" } });
+
+    expect(read.appearance).toEqual({ ...CHOSEN.appearance, motion: "system" });
+    expect(read.data).toEqual(CHOSEN.data);
+  });
+
+  it("givenMotionOff_whenRead_thenOff", () => {
+    const read = readSettings({ ...CHOSEN, appearance: { ...CHOSEN.appearance, motion: "off" } });
+
+    expect(read.appearance.motion).toBe("off");
+    expect(settingsSchema.safeParse(read).success).toBe(true);
   });
 
   it("givenRunAllOnErrorMissingOrUnknown_whenRead_thenAsk", () => {
