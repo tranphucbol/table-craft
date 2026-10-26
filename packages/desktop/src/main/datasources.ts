@@ -50,6 +50,7 @@ const datasourceSchema = z.strictObject({
   secretModes: z.record(z.string(), z.enum(SECRET_MODES)),
   origin: z.strictObject({ app: z.enum(IMPORT_APPS), id: z.string().min(1) }).optional(),
   ssh: sshSchema.optional(),
+  shownNamespaces: z.array(z.string()).readonly().optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -146,6 +147,7 @@ export function toDatasource(
     secretModes,
     ...(draft.origin === undefined ? {} : { origin: { app: draft.origin.app, id: draft.origin.id } }),
     ...(ssh === undefined ? {} : { ssh: { ...ssh, host: ssh.host.trim(), user: ssh.user.trim() } }),
+    ...(draft.shownNamespaces === undefined ? {} : { shownNamespaces: [...draft.shownNamespaces] }),
   };
 }
 

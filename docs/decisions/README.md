@@ -107,3 +107,4 @@ started, not when it is merged.
 | 114 | [Commands and server figures may target a node; cluster reachability is the user's map](114-cluster-nodes-are-the-users-map.md)                                        |
 | 115 | [Key edits are guarded, applied as one MULTI, and not undoable](115-guarded-key-edits.md)                                                                              |
 | 116 | [Redis 5.0 is supported through feature probes, not version branches](116-redis-5-0-is-supported-through-feature-probes.md)                                            |
+| 117 | [Shown schemas are a per-datasource allow-list](117-shown-schemas-are-a-per-datasource-allow-list.md)                                                                  |

@@ -43,6 +43,8 @@ export interface FormDraft {
   readonly storedSecrets: readonly string[];
   /** The SSH/SSL section; only a plugin whose manifest declares `network` shows it (decision 070). */
   readonly ssh: SshDraft;
+  /** Manage Shown Schemas' choice (decision 117); the form does not edit it, only keeps it. */
+  readonly shownNamespaces: readonly string[] | undefined;
   readonly ephemeral: boolean;
   readonly dirty: boolean;
 }
@@ -203,6 +205,7 @@ export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefin
     secrets,
     storedSecrets: view.storedSecrets,
     ssh: sshDraftOf(view.ssh),
+    shownNamespaces: view.shownNamespaces,
     ephemeral: view.ephemeral,
     dirty: false,
   };
@@ -241,6 +244,7 @@ export function newDraft(
     secrets,
     storedSecrets: [],
     ssh: BLANK_SSH,
+    shownNamespaces: undefined,
     ephemeral: false,
     dirty: true,
   };
@@ -381,6 +385,7 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
       config,
       secretModes: Object.fromEntries(Object.entries(draft.secretModes).filter(([key]) => kept(key))),
       ...(tunnel ? { ssh: sshSettingsOf(draft.ssh) } : {}),
+      ...(draft.shownNamespaces === undefined ? {} : { shownNamespaces: draft.shownNamespaces }),
     },
     secrets: Object.fromEntries(Object.entries(draft.secrets).filter(([key]) => kept(key))),
   };

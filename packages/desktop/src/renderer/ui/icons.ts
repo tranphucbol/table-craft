@@ -91,6 +91,7 @@ import { PreviewChangesGlyph, SubmitGlyph } from "@table-craft/desktop/renderer/
 /** Every glyph the app draws, in one family (Phosphor), so this file is the audit. */
 export {
   CircleNotch as SpinnerIcon,
+  MagnifyingGlass as SearchIcon,
   Database as DatabaseIcon,
   HardDrives as ServicesIcon,
   HardDrives as ServerNodeIcon,

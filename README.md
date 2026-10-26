@@ -232,6 +232,10 @@ their columns, keys, foreign keys and indexes. Expanding a disconnected data sou
 Typing in the tree starts speed search, `F1` shows Quick Documentation for the selected object, and
 `⌘B` opens its DDL. **Synchronize** (`⌥⌘Y`) reloads the tree from the database.
 
+On a server with many databases, **Manage Shown Schemas…** on a data source picks which databases
+or schemas the tree lists, as DataGrip does; the data source then shows how many of them it lists,
+such as `3 of 40`. Ones created later stay hidden until you pick them, unless **All schemas** is on.
+
 The tree's context menu also changes the database: **New Table…** on a schema, **Modify Table…**
 (`⌘F6`) on a table, **Rename…** (`⇧F6`), **Truncate…** and **Drop…** (`⌘⌫`). Every change shows
 the DDL it will run first, and **Open in Console** takes it to a console instead. On PostgreSQL and
