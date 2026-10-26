@@ -160,6 +160,7 @@ function Body({ mode, onRun }: { mode: PaletteMode; onRun: (item: SearchItem) =>
 export function Palette() {
   const mode = usePalette((state) => state.mode);
   const ran = useRef(false);
+  const opener = useRef<HTMLElement | null>(null);
 
   function run(item: SearchItem): void {
     if (!item.enabled) return;
@@ -187,12 +188,16 @@ export function Palette() {
           )}
           onOpenAutoFocus={() => {
             ran.current = false;
+            opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           }}
           onCloseAutoFocus={(event) => {
-            // An action that ran decides where focus goes, e.g. a new console's editor.
-            if (!ran.current) return;
+            // Radix would focus the dialog's trigger, and the palette has none: focus fell to the body.
             event.preventDefault();
-            if (document.activeElement === document.body) focusRegion("editor");
+            const returnTo = opener.current;
+            opener.current = null;
+            // An action that ran decides where focus goes, e.g. a new console's editor.
+            if (!ran.current && returnTo?.isConnected === true) returnTo.focus();
+            else if (document.activeElement === document.body) focusRegion("editor");
           }}
         >
           <Dialog.Title className="sr-only">{mode === null ? "" : MODE_TITLE[mode]}</Dialog.Title>
