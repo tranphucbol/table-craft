@@ -436,6 +436,32 @@ function catalogRows(builder: Builder, datasourceId: string, described: Describe
   }
 }
 
+/** The top-level namespaces Manage Shown Schemas keeps (decision 117); null when it keeps them all. */
+function shownFilter(datasource: Pick<DatasourceView, "shownNamespaces">): ReadonlySet<string> | null {
+  return datasource.shownNamespaces === undefined ? null : new Set(datasource.shownNamespaces);
+}
+
+/** The top-level namespaces a datasource lists, as Manage Shown Schemas offers them. */
+export function topLevelNamespaces(namespaces: readonly Namespace[]): readonly Namespace[] {
+  return childNamespaces(namespaces, null);
+}
+
+/**
+ * How many of the listed top-level namespaces Manage Shown Schemas keeps, for the datasource row's
+ * "N of M"; null when it keeps them all or nothing is listed yet. Hidden system schemas count on
+ * neither side, so the number matches the rows the tree draws.
+ */
+export function shownNamespaceCount(
+  datasource: Pick<DatasourceView, "shownNamespaces">,
+  namespaces: readonly Namespace[] | null,
+  showSystem: boolean,
+): { readonly shown: number; readonly total: number } | null {
+  const filter = shownFilter(datasource);
+  if (filter === null || namespaces === null) return null;
+  const top = topLevelNamespaces(namespaces).filter((namespace) => showSystem || !namespace.system);
+  return { shown: top.filter((namespace) => filter.has(namespace.name)).length, total: top.length };
+}
+
 function namespaceRows(
   builder: Builder,
   datasourceId: string,
@@ -443,9 +469,11 @@ function namespaceRows(
   namespaces: readonly Namespace[],
   parent: readonly string[] | null,
   depth: number,
+  shown: ReadonlySet<string> | null = null,
 ): void {
   for (const namespace of childNamespaces(namespaces, parent)) {
     if (namespace.system && !builder.input.showSystem) continue;
+    if (parent === null && shown !== null && !shown.has(namespace.name)) continue;
     const state = catalog.namespaceStates[pathKey(namespace.path)] ?? null;
     const node: NamespaceNode = { kind: "namespace", datasourceId, path: namespace.path, namespace, state };
     if (!push(builder, node, depth, namespaceKey(datasourceId, namespace.path), namespace.name, true)) continue;
@@ -492,7 +520,7 @@ function datasourceRows(builder: Builder, node: DatasourceNode, depth: number): 
   }
   const catalog = builder.input.catalogs[datasource.id] ?? EMPTY_CATALOG;
   if (catalog.namespaces !== null) {
-    namespaceRows(builder, datasource.id, catalog, catalog.namespaces, null, depth + 1);
+    namespaceRows(builder, datasource.id, catalog, catalog.namespaces, null, depth + 1, shownFilter(datasource));
   } else if (catalog.error !== null) {
     const errorNode: ErrorNode = { kind: "error", datasourceId: datasource.id, error: catalog.error };
     push(builder, errorNode, depth + 1, catalogKey(datasource.id, "error"), catalog.error.message, false);

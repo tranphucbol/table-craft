@@ -127,6 +127,25 @@ describe("datasource form", () => {
     });
   });
 
+  it("givenShownNamespaces_whenEditedAndSaved_thenKeptAndCopiedByDuplicate", () => {
+    const filtered = view({ ...SAVED, shownNamespaces: ["shop", "billing"] });
+
+    const request = toSaveRequest(draftFromView(filtered, POSTGRES_PLUGIN), POSTGRES_PLUGIN);
+    const copy = toSaveRequest(duplicateDraft("new-0", filtered, POSTGRES_PLUGIN, [], "forever"), POSTGRES_PLUGIN);
+
+    expect(request.datasource.shownNamespaces).toEqual(["shop", "billing"]);
+    expect(copy.datasource.shownNamespaces).toEqual(["shop", "billing"]);
+  });
+
+  it("givenNoShownNamespaces_whenSaveRequestBuilt_thenKeyAbsent", () => {
+    expect(toSaveRequest(draftFromView(SAVED, POSTGRES_PLUGIN), POSTGRES_PLUGIN).datasource).not.toHaveProperty(
+      "shownNamespaces",
+    );
+    expect(
+      toSaveRequest(newDraft("new-0", POSTGRES_PLUGIN, [], "forever"), POSTGRES_PLUGIN).datasource,
+    ).not.toHaveProperty("shownNamespaces");
+  });
+
   it("givenBlankTimeouts_whenSaveRequestBuilt_thenKeysAbsent", () => {
     const request = toSaveRequest(draftFromView(SAVED, POSTGRES_PLUGIN), POSTGRES_PLUGIN);
 

@@ -12,6 +12,7 @@ import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/data
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
+  answerSecretPrompt,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
   DATABASES_ENABLED,
@@ -20,17 +21,21 @@ import {
   findAction,
   LAUNCH_TIMEOUT_MS,
   launchApp,
+  newProfile,
   paletteInput,
   paletteRows,
   pressChord,
   pressDoubleShift,
   SCENARIO_TIMEOUT_MS,
+  seedDatasources,
   setWindowSize,
   sqlEditor,
   toolWindow,
+  treeNode,
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  type SavedDatasource,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("005");
@@ -46,6 +51,9 @@ const WIDE_COLUMNS = 10;
 const WIDE_DESCRIBE_BUDGET_MS = 2_000;
 const NEW_TABLE = "explorer_new";
 const DATABASE_PANE_WIDENING_PX = 160;
+/** Not `mysql`, which the server's own system database is also called. */
+const SHARED_MYSQL = "Shared MySQL";
+const SHOWN_OF_TOTAL = /^(\d+) of (\d+)$/;
 /** `placed_at` is about 60 px wide in the UI font; a squeezed name measures far less. */
 const MIN_NAME_WIDTH_PX = 40;
 
@@ -252,6 +260,46 @@ describe.runIf(DATABASES_ENABLED)("database explorer live test", () => {
       await findAction(page, "Show System Schemas");
       await expect.poll(() => row(page, "pg_catalog").count()).toBe(0);
       await expect.poll(() => row(page, "information_schema").count()).toBe(0);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenSavedMysql_whenManageShownSchemasHidesTableCraft_thenItsNodeGoesAndTheRowSaysNOfM",
+    async () => {
+      const profile = newProfile();
+      const { password, ...plain } = MYSQL_CONFIG;
+      const saved: SavedDatasource = {
+        id: "shared-mysql",
+        name: SHARED_MYSQL,
+        pluginId: "mysql",
+        config: plain,
+        secretModes: { password: "never" },
+      };
+      seedDatasources(profile, [saved]);
+      running = await launchApp(null, { userDataDir: profile });
+      const { page } = running;
+      await setWindowSize(running.app, EVIDENCE_WINDOW);
+      await widenDatabasePane(page);
+      await treeNode(page, SHARED_MYSQL).click();
+      await page.keyboard.press("ArrowRight");
+      await answerSecretPrompt(page, SHARED_MYSQL, password);
+      await row(page, "table_craft").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+
+      await findAction(page, "Manage Shown Schemas");
+      const dialog = page.getByRole("dialog", { name: `Manage Shown Schemas — ${SHARED_MYSQL}` });
+      await dialog.getByRole("checkbox", { name: "All schemas", exact: true }).uncheck();
+      await dialog.getByRole("checkbox", { name: "table_craft", exact: true }).uncheck();
+      await captureWindow(page, "manage-shown-schemas");
+      await dialog.getByRole("button", { name: "OK", exact: true }).click();
+      await dialog.waitFor({ state: "detached" });
+
+      await expect.poll(() => row(page, "table_craft").count()).toBe(0);
+      const shown = treeNode(page, SHARED_MYSQL).getByTestId("shown-namespaces");
+      await expect.poll(() => shown.textContent()).toMatch(SHOWN_OF_TOTAL);
+      const [, count, total] = SHOWN_OF_TOTAL.exec((await shown.textContent()) ?? "") ?? [];
+      expect(Number(count)).toBe(Number(total) - 1);
+      await captureWindow(page, "shown-schemas-filtered");
     },
     SCENARIO_TIMEOUT_MS,
   );

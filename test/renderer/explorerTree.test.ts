@@ -7,9 +7,13 @@ import {
   relationKey,
   revealKeys,
   routineKey,
+  shownNamespaceCount,
   type ExplorerRow,
 } from "@table-craft/desktop/renderer/model/explorerTree.js";
+import type { Namespace } from "@table-craft/desktop/engine/protocol.js";
+import { buildTree } from "@table-craft/desktop/renderer/model/datasourceTree.js";
 import { AUDIT_PATH, LOADED_PG, outline, PUBLIC_CATALOG, PUBLIC_PATH, rowsOf } from "./catalogFixtures.js";
+import { view } from "./datasourceViews.js";
 
 const DATABASE_KEY = namespaceKey("pg", ["table_craft"]);
 const PUBLIC_KEY = namespaceKey("pg", PUBLIC_PATH);
@@ -160,5 +164,67 @@ describe("explorer tree", () => {
     expect(routineRows.map((candidate) => candidate.key)).toEqual(
       routines.map((routine) => routineKey("pg", PUBLIC_PATH, routine)),
     );
+  });
+});
+
+function database(name: string, overrides: Partial<Namespace> = {}): Namespace {
+  return { path: [name], name, kind: "schema", system: false, current: false, ...overrides };
+}
+
+const SERVER_DATABASES: readonly Namespace[] = [
+  database("billing"),
+  database("mysql", { system: true }),
+  database("shop", { current: true }),
+  database("staging"),
+];
+
+function serverRows(shownNamespaces?: readonly string[]): readonly ExplorerRow[] {
+  return rowsOf({
+    tree: buildTree([view({ id: "pg", name: "pg", ...(shownNamespaces === undefined ? {} : { shownNamespaces }) })]),
+    catalogs: { pg: { ...LOADED_PG, namespaces: SERVER_DATABASES, namespaceStates: {} } },
+    expanded: expanded(),
+    showSystem: true,
+  });
+}
+
+describe("explorer tree shown schemas", () => {
+  it("givenNoShownList_whenTreeBuilt_thenEveryNamespaceShows", () => {
+    expect(outline(serverRows())).toEqual(["0 pg", "1 billing", "1 mysql", "1 shop", "1 staging"]);
+  });
+
+  it("givenShownList_whenTreeBuilt_thenUnlistedTopLevelNamespacesAreHidden", () => {
+    expect(outline(serverRows(["shop", "mysql", "gone"]))).toEqual(["0 pg", "1 mysql", "1 shop"]);
+  });
+
+  it("givenShownList_whenDatabaseExpanded_thenItsSchemasAreNotFiltered", () => {
+    const rows = rowsOf({
+      tree: buildTree([view({ id: "pg", name: "pg", shownNamespaces: ["table_craft"] })]),
+      expanded: expanded(DATABASE_KEY),
+    });
+
+    expect(outline(rows)).toEqual(["0 pg", "1 table_craft", "2 audit", "2 public"]);
+  });
+
+  it("givenShownList_whenCounted_thenListedOnesOfTheTopLevelOnes", () => {
+    expect(shownNamespaceCount({ shownNamespaces: ["shop", "gone"] }, SERVER_DATABASES, true)).toEqual({
+      shown: 1,
+      total: 4,
+    });
+    expect(shownNamespaceCount({ shownNamespaces: ["table_craft"] }, LOADED_PG.namespaces, true)).toEqual({
+      shown: 1,
+      total: 1,
+    });
+  });
+
+  it("givenSystemSchemasHidden_whenCounted_thenHiddenSystemOnesCountOnNeitherSide", () => {
+    expect(shownNamespaceCount({ shownNamespaces: ["shop", "mysql"] }, SERVER_DATABASES, false)).toEqual({
+      shown: 1,
+      total: 3,
+    });
+  });
+
+  it("givenNoShownListOrNothingListed_whenCounted_thenNull", () => {
+    expect(shownNamespaceCount({}, SERVER_DATABASES, true)).toBeNull();
+    expect(shownNamespaceCount({ shownNamespaces: ["shop"] }, null, true)).toBeNull();
   });
 });

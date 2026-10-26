@@ -18,6 +18,7 @@ import { QuickDoc } from "@table-craft/desktop/renderer/catalog/QuickDoc.js";
 import { editorReservedChords } from "@table-craft/desktop/renderer/console/editorKeys.js";
 import { DataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/DataSources.js";
 import { ImportDataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/ImportDataSources.js";
+import { ManageShownSchemasDialog } from "@table-craft/desktop/renderer/dialogs/ManageShownSchemas.js";
 import { HostKeyPrompt } from "@table-craft/desktop/renderer/dialogs/HostKeyPrompt.js";
 import { Modal } from "@table-craft/desktop/renderer/dialogs/Modal.js";
 import { SecretPrompt } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
@@ -99,6 +100,7 @@ export function App() {
       <Palette />
       <DataSourcesDialog />
       <ImportDataSourcesDialog />
+      <ManageShownSchemasDialog />
       <SettingsDialog />
       <SecretPrompt />
       <HostKeyPrompt />

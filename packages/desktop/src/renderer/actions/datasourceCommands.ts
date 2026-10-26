@@ -47,6 +47,25 @@ export async function moveToFolder(view: DatasourceView, folder: string | null):
   );
 }
 
+/**
+ * Saves which top-level namespaces the Database pane shows (decision 117); undefined shows them
+ * all. Its secrets stay as they are. Whether it saved, so a dialog stays open on a failure.
+ */
+export async function setShownNamespaces(
+  view: DatasourceView,
+  shownNamespaces: readonly string[] | undefined,
+): Promise<boolean> {
+  const { storedSecrets: _stored, ephemeral: _ephemeral, shownNamespaces: _previous, ...datasource } = view;
+  const saved = await settle(
+    "Could not save the shown schemas",
+    bridge().saveDatasource({
+      datasource: { ...datasource, ...(shownNamespaces === undefined ? {} : { shownNamespaces }) },
+      secrets: {},
+    }),
+  );
+  return saved !== null;
+}
+
 export async function askMoveToFolder(view: DatasourceView): Promise<void> {
   const folder = await useModal.getState().ask({
     kind: "text",

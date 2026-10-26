@@ -10,6 +10,7 @@ import {
 import { useDdl, type DdlTab } from "@table-craft/desktop/renderer/state/ddl.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
+import { useManageShownSchemasDialog } from "@table-craft/desktop/renderer/state/manageShownSchemasDialog.js";
 import { useSettingsDialog } from "@table-craft/desktop/renderer/state/settingsDialog.js";
 import {
   capabilitiesOf,
@@ -123,6 +124,7 @@ export function modalOpen(): boolean {
     usePalette.getState().mode !== null ||
     useDataSourcesDialog.getState().target !== null ||
     useImportDataSourcesDialog.getState().session !== null ||
+    useManageShownSchemasDialog.getState().datasourceId !== null ||
     useSettingsDialog.getState().page !== null ||
     useSecretPrompt.getState().pending !== null ||
     useHostKeyPrompt.getState().queue.length > 0 ||

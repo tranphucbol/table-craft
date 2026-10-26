@@ -21,6 +21,7 @@ import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
 import { canRun, OUTPUT_TAB, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
+import { useManageShownSchemasDialog } from "@table-craft/desktop/renderer/state/manageShownSchemasDialog.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
@@ -66,6 +67,7 @@ export const ACTION_IDS = {
   disconnect: "datasource.disconnect",
   newFolder: "datasource.newFolder",
   moveToFolder: "datasource.moveToFolder",
+  manageShownSchemas: "datasource.manageShownSchemas",
   synchronize: "database.synchronize",
   collapseAll: "explorer.collapseAll",
   toggleSystemSchemas: "explorer.toggleSystemSchemas",
@@ -102,6 +104,9 @@ const isSaved = (context: ActionContext) => context.datasource !== null && !cont
 const hasUrl = (context: ActionContext) =>
   isSaved(context) &&
   (pluginOf(useDatasources.getState().plugins, context.datasource?.view.pluginId ?? "")?.url ?? null) !== null;
+/** Saved, and its plugin lists namespaces for the tree (decision 007). */
+const listsNamespaces = (context: ActionContext) =>
+  isSaved(context) && context.datasource?.capabilities.includes("schemaTree") === true;
 const isLive = (context: ActionContext) =>
   context.datasource?.connection.status === "connected" || context.datasource?.connection.status === "connecting";
 
@@ -548,6 +553,15 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     when: isSaved,
     run: async (context) => {
       if (context.datasource !== null) await askMoveToFolder(context.datasource.view);
+    },
+  }),
+  defineAction({
+    id: ACTION_IDS.manageShownSchemas,
+    title: "Manage Shown Schemas…",
+    category: "Database",
+    when: listsNamespaces,
+    run: (context) => {
+      if (context.datasource !== null) useManageShownSchemasDialog.getState().show(context.datasource.view.id);
     },
   }),
 ];

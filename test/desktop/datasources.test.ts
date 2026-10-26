@@ -54,6 +54,26 @@ describe("datasource store", () => {
     expect(reloaded.datasources).toEqual([tuned]);
   });
 
+  it("givenShownNamespaces_whenSavedAndLoaded_thenRoundTrip", async () => {
+    const { files, store: first } = store();
+    const filtered = { ...LOCAL_PG, shownNamespaces: ["table_craft", "shop"] };
+    await first.save([filtered, LOCAL_PG]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.datasources).toEqual([filtered, LOCAL_PG]);
+    expect(reloaded.datasources[1]).not.toHaveProperty("shownNamespaces");
+  });
+
+  it("givenDraftWithShownNamespaces_whenStored_thenKept", () => {
+    const draft = { ...LOCAL_PG, shownNamespaces: ["shop"] };
+
+    expect(toDatasource(draft, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields).shownNamespaces).toEqual(["shop"]);
+    expect(toDatasource(LOCAL_PG, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).not.toHaveProperty(
+      "shownNamespaces",
+    );
+  });
+
   it("givenKeepAliveOutOfRange_whenLoaded_thenNotMisread", async () => {
     const file = JSON.stringify({ version: 1, datasources: [{ ...LOCAL_PG, keepAliveSeconds: 99_999 }] });
 

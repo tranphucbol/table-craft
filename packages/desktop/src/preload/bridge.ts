@@ -279,6 +279,11 @@ export interface Datasource {
   readonly origin?: DatasourceOrigin | undefined;
   /** Only for a plugin whose manifest declares `network`; absent is no tunnel. */
   readonly ssh?: SshSettings | undefined;
+  /**
+   * The top-level namespaces the Database pane shows, by name (decision 117); absent shows them all.
+   * An allow-list, so a database created later on a shared server stays hidden until picked.
+   */
+  readonly shownNamespaces?: readonly string[] | undefined;
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */

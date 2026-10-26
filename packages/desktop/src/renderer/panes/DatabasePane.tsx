@@ -29,6 +29,7 @@ import {
   datasourceKey,
   explorerRows,
   objectNameOf,
+  shownNamespaceCount,
   type ExplorerNode,
   type ExplorerRow,
 } from "@table-craft/desktop/renderer/model/explorerTree.js";
@@ -99,6 +100,7 @@ const DATASOURCE_MENU = [
   ACTION_IDS.synchronize,
   OBJECT_ACTION_IDS.newDatabase,
   KEY_ACTION_IDS.goTo,
+  ACTION_IDS.manageShownSchemas,
   null,
   ACTION_IDS.datasourceProperties,
   ACTION_IDS.duplicateDatasource,
@@ -146,6 +148,7 @@ const NAMESPACE_MENU = [
   ACTION_IDS.copyName,
   null,
   ACTION_IDS.toggleSystemSchemas,
+  ACTION_IDS.manageShownSchemas,
 ] as const;
 const RELATION_MENU = [
   TABLE_ACTION_IDS.openData,
@@ -223,6 +226,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   ROUTINE_ACTION_IDS.execute,
   KEY_ACTION_IDS.goTo,
   KEY_ACTION_IDS.loadMore,
+  ACTION_IDS.manageShownSchemas,
   ...KEY_HIDDEN_WHEN_DISABLED,
 ]);
 
@@ -312,12 +316,25 @@ function menuOf(node: ExplorerNode): readonly (string | null)[] {
   return CATALOG_MENU;
 }
 
+/** "N of M" when Manage Shown Schemas hides some of the datasource's listed namespaces (decision 117). */
+function useShownText(node: ExplorerNode): string | null {
+  const namespaces = useCatalog((state) =>
+    node.kind === "datasource" ? (state.catalogs[node.datasource.id]?.namespaces ?? null) : null,
+  );
+  const showSystem = useLayout((state) => state.layout.showSystemSchemas);
+  if (node.kind !== "datasource") return null;
+  const count = shownNamespaceCount(node.datasource, namespaces, showSystem);
+  return count === null ? null : `${String(count.shown)} of ${String(count.total)}`;
+}
+
 function DatasourceLabel({
   node,
   positions,
+  shown,
 }: {
   readonly node: Extract<ExplorerNode, { kind: "datasource" }>;
   readonly positions: readonly number[];
+  readonly shown: string | null;
 }) {
   const { datasource } = node;
   const connection = useDatasources((state) => connectionOf(state, datasource.id));
@@ -342,6 +359,15 @@ function DatasourceLabel({
       {datasource.readOnly ? (
         <ReadOnlyIcon aria-label="read-only" className="size-icon shrink-0 text-ink-muted" />
       ) : null}
+      {shown === null ? null : (
+        <span
+          data-testid="shown-namespaces"
+          className="shrink-0 text-ink-muted tabular-nums"
+          title={`${shown} schemas shown; Manage Shown Schemas… changes which`}
+        >
+          {shown}
+        </span>
+      )}
       {dot === null ? null : <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dot)} />}
       {connection.status === "disconnected" ? null : (
         <span className={cn("truncate", failed ? "text-danger" : "text-ink-muted")}>{connectionText(connection)}</span>
@@ -371,11 +397,12 @@ function TreeRow({ row, selected, positions, top, onSelect, onToggle, onActivate
   const connection = useDatasources((state) =>
     node.kind === "datasource" ? connectionOf(state, node.datasource.id) : null,
   );
+  const shown = useShownText(node);
   const label =
     node.kind === "folder"
       ? `${node.name}, folder`
       : node.kind === "datasource"
-        ? `${node.datasource.name}, ${connectionText(connection ?? { status: "disconnected", error: null, serverVersion: null })}`
+        ? `${node.datasource.name}, ${connectionText(connection ?? { status: "disconnected", error: null, serverVersion: null })}${shown === null ? "" : `, ${shown} schemas shown`}`
         : nodeAriaLabel(row);
   const failedNamespace = node.kind === "namespace" && node.state?.error != null;
   const title =
@@ -438,7 +465,7 @@ function TreeRow({ row, selected, positions, top, onSelect, onToggle, onActivate
               <Highlighted text={node.name} positions={positions} />
             </>
           ) : node.kind === "datasource" ? (
-            <DatasourceLabel node={node} positions={positions} />
+            <DatasourceLabel node={node} positions={positions} shown={shown} />
           ) : node.kind === "keyFilter" ? (
             <KeyFilterRow key={node.filter.match} node={node} onFocus={() => onSelect(row, true)} />
           ) : (
