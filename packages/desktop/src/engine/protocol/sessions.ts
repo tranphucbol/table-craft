@@ -1,3 +1,4 @@
+import type { KeySource } from "./keyspace.js";
 import type { ResultState, ResultWindow } from "./results.js";
 import type { Capability, Column, CommandReply, TypeClass } from "./wire.js";
 
@@ -82,8 +83,14 @@ export interface ExecutedStatement extends ResultState {
   readonly namespace?: CurrentNamespace;
   /** Present when the engine replaced a lost session before running the statement (decision 054). */
   readonly reconnected?: Reconnection;
-  /** A command's scalar answer (decision 112): Output shows it and no result tab opens. */
+  /**
+   * A command's scalar answer (decision 112): Output shows it, and the result holds it as one
+   * `value` row. Only a `read` reply opens that result as a tab; Show as Result opens the rest
+   * (decision 119).
+   */
   readonly reply?: CommandReply;
+  /** The one key the command read, when the plugin can tell (decision 119). */
+  readonly source?: KeySource;
 }
 
 /** A lost session the engine replaced with a new one under the same `sessionId`. */

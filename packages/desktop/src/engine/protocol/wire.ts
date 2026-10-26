@@ -79,6 +79,7 @@ export type Capability =
 export interface CommandReply {
   readonly value: WireValue;
   readonly text: string;
+  readonly read?: boolean;
 }
 
 /** Mirrors `NODE_AUTO` in plugin-api: a command runs where its key's slot lives. */

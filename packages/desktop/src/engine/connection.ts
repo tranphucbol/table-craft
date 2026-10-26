@@ -4,6 +4,7 @@ import {
   type BytesValue,
   type Capability,
   type Column,
+  type KeySource,
   type Row,
   type ServerSession,
   type Session,
@@ -182,6 +183,8 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   const edited = new Map<string, TableResult>();
   /** Files `result.loadBytes` read for a result's edits, by id, until the result is released (plan 043). */
   const staged = new Map<string, { readonly handle: string; readonly bytes: BytesValue }>();
+  /** The one key each console command result read, so `result.editable` can edit it as the key (decision 119). */
+  const keySources = new Map<string, KeySource>();
   const unsubscribe = tasks.subscribe(emit);
   const unsubscribeImports = imports.subscribe(emit);
   const unsubscribeScripts = scripts.subscribe(emit);
@@ -193,6 +196,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     ran.delete(handle);
     edited.delete(handle);
     for (const [id, entry] of staged) if (entry.handle === handle) staged.delete(id);
+    keySources.delete(handle);
   }
 
   async function releaseHandlesOf(sessionId: string): Promise<void> {
@@ -654,6 +658,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     tables.clear();
     staged.clear();
     cursors.clear();
+    keySources.clear();
     await settledWithin(Promise.allSettled(held.map((handle) => results.release(handle))), RELEASE_GRACE_MS);
     const open = [...sessions.values()];
     sessions.clear();
@@ -670,6 +675,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     ran,
     edited,
     staged,
+    keySources,
     unsubscribe,
     unsubscribeImports,
     unsubscribeScripts,
