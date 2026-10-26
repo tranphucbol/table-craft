@@ -100,9 +100,9 @@ Run from the repository root.
   against it on SQLite; `test:smoke:packaged:db` adds MySQL (and PostgreSQL when selected).
   `TABLE_CRAFT_APP_EXECUTABLE` points the harness at a packaged binary instead of the dev build
 - `bun run readme:media` - record the README GIFs into `docs/media/` (decision 036): builds the app,
-  reloads the demo `shop` database in the `test:db:postgres` Postgres and drives one scene per
-  GIF. Needs Docker, ffmpeg and a display; `README_MEDIA=explain,grid` re-records only those.
-  Re-record after a UI change a GIF shows
+  reloads the demo `shop` database in the `test:db:postgres` Postgres and the demo keys in db 3 of
+  the `test:db:redis` Redis, and drives one scene per GIF. Needs Docker, ffmpeg and a display;
+  `README_MEDIA=explain,grid` re-records only those. Re-record after a UI change a GIF shows
 - `bun run api:check` - regenerate the plugin-api surface reports (`packages/plugin-api/api/`),
   fail when they differ from the committed ones, and check `API_VERSION` against the reports at
   the last `v*` tag (decision 107); `bun run test` runs the same. `bun run api:report` rewrites the
