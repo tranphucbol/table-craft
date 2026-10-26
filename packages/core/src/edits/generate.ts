@@ -1,9 +1,17 @@
-import type { Row, SqlLanguage, WireValue } from "@table-craft/plugin-api";
+import type { BytesValue, Row, SqlLanguage, WireValue } from "@table-craft/plugin-api";
 import { CoreError } from "@table-craft/core/errors.js";
 
-/** What the user typed into a cell: text the database casts, `NULL`, or the column's default. */
+/**
+ * What the user put into a cell: text the database casts, `NULL`, the column's default, a boolean
+ * from the boolean editor, or a file's bytes the engine staged under `id` (plan 043), of which the
+ * renderer holds only `length` and the first bytes as `preview` hex.
+ */
 export type CellInput =
-  { readonly kind: "text"; readonly text: string } | { readonly kind: "null" } | { readonly kind: "default" };
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "null" }
+  | { readonly kind: "default" }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "bytes"; readonly id: string; readonly length: number; readonly preview: string };
 
 /** One pending change; `row` is the row's index in the result store (decision 026). */
 export type RowEdit =
@@ -40,6 +48,8 @@ export interface GenerateEditsOptions extends EditTable {
   readonly rows: (row: number) => Row | undefined;
   readonly edits: readonly RowEdit[];
   readonly language: SqlLanguage;
+  /** The bytes staged under an id; undefined when nothing is staged under it. */
+  readonly staged?: (id: string) => BytesValue | undefined;
 }
 
 const STALE_HINT = "Reload the table and make the change again.";
@@ -100,6 +110,13 @@ export function generateEdits(options: GenerateEditsOptions): string[] {
         return "NULL";
       case "default":
         return language.updateDefault(column.default);
+      case "boolean":
+        return language.literal(value.value, column.type);
+      case "bytes":
+        return language.literal(
+          options.staged?.(value.id) ?? refuse("The loaded file is no longer staged.", "Load the file again."),
+          column.type,
+        );
     }
   }
 

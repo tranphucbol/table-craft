@@ -309,6 +309,11 @@ export class ResultStore {
     return this.#stored(handle).columns;
   }
 
+  /** Each column's type class, as the sort and the grid read it. */
+  classes(handle: ResultHandle): readonly TypeClass[] {
+    return this.#stored(handle).classes;
+  }
+
   state(handle: ResultHandle): ResultState {
     return stateOf(this.#stored(handle));
   }
