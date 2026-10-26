@@ -109,3 +109,4 @@ started, not when it is merged.
 | 116 | [Redis 5.0 is supported through feature probes, not version branches](116-redis-5-0-is-supported-through-feature-probes.md)                                            |
 | 117 | [Shown schemas are a per-datasource allow-list](117-shown-schemas-are-a-per-datasource-allow-list.md)                                                                  |
 | 118 | [Grid helpers compute and touch files in the engine](118-grid-helpers-compute-and-touch-files-in-the-engine.md)                                                        |
+| 119 | [Console replies name the key they read, and whole-key replies edit like the key tab](119-console-replies-name-their-key.md)                                           |

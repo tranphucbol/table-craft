@@ -28,6 +28,7 @@ import {
   type KeyChange,
   type KeyContents,
   type KeyName,
+  type KeySource,
   type KeyType,
   type Keyspace,
   type PlanNode,
@@ -219,6 +220,20 @@ export interface KeyspaceFixture {
   readonly stream: KeyRowsFixture & { readonly columns: readonly string[] };
   /** A scratch key the suite creates, changes and removes. */
   readonly edit: KeyEditFixture;
+  /**
+   * Commands run in a console and the key each reply names as its source, null for none
+   * (decision 119): one that reads a whole key, one that reads part of one, and one that reads
+   * several. Without it the reply-source tests are skipped.
+   */
+  readonly sources?: readonly KeySourceFixture[];
+}
+
+/** A command and the source its reply names (decision 119). */
+export interface KeySourceFixture {
+  readonly command: string;
+  readonly source: KeySource | null;
+  /** The reply is a value read, which the console opens as a one-row result. */
+  readonly read?: boolean;
 }
 
 /** How the suite changes one element of a scratch key and reads it back (decision 115). */
@@ -2461,6 +2476,21 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         expect(cursor).toBeNull();
         return { keys, batches };
       }
+
+      it.runIf(fixture.keyspace?.sources !== undefined)(
+        "givenSingleKeyRead_whenExecute_thenReplyNamesItsSourceKey",
+        async () => {
+          await withSession(plugin, fixture, async (session) => {
+            for (const expected of keyspaceFixture().sources ?? []) {
+              const result = await session.execute(expected.command);
+              await collect(result.rows);
+              expect(result.source ?? null, expected.command).toEqual(expected.source);
+              if (expected.read !== undefined)
+                expect(result.reply?.read ?? false, expected.command).toBe(expected.read);
+            }
+          });
+        },
+      );
 
       it("givenKeyspace_whenDatabases_thenFixtureDatabaseCountedAndOneCurrent", async () => {
         await withSession(plugin, fixture, async (session) => {

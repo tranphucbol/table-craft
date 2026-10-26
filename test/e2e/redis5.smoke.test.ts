@@ -121,7 +121,7 @@ describe.runIf(DATABASES_ENABLED)("redis 5.0 live test", () => {
     "givenRedis5Console_whenHgetallAndZrangeWithScores_thenRowsAsOn74",
     async () => {
       const page = await launch(REDIS5);
-      expect(await gridHeaders(page, "HGETALL user:{43}:profile")).toEqual(["key", "value"]);
+      expect(await gridHeaders(page, "HGETALL user:{43}:profile")).toEqual(["field", "value"]);
       expect(await gridHeaders(page, "ZRANGE leaderboard 0 -1 WITHSCORES")).toEqual(["member", "score"]);
       expect((await gridText(page)).cells).toEqual(["bob", "80", "ann", "120", "cid", "200"]);
       await runCommand(page, "ZSCORE leaderboard ann", "(integer) 120");

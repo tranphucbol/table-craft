@@ -1,3 +1,4 @@
+import type { KeyType } from "@table-craft/plugin-api";
 import type { CommandsFixture, KeyspaceFixture } from "@table-craft/plugin-api/testing";
 
 /** What the commands contract runs against the seeded Redis servers, standalone and cluster (plan 058). */
@@ -11,17 +12,16 @@ export const REDIS_COMMANDS: CommandsFixture = {
   ],
   scalar: { command: "HGET user:{42}:profile name", text: '"Ann"' },
   array: {
-    command: "LRANGE type_probe:list 0 -1",
+    command: "LRANGE type_probe:list 0 1",
     columns: ["#", "value"],
     rows: [
       [1, "a"],
       [2, "b"],
-      [3, "c"],
     ],
   },
   map: {
     command: "HGETALL user:{43}:profile",
-    columns: ["key", "value"],
+    columns: ["field", "value"],
     rows: [
       ["name", "Bob"],
       ["email", "bob@example.com"],
@@ -34,6 +34,10 @@ export const REDIS_COMMANDS: CommandsFixture = {
 };
 
 const EDITED_FIELD = { text: "status", hex: null };
+
+function sourced(key: string, type: KeyType, whole: boolean) {
+  return { database: 0, key: { text: key, hex: null }, type, whole };
+}
 
 /** The seeded keys the keyspace contract scans: `page:0001` … `page:5000` and the type probes. */
 export const REDIS_KEYSPACE: KeyspaceFixture = {
@@ -84,6 +88,17 @@ export const REDIS_KEYSPACE: KeyspaceFixture = {
       return null;
     },
   },
+  sources: [
+    { command: "HGETALL type_probe:hash", source: sourced("type_probe:hash", "hash", true) },
+    { command: "GET type_probe:binary", source: sourced("type_probe:binary", "string", true), read: true },
+    { command: "HGET type_probe:hash name", source: sourced("type_probe:hash", "hash", false), read: true },
+    { command: "LRANGE type_probe:list 0 1", source: sourced("type_probe:list", "list", false) },
+    { command: "ZRANGE leaderboard 0 -1 WITHSCORES", source: sourced("leaderboard", "zset", true) },
+    { command: "GET contract:missing", source: null, read: true },
+    { command: "MGET user:{42}:profile user:{42}:session", source: null },
+    { command: "DBSIZE", source: null },
+    { command: "STRLEN type_probe:binary", source: sourced("type_probe:binary", "string", false), read: false },
+  ],
 };
 
 /**

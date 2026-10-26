@@ -1,9 +1,13 @@
 import type { PluginLoadResult } from "@table-craft/core";
 import {
   z,
+  type Capability,
   type CommandLanguage,
   type DatasourcePlugin,
   type ExecuteOptions,
+  type ExecuteResult,
+  type KeySource,
+  type KeyType,
   type Problem,
   type Session,
   type StatementClass,
@@ -75,15 +79,27 @@ export interface FakeCommandsCalls {
   opened: number;
 }
 
-/** A `commands` plugin over an in-memory map: `GET k`, `SET k v`, `PING`; enough to drive the engine. */
-export function fakeCommandsPlugin(): { loaded: PluginLoadResult; calls: FakeCommandsCalls } {
+function sourceOf(key: string, type: KeyType, whole: boolean): KeySource {
+  return { database: 0, key: { text: key, hex: null }, type, whole };
+}
+
+/**
+ * A `commands` plugin over an in-memory map: `GET k`, `SET k v`, `PING`, and the hash `profile`
+ * through `HGET k f` and `HGETALL k`; enough to drive the engine. Each read names its source key.
+ */
+export function fakeCommandsPlugin(capabilities: readonly Capability[] = ["commands"]): {
+  loaded: PluginLoadResult;
+  calls: FakeCommandsCalls;
+} {
   const calls: FakeCommandsCalls = { executed: [], opened: 0 };
   const store = new Map<string, string>([["greeting", "hello"]]);
-  const reply = (text: string, value: string | null) => ({
+  const hashes = new Map<string, Map<string, string>>([["profile", new Map([["name", "Ann"]])]]);
+  const reply = (text: string, value: string | null, read = false, source?: KeySource): ExecuteResult => ({
     columns: [],
     rows: (async function* () {})(),
     rowsAffected: null,
-    reply: { value, text },
+    reply: { value, text, ...(read ? { read } : {}) },
+    ...(source === undefined ? {} : { source }),
   });
   const session = (): Session => ({
     execute: (command: string, _parameters?: unknown, options?: ExecuteOptions) => {
@@ -94,7 +110,28 @@ export function fakeCommandsPlugin(): { loaded: PluginLoadResult; calls: FakeCom
           return Promise.resolve(reply("PONG", "PONG"));
         case "GET": {
           const found = store.get(key) ?? null;
-          return Promise.resolve(reply(found === null ? "(nil)" : JSON.stringify(found), found));
+          const source = found === null ? undefined : sourceOf(key, "string", true);
+          return Promise.resolve(reply(found === null ? "(nil)" : JSON.stringify(found), found, true, source));
+        }
+        case "HGET": {
+          const found = hashes.get(key)?.get(value) ?? null;
+          const source = hashes.has(key) ? sourceOf(key, "hash", false) : undefined;
+          return Promise.resolve(reply(found === null ? "(nil)" : JSON.stringify(found), found, true, source));
+        }
+        case "HGETALL": {
+          const hash = hashes.get(key) ?? new Map<string, string>();
+          return Promise.resolve({
+            columns: [
+              { name: "field", type: null },
+              { name: "value", type: null },
+            ],
+            rows: (async function* () {
+              yield* [...hash].map(([field, held]) => [field, held]);
+              return Promise.resolve();
+            })(),
+            rowsAffected: null,
+            ...(hashes.has(key) ? { source: sourceOf(key, "hash", true) } : {}),
+          });
         }
         case "SET":
           store.set(key, value);
@@ -108,7 +145,7 @@ export function fakeCommandsPlugin(): { loaded: PluginLoadResult; calls: FakeCom
   });
   const plugin: DatasourcePlugin = {
     id: FAKE_COMMANDS_ID,
-    capabilities: ["commands"],
+    capabilities: [...capabilities],
     commandLanguage: language,
     connectionSchema: z.object({}),
     connect: () => {
@@ -119,7 +156,12 @@ export function fakeCommandsPlugin(): { loaded: PluginLoadResult; calls: FakeCom
   const loaded: PluginLoadResult = {
     status: "loaded",
     directory: "plugins/commands",
-    manifest: fakeManifest({ id: FAKE_COMMANDS_ID, name: "Commands", capabilities: ["commands"], highlight: "redis" }),
+    manifest: fakeManifest({
+      id: FAKE_COMMANDS_ID,
+      name: "Commands",
+      capabilities: [...capabilities],
+      highlight: "redis",
+    }),
     plugin,
   };
   return { loaded, calls };

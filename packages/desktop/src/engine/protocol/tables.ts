@@ -1,4 +1,5 @@
 import type { ColumnMeta, ForeignKey } from "./catalog.js";
+import type { KeySource } from "./keyspace.js";
 import type { SortDirection } from "./results.js";
 import type { ExecutedStatement } from "./sessions.js";
 
@@ -46,6 +47,8 @@ export interface ResultEditable {
   readonly columns: readonly ColumnMeta[];
   /** Per result column: a computed, aliased-expression or repeated column no edit may write. */
   readonly readOnlyColumns: readonly boolean[];
+  /** The whole key an editable command result holds: its edits apply to it as a key tab's do (decision 119). */
+  readonly key?: KeySource;
 }
 
 /** A foreign key of the relation at `path`.`relation` that points at another table. */

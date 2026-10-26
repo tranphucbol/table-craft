@@ -10,7 +10,7 @@ import type {
 } from "./completion.js";
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { InspectionRequest, Problem } from "./inspection.js";
-import type { Keyspace } from "./keyspace.js";
+import type { KeySource, Keyspace } from "./keyspace.js";
 import type { ObjectEditor } from "./objects.js";
 import type { SessionMonitor } from "./sessions.js";
 import type { TypeClass, WireValue } from "./values.js";
@@ -92,10 +92,15 @@ export interface ExecuteResult {
   readonly messages?: readonly ServerMessage[];
   /**
    * A command's one-value answer, such as a status, a number or a string (decision 112): the
-   * console shows it in Output and opens no result. Only a `commands` plugin sets it, and then
+   * console shows it in Output and opens no result unless it is `read`. Only a `commands` plugin sets it, and then
    * `columns` and `rows` are empty.
    */
   readonly reply?: CommandReply;
+  /**
+   * The one key the command read, when it read exactly one (decision 119); absent for writes,
+   * keyless and multi-key commands. Only a `keyValue` plugin sets it.
+   */
+  readonly source?: KeySource;
 }
 
 /** A scalar reply to a command (decision 112). */
@@ -103,6 +108,12 @@ export interface CommandReply {
   readonly value: WireValue;
   /** The reply as the server's own client prints it: `"Ann"`, `(integer) 5`, `(nil)`, `OK`. */
   readonly text: string;
+  /**
+   * The reply is a value read, such as a bulk string from `GET` or `HGET` or the nil of a missing
+   * one (decision 119): the console opens it as a one-row `value` result besides Output. Absent
+   * for statuses, numbers and errors, which stay in Output.
+   */
+  readonly read?: boolean;
 }
 
 /** How serious a `ServerMessage` is, from the server's own word for it. */

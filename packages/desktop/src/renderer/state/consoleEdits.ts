@@ -4,6 +4,7 @@ import type {
   CurrentNamespace,
   EditableIdentity,
   EngineError,
+  KeySource,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import {
@@ -27,7 +28,8 @@ import {
   type EditTarget,
   committedInput,
 } from "@table-craft/desktop/renderer/model/resultEdits.js";
-import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
+import { keyChangesOf, type KeyChanges } from "@table-craft/desktop/renderer/model/keyChanges.js";
+import { rowAt, type ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
 
 /**
@@ -46,6 +48,19 @@ export interface ConsoleResultEdits {
   readonly submitting: boolean;
   /** Why the last submit failed; the edits stay so the user can fix or revert them. */
   readonly error: EngineError | null;
+  /** The whole key a command result holds; its edits apply to the key (decision 119). */
+  readonly key?: KeySource;
+}
+
+/** A whole-key result's pending edits as changes to its key, as the key tab makes them (decision 119). */
+export function resultKeyChanges(result: ResultTab, key: KeySource, buffer: EditBuffer): KeyChanges {
+  const columns = result.columns.map((column) => column.name);
+  return keyChangesOf(key.type, columns, buffer, (row) => rowAt(result.windows, row));
+}
+
+/** A change the key cannot take, as the error the result shows. */
+export function keyProblemError(message: string): EngineError {
+  return { code: "statementFailed", message, hint: "" };
 }
 
 /** The console fields the edits read and write; a slice of `ConsoleSession`. */
@@ -289,6 +304,15 @@ export function createConsoleEdits(host: ConsoleEditsHost) {
       const client = host.client(id);
       if (result === undefined || edits === null || client === undefined) return null;
       try {
+        if (edits.key !== undefined) {
+          const pending = resultKeyChanges(result, edits.key, edits.buffer);
+          if ("problem" in pending) {
+            update(id, resultId, (latest) => ({ ...latest, error: keyProblemError(pending.problem) }));
+            return null;
+          }
+          const options = { type: edits.key.type, guard: true };
+          return await client.call("keyspace.preview", { key: edits.key.key, changes: pending.changes, options });
+        }
         return await client.call("edits.preview", { handle: result.handle, edits: toEdits(edits.buffer) });
       } catch (cause) {
         update(id, resultId, (latest) => ({ ...latest, error: toError(cause) }));

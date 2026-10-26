@@ -77,6 +77,7 @@ export {
   type KeyReadRequest,
   type KeyScan,
   type KeyScanRequest,
+  type KeySource,
   type Keyspace,
   type KeyType,
 } from "./keyspace.js";

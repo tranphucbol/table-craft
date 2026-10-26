@@ -181,6 +181,16 @@ export function submittedText(statements: number): string {
   return `Submitted ${String(statements)} ${statements === 1 ? "statement" : "statements"}`;
 }
 
+/** A whole-key result's submit as the Services tree names it (decision 119). */
+export function submitCommandsLabel(commands: number): string {
+  return `Submit ${String(commands)} ${commands === 1 ? "command" : "commands"}`;
+}
+
+/** A whole-key result's submit, which ran as one `MULTI` (decision 119). */
+export function submittedCommandsText(commands: number): string {
+  return `Submitted ${String(commands)} ${commands === 1 ? "command" : "commands"} as one MULTI`;
+}
+
 /** The result with its selection kept inside the rows and columns `buffer` draws. */
 export function clampedTo(result: ResultTab, buffer: EditBuffer): ResultTab {
   const rows = gridRowCount(buffer, shownHeld(result));
