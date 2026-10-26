@@ -466,6 +466,13 @@ has no ACL users: leave Username empty and give the password alone.
   from the server's command docs, and key names complete from a scan. `FLUSHDB` and `FLUSHALL` ask
   you to type the data source's name; `KEYS` and other heavy reads are underlined, with a fix such as
   **Use SCAN**. In a cluster, **Run on** sends a command to one node or every primary.
+- **Console results.** A value read (`GET`, `HGET`, `LINDEX`…) opens a one-row `value` tab as well
+  as its Output line; a number or status stays in Output, where **Show as Result** opens it as a
+  tab. The value panel reads a result's values as the key tab does, Auto first (JSON, gzip,
+  MessagePack…), and remembers your format per key pattern. When a result reads one key, **Open
+  Key** (`⌘B`) opens it in a key tab. A result that reads a whole key (`GET`, `HGETALL`,
+  `SMEMBERS`, `LRANGE key 0 -1`, `ZRANGE key 0 -1 WITHSCORES`) takes edits with the key tab's
+  columns and submits them as one guarded `MULTI`; other results say why they are read-only.
 - **Server tab.** `INFO` as cards with auto-refresh, every node of a cluster at a glance, and the
   slow log. **Show Sessions…** lists `CLIENT LIST` and unblocks or kills a client.
 
@@ -553,6 +560,7 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Drop…                     | `⌘⌫`    | `Ctrl+Backspace`       |
 | Go to DDL                 | `⌘B`    | `Ctrl+B`               |
 | Go to Declaration         | `⌘B`    | `Ctrl+B`               |
+| Open Key                  | `⌘B`    | `Ctrl+B`               |
 | Parameter Info            | `⌘P`    | `Ctrl+P`               |
 | Quick Documentation       | `F1`    | `F1`                   |
 | Open Data                 | `F4`    | `F4`                   |
@@ -730,7 +738,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.2.0",
+  "apiVersion": "1.3.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
