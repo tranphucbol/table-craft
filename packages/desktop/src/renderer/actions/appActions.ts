@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import {
@@ -308,7 +309,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
       if (id === null) return;
       try {
         const path = await consoleFilePath(id);
-        if (path !== null) await navigator.clipboard.writeText(path);
+        if (path !== null) await writeClipboard(path);
       } catch (cause) {
         await noticeTabFailure("Could not copy the path", cause);
       }
@@ -489,7 +490,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     run: async (context) => {
       if (context.datasource === null) return;
       const answer = await bridge().datasourceUrl(context.datasource.view.id);
-      if (answer.ok) await navigator.clipboard.writeText(answer.value);
+      if (answer.ok) await writeClipboard(answer.value);
       else {
         await useModal.getState().ask({
           kind: "notice",

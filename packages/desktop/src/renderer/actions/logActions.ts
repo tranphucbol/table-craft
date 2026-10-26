@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
@@ -99,7 +100,7 @@ export const LOG_ACTIONS: readonly AnyAction[] = [
     when: () => useLogView.getState().selected !== null,
     run: async (_context, args) => {
       const record = isCopyRecordArgs(args) ? args.record : useLogView.getState().selected;
-      if (record !== null) await navigator.clipboard.writeText(JSON.stringify(record, null, 2));
+      if (record !== null) await writeClipboard(JSON.stringify(record, null, 2));
     },
   }),
   defineAction({

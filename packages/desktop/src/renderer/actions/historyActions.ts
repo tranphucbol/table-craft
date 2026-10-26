@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { DatasourceView, HistoryStatement } from "@table-craft/desktop/preload/bridge.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import {
@@ -97,7 +98,7 @@ async function showHistory(context: ActionContext): Promise<void> {
       continue;
     }
     const values = listed.find((statement) => statement.sql === value)?.lastParameters ?? undefined;
-    if (choice === HISTORY_CHOICES.copy) await navigator.clipboard.writeText(value);
+    if (choice === HISTORY_CHOICES.copy) await writeClipboard(value);
     else if (into !== undefined) useConsoles.getState().insert(into, value, values);
     else await openConsole(view.id, value, values);
     return;
@@ -224,7 +225,7 @@ export const HISTORY_ACTIONS: readonly AnyAction[] = [
     when: hasTabs,
     run: async (context, args) => {
       const sql = serviceExecution(context, args)?.sql;
-      if (sql != null) await navigator.clipboard.writeText(sql);
+      if (sql != null) await writeClipboard(sql);
     },
   }),
   defineAction<ServiceArgs | undefined>({
