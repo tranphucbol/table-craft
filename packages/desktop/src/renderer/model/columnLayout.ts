@@ -12,6 +12,8 @@ export type ColumnWidth =
 export interface ColumnLayout {
   readonly widths: readonly ColumnWidth[];
   readonly hidden: readonly boolean[];
+  /** Records drawn as columns and columns as rows (plan 043); the selection keeps record coordinates. */
+  readonly transposed?: boolean;
 }
 
 export const MIN_COLUMN_WIDTH_PX = 40;
@@ -57,10 +59,15 @@ export function visibleColumns(layout: ColumnLayout): readonly number[] {
   return layout.hidden.flatMap((hidden, index) => (hidden ? [] : [index]));
 }
 
-/** Keeps widths and hidden columns across a rerun when the columns are the same, else starts over. */
+/**
+ * Keeps widths and hidden columns across a rerun when the columns are the same, else starts over;
+ * a transposed view stays transposed either way.
+ */
 export function carriedLayout(layout: ColumnLayout, before: readonly string[], after: readonly string[]): ColumnLayout {
   const same = before.length === after.length && before.every((name, index) => name === after[index]);
-  return same ? layout : initialLayout(after.length);
+  if (same) return layout;
+  const fresh = initialLayout(after.length);
+  return layout.transposed === true ? { ...fresh, transposed: true } : fresh;
 }
 
 function charsTrack(chars: number): string {

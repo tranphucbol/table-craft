@@ -36,7 +36,15 @@ const CHOSEN: Settings = {
     inspections: { enabled: false, disabled: ["SqlRedundantAlias", "AcmeOwnCheck"] },
   },
   console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30, runAllOnError: "continue" },
-  data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
+  data: {
+    nullText: "∅",
+    groupDigits: true,
+    pageRows: 100,
+    fetchAllCap: 2_000,
+    exportStallSeconds: 300,
+    aggregates: ["sum", "avg"],
+    blobLimitMb: 64,
+  },
   log: { level: "debug" },
   updates: { checkAutomatically: false },
   plugins: { registryUrl: "http://127.0.0.1:4873" },
@@ -122,7 +130,15 @@ describe("settings document", () => {
     const read = readSettings({
       version: 1,
       appearance: { theme: "neon", density: "compact", fonts: { editor: { family: "a;b", sizePx: 99 } } },
-      data: { nullText: "", groupDigits: "yes", pageRows: 200, fetchAllCap: 100, exportStallSeconds: 5 },
+      data: {
+        nullText: "",
+        groupDigits: "yes",
+        pageRows: 200,
+        fetchAllCap: 100,
+        exportStallSeconds: 5,
+        aggregates: ["max", "median", "count"],
+        blobLimitMb: 0,
+      },
     });
 
     expect(read.appearance.theme).toBe("system");
@@ -134,6 +150,8 @@ describe("settings document", () => {
       pageRows: 200,
       fetchAllCap: 100_000,
       exportStallSeconds: 120,
+      aggregates: ["count", "max"],
+      blobLimitMb: 16,
     });
   });
 

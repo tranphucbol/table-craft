@@ -1,135 +1,58 @@
-import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  type KeyboardEvent,
-  type MouseEvent,
-  type PointerEvent,
-  type ReactNode,
-} from "react";
-import {
-  RESULT_WINDOW_ROWS,
-  type CellInput,
-  type SortDirection,
-  type TypeClass,
-  type WireValue,
-} from "@table-craft/desktop/engine/protocol.js";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { RESULT_WINDOW_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import {
-  GRID_ACTION_IDS,
-  LOCAL_FILTER_LABELS,
-  LOCAL_FILTER_MENU,
-  type SortArgs,
-} from "@table-craft/desktop/renderer/actions/gridActions.js";
-import { invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
-import { DEFAULT_TEXT, formatCell, type CellFormats } from "@table-craft/desktop/renderer/grid/format.js";
+  CellEditorInput,
+  CellMenu,
+  GridCell,
+  HeaderCell,
+  type FindMark,
+  type GridEdits,
+  type GridHost,
+} from "@table-craft/desktop/renderer/grid/GridCells.js";
+import {
+  beganEdit,
+  drawnRow,
+  matchKeys,
+  useCellPointer,
+  type RowsProps,
+} from "@table-craft/desktop/renderer/grid/gridRows.js";
+import { TransposedRows } from "@table-craft/desktop/renderer/grid/TransposedRows.js";
+import { AggregateLine } from "@table-craft/desktop/renderer/grid/AggregateLine.js";
+import { FocusedBytes, type FocusedBytesReader } from "@table-craft/desktop/renderer/grid/BytesView.js";
 import { GridToolbar } from "@table-craft/desktop/renderer/grid/GridToolbar.js";
 import { ValuePanel } from "@table-craft/desktop/renderer/grid/ValuePanel.js";
-import { displayChars, widerChars } from "@table-craft/desktop/renderer/grid/widths.js";
-import {
-  columnTemplate,
-  fittedTo,
-  resizedTo,
-  visibleColumns,
-  type ColumnLayout,
-} from "@table-craft/desktop/renderer/model/columnLayout.js";
-import { bufferRowAt, gridRowCount, type EditBuffer } from "@table-craft/desktop/renderer/model/editBuffer.js";
+import { widerChars } from "@table-craft/desktop/renderer/grid/widths.js";
+import { focusedBinaryCell } from "@table-craft/desktop/renderer/model/binaryCells.js";
+import { columnTemplate, visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
+import { gridRowCount } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import {
   contains,
-  extendTo,
   moveBy,
   rectOf,
   selectCell,
-  selectColumn,
   selectRows,
   type Cell,
   type GridBounds,
-  type GridSelection,
 } from "@table-craft/desktop/renderer/model/gridSelection.js";
-import { sortMarkOf } from "@table-craft/desktop/renderer/model/sortKeys.js";
 import {
   rowAt,
   shownHeld,
   shownRowCount,
   windowOffsetOf,
-  type ResultSearch,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { FilterChips, FindBar } from "@table-craft/desktop/renderer/grid/FindBar.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
-import { currentFormats, useCellFormats, useRowHeightPx } from "@table-craft/desktop/renderer/state/settings.js";
+import { useCellFormats, useRowHeightPx } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import {
-  ReadOnlyIcon,
-  SortAscendingMark,
-  SortDescendingMark,
-  TYPE_GLYPHS,
-} from "@table-craft/desktop/renderer/ui/icons.js";
+
+export type { GridCellEditor, GridEdits, GridHost } from "@table-craft/desktop/renderer/grid/GridCells.js";
 
 const OVERSCAN_ROWS = 20;
 const MIN_GUTTER_DIGITS = 2;
 const STALE_TEXT = "Results from a closed connection; rerun to refresh";
-const CELL = "truncate border-r border-line px-cell leading-(--spacing-row)";
-const MENU_ITEM =
-  "flex h-row cursor-default items-center justify-between gap-gap rounded px-gap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection";
-const MENU_CONTENT = "z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg";
-const PRINTABLE_KEY_LENGTH = 1;
-const READ_ONLY_COLUMN_TITLE = " (read-only: not a column of the table)";
-
-/** What the grid asks of the store that owns its result: a console's or a table tab's. */
-export interface GridHost {
-  readonly ensureWindow: (ownerId: string, resultId: string, offset: number) => void;
-  readonly select: (ownerId: string, resultId: string, selection: GridSelection | null) => void;
-  readonly setLayout: (ownerId: string, resultId: string, layout: ColumnLayout) => void;
-  /** The find bar's typed query; its toggles and the chips are actions. */
-  readonly search: (ownerId: string, resultId: string, change: (search: ResultSearch) => ResultSearch) => Promise<void>;
-}
-
-/** The cell open for editing: its grid row, result column and text. */
-export interface GridCellEditor {
-  readonly row: number;
-  readonly column: number;
-  readonly text: string;
-}
-
-/**
- * The table editor's layer over the grid (plan 008): pending changes drawn on the cells, rows
- * added after the held ones, and a cell editor in place.
- */
-export interface GridEdits {
-  readonly buffer: EditBuffer;
-  readonly editing: GridCellEditor | null;
-  /** Opens the editor on the focused cell; `text` replaces its value, as typing does. */
-  readonly begin: (text?: string) => void;
-  readonly change: (text: string) => void;
-  readonly commit: () => void;
-  readonly cancel: () => void;
-  /** Cell context menu entries by action id; null draws a separator. */
-  readonly menu: readonly (string | null)[];
-  /** By result column: true for one that takes no edits, such as an expression in a console result. */
-  readonly readOnlyColumns?: readonly boolean[];
-}
-
-type EditMark = "modified" | "inserted" | "deleted";
-
-/** A cell the find query matches; `current` is the one the find bar is on. */
-type FindMark = "match" | "current";
-
-const GLYPH_OF: Readonly<Record<TypeClass, keyof typeof TYPE_GLYPHS>> = {
-  integer: "number",
-  float: "number",
-  decimal: "number",
-  boolean: "bool",
-  temporal: "date",
-  json: "json",
-  bytes: "bytes",
-  text: "text",
-};
-
-const NUMERIC: ReadonlySet<TypeClass> = new Set(["integer", "float", "decimal"]);
 
 export interface ResultGridProps {
   /** The console or table tab the result belongs to. */
@@ -163,6 +86,27 @@ export function ResultGrid({
   const focusColumn = focus === null ? undefined : visible[focus.column];
   const focusValue =
     focus === null || focusColumn === undefined ? undefined : rowAt(result.windows, focus.row)?.[focusColumn];
+  const binary = focusedBinaryCell(result, edits?.buffer);
+  const held = binary?.held;
+  const resultId = result.id;
+  const readBytes = useMemo<FocusedBytesReader>(
+    () =>
+      held === undefined || focusColumn === undefined
+        ? null
+        : (maxBytes) => host().cellBytes(ownerId, resultId, held, focusColumn, maxBytes),
+    [host, ownerId, resultId, held, focusColumn],
+  );
+  const transposed = result.layout.transposed === true;
+  const area = useRef<HTMLDivElement>(null);
+  const shownTransposed = useRef(transposed);
+  // Transposing by its chord unmounts the focused grid; hand the keyboard to the one that replaced it.
+  useLayoutEffect(() => {
+    if (shownTransposed.current === transposed) return;
+    shownTransposed.current = transposed;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    area.current?.querySelector<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
+  }, [transposed]);
   return (
     <div
       className="flex min-h-0 flex-1 flex-col"
@@ -182,76 +126,37 @@ export function ResultGrid({
           {staleText ?? STALE_TEXT}
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1">
-        <Rows key={result.handle} ownerId={ownerId} result={result} visible={visible} host={host} edits={edits} />
-        {!valuePanel ? null : panel !== undefined ? (
-          panel(focus === null || focusColumn === undefined ? null : { row: focus.row, column: focusColumn })
-        ) : (
-          <ValuePanel
-            column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
-            value={focusValue}
-          />
-        )}
-      </div>
+      <FocusedBytes.Provider value={readBytes}>
+        <div ref={area} className="flex min-h-0 flex-1">
+          {transposed ? (
+            <TransposedRows
+              key={result.handle}
+              ownerId={ownerId}
+              result={result}
+              visible={visible}
+              host={host}
+              edits={edits}
+            />
+          ) : (
+            <Rows key={result.handle} ownerId={ownerId} result={result} visible={visible} host={host} edits={edits} />
+          )}
+          {!valuePanel ? null : panel !== undefined ? (
+            panel(focus === null || focusColumn === undefined ? null : { row: focus.row, column: focusColumn })
+          ) : (
+            <ValuePanel
+              column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
+              value={focusValue}
+            />
+          )}
+        </div>
+      </FocusedBytes.Provider>
+      <AggregateLine ownerId={ownerId} result={result} host={host} />
     </div>
   );
 }
 
-interface RowsProps {
-  readonly ownerId: string;
-  readonly result: ResultTab;
-  /** Result column indices in drawing order. */
-  readonly visible: readonly number[];
-  readonly host: () => GridHost;
-  readonly edits: GridEdits | undefined;
-}
-
-/** A row's values and pending inputs as the grid draws them. */
-interface DrawnRow {
-  readonly values: readonly WireValue[] | undefined;
-  readonly pending: (column: number) => CellInput | undefined;
-  readonly mark: EditMark | null;
-}
-
-/** Grid row `index`: a shown row's window values, with the buffer's edits named by its held row. */
-function drawnRow(result: ResultTab, buffer: EditBuffer | undefined, index: number): DrawnRow {
-  const values = rowAt(result.windows, index);
-  if (buffer === undefined) return { values, pending: () => undefined, mark: null };
-  const row = bufferRowAt(buffer, shownHeld(result), index);
-  if (row?.kind === "inserted") {
-    const inserted = buffer.inserts.find((each) => each.id === row.id);
-    return { values: [], pending: (column) => inserted?.values[column], mark: "inserted" };
-  }
-  if (row === null) return { values, pending: () => undefined, mark: null };
-  const updates = buffer.updates.get(row.row);
-  return {
-    values,
-    pending: (column) => updates?.get(column),
-    mark: buffer.deletes.has(row.row) ? "deleted" : null,
-  };
-}
-
-/** The loaded windows' matched cells as `row * columnCount + column` keys. */
-function matchKeys(matches: ResultTab["matches"], width: number): ReadonlySet<number> {
-  const keys = new Set<number>();
-  for (const pairs of Object.values(matches)) {
-    for (let index = 0; index + 1 < pairs.length; index += 2) {
-      keys.add((pairs[index] as number) * width + (pairs[index + 1] as number));
-    }
-  }
-  return keys;
-}
-
-function cellOf(target: EventTarget): Cell | null {
-  if (!(target instanceof Element)) return null;
-  const element = target.closest("[data-row][data-col]");
-  if (element === null) return null;
-  return { row: Number(element.getAttribute("data-row")), column: Number(element.getAttribute("data-col")) };
-}
-
 function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
   const scroller = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
   const { windows, selection } = result;
   const rowCount = edits === undefined ? shownRowCount(result) : gridRowCount(edits.buffer, shownHeld(result));
   const width = result.columns.length;
@@ -288,14 +193,6 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
     }
   }, [host, ownerId, result.id, first, last, windows]);
 
-  useEffect(() => {
-    const stop = () => {
-      dragging.current = false;
-    };
-    window.addEventListener("mouseup", stop);
-    return () => window.removeEventListener("mouseup", stop);
-  }, []);
-
   // Add Row and Duplicate select a row past the bottom; bring it into view.
   const focusRow = selection?.focus.row;
   useEffect(() => {
@@ -311,6 +208,7 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
   }, [currentRow, currentPosition]);
 
   const select = (next: ResultTab["selection"]) => host().select(ownerId, result.id, next);
+  const pointer = useCellPointer(selection, select, edits);
 
   /** Gives the keyboard back to the grid once the cell editor closes. */
   function refocus(): void {
@@ -329,43 +227,10 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
     else if (right > container.scrollLeft + container.clientWidth) container.scrollLeft = right - container.clientWidth;
   }
 
-  function onMouseDown(event: MouseEvent<HTMLDivElement>): void {
-    if (event.button !== 0) return;
-    const cell = cellOf(event.target);
-    if (cell === null) return;
-    dragging.current = true;
-    select(event.shiftKey && selection !== null ? extendTo(selection, cell) : selectCell(cell));
-  }
-
-  function onMouseOver(event: MouseEvent<HTMLDivElement>): void {
-    if (!dragging.current || (event.buttons & 1) === 0) return;
-    const cell = cellOf(event.target);
-    if (cell === null || selection === null) return;
-    if (cell.row !== selection.focus.row || cell.column !== selection.focus.column) select(extendTo(selection, cell));
-  }
-
-  function onContextMenu(event: MouseEvent<HTMLDivElement>): void {
-    const cell = cellOf(event.target);
-    if (cell === null) return;
-    const rect = selection === null ? null : rectOf(selection);
-    if (rect === null || !contains(rect, cell.row, cell.column)) select(selectCell(cell));
-  }
-
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.target !== event.currentTarget) return;
     if (event.metaKey || event.ctrlKey || event.altKey || rowCount === 0 || visible.length === 0) return;
-    if (edits !== undefined && selection !== null) {
-      if (event.key === "F2") {
-        event.preventDefault();
-        edits.begin();
-        return;
-      }
-      if (event.key.length === PRINTABLE_KEY_LENGTH && event.key !== " ") {
-        event.preventDefault();
-        edits.begin(event.key);
-        return;
-      }
-    }
+    if (beganEdit(event, edits, selection)) return;
     const page = Math.max(Math.floor((scroller.current?.clientHeight ?? rowHeightPx) / rowHeightPx) - 1, 1);
     const moves: Record<string, [number, number]> = {
       ArrowUp: [-1, 0],
@@ -424,19 +289,7 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
         ))}
       </div>
       <CellMenu entries={edits?.menu}>
-        <div
-          role="rowgroup"
-          className="relative"
-          style={{ height: virtualizer.getTotalSize() }}
-          onMouseDown={onMouseDown}
-          onMouseOver={onMouseOver}
-          onContextMenu={onContextMenu}
-          onDoubleClick={(event) => {
-            if (cellOf(event.target) === null) return;
-            if (edits !== undefined) edits.begin();
-            else if (!useLayout.getState().layout.valuePanel) invoke(GRID_ACTION_IDS.toggleValuePanel);
-          }}
-        >
+        <div role="rowgroup" className="relative" style={{ height: virtualizer.getTotalSize() }} {...pointer}>
           {items.map((item) => {
             const row = drawnRow(result, edits?.buffer, item.index);
             const selectedRow = rect !== null && item.index >= rect.top && item.index <= rect.bottom;
@@ -473,6 +326,8 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
                         row={item.index}
                         position={position}
                         text={editing.text}
+                        typeClass={result.typeClasses[column] ?? "text"}
+                        type={result.columns[column]?.type ?? null}
                         edits={edits}
                         onClosed={refocus}
                         onTab={() => {
@@ -511,323 +366,5 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
         </div>
       </CellMenu>
     </div>
-  );
-}
-
-/** The cells' context menu, when the owner gives one. */
-function CellMenu({
-  entries,
-  children,
-}: {
-  readonly entries: readonly (string | null)[] | undefined;
-  readonly children: ReactNode;
-}) {
-  if (entries === undefined) return children;
-  return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger asChild>{children}</ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Content className={MENU_CONTENT}>
-          {entries.map((actionId, index) =>
-            actionId === null ? (
-              <ContextMenu.Separator key={`separator-${String(index)}`} className="my-1 h-px bg-line" />
-            ) : (
-              <MenuItem key={actionId} actionId={actionId} />
-            ),
-          )}
-        </ContextMenu.Content>
-      </ContextMenu.Portal>
-    </ContextMenu.Root>
-  );
-}
-
-/** The cell editor: Enter commits, Escape cancels, Tab commits and moves right (plan 008 decision 9). */
-function CellEditorInput({
-  name,
-  row,
-  position,
-  text,
-  edits,
-  onClosed,
-  onTab,
-}: {
-  readonly name: string;
-  readonly row: number;
-  readonly position: number;
-  readonly text: string;
-  readonly edits: GridEdits;
-  readonly onClosed: () => void;
-  readonly onTab: () => void;
-}) {
-  const closing = useRef(false);
-
-  function close(commit: boolean): void {
-    closing.current = true;
-    if (commit) edits.commit();
-    else edits.cancel();
-    onClosed();
-  }
-
-  return (
-    <div role="gridcell" data-row={row} data-col={position} data-editing className="relative min-w-0">
-      <input
-        aria-label={`Edit ${name}`}
-        autoFocus
-        spellCheck={false}
-        className="absolute inset-0 w-full border border-accent bg-canvas px-cell font-grid text-grid text-ink outline-none"
-        value={text}
-        onChange={(event) => edits.change(event.target.value)}
-        onMouseDown={(event) => event.stopPropagation()}
-        onDoubleClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          event.stopPropagation();
-          if (event.key === "Enter" && !event.metaKey && !event.ctrlKey) {
-            event.preventDefault();
-            close(true);
-          } else if (event.key === "Escape") {
-            event.preventDefault();
-            close(false);
-          } else if (event.key === "Tab") {
-            event.preventDefault();
-            close(true);
-            onTab();
-          }
-        }}
-        onBlur={() => {
-          if (!closing.current) edits.commit();
-        }}
-      />
-    </div>
-  );
-}
-
-/** What a cell shows: its pending input over the database's value. */
-function cellDisplay(
-  value: WireValue | undefined,
-  pending: CellInput | undefined,
-  typeClass: TypeClass,
-  formats: CellFormats,
-): { readonly text: string; readonly tone: "null" | "default" | null } {
-  if (pending?.kind === "text") return { text: pending.text, tone: null };
-  if (pending?.kind === "null") return { text: formats.nullText, tone: "null" };
-  if (pending?.kind === "default") return { text: DEFAULT_TEXT, tone: "default" };
-  if (value === undefined) return { text: "…", tone: null };
-  if (value === null) return { text: formats.nullText, tone: "null" };
-  return { text: formatCell(value, typeClass, formats), tone: null };
-}
-
-const MARK_CLASS: Readonly<Record<EditMark, string>> = {
-  modified: "bg-edit-modified",
-  inserted: "bg-edit-inserted",
-  deleted: "bg-edit-deleted",
-};
-
-function GridCell({
-  value,
-  pending,
-  mark,
-  find,
-  row,
-  position,
-  typeClass,
-  formats,
-  selected,
-  focused,
-}: {
-  readonly value: WireValue | undefined;
-  readonly pending: CellInput | undefined;
-  readonly mark: EditMark | null;
-  readonly find: FindMark | null;
-  readonly row: number;
-  readonly position: number;
-  readonly typeClass: TypeClass;
-  readonly formats: CellFormats;
-  readonly selected: boolean;
-  readonly focused: boolean;
-}) {
-  const shown = cellDisplay(value, pending, typeClass, formats);
-  const numeric = NUMERIC.has(typeClass);
-  return (
-    <div
-      role="gridcell"
-      data-row={row}
-      data-col={position}
-      aria-selected={selected}
-      data-null={shown.tone === "null" ? true : undefined}
-      data-edit={mark ?? undefined}
-      data-match={find ?? undefined}
-      className={cn(
-        CELL,
-        numeric && "text-right",
-        find === "current"
-          ? "bg-search-match font-semibold"
-          : selected
-            ? "bg-grid-selection"
-            : find === "match"
-              ? "bg-search-match"
-              : mark !== null && MARK_CLASS[mark],
-        mark === "deleted" && "line-through",
-        focused && "outline outline-1 -outline-offset-1 outline-accent",
-        shown.tone !== null && "text-grid-null italic",
-      )}
-    >
-      {shown.text}
-    </div>
-  );
-}
-
-function SortMark({
-  direction,
-  position,
-  several,
-}: {
-  readonly direction: SortDirection;
-  readonly position: number;
-  readonly several: boolean;
-}) {
-  const Mark = direction === "asc" ? SortAscendingMark : SortDescendingMark;
-  return (
-    <span data-sort={direction} className="flex shrink-0 items-center text-accent">
-      <Mark aria-label={direction === "asc" ? "ascending" : "descending"} className="size-icon" />
-      {several ? <span data-sort-position>{position}</span> : null}
-    </span>
-  );
-}
-
-interface HeaderCellProps {
-  readonly ownerId: string;
-  readonly host: () => GridHost;
-  readonly result: ResultTab;
-  readonly column: number;
-  readonly position: number;
-  readonly bounds: GridBounds;
-  readonly select: (selection: ResultTab["selection"]) => void;
-  readonly readOnly: boolean;
-}
-
-function HeaderCell({ ownerId, host, result, column, position, bounds, select, readOnly }: HeaderCellProps) {
-  const name = result.columns[column]?.name ?? "";
-  const type = result.columns[column]?.type ?? null;
-  const Glyph = TYPE_GLYPHS[GLYPH_OF[result.typeClasses[column] ?? "text"]];
-  const mark = sortMarkOf(result.sort, column);
-  const resizing = useRef<{ readonly x: number; readonly width: number } | null>(null);
-
-  function setLayout(layout: ResultTab["layout"]): void {
-    host().setLayout(ownerId, result.id, layout);
-  }
-
-  function onPointerDown(event: PointerEvent<HTMLDivElement>): void {
-    event.stopPropagation();
-    event.preventDefault();
-    const cell = event.currentTarget.parentElement;
-    if (cell === null) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    resizing.current = { x: event.clientX, width: cell.getBoundingClientRect().width };
-  }
-
-  function onPointerMove(event: PointerEvent<HTMLDivElement>): void {
-    const start = resizing.current;
-    if (start === null) return;
-    setLayout(resizedTo(result.layout, column, start.width + event.clientX - start.x));
-  }
-
-  function onPointerUp(event: PointerEvent<HTMLDivElement>): void {
-    resizing.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-  }
-
-  function fit(): void {
-    let widest = displayChars(name);
-    const typeClass = result.typeClasses[column];
-    const formats = currentFormats();
-    for (const rows of Object.values(result.windows)) {
-      for (const row of rows) {
-        widest = Math.max(widest, displayChars(formatCell(row[column] ?? null, typeClass, formats)));
-      }
-    }
-    setLayout(fittedTo(result.layout, column, widest));
-  }
-
-  return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger asChild>
-        <div
-          role="columnheader"
-          data-header-col={position}
-          data-column-name={name}
-          aria-sort={mark === null ? "none" : mark.direction === "asc" ? "ascending" : "descending"}
-          title={`${name}: ${type ?? "unknown"}${readOnly ? READ_ONLY_COLUMN_TITLE : ""}`}
-          data-read-only={readOnly ? "" : undefined}
-          className="relative flex min-w-0 cursor-default items-center gap-1 overflow-hidden border-r border-line px-cell text-ink"
-          onClick={(event) => {
-            if (event.metaKey || event.ctrlKey) {
-              select(selectColumn(position, bounds));
-              return;
-            }
-            const args: SortArgs = { column, add: event.altKey };
-            invoke(GRID_ACTION_IDS.sort, args);
-          }}
-        >
-          <Glyph aria-hidden className="size-icon shrink-0 text-ink-muted" />
-          <span className={cn("truncate", readOnly && "text-ink-muted italic")}>{name}</span>
-          {readOnly ? <ReadOnlyIcon aria-label="read-only" className="size-icon shrink-0 text-ink-muted" /> : null}
-          {mark === null ? null : (
-            <SortMark direction={mark.direction} position={mark.position} several={result.sort.length > 1} />
-          )}
-          <div
-            aria-hidden
-            data-resize-handle
-            className="absolute top-0 right-0 z-10 h-full w-2 cursor-col-resize"
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onClick={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => {
-              event.stopPropagation();
-              fit();
-            }}
-          />
-        </div>
-      </ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Content className={MENU_CONTENT}>
-          <MenuItem actionId={GRID_ACTION_IDS.sort} label="Sort Ascending" args={{ column, direction: "asc" }} />
-          <MenuItem actionId={GRID_ACTION_IDS.sort} label="Sort Descending" args={{ column, direction: "desc" }} />
-          <MenuItem actionId={GRID_ACTION_IDS.clearSort} />
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
-          <MenuItem actionId={GRID_ACTION_IDS.hideColumn} args={{ column }} />
-          <MenuItem actionId={GRID_ACTION_IDS.showAllColumns} />
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
-          <ContextMenu.Label className="px-gap text-ink-muted">Local filter</ContextMenu.Label>
-          {LOCAL_FILTER_MENU.map((actionId) => (
-            <MenuItem key={actionId} actionId={actionId} label={LOCAL_FILTER_LABELS[actionId]} args={{ column }} />
-          ))}
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
-          <MenuItem actionId={GRID_ACTION_IDS.copyColumnName} args={{ column }} />
-        </ContextMenu.Content>
-      </ContextMenu.Portal>
-    </ContextMenu.Root>
-  );
-}
-
-function MenuItem({
-  actionId,
-  label,
-  args,
-}: {
-  readonly actionId: string;
-  readonly label?: string;
-  readonly args?: unknown;
-}) {
-  const enabled = useActionEnabled(actionId);
-  const action = registry.get(actionId);
-  if (action === undefined) return null;
-  return (
-    <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId, args)}>
-      <span>{label ?? action.title}</span>
-      {action.shortcut === undefined ? null : (
-        <span className="text-ink-muted">{formatChord(action.shortcut, currentPlatform())}</span>
-      )}
-    </ContextMenu.Item>
   );
 }

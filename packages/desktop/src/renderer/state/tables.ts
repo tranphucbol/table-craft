@@ -9,6 +9,7 @@ import type {
   ForeignKey,
   ReferencingKey,
   RowRange,
+  SelectionAggregates,
   SortKey,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { HistoryEntry } from "@table-craft/desktop/preload/bridge.js";
@@ -36,6 +37,7 @@ import {
   submittedScript,
   submittedText,
   type CellEditor,
+  committedInput,
 } from "@table-craft/desktop/renderer/model/resultEdits.js";
 import { clampSelection, type GridSelection } from "@table-craft/desktop/renderer/model/gridSelection.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -54,7 +56,7 @@ import {
   type ResultSearch,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
-import { createResultWindows, toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
+import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import { currentFormats, currentPaging, statementTimeoutOf } from "@table-craft/desktop/renderer/state/settings.js";
 
 /** Which table a tab shows: a relation inside a namespace path of a datasource. */
@@ -134,6 +136,19 @@ export interface TablesState {
     rows: readonly RowRange[],
     columns: readonly number[],
   ) => Promise<string | null>;
+  /** What the selected cells add up to, or null when the engine refused. */
+  readonly aggregate: (
+    id: string,
+    resultId: string,
+    rows: readonly RowRange[],
+    columns: readonly number[],
+  ) => Promise<SelectionAggregates | null>;
+  /** Every byte of a held cell, for an image preview; null when the engine refused. */
+  readonly cellBytes: ResultWindows["cellBytes"];
+  /** Writes a held cell's bytes to a file main chose (plan 043). */
+  readonly saveBytes: ResultWindows["saveBytes"];
+  /** Reads a file main chose into the engine for this result's edits (plan 043). */
+  readonly loadBytes: ResultWindows["loadBytes"];
   readonly exportTo: (
     id: string,
     resultId: string,
@@ -580,6 +595,10 @@ export function createTablesStore(dependencies: TablesDependencies) {
       },
 
       extract: windows.extract,
+      aggregate: windows.aggregate,
+      cellBytes: windows.cellBytes,
+      saveBytes: windows.saveBytes,
+      loadBytes: windows.loadBytes,
 
       async exportTo(id, resultId, format, path, columns, shownOnly) {
         const task = await windows.exportTo(id, resultId, format, path, columns, shownOnly);
@@ -604,7 +623,7 @@ export function createTablesStore(dependencies: TablesDependencies) {
         if (current === undefined || editing == null) return false;
         patch(id, { editing: null });
         if (editing.text !== editing.initial) {
-          get().setCells(id, [editing], { kind: "text", text: editing.text });
+          get().setCells(id, [editing], committedInput(current.result?.typeClasses[editing.column], editing.text));
         }
         return true;
       },
@@ -627,10 +646,12 @@ export function createTablesStore(dependencies: TablesDependencies) {
       },
 
       applyPanel(id) {
-        const panel = get().tables[id]?.panel;
+        const current = get().tables[id];
+        const panel = current?.panel;
         if (panel == null) return false;
         patch(id, { panel: null });
-        if (panel.text !== panel.initial) get().setCells(id, [panel], { kind: "text", text: panel.text });
+        if (panel.text !== panel.initial)
+          get().setCells(id, [panel], committedInput(current?.result?.typeClasses[panel.column], panel.text));
         return true;
       },
 

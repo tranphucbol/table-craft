@@ -81,7 +81,11 @@ import {
   Pulse,
   PushPin,
   Stop,
+  Swap,
   Terminal,
+  UploadSimple,
+  FloppyDisk,
+  CalendarBlank,
   X,
   type Icon,
 } from "@phosphor-icons/react";
@@ -136,6 +140,7 @@ export {
   FileSql as ScriptIcon,
   Pulse as SessionsIcon,
   Trash as DeleteIcon,
+  CalendarBlank as CalendarIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */
@@ -206,4 +211,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   sessions: Pulse,
   terminate: Power,
   quickFix: Lightbulb,
+  transpose: Swap,
+  saveFile: FloppyDisk,
+  loadFile: UploadSimple,
 };
