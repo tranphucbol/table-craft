@@ -1,5 +1,5 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, type WheelEvent } from "react";
 import { ACTION_IDS, type TabArgs } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
@@ -120,8 +120,18 @@ function TabIcon({ kind }: { readonly kind: TabKind }) {
   return <Icon aria-hidden data-tab-kind={kind} className="size-icon" />;
 }
 
+/** With the bar hidden, a mouse wheel's vertical turn is the only way it can reach the far tabs. */
+function scrollTabsSideways(event: WheelEvent<HTMLDivElement>) {
+  if (event.deltaX !== 0 || event.deltaY === 0) return;
+  event.currentTarget.scrollLeft += event.deltaY;
+}
+
 function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolean }) {
   const activate = useTabs((state) => state.activate);
+  const tabElement = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (active) tabElement.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active]);
   const args: TabArgs = { tabId: tab.id };
   const datasource = useConsoleDatasource(tab.id);
   const label = (tab.kind === "sessions" || tab.kind === "server" ? sessionsTabLabel : tabLabel)(
@@ -154,6 +164,7 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
         <div
+          ref={tabElement}
           className={cn(
             "group flex h-tab shrink-0 items-center gap-cell border-r border-b-2 border-r-line px-gap",
             active ? "border-b-accent text-ink" : "border-b-transparent text-ink-muted hover:bg-raised",
@@ -247,7 +258,12 @@ export function EditorArea() {
       className="flex h-full min-h-0 flex-col bg-canvas"
     >
       {tabs.length === 0 ? null : (
-        <div role="tablist" aria-label="Editor tabs" className="flex shrink-0 overflow-x-auto bg-panel">
+        <div
+          role="tablist"
+          aria-label="Editor tabs"
+          className="flex shrink-0 overflow-x-auto border-b border-line bg-panel scrollbar-none"
+          onWheel={scrollTabsSideways}
+        >
           {tabs.map((tab) => (
             <TabButton key={tab.id} tab={tab} active={tab.id === active?.id} />
           ))}

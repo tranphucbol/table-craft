@@ -93,6 +93,11 @@ body {
   flex-shrink: 1000;
 }
 
+/* For strips that still scroll by wheel, trackpad or focus but have no room for a bar. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+}
+
 .app-drag {
   app-region: drag;
   -webkit-app-region: drag;
