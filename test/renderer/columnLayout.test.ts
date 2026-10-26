@@ -13,6 +13,13 @@ import {
 import { cycledSort, sortedBy, sortMarkOf } from "@table-craft/desktop/renderer/model/sortKeys.js";
 
 describe("column layout", () => {
+  it("givenTransposedLayout_whenColumnsChangeOnRerun_thenStaysTransposed", () => {
+    const layout = { ...hiddenColumn(initialLayout(2), 0), transposed: true };
+
+    expect(carriedLayout(layout, ["a", "b"], ["a", "b", "c"])).toEqual({ ...initialLayout(3), transposed: true });
+    expect(carriedLayout(initialLayout(2), ["a", "b"], ["c"])).not.toHaveProperty("transposed");
+  });
+
   it("givenDragNarrowerThanMinimum_whenResized_thenClampedToMinimum", () => {
     const layout = resizedTo(initialLayout(2), 1, 12);
 

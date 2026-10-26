@@ -24,6 +24,7 @@ import type {
   ResultState,
   ResultWindow,
   RoutineCall,
+  SelectionAggregates,
   TransactionState,
   ViewState,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -1085,6 +1086,27 @@ describe("engine results", () => {
     });
 
     expect(resultOf<string>(text)).toBe("name\nc\nb\n");
+  });
+
+  it("givenSortedResult_whenAggregated_thenOverShownRowsAndChosenColumns", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(
+      connection,
+      sessionId,
+      "SELECT 2 AS id, 'b' AS name UNION ALL SELECT 1, 'a' UNION ALL SELECT 3, 'c'",
+    );
+
+    await connection.handle({ id: 5, type: "result.sort", handle, keys: [{ column: 0, direction: "desc" }] });
+    const aggregates = await connection.handle({
+      id: 6,
+      type: "result.aggregate",
+      handle,
+      rows: [{ from: 0, to: 2 }],
+      columns: [0],
+    });
+
+    expect(resultOf<SelectionAggregates>(aggregates)).toMatchObject({ cells: 2, sum: "5", min: 2, max: 3 });
   });
 
   it("givenSqlInsertExtractor_whenExtracted_thenPluginQuotesNamesAndValues", async () => {

@@ -1,6 +1,7 @@
 import { CoreError, TunnelError, type EditTable, type ResultState } from "@table-craft/core";
 import {
   isPluginError,
+  type BytesValue,
   type Capability,
   type Column,
   type Row,
@@ -29,6 +30,7 @@ import type {
   SessionsListing,
 } from "@table-craft/desktop/engine/protocol.js";
 import { statementRunners } from "@table-craft/desktop/engine/statements.js";
+import { bytesRunners } from "@table-craft/desktop/engine/bytes.js";
 import { SessionLost, StatementTimedOut, watchStatement, type LostReason } from "@table-craft/desktop/engine/watch.js";
 
 export interface OpenSession {
@@ -178,6 +180,8 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   const ran = new Map<string, string>();
   /** The console results `result.editable` found editable, with what editing them needs (decision 056). */
   const edited = new Map<string, TableResult>();
+  /** Files `result.loadBytes` read for a result's edits, by id, until the result is released (plan 043). */
+  const staged = new Map<string, { readonly handle: string; readonly bytes: BytesValue }>();
   const unsubscribe = tasks.subscribe(emit);
   const unsubscribeImports = imports.subscribe(emit);
   const unsubscribeScripts = scripts.subscribe(emit);
@@ -188,6 +192,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     statements.delete(handle);
     ran.delete(handle);
     edited.delete(handle);
+    for (const [id, entry] of staged) if (entry.handle === handle) staged.delete(id);
   }
 
   async function releaseHandlesOf(sessionId: string): Promise<void> {
@@ -647,6 +652,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     handles.clear();
     statements.clear();
     tables.clear();
+    staged.clear();
     cursors.clear();
     await settledWithin(Promise.allSettled(held.map((handle) => results.release(handle))), RELEASE_GRACE_MS);
     const open = [...sessions.values()];
@@ -663,6 +669,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     statements,
     ran,
     edited,
+    staged,
     unsubscribe,
     unsubscribeImports,
     unsubscribeScripts,
@@ -702,7 +709,8 @@ export type LiveContext = ReturnType<typeof liveContext>;
 /** One renderer port's sessions, handles and statement runners over the engine's shared context. */
 export function createConnectionContext(context: EngineContext, emit: (event: EngineEvent) => void) {
   const live = liveContext(context, emit);
-  return { ...live, ...statementRunners(live) };
+  const runners = statementRunners(live);
+  return { ...live, ...runners, ...bytesRunners(live, runners.tableFor) };
 }
 
 export type ConnectionContext = ReturnType<typeof createConnectionContext>;

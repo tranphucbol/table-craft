@@ -25,6 +25,7 @@ import {
   withReverted,
   type CellEditor,
   type EditTarget,
+  committedInput,
 } from "@table-craft/desktop/renderer/model/resultEdits.js";
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
@@ -217,11 +218,12 @@ export function createConsoleEdits(host: ConsoleEditsHost) {
     },
 
     commitEdit: (id: string, resultId: string): boolean => {
-      const editing = current(id, resultId).edits?.editing;
+      const { result, edits } = current(id, resultId);
+      const editing = edits?.editing;
       if (editing == null) return false;
-      update(id, resultId, (edits) => ({ ...edits, editing: null }));
+      update(id, resultId, (latest) => ({ ...latest, editing: null }));
       if (editing.text !== editing.initial)
-        commands.setCells(id, resultId, [editing], { kind: "text", text: editing.text });
+        commands.setCells(id, resultId, [editing], committedInput(result?.typeClasses[editing.column], editing.text));
       return true;
     },
 
@@ -248,10 +250,12 @@ export function createConsoleEdits(host: ConsoleEditsHost) {
     },
 
     applyPanel: (id: string, resultId: string): boolean => {
-      const panel = current(id, resultId).edits?.panel;
+      const { result, edits } = current(id, resultId);
+      const panel = edits?.panel;
       if (panel == null) return false;
-      update(id, resultId, (edits) => ({ ...edits, panel: null }));
-      if (panel.text !== panel.initial) commands.setCells(id, resultId, [panel], { kind: "text", text: panel.text });
+      update(id, resultId, (latest) => ({ ...latest, panel: null }));
+      if (panel.text !== panel.initial)
+        commands.setCells(id, resultId, [panel], committedInput(result?.typeClasses[panel.column], panel.text));
       return true;
     },
 

@@ -5,6 +5,7 @@ import {
   EXTRACTOR_LABELS,
   GRID_ACTION_IDS,
 } from "@table-craft/desktop/renderer/actions/gridActions.js";
+import { GRID_HELPER_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridHelperActions.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { resultStateText } from "@table-craft/desktop/renderer/model/format.js";
@@ -88,6 +89,7 @@ export function GridToolbar({
       </select>
       <ActionButton actionId={GRID_ACTION_IDS.copy} compact reason={copyBlockedReason(result)} />
       <ActionButton actionId={GRID_ACTION_IDS.export} compact />
+      <ActionButton actionId={GRID_HELPER_ACTION_IDS.transpose} compact pressed={result.layout.transposed === true} />
       <ActionButton actionId={GRID_ACTION_IDS.toggleValuePanel} compact pressed={valuePanel} />
     </div>
   );

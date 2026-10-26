@@ -12,6 +12,7 @@ import {
   type OnErrorChoice,
   type Reconnection,
   type RowRange,
+  type SelectionAggregates,
   type ServerMessage,
   type SortKey,
   type TransactionMode,
@@ -82,7 +83,7 @@ import {
   type ResultSearch,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
-import { createResultWindows, toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
+import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import {
   currentFormatOptions,
   currentFormats,
@@ -356,6 +357,19 @@ export interface ConsolesState extends ConsoleEdits {
     rows: readonly RowRange[],
     columns: readonly number[],
   ) => Promise<string | null>;
+  /** What the selected cells add up to, or null when the engine refused. */
+  readonly aggregate: (
+    id: string,
+    resultId: string,
+    rows: readonly RowRange[],
+    columns: readonly number[],
+  ) => Promise<SelectionAggregates | null>;
+  /** Every byte of a held cell, for an image preview; null when the engine refused. */
+  readonly cellBytes: ResultWindows["cellBytes"];
+  /** Writes a held cell's bytes to a file main chose (plan 043). */
+  readonly saveBytes: ResultWindows["saveBytes"];
+  /** Reads a file main chose into the engine for this result's edits (plan 043). */
+  readonly loadBytes: ResultWindows["loadBytes"];
   /** Writes the result to `path`, draining its open cursor, and logs what it wrote. */
   readonly exportTo: (
     id: string,
@@ -1817,6 +1831,10 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       },
 
       extract: windows.extract,
+      aggregate: windows.aggregate,
+      cellBytes: windows.cellBytes,
+      saveBytes: windows.saveBytes,
+      loadBytes: windows.loadBytes,
 
       async exportTo(id, resultId, format, path, columns, shownOnly) {
         const task = await windows.exportTo(id, resultId, format, path, columns, shownOnly);

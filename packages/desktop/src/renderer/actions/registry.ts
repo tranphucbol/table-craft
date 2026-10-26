@@ -73,7 +73,10 @@ export type ActionIcon =
   | "findPrevious"
   | "sessions"
   | "terminate"
-  | "quickFix";
+  | "quickFix"
+  | "transpose"
+  | "saveFile"
+  | "loadFile";
 
 export interface Action<A = void> {
   readonly id: string;

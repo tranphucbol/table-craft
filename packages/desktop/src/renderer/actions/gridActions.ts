@@ -103,10 +103,22 @@ export interface ExtractorArgs {
 /** What the grid's actions ask of the store holding the shown result; consoles and tables share it. */
 type ResultHost = Pick<
   ReturnType<typeof useConsoles.getState>,
-  "fetchMore" | "stopFetch" | "sort" | "setLayout" | "select" | "extract" | "exportTo" | "search" | "findNext"
+  | "fetchMore"
+  | "stopFetch"
+  | "sort"
+  | "setLayout"
+  | "select"
+  | "extract"
+  | "aggregate"
+  | "cellBytes"
+  | "saveBytes"
+  | "loadBytes"
+  | "exportTo"
+  | "search"
+  | "findNext"
 >;
 
-interface ShownResult {
+export interface ShownResult {
   /** The console or table tab showing the result. */
   readonly ownerId: string;
   readonly result: ResultTab;
@@ -115,7 +127,8 @@ interface ShownResult {
   readonly rows: number;
 }
 
-function shown(context: ActionContext): ShownResult | null {
+/** The result the active tab shows, with the store that holds it. */
+export function shown(context: ActionContext): ShownResult | null {
   if (context.activeTab === null || context.result === null) return null;
   const ownerId = context.activeTab.id;
   if (context.console !== null) {
@@ -138,7 +151,8 @@ function canRerun(context: ActionContext): boolean {
   return context.table !== null && canReload(context.table.status);
 }
 
-function live(context: ActionContext): ShownResult | null {
+/** The shown result while its connection is open. */
+export function live(context: ActionContext): ShownResult | null {
   const target = shown(context);
   return target === null || target.result.stale ? null : target;
 }
@@ -220,7 +234,7 @@ function filterAction(id: string, title: string, op: FilterChip["op"]): AnyActio
   });
 }
 
-async function writeClipboard(text: string): Promise<void> {
+export async function writeClipboard(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 

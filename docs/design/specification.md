@@ -514,6 +514,10 @@ handles belong to the port that created them and are released when it closes.
 | `result.stopFetch`      | `handle`                                                                                          | `ResultState`; stops a running fetch, the cursor stays open                                                                                      |
 | `result.sort`           | `handle`, `keys: { column, direction }[]`                                                         | `ResultState`; windows read through the new order, `[]` restores it                                                                              |
 | `result.extract`        | `handle`, `extractor`, `rows: { from, to }[]`, `columns`                                          | the text, rows in sorted order; with a local filter, `rows` count shown rows                                                                     |
+| `result.aggregate`      | `handle`, `rows: { from, to }[]`, `columns`                                                       | `SelectionAggregates { cells, distinct, kind, sum, avg, min, max }` over the shown rows; see Result grid                                         |
+| `result.cellBytes`      | `handle`, `row`, `column`, `maxBytes`                                                             | the cell's whole `bytes` value, re-read by key when the grid holds a preview; refused past `maxBytes`                                            |
+| `result.saveBytes`      | `handle`, `row`, `column`, `path`, `maxBytes`                                                     | the bytes written; the engine writes the whole value to the absolute `path`                                                                      |
+| `result.loadBytes`      | `handle`, `path`, `maxBytes`                                                                      | `StagedBytes { id, length, preview }`; the file stays in the engine for the result's edits until it is released                                  |
 | `result.view`           | `handle`, `spec: ViewSpec \| null`                                                                | `ViewState { shown, filtered, sources, matches, error }`; sets find and local filter (decision 050), `null` drops them                           |
 | `result.viewState`      | `handle`                                                                                          | `ViewState` after a fetch or sort recomputed the view                                                                                            |
 | `result.findMatch`      | `handle`, `from: { row, column } \| null`, `backward`                                             | `{ index, row, column }` of the next match after `from`, wrapping, or `null`                                                                     |
@@ -1088,6 +1092,22 @@ it is disabled with the reason. The extractor is one setting in the layout, defa
 Bytes in the grid carry only their 32-byte preview, so a longer value copies clipped (`0x…` with `…`, or a
 `/* 32 of 2048 bytes */` comment after the literal).
 
+**Selection aggregates.** Plan 043, decision 118. With two or more cells selected, a status line
+under the rows shows what `result.aggregate` computes in the engine over the selected shown rows
+and visible columns (the rows never leave it): Count (cells) and Distinct (non-`NULL` values)
+always; Sum, Avg, Min and Max when every selected column is a number class, and Min and Max when
+every one is temporal. Integers and decimals add exactly as scaled big integers, so `0.1 + 0.2`
+reads `0.3`, and Avg keeps six more decimal places than its input, rounded half away from zero;
+any `float` cell makes the line float arithmetic. The request settles for 120 ms after the
+selection moves. Clicking the line copies it (`grid.copyAggregates`); its menu chooses the parts
+shown, Settings' `data.aggregates`.
+
+**Transpose.** `grid.transpose` (⌥⌘T, or the toolbar's toggle) draws each visible column as a row
+and the records as columns, virtualised sideways; the flag belongs to the result tab's layout and
+survives Rerun. Selection, focus, the editor and pending edits keep record and column coordinates,
+so ← → move between records and ↑ ↓ between columns, and an edit in the transposed view hits the
+same buffered cell.
+
 **Export.** `grid.export`, and `explorer.export` on a table or view, open the Export dialog:
 format (the five extractors and Excel (XLSX)), columns (the visible ones checked) and file, with
 Browse… asking main for a path (`dialog.saveFile`, default name `<title>.<ext>`). The engine then
@@ -1123,7 +1143,13 @@ italics, unlike the text `'<null>'`. With Group digits on, a number cell (`integ
 and `Infinity` draw as printed. Column widths measure the drawn text. Both are display only: the
 value panel, Copy, Export, the filters, the inline editor and history keep the database's text
 (decision 032). The value panel (⇧↵) shows the focused cell: JSON pretty-printed in a read-only editor, text wrapped,
-bytes as hex lines with `32 of 2,048 bytes shown`, `NULL` muted.
+bytes as hex lines with `32 of 2,048 bytes shown`, `NULL` muted. A binary value also offers
+**Save Value to File…** and **Load File into Cell…**, and draws a PNG, JPEG, GIF or WebP it holds
+as an image (by its signature, as a `data:` URL). Main only picks the path; the engine reads and
+writes the file. When the grid holds just the preview, the engine re-reads the whole value on a
+read-only session by the table's key (a table tab or an editable console result; otherwise it
+says to open the table). Both refuse a value larger than Settings' BLOB file limit
+(`data.blobLimitMb`, 16 MiB).
 
 **Memory.** A tab keeps at most `MAX_LOADED_WINDOWS = 20` windows of `RESULT_WINDOW_ROWS`; loading
 another evicts the one furthest from it, and scrolling back fetches it again. When the engine
@@ -1357,7 +1383,16 @@ default uses `language.updateDefault(columnDefault)` (`DEFAULT`, or SQLite's def
 `edits.submit` closes the table's cursor, runs every statement in one transaction, requires each
 UPDATE and DELETE to affect exactly one row, commits and returns to auto; any failure rolls back and
 answers `editRejected` naming the statement, and the buffer stays. After a commit the editor reads
-the rows again with the same bars. Bytes cells and read-only tables refuse edits.
+the rows again with the same bars. Read-only tables refuse edits.
+
+Typed cells (plan 043). A `boolean` cell edits in a true/false/NULL dropdown, and Space
+(`table.toggleBoolean`) flips the selected boolean cells; the input is `{ kind: "boolean" }`, which
+the plugin writes as its boolean literal. MySQL reports `BOOLEAN` as `tinyint`, so its cells stay
+numbers. A `date`, `time` or `timestamp`/`datetime` cell keeps the text field and adds a calendar
+button opening the native picker; the picked value is written in the cell's shape (its separator
+and zone kept). A binary cell takes no typed text: Load File into Cell stages the file in the
+engine (`result.loadBytes`) and the buffer holds `{ kind: "bytes", id, length, preview }`; Preview
+shows the literal clipped with its `/* 32 of N bytes */` comment and Submit writes every byte.
 
 | Action                  | Chord     | Region             |
 | ----------------------- | --------- | ------------------ |
@@ -1365,6 +1400,8 @@ the rows again with the same bars. Bytes cells and read-only tables refuse edits
 | Reload                  | ⌘R        | table editor       |
 | Edit Cell               | ↵, F2     | grid               |
 | Set NULL / Set DEFAULT  | ⌥⌘N / ⌥⌘D | grid               |
+| Toggle Boolean          | Space     | grid               |
+| Transpose               | ⌥⌘T       | grid               |
 | Add Row                 | ⌘N        | table editor, grid |
 | Duplicate Row           | ⌘D        | grid               |
 | Delete Rows             | ⌘⌫        | grid               |
@@ -1919,6 +1956,7 @@ request is parsed with Zod in main.
 | `engine.connect`           | `datasourceId`, typed `secrets?`    | `connected`, `needsSecrets { keys }` or `failed`                                        |
 | `engine.disconnect`        | `datasourceId`                      | `null` once the engine has exited                                                       |
 | `dialog.choose-file`       | `title`                             | a path, or `null`                                                                       |
+| `dialog.open-any-file`     | `title`                             | an existing file's path of any type, or `null`; Load File into Cell (plan 043)          |
 | `settings.read`            | none                                | `{ settings, themes, warning }`; see Settings and appearance                            |
 | `settings.write`           | the whole settings document         | `null`; saved, then broadcast as `settings.changed`                                     |
 | `themes.reload`            | none                                | `null`; rereads `<userData>/themes/`, then broadcasts                                   |

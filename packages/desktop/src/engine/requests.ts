@@ -179,6 +179,8 @@ const cellInput = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("text"), text: z.string() }),
   z.strictObject({ kind: z.literal("null") }),
   z.strictObject({ kind: z.literal("default") }),
+  z.strictObject({ kind: z.literal("boolean"), value: z.boolean() }),
+  z.strictObject({ kind: z.literal("bytes"), id: z.string().min(1), length: index, preview: z.string() }),
 ]);
 const edits = z.array(
   z.discriminatedUnion("kind", [
@@ -274,6 +276,37 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     extractor,
     rows: z.array(z.strictObject({ from: index, to: index })),
     columns,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("result.aggregate"),
+    handle,
+    rows: z.array(z.strictObject({ from: index, to: index })),
+    columns,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("result.cellBytes"),
+    handle,
+    row: index,
+    column: index,
+    maxBytes: z.number().int().positive(),
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("result.saveBytes"),
+    handle,
+    row: index,
+    column: index,
+    path: file,
+    maxBytes: z.number().int().positive(),
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("result.loadBytes"),
+    handle,
+    path: file,
+    maxBytes: z.number().int().positive(),
   }),
   z.strictObject({
     id: requestId,
