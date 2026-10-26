@@ -3,6 +3,7 @@ import {
   toWireInteger,
   type Column,
   type ExecuteResult,
+  type KeyType,
   type Row,
   type WireValue,
   type WireValueOptions,
@@ -21,6 +22,7 @@ const ESCAPED: Readonly<Record<number, string>> = { 0x0a: "\\n", 0x0d: "\\r", 0x
 const INDEX_COLUMN: Column = { name: "#", type: null, typeClass: "integer" };
 const VALUE_COLUMN: Column = { name: "value", type: null };
 const KEY_COLUMN: Column = { name: "key", type: null };
+const FIELD_COLUMN: Column = { name: "field", type: null };
 const MEMBER_COLUMN: Column = { name: "member", type: null };
 const SCORE_COLUMN: Column = { name: "score", type: null, typeClass: "float" };
 /** The column a fan-out to every primary leads each row with (decision 114). */
@@ -138,18 +140,79 @@ async function* yieldRows(rows: readonly Row[]): AsyncIterable<Row> {
   return Promise.resolve();
 }
 
-/** A command's reply as an `ExecuteResult`: a scalar as `reply`, anything else as rows. */
-export function resultOf(reply: Reply, options: WireValueOptions = {}): ExecuteResult {
+/**
+ * A command's reply as an `ExecuteResult`: a scalar as `reply`, anything else as rows. A bulk
+ * string, or the nil of a command that reads one key, is a value read (decision 119).
+ */
+export function resultOf(reply: Reply, options: WireValueOptions = {}, readsKey = false): ExecuteResult {
   const table = tableOf(reply, options);
   if (table === null) {
+    const read = reply instanceof Uint8Array || (readsKey && (reply === null || reply === undefined));
     return {
       columns: [],
       rows: yieldRows([]),
       rowsAffected: null,
-      reply: { value: cellOf(reply, options), text: replyText(reply) },
+      reply: { value: cellOf(reply, options), text: replyText(reply), ...(read ? { read } : {}) },
     };
   }
   return { columns: table.columns, rows: yieldRows(table.rows), rowsAffected: null };
+}
+
+function membersOf(reply: Reply): Reply[] | null {
+  return Array.isArray(reply) || reply instanceof Set ? [...(reply as Iterable<Reply>)] : null;
+}
+
+/**
+ * A reply holding a whole key in the columns a key tab reads that type with (decision 119), so an
+ * edit maps to the key the same way: list positions count from 0 as `LSET` does. Null when the
+ * reply is not that shape, or the type is not one a console result edits as rows.
+ */
+export function wholeKeyResult(reply: Reply, type: KeyType, options: WireValueOptions = {}): ExecuteResult | null {
+  const result = (columns: Column[], rows: Row[]): ExecuteResult => ({
+    columns,
+    rows: yieldRows(rows),
+    rowsAffected: null,
+  });
+  const members = membersOf(reply);
+  switch (type) {
+    case "hash":
+      if (!(reply instanceof Map)) return null;
+      return result(
+        [FIELD_COLUMN, VALUE_COLUMN],
+        [...(reply as Map<Reply, Reply>)].map(([field, value]) => [cellOf(field, options), cellOf(value, options)]),
+      );
+    case "set":
+      return members === null
+        ? null
+        : result(
+            [MEMBER_COLUMN],
+            members.map((member) => [cellOf(member, options)]),
+          );
+    case "list":
+      return members === null
+        ? null
+        : result(
+            [INDEX_COLUMN, VALUE_COLUMN],
+            members.map((element, index) => [index, cellOf(element, options)]),
+          );
+    case "zset":
+      if (members === null) return null;
+      if (members.length > 0 && members.every(isScoredPair)) {
+        return result(
+          [MEMBER_COLUMN, SCORE_COLUMN],
+          members.map((element) => {
+            const [member, score] = element as [Reply, number];
+            return [cellOf(member, options), score];
+          }),
+        );
+      }
+      return result(
+        [MEMBER_COLUMN],
+        members.map((member) => [cellOf(member, options)]),
+      );
+    default:
+      return null;
+  }
 }
 
 /** One reply per primary, each row led by the node it came from (decision 114). */

@@ -3,6 +3,7 @@ import {
   type ConnectOptions,
   type ExecuteOptions,
   type ExecuteResult,
+  type KeySource,
   type ParameterValue,
   type ServerInfo,
   type ServerNode,
@@ -15,13 +16,15 @@ import type { RedisConfig } from "./config.js";
 import { openConnection, type Connection } from "./connect.js";
 import { docsFromReply, docsKnownTo, SNAPSHOT_DOCS, type CommandDocs } from "./docs.js";
 import { featuresOf, keepsTtl, type RedisFeatures } from "./features.js";
-import { RedisKeyspace } from "./keyspace.js";
+import { keyBytesOf } from "./keyBytes.js";
+import { keyTypeOf, RedisKeyspace } from "./keyspace.js";
 import { wordsOf } from "./language.js";
 import { commandTableOf, readOnlyRefusal, type CommandTable } from "./readOnly.js";
-import { fannedOutResult, resultOf, utf8OrNull } from "./replies.js";
+import { fannedOutResult, resultOf, utf8OrNull, wholeKeyResult } from "./replies.js";
 import { Router, type Routed } from "./routing.js";
 import { serverInfo, slowLog, type ServerHost } from "./server.js";
 import { RedisSessionMonitor, sessionId } from "./sessions.js";
+import { keyRead, QUEUED, readsWholeKey } from "./source.js";
 import { tokenize } from "./tokens.js";
 
 const CLOSE_GRACE_MS = 3000;
@@ -167,14 +170,17 @@ export class RedisSession implements Session {
         const refusal = readOnlyRefusal(await this.commandTable(), words);
         if (refusal !== null) throw new PluginError("statementFailed", refusal);
       }
-      const routed = await this.#run(
-        tokens.map((token) => token.bytes),
-        words,
-        options?.node,
-      );
+      const args = tokens.map((token) => token.bytes);
+      const routed = await this.#run(args, words, options?.node);
       if (words[0] === "SELECT" && !routed.fanned) this.#database = Number(words[1]);
-      const wire = { fullBytes: options?.fullBytes === true };
-      return routed.fanned ? fannedOutResult(routed.replies, wire) : resultOf(routed.reply, wire);
+      if (routed.fanned) return fannedOutResult(routed.replies, { fullBytes: options?.fullBytes === true });
+      const key = routed.reply === QUEUED ? null : keyRead(await this.commandTable(), words, args);
+      const source = key === null ? null : await this.#sourceOf(key, words);
+      // One key's values are read as the key tab reads them, every byte, so they decode and edit alike.
+      const wire = { fullBytes: options?.fullBytes === true || key !== null };
+      const whole = source?.whole === true ? wholeKeyResult(routed.reply, source.type, wire) : null;
+      const result = whole ?? resultOf(routed.reply, wire, key !== null);
+      return source === null ? result : { ...result, source };
     } finally {
       this.#running = false;
     }
@@ -299,6 +305,17 @@ export class RedisSession implements Session {
     });
     this.#queue = run.catch(() => undefined);
     return run;
+  }
+
+  /** The key the command read, typed by `TYPE` (decision 119); null when it is gone or `TYPE` is refused. */
+  async #sourceOf(key: Buffer, words: readonly string[]): Promise<KeySource | null> {
+    try {
+      const type = keyTypeOf(String(await this.#router.onKey(key, ["TYPE", key])));
+      if (type === null) return null;
+      return { database: this.#database, key: keyBytesOf(key), type, whole: readsWholeKey(words, type) };
+    } catch {
+      return null;
+    }
   }
 
   #run(args: readonly Buffer[], words: readonly string[], node: string | undefined): Promise<Routed> {
