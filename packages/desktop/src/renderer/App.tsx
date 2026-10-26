@@ -23,6 +23,7 @@ import { HostKeyPrompt } from "@table-craft/desktop/renderer/dialogs/HostKeyProm
 import { Modal } from "@table-craft/desktop/renderer/dialogs/Modal.js";
 import { SecretPrompt } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
 import { SettingsDialog } from "@table-craft/desktop/renderer/dialogs/Settings.js";
+import { SnippetsDialog } from "@table-craft/desktop/renderer/dialogs/Snippets.js";
 import { Palette } from "@table-craft/desktop/renderer/palette/Palette.js";
 import { Shell } from "@table-craft/desktop/renderer/shell/Shell.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -102,6 +103,7 @@ export function App() {
       <ImportDataSourcesDialog />
       <ManageShownSchemasDialog />
       <SettingsDialog />
+      <SnippetsDialog />
       <SecretPrompt />
       <HostKeyPrompt />
       <Modal />

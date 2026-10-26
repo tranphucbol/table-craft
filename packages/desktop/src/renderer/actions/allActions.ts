@@ -22,6 +22,7 @@ import { LOG_ACTIONS } from "@table-craft/desktop/renderer/actions/logActions.js
 import { ROUTINE_ACTIONS } from "@table-craft/desktop/renderer/actions/routineActions.js";
 import { SESSIONS_ACTIONS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import { SETTINGS_ACTIONS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
+import { SNIPPET_ACTIONS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import { WINDOW_ACTIONS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { TABLE_ACTIONS } from "@table-craft/desktop/renderer/actions/tableActions.js";
 import { UPDATE_ACTIONS } from "@table-craft/desktop/renderer/actions/updateActions.js";
@@ -50,6 +51,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...KEY_ACTIONS,
   ...KEY_EDIT_ACTIONS,
   ...SETTINGS_ACTIONS,
+  ...SNIPPET_ACTIONS,
   ...LOG_ACTIONS,
   ...UPDATE_ACTIONS,
   ...PLUGIN_ACTIONS,

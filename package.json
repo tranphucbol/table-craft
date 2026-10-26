@@ -69,5 +69,8 @@
     "typescript-eslint": "^8.67.0",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
+  },
+  "patchedDependencies": {
+    "@codemirror/autocomplete@6.20.4": "patches/@codemirror%2Fautocomplete@6.20.4.patch"
   }
 }

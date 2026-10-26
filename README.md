@@ -330,6 +330,43 @@ schema in the toolbar to switch the console to another one; it runs the `USE` or
 
 See [Completion and navigation](docs/design/specification.md#completion-and-navigation).
 
+### Snippets
+
+Open **Find Action** and choose **Snippets…** to create, search, edit, preview or delete your
+templates. The list starts empty. Give a snippet a name, a completion prefix and a **Snippet body**.
+**Applies to** chooses **All text consoles**, **All SQL consoles**, or one installed data source type.
+A new snippet defaults to the active data source's type, or All text consoles when none is active.
+Type-specific snippets apply to every data source using that plugin, not just one connection;
+the choices come from installed plugin names and identities, not syntax-highlighting dialects.
+
+For example, save prefix `sel` for All SQL consoles with this body:
+
+```sql
+SELECT * FROM ${table} LIMIT 100;
+```
+
+For a Redis-scoped snippet, prefix `getkey` could insert:
+
+```text
+GET ${key}${cursor}
+```
+
+Type the prefix in a matching SQL or command console and accept the snippet from completion with
+`Tab` or `Enter`. It appears alongside the console's usual suggestions. `Tab` and `Shift+Tab` move between editable
+fields. `${table}`, `${schema}` and any other named field are text you fill in, not values fetched
+from the database; repeated names edit together. `${cursor}` marks the final caret position and
+inserts no text. `${key}` is editable text too. Inserting a snippet never runs it: finish the fields,
+then run the SQL or command as usual. Editing templates and expanding them need no live database
+connection. A command language without a recognized highlighter uses plain text, not SQL keywords.
+
+Snippets are saved in `snippets.json` in your [profile folder](#where-your-data-lives), separately
+from settings. Their bodies are plain text; do not put passwords or other secrets in them.
+Older SQL-only snippets keep their SQL/dialect restrictions when loaded; reading does not rewrite
+the file. The next successful create, update or delete saves the migrated version-2 document.
+
+Future plugins that provide the existing SQL or command-console hooks can use snippets too. This
+does not add etcd, Kafka or MongoDB plugins or promise execution support for those systems.
+
 ### Result grid
 
 The grid shows the first page (500 rows by default) and keeps the cursor open: **Fetch Next Page**
@@ -835,6 +872,7 @@ Everything is stored in one profile folder:
 | `consoles/`            | One folder per data source with its console files                         |
 | `history.sqlite`       | Query history                                                             |
 | `settings.json`        | [Settings](#settings)                                                     |
+| `snippets.json`        | Your [Snippets](#snippets), including their plain-text bodies             |
 | `logs/`                | The app log, `table-craft.log` and up to four older files of 5 MB each    |
 | `update-state.json`    | The version you chose to skip                                             |
 | `update-swap.log`      | The last macOS update's swap, logged and removed at the next launch       |

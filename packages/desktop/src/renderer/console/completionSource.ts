@@ -41,6 +41,8 @@ export interface CompletionTarget {
   readonly current?: () => CurrentNamespace;
   /** The engine to ask for the call at the caret; without it the editor shows no parameter hint. */
   readonly signature?: () => SignatureCall | null;
+  /** Additional synchronous console completions; table filter editors leave this unset. */
+  readonly snippets?: CompletionSource;
 }
 
 /** Where the engine put each option; lang-sql's keywords have none. */
@@ -153,7 +155,7 @@ export function completion(target: CompletionTarget): Extension {
     signature === undefined ? [] : signatureHint(scope === undefined ? { signature } : { signature, scope }),
     autocompletion({
       aboveCursor: false,
-      override: [engineCompletionSource(target)],
+      override: [engineCompletionSource(target), ...(target.snippets === undefined ? [] : [target.snippets])],
       icons: false,
       activateOnTypingDelay: COMPLETION_TYPING_DELAY_MS,
       compareCompletions: compareByEngineOrder,

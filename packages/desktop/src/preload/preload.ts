@@ -17,6 +17,7 @@ import {
   type WindowState,
 } from "@table-craft/desktop/preload/bridge.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
+import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
 /** Structural, because this program has no DOM lib and preload is the one place that needs it. */
 interface TransferringWindow {
@@ -99,6 +100,10 @@ const bridge: TableCraftBridge = {
   onHostKeyPrompt: (listener) => subscribe<HostKeyPrompt>(CHANNELS.hostKeyPrompt, listener),
   answerHostKey: (requestId, trust) => invoke(INVOKE_CHANNELS.answerHostKey, { requestId, trust }),
   readSettings: () => invoke(INVOKE_CHANNELS.readSettings),
+  readSnippets: () => invoke(INVOKE_CHANNELS.readSnippets),
+  saveSnippet: (snippet) => invoke(INVOKE_CHANNELS.saveSnippet, snippet),
+  deleteSnippet: (id) => invoke(INVOKE_CHANNELS.deleteSnippet, { id }),
+  onSnippetsChanged: (listener) => subscribe<readonly TextSnippet[]>(CHANNELS.snippetsChanged, listener),
   writeSettings: (settings) => invoke(INVOKE_CHANNELS.writeSettings, settings),
   reloadThemes: () => invoke(INVOKE_CHANNELS.reloadThemes),
   openThemesFolder: () => invoke(INVOKE_CHANNELS.openThemesFolder),

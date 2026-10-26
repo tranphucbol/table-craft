@@ -7,6 +7,7 @@ import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
 import type { Capability, HostKeyOffer, ProbeResult, SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import type { Settings } from "@table-craft/desktop/settings/settings.js";
+import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
 export const CHANNELS = {
   /** Main to preload: here is a fresh engine port for the datasource the payload names. */
@@ -21,6 +22,7 @@ export const CHANNELS = {
   closeRequested: "table-craft:window.close-requested",
   /** Main to every window: settings were saved or the themes reread; the payload is a `SettingsChanged`. */
   settingsChanged: "table-craft:settings.changed",
+  snippetsChanged: "table-craft:snippets.changed",
   /** Main to a window: it entered or left full screen; the payload is its `WindowState`. */
   windowState: "table-craft:window.state-changed",
   /** Main to every window: records were written to the log; the payload is a `LogRecord[]`. */
@@ -75,6 +77,9 @@ export const INVOKE_CHANNELS = {
   historyClear: "table-craft:history.clear",
   answerClose: "table-craft:window.answer-close",
   readSettings: "table-craft:settings.read",
+  readSnippets: "table-craft:snippets.read",
+  saveSnippet: "table-craft:snippets.save",
+  deleteSnippet: "table-craft:snippets.delete",
   writeSettings: "table-craft:settings.write",
   reloadThemes: "table-craft:themes.reload",
   openThemesFolder: "table-craft:themes.open-folder",
@@ -649,6 +654,10 @@ export interface TableCraftBridge {
   onHostKeyPrompt(listener: (prompt: HostKeyPrompt) => void): () => void;
   answerHostKey(requestId: number, trust: boolean): Promise<InvokeResult<null>>;
   readSettings(): Promise<InvokeResult<SettingsSnapshot>>;
+  readSnippets(): Promise<InvokeResult<readonly TextSnippet[]>>;
+  saveSnippet(snippet: TextSnippet): Promise<InvokeResult<readonly TextSnippet[]>>;
+  deleteSnippet(id: string): Promise<InvokeResult<readonly TextSnippet[]>>;
+  onSnippetsChanged(listener: (snippets: readonly TextSnippet[]) => void): () => void;
   appInfo(): Promise<InvokeResult<AppInfo>>;
   /** Saves the whole document; every window, this one included, hears it on `onSettingsChanged`. */
   writeSettings(settings: Settings): Promise<InvokeResult<null>>;

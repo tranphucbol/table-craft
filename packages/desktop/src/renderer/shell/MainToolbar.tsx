@@ -4,6 +4,7 @@ import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js"
 import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import { useActionAvailable } from "@table-craft/desktop/renderer/actions/index.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
+import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import { MAIN_MENU_ANCHOR_ATTRIBUTE, WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { tabCaption, windowTitle } from "@table-craft/desktop/renderer/model/windowTitle.js";
 import { DatasourceWidget } from "@table-craft/desktop/renderer/shell/DatasourceWidget.js";
@@ -71,6 +72,7 @@ export function MainToolbar() {
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <ActionButton actionId={ACTION_IDS.searchEverywhere} compact />
+        <ActionButton actionId={SNIPPET_ACTION_IDS.show} compact />
         <UpdateButton />
         <ActionButton actionId={SETTINGS_ACTION_IDS.show} compact />
       </div>

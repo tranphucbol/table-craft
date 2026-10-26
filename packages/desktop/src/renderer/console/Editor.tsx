@@ -27,6 +27,7 @@ import { completion, connectedEngine } from "@table-craft/desktop/renderer/conso
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
 import { redisLanguage } from "@table-craft/desktop/renderer/console/highlighters/redis.js";
 import { connectedSignature } from "@table-craft/desktop/renderer/console/signatureHint.js";
+import { snippetSource } from "@table-craft/desktop/renderer/console/snippetCompletion.js";
 import {
   errorMarks,
   errorMarksOf,
@@ -53,6 +54,7 @@ import { AUTOFOCUS_ATTRIBUTE } from "@table-craft/desktop/renderer/shell/focus.j
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { connectionOf, pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
 import { withInspection } from "@table-craft/desktop/settings/settings.js";
 
 /** The manifest's `highlight` names one of these; anything else gets standard SQL (plan 006 decision 1). */
@@ -98,20 +100,27 @@ export function dialectOf(highlight: string | null | undefined): SQLDialect {
   return DIALECTS[highlight ?? ""] ?? StandardSQL;
 }
 
-/** The SQL dialect whose keywords complete offline; null for a command language. */
-export function keywordDialectOf(highlight: string | null | undefined): SQLDialect | null {
-  return COMMAND_HIGHLIGHTERS[highlight ?? ""] === undefined ? dialectOf(highlight) : null;
+interface EditorLanguage {
+  readonly capabilities: readonly string[];
+  readonly highlight?: string | null;
 }
 
-/** The editor's language for the manifest's `highlight`: a command language, else a SQL dialect. */
-export function highlighterOf(highlight: string | null | undefined): Extension {
-  return COMMAND_HIGHLIGHTERS[highlight ?? ""] ?? sql({ dialect: dialectOf(highlight), upperCaseKeywords: true });
+/** Only SQL-capable datasources receive offline SQL keyword completion. */
+export function keywordDialectOf(plugin: EditorLanguage | undefined): SQLDialect | null {
+  return plugin?.capabilities.includes("sql") ? dialectOf(plugin.highlight) : null;
 }
 
-function placeholderText(highlight: string | null | undefined): string {
+/** Capabilities select the language family; unknown command languages stay plain text. */
+export function highlighterOf(plugin: EditorLanguage | undefined): Extension {
+  const dialect = keywordDialectOf(plugin);
+  if (dialect !== null) return sql({ dialect, upperCaseKeywords: true });
+  return plugin?.capabilities.includes("commands") ? (COMMAND_HIGHLIGHTERS[plugin.highlight ?? ""] ?? []) : [];
+}
+
+function placeholderText(plugin: EditorLanguage | undefined): string {
   const shortcut = registry.get(ACTION_IDS.run)?.shortcut;
   const chord = shortcut === undefined ? "" : ` ${formatChord(shortcut, currentPlatform())}`;
-  if (keywordDialectOf(highlight) === null) return `Type commands, one a line;${chord} runs the line at the caret`;
+  if (keywordDialectOf(plugin) === null) return `Type text;${chord} runs the current selection or command`;
   return `Type SQL;${chord} runs the statement at the caret`;
 }
 
@@ -160,7 +169,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const viewRef = useRef<EditorView | null>(null);
   const languageRef = useRef(new Compartment());
   const datasource = useConsoleDatasource(consoleId);
-  const highlight = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? "")?.highlight);
+  const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
   const text = useConsoles((state) => state.consoles[consoleId]?.sql ?? "");
   const flash = useConsoles((state) => state.consoles[consoleId]?.flash ?? null);
   const jump = useConsoles((state) => state.consoles[consoleId]?.jump ?? null);
@@ -172,7 +181,11 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     datasource === undefined ? null : connectionOf(state, datasource.id).status,
   );
   const inspectionSettings = useSettings((state) => state.settings.editor.inspections);
-  const dialectRef = useRef(keywordDialectOf(highlight));
+  const dialectRef = useRef(keywordDialectOf(plugin));
+
+  useEffect(() => {
+    void useSnippets.getState().load();
+  }, []);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -200,11 +213,19 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
             engine: connectedEngine(datasourceId),
             signature: connectedSignature(datasourceId),
             current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
+            snippets: snippetSource({
+              snippets: () => useSnippets.getState().snippets,
+              plugin: () => {
+                const state = useDatasources.getState();
+                const id = datasourceId();
+                const source = state.datasources.find((item) => item.id === id);
+                return pluginOf(state.plugins, source?.pluginId ?? "");
+              },
+            }),
           }),
           highlightSelectionMatches(),
           search({ top: false }),
-          placeholder(placeholderText(highlight)),
-          languageRef.current.of(highlighterOf(highlight)),
+          languageRef.current.of([highlighterOf(plugin), placeholder(placeholderText(plugin))]),
           flashField,
           errorMarks,
           inspections,
@@ -260,9 +281,11 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   }, [consoleId]);
 
   useEffect(() => {
-    dialectRef.current = keywordDialectOf(highlight);
-    viewRef.current?.dispatch({ effects: languageRef.current.reconfigure(highlighterOf(highlight)) });
-  }, [highlight]);
+    dialectRef.current = keywordDialectOf(plugin);
+    viewRef.current?.dispatch({
+      effects: languageRef.current.reconfigure([highlighterOf(plugin), placeholder(placeholderText(plugin))]),
+    });
+  }, [plugin]);
 
   useEffect(() => {
     const view = viewRef.current;

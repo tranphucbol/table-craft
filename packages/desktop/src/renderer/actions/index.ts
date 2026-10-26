@@ -18,6 +18,8 @@ import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPromp
 import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
+import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
+import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 
 /** The app's one registry. Everything that runs a command goes through `invoke` (decision 015). */
 export const registry = createActionRegistry(currentContext, (id, cause) => {
@@ -45,6 +47,8 @@ const STORES = [
   useObjects,
   useSessions,
   useWindowState,
+  useSnippets,
+  useSnippetsDialog,
 ] as const;
 
 /** Calls `listener` whenever a store an action's `when` might read changes. */

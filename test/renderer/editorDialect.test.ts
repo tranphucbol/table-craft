@@ -1,6 +1,8 @@
 import { MSSQL, MySQL, PLSQL, PostgreSQL, SQLite, StandardSQL } from "@codemirror/lang-sql";
 import { describe, expect, it } from "vitest";
-import { StringStream } from "@codemirror/language";
+import { language, StringStream } from "@codemirror/language";
+import { Compartment, EditorState } from "@codemirror/state";
+import { history, undo } from "@codemirror/commands";
 import { dialectOf, highlighterOf, keywordDialectOf } from "@table-craft/desktop/renderer/console/Editor.js";
 import { redisLanguage, redisParser } from "@table-craft/desktop/renderer/console/highlighters/redis.js";
 
@@ -19,9 +21,53 @@ describe("editor dialect", () => {
   });
 
   it("givenHighlightRedis_whenEditorBuilt_thenCommandHighlighterAndNoSqlKeywords", () => {
-    expect(highlighterOf("redis")).toBe(redisLanguage);
-    expect(keywordDialectOf("redis")).toBeNull();
-    expect(keywordDialectOf("mysql")).toBe(MySQL);
+    expect(highlighterOf({ capabilities: ["commands"], highlight: "redis" })).toBe(redisLanguage);
+    expect(keywordDialectOf({ capabilities: ["commands"], highlight: "redis" })).toBeNull();
+    expect(keywordDialectOf({ capabilities: ["sql"], highlight: "mysql" })).toBe(MySQL);
+  });
+
+  it("givenUnknownOrMisleadingCommandHighlight_whenEditorBuilt_thenUsesPlainTextAndNoSQLKeywords", () => {
+    for (const highlight of ["unknown", "mysql", null]) {
+      const plugin = { capabilities: ["commands"], highlight };
+      expect(keywordDialectOf(plugin)).toBeNull();
+      expect(EditorState.create({ extensions: [highlighterOf(plugin)] }).facet(language)).toBeNull();
+    }
+    for (const plugin of [undefined, { capabilities: [], highlight: "mysql" }]) {
+      expect(keywordDialectOf(plugin)).toBeNull();
+      expect(EditorState.create({ extensions: [highlighterOf(plugin)] }).facet(language)).toBeNull();
+    }
+  });
+
+  it("givenUnknownSQLHighlight_whenEditorBuilt_thenUsesStandardSQL", () => {
+    const plugin = { capabilities: ["sql"], highlight: "unknown" };
+    expect(keywordDialectOf(plugin)).toBe(StandardSQL);
+    expect(EditorState.create({ extensions: [highlighterOf(plugin)] }).facet(language)).not.toBeNull();
+  });
+
+  it("givenCapabilityChangeWithUnchangedHighlight_whenReconfigured_thenChangesLanguageWithoutLosingUndo", () => {
+    const compartment = new Compartment();
+    const sqlPlugin = { capabilities: ["sql"], highlight: "mysql" };
+    const commandPlugin = { ...sqlPlugin, capabilities: ["commands"] };
+    let state = EditorState.create({
+      doc: "before",
+      extensions: [history(), compartment.of(highlighterOf(sqlPlugin))],
+    });
+    state = state.update({ changes: { from: 0, to: 6, insert: "after" } }).state;
+    state = state.update({ effects: compartment.reconfigure(highlighterOf(commandPlugin)) }).state;
+    expect(state.facet(language)).toBeNull();
+    expect(keywordDialectOf(commandPlugin)).toBeNull();
+    expect(
+      undo({
+        state,
+        dispatch: (transaction) => {
+          state = transaction.state;
+        },
+      }),
+    ).toBe(true);
+    expect(state.doc.toString()).toBe("before");
+    state = state.update({ effects: compartment.reconfigure(highlighterOf(sqlPlugin)) }).state;
+    expect(state.facet(language)).not.toBeNull();
+    expect(keywordDialectOf(sqlPlugin)).toBe(MySQL);
   });
 
   it("givenRedisLine_whenTokenized_thenCommandStringNumberAndComment", () => {

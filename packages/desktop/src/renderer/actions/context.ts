@@ -12,6 +12,7 @@ import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSo
 import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
 import { useManageShownSchemasDialog } from "@table-craft/desktop/renderer/state/manageShownSchemasDialog.js";
 import { useSettingsDialog } from "@table-craft/desktop/renderer/state/settingsDialog.js";
+import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import {
   capabilitiesOf,
   connectionOf,
@@ -126,6 +127,7 @@ export function modalOpen(): boolean {
     useImportDataSourcesDialog.getState().session !== null ||
     useManageShownSchemasDialog.getState().datasourceId !== null ||
     useSettingsDialog.getState().page !== null ||
+    useSnippetsDialog.getState().open ||
     useSecretPrompt.getState().pending !== null ||
     useHostKeyPrompt.getState().queue.length > 0 ||
     useModal.getState().pending !== null
