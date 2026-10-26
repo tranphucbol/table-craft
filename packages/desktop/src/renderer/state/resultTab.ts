@@ -6,6 +6,7 @@ import {
   type FilterChip,
   type FindQuery,
   type FoundMatch,
+  type KeySource,
   type ResultPaging,
   type ResultState,
   type Row,
@@ -20,6 +21,7 @@ import { initialLayout, visibleColumns, type ColumnLayout } from "@table-craft/d
 import type { HeldRows } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
 import type { GridSelection } from "@table-craft/desktop/renderer/model/gridSelection.js";
+import type { ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 
 /** What the grid is fetching for a result: a page, everything to the cap, or the rest into a file. */
 export type ResultFetch = "page" | "all" | "export";
@@ -85,6 +87,10 @@ export interface ResultTab extends ResultState {
    * columns); a window without an entry is fetched again while the find bar marks cells.
    */
   readonly matches: Readonly<Record<number, readonly number[]>>;
+  /** The one key a command result read (decision 119); its value format is remembered by the key's pattern. */
+  readonly source?: KeySource;
+  /** The value panel's format for a command result with no source key; it lasts as long as the tab. */
+  readonly valueFormat?: ValueFormat;
 }
 
 /** Whether a find query is live, so windows carry the cells it matches. */

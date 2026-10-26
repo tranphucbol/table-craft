@@ -126,7 +126,7 @@ export function ResultTabs({ consoleId, session }: { readonly consoleId: string;
       </div>
       <div role="tabpanel" className="flex min-h-0 flex-1 flex-col">
         {active === null ? (
-          <OutputLog entries={session.output} />
+          <OutputLog entries={session.output} datasourceId={session.datasourceId} />
         ) : active.kind === "plan" ? (
           <PlanView key={active.id} consoleId={consoleId} plan={active} />
         ) : (

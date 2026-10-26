@@ -91,6 +91,14 @@ function tableSurface(id: string): EditSurface | null {
   };
 }
 
+function commandsText(commands: number): string {
+  return `${formatCount(commands)} ${commands === 1 ? "command" : "commands"}`;
+}
+
+function keySubmitsAs(commands: number): string {
+  return `Submit runs ${commandsText(commands)} as one MULTI; it cannot be undone.`;
+}
+
 function consoleSurface(id: string): EditSurface | null {
   const store = useConsoles.getState;
   const session = store().consoles[id];
@@ -105,11 +113,15 @@ function consoleSurface(id: string): EditSurface | null {
     editing: edits.editing,
     panel: edits.panel,
     pending: pendingCount(edits.buffer),
-    terminator: SQL_TERMINATOR,
-    submitsAs: (statements) =>
-      session.txMode === "auto"
-        ? `Submit runs ${statementsText(statements)} in one transaction and commits it.`
-        : `Submit runs ${statementsText(statements)} in the console's transaction; they stay uncommitted until you commit.`,
+    ...(edits.key === undefined
+      ? {
+          terminator: SQL_TERMINATOR,
+          submitsAs: (statements: number) =>
+            session.txMode === "auto"
+              ? `Submit runs ${statementsText(statements)} in one transaction and commits it.`
+              : `Submit runs ${statementsText(statements)} in the console's transaction; they stay uncommitted until you commit.`,
+        }
+      : { terminator: "", submitsAs: keySubmitsAs }),
     beginEdit: (cell, text) => store().beginEdit(id, resultId, cell, text),
     commitEdit: () => void store().commitEdit(id, resultId),
     setCells: (cells, input) => store().setCells(id, resultId, cells, input),
@@ -133,10 +145,6 @@ function consoleSurface(id: string): EditSurface | null {
   };
 }
 
-function commandsText(commands: number): string {
-  return `${formatCount(commands)} ${commands === 1 ? "command" : "commands"}`;
-}
-
 /** A key tab (plan 058 decision 16): its rows, its string value, or the Recreate it holds. */
 function keySurface(id: string, datasourceReadOnly: boolean): EditSurface | null {
   const store = useKeyTabs.getState;
@@ -149,7 +157,7 @@ function keySurface(id: string, datasourceReadOnly: boolean): EditSurface | null
     editing: tab.editing,
     panel: tab.panel,
     pending: pendingKeyCount(tab),
-    submitsAs: (commands) => `Submit runs ${commandsText(commands)} as one MULTI; it cannot be undone.`,
+    submitsAs: keySubmitsAs,
     terminator: "",
     beginEdit: (cell, text) => store().beginEdit(id, cell, text),
     commitEdit: () => void store().commitEdit(id),

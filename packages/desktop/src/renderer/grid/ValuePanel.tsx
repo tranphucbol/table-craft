@@ -23,7 +23,7 @@ import {
 const FORMAT_LABEL = "Format";
 const FORMAT_OPTIONS = VALUE_FORMATS.map((format) => ({ value: format, label: FORMAT_LABELS[format] }));
 
-/** How a key tab's value panel reads bytes (plan 058 decision 15); the console's and table's panels have none. */
+/** How a key-value value panel reads bytes (plan 058 decision 15, decision 119); SQL panels have none. */
 export interface ValueFormatChoice {
   readonly format: ValueFormat;
   readonly onChange: (format: ValueFormat) => void;
