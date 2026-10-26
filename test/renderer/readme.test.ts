@@ -17,6 +17,7 @@ import {
   DEFAULT_SETTINGS,
   EXPORT_STALL_SECONDS_RANGE,
   FETCH_ALL_CAP_RANGE,
+  BLOB_LIMIT_MB_RANGE,
   FONT_SIZE_RANGE,
   FORMAT_STYLES,
   INDENT_WIDTH_RANGE,
@@ -44,6 +45,7 @@ const RANGES: Readonly<Record<string, NumberRange>> = {
   "data.pageRows": PAGE_ROWS_RANGE,
   "data.fetchAllCap": FETCH_ALL_CAP_RANGE,
   "data.exportStallSeconds": EXPORT_STALL_SECONDS_RANGE,
+  "data.blobLimitMb": BLOB_LIMIT_MB_RANGE,
   "console.statementTimeoutSeconds": STATEMENT_TIMEOUT_SECONDS_RANGE,
   "console.sessionsRefreshSeconds": SESSIONS_REFRESH_SECONDS_RANGE,
 };

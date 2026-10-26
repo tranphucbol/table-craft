@@ -351,6 +351,12 @@ already fetched and say so; **Search All Rows** fetches the rest. Copy takes the
 Export asks whether to write the visible rows or the whole result. In the table editor the local
 filter sits beside the `WHERE` bar, which still filters on the server.
 
+Select two or more cells and the line under the grid shows their count, distinct values and, for
+numbers, an exact sum, average, minimum and maximum; click it to copy, and its menu picks which
+show. **Transpose** (`⌥⌘T`) turns records into columns, handy for a wide row. A binary value's
+panel saves it to a file, loads a file into the cell, and draws it when it holds a PNG, JPEG, GIF
+or WebP image.
+
 ![Result grid](docs/media/grid.gif)
 
 See [Result grid](docs/design/specification.md#result-grid).
@@ -361,7 +367,9 @@ See [Result grid](docs/design/specification.md#result-grid).
 place, add rows with `⌘N` and delete them with `⌘⌫`; changes stay pending and highlighted until you
 submit. **Preview Pending Changes** (`⇧⌘P`) shows the SQL, and **Submit** (`⌘↩`) runs it in one
 transaction: if any statement fails or touches more than one row, everything rolls back and your
-edits stay. `⌘B` on a foreign key cell opens the referenced row.
+edits stay. `⌘B` on a foreign key cell opens the referenced row. A boolean cell edits in a
+true/false/NULL list and `Space` flips it; a date or timestamp cell has a calendar picker beside its
+text.
 
 A console result is editable too when it reads one table and shows its primary key, as
 `SELECT * FROM orders WHERE …` does: the same chords edit it, and **Submit** runs on the console's
@@ -553,6 +561,8 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Preview Pending Changes   | `⇧⌘P`   | `Ctrl+Shift+P`         |
 | Submit                    | `⌘↩`    | `Ctrl+Enter`           |
 | Find in Result            | `⌘F`    | `Ctrl+F`               |
+| Transpose                 | `⌥⌘T`   | `Ctrl+Alt+T`           |
+| Toggle Boolean            | `Space` | `Space`                |
 | Settings…                 | `⌘,`    | `Ctrl+,`               |
 | Increase Editor Font Size | `⌘=`    | `Ctrl+=`               |
 | Decrease Editor Font Size | `⌘-`    | `Ctrl+-`               |
@@ -567,33 +577,35 @@ Settings live in `settings.json` in your [profile folder](#where-your-data-lives
 dialog writes it; you can also edit it by hand, and a field that is missing or out of range falls
 back to its default without affecting the others.
 
-| Field                                  | Values                                                                                         | Default                      |
-| :------------------------------------- | :--------------------------------------------------------------------------------------------- | :--------------------------- |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`    | `system`                     |
-| `appearance.density`                   | `comfortable`, `compact`                                                                       | `comfortable`                |
-| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                    | `false`                      |
-| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 13                   |
-| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 13                   |
-| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 12                   |
-| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                          | `aligned`                    |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                 | `upper`                      |
-| `editor.format.indentWidth`            | 1–8 spaces                                                                                     | 2                            |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                | 1                            |
-| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                 | `true`                       |
-| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                         | `true`                       |
-| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                            | `[]`                         |
-| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                             | `true`                       |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                             | 0                            |
-| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                             | 5                            |
-| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure  | `ask`                        |
-| `data.nullText`                        | 1–16 characters                                                                                | `<null>`                     |
-| `data.groupDigits`                     | `true`, `false`                                                                                | `false`                      |
-| `data.pageRows`                        | 10–10,000                                                                                      | 500                          |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                           | 100,000                      |
-| `log.level`                            | `info`, `debug`                                                                                | `info`                       |
-| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                              | 120                          |
-| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                 | `true`                       |
-| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from | `https://registry.npmjs.org` |
+| Field                                  | Values                                                                                          | Default                                        |
+| :------------------------------------- | :---------------------------------------------------------------------------------------------- | :--------------------------------------------- |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`     | `system`                                       |
+| `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable`                                  |
+| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
+| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
+| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
+| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 12                                     |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                           | `aligned`                                      |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                  | `upper`                                        |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                      | 2                                              |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                 | 1                                              |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                  | `true`                                         |
+| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                          | `true`                                         |
+| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                             | `[]`                                           |
+| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                              | `true`                                         |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                              | 0                                              |
+| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                              | 5                                              |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure   | `ask`                                          |
+| `data.nullText`                        | 1–16 characters                                                                                 | `<null>`                                       |
+| `data.groupDigits`                     | `true`, `false`                                                                                 | `false`                                        |
+| `data.pageRows`                        | 10–10,000                                                                                       | 500                                            |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                            | 100,000                                        |
+| `data.aggregates`                      | which of `count`, `distinct`, `sum`, `avg`, `min`, `max` the grid's selection line shows        | `["count","distinct","sum","avg","min","max"]` |
+| `data.blobLimitMb`                     | 1–128; the largest file, in MiB, Load from File puts into a binary cell, and Save to File reads | 16                                             |
+| `log.level`                            | `info`, `debug`                                                                                 | `info`                                         |
+| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                               | 120                                            |
+| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                  | `true`                                         |
+| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then
