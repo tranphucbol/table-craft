@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js";
 import { currentContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { createActionRegistry, type InvokeOutcome } from "@table-craft/desktop/renderer/actions/registry.js";
@@ -18,6 +18,9 @@ import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPromp
 import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
+
+/** A visible editor's controls describe its own tab, even while another group has focus. */
+export const ActionTabContext = createContext<string | undefined>(undefined);
 
 /** The app's one registry. Everything that runs a command goes through `invoke` (decision 015). */
 export const registry = createActionRegistry(currentContext, (id, cause) => {
@@ -55,10 +58,12 @@ export function subscribeToActions(listener: () => void): () => void {
 
 /** Whether `id` can run now, re-read whenever a store it might depend on changes. */
 export function useActionEnabled(id: string): boolean {
-  return useSyncExternalStore(subscribeToActions, () => registry.isEnabled(id));
+  const tabId = useContext(ActionTabContext);
+  return useSyncExternalStore(subscribeToActions, () => registry.isEnabled(id, currentContext(tabId)));
 }
 
 /** Whether `id` exists for the active tab at all (its `available`), re-read like `useActionEnabled`. */
 export function useActionAvailable(id: string): boolean {
-  return useSyncExternalStore(subscribeToActions, () => registry.isAvailable(id));
+  const tabId = useContext(ActionTabContext);
+  return useSyncExternalStore(subscribeToActions, () => registry.isAvailable(id, currentContext(tabId)));
 }

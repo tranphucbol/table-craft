@@ -1,9 +1,16 @@
 import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyField, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { MSSQL, MySQL, PLSQL, PostgreSQL, sql, SQLite, StandardSQL, type SQLDialect } from "@codemirror/lang-sql";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Compartment, EditorState, StateEffect, StateField, type Extension } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  StateEffect,
+  StateField,
+  type Extension,
+  type EditorStateConfig,
+} from "@codemirror/state";
 import {
   crosshairCursor,
   Decoration,
@@ -34,6 +41,7 @@ import {
   setErrorMarks,
 } from "@table-craft/desktop/renderer/console/errorMarks.js";
 import { insertionAt, replacementAt } from "@table-craft/desktop/renderer/console/insertion.js";
+import { applyEditorJump } from "@table-craft/desktop/renderer/console/editorJump.js";
 import {
   connectedInspector,
   inspectionSource,
@@ -53,6 +61,7 @@ import { AUTOFOCUS_ATTRIBUTE } from "@table-craft/desktop/renderer/shell/focus.j
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { connectionOf, pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { withInspection } from "@table-craft/desktop/settings/settings.js";
 
 /** The manifest's `highlight` names one of these; anything else gets standard SQL (plan 006 decision 1). */
@@ -70,6 +79,13 @@ const FLASH_MS = 900;
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
 
 const NO_MARKS: readonly ErrorMark[] = [];
+const savedEditors = new Map<string, EditorState>();
+
+function restoredEditor(config: EditorStateConfig, saved: EditorState | undefined): EditorState {
+  return saved === undefined
+    ? EditorState.create(config)
+    : EditorState.fromJSON(saved.toJSON({ history: historyField }), config, { history: historyField });
+}
 
 const setFlash = StateEffect.define<TextSpan | null>();
 const FLASH_MARK = Decoration.mark({ class: FLASH_CLASS });
@@ -178,80 +194,93 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     const host = hostRef.current;
     if (host === null) return;
     const store = useConsoles.getState();
+    for (const id of savedEditors.keys()) {
+      if (store.consoles[id] === undefined) savedEditors.delete(id);
+    }
+    const saved = savedEditors.get(consoleId);
+    savedEditors.delete(consoleId);
     const datasourceId = () => useConsoles.getState().consoles[consoleId]?.datasourceId;
     const view = new EditorView({
       parent: host,
-      state: EditorState.create({
-        doc: store.consoles[consoleId]?.sql ?? "",
-        extensions: [
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          history(),
-          drawSelection(),
-          dropCursor(),
-          EditorState.allowMultipleSelections.of(true),
-          rectangularSelection(),
-          crosshairCursor(),
-          indentOnInput(),
-          bracketMatching(),
-          closeBrackets(),
-          completion({
-            dialect: () => dialectRef.current,
-            engine: connectedEngine(datasourceId),
-            signature: connectedSignature(datasourceId),
-            current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
-          }),
-          highlightSelectionMatches(),
-          search({ top: false }),
-          placeholder(placeholderText(highlight)),
-          languageRef.current.of(highlighterOf(highlight)),
-          flashField,
-          errorMarks,
-          inspections,
-          inspectionSource({
-            engine: connectedInspector(datasourceId),
-            current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
-            settings: () => useSettings.getState().settings.editor.inspections,
-          }),
-          intentions(intentionTarget(datasourceId)),
-          EDITOR_THEME,
-          keymap.of([
-            ...completionKeymap,
-            ...closeBracketsKeymap,
-            ...defaultKeymap.filter((binding) => binding.key === undefined || !REGISTRY_KEYS.has(binding.key)),
-            ...searchKeymap,
-            ...historyKeymap,
-            indentWithTab,
-          ]),
-          EditorView.contentAttributes.of({ "aria-label": EDITOR_LABEL, [AUTOFOCUS_ATTRIBUTE]: "" }),
-          EditorView.updateListener.of((update) => {
-            const consoles = useConsoles.getState();
-            if (update.docChanged) consoles.setSql(consoleId, update.state.doc.toString());
-            if (marksChanged(update)) consoles.marksMoved(consoleId, errorMarksOf(update.view));
-            if (update.docChanged || update.selectionSet) {
-              const { from, to } = update.state.selection.main;
-              consoles.setSelection(consoleId, { from, to });
-            }
-          }),
-          EditorView.domEventHandlers({
-            drop(event, target) {
-              const object = parseDraggedObject(event.dataTransfer?.getData(DRAG_OBJECT_TYPE) ?? "");
-              if (object === null) return false;
-              event.preventDefault();
-              const at = target.posAtCoords({ x: event.clientX, y: event.clientY }) ?? target.state.selection.main.head;
-              void insertQualifiedName(target, object, at);
-              return true;
-            },
-          }),
-        ],
-      }),
+      state: restoredEditor(
+        {
+          doc: store.consoles[consoleId]?.sql ?? "",
+          selection: {
+            anchor: store.consoles[consoleId]?.selection.from ?? 0,
+            head: store.consoles[consoleId]?.selection.to ?? 0,
+          },
+          extensions: [
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            history(),
+            drawSelection(),
+            dropCursor(),
+            EditorState.allowMultipleSelections.of(true),
+            rectangularSelection(),
+            crosshairCursor(),
+            indentOnInput(),
+            bracketMatching(),
+            closeBrackets(),
+            completion({
+              dialect: () => dialectRef.current,
+              engine: connectedEngine(datasourceId),
+              signature: connectedSignature(datasourceId),
+              current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
+            }),
+            highlightSelectionMatches(),
+            search({ top: false }),
+            placeholder(placeholderText(highlight)),
+            languageRef.current.of(highlighterOf(highlight)),
+            flashField,
+            errorMarks,
+            inspections,
+            inspectionSource({
+              engine: connectedInspector(datasourceId),
+              current: () => useConsoles.getState().consoles[consoleId]?.namespace ?? null,
+              settings: () => useSettings.getState().settings.editor.inspections,
+            }),
+            intentions(intentionTarget(datasourceId)),
+            EDITOR_THEME,
+            keymap.of([
+              ...completionKeymap,
+              ...closeBracketsKeymap,
+              ...defaultKeymap.filter((binding) => binding.key === undefined || !REGISTRY_KEYS.has(binding.key)),
+              ...searchKeymap,
+              ...historyKeymap,
+              indentWithTab,
+            ]),
+            EditorView.contentAttributes.of({ "aria-label": EDITOR_LABEL, [AUTOFOCUS_ATTRIBUTE]: "" }),
+            EditorView.updateListener.of((update) => {
+              const consoles = useConsoles.getState();
+              if (update.docChanged) consoles.setSql(consoleId, update.state.doc.toString());
+              if (marksChanged(update)) consoles.marksMoved(consoleId, errorMarksOf(update.view));
+              if (update.docChanged || update.selectionSet) {
+                const { from, to } = update.state.selection.main;
+                consoles.setSelection(consoleId, { from, to });
+              }
+            }),
+            EditorView.domEventHandlers({
+              drop(event, target) {
+                const object = parseDraggedObject(event.dataTransfer?.getData(DRAG_OBJECT_TYPE) ?? "");
+                if (object === null) return false;
+                event.preventDefault();
+                const at =
+                  target.posAtCoords({ x: event.clientX, y: event.clientY }) ?? target.state.selection.main.head;
+                void insertQualifiedName(target, object, at);
+                return true;
+              },
+            }),
+          ],
+        },
+        saved,
+      ),
     });
     viewRef.current = view;
     const untrack = trackEditor(consoleId, view);
-    // Each tab mounts its own console, so focus follows the tab the user just chose.
-    view.focus();
+    if (useTabs.getState().activeId === consoleId) view.focus();
     return () => {
       untrack();
+      if (useConsoles.getState().consoles[consoleId] !== undefined) savedEditors.set(consoleId, view.state);
       view.destroy();
       viewRef.current = null;
     };
@@ -311,10 +340,17 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   useEffect(() => {
     const view = viewRef.current;
     if (view === null || jump === null) return;
-    const anchor = Math.min(jump.from, view.state.doc.length);
-    view.dispatch({ selection: { anchor }, scrollIntoView: true });
-    view.focus();
-  }, [jump]);
+    applyEditorJump(
+      {
+        length: view.state.doc.length,
+        select: (anchor) => view.dispatch({ selection: { anchor }, scrollIntoView: true }),
+        focus: () => view.focus(),
+      },
+      consoleId,
+      useConsoles.getState(),
+      useTabs.getState().activeId === consoleId,
+    );
+  }, [consoleId, jump]);
 
   return <div ref={hostRef} data-testid="sql-editor" className="h-full min-h-0 overflow-hidden" />;
 }

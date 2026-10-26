@@ -200,6 +200,13 @@ Never animated: typing, the caret, CodeMirror's completion and hover tooltips, g
 selection, sort, edits and results arriving, tree expand and collapse, pane resizing, tab
 switches, theme switches, transaction and connection state.
 
+Side-by-side editor groups reuse the vertical `Handle`: `bg-line` at rest, `bg-accent` while
+dragged. Both strips retain their active-tab underline; `data-focused` on the group identifies the
+command target without dimming the other editor. During a tab drag, left/right half-width drop
+targets use `border-accent`, a translucent `bg-selection`, and a `bg-panel` label; the hovered
+target strengthens the selection fill. Splits, moves and resizing do not animate. Narrow groups
+keep their own scrolling tab strip and console toolbar instead of overflowing into their neighbor.
+
 Pressed and confirmed (plan 110): every enabled `<button>` takes an inset `--tc-press-tint` (14 %
 `--tc-ink`) while held, from one `@layer base` rule in `app.css`, so a press reads on any
 background; icon buttons add the `press` utility and also shrink to `--tc-motion-press-scale`. A
