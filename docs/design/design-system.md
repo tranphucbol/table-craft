@@ -163,6 +163,46 @@ live row height.
 | `density.planDetailsWidthPx`   | `--tc-plan-details-width`    | 320 px      | 320 px  |
 | `density.planBarHeightPx`      | `--tc-plan-bar-height`       | 3 px        | 3 px    |
 
+## Motion
+
+Plan 109, decision 120. Motion is quiet and only on surfaces that open: a short fade, a few
+pixels of travel or a slight scale, and nothing on close, so focus returns in the same frame. Every
+timing is a token in `appearance/motion.ts`, written as `--tc-motion-*` variables; `app.css` names
+the animations (`animate-surface-in`, `animate-menu-in`, `animate-tooltip-in`, `animate-dialog-in`,
+`animate-overlay-in`) and the easing, and `renderer/ui/motion.ts` holds the class each surface
+adds. No component writes a duration.
+
+| Token (`appearance/motion.ts`) | CSS variable              | Full    | Reduced | Off    |
+| ------------------------------ | ------------------------- | ------- | ------- | ------ |
+| `fastMs`                       | `--tc-motion-fast`        | 100 ms  | 100 ms  | 0 ms   |
+| `baseMs`                       | `--tc-motion-base`        | 150 ms  | 150 ms  | 0 ms   |
+| `slowMs`                       | `--tc-motion-slow`        | 200 ms  | 200 ms  | 0 ms   |
+| `flashMs`                      | `--tc-motion-flash`       | 600 ms  | 600 ms  | 0 ms   |
+| `shiftPx`                      | `--tc-motion-shift`       | 4 px    | 0 px    | 0 px   |
+| `enterScale`                   | `--tc-motion-enter-scale` | 0.98    | 1       | 1      |
+| `progress` (spinners)          | `--tc-motion-progress`    | running | running | paused |
+| `ambient` (connecting pulse)   | `--tc-motion-ambient`     | running | paused  | paused |
+
+Two easings: `--ease-standard` (`cubic-bezier(0.2, 0, 0, 1)`) for entering, `linear` for fades and
+progress. No springs, bounce or overshoot.
+
+| Surface                                    | Class (`ui/motion.ts`)                           | Opens with                          |
+| ------------------------------------------ | ------------------------------------------------ | ----------------------------------- |
+| Popovers, the data source widget           | `SURFACE_MOTION`                                 | base fade, 4 px from its side       |
+| Command palette                            | `SURFACE_MOTION`, `OVERLAY_MOTION`               | base fade, 4 px down                |
+| Context menus                              | `MENU_MOTION`                                    | fast fade, 4 px from its side       |
+| Tooltips                                   | `TOOLTIP_MOTION`                                 | fast fade, on the delayed open only |
+| Dialogs (`CONTENT_CLASS`, `OVERLAY_CLASS`) | `DIALOG_MOTION`, `OVERLAY_MOTION`                | slow fade and scale 0.98 → 1        |
+| Spinners, the connecting pulse             | none (`animate-spin`, `animate-pulse` redefined) | loop, play state per level          |
+
+Never animated: typing, the caret, CodeMirror's completion and hover tooltips, grid scroll,
+selection, sort, edits and results arriving, tree expand and collapse, pane resizing, tab
+switches, theme switches, transaction and connection state.
+
+The level is the **Motion** setting (`appearance.motion`): System (default) follows
+`prefers-reduced-motion`, which Chromium reads from macOS Reduce Motion and its Windows and GNOME
+equivalents; Full, Reduced and Off override it. It applies live.
+
 ## Settings dialog
 
 Plan 013. `⌘,` (Settings… in the macOS app menu, File elsewhere) opens a modal the size of Data
@@ -179,7 +219,9 @@ as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink
   `text-ink-muted`, the chosen one checked, the highlighted one `bg-selection` and previewed live.
   A broken user theme is named by its file with its error count in `text-danger` and
   `aria-disabled`; highlighting it lists its errors under the list behind a `border-line` rule.
-  Reload Themes and Open Themes Folder sit under the trigger. Density as two native radios; UI font.
+  Reload Themes and Open Themes Folder sit under the trigger. Density as two native radios; Motion
+  as four (System, Full, Reduced, Off), with a muted "Following the system: …" line under System;
+  UI font.
 - **Editor**: Editor font and a muted line naming the zoom chords.
 - **Data Editor**: Grid font, NULL text, Group digits, page size and Fetch All limit, with a muted
   note that formats are display only and paging applies to the next statement.
