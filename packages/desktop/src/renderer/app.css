@@ -111,6 +111,31 @@
   scrollbar-color: var(--tc-scrollbar-thumb) transparent;
 }
 
+/* Every enabled button answers a press (plan 110): an inset tint over its own background reads on
+   transparent, raised and accent buttons alike. The tint is state, so it stays at every motion
+   level; icon buttons add `press` to also shrink, which Reduced and Off turn off. */
+:root {
+  --tc-press-tint: color-mix(in oklab, var(--tc-ink) 14%, transparent);
+}
+
+@layer base {
+  button:enabled {
+    transition:
+      box-shadow var(--tc-motion-fast) linear,
+      scale var(--tc-motion-fast) var(--ease-standard);
+  }
+
+  button:enabled:active {
+    box-shadow: inset 0 0 0 100vmax var(--tc-press-tint);
+  }
+}
+
+@utility press {
+  &:enabled:active {
+    scale: var(--tc-motion-press-scale);
+  }
+}
+
 html,
 body,
 #app {

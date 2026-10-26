@@ -74,6 +74,7 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-motion-flash": `${motion.flashMs}ms`,
     "--tc-motion-shift": `${motion.shiftPx}px`,
     "--tc-motion-enter-scale": String(motion.enterScale),
+    "--tc-motion-press-scale": String(motion.pressScale),
     "--tc-motion-progress": motion.progress,
     "--tc-motion-ambient": motion.ambient,
   };
