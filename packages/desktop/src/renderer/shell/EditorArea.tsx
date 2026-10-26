@@ -261,7 +261,7 @@ export function EditorArea() {
         <div
           role="tablist"
           aria-label="Editor tabs"
-          className="flex shrink-0 overflow-x-auto bg-panel scrollbar-none"
+          className="flex shrink-0 overflow-x-auto border-b border-line bg-panel scrollbar-none"
           onWheel={scrollTabsSideways}
         >
           {tabs.map((tab) => (

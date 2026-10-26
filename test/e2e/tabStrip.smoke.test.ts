@@ -37,7 +37,9 @@ interface StripElement {
   readonly offsetHeight: number;
   readonly clientHeight: number;
   readonly ownerDocument: {
-    readonly defaultView: { getComputedStyle(element: StripElement): { readonly scrollbarWidth: string } };
+    readonly defaultView: {
+      getComputedStyle(element: StripElement): { readonly scrollbarWidth: string; readonly borderBottomWidth: string };
+    };
   };
 }
 
@@ -46,15 +48,20 @@ interface StripMetrics {
   readonly overflows: boolean;
   readonly barHeight: number;
   readonly scrollbarWidth: string;
+  readonly borderBottomWidth: string;
 }
 
 function metrics(strip: Locator): Promise<StripMetrics> {
-  return strip.evaluate((element: StripElement) => ({
-    scrollLeft: element.scrollLeft,
-    overflows: element.scrollWidth > element.clientWidth,
-    barHeight: element.offsetHeight - element.clientHeight,
-    scrollbarWidth: element.ownerDocument.defaultView.getComputedStyle(element).scrollbarWidth,
-  }));
+  return strip.evaluate((element: StripElement) => {
+    const style = element.ownerDocument.defaultView.getComputedStyle(element);
+    return {
+      scrollLeft: element.scrollLeft,
+      overflows: element.scrollWidth > element.clientWidth,
+      barHeight: element.offsetHeight - element.clientHeight - parseFloat(style.borderBottomWidth),
+      scrollbarWidth: style.scrollbarWidth,
+      borderBottomWidth: style.borderBottomWidth,
+    };
+  });
 }
 
 /** The tab lies wholly inside the strip's visible width, not clipped by its scroll. */
@@ -92,6 +99,7 @@ describe.runIf(SMOKE_ENABLED)("editor tab strip live test", () => {
       expect(opened.overflows).toBe(true);
       expect(opened.scrollbarWidth).toBe("none");
       expect(opened.barHeight).toBe(0);
+      expect(opened.borderBottomWidth).toBe("1px");
       expect(opened.scrollLeft).toBeGreaterThan(0);
       expect(await shownWhole(strip, activeEditorTab(page))).toBe(true);
 
