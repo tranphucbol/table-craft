@@ -43,6 +43,9 @@ function fakeRedis(version: string): Promise<Server> {
   const server = createServer((socket: Socket) => {
     let buffer = "";
     socket.setEncoding("utf8");
+    // The client drops the connection once it reads the old version; under load the reset reaches
+    // this side as an error event, which unhandled fails the whole run.
+    socket.on("error", () => undefined);
     socket.on("data", (chunk: string) => {
       const { commands, rest } = commandsIn(buffer + chunk);
       buffer = rest;
