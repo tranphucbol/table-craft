@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import {
@@ -81,7 +82,7 @@ export const EXPLAIN_ACTIONS: readonly AnyAction[] = [
     when: (context) => shownPlan(context) !== null,
     run: async (context) => {
       const shown = shownPlan(context);
-      if (shown !== null) await navigator.clipboard.writeText(shown.plan.plan.raw);
+      if (shown !== null) await writeClipboard(shown.plan.plan.raw);
     },
   }),
   defineAction({

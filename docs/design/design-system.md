@@ -180,6 +180,7 @@ adds. No component writes a duration.
 | `flashMs`                      | `--tc-motion-flash`       | 600 ms  | 600 ms  | 0 ms   |
 | `shiftPx`                      | `--tc-motion-shift`       | 4 px    | 0 px    | 0 px   |
 | `enterScale`                   | `--tc-motion-enter-scale` | 0.98    | 1       | 1      |
+| `pressScale`                   | `--tc-motion-press-scale` | 0.92    | 1       | 1      |
 | `progress` (spinners)          | `--tc-motion-progress`    | running | running | paused |
 | `ambient` (connecting pulse)   | `--tc-motion-ambient`     | running | paused  | paused |
 
@@ -205,6 +206,13 @@ command target without dimming the other editor. During a tab drag, left/right h
 targets use `border-accent`, a translucent `bg-selection`, and a `bg-panel` label; the hovered
 target strengthens the selection fill. Splits, moves and resizing do not animate. Narrow groups
 keep their own scrolling tab strip and console toolbar instead of overflowing into their neighbor.
+
+Pressed and confirmed (plan 110): every enabled `<button>` takes an inset `--tc-press-tint` (14 %
+`--tc-ink`) while held, from one `@layer base` rule in `app.css`, so a press reads on any
+background; icon buttons add the `press` utility and also shrink to `--tc-motion-press-scale`. A
+copy button swaps its glyph for a bold `Check` in `text-success` and its tooltip for "Copied" for
+1.5 s after the clipboard write it caused (`ui/useCopyConfirmation.ts`); a failed copy never
+confirms.
 
 The level is the **Motion** setting (`appearance.motion`): System (default) follows
 `prefers-reduced-motion`, which Chromium reads from macOS Reduce Motion and its Windows and GNOME

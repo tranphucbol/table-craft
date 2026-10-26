@@ -211,6 +211,8 @@ SSH tunnel, or one already in TableCraft, starts unticked; ticking a duplicate i
 `<name> (2)`, never overwriting the one you have. Folders and colours come along, under a
 `DataGrip` or `TablePro` folder unless you turn that off.
 
+![Import from DataGrip](docs/media/import-datasources.gif)
+
 Passwords:
 
 - **DataGrip** keeps them in the system keychain or in its own KeePass file. A KeePass file is read
@@ -232,6 +234,8 @@ their columns, keys, foreign keys and indexes. Expanding a disconnected data sou
 Typing in the tree starts speed search, `F1` shows Quick Documentation for the selected object, and
 `⌘B` opens its DDL. **Synchronize** (`⌥⌘Y`) reloads the tree from the database.
 
+![Database explorer](docs/media/explorer.gif)
+
 On a server with many databases, **Manage Shown Schemas…** on a data source picks which databases
 or schemas the tree lists, as DataGrip does; the data source then shows how many of them it lists,
 such as `3 of 40`. Ones created later stay hidden until you pick them, unless **All schemas** is on.
@@ -244,7 +248,7 @@ DDL statement, and its preview says so. Drop and Truncate name the object and it
 Cascade is a checkbox where the database has it. SQLite rebuilds a table for a change its `ALTER
 TABLE` cannot make.
 
-![Database explorer](docs/media/explorer.gif)
+![Modify Table](docs/media/modify-table.gif)
 
 See [Database explorer](docs/design/specification.md#database-explorer).
 
@@ -306,6 +310,8 @@ a mark for its message and fixes; `⌥↩` (Show Context Actions) at the caret l
 inspection**. `F2` / `⇧F2` visit these too, errors first. Settings → Editor → Inspections turns each
 check, or all of them, off. The checks know your tables once the data source is connected.
 
+![Inspections and a failing statement](docs/media/inspections.gif)
+
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
 back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
 under it, `AS` lined up, `AND`/`OR` under `WHERE`; other statements keep the standard layout. A statement with `:name`, `?` or (on PostgreSQL) `$1` placeholders asks for their values
@@ -351,6 +357,8 @@ straight to disk, so a multi-gigabyte export uses flat memory, shows its progres
 in Services, and never leaves a half-written file behind when the network drops, the disk fills or
 you cancel.
 
+![Result grid](docs/media/grid.gif)
+
 **Find in Result** (`⌘F` in the grid) searches the fetched rows as the grid draws them, with Match
 Case, Regular Expression and Whole Cell toggles; `↩` and `⇧↩` step through the matches and
 **Filter Rows** hides the rows without one. A column header's menu filters by the focused row's
@@ -365,7 +373,7 @@ show. **Transpose** (`⌥⌘T`) turns records into columns, handy for a wide row
 panel saves it to a file, loads a file into the cell, and draws it when it holds a PNG, JPEG, GIF
 or WebP image.
 
-![Result grid](docs/media/grid.gif)
+![Find, filter and aggregate in the grid](docs/media/grid-helpers.gif)
 
 See [Result grid](docs/design/specification.md#result-grid).
 
@@ -401,6 +409,8 @@ connection rolls everything back. Choose **Commit every N rows** to keep what wa
 **Resume** from the first row that was not, and **Skip** to set bad rows aside in
 `<file>.rejected.csv` with the reason for each.
 
+![Import](docs/media/import.gif)
+
 See [Import](docs/design/specification.md#import).
 
 ### DDL and SQL generation
@@ -422,6 +432,8 @@ what comes back, and the SQL it will run is shown as you type. **Run** opens a n
 routine's schema with that SQL and runs it, values bound rather than pasted in, so the result, the
 OUT values and server messages show in the usual result tabs and Output. **Open in Console** opens
 the same console without running it. PostgreSQL and MySQL support it.
+
+![Execute a routine](docs/media/routine.gif)
 
 See [Execute a routine](docs/design/specification.md#execute-a-routine).
 
@@ -448,6 +460,8 @@ On a data source coloured red you type the PID to confirm, and a read-only data 
 anything. **Show in Sessions** on an execution in Services selects the console's own session.
 PostgreSQL, MySQL and TiDB support it; when your account cannot see everything, the tab says which
 grant to ask for.
+
+![Sessions](docs/media/sessions.gif)
 
 See [Sessions](docs/design/specification.md#sessions).
 
@@ -483,6 +497,10 @@ has no ACL users: leave Username empty and give the password alone.
   columns and submits them as one guarded `MULTI`; other results say why they are read-only.
 - **Server tab.** `INFO` as cards with auto-refresh, every node of a cluster at a glance, and the
   slow log. **Show Sessions…** lists `CLIENT LIST` and unblocks or kills a client.
+
+![Redis key tree and key tab](docs/media/redis-keys.gif)
+
+![Redis console](docs/media/redis-console.gif)
 
 See [Command consoles](docs/design/specification.md#command-consoles),
 [Key browser](docs/design/specification.md#key-browser) and
@@ -882,7 +900,6 @@ Updates…** or install a plugin.
 
 ## Not in v1
 
-- Planned for v1.1: saved query files.
 - Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, a MongoDB
   plugin, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
   Kubernetes integration.

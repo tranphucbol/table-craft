@@ -12,8 +12,9 @@ import {
 } from "@table-craft/desktop/renderer/model/aggregates.js";
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { useCellFormats, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
-import { DropdownIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { CopiedIcon, DropdownIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
+import { COPIED_LABEL, useCopyConfirmation } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
 import { AGGREGATE_NAMES } from "@table-craft/desktop/settings/settings.js";
 
 /** Drag-selecting fires a selection per cell crossed; only the one the pointer rests on is added up. */
@@ -35,6 +36,7 @@ export function AggregateLine({
 }) {
   const chosen = useSettings((state) => state.settings.data.aggregates);
   const formats = useCellFormats();
+  const confirmation = useCopyConfirmation();
   const [answer, setAnswer] = useState<{ readonly key: string; readonly aggregates: SelectionAggregates | null }>();
   const request = aggregateRequest(result);
   const key = request === null ? null : JSON.stringify(request);
@@ -69,12 +71,19 @@ export function AggregateLine({
     >
       <button
         type="button"
-        title="Copy"
+        title={confirmation.copied ? COPIED_LABEL : "Copy"}
         data-testid="aggregate-copy"
+        data-copied={confirmation.copied ? "" : undefined}
         className="flex min-w-0 cursor-default items-center gap-gap truncate rounded px-1 hover:bg-selection"
-        onClick={() => invoke(GRID_HELPER_ACTION_IDS.copyAggregates)}
+        onClick={() => {
+          confirmation.arm();
+          invoke(GRID_HELPER_ACTION_IDS.copyAggregates);
+        }}
         aria-label={aggregateText(parts)}
       >
+        {confirmation.copied ? (
+          <CopiedIcon aria-label={COPIED_LABEL} weight="bold" className="size-icon shrink-0 text-success" />
+        ) : null}
         {parts.map((part) => (
           <span key={part.name} data-aggregate={part.name} className="whitespace-nowrap">
             {part.label}: <span className="text-ink">{part.text}</span>

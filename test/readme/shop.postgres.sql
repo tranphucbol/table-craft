@@ -87,4 +87,19 @@ FROM customers AS c
   JOIN order_items AS i ON i.order_id = o.id
 GROUP BY c.id, c.name;
 
+-- The routine GIF runs these from the explorer (plan 061).
+CREATE FUNCTION order_total(order_id integer, discount numeric DEFAULT 0) RETURNS numeric
+LANGUAGE sql STABLE AS $$
+  SELECT round(sum(quantity * unit_price) * (1 - discount), 2)
+  FROM order_items WHERE order_items.order_id = order_total.order_id
+$$;
+
+CREATE PROCEDURE restock(IN product_id integer, IN quantity integer, OUT stock integer)
+LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE products SET stock = products.stock + quantity WHERE id = product_id
+  RETURNING products.stock INTO stock;
+END
+$$;
+
 ANALYZE;

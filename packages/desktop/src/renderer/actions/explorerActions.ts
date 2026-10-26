@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { RelationKind } from "@table-craft/desktop/engine/protocol.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
@@ -47,10 +48,6 @@ function collapsedSelection(selection: TreeSelection | null): TreeSelection | nu
 
 function isRevealArgs(args: unknown): args is RevealArgs {
   return typeof args === "object" && args !== null && "datasourceId" in args && "path" in args && "name" in args;
-}
-
-async function writeClipboard(text: string): Promise<void> {
-  await navigator.clipboard.writeText(text);
 }
 
 /**

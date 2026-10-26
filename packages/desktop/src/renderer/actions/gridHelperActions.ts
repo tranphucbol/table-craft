@@ -1,5 +1,6 @@
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
-import { live, shown, writeClipboard, type ShownResult } from "@table-craft/desktop/renderer/actions/gridActions.js";
+import { live, shown, type ShownResult } from "@table-craft/desktop/renderer/actions/gridActions.js";
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import {
   editableSurfaceOf,

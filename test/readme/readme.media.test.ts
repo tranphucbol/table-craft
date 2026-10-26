@@ -1,377 +1,66 @@
 /**
  * Records the README's GIFs (plan 016, decision 036) from the built app against the demo shop:
- * PostgreSQL `shop` in the `test:db` container, reloaded before every scene, and a SQLite `shop.db`
- * built fresh. Gated, because it needs a display, a fresh build, Docker and ffmpeg:
+ * PostgreSQL `shop` in the `test:db` container, reloaded before every scene, a SQLite `shop.db`
+ * built fresh and, for the Redis scenes, database 3 of the `test:db` `redis` service. Gated,
+ * because it needs a display, a fresh build, Docker and ffmpeg:
  *
  *   bun run readme:media                          every GIF
  *   README_MEDIA=explain,grid bun run readme:media   only those
  *
  * Each scene sets up off camera (connect, open a console, fill text a reader need not watch typed),
- * then records only what the GIF is about, paced by `pace.ts` for a reader.
+ * then records only what the GIF is about, paced by `pace.ts` for a reader. This file holds the
+ * plan 016 scenes, `features.media.test.ts` the plan 061 ones, `scenes.ts` what they share.
  */
-import { mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ElectronApplication, Locator, Page } from "playwright-core";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { expect } from "vitest";
 import { POSTGRES_CONFIG } from "../support/databases.js";
 import {
   activeEditorTab,
-  answerSecretPrompt,
-  CLOSE_HOOK_TIMEOUT_MS,
-  closeApp,
   consoleToolbar,
   dataSourcesDialog,
-  EVIDENCE_WINDOW,
   exportDialog,
   LAUNCH_TIMEOUT_MS,
-  launchApp,
-  newProfile,
   paletteInput,
   paletteRows,
-  pressChord,
-  type SavedDatasource,
-  seedDatasources,
-  seedSettings,
-  setWindowSize,
-  SMOKE_ENABLED,
   sqlEditor,
   toolWindow,
   waitUntilReady,
 } from "../e2e/harness.js";
 import { stubSaveDialog } from "../e2e/workflows.js";
-import { type Gif, GIF_MAX_BYTES, GIFS_MAX_BYTES, requireFfmpeg, startRecording } from "./recorder.js";
-import { clickAtVisibly, clickVisibly, END_PAUSE_MS, pause, pointAt, pressVisibly, typeSlowly } from "./pace.js";
-import { buildShopSqlite, loadShopPostgres, SHOP_DATABASE } from "./shop.js";
+import { clickVisibly, pause, pointAt, pressVisibly, typeSlowly } from "./pace.js";
+import {
+  acceptCompletion,
+  cell,
+  clickInConsole,
+  connect,
+  datasourceRow,
+  editCell,
+  editor,
+  executions,
+  expandVisibly,
+  EXPORT_DIRECTORY,
+  filterBar,
+  mediaSuite,
+  NAMESPACE,
+  openConsole,
+  PASSWORD,
+  previewAndSubmit,
+  READ_PAUSE_MS,
+  resultTab,
+  resultToolbarButton,
+  scene,
+  selectInTree,
+  setConsoleText,
+  SHOP,
+  shopTables,
+  sortTableBy,
+  TABLES_GROUP,
+  treeRow,
+  waitForRows,
+} from "./scenes.js";
+import { SHOP_DATABASE } from "./shop.js";
 
-const README_MEDIA_ENABLED = SMOKE_ENABLED && process.env["TABLE_CRAFT_README_MEDIA"] === "1";
-/** `README_MEDIA=explain,grid` re-records only those GIFs; unset records all of them. */
-const ONLY = (process.env["README_MEDIA"] ?? "")
-  .split(",")
-  .map((name) => name.trim())
-  .filter((name) => name !== "");
-
-const SCENE_TIMEOUT_MS = 120_000;
-/** Long enough to read a result or a dialog before the scene moves on. */
-const READ_PAUSE_MS = 1_500;
-/** Plan 016 decision 20: a GIF a reader watches through, not a screencast to scrub. */
-const MAX_GIF_SECONDS = 25;
-
-const SHOP = "shop";
-const SHOP_FILE = "shop.db";
-const NAMESPACE = "public";
-const TABLES_GROUP = "tables 4";
-const PASSWORD = POSTGRES_CONFIG.password;
-const EXPORT_DIRECTORY = "/tmp/table-craft-readme";
-
-const SHOP_POSTGRES: SavedDatasource = {
-  id: "shop",
-  name: SHOP,
-  pluginId: "postgres",
-  color: "green",
-  config: {
-    host: POSTGRES_CONFIG.host,
-    port: POSTGRES_CONFIG.port,
-    database: SHOP_DATABASE,
-    user: POSTGRES_CONFIG.user,
-    sslMode: "disable",
-  },
-  secretModes: { password: "untilRestart" },
-};
-
-function shopSqlite(path: string): SavedDatasource {
-  return { id: "shop-db", name: SHOP_FILE, pluginId: "sqlite", color: "blue", config: { path } };
-}
-
-/** The GIFs pin Dark (plan 016, Consequences), whatever the recording Mac's appearance is. */
-const DARK = { version: 1, appearance: { theme: "dark" } };
-
-interface Scene {
-  readonly app: ElectronApplication;
-  readonly page: Page;
-}
-
-const recorded: Gif[] = [];
-let sqliteDirectory = "";
-let running: ElectronApplication | null = null;
-
-interface SceneScript {
-  /** Off camera: connect, open a console, fill text the reader need not watch typed. */
-  readonly setup: (scene: Scene) => Promise<void>;
-  /** On camera. */
-  readonly run: (scene: Scene) => Promise<void>;
-  /** Only the SQLite file is saved, for the scene that adds `shop` itself. */
-  readonly withoutShop?: boolean;
-}
-
-function scene(name: string, { setup, run, withoutShop = false }: SceneScript) {
-  const skipped = ONLY.length > 0 && !ONLY.includes(name);
-  it.skipIf(skipped)(
-    name,
-    async () => {
-      loadShopPostgres();
-      const profile = newProfile();
-      const sqlite = shopSqlite(join(sqliteDirectory, SHOP_FILE));
-      seedDatasources(profile, withoutShop ? [sqlite] : [SHOP_POSTGRES, sqlite]);
-      seedSettings(profile, DARK);
-      const { app, page } = await launchApp(null, { userDataDir: profile });
-      running = app;
-      await setWindowSize(app, EVIDENCE_WINDOW);
-      await toolWindow(page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      await setup({ app, page });
-      await pause(page);
-      const recording = await startRecording(app, page);
-      try {
-        await run({ app, page });
-      } catch (error) {
-        await page.screenshot({ path: join(tmpdir(), `table-craft-readme-${name}-failure.png`) });
-        throw error;
-      }
-      await pause(page, END_PAUSE_MS);
-      const gif = await recording.stop(name);
-      recorded.push(gif);
-      expect(statSync(gif.path).size).toBe(gif.bytes);
-      expect(gif.bytes, `${name}.gif is ${String(gif.bytes)} bytes`).toBeLessThanOrEqual(GIF_MAX_BYTES);
-      expect(gif.seconds, `${name}.gif lasts ${gif.seconds.toFixed(1)} s`).toBeLessThanOrEqual(MAX_GIF_SECONDS);
-    },
-    SCENE_TIMEOUT_MS,
-  );
-}
-
-// Locators -------------------------------------------------------------------------------------
-
-function treeRow(page: Page, name: string): Locator {
-  return toolWindow(page, "Database").getByRole("treeitem", { name, exact: true });
-}
-
-/** The datasource row, not the PostgreSQL database of the same name under it. */
-function datasourceRow(page: Page, name: string): Locator {
-  return toolWindow(page, "Database")
-    .locator('[role="treeitem"][data-kind="datasource"]')
-    .filter({ has: page.getByText(name, { exact: true }) });
-}
-
-function editor(page: Page): Locator {
-  return page.getByTestId("table-editor");
-}
-
-function cell(page: Page, row: number, column: number): Locator {
-  return editor(page).locator(`[role="gridcell"][data-row="${String(row)}"][data-col="${String(column)}"]`);
-}
-
-function filterBar(page: Page, bar: "where" | "order-by"): Locator {
-  return editor(page).getByTestId(`filter-${bar}`).locator(".cm-content");
-}
-
-function resultTab(page: Page, title: string): Locator {
-  return page
-    .getByRole("tablist", { name: "Results" })
-    .getByRole("tab")
-    .filter({ hasText: new RegExp(`^${title}$`) });
-}
-
-function resultState(page: Page): Locator {
-  return page.getByTestId("result-state");
-}
-
-function resultToolbarButton(page: Page, name: string): Locator {
-  return page.getByRole("toolbar", { name: "Result" }).getByRole("button", { name, exact: true });
-}
-
-function completionPopup(page: Page): Locator {
-  return page.locator(".cm-tooltip-autocomplete");
-}
-
-function executions(page: Page): Locator {
-  return toolWindow(page, "Services").locator('[role="treeitem"][data-kind="execution"]');
-}
-
-// Steps ----------------------------------------------------------------------------------------
-
-/** Connects off camera: the prompt for the password is not what any GIF is about. */
-async function connect(page: Page, name: string, password?: string): Promise<void> {
-  await datasourceRow(page, name).click({ button: "right" });
-  await page.getByRole("menuitem", { name: /^Connect/ }).click();
-  if (password !== undefined) await answerSecretPrompt(page, name, password);
-  await expect
-    .poll(() => datasourceRow(page, name).getAttribute("data-state"), { timeout: LAUNCH_TIMEOUT_MS })
-    .toBe("connected");
-}
-
-async function expandQuietly(page: Page, name: string): Promise<void> {
-  const row = treeRow(page, name);
-  await row.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-  if ((await row.getAttribute("aria-expanded")) === "true") return;
-  await row.click();
-  await page.keyboard.press("ArrowRight");
-  await expect.poll(() => row.getAttribute("aria-expanded")).toBe("true");
-}
-
-async function expandVisibly(page: Page, name: string): Promise<void> {
-  const row = treeRow(page, name);
-  await row.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-  if ((await row.getAttribute("aria-expanded")) === "true") return;
-  await clickVisibly(page, row);
-  await pressVisibly(page, "ArrowRight");
-  await expect.poll(() => row.getAttribute("aria-expanded"), { timeout: LAUNCH_TIMEOUT_MS }).toBe("true");
-  await pause(page);
-}
-
-/** Connects `shop` and opens its tables group, the state most scenes start from. */
-async function shopTables(page: Page): Promise<void> {
-  await connect(page, SHOP, PASSWORD);
-  await expandQuietly(page, NAMESPACE);
-  await expandQuietly(page, TABLES_GROUP);
-}
-
-async function openConsole(page: Page, name: string): Promise<void> {
-  await datasourceRow(page, name).click();
-  await pressChord(page, "Shift+L");
-  await expect.poll(() => activeEditorTab(page).textContent()).toBe(`console [${name}]`);
-  await waitUntilReady(page);
-}
-
-/** Puts `sql` into the console without typing it, for text a scene shows rather than writes. */
-async function setConsoleText(page: Page, sql: string): Promise<void> {
-  await sqlEditor(page).fill(sql);
-  await page.keyboard.press("ControlOrMeta+End");
-}
-
-async function waitForRows(page: Page, state: string | RegExp): Promise<void> {
-  await expect.poll(() => resultState(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toMatch(state);
-}
-
-/** CodeMirror ignores Enter for `interactionDelay` after the popup opens; a reader never beats it. */
-const INTERACTION_DELAY_MS = 75;
-/** Basic Completion, CodeMirror's `Ctrl-Space` on every platform. */
-const BASIC_COMPLETION = "Ctrl+Space";
-const POPUP_GRACE_MS = 1_000;
-
-/**
- * True once Enter would accept `label`, as `completion.smoke.test.ts` checks it. A string, because
- * the root program has no DOM lib.
- */
-function acceptable(label: string): string {
-  return `(() => {
-    const popup = document.querySelector('.cm-tooltip-autocomplete');
-    if (popup === null) return false;
-    const seen = (window.__popupSeen ??= new WeakMap());
-    if (!seen.has(popup)) seen.set(popup, performance.now());
-    if (performance.now() - seen.get(popup) < ${String(INTERACTION_DELAY_MS)}) return false;
-    if (popup.classList.contains('cm-tooltip-autocomplete-disabled')) return false;
-    return popup.querySelector('[aria-selected] .cm-completionLabel')?.textContent === ${JSON.stringify(label)};
-  })()`;
-}
-
-/**
- * Accepts `label` from the completion popup, asking for it with Basic Completion when typing did not
- * open the popup (it opens on a word, not after a space).
- */
-async function acceptCompletion(page: Page, label: string): Promise<void> {
-  const opened = await completionPopup(page)
-    .waitFor({ timeout: POPUP_GRACE_MS })
-    .then(() => true)
-    .catch(() => false);
-  if (!opened) await pressVisibly(page, BASIC_COMPLETION);
-  await expect.poll(() => page.evaluate<boolean>(acceptable(label)), { timeout: LAUNCH_TIMEOUT_MS }).toBe(true);
-  await pause(page);
-  await pressVisibly(page, "Enter");
-  await expect.poll(() => completionPopup(page).count()).toBe(0);
-}
-
-async function selectInTree(page: Page, name: string): Promise<void> {
-  await clickVisibly(page, treeRow(page, name));
-  await expect.poll(() => treeRow(page, name).getAttribute("aria-selected")).toBe("true");
-}
-
-async function editCell(page: Page, row: number, column: number, text: string): Promise<void> {
-  await clickVisibly(page, cell(page, row, column), { double: true });
-  const field = editor(page).locator("[data-editing] input");
-  await field.waitFor();
-  await page.keyboard.press("ControlOrMeta+A");
-  await typeSlowly(page, text);
-  await pressVisibly(page, "Enter");
-  await expect.poll(() => field.count()).toBe(0);
-}
-
-/**
- * Clicking a header writes `ORDER BY`. PostgreSQL returns an updated row last in a plain scan, so a
- * scene that edits and reloads sorts first, or the edited row would seem to vanish.
- */
-async function sortTableBy(page: Page, column: string): Promise<void> {
-  await clickVisibly(page, editor(page).getByRole("columnheader", { name: new RegExp(`^${column}\\b`) }));
-  await expect
-    .poll(() => editor(page).getByTestId("filter-order-by").locator(".cm-line").textContent(), {
-      timeout: LAUNCH_TIMEOUT_MS,
-    })
-    .toContain(column);
-  await pause(page);
-}
-
-/**
- * The centre of the first character of `needle` in the console's first line, which CodeMirror may
- * split across several spans. A string, because the root program has no DOM lib.
- */
-function firstCharacterOf(needle: string): string {
-  return `(() => {
-    const line = document.querySelector('[data-testid="sql-editor"] .cm-line');
-    const at = line?.textContent.indexOf(${JSON.stringify(needle)}) ?? -1;
-    if (at < 0) return null;
-    const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-    let seen = 0;
-    for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-      const length = node.textContent.length;
-      if (seen + length > at) {
-        const range = document.createRange();
-        range.setStart(node, at - seen);
-        range.setEnd(node, at - seen + 1);
-        const box = range.getBoundingClientRect();
-        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-      }
-      seen += length;
-    }
-    return null;
-  })()`;
-}
-
-async function clickInConsole(page: Page, needle: string): Promise<void> {
-  const point = await page.evaluate<{ x: number; y: number } | null>(firstCharacterOf(needle));
-  if (point === null) throw new Error(`"${needle}" is not on the console's first line.`);
-  await clickAtVisibly(page, point.x, point.y);
-}
-
-/** Preview Pending Changes lists the SQL Submit will run; its Submit runs it. */
-async function previewAndSubmit(page: Page, readMs = 1600): Promise<void> {
-  await pressVisibly(page, "Mod+Shift+P");
-  const preview = page.getByRole("dialog", { name: "Pending changes" });
-  await preview.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-  await pause(page, readMs);
-  await clickVisibly(page, preview.getByRole("button", { name: "Submit", exact: true }));
-  await preview.waitFor({ state: "detached" });
-}
-
-// Scenes ---------------------------------------------------------------------------------------
-
-describe.runIf(README_MEDIA_ENABLED)("README media", () => {
-  beforeAll(() => {
-    requireFfmpeg();
-    sqliteDirectory = mkdtempSync(join(tmpdir(), "table-craft-readme-shop-"));
-    buildShopSqlite(sqliteDirectory);
-    mkdirSync(EXPORT_DIRECTORY, { recursive: true });
-  });
-
-  afterEach(async () => {
-    await closeApp(running);
-    running = null;
-  }, CLOSE_HOOK_TIMEOUT_MS);
-
-  afterAll(() => {
-    rmSync(sqliteDirectory, { recursive: true, force: true });
-    rmSync(EXPORT_DIRECTORY, { recursive: true, force: true });
-    const total = recorded.reduce((sum, gif) => sum + gif.bytes, 0);
-    if (ONLY.length === 0) expect(total, `all GIFs: ${String(total)} bytes`).toBeLessThanOrEqual(GIFS_MAX_BYTES);
-  });
-
+mediaSuite("README media", () => {
   scene("how-it-works", {
     setup: async ({ page }) => {
       await connect(page, SHOP, PASSWORD);
