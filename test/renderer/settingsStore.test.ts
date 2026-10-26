@@ -131,10 +131,12 @@ describe("live appearance", () => {
   function installed(store = storeWith()) {
     const dark = fakeMedia(true);
     const contrast = fakeMedia(false);
+    const reducedMotion = fakeMedia(false);
     const applied: { appearance: Appearance; scheme: ColorScheme }[] = [];
     const apply = vi.fn((appearance: Appearance, scheme: ColorScheme) => void applied.push({ appearance, scheme }));
     const stop = installAppearance(store, {
-      matchMedia: (query) => (query.includes("contrast") ? contrast : dark),
+      matchMedia: (query) =>
+        query.includes("contrast") ? contrast : query.includes("reduced-motion") ? reducedMotion : dark,
       apply,
     });
     return { store, dark, contrast, applied, stop };

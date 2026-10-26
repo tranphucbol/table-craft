@@ -13,6 +13,7 @@ import {
   DENSITIES,
   PORTED_THEME_IDS,
 } from "@table-craft/desktop/appearance/themes.js";
+import { MOTION_CHOICES } from "@table-craft/desktop/appearance/motion.js";
 import {
   DEFAULT_SETTINGS,
   EXPORT_STALL_SECONDS_RANGE,
@@ -188,6 +189,7 @@ describe("README", () => {
     const choices = (path: string) => codeSpans(rows.find(([field]) => field === `\`${path}\``)?.[1] ?? "");
     expect(choices("appearance.theme")).toEqual(["system", ...BUILT_IN_THEME_IDS, USER_THEME_CHOICE]);
     expect(choices("appearance.density")).toEqual(Object.keys(DENSITIES));
+    expect(choices("appearance.motion")).toEqual(MOTION_CHOICES);
     expect(choices("editor.format.keywordCase")).toEqual(KEYWORD_CASES);
     expect(choices("editor.format.style")).toEqual(FORMAT_STYLES);
   });

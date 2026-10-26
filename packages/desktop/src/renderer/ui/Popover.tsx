@@ -1,5 +1,7 @@
 import * as Primitive from "@radix-ui/react-popover";
 import { useMemo, useState, type ReactNode } from "react";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 
 const SIDE_OFFSET_PX = 4;
 
@@ -55,7 +57,10 @@ export function Popover({
             event.preventDefault();
             if (returnTo instanceof HTMLElement) returnTo.focus();
           }}
-          className="z-50 flex max-h-popover-height w-max max-w-popover flex-col overflow-hidden rounded border border-line bg-raised text-ui text-ink shadow-lg outline-none"
+          className={cn(
+            "z-50 flex max-h-popover-height w-max max-w-popover flex-col overflow-hidden rounded border border-line bg-raised text-ui text-ink shadow-lg outline-none",
+            SURFACE_MOTION,
+          )}
         >
           {children}
         </Primitive.Content>

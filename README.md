@@ -508,7 +508,8 @@ See [Shell and actions](docs/design/specification.md#shell-and-actions).
 dropdown: type to filter by name or source, and the theme under the arrow keys or the mouse
 previews live; Enter or a click keeps it, Escape puts the previous one back. Themes and density
 change live; Follow system picks Dark, Light or High contrast from the operating system. `⌘=`, `⌘-` and
-`⌘0` zoom the editor font.
+`⌘0` zoom the editor font. Menus, popovers and dialogs fade in briefly and close at once; **Motion**
+turns that down to Reduced or Off, or follows the operating system's Reduce Motion (System).
 
 ![Settings and appearance](docs/media/settings.gif)
 
@@ -589,6 +590,7 @@ back to its default without affecting the others.
 | :------------------------------------- | :---------------------------------------------------------------------------------------------- | :--------------------------------------------- |
 | `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`     | `system`                                       |
 | `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable`                                  |
+| `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                              | `system`                                       |
 | `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
 | `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
 | `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |

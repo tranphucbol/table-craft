@@ -5,6 +5,7 @@ import {
   type FontToken,
   type Theme,
 } from "@table-craft/desktop/appearance/themes.js";
+import { MOTION, resolveMotion } from "@table-craft/desktop/appearance/motion.js";
 import type { FontSetting, Settings } from "@table-craft/desktop/settings/settings.js";
 
 export * from "@table-craft/desktop/appearance/themes.js";
@@ -22,9 +23,13 @@ function fontOf(setting: FontSetting, builtIn: FontToken): FontToken {
   return { family: fontStack(setting.family, builtIn.family), sizePx: setting.sizePx };
 }
 
-/** The tokens the settings and the resolved theme draw with. */
-export function appearanceOf(settings: Settings, theme: Theme): Appearance {
-  const { fonts, density } = settings.appearance;
+/** The tokens the settings, the resolved theme and the OS's motion preference draw with. */
+export function appearanceOf(
+  settings: Settings,
+  theme: Theme,
+  system: { readonly prefersReducedMotion: boolean },
+): Appearance {
+  const { fonts, density, motion } = settings.appearance;
   return {
     colors: theme.colors,
     fonts: {
@@ -33,5 +38,6 @@ export function appearanceOf(settings: Settings, theme: Theme): Appearance {
       grid: fontOf(fonts.grid, DEFAULT_FONTS.grid),
     },
     density: DENSITIES[density],
+    motion: MOTION[resolveMotion(motion, system.prefersReducedMotion)],
   };
 }

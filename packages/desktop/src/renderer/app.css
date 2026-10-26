@@ -61,6 +61,46 @@
   --spacing-picker-list: var(--tc-picker-list-height);
   --spacing-plan-details: var(--tc-plan-details-width);
   --spacing-plan-bar: var(--tc-plan-bar-height);
+
+  /* Open animations only: Radix holds a closing surface until its exit animation ends, which
+     delays the focus return, so nothing here runs on `data-state=closed` (decision 120). The
+     levels in `appearance/motion.ts` zero the durations and travel, and pause the loops. */
+  --animate-surface-in: tc-surface-in var(--tc-motion-base) var(--ease-standard) both;
+  --animate-menu-in: tc-surface-in var(--tc-motion-fast) var(--ease-standard) both;
+  --animate-tooltip-in: tc-fade-in var(--tc-motion-fast) linear both;
+  --animate-dialog-in: tc-dialog-in var(--tc-motion-slow) var(--ease-standard) both;
+  --animate-overlay-in: tc-fade-in var(--tc-motion-base) linear both;
+  --animate-spin: spin 1s linear infinite var(--tc-motion-progress);
+  --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite var(--tc-motion-ambient);
+
+  /* `transform`, not `translate`: the palette and dialogs centre themselves with `translate`, and
+     the two compose. `--tc-motion-dx`/`-dy` are the side's sign, set by `ui/motion.ts`. */
+  @keyframes tc-surface-in {
+    from {
+      opacity: 0;
+      transform: translate(
+        calc(var(--tc-motion-dx, 0) * var(--tc-motion-shift)),
+        calc(var(--tc-motion-dy, -1) * var(--tc-motion-shift))
+      );
+    }
+  }
+
+  @keyframes tc-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes tc-dialog-in {
+    from {
+      opacity: 0;
+      scale: var(--tc-motion-enter-scale);
+    }
+  }
+}
+
+@theme {
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 }
 
 /* `color-scheme` alone gives every theme the same grey native scrollbar. `scrollbar-color` is

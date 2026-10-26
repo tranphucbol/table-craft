@@ -13,6 +13,7 @@ import {
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { useCellFormats, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { DropdownIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { AGGREGATE_NAMES } from "@table-craft/desktop/settings/settings.js";
 
 /** Drag-selecting fires a selection per cell crossed; only the one the pointer rests on is added up. */
@@ -94,7 +95,7 @@ export function AggregateLine({
             align="end"
             sideOffset={SIDE_OFFSET_PX}
             aria-label="Shown aggregates"
-            className="z-50 flex flex-col rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg outline-none"
+            className={`z-50 flex flex-col rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg outline-none ${SURFACE_MOTION}`}
           >
             {AGGREGATE_NAMES.map((name) => {
               const args: AggregateArgs = { name };
