@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import type { OpenTableArgs } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -171,11 +172,21 @@ export function Palette() {
     item.run();
   }
 
+  function returnFocus(): void {
+    const target = opener.current;
+    opener.current = null;
+    if (target?.isConnected === true) target.focus();
+    else if (document.activeElement === document.body) focusRegion("editor");
+  }
+
   return (
     <Dialog.Root
       open={mode !== null}
       onOpenChange={(open) => {
-        if (!open) usePalette.getState().hide();
+        if (open) return;
+        // Radix returns focus a task after unmount; a key typed right after Escape must not land on the body.
+        flushSync(() => usePalette.getState().hide());
+        returnFocus();
       }}
     >
       <Dialog.Portal>
@@ -191,13 +202,11 @@ export function Palette() {
             opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           }}
           onCloseAutoFocus={(event) => {
-            // Radix would focus the dialog's trigger, and the palette has none: focus fell to the body.
+            // Radix would focus the dialog's trigger, and the palette has none.
             event.preventDefault();
-            const returnTo = opener.current;
-            opener.current = null;
             // An action that ran decides where focus goes, e.g. a new console's editor.
-            if (!ran.current && returnTo?.isConnected === true) returnTo.focus();
-            else if (document.activeElement === document.body) focusRegion("editor");
+            if (ran.current) opener.current = null;
+            returnFocus();
           }}
         >
           <Dialog.Title className="sr-only">{mode === null ? "" : MODE_TITLE[mode]}</Dialog.Title>
