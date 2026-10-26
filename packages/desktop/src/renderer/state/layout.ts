@@ -31,6 +31,8 @@ export interface Layout {
   readonly valuePanel: boolean;
   /** The value panel's format per key pattern, such as `session:*` → gzip (plan 058 decision 15). */
   readonly valueFormats: Readonly<Record<string, ValueFormat>>;
+  /** Percent of a console's height its SQL editor takes, the rest going to its results (plan 060). */
+  readonly consoleEditor: number;
 }
 
 /**
@@ -53,6 +55,11 @@ export interface OpenTable {
   readonly active: boolean;
 }
 
+export const DEFAULT_CONSOLE_EDITOR_PERCENT = 50;
+/** The least of a console's height its editor, and its results, keep while the boundary is dragged. */
+export const MIN_CONSOLE_PANE_PERCENT = 10;
+const MAX_CONSOLE_EDITOR_PERCENT = 100 - MIN_CONSOLE_PANE_PERCENT;
+
 export const DEFAULT_LAYOUT: Layout = {
   visible: { database: true, services: true, log: false },
   sizes: { database: 22, services: 28, log: 30 },
@@ -64,6 +71,7 @@ export const DEFAULT_LAYOUT: Layout = {
   extractor: "csv",
   valuePanel: false,
   valueFormats: {},
+  consoleEditor: DEFAULT_CONSOLE_EDITOR_PERCENT,
 };
 
 const MIN_SIZE_PERCENT = 5;
@@ -119,6 +127,9 @@ function isOpenTable(value: unknown): value is OpenTable {
   );
 }
 
+const isConsoleEditorSize = (value: unknown): value is number =>
+  typeof value === "number" && value >= MIN_CONSOLE_PANE_PERCENT && value <= MAX_CONSOLE_EDITOR_PERCENT;
+
 const isExtractor = (value: unknown): value is ExtractorKind =>
   typeof value === "string" && (EXTRACTOR_KINDS as readonly string[]).includes(value);
 
@@ -157,6 +168,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     extractor,
     valuePanel,
     valueFormats,
+    consoleEditor,
   } = saved as Record<string, unknown>;
   const visibleRead = recordOf(visible, isBoolean, DEFAULT_LAYOUT.visible);
   const sizesRead = recordOf(sizes, isSize, DEFAULT_LAYOUT.sizes);
@@ -172,6 +184,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     extractor: isExtractor(extractor) ? extractor : DEFAULT_LAYOUT.extractor,
     valuePanel: valuePanel === true,
     valueFormats: valueFormatsOf(valueFormats),
+    consoleEditor: isConsoleEditorSize(consoleEditor) ? consoleEditor : DEFAULT_CONSOLE_EDITOR_PERCENT,
   };
 }
 
@@ -202,6 +215,11 @@ export function resized(layout: Layout, id: ToolWindowId, percent: number): Layo
   return { ...layout, sizes: { ...layout.sizes, [id]: size } };
 }
 
+export function consoleEditorResized(layout: Layout, percent: number): Layout {
+  const size = Math.min(MAX_CONSOLE_EDITOR_PERCENT, Math.max(MIN_CONSOLE_PANE_PERCENT, percent));
+  return layout.consoleEditor === size ? layout : { ...layout, consoleEditor: size };
+}
+
 export interface LayoutState {
   readonly layout: Layout;
   readonly toggle: (id: ToolWindowId) => void;
@@ -214,6 +232,7 @@ export interface LayoutState {
   readonly setOpenTables: (openTables: readonly OpenTable[]) => void;
   readonly setExtractor: (extractor: ExtractorKind) => void;
   readonly toggleValuePanel: () => void;
+  readonly resizeConsoleEditor: (percent: number) => void;
   /** Remembers `format` for keys like `pattern`; Auto forgets it. */
   readonly setValueFormat: (pattern: string, format: ValueFormat) => void;
 }
@@ -246,6 +265,7 @@ export function createLayoutStore(storage: LayoutStorage) {
         if (extractor !== get().layout.extractor) update({ ...get().layout, extractor });
       },
       toggleValuePanel: () => update({ ...get().layout, valuePanel: !get().layout.valuePanel }),
+      resizeConsoleEditor: (percent) => update(consoleEditorResized(get().layout, percent)),
       setValueFormat(pattern, format) {
         const { [pattern]: current, ...rest } = get().layout.valueFormats;
         if ((current ?? "auto") === format) return;
