@@ -2,9 +2,16 @@ import type { ColumnMeta, ForeignKey } from "./catalog.js";
 import type { SortDirection } from "./results.js";
 import type { ExecutedStatement } from "./sessions.js";
 
-/** Mirrors `CellInput` in core: text the database casts, `NULL`, or the column's default. */
+/**
+ * Mirrors `CellInput` in core: text the database casts, `NULL`, the column's default, a boolean, or
+ * a file's bytes staged in the engine by `result.loadBytes` (plan 043).
+ */
 export type CellInput =
-  { readonly kind: "text"; readonly text: string } | { readonly kind: "null" } | { readonly kind: "default" };
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "null" }
+  | { readonly kind: "default" }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "bytes"; readonly id: string; readonly length: number; readonly preview: string };
 
 /** Mirrors `RowEdit` in core; `row` indexes the table result's held rows. */
 export type RowEdit =

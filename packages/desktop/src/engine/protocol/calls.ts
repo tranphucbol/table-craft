@@ -11,7 +11,17 @@ import type {
 } from "./catalog.js";
 import type { Problem } from "./inspection.js";
 import type { AppliedChange, DdlScript, ObjectChange, ObjectFeatures, TableDesign } from "./objects.js";
-import type { FoundMatch, ResultState, ResultWindow, SortKey, ViewSpec, ViewState } from "./results.js";
+import type {
+  FoundMatch,
+  CellBytes,
+  ResultState,
+  ResultWindow,
+  SelectionAggregates,
+  StagedBytes,
+  SortKey,
+  ViewSpec,
+  ViewState,
+} from "./results.js";
 import type {
   ExecutedStatement,
   OpenedSession,
@@ -164,6 +174,38 @@ export interface EngineCalls {
       readonly columns: readonly number[];
     };
     result: string;
+  };
+  /** Count, distinct, and sum, average, minimum and maximum of the given shown rows and columns. */
+  "result.aggregate": {
+    params: { readonly handle: string; readonly rows: readonly RowRange[]; readonly columns: readonly number[] };
+    result: SelectionAggregates;
+  };
+  /**
+   * Every byte of the cell at held row `row`, read again by the row's key when the result holds
+   * only a preview. Refused past `maxBytes`, and for a result with no table to read from.
+   */
+  "result.cellBytes": {
+    params: { readonly handle: string; readonly row: number; readonly column: number; readonly maxBytes: number };
+    result: CellBytes;
+  };
+  /** Writes every byte of a cell to `path`, an absolute path the user chose; answers the length. */
+  "result.saveBytes": {
+    params: {
+      readonly handle: string;
+      readonly row: number;
+      readonly column: number;
+      readonly path: string;
+      readonly maxBytes: number;
+    };
+    result: number;
+  };
+  /**
+   * Reads the file at `path`, refused past `maxBytes`, and holds its bytes for the result's edits
+   * until the result is released; a `bytes` cell input names them by the answered id.
+   */
+  "result.loadBytes": {
+    params: { readonly handle: string; readonly path: string; readonly maxBytes: number };
+    result: StagedBytes;
   };
   /**
    * Starts a background export to `path` and answers at once with the task; progress and the end

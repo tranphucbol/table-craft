@@ -10,8 +10,10 @@ import {
   type RowEdit,
 } from "@table-craft/core";
 import {
+  BYTES_PREVIEW_LENGTH,
   isPluginError,
   type BoundStatement,
+  type BytesValue,
   type Capability,
   type Column,
   type ColumnMeta,
@@ -82,6 +84,7 @@ export function statementRunners(live: LiveContext) {
     statements,
     ran,
     edited,
+    staged,
     afterClose,
     mustSettle,
     busyRefused,
@@ -314,7 +317,17 @@ export function statementRunners(live: LiveContext) {
     return table;
   }
 
-  function editStatements(handle: string, edits: readonly RowEdit[]): string[] {
+  /** A staged file's bytes for `handle`'s edits: every byte to submit, the first ones to preview. */
+  function stagedFor(handle: string, full: boolean): (id: string) => BytesValue | undefined {
+    return (id) => {
+      const entry = staged.get(id);
+      if (entry?.handle !== handle) return undefined;
+      return full ? entry.bytes : { ...entry.bytes, preview: entry.bytes.preview.slice(0, 2 * BYTES_PREVIEW_LENGTH) };
+    };
+  }
+
+  /** The statements that apply `edits`; a preview writes loaded files clipped, a submit in full. */
+  function editStatements(handle: string, edits: readonly RowEdit[], full = false): string[] {
     const table = tableFor(handle);
     if (table.readOnly !== null) {
       throw new EngineFailure({
@@ -324,7 +337,13 @@ export function statementRunners(live: LiveContext) {
       });
     }
     const held = results.heldRows(handle);
-    return generateEdits({ ...table, rows: (row) => held[row], edits, language: sqlLanguage() });
+    return generateEdits({
+      ...table,
+      rows: (row) => held[row],
+      edits,
+      language: sqlLanguage(),
+      staged: stagedFor(ownedHandle(handle), full),
+    });
   }
 
   async function submit(request: RequestOf<"edits.submit">): Promise<ResultOf<"edits.submit">> {
@@ -336,7 +355,7 @@ export function statementRunners(live: LiveContext) {
         hint: BUG_HINT,
       });
     }
-    const statements = editStatements(request.handle, request.edits);
+    const statements = editStatements(request.handle, request.edits, true);
     if (edited.has(request.handle)) return submitConsole(request.sessionId, open, statements);
     if (mustSettle(request.sessionId, open)) await afterClose(request.sessionId, open);
     return { ...(await submitEdits(open.session, statements)), transactionOpen: false };
