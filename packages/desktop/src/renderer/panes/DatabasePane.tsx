@@ -799,46 +799,50 @@ export function DatabasePane() {
               {query}
             </div>
           )}
-          <div ref={scrollRef} data-testid="database-tree-scroll" className="min-h-0 flex-1 overflow-auto py-1">
-            <ul
-              role="tree"
-              aria-label="Datasources"
-              tabIndex={selectedIndex === -1 ? 0 : -1}
-              className="w-max min-w-full outline-none"
-              style={{ height: virtualizer.getTotalSize(), paddingTop: virtualItems[0]?.start ?? 0 }}
-              onKeyDown={onKeyDown}
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setQuery(null);
-              }}
-              onFocus={(event) => {
-                if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined) {
-                  selectIndex(0);
-                }
-              }}
-            >
-              {virtualItems.map((item) => {
-                const row = rows[item.index];
-                if (row === undefined) return null;
-                return (
-                  <TreeRow
-                    key={row.key}
-                    row={row}
-                    selected={item.index === selectedIndex}
-                    positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
-                    onSelect={(clicked, keepFocus) => {
-                      setQuery(null);
-                      selectRow(clicked, keepFocus);
-                    }}
-                    onToggle={toggle}
-                    onActivate={activate}
-                    register={(key, element) => {
-                      if (element === null) elements.current.delete(key);
-                      else elements.current.set(key, element);
-                    }}
-                  />
-                );
-              })}
-            </ul>
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-1">
+            {/* Long names scroll sideways by trackpad, Shift+wheel or focus, with no bar: the
+                tree's own height never overflows here, so the vertical bar stays the outer one's. */}
+            <div data-testid="database-tree-scroll" className="overflow-x-auto scrollbar-none">
+              <ul
+                role="tree"
+                aria-label="Datasources"
+                tabIndex={selectedIndex === -1 ? 0 : -1}
+                className="w-max min-w-full outline-none"
+                style={{ height: virtualizer.getTotalSize(), paddingTop: virtualItems[0]?.start ?? 0 }}
+                onKeyDown={onKeyDown}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setQuery(null);
+                }}
+                onFocus={(event) => {
+                  if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined) {
+                    selectIndex(0);
+                  }
+                }}
+              >
+                {virtualItems.map((item) => {
+                  const row = rows[item.index];
+                  if (row === undefined) return null;
+                  return (
+                    <TreeRow
+                      key={row.key}
+                      row={row}
+                      selected={item.index === selectedIndex}
+                      positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
+                      onSelect={(clicked, keepFocus) => {
+                        setQuery(null);
+                        selectRow(clicked, keepFocus);
+                      }}
+                      onToggle={toggle}
+                      onActivate={activate}
+                      register={(key, element) => {
+                        if (element === null) elements.current.delete(key);
+                        else elements.current.set(key, element);
+                      }}
+                    />
+                  );
+                })}
+              </ul>
+            </div>
           </div>
         </div>
       )}

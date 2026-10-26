@@ -100,7 +100,7 @@ function namespaceName(name: string): RegExp {
 /** The tree's rows that are fully inside its scroll viewport, against how many fit there. */
 const VIEWPORT_ROWS = `(() => {
   const tree = document.querySelector('[aria-label="Database"] [role="tree"]');
-  const viewport = tree?.parentElement?.getBoundingClientRect();
+  const viewport = tree?.parentElement?.parentElement?.getBoundingClientRect();
   if (!tree || !viewport) return null;
   const rows = [...tree.querySelectorAll('[role="treeitem"]')].map((item) => item.getBoundingClientRect());
   const inside = rows.filter((box) => box.top >= viewport.top - 1 && box.bottom <= viewport.bottom + 1);

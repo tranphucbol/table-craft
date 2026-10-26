@@ -42,7 +42,13 @@ interface Box {
   readonly scrollLeft: number;
   scrollTo(options: { readonly left: number }): void;
   readonly ownerDocument: {
-    readonly defaultView: { getComputedStyle(element: Box): { readonly boxShadow: string; readonly scale: string } };
+    readonly defaultView: {
+      getComputedStyle(element: Box): {
+        readonly boxShadow: string;
+        readonly scale: string;
+        readonly scrollbarWidth: string;
+      };
+    };
   };
 }
 
@@ -97,7 +103,7 @@ describe.runIf(SMOKE_ENABLED)("copy confirmation, tree scroll, console icon and 
   );
 
   it(
-    "givenLongDatasourceName_whenTreeScrolledRight_thenNameEndShows",
+    "givenLongDatasourceName_whenTreeScrolledRight_thenNameEndShowsWithNoHorizontalBar",
     async () => {
       const page = await launch();
       const scroller = treeScroller(page);
@@ -106,6 +112,10 @@ describe.runIf(SMOKE_ENABLED)("copy confirmation, tree scroll, console icon and 
 
       const overflow = await scroller.evaluate((element: Box) => element.scrollWidth - element.clientWidth);
       expect(overflow).toBeGreaterThan(0);
+      const bar = await scroller.evaluate(
+        (element: Box) => element.ownerDocument.defaultView.getComputedStyle(element).scrollbarWidth,
+      );
+      expect(bar).toBe("none");
       await scroller.evaluate((element: Box) => element.scrollTo({ left: element.scrollWidth }));
 
       await expect.poll(() => scroller.evaluate((element: Box) => element.scrollLeft)).toBeGreaterThan(0);
