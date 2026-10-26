@@ -180,6 +180,7 @@ adds. No component writes a duration.
 | `flashMs`                      | `--tc-motion-flash`       | 600 ms  | 600 ms  | 0 ms   |
 | `shiftPx`                      | `--tc-motion-shift`       | 4 px    | 0 px    | 0 px   |
 | `enterScale`                   | `--tc-motion-enter-scale` | 0.98    | 1       | 1      |
+| `pressScale`                   | `--tc-motion-press-scale` | 0.92    | 1       | 1      |
 | `progress` (spinners)          | `--tc-motion-progress`    | running | running | paused |
 | `ambient` (connecting pulse)   | `--tc-motion-ambient`     | running | paused  | paused |
 
@@ -198,6 +199,13 @@ progress. No springs, bounce or overshoot.
 Never animated: typing, the caret, CodeMirror's completion and hover tooltips, grid scroll,
 selection, sort, edits and results arriving, tree expand and collapse, pane resizing, tab
 switches, theme switches, transaction and connection state.
+
+Pressed and confirmed (plan 110): every enabled `<button>` takes an inset `--tc-press-tint` (14 %
+`--tc-ink`) while held, from one `@layer base` rule in `app.css`, so a press reads on any
+background; icon buttons add the `press` utility and also shrink to `--tc-motion-press-scale`. A
+copy button swaps its glyph for a bold `Check` in `text-success` and its tooltip for "Copied" for
+1.5 s after the clipboard write it caused (`ui/useCopyConfirmation.ts`); a failed copy never
+confirms.
 
 The level is the **Motion** setting (`appearance.motion`): System (default) follows
 `prefers-reduced-motion`, which Chromium reads from macOS Reduce Motion and its Windows and GNOME

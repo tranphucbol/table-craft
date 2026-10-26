@@ -23,14 +23,19 @@ describe("motion levels", () => {
       flashMs: 0,
       shiftPx: 0,
       enterScale: 1,
+      pressScale: 1,
       progress: "paused",
       ambient: "paused",
     });
   });
 
   it("givenReducedLevel_whenTokensRead_thenNoTravelNoScaleAndSpinnersRun", () => {
-    expect(MOTION.reduced).toEqual({ ...MOTION.full, shiftPx: 0, enterScale: 1, ambient: "paused" });
+    expect(MOTION.reduced).toEqual({ ...MOTION.full, shiftPx: 0, enterScale: 1, pressScale: 1, ambient: "paused" });
     expect(MOTION.reduced.progress).toBe("running");
     expect(MOTION.full).toMatchObject({ fastMs: 100, baseMs: 150, slowMs: 200, shiftPx: 4, enterScale: 0.98 });
+  });
+
+  it("givenFullLevel_whenTokensRead_thenIconButtonsShrinkWhilePressed", () => {
+    expect(MOTION.full.pressScale).toBeLessThan(1);
   });
 });

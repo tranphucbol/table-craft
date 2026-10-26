@@ -205,7 +205,7 @@ function ToolbarButton({ actionId }: { readonly actionId: string }) {
         type="button"
         aria-label={action.title}
         disabled={!enabled}
-        className="flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
+        className="press flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
         onClick={() => invoke(actionId)}
       >
         <Icon aria-hidden className="size-icon" />
@@ -385,7 +385,6 @@ interface RowProps {
   readonly row: ExplorerRow;
   readonly selected: boolean;
   readonly positions: readonly number[];
-  readonly top: number;
   /** `keepFocus` selects the row and leaves focus where it is, in the row's own field say. */
   readonly onSelect: (row: ExplorerRow, keepFocus?: boolean) => void;
   readonly onToggle: (row: ExplorerRow) => void;
@@ -393,7 +392,7 @@ interface RowProps {
   readonly register: (key: string, element: HTMLLIElement | null) => void;
 }
 
-function TreeRow({ row, selected, positions, top, onSelect, onToggle, onActivate, register }: RowProps) {
+function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, register }: RowProps) {
   const { node, depth } = row;
   const connection = useDatasources((state) =>
     node.kind === "datasource" ? connectionOf(state, node.datasource.id) : null,
@@ -427,12 +426,9 @@ function TreeRow({ row, selected, positions, top, onSelect, onToggle, onActivate
           tabIndex={selected ? 0 : -1}
           data-state={connection?.status ?? (failedNamespace ? "failed" : undefined)}
           data-kind={node.kind}
-          style={{
-            paddingLeft: `calc(var(--spacing-gap) + ${String(depth * INDENT_PX)}px)`,
-            transform: `translateY(${String(top)}px)`,
-          }}
+          style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(depth * INDENT_PX)}px)` }}
           className={cn(
-            "absolute top-0 left-0 flex h-row w-full cursor-default items-center gap-cell overflow-hidden pr-gap outline-none hover:bg-raised",
+            "flex h-row w-full cursor-default items-center gap-cell pr-gap whitespace-nowrap outline-none hover:bg-raised",
             selected && "bg-selection hover:bg-selection",
             (failedNamespace || node.kind === "error") && "text-danger",
           )}
@@ -804,46 +800,49 @@ export function DatabasePane() {
             </div>
           )}
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-1">
-            <ul
-              role="tree"
-              aria-label="Datasources"
-              tabIndex={selectedIndex === -1 ? 0 : -1}
-              className="relative outline-none"
-              style={{ height: virtualizer.getTotalSize() }}
-              onKeyDown={onKeyDown}
-              onBlur={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setQuery(null);
-              }}
-              onFocus={(event) => {
-                if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined) {
-                  selectIndex(0);
-                }
-              }}
-            >
-              {virtualItems.map((item) => {
-                const row = rows[item.index];
-                if (row === undefined) return null;
-                return (
-                  <TreeRow
-                    key={row.key}
-                    row={row}
-                    top={item.start}
-                    selected={item.index === selectedIndex}
-                    positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
-                    onSelect={(clicked, keepFocus) => {
-                      setQuery(null);
-                      selectRow(clicked, keepFocus);
-                    }}
-                    onToggle={toggle}
-                    onActivate={activate}
-                    register={(key, element) => {
-                      if (element === null) elements.current.delete(key);
-                      else elements.current.set(key, element);
-                    }}
-                  />
-                );
-              })}
-            </ul>
+            {/* Long names scroll sideways by trackpad, Shift+wheel or focus, with no bar: the
+                tree's own height never overflows here, so the vertical bar stays the outer one's. */}
+            <div data-testid="database-tree-scroll" className="overflow-x-auto scrollbar-none">
+              <ul
+                role="tree"
+                aria-label="Datasources"
+                tabIndex={selectedIndex === -1 ? 0 : -1}
+                className="w-max min-w-full outline-none"
+                style={{ height: virtualizer.getTotalSize(), paddingTop: virtualItems[0]?.start ?? 0 }}
+                onKeyDown={onKeyDown}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setQuery(null);
+                }}
+                onFocus={(event) => {
+                  if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined) {
+                    selectIndex(0);
+                  }
+                }}
+              >
+                {virtualItems.map((item) => {
+                  const row = rows[item.index];
+                  if (row === undefined) return null;
+                  return (
+                    <TreeRow
+                      key={row.key}
+                      row={row}
+                      selected={item.index === selectedIndex}
+                      positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
+                      onSelect={(clicked, keepFocus) => {
+                        setQuery(null);
+                        selectRow(clicked, keepFocus);
+                      }}
+                      onToggle={toggle}
+                      onActivate={activate}
+                      register={(key, element) => {
+                        if (element === null) elements.current.delete(key);
+                        else elements.current.set(key, element);
+                      }}
+                    />
+                  );
+                })}
+              </ul>
+            </div>
           </div>
         </div>
       )}

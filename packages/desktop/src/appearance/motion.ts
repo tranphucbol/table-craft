@@ -23,6 +23,8 @@ export interface MotionTokens {
   readonly shiftPx: number;
   /** The scale a dialog grows from. */
   readonly enterScale: number;
+  /** The scale an icon button shrinks to while held. */
+  readonly pressScale: number;
   /** Spinners, which carry status. */
   readonly progress: LoopState;
   /** The connecting pulse, which is decoration. */
@@ -36,13 +38,14 @@ const FULL_MOTION: MotionTokens = {
   flashMs: 600,
   shiftPx: 4,
   enterScale: 0.98,
+  pressScale: 0.92,
   progress: "running",
   ambient: "running",
 };
 
 export const MOTION: Readonly<Record<MotionLevel, MotionTokens>> = {
   full: FULL_MOTION,
-  reduced: { ...FULL_MOTION, shiftPx: 0, enterScale: 1, ambient: "paused" },
+  reduced: { ...FULL_MOTION, shiftPx: 0, enterScale: 1, pressScale: 1, ambient: "paused" },
   off: {
     fastMs: 0,
     baseMs: 0,
@@ -50,6 +53,7 @@ export const MOTION: Readonly<Record<MotionLevel, MotionTokens>> = {
     flashMs: 0,
     shiftPx: 0,
     enterScale: 1,
+    pressScale: 1,
     progress: "paused",
     ambient: "paused",
   },

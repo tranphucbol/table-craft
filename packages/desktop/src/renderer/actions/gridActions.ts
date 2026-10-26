@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { ExtractorKind, FilterChip, FindQuery, SortDirection } from "@table-craft/desktop/engine/protocol.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
@@ -232,10 +233,6 @@ function filterAction(id: string, title: string, op: FilterChip["op"]): AnyActio
       await changeSearch(target, (search) => withChip(search, chip));
     },
   });
-}
-
-export async function writeClipboard(text: string): Promise<void> {
-  await navigator.clipboard.writeText(text);
 }
 
 export const GRID_ACTIONS: readonly AnyAction[] = [
