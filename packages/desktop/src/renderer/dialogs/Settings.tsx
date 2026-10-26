@@ -17,6 +17,7 @@ import {
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { InspectionFields } from "@table-craft/desktop/renderer/dialogs/InspectionSettings.js";
+import { MotionFields } from "@table-craft/desktop/renderer/dialogs/MotionSettings.js";
 import { PluginsPage } from "@table-craft/desktop/renderer/dialogs/PluginsPage.js";
 import { FieldError, SectionTitle, update, useDraft } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { ThemePicker } from "@table-craft/desktop/renderer/dialogs/ThemePicker.js";
@@ -105,6 +106,7 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
       ...current.appearance,
       theme: DEFAULT_SETTINGS.appearance.theme,
       density: DEFAULT_SETTINGS.appearance.density,
+      motion: DEFAULT_SETTINGS.appearance.motion,
       fonts: { ...current.appearance.fonts, ui: DEFAULT_SETTINGS.appearance.fonts.ui },
       systemTitleBar: DEFAULT_SETTINGS.appearance.systemTitleBar,
     },
@@ -319,6 +321,7 @@ function AppearancePage() {
           ))}
         </div>
       </FieldRow>
+      <MotionFields />
       <SectionTitle>Font</SectionTitle>
       <FontFields role="ui" />
       <SectionTitle>Window</SectionTitle>
