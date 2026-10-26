@@ -679,6 +679,18 @@ the share of a console tab the SQL editor takes above its results (one split for
 `localStorage` under `table-craft.layout.v1`; a value that does not parse falls back to the default
 layout.
 
+The editor supports at most two side-by-side tab groups (decision 121). Drag a tab to the left or
+right drop target, or use its **Split Left** / **Split Right** context-menu actions. A split moves
+the existing tab; it never duplicates a session or its results. Each group has its own active tab.
+Clicking or focusing a group's content makes its active tab the command target, including Run,
+new consoles and the status bar. Tab cycling and bulk closes affect that group only. **Unsplit**
+joins both strips, preserving pinned tabs; an empty group collapses automatically.
+
+The vertical separator between groups is keyboard accessible and resizable from 25% to 75%,
+starting at 50%. Its width, saved console/table group membership, each group's selected tab and
+the focused tab persist in the existing layout document. Older documents open in one group.
+The editor/results split within each console stays separate and keeps its existing behavior.
+
 Each console tab belongs to one datasource and owns a session on that datasource's engine; closing
 the tab sends `session.close`. The tab reads `console [name]`, and a datasource's colour tints its
 tabs and its console's border; a read-only one shows a lock. The Database tool window shows the

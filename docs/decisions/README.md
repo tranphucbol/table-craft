@@ -111,3 +111,4 @@ started, not when it is merged.
 | 118 | [Grid helpers compute and touch files in the engine](118-grid-helpers-compute-and-touch-files-in-the-engine.md)                                                        |
 | 119 | [Console replies name the key they read, and whole-key replies edit like the key tab](119-console-replies-name-their-key.md)                                           |
 | 120 | [Motion is plain CSS, and surfaces animate in only](120-motion-is-plain-css-and-surfaces-animate-in-only.md)                                                           |
+| 121 | [Editor groups move tabs without duplicating sessions](121-editor-groups-move-tabs-without-duplicating-sessions.md)                                                    |

@@ -21,6 +21,7 @@ import {
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { MIN_CONSOLE_PANE_PERCENT, useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { groupOf, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -34,8 +35,8 @@ const MIN_PANE_SIZE = String(MIN_CONSOLE_PANE_PERCENT);
 const PANEL_STYLE = { overflow: "hidden" } as const;
 
 /** Only a drag is remembered; the sizes the library settles on at mount or a window resize are not. */
-function persistConsoleEditor(layout: Layout, meta: { readonly isUserInteraction: boolean }): void {
-  const size = layout[EDITOR_PANEL];
+function persistConsoleEditor(layout: Layout, meta: { readonly isUserInteraction: boolean }, panelId: string): void {
+  const size = layout[panelId];
   if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeConsoleEditor(size);
 }
 
@@ -128,6 +129,11 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
   const editorSize = useLayout((state) => state.layout.consoleEditor);
+  const split = useTabs(
+    (state) => state.tabs.some((tab) => groupOf(tab) === "left") && state.tabs.some((tab) => groupOf(tab) === "right"),
+  );
+  const editorPanelId = split ? `${EDITOR_PANEL}-${consoleId}` : EDITOR_PANEL;
+  const resultsPanelId = split ? `${RESULTS_PANEL}-${consoleId}` : RESULTS_PANEL;
   if (session === undefined) return null;
   const { status } = session;
   // While the run asks about a failure, the banner shows it; the toolbar has no room for both.
@@ -140,7 +146,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
       <div
         role="toolbar"
         aria-label="Console toolbar"
-        className="flex items-center gap-gap border-b border-line bg-panel p-gap"
+        className="flex shrink-0 items-center gap-gap overflow-x-auto border-b border-line bg-panel p-gap"
       >
         <ActionButton actionId={ACTION_IDS.run} primary />
         <ActionButton actionId={ACTION_IDS.runAll} />
@@ -216,9 +222,14 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         )}
       </div>
       {session.diskChanged === null ? null : <DiskChangedBanner change={session.diskChanged} />}
-      <Group orientation="vertical" className="min-h-0 flex-1" onLayoutChanged={persistConsoleEditor}>
+      <Group
+        orientation="vertical"
+        className="min-h-0 flex-1"
+        onLayoutChanged={(layout, meta) => persistConsoleEditor(layout, meta, editorPanelId)}
+      >
         <Panel
-          id={EDITOR_PANEL}
+          id={editorPanelId}
+          data-testid={EDITOR_PANEL}
           defaultSize={String(editorSize)}
           minSize={MIN_PANE_SIZE}
           className="flex flex-col"
@@ -229,7 +240,13 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           </div>
         </Panel>
         <Handle axis="horizontal" />
-        <Panel id={RESULTS_PANEL} minSize={MIN_PANE_SIZE} className="flex flex-col" style={PANEL_STYLE}>
+        <Panel
+          id={resultsPanelId}
+          data-testid={RESULTS_PANEL}
+          minSize={MIN_PANE_SIZE}
+          className="flex flex-col"
+          style={PANEL_STYLE}
+        >
           {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
           <ResultTabs consoleId={consoleId} session={session} />
         </Panel>

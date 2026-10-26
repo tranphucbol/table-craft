@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { EXTRACTOR_KINDS, type ExtractorKind } from "@table-craft/desktop/engine/protocol.js";
 import { VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
+import type { EditorGroupId } from "@table-craft/desktop/renderer/state/tabs.js";
 
 /**
  * Which tool windows are open and how big they are. Per-window UI memory in `localStorage`, not a
@@ -33,6 +34,7 @@ export interface Layout {
   readonly valueFormats: Readonly<Record<string, ValueFormat>>;
   /** Percent of a console's height its SQL editor takes, the rest going to its results (plan 060). */
   readonly consoleEditor: number;
+  readonly editorGroupWidth: number;
 }
 
 /**
@@ -45,6 +47,8 @@ export interface OpenConsole {
   readonly active: boolean;
   readonly path?: string;
   readonly pinned?: boolean;
+  readonly groupId?: EditorGroupId;
+  readonly groupActive?: boolean;
 }
 
 /** A table tab as the layout remembers it; its filter and edits are not kept. */
@@ -53,9 +57,14 @@ export interface OpenTable {
   readonly path: readonly string[];
   readonly relation: string;
   readonly active: boolean;
+  readonly groupId?: EditorGroupId;
+  readonly groupActive?: boolean;
 }
 
 export const DEFAULT_CONSOLE_EDITOR_PERCENT = 50;
+export const DEFAULT_EDITOR_GROUP_WIDTH = 50;
+export const MIN_EDITOR_GROUP_PERCENT = 25;
+const MAX_EDITOR_GROUP_PERCENT = 100 - MIN_EDITOR_GROUP_PERCENT;
 /** The least of a console's height its editor, and its results, keep while the boundary is dragged. */
 export const MIN_CONSOLE_PANE_PERCENT = 10;
 const MAX_CONSOLE_EDITOR_PERCENT = 100 - MIN_CONSOLE_PANE_PERCENT;
@@ -72,6 +81,7 @@ export const DEFAULT_LAYOUT: Layout = {
   valuePanel: false,
   valueFormats: {},
   consoleEditor: DEFAULT_CONSOLE_EDITOR_PERCENT,
+  editorGroupWidth: DEFAULT_EDITOR_GROUP_WIDTH,
 };
 
 const MIN_SIZE_PERCENT = 5;
@@ -105,30 +115,38 @@ const isSize = (value: unknown): value is number =>
 
 function isOpenConsole(value: unknown): value is OpenConsole {
   if (typeof value !== "object" || value === null) return false;
-  const { datasourceId, name, active, path, pinned } = value as Record<string, unknown>;
+  const { datasourceId, name, active, path, pinned, groupId, groupActive } = value as Record<string, unknown>;
   return (
     typeof datasourceId === "string" &&
     typeof name === "string" &&
     typeof active === "boolean" &&
     (path === undefined || typeof path === "string") &&
-    (pinned === undefined || typeof pinned === "boolean")
+    (pinned === undefined || typeof pinned === "boolean") &&
+    isGroup(groupId) &&
+    (groupActive === undefined || typeof groupActive === "boolean")
   );
 }
 
 function isOpenTable(value: unknown): value is OpenTable {
   if (typeof value !== "object" || value === null) return false;
-  const { datasourceId, path, relation, active } = value as Record<string, unknown>;
+  const { datasourceId, path, relation, active, groupId, groupActive } = value as Record<string, unknown>;
   return (
     typeof datasourceId === "string" &&
     Array.isArray(path) &&
     path.every((part) => typeof part === "string") &&
     typeof relation === "string" &&
-    typeof active === "boolean"
+    typeof active === "boolean" &&
+    isGroup(groupId) &&
+    (groupActive === undefined || typeof groupActive === "boolean")
   );
 }
 
 const isConsoleEditorSize = (value: unknown): value is number =>
   typeof value === "number" && value >= MIN_CONSOLE_PANE_PERCENT && value <= MAX_CONSOLE_EDITOR_PERCENT;
+
+const isGroup = (value: unknown) => value === undefined || value === "left" || value === "right";
+const isGroupSize = (value: unknown): value is number =>
+  typeof value === "number" && value >= MIN_EDITOR_GROUP_PERCENT && value <= MAX_EDITOR_GROUP_PERCENT;
 
 const isExtractor = (value: unknown): value is ExtractorKind =>
   typeof value === "string" && (EXTRACTOR_KINDS as readonly string[]).includes(value);
@@ -169,6 +187,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     valuePanel,
     valueFormats,
     consoleEditor,
+    editorGroupWidth,
   } = saved as Record<string, unknown>;
   const visibleRead = recordOf(visible, isBoolean, DEFAULT_LAYOUT.visible);
   const sizesRead = recordOf(sizes, isSize, DEFAULT_LAYOUT.sizes);
@@ -185,6 +204,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     valuePanel: valuePanel === true,
     valueFormats: valueFormatsOf(valueFormats),
     consoleEditor: isConsoleEditorSize(consoleEditor) ? consoleEditor : DEFAULT_CONSOLE_EDITOR_PERCENT,
+    editorGroupWidth: isGroupSize(editorGroupWidth) ? editorGroupWidth : DEFAULT_EDITOR_GROUP_WIDTH,
   };
 }
 
@@ -233,6 +253,7 @@ export interface LayoutState {
   readonly setExtractor: (extractor: ExtractorKind) => void;
   readonly toggleValuePanel: () => void;
   readonly resizeConsoleEditor: (percent: number) => void;
+  readonly resizeEditorGroups: (percent: number) => void;
   /** Remembers `format` for keys like `pattern`; Auto forgets it. */
   readonly setValueFormat: (pattern: string, format: ValueFormat) => void;
 }
@@ -266,6 +287,11 @@ export function createLayoutStore(storage: LayoutStorage) {
       },
       toggleValuePanel: () => update({ ...get().layout, valuePanel: !get().layout.valuePanel }),
       resizeConsoleEditor: (percent) => update(consoleEditorResized(get().layout, percent)),
+      resizeEditorGroups: (percent) => {
+        const editorGroupWidth = Math.min(MAX_EDITOR_GROUP_PERCENT, Math.max(MIN_EDITOR_GROUP_PERCENT, percent));
+        if (Number.isFinite(editorGroupWidth) && editorGroupWidth !== get().layout.editorGroupWidth)
+          update({ ...get().layout, editorGroupWidth });
+      },
       setValueFormat(pattern, format) {
         const { [pattern]: current, ...rest } = get().layout.valueFormats;
         if ((current ?? "auto") === format) return;

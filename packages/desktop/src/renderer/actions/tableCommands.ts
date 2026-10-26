@@ -1,7 +1,7 @@
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
-import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
+import { activeTab, groupOf, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import {
   pendingOf,
   useTables,
@@ -60,15 +60,24 @@ export async function openTable(args: OpenTableArgs): Promise<void> {
 
 /** Reopens the table tabs the layout remembers, each disconnected until Reload (decision 2). */
 export function restoreTables(): void {
+  const before = useTabs.getState();
+  const selected = before.tabs.map((tab) => ({
+    id: tab.id,
+    groupId: groupOf(tab),
+    selected: before.groupActiveIds[groupOf(tab)] === tab.id,
+  }));
   let active: string | null = null;
   for (const entry of useLayout.getState().layout.openTables) {
     if (!persists(entry.datasourceId)) continue;
     const tab = newTab(entry.relation);
-    useTabs.getState().open(tab);
+    useTabs.getState().open({ ...tab, groupId: entry.groupId ?? "left" });
     void useTables.getState().open(tab.id, entry, { connect: false });
+    selected.push({ id: tab.id, groupId: entry.groupId ?? "left", selected: entry.groupActive ?? entry.active });
     if (entry.active) active = tab.id;
   }
-  if (active !== null) useTabs.getState().activate(active);
+  useTabs.getState().restoreGroups(selected);
+  const focused = active ?? before.activeId;
+  if (focused !== null) useTabs.getState().activate(focused);
 }
 
 /** Keeps the layout's list of open table tabs in step with the tab strip. */
@@ -82,7 +91,16 @@ export function rememberOpenTables(): () => void {
         const session = tables[tab.id];
         if (tab.kind !== "table" || session === undefined || !persists(session.datasourceId)) return [];
         const { datasourceId, path, relation } = session;
-        return [{ datasourceId, path, relation, active: tab.id === current }];
+        return [
+          {
+            datasourceId,
+            path,
+            relation,
+            active: tab.id === current,
+            groupId: groupOf(tab),
+            groupActive: strip.groupActiveIds[groupOf(tab)] === tab.id,
+          },
+        ];
       }),
     );
   };

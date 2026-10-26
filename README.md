@@ -275,6 +275,14 @@ show it in Finder (or its folder elsewhere) or rename it; to **Duplicate** it as
 the same data source and schema; or to **Pin** it at the left, where closing many tabs leaves it
 open. **Reopen Closed Tab** (`⇧⌘T`) brings back the consoles you closed, newest first.
 
+Drag a tab toward the left or right side of the editor, or right-click it and choose **Split Left**
+or **Split Right**, to work in two consoles side by side. Each side keeps its own selected tab;
+click inside one to send Run, shortcuts and new consoles there. Drag the divider to resize them.
+Splitting moves the existing console, keeping its text, results and connection. With two sides
+already open, splitting moves the tab to that side; **Unsplit** brings all tabs together. Closing
+the last tab on one side also removes the split. Bulk tab closing and next/previous tab stay within
+the selected side. Saved console and table tabs remember their sides and the divider width.
+
 **Run SQL Script…**, on a data source or schema in the Database pane, runs one or more `.sql` files
 without opening them: the files are streamed, so a multi-gigabyte dump uses flat memory, and the
 run shows its statements and bytes under **SQL Scripts** in Services, where you can cancel it. A

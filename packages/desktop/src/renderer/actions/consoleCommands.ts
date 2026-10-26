@@ -25,7 +25,7 @@ import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { bridgeSqlFiles } from "@table-craft/desktop/renderer/state/sqlFiles.js";
 import { useServer } from "@table-craft/desktop/renderer/state/server.js";
 import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
-import { activeTab, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
+import { activeTab, groupOf, useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { pendingTables, tablesOf, useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useKeyTabs } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -92,11 +92,12 @@ function allocateConsole(
   place: (tab: Tab) => void,
   open: (id: string, name: string) => void,
 ): Promise<string> {
+  const groupId = groupOf(activeTab(useTabs.getState()));
   const previous = allocating.get(datasourceId) ?? Promise.resolve();
   const opened = previous.then(async () => {
     const saved = persists(datasourceId) ? await files.list(datasourceId).catch(() => []) : [];
     const name = firstFreeName([...saved, ...openNames(datasourceId)]);
-    const tab = newTab(name);
+    const tab = { ...newTab(name), groupId };
     place(tab);
     open(tab.id, name);
     return tab.id;
@@ -213,12 +214,13 @@ export async function restoreConsoles(): Promise<void> {
     fileConsoles.reopen(paths),
   ]);
   const byPath = new Map(paths.map((path, index) => [path, opened[index] ?? null]));
+  const selected: { id: string; entry: OpenConsole }[] = [];
   let active: string | null = null;
   for (const [index, entry] of remembered.entries()) {
     let tabId: string;
     if (entry.path === undefined) {
       const tab = newTab(entry.name);
-      useTabs.getState().open(tab);
+      useTabs.getState().open({ ...tab, groupId: entry.groupId ?? "left" });
       const sql = scratch[index] ?? "";
       void useConsoles.getState().open(tab.id, entry.datasourceId, { name: entry.name, sql, connect: false });
       tabId = tab.id;
@@ -228,8 +230,16 @@ export async function restoreConsoles(): Promise<void> {
       tabId = fileConsoles.openTab(file, entry.datasourceId);
     }
     if (entry.pinned === true) pinOpened(tabId);
+    selected.push({ id: tabId, entry });
     if (entry.active) active = tabId;
   }
+  useTabs.getState().restoreGroups(
+    selected.map(({ id, entry }) => ({
+      id,
+      groupId: entry.groupId ?? "left",
+      selected: entry.groupActive ?? entry.active,
+    })),
+  );
   if (active !== null) useTabs.getState().activate(active);
 }
 
@@ -247,6 +257,8 @@ export function rememberOpenConsoles(): () => void {
           datasourceId: session.datasourceId,
           name: session.name,
           active: tab.id === current,
+          groupId: groupOf(tab),
+          groupActive: strip.groupActiveIds[groupOf(tab)] === tab.id,
           ...(tab.pinned === true ? { pinned: true } : {}),
         };
         const source = fileSourceOf(session);

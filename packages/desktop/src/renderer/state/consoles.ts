@@ -349,6 +349,7 @@ export interface ConsolesState extends ConsoleEdits {
   readonly answerError: (id: string, answer: ErrorAnswer) => void;
   /** Puts the editor's caret at `span.from` and flashes `span`, as Go to Declaration lands. */
   readonly jumpTo: (id: string, span: TextSpan) => void;
+  readonly jumped: (id: string, seq: number) => void;
   /** Asks the editor to replace its selection with `text`, or insert it at the caret, as one undo step. */
   readonly insert: (id: string, text: string, values?: ParameterValues) => void;
   /** The editor applied the insertion numbered `seq`. */
@@ -1685,6 +1686,11 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           jump: { ...span, seq: flashes },
           flash: { ...span, seq: flashes },
         });
+      },
+
+      jumped(id, seq) {
+        if (get().consoles[id]?.jump?.seq !== seq) return;
+        patch(id, { jump: null });
       },
 
       async switchNamespace(id, path) {

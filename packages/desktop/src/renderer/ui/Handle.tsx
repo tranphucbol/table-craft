@@ -13,8 +13,9 @@ const PAINT_CLASS =
 export interface HandleProps {
   /** `horizontal` for a boundary dragged up and down, `vertical` for one dragged left and right. */
   readonly axis: keyof typeof AXIS_CLASS;
+  readonly label?: string;
 }
 
-export function Handle({ axis }: HandleProps) {
-  return <Separator className={cn(PAINT_CLASS, AXIS_CLASS[axis])} />;
+export function Handle({ axis, label }: HandleProps) {
+  return <Separator aria-label={label} className={cn(PAINT_CLASS, AXIS_CLASS[axis])} />;
 }
