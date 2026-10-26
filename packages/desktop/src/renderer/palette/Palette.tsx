@@ -21,6 +21,7 @@ import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/st
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { OVERLAY_MOTION, SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 
 const PROVIDERS: readonly SearchProvider[] = [
   actionsProvider(registry),
@@ -177,10 +178,13 @@ export function Palette() {
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-canvas/50" />
+        <Dialog.Overlay className={cn("fixed inset-0 z-40 bg-canvas/50", OVERLAY_MOTION)} />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-24 left-1/2 z-50 w-palette max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl"
+          className={cn(
+            "fixed top-24 left-1/2 z-50 w-palette max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl",
+            SURFACE_MOTION,
+          )}
           onOpenAutoFocus={() => {
             ran.current = false;
           }}

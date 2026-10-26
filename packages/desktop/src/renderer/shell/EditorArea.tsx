@@ -24,6 +24,7 @@ import {
   type TabKind,
 } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { TableEditor } from "@table-craft/desktop/renderer/table/TableEditor.js";
 import {
   ACTION_ICONS,
@@ -213,7 +214,12 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Content className="z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg">
+        <ContextMenu.Content
+          className={cn(
+            "z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg",
+            MENU_MOTION,
+          )}
+        >
           {groups.map((group, index) => (
             <Fragment key={group[0]?.actionId}>
               {index === 0 ? null : <ContextMenu.Separator className="my-1 h-px bg-line" />}

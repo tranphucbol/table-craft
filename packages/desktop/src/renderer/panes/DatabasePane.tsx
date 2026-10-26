@@ -64,6 +64,7 @@ import {
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { themeOf, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import {
   ACTION_ICONS,
@@ -274,7 +275,7 @@ function MenuItems({ items }: { readonly items: readonly (string | null)[] }) {
 function Menu({ items }: { readonly items: readonly (string | null)[] }) {
   return (
     <ContextMenu.Portal>
-      <ContextMenu.Content className="z-50 min-w-56 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg">
+      <ContextMenu.Content className={WIDE_MENU_CONTENT}>
         <MenuItems items={items} />
       </ContextMenu.Content>
     </ContextMenu.Portal>

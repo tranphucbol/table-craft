@@ -8,6 +8,7 @@ import { DOT_CLASS, useActiveDatasourceId } from "@table-craft/desktop/renderer/
 import { connectionOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { DropdownIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const SIDE_OFFSET_PX = 4;
@@ -115,7 +116,10 @@ export function DatasourceWidget() {
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}
           aria-label="Switch data source"
-          className="app-no-drag z-50 flex max-h-popover-height w-max max-w-popover min-w-56 flex-col overflow-y-auto rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg outline-none"
+          className={cn(
+            "app-no-drag z-50 flex max-h-popover-height w-max max-w-popover min-w-56 flex-col overflow-y-auto rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg outline-none",
+            SURFACE_MOTION,
+          )}
         >
           {datasources.map((datasource) => (
             <DatasourceRow key={datasource.id} datasource={datasource} onChosen={close} />
