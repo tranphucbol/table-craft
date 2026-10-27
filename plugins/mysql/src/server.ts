@@ -33,6 +33,44 @@ export function isTidb(serverVersion: string | null): boolean {
   return serverVersion !== null && TIDB_VERSION.test(serverVersion);
 }
 
+/** MariaDB's `VERSION()` reads like `10.11.8-MariaDB-log`; its number is not a MySQL release. */
+const MARIADB_VERSION = /-MariaDB/i;
+/** The first MySQL releases with `EXPLAIN FORMAT=TREE` and with `EXPLAIN ANALYZE`. */
+const MYSQL_TREE = [8, 0, 16] as const;
+const MYSQL_ANALYZE = [8, 0, 18] as const;
+
+function atLeast(version: readonly number[], wanted: readonly number[]): boolean {
+  for (const [index, part] of wanted.entries()) {
+    const have = version[index] ?? 0;
+    if (have !== part) return have > part;
+  }
+  return true;
+}
+
+/** What a server's EXPLAIN speaks. */
+export interface ExplainDialect {
+  /** TiDB prints its plan as rows of a table. */
+  readonly tidb: boolean;
+  readonly tree: boolean;
+  /** How the server runs and times a statement: MySQL's `EXPLAIN ANALYZE`, MariaDB's `ANALYZE FORMAT=JSON`, or not at all. */
+  readonly analyze: "explainAnalyze" | "analyzeJson" | null;
+}
+
+/** An unreadable version is taken for a current MySQL, as before servers were told apart. */
+export function explainDialect(serverVersion: string | null): ExplainDialect {
+  if (isTidb(serverVersion)) return { tidb: true, tree: false, analyze: "explainAnalyze" };
+  if (serverVersion !== null && MARIADB_VERSION.test(serverVersion)) {
+    return { tidb: false, tree: false, analyze: "analyzeJson" };
+  }
+  const mysql = serverVersion === null ? null : MYSQL_RELEASE.exec(serverVersion);
+  const version = mysql === null ? [...MYSQL_ANALYZE] : release(mysql);
+  return {
+    tidb: false,
+    tree: atLeast(version, MYSQL_TREE),
+    analyze: atLeast(version, MYSQL_ANALYZE) ? "explainAnalyze" : null,
+  };
+}
+
 /**
  * The statement that stops a running query of another connection, or `null` when no statement
  * stops it safely (decision 058).

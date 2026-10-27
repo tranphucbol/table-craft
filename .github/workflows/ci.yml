@@ -33,7 +33,7 @@ jobs:
       - run: bun run format:check
       - run: bun run typecheck
       - run: bun run test
-      # Decision 099: MySQL and TiDB only; every other server has its own job below.
+      # Decision 099: MySQL, TiDB and MariaDB only; every other server has its own job below.
       - run: bun run test:db
 
   changes:
