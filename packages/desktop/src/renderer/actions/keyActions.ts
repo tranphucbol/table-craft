@@ -8,6 +8,7 @@ import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { formatPattern, VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import { canReloadKey, useKeyTabs, type KeyTab, type KeyTarget } from "@table-craft/desktop/renderer/state/keyTabs.js";
+import { useKeyDetails } from "@table-craft/desktop/renderer/state/keyDetails.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
@@ -21,6 +22,7 @@ export const KEY_ACTION_IDS = {
   loadMore: "key.loadMore",
   filter: "key.filter",
   reload: "key.reload",
+  details: "key.details",
   valueFormat: "key.valueFormat",
   toggleEmptyDatabases: "explorer.toggleEmptyDatabases",
   openFromResult: "key.openFromResult",
@@ -103,6 +105,11 @@ export function openKey(_context: ActionContext, target: OpenKeyArgs): void {
   const tab: Tab = { id: `${KEY_TAB_PREFIX}${String(keyTabsOpened++)}`, kind: "key", title: target.key.text };
   useTabs.getState().open(tab);
   void useKeyTabs.getState().open(tab.id, target);
+}
+
+/** The key carries facts beyond the common ones, which the Details panel lists. */
+export function hasAttributes(tab: KeyTab | null): boolean {
+  return (tab?.details?.attributes?.length ?? 0) > 0;
 }
 
 /** The pattern the active key tab's value format is remembered under. */
@@ -285,6 +292,20 @@ export const KEY_ACTIONS: readonly AnyAction[] = [
     run: async (context) => {
       if (context.activeTab !== null && context.keyTab !== null) {
         await useKeyTabs.getState().reload(context.activeTab.id);
+      }
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.details,
+    title: "Key Details",
+    category: "Key Editor",
+    icon: "details",
+    shortcut: "Mod+I",
+    tabKind: "key",
+    when: (context) => hasAttributes(context.keyTab),
+    run: (context) => {
+      if (context.activeTab !== null && hasAttributes(context.keyTab)) {
+        useKeyDetails.getState().toggle(context.activeTab.id);
       }
     },
   }),

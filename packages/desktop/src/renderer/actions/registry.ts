@@ -61,6 +61,7 @@ export type ActionIcon =
   | "table"
   | "ddl"
   | "quickDoc"
+  | "details"
   | "generate"
   | "history"
   | "reopen"

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { keyInfoParts, ttlLabel } from "@table-craft/desktop/renderer/model/keyHeader.js";
+import { attributeFacts, keyInfoParts, ttlLabel } from "@table-craft/desktop/renderer/model/keyHeader.js";
 import { databaseLabel } from "@table-craft/desktop/renderer/model/keyTree.js";
 import { remainingTtl, type KeyTab } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { KeyTypeBadge } from "@table-craft/desktop/renderer/ui/KeyTypeBadge.js";
@@ -33,7 +33,10 @@ export function KeyHeader({ tab, datasourceName, onExpired }: KeyHeaderProps) {
   useEffect(() => {
     if (expired) onExpired();
   }, [expired, readAt, onExpired]);
-  const parts = tab.details === null ? [] : keyInfoParts(tab.details);
+  const compact = tab.details?.attributes !== undefined;
+  const parts = tab.details === null || compact ? [] : keyInfoParts(tab.details);
+  const facts = tab.details === null ? [] : attributeFacts(tab.details);
+  const showTtl = tab.details?.type != null && (!compact || remaining !== null);
   return (
     <div data-testid="key-header" className="flex shrink-0 flex-col gap-1 border-b border-line bg-panel p-gap">
       <div className="flex min-w-0 items-center gap-gap">
@@ -41,7 +44,12 @@ export function KeyHeader({ tab, datasourceName, onExpired }: KeyHeaderProps) {
         <span data-testid="key-name" className="truncate font-mono text-ink" title={tab.key.text}>
           {tab.key.text}
         </span>
-        {tab.details?.type == null ? null : (
+        {facts.length === 0 ? null : (
+          <span data-testid="key-facts" className="shrink-0 text-ink-muted tabular-nums">
+            {facts.join(" · ")}
+          </span>
+        )}
+        {!showTtl ? null : (
           <span data-testid="key-ttl" className="shrink-0 text-ink-muted">
             {ttlLabel(remaining)}
           </span>

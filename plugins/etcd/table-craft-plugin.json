@@ -1,0 +1,72 @@
+{
+  "id": "etcd",
+  "name": "etcd",
+  "version": "0.0.0",
+  "apiVersion": "1.4.0",
+  "entry": "index.js",
+  "capabilities": ["commands", "keepAlive", "keyValue", "nodes", "serverInfo"],
+  "highlight": "etcd",
+  "connection": {
+    "fields": [
+      { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
+      { "key": "port", "label": "Port", "kind": "number", "default": 2379, "required": true },
+      { "key": "user", "label": "Username", "kind": "text" },
+      { "key": "password", "label": "Password", "kind": "password", "secret": true },
+      {
+        "key": "tlsMode",
+        "label": "TLS mode",
+        "kind": "select",
+        "default": "disable",
+        "group": "advanced",
+        "options": [
+          { "value": "disable", "label": "Disable" },
+          { "value": "require", "label": "Require" },
+          { "value": "verify-ca", "label": "Verify CA" },
+          { "value": "verify-full", "label": "Verify full" }
+        ]
+      },
+      { "key": "tlsCa", "label": "CA certificate", "kind": "file", "group": "advanced" },
+      { "key": "tlsCert", "label": "Client certificate", "kind": "file", "group": "advanced" },
+      { "key": "tlsKey", "label": "Client key", "kind": "file", "group": "advanced" },
+      {
+        "key": "tlsKeyPassphrase",
+        "label": "Client key passphrase",
+        "kind": "password",
+        "secret": true,
+        "group": "advanced"
+      },
+      { "key": "keyDelimiter", "label": "Key delimiter", "kind": "text", "default": "/", "group": "advanced" },
+      { "key": "scanBatch", "label": "Scan batch", "kind": "number", "default": 1000, "group": "advanced" },
+      {
+        "key": "connectTimeout",
+        "label": "Connect timeout (s)",
+        "kind": "number",
+        "default": 10,
+        "group": "advanced"
+      },
+      {
+        "key": "maxMessageMb",
+        "label": "Max message size (MiB)",
+        "kind": "number",
+        "default": 16,
+        "group": "advanced"
+      }
+    ],
+    "url": {
+      "schemes": ["etcd", "etcds"],
+      "form": "server",
+      "parts": { "host": "host", "port": "port", "user": "user", "password": "password" },
+      "params": [],
+      "sets": { "etcd": { "tlsMode": "disable" }, "etcds": { "tlsMode": "require" } }
+    },
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" },
+    "tls": {
+      "mode": "tlsMode",
+      "verifyModes": ["verify-ca", "verify-full"],
+      "caFile": "tlsCa",
+      "certFile": "tlsCert",
+      "keyFile": "tlsKey",
+      "keyPassphrase": "tlsKeyPassphrase"
+    }
+  }
+}

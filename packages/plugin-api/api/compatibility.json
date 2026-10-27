@@ -59,6 +59,21 @@
       "key": "ContractFixture.statements",
       "kind": "addition",
       "reason": "Gains the optional slowRead and sessionTimeout; a plugin supplies the fixture, so the shape only widens what it may pass (decision 129)."
+    },
+    {
+      "key": "KeyspaceFixture.hash",
+      "kind": "addition",
+      "reason": "Becomes optional and the hash read test runs only when the fixture names it; a plugin supplies the fixture, so every fixture valid before still is."
+    },
+    {
+      "key": "KeyspaceFixture.zset",
+      "kind": "addition",
+      "reason": "Becomes optional and the sorted-set read test runs only when the fixture names it; a plugin supplies the fixture, so every fixture valid before still is."
+    },
+    {
+      "key": "KeyspaceFixture.stream",
+      "kind": "addition",
+      "reason": "Becomes optional and the stream read test runs only when the fixture names it; a plugin supplies the fixture, so every fixture valid before still is."
     }
   ]
 }

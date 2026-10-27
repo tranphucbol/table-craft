@@ -33,7 +33,7 @@ function textFromEnv(name: string, fallback: string): string {
 }
 
 /** Every server the suites can run against; SQLite is in-process and always runs. */
-export const DATABASE_IDS = ["mysql", "tidb", "mariadb", "postgres", "oracle", "mssql", "redis"] as const;
+export const DATABASE_IDS = ["mysql", "tidb", "mariadb", "postgres", "oracle", "mssql", "redis", "etcd"] as const;
 export type DatabaseId = (typeof DATABASE_IDS)[number];
 export const DATABASES_ENV = "TABLE_CRAFT_DATABASES";
 /**
@@ -329,6 +329,31 @@ export const REDIS5_CLUSTER_CONFIG = {
   user: "",
 } as const;
 
+const DEFAULT_ETCD_PORT = 52379;
+const DEFAULT_ETCD35_PORT = 52380;
+
+/** The `etcd` service: etcd 3.6 with auth on, keys seeded from `schema/etcd.etcd` (plan 110). */
+export const ETCD_CONFIG = {
+  host: hostFromEnv("TABLE_CRAFT_ETCD_HOST"),
+  port: portFromEnv("TABLE_CRAFT_ETCD_PORT", DEFAULT_ETCD_PORT),
+  user: CREDENTIAL,
+  password: CREDENTIAL,
+} as const;
+
+/** The `etcd-3-5` service: etcd 3.5 without auth, the same keys. */
+export const ETCD35_CONFIG = {
+  host: hostFromEnv("TABLE_CRAFT_ETCD35_HOST"),
+  port: portFromEnv("TABLE_CRAFT_ETCD35_PORT", DEFAULT_ETCD35_PORT),
+  user: "",
+  password: "",
+} as const;
+
+/** The `etcd` server's root, which may read and change everything, maintenance included. */
+export const ETCD_ROOT_USER = { user: "root", password: CREDENTIAL } as const;
+
+/** The `etcd` server's user that may only read keys under `/app/`. */
+export const ETCD_LIMITED_USER = { user: "limited", password: "limited" } as const;
+
 export function withWrongPassword<Config extends { readonly password: string }>(config: Config): Config {
   return { ...config, password: WRONG_PASSWORD };
 }
@@ -343,6 +368,8 @@ export const WITHOUT_REDIS = !databaseEnabled("redis");
 export const WITHOUT_ORACLE = !databaseEnabled("oracle");
 /** The smoke files' SQL Server scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
 export const WITHOUT_MSSQL = !databaseEnabled("mssql");
+/** The etcd suites and scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
+export const WITHOUT_ETCD = !databaseEnabled("etcd");
 
 /** Whether a scenario on a datasource of `pluginId` skips, because its server is not selected. */
 export function serverSkipped(pluginId: string): boolean {
@@ -350,6 +377,7 @@ export function serverSkipped(pluginId: string): boolean {
     (pluginId === "postgres" && WITHOUT_POSTGRES) ||
     (pluginId === "redis" && WITHOUT_REDIS) ||
     (pluginId === "oracle" && WITHOUT_ORACLE) ||
-    (pluginId === "mssql" && WITHOUT_MSSQL)
+    (pluginId === "mssql" && WITHOUT_MSSQL) ||
+    (pluginId === "etcd" && WITHOUT_ETCD)
   );
 }

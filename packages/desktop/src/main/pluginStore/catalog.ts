@@ -1,7 +1,7 @@
 /**
  * The official plugins TableCraft can download (decision 108), compiled in so the Data Sources
  * dialog lists them offline. `test/desktop/pluginStore.test.ts` pins it to
- * `OPTIONAL_PLUGINS` and to each plugin's manifest; plan 054 adds Oracle, 055 SQL Server, 058 Redis.
+ * `OPTIONAL_PLUGINS` and to each plugin's manifest.
  */
 import type { Brand } from "@table-craft/plugin-api";
 
@@ -56,6 +56,14 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     brands: [{ id: "microsoftsqlserver", name: "SQL Server" }],
     schemes: ["sqlserver", "mssql"],
     approximateBytes: 760_000,
+  },
+  {
+    id: "etcd",
+    name: "etcd",
+    packageName: officialPackage("etcd"),
+    brands: [{ id: "etcd", name: "etcd" }],
+    schemes: ["etcd", "etcds"],
+    approximateBytes: 400_000,
   },
 ];
 

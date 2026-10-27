@@ -56,6 +56,13 @@ export interface KeyDetails extends KeyInfo {
   readonly memoryBytes: number | null;
   readonly encoding: string | null;
   readonly idleSeconds: number | null;
+  readonly attributes?: readonly KeyAttribute[];
+}
+
+/** Mirrors `KeyAttribute` in plugin-api. */
+export interface KeyAttribute {
+  readonly name: string;
+  readonly value: string;
 }
 
 /** Which part of a key the key tab reads: a `MATCH` glob, a stream id range, a list offset. */

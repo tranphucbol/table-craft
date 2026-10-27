@@ -31,7 +31,9 @@ export type SeededService =
   | "redis-cluster"
   | "redis-6-cluster"
   | "redis-5"
-  | "redis-5-cluster";
+  | "redis-5-cluster"
+  | "etcd"
+  | "etcd-3-5";
 
 /** What a Redis server reads at start (`redis/*.sh`): its users, its start script and the seeds. */
 const REDIS_STANDALONE_SEED = [
@@ -42,6 +44,8 @@ const REDIS_STANDALONE_SEED = [
   "schema/redis-db1.redis",
 ];
 const REDIS_CLUSTER_SEED = ["redis/users.sh", "redis/seed.sh", "redis/cluster.sh", "schema/redis.redis"];
+/** What `etcd-seed` reads, which seeds both etcd servers: its image, its script and the keys. */
+const ETCD_SEED = ["etcd/Dockerfile", "etcd/seed.sh", "schema/etcd.etcd"];
 
 /**
  * What each service reads when its data directory is first made: the initdb scripts, and for the
@@ -63,6 +67,8 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   "redis-6-cluster": REDIS_CLUSTER_SEED,
   "redis-5": REDIS_STANDALONE_SEED,
   "redis-5-cluster": REDIS_CLUSTER_SEED,
+  etcd: ETCD_SEED,
+  "etcd-3-5": ETCD_SEED,
 };
 
 /** The variable `compose.yml` interpolates into each service's `table-craft.seed` label. */
@@ -81,12 +87,22 @@ export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   "redis-6-cluster": "TABLE_CRAFT_REDIS6_CLUSTER_SEED",
   "redis-5": "TABLE_CRAFT_REDIS5_SEED",
   "redis-5-cluster": "TABLE_CRAFT_REDIS5_CLUSTER_SEED",
+  etcd: "TABLE_CRAFT_ETCD_SEED",
+  "etcd-3-5": "TABLE_CRAFT_ETCD35_SEED",
 };
 
 const SERVICES = Object.keys(SEED_FILES) as SeededService[];
 
-/** A one-shot service that seeds a server with no initdb directory, recreated with it. */
-const SEEDER_OF: Partial<Readonly<Record<SeededService, string>>> = { mssql: "mssql-seed" };
+/**
+ * What else to recreate with a stale service: the one-shot service that seeds a server with no
+ * initdb directory, and for etcd the other server too, since `etcd-seed` reseeds both and the
+ * fixture's revisions hold only on a fresh one.
+ */
+const RECREATED_WITH: Partial<Readonly<Record<SeededService, readonly string[]>>> = {
+  mssql: ["mssql-seed"],
+  etcd: ["etcd-3-5", "etcd-seed"],
+  "etcd-3-5": ["etcd", "etcd-seed"],
+};
 
 function seedFiles(directory: string, path: string): string[] {
   if (!statSync(join(directory, path)).isDirectory()) return [path];
@@ -169,7 +185,7 @@ export async function upDatabases(
   const stale = await servicesMissingSentinels(undefined, sentinelsFor(services));
   if (stale.length > 0) {
     console.log(`Reseeding ${stale.join(", ")}: their seed objects are missing.`);
-    const recreated = stale.flatMap((service) => [service, ...(SEEDER_OF[service] ?? [])]);
+    const recreated = [...new Set(stale.flatMap((service) => [service, ...(RECREATED_WITH[service] ?? [])]))];
     compose([...profiles, "up", "-d", "--wait", "--force-recreate", ...recreated], env);
   }
   return env;

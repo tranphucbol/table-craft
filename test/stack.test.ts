@@ -10,7 +10,7 @@ const DB_DIRECTORY = join(import.meta.dirname, "db");
 
 function copyOfSeeds(): string {
   const directory = mkdtempSync(join(tmpdir(), "table-craft-seeds-"));
-  for (const folder of ["schema", "tls", "redis"])
+  for (const folder of ["schema", "tls", "redis", "etcd"])
     cpSync(join(DB_DIRECTORY, folder), join(directory, folder), { recursive: true });
   return directory;
 }
@@ -59,6 +59,8 @@ describe("seed hashes (test/db/stack.ts)", () => {
       "redis-5": "l",
       "redis-5-cluster": "m",
       mariadb: "n",
+      etcd: "o",
+      "etcd-3-5": "p",
     });
 
     expect(env).toEqual({
@@ -76,6 +78,8 @@ describe("seed hashes (test/db/stack.ts)", () => {
       [SEED_ENV["redis-5"]]: "l",
       [SEED_ENV["redis-5-cluster"]]: "m",
       [SEED_ENV.mariadb]: "n",
+      [SEED_ENV.etcd]: "o",
+      [SEED_ENV["etcd-3-5"]]: "p",
     });
   });
 
@@ -122,7 +126,7 @@ describe("database selector (decision 099)", () => {
       services: ["mysql", "mysql-tls", "mariadb"],
     });
     expect(describeSelection(databases, {})).toBe(
-      `Databases: mysql, tidb, mariadb (from ${DATABASES_ENV} unset, the normal flow); not started: postgres, oracle, mssql, redis`,
+      `Databases: mysql, tidb, mariadb (from ${DATABASES_ENV} unset, the normal flow); not started: postgres, oracle, mssql, redis, etcd`,
     );
   });
 
@@ -144,7 +148,7 @@ describe("database selector (decision 099)", () => {
     const databases = selectedDatabases({ [DATABASES_ENV]: "all" });
 
     expect(stackFor(databases, LOCAL_TIDB)).toEqual({
-      profiles: ["mysql", "tidb", "mariadb", "postgres", "oracle", "mssql", "redis"].flatMap((profile) => [
+      profiles: ["mysql", "tidb", "mariadb", "postgres", "oracle", "mssql", "redis", "etcd"].flatMap((profile) => [
         "--profile",
         profile,
       ]),
@@ -163,6 +167,8 @@ describe("database selector (decision 099)", () => {
         "redis-6-cluster",
         "redis-5",
         "redis-5-cluster",
+        "etcd",
+        "etcd-3-5",
       ],
     });
     expect(stackFor(databases, REMOTE_TIDB).profiles).not.toContain("tidb");
@@ -174,7 +180,7 @@ describe("database selector (decision 099)", () => {
 
   it("givenUnknownDatabaseInSelector_whenUp_thenErrorNamesKnownIds", () => {
     expect(() => selectedDatabases({ [DATABASES_ENV]: "mysql,sybase" })).toThrow(
-      `${DATABASES_ENV} names sybase, which is not a test database; list any of mysql, tidb, mariadb, postgres, oracle, mssql, redis, all, separated by commas.`,
+      `${DATABASES_ENV} names sybase, which is not a test database; list any of mysql, tidb, mariadb, postgres, oracle, mssql, redis, etcd, all, separated by commas.`,
     );
   });
 });
