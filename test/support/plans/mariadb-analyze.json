@@ -1,0 +1,58 @@
+{
+  "query_optimization": {
+    "r_total_time_ms": 5.84552741
+  },
+  "query_block": {
+    "select_id": 1,
+    "r_loops": 1,
+    "r_total_time_ms": 0.536556479,
+    "nested_loop": [
+      {
+        "table": {
+          "table_name": "c",
+          "access_type": "ALL",
+          "possible_keys": ["PRIMARY"],
+          "r_loops": 1,
+          "rows": 2,
+          "r_rows": 2,
+          "r_table_time_ms": 0.161935216,
+          "r_other_time_ms": 0.023580772,
+          "r_engine_stats": {
+            "pages_accessed": 1
+          },
+          "filtered": 100,
+          "r_filtered": 100
+        }
+      },
+      {
+        "block-nl-join": {
+          "table": {
+            "table_name": "o",
+            "access_type": "ALL",
+            "possible_keys": ["customer_id"],
+            "r_loops": 1,
+            "rows": 3,
+            "r_rows": 3,
+            "r_table_time_ms": 0.02157745,
+            "r_other_time_ms": 0.305297965,
+            "r_engine_stats": {
+              "pages_accessed": 1
+            },
+            "filtered": 100,
+            "r_filtered": 66.66666667,
+            "attached_condition": "o.total > 10"
+          },
+          "buffer_type": "flat",
+          "buffer_size": "11KiB",
+          "join_type": "BNL",
+          "attached_condition": "o.customer_id = c.`id`",
+          "r_loops": 2,
+          "r_filtered": 50,
+          "r_unpack_time_ms": 4.173588e-4,
+          "r_other_time_ms": 0.002295473,
+          "r_effective_rows": 2
+        }
+      }
+    ]
+  }
+}

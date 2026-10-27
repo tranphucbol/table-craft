@@ -71,11 +71,13 @@ const CONSTRAINTS_SQL = `
   WHERE tc.TABLE_SCHEMA = ? AND tc.CONSTRAINT_TYPE IN ('${PRIMARY_KEY}', '${UNIQUE_KEY}', '${FOREIGN_KEY}')
   ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME, k.ORDINAL_POSITION`;
 
-/** A functional index part has no column; `EXPRESSION` carries it instead. */
+/**
+ * A functional index part has no column; `EXPRESSION` carries it instead. Only MySQL 8.0.13+ has
+ * that column (MariaDB and older MySQL fail on the name), so `s.*` picks it up where it exists.
+ */
 const INDEXES_SQL = `
-  SELECT TABLE_NAME AS relation, INDEX_NAME AS name, NON_UNIQUE AS non_unique,
-    COALESCE(COLUMN_NAME, EXPRESSION) AS col
-  FROM information_schema.STATISTICS
+  SELECT TABLE_NAME AS relation, INDEX_NAME AS name, NON_UNIQUE AS non_unique, s.*
+  FROM information_schema.STATISTICS s
   WHERE TABLE_SCHEMA = ?
   ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`;
 
@@ -135,7 +137,12 @@ interface IndexRow {
   readonly relation: Text;
   readonly name: Text;
   readonly non_unique: number | string;
-  readonly col: Text;
+  readonly COLUMN_NAME: Text;
+  readonly EXPRESSION?: Text;
+}
+
+function indexPart(row: IndexRow): string {
+  return text(row.COLUMN_NAME ?? row.EXPRESSION ?? null);
 }
 
 interface RoutineRow {
@@ -238,6 +245,21 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
     });
   }
 
+  /**
+   * Routines read from `mysql.proc`, which a server upgraded without `mariadb-upgrade` cannot read
+   * ("Column count of mysql.proc is wrong"); the tables still deserve a catalog then.
+   */
+  async function routineRows(database: string): Promise<[RoutineRow[], ParameterRow[]]> {
+    try {
+      return await Promise.all([
+        rows<RoutineRow>(ROUTINES_SQL, [database]),
+        rows<ParameterRow>(PARAMETERS_SQL, [database]),
+      ]);
+    } catch {
+      return [[], []];
+    }
+  }
+
   return {
     async namespaces(): Promise<readonly Namespace[]> {
       const found = await rows<NamespaceRow>(NAMESPACES_SQL);
@@ -264,13 +286,12 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
           `Database "${database}" does not exist, or this user has no privileges on it.`,
         );
       }
-      const [relations, columns, constraints, indexes, routines, parameters] = await Promise.all([
+      const [relations, columns, constraints, indexes, [routines, parameters]] = await Promise.all([
         rows<RelationRow>(RELATIONS_SQL, [database]),
         rows<ColumnRow>(COLUMNS_SQL, [database]),
         rows<ConstraintRow>(CONSTRAINTS_SQL, [database]),
         rows<IndexRow>(INDEXES_SQL, [database]),
-        rows<RoutineRow>(ROUTINES_SQL, [database]),
-        rows<ParameterRow>(PARAMETERS_SQL, [database]),
+        routineRows(database),
       ]);
       const columnsOf = new Map<string, ColumnRow[]>();
       for (const column of columns) {
@@ -318,7 +339,7 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
           indexes: byName(
             [...(indexesOf.get(name) ?? new Map<string, IndexRow[]>()).entries()].map(([indexName, parts]): Index => ({
               name: indexName,
-              columns: parts.map((part) => text(part.col)),
+              columns: parts.map(indexPart),
               unique: Number(parts[0]?.non_unique) === 0,
               primary: indexName === PRIMARY_INDEX,
             })),

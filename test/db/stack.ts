@@ -20,6 +20,7 @@ export const COMPOSE_FILE = join(DB_DIRECTORY, "compose.yml");
 export type SeededService =
   | "postgres"
   | "mysql"
+  | "mariadb"
   | "postgres-tls"
   | "mysql-tls"
   | "oracle"
@@ -50,6 +51,7 @@ const REDIS_CLUSTER_SEED = ["redis/users.sh", "redis/seed.sh", "redis/cluster.sh
 const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   postgres: ["schema/postgres.sql"],
   mysql: ["schema/mysql.sql"],
+  mariadb: ["schema/mysql.sql"],
   "postgres-tls": ["tls/postgres.sql", "tls/pg_hba.conf", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   "mysql-tls": ["tls/mysql.sql", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   oracle: ["schema/oracle"],
@@ -67,6 +69,7 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
 export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   postgres: "TABLE_CRAFT_PG_SEED",
   mysql: "TABLE_CRAFT_MYSQL_SEED",
+  mariadb: "TABLE_CRAFT_MARIADB_SEED",
   "postgres-tls": "TABLE_CRAFT_PG_TLS_SEED",
   "mysql-tls": "TABLE_CRAFT_MYSQL_TLS_SEED",
   oracle: "TABLE_CRAFT_ORACLE_SEED",

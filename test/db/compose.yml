@@ -1,11 +1,12 @@
 # The databases `bun run test:db` runs the plugin contract against, seeded from ./schema.
 # Ports sit far from the defaults so a developer's own server keeps 5432 and 3306. Parallel
 # worktrees each set COMPOSE_PROJECT_NAME, TABLE_CRAFT_PG_PORT, TABLE_CRAFT_MYSQL_PORT,
-# TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT, TABLE_CRAFT_PG_TLS_PORT, TABLE_CRAFT_MYSQL_TLS_PORT,
-# TABLE_CRAFT_ORACLE_PORT and TABLE_CRAFT_MSSQL_PORT so one checkout's `up` never recreates the
-# containers another checkout is testing against.
+# TABLE_CRAFT_MARIADB_PORT, TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT,
+# TABLE_CRAFT_PG_TLS_PORT, TABLE_CRAFT_MYSQL_TLS_PORT, TABLE_CRAFT_ORACLE_PORT and
+# TABLE_CRAFT_MSSQL_PORT so one checkout's `up` never recreates the containers another checkout is
+# testing against.
 # Every database service sits behind a profile named after the database (decision 099):
-# `TABLE_CRAFT_DATABASES` (default `mysql,tidb`) picks the profiles `stack.ts` passes.
+# `TABLE_CRAFT_DATABASES` (default `mysql,tidb,mariadb`) picks the profiles `stack.ts` passes.
 # Each seeded service is labelled with the hash of its seed (`stack.ts`), so `bun test/db/up.ts`
 # and the headless runner recreate, and so reseed, exactly the containers whose seed changed.
 name: table-craft-test-db
@@ -76,6 +77,37 @@ services:
         [
           "CMD-SHELL",
           "mysql -h 127.0.0.1 -u table_craft -ptable_craft table_craft -e 'SELECT 1 FROM type_probe LIMIT 1'",
+        ]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
+  # MariaDB 10.11 LTS, which users reach through the MySQL plugin: JSON is LONGTEXT with a
+  # json_valid check, routines live in mysql.proc, and STATISTICS has no EXPRESSION.
+  mariadb:
+    profiles: ["mariadb"]
+    image: mariadb:10.11
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_MARIADB_SEED:-none}
+    environment:
+      MARIADB_ROOT_PASSWORD: table_craft
+      MARIADB_USER: table_craft
+      MARIADB_PASSWORD: table_craft
+      MARIADB_DATABASE: table_craft
+    command:
+      - --innodb-buffer-pool-size=32M
+      - --innodb-log-buffer-size=1M
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_MARIADB_PORT:-53310}:3306"
+    volumes:
+      - ./schema/mysql.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mariadb -h 127.0.0.1 -u table_craft -ptable_craft table_craft -e 'SELECT 1 FROM type_probe LIMIT 1'",
         ]
       interval: 1s
       timeout: 5s
@@ -331,6 +363,8 @@ services:
       TABLE_CRAFT_PG_PORT: "5432"
       TABLE_CRAFT_MYSQL_HOST: mysql
       TABLE_CRAFT_MYSQL_PORT: "3306"
+      TABLE_CRAFT_MARIADB_HOST: mariadb
+      TABLE_CRAFT_MARIADB_PORT: "3306"
       TABLE_CRAFT_PG_TLS_HOST: postgres-tls
       TABLE_CRAFT_PG_TLS_PORT: "5432"
       TABLE_CRAFT_MYSQL_TLS_HOST: mysql-tls

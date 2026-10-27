@@ -27,6 +27,9 @@ export const TYPE_PROBE_WRITE = "UPDATE type_probe SET small_int = small_int WHE
 /** Postgres and MySQL keep declared types through `CREATE TABLE … AS`. */
 export const TYPE_PROBE_COPY_AS = "CREATE TABLE type_probe_copy AS SELECT * FROM type_probe WHERE 1 = 0";
 
+/** MariaDB's JSON is LONGTEXT with a `json_valid` check, which `CREATE TABLE … AS` drops and `LIKE` keeps. */
+export const TYPE_PROBE_COPY_LIKE = "CREATE TABLE type_probe_copy LIKE type_probe";
+
 /** SQLite's `CREATE TABLE … AS` keeps only affinities, which lose BOOLEAN and JSON, so it is spelled out. */
 export const TYPE_PROBE_COPY_SQLITE = `CREATE TABLE type_probe_copy (
   id INTEGER PRIMARY KEY,

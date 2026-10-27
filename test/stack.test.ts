@@ -58,6 +58,7 @@ describe("seed hashes (test/db/stack.ts)", () => {
       "redis-6-cluster": "k",
       "redis-5": "l",
       "redis-5-cluster": "m",
+      mariadb: "n",
     });
 
     expect(env).toEqual({
@@ -74,6 +75,7 @@ describe("seed hashes (test/db/stack.ts)", () => {
       [SEED_ENV["redis-6-cluster"]]: "k",
       [SEED_ENV["redis-5"]]: "l",
       [SEED_ENV["redis-5-cluster"]]: "m",
+      [SEED_ENV.mariadb]: "n",
     });
   });
 
@@ -111,16 +113,16 @@ const REMOTE_TIDB: TidbTarget = { remote: true, env: {}, description: "remote" }
 const LOCAL_TIDB: TidbTarget = { remote: false, env: {}, description: "local" };
 
 describe("database selector (decision 099)", () => {
-  it("givenSelectorUnset_whenTestDbRuns_thenOnlyMysqlAndTidb", () => {
+  it("givenSelectorUnset_whenTestDbRuns_thenEveryMysqlPluginServer", () => {
     const databases = selectedDatabases({});
 
-    expect(databases).toEqual(["mysql", "tidb"]);
+    expect(databases).toEqual(["mysql", "tidb", "mariadb"]);
     expect(stackFor(databases, REMOTE_TIDB)).toEqual({
-      profiles: ["--profile", "mysql"],
-      services: ["mysql", "mysql-tls"],
+      profiles: ["mysql", "mariadb"].flatMap((profile) => ["--profile", profile]),
+      services: ["mysql", "mysql-tls", "mariadb"],
     });
     expect(describeSelection(databases, {})).toBe(
-      `Databases: mysql, tidb (from ${DATABASES_ENV} unset, the normal flow); not started: postgres, oracle, mssql, redis`,
+      `Databases: mysql, tidb, mariadb (from ${DATABASES_ENV} unset, the normal flow); not started: postgres, oracle, mssql, redis`,
     );
   });
 
@@ -142,10 +144,14 @@ describe("database selector (decision 099)", () => {
     const databases = selectedDatabases({ [DATABASES_ENV]: "all" });
 
     expect(stackFor(databases, LOCAL_TIDB)).toEqual({
-      profiles: ["mysql", "tidb", "postgres", "oracle", "mssql", "redis"].flatMap((profile) => ["--profile", profile]),
+      profiles: ["mysql", "tidb", "mariadb", "postgres", "oracle", "mssql", "redis"].flatMap((profile) => [
+        "--profile",
+        profile,
+      ]),
       services: [
         "mysql",
         "mysql-tls",
+        "mariadb",
         "postgres",
         "postgres-tls",
         "oracle",
@@ -168,7 +174,7 @@ describe("database selector (decision 099)", () => {
 
   it("givenUnknownDatabaseInSelector_whenUp_thenErrorNamesKnownIds", () => {
     expect(() => selectedDatabases({ [DATABASES_ENV]: "mysql,sybase" })).toThrow(
-      `${DATABASES_ENV} names sybase, which is not a test database; list any of mysql, tidb, postgres, oracle, mssql, redis, all, separated by commas.`,
+      `${DATABASES_ENV} names sybase, which is not a test database; list any of mysql, tidb, mariadb, postgres, oracle, mssql, redis, all, separated by commas.`,
     );
   });
 });

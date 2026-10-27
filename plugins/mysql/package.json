@@ -11,6 +11,7 @@
     "./bulk": "./src/bulk.ts",
     "./server": "./src/server.ts",
     "./functions": "./src/functions/index.ts",
+    "./introspect": "./src/introspect.ts",
     "./sessions": "./src/sessions.ts",
     "./warnings": "./src/warnings.ts",
     "./errorPosition": "./src/errorPosition.ts"

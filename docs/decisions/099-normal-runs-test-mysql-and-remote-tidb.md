@@ -56,3 +56,18 @@ headless box agreeing on what ran.
   under emulation in about 21 s and about 1 GiB (measured on the 8 GiB VM, images cached).
 - `oracledb` (thin mode) and `tedious` are root devDependencies, used only by the sentinel
   checks.
+
+## Amendment (MariaDB)
+
+The default set is `mysql,tidb,mariadb`. A user reached MariaDB 10.11 through the MySQL plugin and
+the catalog failed on `information_schema.STATISTICS.EXPRESSION`, which only MySQL 8.0.13+ and
+TiDB have; nothing in the normal flow ran against MariaDB. The `mariadb` profile holds
+`mariadb:10.11`, seeded from the same `test/db/schema/mysql.sql`, on port 53310
+(`TABLE_CRAFT_MARIADB_PORT`), and `test/db/mariadb.test.ts` runs the MySQL plugin's contract
+(`test/db/mysqlFamily.ts`) against it; `test:db:mariadb` runs it alone. It is light (about the
+size of the MySQL container, native on Apple silicon), so it stays in the normal flow rather than
+behind a CI path filter. Smoke runs still need only `mysql,tidb` (`SMOKE_DATABASES`).
+
+MySQL 5.7 was tried and left out: it ignores `CHECK` constraints and has no `EXPLAIN ANALYZE`,
+which the contract requires of every server the plugin declares them for, and its image is
+amd64-only. The plugin still reads 5.7 (JSON plans, no `EXPRESSION`); unit tests cover that.
