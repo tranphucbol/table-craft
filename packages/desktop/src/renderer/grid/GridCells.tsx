@@ -1,5 +1,5 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import type { CellInput, SortDirection, TypeClass, WireValue } from "@table-craft/desktop/engine/protocol.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import {
@@ -9,6 +9,7 @@ import {
   type SortArgs,
 } from "@table-craft/desktop/renderer/actions/gridActions.js";
 import { invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
+import { TemporalPicker } from "@table-craft/desktop/renderer/grid/TemporalPicker.js";
 import { DEFAULT_TEXT, formatCell, type CellFormats } from "@table-craft/desktop/renderer/grid/format.js";
 import { displayChars } from "@table-craft/desktop/renderer/grid/widths.js";
 import { fittedTo, resizedTo, type ColumnLayout } from "@table-craft/desktop/renderer/model/columnLayout.js";
@@ -20,12 +21,13 @@ import {
 } from "@table-craft/desktop/renderer/model/gridSelection.js";
 import { booleanOfText } from "@table-craft/desktop/renderer/model/resultEdits.js";
 import { sortMarkOf } from "@table-craft/desktop/renderer/model/sortKeys.js";
-import { pickedText, pickerKindOf, pickerValueOf } from "@table-craft/desktop/renderer/model/temporalPicker.js";
+import { pickerKindOf } from "@table-craft/desktop/renderer/model/temporalPicker.js";
 import type { ResultSearch, ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import type { ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import { currentFormats } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
+import type { PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import {
   CalendarIcon,
   ReadOnlyIcon,
@@ -154,8 +156,9 @@ export function CellEditorInput({
   readonly onTab: () => void;
 }) {
   const closing = useRef(false);
-  const picker = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const [pickerAnchor, setPickerAnchor] = useState<PopoverAnchor | null>(null);
   const pickerKind = typeClass === "temporal" ? pickerKindOf(type) : null;
 
   function close(commit: boolean): void {
@@ -223,9 +226,8 @@ export function CellEditorInput({
       onMouseDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onKeyDown={onKeyDown}
-      onBlur={(event) => {
-        if (closing.current) return;
-        if (pickerKind !== null && (event.relatedTarget === picker.current || !document.hasFocus())) return;
+      onBlur={() => {
+        if (closing.current || pickerAnchor !== null) return;
         edits.commit();
       }}
     />
@@ -240,6 +242,7 @@ export function CellEditorInput({
   return (
     <div role="gridcell" data-row={row} data-col={position} data-editing className="relative h-full min-w-0">
       <div
+        ref={box}
         className="absolute inset-y-0 left-0 z-10 min-w-full font-grid text-grid"
         style={{ width: `calc(${String(text.length + 1)}ch + ${TEMPORAL_EDITOR_ROOM})` }}
       >
@@ -247,33 +250,45 @@ export function CellEditorInput({
         <button
           type="button"
           aria-label={`Pick ${name}`}
+          aria-expanded={pickerAnchor !== null}
           title="Pick a value"
           className="absolute inset-y-0 right-0 flex w-row items-center justify-center text-ink-muted hover:text-ink"
           onMouseDown={(event) => {
             event.preventDefault();
             event.stopPropagation();
           }}
-          onClick={() => picker.current?.showPicker()}
+          // The picker closes on a pointer down outside it; this button toggles it on click instead.
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => setPickerAnchor(pickerAnchor === null ? anchorOf(box.current) : null)}
         >
           <CalendarIcon aria-hidden className="size-icon" />
         </button>
-        <input
-          ref={picker}
-          type={pickerKind}
-          step={1}
-          tabIndex={-1}
-          aria-hidden
-          data-cell-picker={pickerKind}
-          className="pointer-events-none absolute inset-y-0 right-0 w-row opacity-0"
-          value={pickerValueOf(pickerKind, text)}
-          onChange={(event) => {
-            edits.change(pickedText(pickerKind, event.target.value, text));
-            field.current?.focus();
-          }}
-        />
+        {pickerAnchor === null ? null : (
+          <TemporalPicker
+            kind={pickerKind}
+            name={name}
+            text={text}
+            anchor={pickerAnchor}
+            onPick={(picked) => edits.change(picked)}
+            onClose={() => {
+              setPickerAnchor(null);
+              // Radix hands focus back a task later; a key typed in between would reach nothing.
+              if (!closing.current) field.current?.focus({ preventScroll: true });
+            }}
+            onOutside={(target) => {
+              if (!(target instanceof Node && box.current?.contains(target) === true)) close(true);
+            }}
+          />
+        )}
       </div>
     </div>
   );
+}
+
+function anchorOf(element: HTMLElement | null): PopoverAnchor | null {
+  if (element === null) return null;
+  const { left, top, right, bottom } = element.getBoundingClientRect();
+  return { left, top, right, bottom };
 }
 
 /** What a cell shows: its pending input over the database's value. */

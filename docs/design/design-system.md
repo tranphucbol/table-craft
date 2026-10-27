@@ -467,6 +467,16 @@ Selection (`bg-grid-selection`) wins over the edit colours. A pending `NULL` rea
 pending default `<default>`, both italic `text-grid-null`. The inline cell editor is an `<input>`
 filling the cell with the `outline-accent` inset.
 
+A temporal cell's calendar button opens the date and time picker in a `ui/Popover` below the
+editor, so it takes the popover's surface, border and motion. The month header is a `font-semibold`
+title between `‹` `›` icon buttons; the day grid is seven `size-row` columns under `text-ink-muted`
+weekday initials, days of the adjacent months `text-ink-muted`, a hovered day `bg-selection`, the
+chosen day `bg-accent text-accent-ink`, today a `border-accent` ring and the keyboard cursor the
+`outline-accent` focus ring. The time row is three two-digit fields in `font-grid` on `bg-canvas`
+with a `border-line` frame that turns `border-accent` on focus, under a `border-line` divider when
+the grid sits above it. The footer's Today or Now is a `text-accent` text button. No token is the
+picker's own.
+
 Above the grid sit the WHERE and ORDER BY bars: single-line CodeMirror fields on `bg-canvas` with a
 `border-line` frame that turns `border-danger` on a refused clause, the label in `text-ink-muted`,
 and the datasource name · plugin name on the right. The database's message sits under them in

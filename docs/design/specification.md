@@ -1468,8 +1468,11 @@ Typed cells (plan 043). A `boolean` cell edits in a true/false/NULL dropdown, an
 (`table.toggleBoolean`) flips the selected boolean cells; the input is `{ kind: "boolean" }`, which
 the plugin writes as its boolean literal. MySQL reports `BOOLEAN` as `tinyint`, so its cells stay
 numbers. A `date`, `time` or `timestamp`/`datetime` cell keeps the text field and adds a calendar
-button opening the native picker; the picked value is written in the cell's shape (its separator
-and zone kept). A binary cell takes no typed text: Load File into Cell stages the file in the
+button opening the app's own picker (plan 111): a month grid for a date, hour, minute and second
+fields for a time, both for a timestamp, and a Today or Now button. Every pick is written into the
+field at once in the cell's shape (its separator, fraction and zone kept; Now drops the fraction).
+A date closes on the day picked; the others close on Enter, Escape or a click outside, which commits
+the edit as leaving the field does. A binary cell takes no typed text: Load File into Cell stages the file in the
 engine (`result.loadBytes`) and the buffer holds `{ kind: "bytes", id, length, preview }`; Preview
 shows the literal clipped with its `/* 32 of N bytes */` comment and Submit writes every byte.
 
