@@ -104,7 +104,7 @@ const PROTOCOL_PURITY_RULE =
  * Code lines a source file may hold (decision 091). Past this an agent reads a file in slices and
  * re-reads it after every compression, which is where most of a plan session's tokens go.
  */
-export const MAX_LINES = 800;
+export const MAX_LINES = 1000;
 const MAX_LINES_RULE = ["error", { max: MAX_LINES, skipBlankLines: true, skipComments: true }];
 
 /**
