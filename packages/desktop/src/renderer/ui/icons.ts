@@ -47,6 +47,7 @@ import {
   ArrowsInLineVertical,
   Asterisk,
   CaretDown,
+  CaretLeft,
   CaretRight,
   CaretUp,
   Check,
@@ -142,6 +143,8 @@ export {
   Pulse as SessionsIcon,
   Trash as DeleteIcon,
   CalendarBlank as CalendarIcon,
+  CaretLeft as PreviousMonthIcon,
+  CaretRight as NextMonthIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */

@@ -22,12 +22,15 @@ export function Popover({
   label,
   testId,
   onClose,
+  onOutside,
   children,
 }: {
   readonly anchor: PopoverAnchor;
   readonly label: string;
   readonly testId?: string;
   readonly onClose: () => void;
+  /** A pointer down or focus outside, before `onClose`: what was pressed or focused. */
+  readonly onOutside?: (target: EventTarget | null) => void;
   readonly children: ReactNode;
 }) {
   // The anchor is no trigger Radix could hand focus back to, so focus returns where it was.
@@ -53,6 +56,7 @@ export function Popover({
           collisionPadding={SIDE_OFFSET_PX}
           aria-label={label}
           data-testid={testId}
+          onInteractOutside={(event) => onOutside?.(event.target)}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (returnTo instanceof HTMLElement) returnTo.focus();
