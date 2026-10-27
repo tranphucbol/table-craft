@@ -385,6 +385,11 @@ interface KeyApplyOptions {
   readonly type: KeyType;
 }
 
+interface KeyAttribute {
+  readonly name: string;
+  readonly value: string;
+}
+
 interface KeyBytes {
   readonly hex: string | null;
   readonly text: string;
@@ -407,6 +412,7 @@ interface KeyDatabase {
 }
 
 interface KeyDetails extends KeyInfo {
+  readonly attributes?: readonly KeyAttribute[];
   readonly encoding: string | null;
   readonly idleSeconds: number | null;
   readonly length: number | null;

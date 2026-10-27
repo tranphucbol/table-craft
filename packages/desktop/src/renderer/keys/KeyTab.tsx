@@ -4,11 +4,12 @@ import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js"
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
-import { formatPatternOf, KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
+import { formatPatternOf, hasAttributes, KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { TABLE_ACTION_IDS, TABLE_CELL_MENU } from "@table-craft/desktop/renderer/actions/tableActions.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { ResultGrid, type GridEdits } from "@table-craft/desktop/renderer/grid/ResultGrid.js";
 import { ValueEditor, ValuePanel } from "@table-craft/desktop/renderer/grid/ValuePanel.js";
+import { KeyDetailsPanel } from "@table-craft/desktop/renderer/keys/KeyDetailsPanel.js";
 import { KeyFilterBar } from "@table-craft/desktop/renderer/keys/KeyFilterBar.js";
 import { KeyHeader } from "@table-craft/desktop/renderer/keys/KeyHeader.js";
 import { StringValueEditor } from "@table-craft/desktop/renderer/keys/StringValueEditor.js";
@@ -25,6 +26,7 @@ import {
   useKeyTabs,
   type KeyTab as KeyTabState,
 } from "@table-craft/desktop/renderer/state/keyTabs.js";
+import { useKeyDetails } from "@table-craft/desktop/renderer/state/keyDetails.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { rowAt, shownHeld } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
@@ -43,7 +45,7 @@ const STATUS_TEXT = {
 
 const STALE_TEXT = "The connection closed; Reload reads the key again.";
 /** Plan 058 decision 16: where the table editor reads `Tx: Auto`. */
-const MULTI_TEXT = "Submit runs as one MULTI · not undoable";
+const SUBMIT_TEXT = "Submit applies changes atomically · not undoable";
 const RECREATE_PENDING_TEXT = "; Submit writes it back as it was read";
 const ERROR_CLASS = "shrink-0 border-b border-line bg-panel px-gap py-1 break-words text-danger";
 
@@ -208,7 +210,9 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
   const pattern = tab === undefined ? null : formatPatternOf(tab);
   const format = useLayout((state) => (pattern === null ? undefined : state.layout.valueFormats[pattern])) ?? "auto";
   const onExpired = useCallback(() => void useKeyTabs.getState().reload(tabId), [tabId]);
+  const detailsOpen = useKeyDetails((state) => state.open[tabId] === true);
   if (tab === undefined) return null;
+  const withDetails = hasAttributes(tab);
   const color = datasource?.color ?? null;
   const missing = keyMissing(tab);
   const readOnly = datasource?.readOnly === true;
@@ -237,10 +241,16 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
       <ActionButton actionId={TABLE_ACTION_IDS.preview} compact />
       <ActionButton actionId={TABLE_ACTION_IDS.submit} compact />
       <span data-testid="tx-mode" className="shrink-0 px-1 text-ink-muted">
-        {MULTI_TEXT}
+        {SUBMIT_TEXT}
       </span>
     </>
   );
+  const detailsTool = withDetails ? (
+    <span className="ml-auto flex shrink-0 items-center">
+      <ActionButton actionId={KEY_ACTION_IDS.details} compact pressed={detailsOpen} />
+    </span>
+  ) : null;
+  const details = withDetails && detailsOpen && tab.details !== null ? <KeyDetailsPanel details={tab.details} /> : null;
   return (
     <div
       data-testid="key-tab"
@@ -277,29 +287,40 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
         </div>
       )}
       {result !== null ? (
-        <ResultGrid
-          ownerId={tabId}
-          result={result}
-          host={useKeyTabs.getState}
-          edits={edits}
-          staleText={STALE_TEXT}
-          panel={(focus) => <KeyPanel tabId={tabId} tab={tab} editable={editable} focus={focus} />}
-          toolbar={
-            <>
-              <span className="mx-1 h-4 w-px shrink-0 bg-line" />
-              <ActionButton actionId={KEY_ACTION_IDS.reload} compact />
-              {edits === undefined ? null : (
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <ResultGrid
+              ownerId={tabId}
+              result={result}
+              host={useKeyTabs.getState}
+              edits={edits}
+              staleText={STALE_TEXT}
+              panel={(focus) => <KeyPanel tabId={tabId} tab={tab} editable={editable} focus={focus} />}
+              toolbar={
                 <>
                   <span className="mx-1 h-4 w-px shrink-0 bg-line" />
-                  <ActionButton actionId={TABLE_ACTION_IDS.addRow} compact />
-                  <ActionButton actionId={TABLE_ACTION_IDS.deleteRows} compact />
-                  <ActionButton actionId={TABLE_ACTION_IDS.revertSelected} compact />
-                  {submitTools}
+                  <ActionButton actionId={KEY_ACTION_IDS.reload} compact />
+                  {edits === undefined ? null : (
+                    <>
+                      <span className="mx-1 h-4 w-px shrink-0 bg-line" />
+                      <ActionButton actionId={TABLE_ACTION_IDS.addRow} compact />
+                      <ActionButton actionId={TABLE_ACTION_IDS.deleteRows} compact />
+                      <ActionButton actionId={TABLE_ACTION_IDS.revertSelected} compact />
+                      {submitTools}
+                    </>
+                  )}
+                  {withDetails ? (
+                    <>
+                      <span className="mx-1 h-4 w-px shrink-0 bg-line" />
+                      <ActionButton actionId={KEY_ACTION_IDS.details} compact pressed={detailsOpen} />
+                    </>
+                  ) : null}
                 </>
-              )}
-            </>
-          }
-        />
+              }
+            />
+          </div>
+          {details}
+        </div>
       ) : tab.value !== null ? (
         <>
           {tab.details?.type === "string" && !missing ? (
@@ -308,9 +329,15 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
               <span className="mx-1 h-4 w-px shrink-0 bg-line" />
               <ActionButton actionId={TABLE_ACTION_IDS.revertAll} compact />
               {submitTools}
+              {detailsTool}
             </div>
           ) : null}
-          <StringValueEditor tab={tab} tabId={tabId} format={format} editable={editable} />
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
+              <StringValueEditor tab={tab} tabId={tabId} format={format} editable={editable} />
+            </div>
+            {details}
+          </div>
         </>
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center gap-gap text-ink-muted">

@@ -43,6 +43,7 @@ jobs:
       postgres: ${{ steps.filter.outputs.postgres }}
       oracle: ${{ steps.filter.outputs.oracle }}
       mssql: ${{ steps.filter.outputs.mssql }}
+      etcd: ${{ steps.filter.outputs.etcd }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
@@ -62,6 +63,13 @@ jobs:
               - "plugins/mssql/**"
               - "packages/plugin-api/src/testing/**"
               - "test/db/schema/mssql*"
+            etcd:
+              - "plugins/etcd/**"
+              - "packages/plugin-api/src/testing/**"
+              - "test/db/schema/etcd*"
+              - "test/db/etcd/**"
+              - "test/db/etcd.test.ts"
+              - "test/support/etcdFixture.ts"
 
   # Decision 099: one job per opt-in server, run when its plugin, the contract suite or its seed
   # changes. PostgreSQL also runs on a tag, so a release is checked against it.
@@ -73,10 +81,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        database: [postgres, oracle, mssql]
+        database: [postgres, oracle, mssql, etcd]
     if: >-
       needs.changes.outputs.postgres == 'true' || needs.changes.outputs.oracle == 'true' ||
-      needs.changes.outputs.mssql == 'true' || startsWith(github.ref, 'refs/tags/')
+      needs.changes.outputs.mssql == 'true' || needs.changes.outputs.etcd == 'true' ||
+      startsWith(github.ref, 'refs/tags/')
     steps:
       - name: Skip unless this server's paths changed
         id: wanted

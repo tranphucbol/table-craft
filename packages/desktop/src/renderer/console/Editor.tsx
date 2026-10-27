@@ -35,6 +35,7 @@ import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import { etcdLanguage } from "@table-craft/desktop/renderer/console/highlighters/etcd.js";
 import { redisLanguage } from "@table-craft/desktop/renderer/console/highlighters/redis.js";
 import { connectedSignature } from "@table-craft/desktop/renderer/console/signatureHint.js";
 import { snippetSource } from "@table-craft/desktop/renderer/console/snippetCompletion.js";
@@ -117,7 +118,10 @@ const flashField = StateField.define<DecorationSet>({
 });
 
 /** Command languages the manifest's `highlight` may name instead of a SQL dialect (decision 112). */
-const COMMAND_HIGHLIGHTERS: Readonly<Record<string, Extension>> = { redis: redisLanguage };
+const COMMAND_HIGHLIGHTERS: Readonly<Record<string, Extension>> = {
+  redis: redisLanguage,
+  etcd: etcdLanguage,
+};
 
 export function dialectOf(highlight: string | null | undefined): SQLDialect {
   return DIALECTS[highlight ?? ""] ?? StandardSQL;

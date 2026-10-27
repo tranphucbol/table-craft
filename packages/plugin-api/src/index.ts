@@ -66,6 +66,7 @@ export {
   KEY_TYPES,
   type KeyApplied,
   type KeyApplyOptions,
+  type KeyAttribute,
   type KeyBytes,
   type KeyChange,
   type KeyContents,

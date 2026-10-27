@@ -82,6 +82,14 @@ export interface KeyDetails extends KeyInfo {
   readonly memoryBytes: number | null;
   readonly encoding: string | null;
   readonly idleSeconds: number | null;
+  /** Extra per-key facts a store reports, such as etcd's revisions and lease, the host lists as-is. */
+  readonly attributes?: readonly KeyAttribute[];
+}
+
+/** One extra fact about a key, by the store's own name for it. */
+export interface KeyAttribute {
+  readonly name: string;
+  readonly value: string;
 }
 
 /** Which part of a key `Keyspace.read` returns (decision 113). */

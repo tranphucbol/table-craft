@@ -32,6 +32,52 @@ export function keyInfoParts(details: KeyDetails): readonly string[] {
   ].filter((part): part is string => part !== null);
 }
 
+/** The attribute the header shortens to `v14`: how many times the key was written. */
+const VERSION_ATTRIBUTE = "version";
+const WHOLE_NUMBER = /^\d+$/;
+const ATTRIBUTE_WORD_BREAK = /[_\-\s]+/g;
+
+/** `create_revision` → `Create revision`: an attribute name as a label. */
+export function attributeLabel(name: string): string {
+  const words = name.replace(ATTRIBUTE_WORD_BREAK, " ").trim();
+  return words === "" ? name : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
+/** The key's size: bytes for a string, else its element count. */
+export function sizeText(details: KeyDetails): string | null {
+  if (details.type === null || details.length === null) return null;
+  return details.type === "string" ? formatBytes(details.length) : lengthText(details.type, details.length);
+}
+
+/**
+ * The one-line header's facts for a key that carries attributes: `v14 · 2.4 KiB`. Every other
+ * attribute waits in Details, so the header stays one row.
+ */
+export function attributeFacts(details: KeyDetails): readonly string[] {
+  if (details.type === null || details.attributes === undefined) return [];
+  const version = details.attributes.find((attribute) => attribute.name === VERSION_ATTRIBUTE)?.value;
+  return [version !== undefined && WHOLE_NUMBER.test(version) ? `v${version}` : null, sizeText(details)].filter(
+    (part): part is string => part !== null,
+  );
+}
+
+export interface DetailRow {
+  readonly label: string;
+  readonly value: string;
+}
+
+/** What the Details panel lists: the size, then every attribute in the plugin's order. */
+export function detailRows(details: KeyDetails): readonly DetailRow[] {
+  const size = sizeText(details);
+  return [
+    ...(size === null ? [] : [{ label: "Size", value: size }]),
+    ...(details.attributes ?? []).map((attribute) => ({
+      label: attributeLabel(attribute.name),
+      value: attribute.value,
+    })),
+  ];
+}
+
 /** The header's TTL: `TTL 14 m`, or `no TTL`. */
 export function ttlLabel(remainingMs: number | null): string {
   return remainingMs === null ? ttlText(null) : `TTL ${ttlText(remainingMs)}`;

@@ -19,6 +19,7 @@ const ROOT_OF: Readonly<Record<string, string>> = {
   redis: OPTIONAL_PLUGINS_ROOT,
   oracle: OPTIONAL_PLUGINS_ROOT,
   mssql: OPTIONAL_PLUGINS_ROOT,
+  etcd: OPTIONAL_PLUGINS_ROOT,
 };
 const PLUGIN_ENTRY_FILE = "index.js";
 /** Port 1 (tcpmux) is reserved and closed on any machine running these tests. */
@@ -73,7 +74,7 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
 
     expect(results.filter((result) => result.status === "unavailable")).toEqual([]);
     expect(results.map((result) => result.manifest?.id)).toEqual(
-      expect.arrayContaining(["postgres", "redis", "oracle", "mssql"]),
+      expect.arrayContaining(["postgres", "redis", "oracle", "mssql", "etcd"]),
     );
   });
 

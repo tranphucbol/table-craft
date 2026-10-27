@@ -1,0 +1,27 @@
+{
+  "name": "@table-craft/plugin-etcd",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Optional etcd datasource plugin for table-craft",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./language": "./src/language.ts",
+    "./tokens": "./src/tokens.ts",
+    "./complete": "./src/complete.ts",
+    "./scan": "./src/scan.ts",
+    "./txn": "./src/txn.ts",
+    "./ops": "./src/ops.ts",
+    "./writes": "./src/writes.ts",
+    "./server": "./src/server.ts",
+    "./keyBytes": "./src/keyBytes.ts",
+    "./docs": "./src/docs.ts",
+    "./client": "./src/client.ts",
+    "./results": "./src/results.ts"
+  },
+  "dependencies": {
+    "@table-craft/plugin-api": "workspace:*",
+    "etcd3": "^1.1.2"
+  }
+}

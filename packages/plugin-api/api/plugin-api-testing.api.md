@@ -80,12 +80,12 @@ interface KeyspaceFixture {
   readonly database: number;
   readonly edit: KeyEditFixture;
   readonly expiring: string;
-  readonly hash: KeyRowsFixture;
+  readonly hash?: KeyRowsFixture;
   readonly scan: { readonly match: string; readonly count: number; readonly batch: number; };
   readonly sources?: readonly KeySourceFixture[];
-  readonly stream: KeyRowsFixture & { readonly columns: readonly string[]; };
+  readonly stream?: KeyRowsFixture & { readonly columns: readonly string[]; };
   readonly typed: { readonly match: string; readonly type: KeyType; readonly keys: readonly string[]; };
-  readonly zset: KeyRowsFixture;
+  readonly zset?: KeyRowsFixture;
 }
 
 const LINE_ITEMS_TABLE = "Line Items";

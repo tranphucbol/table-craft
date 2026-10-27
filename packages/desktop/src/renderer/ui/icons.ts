@@ -209,6 +209,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   table: Table,
   ddl: FileCode,
   quickDoc: Info,
+  details: Info,
   explain: TreeView,
   explainAnalyze: Gauge,
   generate: Code,

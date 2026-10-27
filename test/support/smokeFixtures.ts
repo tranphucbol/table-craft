@@ -10,6 +10,8 @@ import type { SeededService } from "../db/stack.js";
 import {
   type DatabaseId,
   DATABASES_ENV,
+  ETCD35_CONFIG,
+  ETCD_CONFIG,
   MARIADB_CONFIG,
   MSSQL_CONFIG,
   MYSQL_CONFIG,
@@ -37,7 +39,7 @@ export interface Sentinel {
   readonly service: SeededService;
   /** What the seed creates, as the failure names it. */
   readonly object: string;
-  /** Returns a row when the object exists; for a Redis server, a command that answers 1. */
+  /** Returns a row when the object exists; for a Redis server, a command that answers 1; for etcd, a key. */
   readonly sql: string;
 }
 
@@ -50,6 +52,8 @@ const REDIS_SERVICES = [
   "redis-5",
   "redis-5-cluster",
 ] as const satisfies readonly SeededService[];
+
+const ETCD_SERVICES = ["etcd", "etcd-3-5"] as const satisfies readonly SeededService[];
 
 /**
  * One per seed file: its oldest object, which proves the seed ran, and its newest, which proves it
@@ -96,12 +100,13 @@ export const SENTINELS: readonly Sentinel[] = [
     object: "key seed:probe",
     sql: "EXISTS seed:probe",
   })),
+  ...ETCD_SERVICES.map((service) => ({ service, object: "key /seed/probe", sql: "/seed/probe" })),
 ];
 
 /**
  * The seeded services each database brings up, under the compose profile of the same name
  * (`test/db/compose.yml`), which also starts the unseeded `ssh` bastion for MySQL and PostgreSQL
- * and `mssql-seed`. TiDB has no seed: the suites make their own scratch databases on it.
+ * and `mssql-seed` and `etcd-seed`. TiDB has no seed: the suites make their own scratch databases on it.
  */
 const SERVICES_OF: Readonly<Record<DatabaseId, readonly SeededService[]>> = {
   mysql: ["mysql", "mysql-tls"],
@@ -111,6 +116,7 @@ const SERVICES_OF: Readonly<Record<DatabaseId, readonly SeededService[]>> = {
   oracle: ["oracle"],
   mssql: ["mssql"],
   redis: REDIS_SERVICES,
+  etcd: ETCD_SERVICES,
 };
 
 export function servicesOf(databases: readonly DatabaseId[]): SeededService[] {
@@ -297,7 +303,39 @@ async function redisAnswersOne(
   }
 }
 
-/** node-oracledb in thin mode, the Oracle plugin's driver. */
+interface EtcdTarget {
+  readonly host: string;
+  readonly port: number;
+  readonly user: string;
+  readonly password: string;
+}
+
+/**
+ * Whether `key` exists, over etcd's JSON gateway on the client port, so the check needs no driver:
+ * keys travel base64-encoded, and with auth on a token from `/v3/auth/authenticate` goes in the
+ * `Authorization` header.
+ */
+async function etcdHasKey(target: EtcdTarget, key: string): Promise<boolean> {
+  const base = `http://${target.host}:${String(target.port)}/v3`;
+  const post = async (path: string, body: unknown, token?: string) => {
+    const response = await fetch(`${base}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(token === undefined ? {} : { authorization: token }) },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(CONNECT_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`etcd ${path} answered ${String(response.status)}: ${await response.text()}`);
+    return (await response.json()) as Record<string, unknown>;
+  };
+  const token =
+    target.user === ""
+      ? undefined
+      : String((await post("/auth/authenticate", { name: target.user, password: target.password })).token);
+  const range = await post("/kv/range", { key: Buffer.from(key).toString("base64"), count_only: true }, token);
+  return Number(range.count ?? 0) > 0;
+}
+
+/** node-oracledb in thin mode, the driver plan 054's plugin will use. */
 async function oracleHasRow(sql: string): Promise<boolean> {
   const { default: oracledb } = await import("oracledb");
   const { host, port, service, user, password } = ORACLE_CONFIG;
@@ -371,6 +409,10 @@ export const serverQuery: SentinelQuery = (service, sql) => {
       return redisAnswersOne(REDIS5_CONFIG, sql);
     case "redis-5-cluster":
       return redisAnswersOne(REDIS5_CLUSTER_CONFIG, sql, { cluster: true });
+    case "etcd":
+      return etcdHasKey(ETCD_CONFIG, sql);
+    case "etcd-3-5":
+      return etcdHasKey(ETCD35_CONFIG, sql);
   }
 };
 
