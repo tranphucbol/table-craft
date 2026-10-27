@@ -295,7 +295,9 @@ export const SNIPPET_ACTIONS: readonly AnyAction[] = [
       const console = context.console;
       if (console === null || context.activeTab?.kind !== "console" || console.selection.from === console.selection.to)
         return;
-      const focus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      const focus =
+        editorOf(context.activeTab.id)?.contentDOM ??
+        (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       const dialog = useSnippetsDialog.getState();
       const { from, to } = console.selection;
       const selectedText = console.sql.slice(Math.min(from, to), Math.max(from, to));

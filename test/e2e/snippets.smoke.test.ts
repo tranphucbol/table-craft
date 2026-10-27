@@ -295,9 +295,17 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
       await importing.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect.poll(() => importing.count()).toBe(0);
       expect(await left.getAttribute("data-focused")).toBe("true");
-      expect(await page.evaluate<string | undefined>("document.getSelection()?.toString()")).toBe(leftText);
+      await expect
+        .poll(() =>
+          page.evaluate<boolean>(
+            "document.activeElement === document.querySelector('[data-group-id=left] .cm-content')",
+          ),
+        )
+        .toBe(true);
+      await expect.poll(() => page.evaluate<string | undefined>("document.getSelection()?.toString()")).toBe(leftText);
       expect(await rightEditor.innerText()).toBe(rightText);
       await rightEditor.focus();
+      await expect.poll(() => page.evaluate<string | undefined>("document.getSelection()?.toString()")).toBe(rightText);
       await left
         .locator('[data-testid="sql-editor"] .cm-line')
         .first()
@@ -312,6 +320,14 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
       expect(await right.getByRole("button", { name: "Open Snippets", exact: true }).count()).toBe(0);
       expect(await leftEditor.innerText()).toBe(leftText);
       expect(await rightEditor.innerText()).toBe(rightText);
+      await rightEditor.press("ControlOrMeta+z");
+      await expect.poll(() => rightEditor.innerText()).toBe(leftText);
+      await rightEditor.press("ControlOrMeta+Shift+z");
+      await expect.poll(() => rightEditor.innerText()).toBe(rightText);
+      await leftEditor.press("ControlOrMeta+z");
+      await expect.poll(() => leftEditor.innerText()).toBe("");
+      await leftEditor.press("ControlOrMeta+Shift+z");
+      await expect.poll(() => leftEditor.innerText()).toBe(leftText);
       await captureWindow(page, "snippet-split-console-notice");
       await notice.getByRole("button", { name: "Open Snippets", exact: true }).click();
       await dialog(page).waitFor();
