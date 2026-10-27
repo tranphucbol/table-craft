@@ -422,7 +422,7 @@ submit. **Preview Pending Changes** (`⇧⌘P`) shows the SQL, and **Submit** (`
 transaction: if any statement fails or touches more than one row, everything rolls back and your
 edits stay. `⌘B` on a foreign key cell opens the referenced row. A boolean cell edits in a
 true/false/NULL list and `Space` flips it; a date or timestamp cell has a calendar picker beside its
-text.
+text, in the app's theme, that you can drive with the mouse or the arrow keys.
 
 A console result is editable too when it reads one table and shows its primary key, as
 `SELECT * FROM orders WHERE …` does: the same chords edit it, and **Submit** runs on the console's
