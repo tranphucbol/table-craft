@@ -33,11 +33,16 @@ function textFromEnv(name: string, fallback: string): string {
 }
 
 /** Every server the suites can run against; SQLite is in-process and always runs. */
-export const DATABASE_IDS = ["mysql", "tidb", "postgres", "oracle", "mssql", "redis"] as const;
+export const DATABASE_IDS = ["mysql", "tidb", "mariadb", "postgres", "oracle", "mssql", "redis"] as const;
 export type DatabaseId = (typeof DATABASE_IDS)[number];
 export const DATABASES_ENV = "TABLE_CRAFT_DATABASES";
-/** Decision 099: the normal flow tests MySQL and the remote TiDB; every other server is opt-in. */
-export const DEFAULT_DATABASES: readonly DatabaseId[] = ["mysql", "tidb"];
+/**
+ * Decision 099: the normal flow tests every server the built-in MySQL plugin reaches, MySQL 8.4,
+ * the remote TiDB and MariaDB; every other server is opt-in.
+ */
+export const DEFAULT_DATABASES: readonly DatabaseId[] = ["mysql", "tidb", "mariadb"];
+/** What every smoke run needs: the app's scenarios drive MySQL 8.4 and TiDB only. */
+export const SMOKE_DATABASES: readonly DatabaseId[] = ["mysql", "tidb"];
 const EVERY_DATABASE = "all";
 
 function isDatabaseId(id: string): id is DatabaseId {
@@ -82,6 +87,15 @@ export const MYSQL_CONFIG = {
   password: CREDENTIAL,
 } as const;
 
+const DEFAULT_MARIADB_PORT = 53310;
+
+/** The `mariadb` service, seeded from the same `schema/mysql.sql` as `mysql`. */
+export const MARIADB_CONFIG = {
+  ...MYSQL_CONFIG,
+  host: hostFromEnv("TABLE_CRAFT_MARIADB_HOST"),
+  port: portFromEnv("TABLE_CRAFT_MARIADB_PORT", DEFAULT_MARIADB_PORT),
+} as const;
+
 const DEFAULT_ORACLE_PORT = 51521;
 const DEFAULT_MSSQL_PORT = 51433;
 
@@ -122,6 +136,7 @@ export function tidbConfigFromEnv() {
 
 /** MySQL's `root`, which holds `PROCESS` and may kill any thread; `table_craft` holds neither. */
 export const MYSQL_ROOT_CONFIG = { ...MYSQL_CONFIG, user: "root", password: CREDENTIAL } as const;
+export const MARIADB_ROOT_CONFIG = { ...MARIADB_CONFIG, user: "root", password: CREDENTIAL } as const;
 
 /** A TiDB 4 server: no Global Kill, and `KILL QUERY` only warns (decision 058). */
 export const TIDB_CONFIG = tidbConfigFromEnv();

@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import type { PlanNode, Row } from "@table-craft/plugin-api";
 import { explainStatement, planFormat, readJson, readTidbTable, readTree } from "@table-craft/plugin-mysql/explain";
+import { explainDialect } from "@table-craft/plugin-mysql/server";
 import { readPlan } from "@table-craft/plugin-postgres/explain";
 import { readPlanRows } from "@table-craft/plugin-sqlite/explain";
 import { describe, expect, it } from "vitest";
 
-/** Captured from the `test:db` containers (postgres:17, mysql:8.4, TiDB v4.0.14) and node:sqlite on the fixture schema. */
+/** Captured from the `test:db` containers (postgres:17, mysql:8.4, mariadb:10.11, TiDB v4.0.14) and node:sqlite on the fixture schema. */
 function captured(name: string): string {
   return readFileSync(new URL(`../support/plans/${name}`, import.meta.url), "utf8").trimEnd();
 }
@@ -89,12 +90,34 @@ describe("plan readers", () => {
     });
   });
 
+  it("givenMariadbAnalysedJson_whenRead_thenTablesWithActualRowsAndLoops", () => {
+    const plan = readJson(captured("mariadb-analyze.json"), "ANALYZE FORMAT=JSON …", true);
+    expect(plan.analyzed).toBe(true);
+    const [first, joined] = plan.roots[0]?.children ?? [];
+    expect(first).toMatchObject({ target: "c", estimatedRows: 2, actualRows: 2, loops: 1 });
+    expect(joined).toMatchObject({ target: "o", estimatedRows: 3, actualRows: 3, loops: 1 });
+    expect(joined?.properties).toContainEqual({ name: "join_type", value: "BNL" });
+  });
+
   it("givenTidb_whenPlanFormatChosen_thenPlainExplainWithoutFormat", () => {
-    expect(planFormat("SELECT", true)).toBe("table");
-    expect(planFormat("UPDATE", true)).toBe("table");
-    expect(planFormat("UPDATE", false)).toBe("json");
-    expect(explainStatement("SELECT 1", false, "table")).toBe("EXPLAIN SELECT 1");
-    expect(explainStatement("SELECT 1", true, "table")).toBe("EXPLAIN ANALYZE SELECT 1");
+    const tidb = explainDialect("8.0.11-TiDB-v7.5.1");
+    expect(planFormat("SELECT", tidb, false)).toBe("table");
+    expect(planFormat("UPDATE", tidb, false)).toBe("table");
+    expect(planFormat("UPDATE", explainDialect("8.4.3"), false)).toBe("json");
+    expect(explainStatement("SELECT 1", false, "table", tidb)).toBe("EXPLAIN SELECT 1");
+    expect(explainStatement("SELECT 1", true, "table", tidb)).toBe("EXPLAIN ANALYZE SELECT 1");
+  });
+
+  it("givenServerWithoutTree_whenPlanFormatChosen_thenJson", () => {
+    const mariadb = explainDialect("10.11.8-MariaDB-log");
+    const mysql57 = explainDialect("5.7.44");
+    expect(planFormat("SELECT", mariadb, false)).toBe("json");
+    expect(planFormat("SELECT", mysql57, false)).toBe("json");
+    expect(planFormat("SELECT", explainDialect("8.0.16"), false)).toBe("tree");
+    expect(explainStatement("SELECT 1", true, "json", mariadb)).toBe("ANALYZE FORMAT=JSON SELECT 1");
+    expect(() => explainStatement("SELECT 1", true, "json", mysql57)).toThrow(/8\.0\.18/);
+    expect(explainDialect("8.0.17").analyze).toBeNull();
+    expect(explainDialect(null)).toEqual({ tidb: false, tree: true, analyze: "explainAnalyze" });
   });
 
   it("givenTidbTable_whenRead_thenTreeFromPrefixesAndAccessObjectAsTarget", () => {

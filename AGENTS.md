@@ -16,9 +16,10 @@ Run from the repository root.
 - `bun run test` - Vitest, unit tests plus the plugin contract suite against SQLite
 - `bun run test:db` - the contract suite against MySQL (port 53306) in `docker compose`, seeded
   from `test/db/schema/`, plus the TiDB 4 suite (`test/db/tidb.test.ts`, port 54000, root with no
-  password; an amd64 image, emulated on Apple silicon, and heavy). That is the normal flow
-  (decision 099): `TABLE_CRAFT_DATABASES` (comma list of `mysql`, `tidb`, `postgres`, `oracle`,
-  `mssql`, `redis`, or `all`; unset, `mysql,tidb`) picks the servers `test/db/up.ts` starts, by compose
+  password; an amd64 image, emulated on Apple silicon, and heavy), and the MySQL plugin's contract
+  against MariaDB 10.11 (`test/db/mariadb.test.ts`, port 53310, same seed). That is the normal flow
+  (decision 099): `TABLE_CRAFT_DATABASES` (comma list of `mysql`, `tidb`, `mariadb`, `postgres`,
+  `oracle`, `mssql`, `redis`, or `all`; unset, `mysql,tidb,mariadb`) picks the servers `test/db/up.ts` starts, by compose
   profile, and the suites that run. `test:db:postgres` (port 55432), `test:db:oracle` (Oracle 23ai
   Free, port 51521, about 2 GB), `test:db:mssql` (SQL Server 2022, port 51433, amd64-emulated),
   `test:db:redis` and `test:db:all` set it; run the one for a plugin you touch. `redis` selects seven
@@ -48,7 +49,7 @@ Run from the repository root.
   CA, server and client certificates in `test/db/tls/` (`generate.sh` remakes them).
   A second checkout (a parallel worktree) sets `COMPOSE_PROJECT_NAME`, `TABLE_CRAFT_PG_PORT`,
   `TABLE_CRAFT_MYSQL_PORT`, `TABLE_CRAFT_TIDB_PORT`, `TABLE_CRAFT_SSH_PORT`,
-  `TABLE_CRAFT_PG_TLS_PORT`, `TABLE_CRAFT_MYSQL_TLS_PORT`, `TABLE_CRAFT_ORACLE_PORT`,
+  `TABLE_CRAFT_PG_TLS_PORT`, `TABLE_CRAFT_MYSQL_TLS_PORT`, `TABLE_CRAFT_MARIADB_PORT`, `TABLE_CRAFT_ORACLE_PORT`,
   `TABLE_CRAFT_MSSQL_PORT`, `TABLE_CRAFT_REDIS_PORT`, `TABLE_CRAFT_REDIS_TLS_PORT`,
   `TABLE_CRAFT_REDIS6_PORT`, `TABLE_CRAFT_REDIS5_PORT`, `TABLE_CRAFT_REDIS_CLUSTER_PORTS`,
   `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` and `TABLE_CRAFT_REDIS5_CLUSTER_PORTS` (a range such as

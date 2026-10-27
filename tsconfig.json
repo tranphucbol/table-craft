@@ -24,6 +24,7 @@
       "@table-craft/plugin-mysql/server": ["plugins/mysql/src/server.ts"],
       "@table-craft/plugin-mysql/functions": ["plugins/mysql/src/functions/index.ts"],
       "@table-craft/plugin-mysql/warnings": ["plugins/mysql/src/warnings.ts"],
+      "@table-craft/plugin-mysql/introspect": ["plugins/mysql/src/introspect.ts"],
       "@table-craft/plugin-postgres/notices": ["plugins/postgres/src/notices.ts"],
       "@table-craft/plugin-postgres/sessions": ["plugins/postgres/src/sessions.ts"],
       "@table-craft/plugin-mysql/sessions": ["plugins/mysql/src/sessions.ts"],

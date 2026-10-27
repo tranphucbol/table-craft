@@ -10,7 +10,7 @@ import type { SeededService } from "../db/stack.js";
 import {
   type DatabaseId,
   DATABASES_ENV,
-  DEFAULT_DATABASES,
+  MARIADB_CONFIG,
   MSSQL_CONFIG,
   MYSQL_CONFIG,
   MYSQL_TLS_CONFIG,
@@ -25,6 +25,7 @@ import {
   REDIS_CONFIG,
   REDIS_TLS_CONFIG,
   selectedDatabases,
+  SMOKE_DATABASES,
   TLS_FILES,
 } from "./databases.js";
 
@@ -54,6 +55,9 @@ const REDIS_SERVICES = [
  * One per seed file: its oldest object, which proves the seed ran, and its newest, which proves it
  * is the current seed. A seed edit that adds an object moves the newest sentinel to it.
  */
+/** `schema/mysql.sql` seeds MySQL 8.4 and MariaDB alike. */
+const MYSQL_SEEDED = ["mysql", "mariadb"] as const satisfies readonly SeededService[];
+
 export const SENTINELS: readonly Sentinel[] = [
   { service: "postgres", object: "table type_probe", sql: "SELECT 1 FROM pg_tables WHERE tablename = 'type_probe'" },
   {
@@ -61,21 +65,23 @@ export const SENTINELS: readonly Sentinel[] = [
     object: "procedure settle_order",
     sql: "SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = 'settle_order'",
   },
-  {
-    service: "mysql",
-    object: "table type_probe",
-    sql: "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'table_craft' AND TABLE_NAME = 'type_probe'",
-  },
-  {
-    service: "mysql",
-    object: "procedure settle_order",
-    sql: "SELECT 1 FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = 'table_craft' AND ROUTINE_NAME = 'settle_order'",
-  },
-  {
-    service: "mysql",
-    object: "table archive.old_orders",
-    sql: "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'archive' AND TABLE_NAME = 'old_orders'",
-  },
+  ...MYSQL_SEEDED.flatMap((service) => [
+    {
+      service,
+      object: "table type_probe",
+      sql: "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'table_craft' AND TABLE_NAME = 'type_probe'",
+    },
+    {
+      service,
+      object: "procedure settle_order",
+      sql: "SELECT 1 FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = 'table_craft' AND ROUTINE_NAME = 'settle_order'",
+    },
+    {
+      service,
+      object: "table archive.old_orders",
+      sql: "SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'archive' AND TABLE_NAME = 'old_orders'",
+    },
+  ]),
   { service: "postgres-tls", object: "table tls_probe", sql: "SELECT 1 FROM pg_tables WHERE tablename = 'tls_probe'" },
   {
     service: "mysql-tls",
@@ -99,6 +105,7 @@ export const SENTINELS: readonly Sentinel[] = [
 const SERVICES_OF: Readonly<Record<DatabaseId, readonly SeededService[]>> = {
   mysql: ["mysql", "mysql-tls"],
   tidb: [],
+  mariadb: ["mariadb"],
   postgres: ["postgres", "postgres-tls"],
   oracle: ["oracle"],
   mssql: ["mssql"],
@@ -339,6 +346,8 @@ export const serverQuery: SentinelQuery = (service, sql) => {
       return postgresHasRow(POSTGRES_CONFIG, sql);
     case "mysql":
       return mysqlHasRow(MYSQL_CONFIG, sql);
+    case "mariadb":
+      return mysqlHasRow(MARIADB_CONFIG, sql);
     case "postgres-tls":
       return postgresHasRow({ ...POSTGRES_TLS_CONFIG, ssl: tls }, sql);
     case "mysql-tls":
@@ -369,9 +378,9 @@ const CHECKED_ENV = "TABLE_CRAFT_SMOKE_FIXTURES_CHECKED";
 
 /** The smoke files take MySQL and TiDB as given and skip only the opt-in servers' scenarios. */
 export function smokeSelectionProblem(databases: readonly DatabaseId[]): string | null {
-  const missing = DEFAULT_DATABASES.filter((id) => !databases.includes(id));
+  const missing = SMOKE_DATABASES.filter((id) => !databases.includes(id));
   if (missing.length === 0) return null;
-  return `${DATABASES_ENV} leaves out ${missing.join(", ")}, which every smoke run needs; add to ${DEFAULT_DATABASES.join(",")} instead`;
+  return `${DATABASES_ENV} leaves out ${missing.join(", ")}, which every smoke run needs; add to ${SMOKE_DATABASES.join(",")} instead`;
 }
 
 export async function setup(): Promise<void> {

@@ -68,9 +68,10 @@ export default defineConfig({
         find: /^@table-craft\/plugin-(postgres|mysql)\/bulk$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/$1/src/bulk.ts"),
       },
-      // Which kill statement a MySQL-protocol server takes (decision 058), and how its warnings read (decision 066).
+      // Which kill statement a MySQL-protocol server takes (decision 058), how its warnings read
+      // (decision 066), and the catalog it reads from servers without a given column or table.
       {
-        find: /^@table-craft\/plugin-mysql\/(server|warnings)$/,
+        find: /^@table-craft\/plugin-mysql\/(server|warnings|introspect)$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/$1.ts"),
       },
       // The MySQL and TiDB function list, which the list tests filter by server version (plan 052).

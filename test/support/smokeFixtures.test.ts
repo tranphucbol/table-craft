@@ -61,6 +61,7 @@ describe("smoke fixture sentinels (smokeFixtures.ts)", () => {
       new Set([
         "postgres",
         "mysql",
+        "mariadb",
         "postgres-tls",
         "mysql-tls",
         "oracle",

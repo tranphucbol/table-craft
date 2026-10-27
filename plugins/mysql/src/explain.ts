@@ -1,5 +1,6 @@
 import { PluginError, type ExplainedPlan, type PlanNode, type PlanProperty } from "@table-craft/plugin-api";
 import { planPropertyValue } from "@table-craft/plugin-api/sql";
+import type { ExplainDialect } from "./server.js";
 
 /** What MySQL 8.4's EXPLAIN accepts; `DESCRIBE` and `CREATE TABLE … AS` are syntax errors there. */
 export const EXPLAIN_VERBS = ["SELECT", "TABLE", "VALUES", "INSERT", "REPLACE", "UPDATE", "DELETE"];
@@ -13,16 +14,25 @@ const JSON_VERBS = new Set(["UPDATE", "DELETE"]);
 
 /**
  * `table` is TiDB's own: it has neither `FORMAT=TREE` nor MySQL's JSON, and prints its plan as
- * rows of a table whose first column draws the tree.
+ * rows of a table whose first column draws the tree. MariaDB and MySQL before 8.0.16 have no
+ * `FORMAT=TREE`, so every plan of theirs is JSON.
  */
 export type PlanFormat = "tree" | "json" | "table";
 
-export function planFormat(verb: string, tidb: boolean): PlanFormat {
-  if (tidb) return "table";
-  return JSON_VERBS.has(verb) ? "json" : "tree";
+export function planFormat(verb: string, dialect: ExplainDialect, analyze: boolean): PlanFormat {
+  if (dialect.tidb) return "table";
+  if (analyze && dialect.analyze === "analyzeJson") return "json";
+  return JSON_VERBS.has(verb) || !dialect.tree ? "json" : "tree";
 }
 
-export function explainStatement(sql: string, analyze: boolean, format: PlanFormat): string {
+export function explainStatement(sql: string, analyze: boolean, format: PlanFormat, dialect: ExplainDialect): string {
+  if (analyze && dialect.analyze === null) {
+    throw new PluginError(
+      "explainUnsupported",
+      "This server has no EXPLAIN ANALYZE, which needs MySQL 8.0.18 or later; use Explain Plan instead.",
+    );
+  }
+  if (analyze && dialect.analyze === "analyzeJson") return `ANALYZE FORMAT=JSON ${sql}`;
   if (format === "json") return `EXPLAIN FORMAT=JSON ${sql}`;
   if (format === "table") return analyze ? `EXPLAIN ANALYZE ${sql}` : `EXPLAIN ${sql}`;
   return analyze ? `EXPLAIN ANALYZE FORMAT=TREE ${sql}` : `EXPLAIN FORMAT=TREE ${sql}`;
@@ -184,6 +194,14 @@ function isJson(value: unknown): value is Json {
 const TABLE = "table";
 const NESTED_LOOP = "nested_loop";
 const COST_INFO = "cost_info";
+/** MariaDB wraps a table joined through the join buffer in this, beside the buffer's own keys. */
+const BLOCK_NL_JOIN = "block-nl-join";
+/** MySQL estimates a table's rows as `rows_examined_per_scan`, MariaDB as `rows`. */
+const ESTIMATED_ROWS = ["rows_examined_per_scan", "rows"];
+/** What MariaDB's `ANALYZE FORMAT=JSON` measured: rows per loop, loops, and the time spent. */
+const ACTUAL_ROWS = "r_rows";
+const ACTUAL_LOOPS = "r_loops";
+const ACTUAL_TIMES = ["r_total_time_ms", "r_table_time_ms"];
 /** The keys a table step has a `PlanNode` field for; the rest become properties. */
 const TABLE_MAPPED = new Set([
   "table_name",
@@ -191,10 +209,14 @@ const TABLE_MAPPED = new Set([
   "delete",
   "access_type",
   "key",
-  "rows_examined_per_scan",
+  ...ESTIMATED_ROWS,
+  ACTUAL_ROWS,
+  ACTUAL_LOOPS,
+  ...ACTUAL_TIMES,
   COST_INFO,
 ]);
-const BLOCK_MAPPED = new Set([TABLE, NESTED_LOOP, COST_INFO, "select_id"]);
+const BLOCK_MAPPED = new Set([TABLE, NESTED_LOOP, COST_INFO, "select_id", ACTUAL_LOOPS, ...ACTUAL_TIMES]);
+const JOIN_MAPPED = new Set([TABLE]);
 
 function properties(json: Json, skip: ReadonlySet<string>): PlanProperty[] {
   return Object.entries(json).flatMap(([name, value]) => {
@@ -208,7 +230,15 @@ function costOf(json: Json, key: string): number | null {
   return isJson(info) ? number(planPropertyValue(info[key]) ?? undefined) : null;
 }
 
-function tableNode(table: Json): PlanNode {
+function firstNumber(json: Json, keys: readonly string[]): number | null {
+  for (const key of keys) {
+    const value = number(planPropertyValue(json[key]) ?? undefined);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function tableNode(table: Json, extra: readonly PlanProperty[] = []): PlanNode {
   const access = planPropertyValue(table.access_type);
   const key = planPropertyValue(table.key);
   const operation = table.update === true ? "Update" : table.delete === true ? "Delete" : "Read";
@@ -219,21 +249,29 @@ function tableNode(table: Json): PlanNode {
     operation,
     target: planPropertyValue(table.table_name),
     detail: detail === "" ? null : detail,
-    estimatedRows: number(planPropertyValue(table.rows_examined_per_scan) ?? undefined),
+    estimatedRows: firstNumber(table, ESTIMATED_ROWS),
     estimatedCost: costOf(table, "prefix_cost"),
-    actualRows: null,
-    actualTimeMs: null,
-    loops: null,
-    properties: properties(table, TABLE_MAPPED),
+    actualRows: firstNumber(table, [ACTUAL_ROWS]),
+    actualTimeMs: firstNumber(table, ACTUAL_TIMES),
+    loops: firstNumber(table, [ACTUAL_LOOPS]),
+    properties: [...properties(table, TABLE_MAPPED), ...extra],
     children: [],
   };
+}
+
+function loopEntry(entry: unknown): PlanNode[] {
+  if (!isJson(entry)) return [];
+  if (isJson(entry[TABLE])) return [tableNode(entry[TABLE])];
+  const join = entry[BLOCK_NL_JOIN];
+  if (isJson(join) && isJson(join[TABLE])) return [tableNode(join[TABLE], properties(join, JOIN_MAPPED))];
+  return [];
 }
 
 function blockNodes(block: Json): PlanNode[] {
   if (isJson(block[TABLE])) return [tableNode(block[TABLE])];
   const loop = block[NESTED_LOOP];
   if (Array.isArray(loop)) {
-    const children = loop.flatMap((entry) => (isJson(entry) && isJson(entry[TABLE]) ? [tableNode(entry[TABLE])] : []));
+    const children = loop.flatMap(loopEntry);
     return [
       {
         operation: "Nested loop",
@@ -252,8 +290,11 @@ function blockNodes(block: Json): PlanNode[] {
   return [];
 }
 
-/** Reads `FORMAT=JSON` (version 1): the query block's tables, which is all an UPDATE or DELETE has. */
-export function readJson(raw: string, statement: string): ExplainedPlan {
+/**
+ * Reads `FORMAT=JSON` (version 1): the query block's tables, which is all an UPDATE or DELETE has.
+ * MariaDB's JSON has the same shape, and its `ANALYZE` adds what each table measured.
+ */
+export function readJson(raw: string, statement: string, analyzed = false): ExplainedPlan {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
@@ -266,7 +307,7 @@ export function readJson(raw: string, statement: string): ExplainedPlan {
   const cost = costOf(block, "query_cost");
   return {
     statement,
-    analyzed: false,
+    analyzed,
     roots: blockNodes(block),
     summary: [
       ...(cost === null ? [] : [{ name: "Query cost", value: String(cost) }]),

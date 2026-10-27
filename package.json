@@ -32,6 +32,7 @@
     "test:smoke:db:headless:redis": "TABLE_CRAFT_DATABASES=mysql,tidb,redis bun test/e2e/docker/headless.ts --databases",
     "test:smoke:db:headless:all": "TABLE_CRAFT_DATABASES=all bun test/e2e/docker/headless.ts --databases",
     "test:db": "bun test/db/up.ts && vitest run --config vitest.db.config.ts",
+    "test:db:mariadb": "TABLE_CRAFT_DATABASES=mariadb bun run test:db",
     "test:db:postgres": "TABLE_CRAFT_DATABASES=postgres bun run test:db",
     "test:db:oracle": "TABLE_CRAFT_DATABASES=oracle bun run test:db",
     "test:db:mssql": "TABLE_CRAFT_DATABASES=mssql bun run test:db",

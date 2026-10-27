@@ -1,96 +1,11 @@
 import mysql from "@table-craft/plugin-mysql";
 import { isPluginError, omittedMessages, SERVER_MESSAGE_LIMIT, type Session } from "@table-craft/plugin-api";
-import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { describe, expect, it } from "vitest";
-import { databaseEnabled, MYSQL_CONFIG, MYSQL_ROOT_CONFIG, withWrongPassword } from "../support/databases.js";
-import { MYSQL_MANIFEST } from "../support/manifests.js";
-import { TYPE_PROBE_COPY_AS, TYPE_PROBE_EXPECTED, TYPE_PROBE_WRITE } from "../support/typeProbe.js";
+import { databaseEnabled, MYSQL_CONFIG, MYSQL_ROOT_CONFIG } from "../support/databases.js";
+import { runMysqlFamilyContract } from "./mysqlFamily.js";
 
 describe.runIf(databaseEnabled("mysql"))("mysql server", () => {
-  runPluginContract(mysql, {
-    manifest: MYSQL_MANIFEST,
-    config: MYSQL_CONFIG,
-    wrongPasswordConfig: withWrongPassword(MYSQL_CONFIG),
-    statements: {
-      write: TYPE_PROBE_WRITE,
-      sleep: (seconds) => `SELECT SLEEP(${String(seconds)})`,
-      message: { sql: "SELECT CAST('1x' AS SIGNED) AS n", level: "warning", code: "1292" },
-      syntaxError: { sql: "SELECT id FROM customers WHER id = 1", offset: "SELECT id FROM customers WHER ".length },
-    },
-    typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_AS },
-    scripts: [
-      {
-        text: "DELIMITER //\nCREATE PROCEDURE p() BEGIN SELECT 1; END//\nDELIMITER ;\nCALL p();",
-        statements: ["CREATE PROCEDURE p() BEGIN SELECT 1; END", "CALL p()"],
-      },
-      { text: "SELECT 'it\\'s;' AS s; # a; note\nSELECT 2", statements: ["SELECT 'it\\'s;' AS s", "SELECT 2"] },
-    ],
-    catalog: {
-      path: ["table_craft"],
-      quoted: { name: "odd `name`", qualified: "`table_craft`.`odd ``name```" },
-      lineItems: "`Line Items`",
-      ordersCheck: "orders_total_nonnegative",
-      customersComment: "People who place orders",
-    },
-    namespaceSwitch: { statement: "USE archive", path: ["archive"], missing: "USE no_such_database" },
-    sessions: { monitorConfig: MYSQL_ROOT_CONFIG, limited: { config: MYSQL_CONFIG, note: /GRANT PROCESS/ } },
-    routines: {
-      expected: [
-        {
-          name: "calc_fee",
-          kind: "function",
-          signature: "amount decimal(12,2), rate decimal(6,4)",
-          parameters: [
-            { name: "amount", type: "decimal(12,2)", mode: "in", hasDefault: false },
-            { name: "rate", type: "decimal(6,4)", mode: "in", hasDefault: false },
-          ],
-          returns: "decimal(12,2)",
-        },
-        {
-          name: "settle_order",
-          kind: "procedure",
-          signature: "order_id int, OUT total decimal(12,2), INOUT note varchar(64)",
-          parameters: [
-            { name: "order_id", type: "int", mode: "in", hasDefault: false },
-            { name: "total", type: "decimal(12,2)", mode: "out", hasDefault: false },
-            { name: "note", type: "varchar(64)", mode: "inout", hasDefault: false },
-          ],
-          returns: null,
-        },
-      ],
-      function: {
-        name: "calc_fee",
-        kind: "function",
-        signature: "amount decimal(12,2), rate decimal(6,4)",
-        args: [
-          { kind: "value", value: "100.00" },
-          { kind: "value", value: "0.0200" },
-        ],
-        rows: [["2.00"]],
-      },
-      nullArgument: {
-        name: "calc_fee",
-        kind: "function",
-        signature: "amount decimal(12,2), rate decimal(6,4)",
-        args: [
-          { kind: "value", value: null },
-          { kind: "value", value: "0.0200" },
-        ],
-        rows: [[null]],
-      },
-      procedureOut: {
-        name: "settle_order",
-        kind: "procedure",
-        signature: "order_id int, OUT total decimal(12,2), INOUT note varchar(64)",
-        args: [
-          { kind: "value", value: "3" },
-          { kind: "value", value: null },
-          { kind: "value", value: "paid" },
-        ],
-        rows: [["120.50", "paid settled"]],
-      },
-    },
-  });
+  runMysqlFamilyContract(MYSQL_CONFIG, MYSQL_ROOT_CONFIG);
 
   /** More rows than `SERVER_MESSAGE_LIMIT`, each truncating `'<n>x'` to an integer with a warning. */
   const MANY_WARNINGS_SQL = `WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${String(

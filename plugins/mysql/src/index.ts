@@ -74,7 +74,7 @@ import {
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { mysqlRoutineCall } from "./routines.js";
-import { isTidb, killStatementFor, serverIdentity, tidbGlobalKill } from "./server.js";
+import { explainDialect, killStatementFor, serverIdentity, tidbGlobalKill } from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
@@ -271,7 +271,14 @@ const BINARY_TYPE_NAMES: ReadonlyMap<string, string> = new Map([
   ["text", "blob"],
 ]);
 
+/**
+ * MariaDB sends JSON as LONGTEXT and names the format only in its extended metadata; mysql2 would
+ * parse such a cell, losing the server's spelling and any integer past 2^53.
+ */
+const MARIADB_JSON_FORMAT = "json";
+
 function typeName(field: mysql.FieldPacket): string | null {
+  if (field.extendedFormat === MARIADB_JSON_FORMAT) return "json";
   const name = field.columnType === undefined ? undefined : TYPE_NAMES.get(field.columnType);
   if (name === undefined) return null;
   return field.characterSet === BINARY_CHARSET ? (BINARY_TYPE_NAMES.get(name) ?? name) : name;
@@ -292,6 +299,10 @@ function fullBytesCast(field: mysql.TypeCastField, next: mysql.TypeCastNext): Wi
 }
 
 function castCell(field: mysql.TypeCastField, next: mysql.TypeCastNext, options: ExecuteOptions): WireValue {
+  if (field.extendedFormat === MARIADB_JSON_FORMAT) {
+    const text = field.string("utf8");
+    return text === null ? null : { kind: "json", text };
+  }
   switch (field.type) {
     case "JSON": {
       const text = field.string("utf8");
@@ -463,7 +474,7 @@ function readPlan(
   statement: string,
   analyzed: boolean,
 ): ExplainedPlan {
-  if (format === "json") return readJson(planText(rows), statement);
+  if (format === "json") return readJson(planText(rows), statement, analyzed);
   if (format === "tree") return readTree(planText(rows), statement, analyzed);
   const cells = rows.map((row) => row.map((cell) => planText([[cell]])));
   return readTidbTable(
@@ -748,8 +759,9 @@ class MysqlSession implements Session {
   async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
     const verdict = explainable(sql, options);
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
-    const format = planFormat(explainedVerb(sql, DIALECT), isTidb(this.serverVersion));
-    const statement = explainStatement(sql, options.analyze, format);
+    const dialect = explainDialect(this.serverVersion);
+    const format = planFormat(explainedVerb(sql, DIALECT), dialect, options.analyze);
+    const statement = explainStatement(sql, options.analyze, format, dialect);
     const rows: Row[] = [];
     const result = await this.execute(statement);
     for await (const row of result.rows) rows.push(row);
