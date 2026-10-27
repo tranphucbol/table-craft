@@ -134,9 +134,9 @@ export function modalOpen(): boolean {
   );
 }
 
-export function currentContext(): ActionContext {
+export function currentContext(tabId?: string): ActionContext {
   const strip = useTabs.getState();
-  const active = activeTab(strip);
+  const active = tabId === undefined ? activeTab(strip) : (strip.tabs.find((tab) => tab.id === tabId) ?? null);
   const { consoles } = useConsoles.getState();
   const datasources = useDatasources.getState();
   const console = active?.kind === "console" ? (consoles[active.id] ?? null) : null;
@@ -154,7 +154,7 @@ export function currentContext(): ActionContext {
     serverTab?.datasourceId;
   const focus = focusedRegion();
   const selected = selectedDatasourceId(datasources.selection);
-  const inTree = focus === "database" || (focus === "other" && lastRegion === "database");
+  const inTree = tabId === undefined && (focus === "database" || (focus === "other" && lastRegion === "database"));
   const targetId = inTree ? selected : (tabDatasourceId ?? selected);
   const target = datasourceById(datasources, targetId);
   return {

@@ -1,5 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { flushSync } from "react-dom";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import type { OpenTableArgs } from "@table-craft/desktop/renderer/actions/tableCommands.js";
@@ -21,6 +22,7 @@ import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/st
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { OVERLAY_MOTION, SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 
 const PROVIDERS: readonly SearchProvider[] = [
   actionsProvider(registry),
@@ -159,6 +161,7 @@ function Body({ mode, onRun }: { mode: PaletteMode; onRun: (item: SearchItem) =>
 export function Palette() {
   const mode = usePalette((state) => state.mode);
   const ran = useRef(false);
+  const opener = useRef<HTMLElement | null>(null);
 
   function run(item: SearchItem): void {
     if (!item.enabled) return;
@@ -169,26 +172,41 @@ export function Palette() {
     item.run();
   }
 
+  function returnFocus(): void {
+    const target = opener.current;
+    opener.current = null;
+    if (target?.isConnected === true) target.focus();
+    else if (document.activeElement === document.body) focusRegion("editor");
+  }
+
   return (
     <Dialog.Root
       open={mode !== null}
       onOpenChange={(open) => {
-        if (!open) usePalette.getState().hide();
+        if (open) return;
+        // Radix returns focus a task after unmount; a key typed right after Escape must not land on the body.
+        flushSync(() => usePalette.getState().hide());
+        returnFocus();
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-canvas/50" />
+        <Dialog.Overlay className={cn("fixed inset-0 z-40 bg-canvas/50", OVERLAY_MOTION)} />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed top-24 left-1/2 z-50 w-palette max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl"
+          className={cn(
+            "fixed top-24 left-1/2 z-50 w-palette max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl",
+            SURFACE_MOTION,
+          )}
           onOpenAutoFocus={() => {
             ran.current = false;
+            opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
           }}
           onCloseAutoFocus={(event) => {
-            // An action that ran decides where focus goes, e.g. a new console's editor.
-            if (!ran.current) return;
+            // Radix would focus the dialog's trigger, and the palette has none.
             event.preventDefault();
-            if (document.activeElement === document.body) focusRegion("editor");
+            // An action that ran decides where focus goes, e.g. a new console's editor.
+            if (ran.current) opener.current = null;
+            returnFocus();
           }}
         >
           <Dialog.Title className="sr-only">{mode === null ? "" : MODE_TITLE[mode]}</Dialog.Title>

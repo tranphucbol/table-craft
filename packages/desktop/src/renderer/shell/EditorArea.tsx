@@ -1,29 +1,37 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState, type WheelEvent } from "react";
+import { Group, Panel } from "react-resizable-panels";
 import { ACTION_IDS, type TabArgs } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
-import { invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
+import { ActionTabContext, invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { Console } from "@table-craft/desktop/renderer/console/Console.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
 import { KeyTab } from "@table-craft/desktop/renderer/keys/KeyTab.js";
 import { ServerTab } from "@table-craft/desktop/renderer/server/ServerTab.js";
 import { sessionsTabLabel, tabLabel } from "@table-craft/desktop/renderer/model/format.js";
+import { deferTabDrag } from "@table-craft/desktop/renderer/model/tabDrag.js";
 import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { SessionsView } from "@table-craft/desktop/renderer/sessions/SessionsView.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import {
-  activeTab,
+  EDITOR_GROUPS,
+  groupOf,
+  groupStrip,
   otherTabIds,
   rightTabIds,
   unpinnedTabIds,
   useTabs,
   type Tab,
   type TabKind,
+  type EditorGroupId,
 } from "@table-craft/desktop/renderer/state/tabs.js";
+import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { TableEditor } from "@table-craft/desktop/renderer/table/TableEditor.js";
 import {
   ACTION_ICONS,
@@ -37,8 +45,12 @@ import {
   TableIcon,
 } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_TAB } from "@table-craft/desktop/renderer/ui/tint.js";
+import { AUTOFOCUS_ATTRIBUTE, focusActivatedEditor } from "@table-craft/desktop/renderer/shell/focus.js";
 
 const PinIcon = ACTION_ICONS.pin;
+const TAB_DRAG_TYPE = "application/x-tablecraft-editor-tab";
+const MIN_GROUP_SIZE = "25";
+const PANEL_STYLE = { overflow: "hidden" } as const;
 
 /** What the tab menu needs to know about the tab it opened on. */
 interface TabFacts {
@@ -74,6 +86,7 @@ const TAB_MENU: readonly (readonly TabMenuEntry[])[] = [
   [{ actionId: ACTION_IDS.togglePinTab, label: (facts) => (facts.pinned ? UNPIN_LABEL : undefined) }],
   [{ actionId: ACTION_IDS.reopenClosedTab }],
   [{ actionId: ACTION_IDS.duplicateTab, shows: (facts) => facts.console }],
+  [{ actionId: ACTION_IDS.splitLeft }, { actionId: ACTION_IDS.splitRight }, { actionId: ACTION_IDS.unsplit }],
   [{ actionId: ACTION_IDS.revealTab, shows: (facts) => facts.path }],
   [{ actionId: FILE_ACTION_IDS.rename, shows: (facts) => facts.console }],
 ];
@@ -120,8 +133,28 @@ function TabIcon({ kind }: { readonly kind: TabKind }) {
   return <Icon aria-hidden data-tab-kind={kind} className="size-icon" />;
 }
 
-function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolean }) {
+/** With the bar hidden, a mouse wheel's vertical turn is the only way it can reach the far tabs. */
+function scrollTabsSideways(event: WheelEvent<HTMLDivElement>) {
+  if (event.deltaX !== 0 || event.deltaY === 0) return;
+  event.currentTarget.scrollLeft += event.deltaY;
+}
+
+function TabButton({
+  tab,
+  active,
+  onDrag,
+}: {
+  readonly tab: Tab;
+  readonly active: boolean;
+  readonly onDrag: (id: string | null) => void;
+}) {
   const activate = useTabs((state) => state.activate);
+  const tabElement = useRef<HTMLDivElement>(null);
+  const cancelDragFrame = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelDragFrame.current?.(), []);
+  useEffect(() => {
+    if (active) tabElement.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active]);
   const args: TabArgs = { tabId: tab.id };
   const datasource = useConsoleDatasource(tab.id);
   const label = (tab.kind === "sessions" || tab.kind === "server" ? sessionsTabLabel : tabLabel)(
@@ -135,9 +168,9 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
     return session !== undefined && isDirty(session);
   });
   const isConsole = useConsoles((state) => tab.kind === "console" && state.consoles[tab.id] !== undefined);
-  const others = useTabs((state) => otherTabIds(state, tab.id).length > 0);
-  const right = useTabs((state) => rightTabIds(state, tab.id).length > 0);
-  const unpinned = useTabs((state) => unpinnedTabIds(state).length > 0);
+  const others = useTabs((state) => otherTabIds(groupStrip(state, groupOf(tab)), tab.id).length > 0);
+  const right = useTabs((state) => rightTabIds(groupStrip(state, groupOf(tab)), tab.id).length > 0);
+  const unpinned = useTabs((state) => unpinnedTabIds(groupStrip(state, groupOf(tab))).length > 0);
   const pinned = tab.pinned === true;
   const facts: TabFacts = {
     console: isConsole,
@@ -154,6 +187,19 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
         <div
+          ref={tabElement}
+          draggable
+          onDragStart={(event) => {
+            event.dataTransfer.setData(TAB_DRAG_TYPE, tab.id);
+            event.dataTransfer.effectAllowed = "move";
+            cancelDragFrame.current?.();
+            cancelDragFrame.current = deferTabDrag(tab.id, onDrag);
+          }}
+          onDragEnd={() => {
+            cancelDragFrame.current?.();
+            cancelDragFrame.current = null;
+            onDrag(null);
+          }}
           className={cn(
             "group flex h-tab shrink-0 items-center gap-cell border-r border-b-2 border-r-line px-gap",
             active ? "border-b-accent text-ink" : "border-b-transparent text-ink-muted hover:bg-raised",
@@ -168,7 +214,14 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
             data-path={path}
             title={path}
             className="flex items-center gap-cell outline-none"
-            onClick={() => activate(tab.id)}
+            onClick={(event) => {
+              activate(tab.id);
+              if (active)
+                event.currentTarget
+                  .closest('[data-testid="editor-group"]')
+                  ?.querySelector<HTMLElement>(`[${AUTOFOCUS_ATTRIBUTE}]`)
+                  ?.focus();
+            }}
           >
             <TabIcon kind={tab.kind} />
             {label}
@@ -202,7 +255,12 @@ function TabButton({ tab, active }: { readonly tab: Tab; readonly active: boolea
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Content className="z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg">
+        <ContextMenu.Content
+          className={cn(
+            "z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg",
+            MENU_MOTION,
+          )}
+        >
           {groups.map((group, index) => (
             <Fragment key={group[0]?.actionId}>
               {index === 0 ? null : <ContextMenu.Separator className="my-1 h-px bg-line" />}
@@ -236,37 +294,149 @@ function EmptyEditor() {
   );
 }
 
-/** The tab strip and the active tab's content. */
+function EditorGroup({
+  groupId,
+  onDrag,
+}: {
+  readonly groupId: EditorGroupId;
+  readonly onDrag: (id: string | null) => void;
+}) {
+  const state = useTabs();
+  const { tabs, activeId } = groupStrip(state, groupId);
+  const active = tabs.find((tab) => tab.id === activeId) ?? null;
+  const groupRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (groupRef.current !== null) focusActivatedEditor(groupRef.current, state.activeId, activeId);
+  }, [state.activeId, activeId]);
+  return (
+    <div
+      ref={groupRef}
+      data-testid="editor-group"
+      data-group-id={groupId}
+      data-focused={groupOf(state.tabs.find((tab) => tab.id === state.activeId)) === groupId}
+      onFocusCapture={() => state.focusGroup(groupId)}
+      onPointerDownCapture={(event) => {
+        state.focusGroup(groupId);
+        if (
+          !event.currentTarget.contains(document.activeElement) &&
+          event.target instanceof Element &&
+          event.target.closest('[role="toolbar"]') !== null
+        ) {
+          event.currentTarget.querySelector<HTMLElement>(`[${AUTOFOCUS_ATTRIBUTE}]`)?.focus();
+        }
+      }}
+      className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
+    >
+      {tabs.length === 0 ? null : (
+        <div
+          role="tablist"
+          aria-label="Editor tabs"
+          className="flex shrink-0 overflow-x-auto border-b border-line bg-panel scrollbar-none"
+          onWheel={scrollTabsSideways}
+        >
+          {tabs.map((tab) => (
+            <TabButton key={tab.id} tab={tab} active={tab.id === activeId} onDrag={onDrag} />
+          ))}
+        </div>
+      )}
+      <ActionTabContext value={active?.id}>
+        <EditorContent active={active} />
+      </ActionTabContext>
+    </div>
+  );
+}
+
+function EditorContent({ active }: { readonly active: Tab | null }) {
+  return active === null ? (
+    <EmptyEditor />
+  ) : active.kind === "table" ? (
+    <TableEditor key={active.id} tableId={active.id} />
+  ) : active.kind === "ddl" ? (
+    <DdlView key={active.id} ddlId={active.id} />
+  ) : active.kind === "sessions" ? (
+    <SessionsView key={active.id} sessionsId={active.id} />
+  ) : active.kind === "key" ? (
+    <KeyTab key={active.id} tabId={active.id} />
+  ) : active.kind === "server" ? (
+    <ServerTab key={active.id} tabId={active.id} />
+  ) : (
+    <Console key={active.id} consoleId={active.id} />
+  );
+}
+
 export function EditorArea() {
   const tabs = useTabs((state) => state.tabs);
-  const active = useTabs(activeTab);
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [preview, setPreview] = useState<EditorGroupId | null>(null);
+  const size = useLayout((state) => state.layout.editorGroupWidth);
+  const groups = EDITOR_GROUPS.filter((id) => tabs.some((tab) => groupOf(tab) === id));
+  const split = groups.length > 1;
+  const onDrag = (id: string | null) => {
+    setDragged(id);
+    setPreview(null);
+  };
   return (
     <section
       aria-label="Editor"
       {...{ [REGION_ATTRIBUTE]: "editor" }}
-      className="flex h-full min-h-0 flex-col bg-canvas"
+      className="relative flex h-full min-h-0 min-w-0 flex-col bg-canvas"
     >
-      {tabs.length === 0 ? null : (
-        <div role="tablist" aria-label="Editor tabs" className="flex shrink-0 overflow-x-auto bg-panel">
-          {tabs.map((tab) => (
-            <TabButton key={tab.id} tab={tab} active={tab.id === active?.id} />
+      {split ? (
+        <Group
+          orientation="horizontal"
+          className="min-h-0 flex-1"
+          onLayoutChanged={(layout, meta) => {
+            if (meta.isUserInteraction && layout["editor-group-left"] !== undefined)
+              useLayout.getState().resizeEditorGroups(layout["editor-group-left"]);
+          }}
+        >
+          <Panel id="editor-group-left" defaultSize={String(size)} minSize={MIN_GROUP_SIZE} style={PANEL_STYLE}>
+            <EditorGroup groupId="left" onDrag={onDrag} />
+          </Panel>
+          <Handle axis="vertical" label="Editor groups" />
+          <Panel id="editor-group-right" minSize={MIN_GROUP_SIZE} style={PANEL_STYLE}>
+            <EditorGroup groupId="right" onDrag={onDrag} />
+          </Panel>
+        </Group>
+      ) : (
+        <EditorGroup groupId={groups[0] ?? "left"} onDrag={onDrag} />
+      )}
+      {dragged === null || tabs.length < 2 ? null : (
+        <div className="absolute inset-0 z-20 flex">
+          {EDITOR_GROUPS.map((side) => (
+            <div
+              key={side}
+              data-testid={`editor-drop-${side}`}
+              aria-label={`Split ${side}`}
+              className={cn(
+                "flex w-1/2 items-center justify-center border-2 border-dashed border-accent bg-selection/50",
+                preview === side && "bg-selection/90",
+              )}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setPreview(side);
+              }}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setPreview(side);
+              }}
+              onDragLeave={() => setPreview(null)}
+              onDrop={(event) => {
+                event.preventDefault();
+                const id = event.dataTransfer.getData(TAB_DRAG_TYPE);
+                if (id === dragged)
+                  void invoke(side === "left" ? ACTION_IDS.splitLeft : ACTION_IDS.splitRight, { tabId: id });
+                onDrag(null);
+              }}
+            >
+              <span className="pointer-events-none rounded border border-accent bg-panel px-gap py-cell text-ink">
+                {split ? `Move ${side}` : `Split ${side}`}
+              </span>
+            </div>
           ))}
         </div>
-      )}
-      {active === null ? (
-        <EmptyEditor />
-      ) : active.kind === "table" ? (
-        <TableEditor key={active.id} tableId={active.id} />
-      ) : active.kind === "ddl" ? (
-        <DdlView key={active.id} ddlId={active.id} />
-      ) : active.kind === "sessions" ? (
-        <SessionsView key={active.id} sessionsId={active.id} />
-      ) : active.kind === "key" ? (
-        <KeyTab key={active.id} tabId={active.id} />
-      ) : active.kind === "server" ? (
-        <ServerTab key={active.id} tabId={active.id} />
-      ) : (
-        <Console key={active.id} consoleId={active.id} />
       )}
     </section>
   );

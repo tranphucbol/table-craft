@@ -10,12 +10,19 @@ import {
   type RowEdit,
 } from "@table-craft/core";
 import {
+  BYTES_PREVIEW_LENGTH,
   isPluginError,
   type BoundStatement,
+  type BytesValue,
   type Capability,
   type Column,
   type ColumnMeta,
+  type ExecuteResult,
+  type KeyType,
+  type Row,
   type SavepointStatements,
+  type TypeClass,
+  type WireValue,
   type SqlLanguage,
   type Transactions,
 } from "@table-craft/plugin-api";
@@ -45,6 +52,39 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 
 const NO_KEYSPACE = "This datasource's plugin does not declare the keyValue capability.";
+const REPLY_COLUMN = "value";
+const SCORE_COLUMN = "score";
+const LIST_INDEX_COLUMN = "#";
+const ROW_EDITED_TYPES: ReadonlySet<KeyType> = new Set(["string", "hash", "list", "set", "zset"]);
+
+/** Why a command result is read-only, phrased to follow "Read-only: " (decision 119). */
+const KEY_READ_ONLY_REASONS = {
+  noKeyspace: "the plugin cannot edit keys",
+  partial: "the result is not one whole key; read all of it (as HGETALL does), or Open Key",
+  scores: "the sorted set was read without its scores; read them too (WITHSCORES), or Open Key",
+  type: (type: KeyType) => `a ${type} key edits only in its key tab; Open Key`,
+} as const;
+
+function replyClass(value: WireValue): TypeClass | undefined {
+  if (typeof value === "number") return Number.isInteger(value) ? "integer" : "float";
+  if (typeof value === "boolean") return "boolean";
+  if (value !== null && typeof value === "object" && value.kind === "bigint") return "integer";
+  return undefined;
+}
+
+async function* oneRow(row: Row): AsyncIterable<Row> {
+  yield row;
+  return Promise.resolve();
+}
+
+/** A command's reply held as one `value` row, so a result tab can show it (decision 119). */
+function heldOf(result: ExecuteResult): ExecuteResult {
+  const { reply } = result;
+  if (reply === undefined) return result;
+  const typeClass = replyClass(reply.value);
+  const column: Column = { name: REPLY_COLUMN, type: null, ...(typeClass === undefined ? {} : { typeClass }) };
+  return { ...result, columns: [column], rows: oneRow([reply.value]) };
+}
 
 /** A result column the catalog does not know, described from what the driver reported. */
 function reportedColumn(column: Column, index: number): ColumnMeta {
@@ -82,6 +122,8 @@ export function statementRunners(live: LiveContext) {
     statements,
     ran,
     edited,
+    staged,
+    keySources,
     afterClose,
     mustSettle,
     busyRefused,
@@ -121,8 +163,12 @@ export function statementRunners(live: LiveContext) {
         timeoutSeconds,
         (session) =>
           session.execute(bound.sql, bound.params, executeOptions).then(async (result) => {
-            const put = await results.put(result, paging);
-            return result.reply === undefined ? put : { ...put, reply: result.reply };
+            const put = await results.put(heldOf(result), paging);
+            return {
+              ...put,
+              ...(result.reply === undefined ? {} : { reply: result.reply }),
+              ...(result.source === undefined ? {} : { source: result.source }),
+            };
           }),
         (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
         (late) => void results.release(late.handle),
@@ -135,6 +181,7 @@ export function statementRunners(live: LiveContext) {
       handles.set(summary.handle, sessionId);
       if (!open.moved) statements.set(summary.handle, sql);
       ran.set(summary.handle, sql);
+      if (summary.source !== undefined) keySources.set(summary.handle, summary.source);
       if (summary.cursorOpen) cursors.set(sessionId, summary.handle);
       // An open cursor keeps the session busy, and no statement that switches returns rows.
       // A statement that switches namespaces, or ends a transaction that may have, is followed by a read.
@@ -273,6 +320,7 @@ export function statementRunners(live: LiveContext) {
       edited.delete(handle);
       return { editable: { readOnly: reason }, columns: fallback, readOnlyColumns: reported.map(() => true) };
     };
+    if (commandLanguage() !== null) return keyEditable(handle, open, fallback, readOnly);
     const language = sqlLanguage();
     const sql = ran.get(handle);
     if (sql === undefined || language.selectSource === undefined || tables.has(handle)) {
@@ -301,6 +349,32 @@ export function statementRunners(live: LiveContext) {
     };
   }
 
+  /**
+   * A command result is editable when it holds one whole key of a type a key tab edits as rows, or
+   * a string; its edits then go through `keyspace.apply` like the key tab's (decision 119).
+   */
+  function keyEditable(
+    handle: string,
+    open: OpenSession,
+    columns: readonly ColumnMeta[],
+    readOnly: (reason: string) => ResultEditable,
+  ): ResultEditable {
+    const source = keySources.get(handle);
+    if (!open.capabilities.includes("keyValue")) return readOnly(KEY_READ_ONLY_REASONS.noKeyspace);
+    if (source === undefined || !source.whole) return readOnly(KEY_READ_ONLY_REASONS.partial);
+    if (options.datasource.readOnly) return readOnly(CONSOLE_READ_ONLY_REASONS.datasource);
+    if (!ROW_EDITED_TYPES.has(source.type)) return readOnly(KEY_READ_ONLY_REASONS.type(source.type));
+    const names = columns.map((column) => column.name);
+    if (source.type === "zset" && !names.includes(SCORE_COLUMN)) return readOnly(KEY_READ_ONLY_REASONS.scores);
+    edited.delete(handle);
+    return {
+      editable: { identity: [] },
+      columns,
+      readOnlyColumns: names.map((name) => source.type === "list" && name === LIST_INDEX_COLUMN),
+      key: source,
+    };
+  }
+
   function tableFor(handle: string): TableResult {
     const owned = ownedHandle(handle);
     const table = tables.get(owned) ?? edited.get(owned);
@@ -314,7 +388,17 @@ export function statementRunners(live: LiveContext) {
     return table;
   }
 
-  function editStatements(handle: string, edits: readonly RowEdit[]): string[] {
+  /** A staged file's bytes for `handle`'s edits: every byte to submit, the first ones to preview. */
+  function stagedFor(handle: string, full: boolean): (id: string) => BytesValue | undefined {
+    return (id) => {
+      const entry = staged.get(id);
+      if (entry?.handle !== handle) return undefined;
+      return full ? entry.bytes : { ...entry.bytes, preview: entry.bytes.preview.slice(0, 2 * BYTES_PREVIEW_LENGTH) };
+    };
+  }
+
+  /** The statements that apply `edits`; a preview writes loaded files clipped, a submit in full. */
+  function editStatements(handle: string, edits: readonly RowEdit[], full = false): string[] {
     const table = tableFor(handle);
     if (table.readOnly !== null) {
       throw new EngineFailure({
@@ -324,7 +408,13 @@ export function statementRunners(live: LiveContext) {
       });
     }
     const held = results.heldRows(handle);
-    return generateEdits({ ...table, rows: (row) => held[row], edits, language: sqlLanguage() });
+    return generateEdits({
+      ...table,
+      rows: (row) => held[row],
+      edits,
+      language: sqlLanguage(),
+      staged: stagedFor(ownedHandle(handle), full),
+    });
   }
 
   async function submit(request: RequestOf<"edits.submit">): Promise<ResultOf<"edits.submit">> {
@@ -336,7 +426,7 @@ export function statementRunners(live: LiveContext) {
         hint: BUG_HINT,
       });
     }
-    const statements = editStatements(request.handle, request.edits);
+    const statements = editStatements(request.handle, request.edits, true);
     if (edited.has(request.handle)) return submitConsole(request.sessionId, open, statements);
     if (mustSettle(request.sessionId, open)) await afterClose(request.sessionId, open);
     return { ...(await submitEdits(open.session, statements)), transactionOpen: false };

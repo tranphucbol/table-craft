@@ -1,10 +1,10 @@
-# 119: Snippets are scoped text templates
+# 123: Snippets are scoped text templates
 
 Status: Accepted
 
 ## Decision
 
-Generalize decision 118's SQL-only templates to desktop-owned `TextSnippet { id, name, prefix,
+Generalize decision 122's SQL-only templates to desktop-owned `TextSnippet { id, name, prefix,
 body, scope }`. Eligibility requires the existing `sql` or `commands` capability. Scope selects
 all eligible text consoles, all SQL consoles, or one plugin by manifest identity. A legacy SQL
 scope retaining a highlight restriction exists only to preserve migrated SQL snippets.
@@ -67,7 +67,7 @@ matrix and the real Redis linked-field scenario. No upstream issue or submission
 
 ## Consequences
 
-- This supersedes decision 118's SQL-only model and selector, not its profile ownership, native
+- This supersedes decision 122's SQL-only model and selector, not its profile ownership, native
   expansion, linked fields or plain-text/no-secrets guarantees. New profiles still start empty.
 - New plugin-specific templates use plugin identity; legacy SQL highlight scopes remain readable
   and restricted rather than being rewritten as an arbitrary plugin or a broader scope.

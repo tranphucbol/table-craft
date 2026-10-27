@@ -1,7 +1,7 @@
 /**
  * RESP2 replies in their RESP3 shape (decision 116): a server before 6.0 speaks RESP2 only, which
  * sends maps as flat arrays and scores as bulk strings. Reshaping them here keeps one rendering, so
- * `HGETALL` shows `key` and `value` columns on 5.0 as on 7.4.
+ * `HGETALL` shows `field` and `value` columns on 5.0 as on 7.4.
  */
 
 type Argument = string | Buffer;

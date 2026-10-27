@@ -13,6 +13,14 @@ export interface KeyBytes {
 
 export type KeyName = KeyBytes;
 
+/** Mirrors `KeySource` in plugin-api: the one key a command's reply read (decision 119). */
+export interface KeySource {
+  readonly database: number;
+  readonly key: KeyName;
+  readonly type: KeyType;
+  readonly whole: boolean;
+}
+
 /** Mirrors `KeyDatabase` in plugin-api. */
 export interface KeyDatabase {
   readonly index: number;

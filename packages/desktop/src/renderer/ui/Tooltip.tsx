@@ -1,5 +1,7 @@
 import * as Primitive from "@radix-ui/react-tooltip";
 import type { ReactElement } from "react";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { TOOLTIP_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 
 const OPEN_DELAY_MS = 500;
 const SIDE_OFFSET_PX = 4;
@@ -24,7 +26,10 @@ export function Tooltip({ label, shortcut, side = "right", children }: TooltipPr
         <Primitive.Content
           side={side}
           sideOffset={SIDE_OFFSET_PX}
-          className="z-50 rounded border border-line bg-raised px-cell py-1 text-ui text-ink shadow-lg"
+          className={cn(
+            "z-50 rounded border border-line bg-raised px-cell py-1 text-ui text-ink shadow-lg",
+            TOOLTIP_MOTION,
+          )}
         >
           {label}
           {shortcut === undefined ? null : <span className="ml-gap text-ink-muted">{shortcut}</span>}

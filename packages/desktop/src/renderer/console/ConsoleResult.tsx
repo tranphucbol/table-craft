@@ -1,12 +1,15 @@
 import { useEffect } from "react";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { registry } from "@table-craft/desktop/renderer/actions/index.js";
+import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { TABLE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/tableActions.js";
+import { CommandValuePanel } from "@table-craft/desktop/renderer/console/CommandValuePanel.js";
 import { ResultGrid, type GridEdits } from "@table-craft/desktop/renderer/grid/ResultGrid.js";
 import { ValueEditor, ValuePanel } from "@table-craft/desktop/renderer/grid/ValuePanel.js";
 import { visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { bufferRowAt, pendingCount, pendingText } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { canEditCell, editCellText } from "@table-craft/desktop/renderer/model/resultEdits.js";
+import { formatPattern } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
   consoleReadOnlyReason,
   editsOf,
@@ -15,6 +18,9 @@ import {
   type ConsoleResultEdits,
 } from "@table-craft/desktop/renderer/state/consoleEdits.js";
 import { useConsoles, type ConsoleSession } from "@table-craft/desktop/renderer/state/consoles.js";
+import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
+import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { rowAt, shownHeld, type ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -107,9 +113,18 @@ function EditToolbar({ edits, editable }: { readonly edits: ConsoleResultEdits; 
   );
 }
 
+/** Whether the console's datasource holds keys, so its results read values as the key tab does (decision 119). */
+function useKeyValue(datasourceId: string): boolean {
+  return useDatasources((state) => {
+    const datasource = state.datasources.find((candidate) => candidate.id === datasourceId);
+    return datasource !== undefined && capabilitiesOf(state.plugins, datasource.pluginId).includes("keyValue");
+  });
+}
+
 /**
  * A console's row result: the grid, editable like the table editor's when the engine says the
- * statement reads one table by its key (plan 026), else read-only with the reason in its toolbar.
+ * statement reads one table by its key (plan 026), or one whole key (decision 119), else read-only
+ * with the reason in its toolbar.
  */
 export function ConsoleResult({
   consoleId,
@@ -130,6 +145,11 @@ export function ConsoleResult({
   const edits = editsOf(session, result);
   const editable = isConsoleEditable(session, result);
   const store = useConsoles.getState;
+  const keyValue = useKeyValue(session.datasourceId);
+  const delimiter = useKeys((state) => state.keyspaces[session.datasourceId]?.delimiter ?? "");
+  const pattern = result.source === undefined ? null : formatPattern(result.source.key.text, delimiter);
+  const remembered = useLayout((state) => (pattern === null ? undefined : state.layout.valueFormats[pattern]));
+  const format = remembered ?? result.valueFormat ?? "auto";
   const gridEdits: GridEdits | undefined =
     edits === null || !("identity" in (edits.editable ?? {}))
       ? undefined
@@ -165,13 +185,43 @@ export function ConsoleResult({
         result={result}
         host={useConsoles.getState}
         edits={gridEdits}
-        toolbar={edits === null ? undefined : <EditToolbar edits={edits} editable={editable} />}
+        toolbar={
+          edits === null && result.source === undefined ? undefined : (
+            <>
+              {result.source === undefined ? null : (
+                <>
+                  <span className="mx-1 h-4 w-px shrink-0 bg-line" />
+                  <ActionButton actionId={KEY_ACTION_IDS.openFromResult} compact />
+                </>
+              )}
+              {edits === null ? null : <EditToolbar edits={edits} editable={editable} />}
+            </>
+          )
+        }
         panel={
-          gridEdits === undefined || edits === null
-            ? undefined
-            : (focus) => (
-                <EditablePanel consoleId={consoleId} result={result} edits={edits} editable={editable} focus={focus} />
+          keyValue
+            ? (focus) => (
+                <CommandValuePanel
+                  key={focus === null ? "none" : `${String(focus.row)}:${String(focus.column)}`}
+                  consoleId={consoleId}
+                  result={result}
+                  edits={gridEdits === undefined ? null : edits}
+                  editable={editable}
+                  format={format}
+                  focus={focus}
+                />
               )
+            : gridEdits === undefined || edits === null
+              ? undefined
+              : (focus) => (
+                  <EditablePanel
+                    consoleId={consoleId}
+                    result={result}
+                    edits={edits}
+                    editable={editable}
+                    focus={focus}
+                  />
+                )
         }
       />
     </>

@@ -9,6 +9,8 @@ import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.
 import { formatPattern, VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import { canReloadKey, useKeyTabs, type KeyTab, type KeyTarget } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
+import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { useTabs, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
@@ -21,6 +23,9 @@ export const KEY_ACTION_IDS = {
   reload: "key.reload",
   valueFormat: "key.valueFormat",
   toggleEmptyDatabases: "explorer.toggleEmptyDatabases",
+  openFromResult: "key.openFromResult",
+  resultValueFormat: "key.resultValueFormat",
+  showReply: "console.showReply",
 } as const;
 
 /** Characters a Redis glob gives meaning to, escaped so Go to Key matches them literally. */
@@ -115,6 +120,46 @@ export function valueFormatOf(tab: KeyTab | null): ValueFormat {
 
 export interface ValueFormatArgs {
   readonly format: ValueFormat;
+}
+
+/** The pattern a command result's value format is remembered under: its source key's (decision 119). */
+export function resultFormatPattern(datasourceId: string, result: ResultTab | null): string | null {
+  if (result?.source === undefined) return null;
+  const delimiter = useKeys.getState().keyspaces[datasourceId]?.delimiter ?? "";
+  return formatPattern(result.source.key.text, delimiter);
+}
+
+/** The format a command result's value panel reads with: its key pattern's, else the tab's own. */
+export function resultValueFormatOf(datasourceId: string, result: ResultTab | null): ValueFormat {
+  const pattern = resultFormatPattern(datasourceId, result);
+  const remembered = pattern === null ? undefined : useLayout.getState().layout.valueFormats[pattern];
+  return remembered ?? result?.valueFormat ?? "auto";
+}
+
+function nextFormat(current: ValueFormat): ValueFormat {
+  return VALUE_FORMATS[(VALUE_FORMATS.indexOf(current) + 1) % VALUE_FORMATS.length] ?? "auto";
+}
+
+/** The key Open Key opens from a console: the shown result's source, or on Output the last line that read one. */
+function resultKey(context: ActionContext): OpenKeyArgs | null {
+  const session = context.console;
+  if (session === null || !browsesKeys(context)) return null;
+  const source =
+    context.result === null
+      ? [...session.output].reverse().find((entry) => entry.key !== undefined)?.key
+      : context.result.source;
+  return source === undefined
+    ? null
+    : { datasourceId: session.datasourceId, database: source.database, key: source.key };
+}
+
+export interface ShowReplyArgs {
+  readonly entryId: number;
+}
+
+function lastReply(context: ActionContext): number | null {
+  const output = context.console?.output ?? [];
+  return [...output].reverse().find((entry) => entry.result !== undefined)?.id ?? null;
 }
 
 async function goToKey(context: ActionContext): Promise<void> {
@@ -255,6 +300,49 @@ export const KEY_ACTIONS: readonly AnyAction[] = [
       const current = valueFormatOf(context.keyTab);
       const next = args?.format ?? VALUE_FORMATS[(VALUE_FORMATS.indexOf(current) + 1) % VALUE_FORMATS.length];
       if (next !== undefined) useLayout.getState().setValueFormat(pattern, next);
+    },
+  }),
+  defineAction<ValueFormatArgs | undefined>({
+    id: KEY_ACTION_IDS.resultValueFormat,
+    title: "Next Value Format",
+    category: "Result Grid",
+    tabKind: "console",
+    available: browsesKeys,
+    when: (context) => context.result !== null && browsesKeys(context),
+    run: (context, args) => {
+      const { result, console: session, activeTab } = context;
+      if (result === null || session === null || activeTab === null) return;
+      const next = args?.format ?? nextFormat(resultValueFormatOf(session.datasourceId, result));
+      const pattern = resultFormatPattern(session.datasourceId, result);
+      if (pattern === null) useConsoles.getState().setValueFormat(activeTab.id, result.id, next);
+      else useLayout.getState().setValueFormat(pattern, next);
+    },
+  }),
+  defineAction<OpenKeyArgs | undefined>({
+    id: KEY_ACTION_IDS.openFromResult,
+    title: "Open Key",
+    category: "Result Grid",
+    icon: "goTo",
+    shortcut: "Mod+B",
+    shortcutRegion: "grid",
+    tabKind: "console",
+    available: browsesKeys,
+    when: (context) => resultKey(context) !== null,
+    run: (context, args) => {
+      const target = isOpenKeyArgs(args) ? args : resultKey(context);
+      if (target !== null) openKey(context, target);
+    },
+  }),
+  defineAction<ShowReplyArgs | undefined>({
+    id: KEY_ACTION_IDS.showReply,
+    title: "Show as Result",
+    category: "Console",
+    tabKind: "console",
+    when: (context) => lastReply(context) !== null,
+    run: (context, args) => {
+      const entryId = args?.entryId ?? lastReply(context);
+      if (context.activeTab !== null && entryId !== null)
+        useConsoles.getState().showReply(context.activeTab.id, entryId);
     },
   }),
   defineAction({

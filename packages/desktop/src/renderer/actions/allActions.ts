@@ -7,6 +7,7 @@ import { FILE_ACTIONS } from "@table-craft/desktop/renderer/actions/fileActions.
 import { IMPORT_ACTIONS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { SCRIPT_ACTIONS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { GRID_ACTIONS } from "@table-craft/desktop/renderer/actions/gridActions.js";
+import { GRID_HELPER_ACTIONS } from "@table-craft/desktop/renderer/actions/gridHelperActions.js";
 import { EXPLAIN_ACTIONS } from "@table-craft/desktop/renderer/actions/explainActions.js";
 import { EXPLORER_ACTIONS } from "@table-craft/desktop/renderer/actions/explorerActions.js";
 import { OBJECT_ACTIONS } from "@table-craft/desktop/renderer/actions/objectActions.js";
@@ -33,6 +34,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...ERROR_ACTIONS,
   ...FILE_ACTIONS,
   ...GRID_ACTIONS,
+  ...GRID_HELPER_ACTIONS,
   ...EXPORT_ACTIONS,
   ...IMPORT_ACTIONS,
   ...SCRIPT_ACTIONS,

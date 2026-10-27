@@ -1,0 +1,11 @@
+# The demo shop's cache the Redis GIFs are recorded against (plan 061): redis-cli commands, one per
+# line, redis-cli quoting. `loadShopRedis` flushes database 3 of the `redis` service, runs these and
+# adds `product:<id>:stock` for the shop's 30 products.
+HSET cart:{1042} "Espresso beans Classic" "2" "Ceramic mug Plus" "1" "Oat milk Classic" "4" "Paper filters Pro" "1"
+SADD customer:17:tags "newsletter" "wholesale" "early-adopter"
+ZADD product:views 1840 "Espresso beans Classic" 1210 "Hand grinder Pro" 960 "Ceramic mug Plus" 720 "Green tea Classic" 455 "Cold brew jar Plus"
+RPUSH recent:orders "order:200" "order:199" "order:198" "order:197" "order:196"
+XADD queue:orders 1767340800000-0 order "196" event "paid"
+XADD queue:orders 1767344400000-0 order "197" event "paid"
+XADD queue:orders 1767348000000-0 order "197" event "shipped" carrier "DHL"
+SET session:u17 "{\"user\":17,\"cart\":\"cart:{1042}\",\"locale\":\"en-GB\",\"currency\":\"EUR\"}" EX 3600

@@ -67,6 +67,7 @@ import { isScriptAsking, useScripts, type ScriptEntry } from "@table-craft/deskt
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import {
   CollapsedIcon,
   ConsoleIcon,
@@ -199,7 +200,7 @@ function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): rea
 function Menu({ entries }: { readonly entries: readonly MenuEntry[] }) {
   return (
     <ContextMenu.Portal>
-      <ContextMenu.Content className="z-50 min-w-56 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg">
+      <ContextMenu.Content className={WIDE_MENU_CONTENT}>
         {entries.map((entry) => (
           <ContextMenu.Item
             key={entry.actionId}

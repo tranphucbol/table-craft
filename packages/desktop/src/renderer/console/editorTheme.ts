@@ -17,7 +17,7 @@ import {
 
 /** The flashed statement's mark; `Editor.tsx` adds and removes it. */
 export const FLASH_CLASS = "tc-statement-flash";
-const FLASH_FADE = "background-color 600ms ease-out";
+const FLASH_FADE = "background-color var(--tc-motion-flash) ease-out";
 /** Where a failed statement went wrong (decision 082); `errorMarks.ts` draws them. */
 export const ERROR_MARK_CLASS = "tc-error-mark";
 export const ERROR_GUTTER_CLASS = "tc-error-gutter";

@@ -1,4 +1,4 @@
-import { cellClipboardText, project, rowWriter } from "@table-craft/core";
+import { aggregateCells, cellClipboardText, project, rowWriter } from "@table-craft/core";
 import type { Row } from "@table-craft/plugin-api";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
 import { EngineFailure, SERVER_SORT_HINT, statementFailed } from "@table-craft/desktop/engine/failures.js";
@@ -23,6 +23,9 @@ export function resultRoutes(connection: ConnectionContext): RoutesFor<"result">
     chosenColumns,
     ownedHandle,
     resultEditable,
+    cellBytes,
+    saveBytes,
+    loadBytes,
   } = connection;
   return {
     "result.window": ({ handle, offset, limit }) => Promise.resolve(results.window(ownedHandle(handle), offset, limit)),
@@ -73,6 +76,21 @@ export function resultRoutes(connection: ConnectionContext): RoutesFor<"result">
       const body = picked.map((row, index) => writer.row(project(row, columns), index)).join("");
       return Promise.resolve(writer.start() + body + writer.end(picked.length));
     },
+    "result.aggregate": ({ handle, rows, columns }) => {
+      const owned = ownedHandle(handle);
+      chosenColumns(owned, columns);
+      const classes = results.classes(owned);
+      const picked = rowsIn(results.shownRows(owned), rows).map((row) => project(row, columns));
+      return Promise.resolve(
+        aggregateCells(
+          picked,
+          columns.map((column) => classes[column] ?? "text"),
+        ),
+      );
+    },
     "result.editable": (request) => resultEditable(request),
+    "result.cellBytes": (request) => cellBytes(request),
+    "result.saveBytes": (request) => saveBytes(request),
+    "result.loadBytes": (request) => loadBytes(request),
   };
 }

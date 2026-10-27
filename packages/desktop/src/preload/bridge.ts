@@ -56,6 +56,7 @@ export const INVOKE_CHANNELS = {
   disconnectEngine: "table-craft:engine.disconnect",
   chooseFile: "table-craft:dialog.choose-file",
   openFile: "table-craft:dialog.open-file",
+  openAnyFile: "table-craft:dialog.open-any-file",
   saveFile: "table-craft:dialog.save-file",
   revealFile: "table-craft:shell.reveal-file",
   listConsoles: "table-craft:consoles.list",
@@ -605,6 +606,8 @@ export interface TableCraftBridge {
   chooseFile(title: string): Promise<InvokeResult<string | null>>;
   /** The native open dialog for an existing file to import (plan 021); null when cancelled. */
   openFile(title: string): Promise<InvokeResult<string | null>>;
+  /** The native open dialog for any file, to load into a binary cell (plan 043); null when cancelled. */
+  openAnyFile(title: string): Promise<InvokeResult<string | null>>;
   /** The native save dialog, for an export; the chosen absolute path, or null when cancelled. */
   saveFile(title: string, defaultName: string): Promise<InvokeResult<string | null>>;
   /** Shows an absolute path selected in the file manager: an export's file (decision 040). */

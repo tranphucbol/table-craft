@@ -7,6 +7,9 @@ import {
   type FoundMatch,
   type ResultState,
   type RowRange,
+  type CellBytes,
+  type SelectionAggregates,
+  type StagedBytes,
   type ServerMessage,
 } from "@table-craft/desktop/engine/protocol.js";
 import { EngineRequestError, type EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
@@ -189,6 +192,72 @@ export function createResultWindows(owner: ResultOwner) {
     }
   }
 
+  /** What the selected cells add up to; null when the engine refused, which the status line omits. */
+  async function aggregate(
+    ownerId: string,
+    resultId: string,
+    rows: readonly RowRange[],
+    columns: readonly number[],
+  ): Promise<SelectionAggregates | null> {
+    const result = owner.result(ownerId, resultId);
+    const client = owner.client(ownerId);
+    if (result === undefined || client === undefined || result.stale) return null;
+    return client
+      .call("result.aggregate", { handle: result.handle, rows: [...rows], columns: [...columns] })
+      .catch(() => null);
+  }
+
+  /** Every byte of a held cell, for the value panel's image preview; null when the engine refused. */
+  async function cellBytes(
+    ownerId: string,
+    resultId: string,
+    row: number,
+    column: number,
+    maxBytes: number,
+  ): Promise<CellBytes | null> {
+    const result = owner.result(ownerId, resultId);
+    const client = owner.client(ownerId);
+    if (result === undefined || client === undefined || result.stale) return null;
+    return client.call("result.cellBytes", { handle: result.handle, row, column, maxBytes }).catch(() => null);
+  }
+
+  /** Writes a held cell's bytes to `path` (plan 043); the length written, or null when it failed. */
+  async function saveBytes(
+    ownerId: string,
+    resultId: string,
+    cell: { readonly row: number; readonly column: number },
+    path: string,
+    maxBytes: number,
+  ): Promise<number | null> {
+    const result = owner.result(ownerId, resultId);
+    const client = owner.client(ownerId);
+    if (result === undefined || client === undefined || result.stale) return null;
+    try {
+      return await client.call("result.saveBytes", { handle: result.handle, ...cell, path, maxBytes });
+    } catch (cause) {
+      owner.failed(ownerId, result, toError(cause), false);
+      return null;
+    }
+  }
+
+  /** Reads the file at `path` into the engine for this result's edits; null when it failed. */
+  async function loadBytes(
+    ownerId: string,
+    resultId: string,
+    path: string,
+    maxBytes: number,
+  ): Promise<StagedBytes | null> {
+    const result = owner.result(ownerId, resultId);
+    const client = owner.client(ownerId);
+    if (result === undefined || client === undefined || result.stale) return null;
+    try {
+      return await client.call("result.loadBytes", { handle: result.handle, path, maxBytes });
+    } catch (cause) {
+      owner.failed(ownerId, result, toError(cause), false);
+      return null;
+    }
+  }
+
   /**
    * Starts a background export of the result (decision 040), or with `shownOnly` of the rows the
    * grid shows, in its order (plan 023); null when it could not start. Only
@@ -329,6 +398,10 @@ export function createResultWindows(owner: ResultOwner) {
     fetchMore,
     stopFetch,
     extract,
+    aggregate,
+    cellBytes,
+    saveBytes,
+    loadBytes,
     exportTo,
     applyView,
     search,

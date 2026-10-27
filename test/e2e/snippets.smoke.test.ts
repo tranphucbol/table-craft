@@ -264,6 +264,64 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
   );
 
   it(
+    "givenSplitConsoles_whenImportingFromUnfocusedGroup_thenUsesItsSelectionAndKeepsNoticeInSourceConsole",
+    async () => {
+      const sqlite: Datasource = { id: "sqlite", pluginId: "sqlite", config: { path: seededSqliteFile() } };
+      const page = await launch(newProfile(), sqlite);
+      const leftText = "SELECT ${left_value}${cursor}";
+      const rightText = "SELECT ${right_value}${cursor}";
+      await sqlEditor(page).fill(leftText);
+      await sqlEditor(page).press("ControlOrMeta+A");
+      await findAction(page, "Duplicate");
+      await findAction(page, "Split Right");
+      const groups = page.getByTestId("editor-group");
+      await expect.poll(() => groups.count()).toBe(2);
+      const left = groups.first();
+      const right = groups.last();
+      const leftEditor = left.getByRole("textbox", { name: "SQL console", exact: true });
+      const rightEditor = right.getByRole("textbox", { name: "SQL console", exact: true });
+      await rightEditor.fill(rightText);
+      await rightEditor.press("ControlOrMeta+A");
+      expect(await right.getAttribute("data-focused")).toBe("true");
+      await left
+        .locator('[data-testid="sql-editor"] .cm-line')
+        .first()
+        .click({ button: "right", position: { x: 8, y: 8 } });
+      await page.getByRole("menuitem", { name: "Import into Snippet…" }).click();
+      const importing = page.getByRole("dialog", { name: "Import into Snippet", exact: true });
+      await importing.waitFor();
+      expect(await importing.locator("#snippet-body").inputValue()).toBe(leftText);
+      expect(await importing.locator("#snippet-scope").inputValue()).toBe("plugin:sqlite");
+      await importing.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect.poll(() => importing.count()).toBe(0);
+      expect(await left.getAttribute("data-focused")).toBe("true");
+      expect(await page.evaluate<string | undefined>("document.getSelection()?.toString()")).toBe(leftText);
+      expect(await rightEditor.innerText()).toBe(rightText);
+      await rightEditor.focus();
+      await left
+        .locator('[data-testid="sql-editor"] .cm-line')
+        .first()
+        .click({ button: "right", position: { x: 8, y: 8 } });
+      await page.getByRole("menuitem", { name: "Import into Snippet…" }).click();
+      await importing.locator("#snippet-name").fill("Left console snippet");
+      await importing.locator("#snippet-prefix").fill("left_console");
+      await importing.getByRole("button", { name: "Create Snippet", exact: true }).click();
+      await expect.poll(() => importing.count()).toBe(0);
+      const notice = left.getByRole("status").filter({ hasText: "Left console snippet" });
+      await notice.waitFor();
+      expect(await right.getByRole("button", { name: "Open Snippets", exact: true }).count()).toBe(0);
+      expect(await leftEditor.innerText()).toBe(leftText);
+      expect(await rightEditor.innerText()).toBe(rightText);
+      await captureWindow(page, "snippet-split-console-notice");
+      await notice.getByRole("button", { name: "Open Snippets", exact: true }).click();
+      await dialog(page).waitFor();
+      expect(await dialog(page).locator("#snippet-body").inputValue()).toBe(leftText);
+      expect(await dialog(page).locator("#snippet-name").inputValue()).toBe("Left console snippet");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
     "givenDirtyDraft_whenClose_thenUnsavedGuardCanCancelOrDiscard",
     async () => {
       const page = await launch();

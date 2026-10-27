@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { ListedSession } from "@table-craft/desktop/engine/protocol.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
@@ -184,7 +185,7 @@ export const SESSIONS_ACTIONS: readonly AnyAction[] = [
     when: (context) => selectedQuery(context) !== null,
     run: async (context) => {
       const query = selectedQuery(context);
-      if (query !== null) await navigator.clipboard.writeText(query);
+      if (query !== null) await writeClipboard(query);
     },
   }),
   defineAction({

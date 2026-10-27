@@ -9,6 +9,7 @@ import {
   type DensityId,
   type UserThemeId,
 } from "@table-craft/desktop/appearance/themes.js";
+import { isMotionChoice, type MotionChoice } from "@table-craft/desktop/appearance/motion.js";
 
 export const SETTINGS_VERSION = 1;
 
@@ -30,6 +31,8 @@ export interface AppearanceSettings {
   readonly theme: ThemeChoice;
   readonly density: DensityId;
   readonly fonts: FontSettings;
+  /** How much the window animates (plan 109); `system` follows `prefers-reduced-motion`. */
+  readonly motion: MotionChoice;
   /** Frame the window with the operating system's title bar; main reads it at window creation. */
   readonly systemTitleBar: boolean;
 }
@@ -45,7 +48,15 @@ export interface DataSettings {
   readonly fetchAllCap: number;
   /** Seconds an export waits for the next row before it fails as stalled (decision 040). */
   readonly exportStallSeconds: number;
+  /** Which selection aggregates the grid's status line shows, in `AGGREGATE_NAMES` order (plan 043). */
+  readonly aggregates: readonly AggregateName[];
+  /** The largest file, in MiB, Load from File puts into a bytes cell. */
+  readonly blobLimitMb: number;
 }
+
+/** The selection aggregates the grid can show, in the order it shows them. */
+export const AGGREGATE_NAMES = ["count", "distinct", "sum", "avg", "min", "max"] as const;
+export type AggregateName = (typeof AGGREGATE_NAMES)[number];
 
 /** Mirrors `KEYWORD_CASES` in plugin-api. */
 export const KEYWORD_CASES = ["upper", "lower", "preserve"] as const;
@@ -157,6 +168,7 @@ export const FONT_SIZE_RANGE: NumberRange = { min: 8, max: 32 };
 export const PAGE_ROWS_RANGE: NumberRange = { min: 10, max: 10_000 };
 export const FETCH_ALL_CAP_RANGE: NumberRange = { min: 1_000, max: 1_000_000 };
 export const EXPORT_STALL_SECONDS_RANGE: NumberRange = { min: 10, max: 3_600 };
+export const BLOB_LIMIT_MB_RANGE: NumberRange = { min: 1, max: 128 };
 export const NULL_TEXT_LENGTH: NumberRange = { min: 1, max: 16 };
 export const INDENT_WIDTH_RANGE: NumberRange = { min: 1, max: 8 };
 export const LINES_BETWEEN_STATEMENTS_RANGE: NumberRange = { min: 0, max: 5 };
@@ -179,6 +191,7 @@ export const DEFAULT_SETTINGS: Settings = {
       editor: { family: null, sizePx: 13 },
       grid: { family: null, sizePx: 12 },
     },
+    motion: "system",
     systemTitleBar: false,
   },
   editor: {
@@ -197,6 +210,8 @@ export const DEFAULT_SETTINGS: Settings = {
     pageRows: 500,
     fetchAllCap: 100_000,
     exportStallSeconds: 120,
+    aggregates: AGGREGATE_NAMES,
+    blobLimitMb: 16,
   },
   log: {
     level: "info",
@@ -372,6 +387,7 @@ export function readSettings(input: unknown): Settings {
         editor: readFont(fonts.editor, defaults.appearance.fonts.editor),
         grid: readFont(fonts.grid, defaults.appearance.fonts.grid),
       },
+      motion: isMotionChoice(appearance.motion) ? appearance.motion : defaults.appearance.motion,
       systemTitleBar:
         typeof appearance.systemTitleBar === "boolean" ? appearance.systemTitleBar : defaults.appearance.systemTitleBar,
     },
@@ -402,6 +418,10 @@ export function readSettings(input: unknown): Settings {
       exportStallSeconds: inRange(data.exportStallSeconds, EXPORT_STALL_SECONDS_RANGE)
         ? data.exportStallSeconds
         : defaults.data.exportStallSeconds,
+      aggregates: Array.isArray(data.aggregates)
+        ? AGGREGATE_NAMES.filter((name) => (data.aggregates as unknown[]).includes(name))
+        : defaults.data.aggregates,
+      blobLimitMb: inRange(data.blobLimitMb, BLOB_LIMIT_MB_RANGE) ? data.blobLimitMb : defaults.data.blobLimitMb,
     },
     log: {
       level: LOG_LEVEL_CHOICES.includes(log.level as LogLevelChoice)

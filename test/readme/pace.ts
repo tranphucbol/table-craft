@@ -86,14 +86,14 @@ async function movePointer(page: Page, x: number, y: number): Promise<void> {
 export async function clickVisibly(
   page: Page,
   target: Locator,
-  options: { readonly button?: "left" | "right"; readonly double?: boolean } = {},
+  options: { readonly button?: "left" | "right"; readonly double?: boolean; readonly shift?: boolean } = {},
 ): Promise<void> {
   await target.scrollIntoViewIfNeeded();
   const box = await target.boundingBox();
   if (box === null) throw new Error("The target to click is not visible; wait for it before clickVisibly.");
   await movePointer(page, box.x + box.width / 2, box.y + box.height / 2);
   if (options.double === true) await target.dblclick();
-  else await target.click({ button: options.button ?? "left" });
+  else await target.click({ button: options.button ?? "left", modifiers: options.shift === true ? ["Shift"] : [] });
 }
 
 /** Moves the pointer to a point, then clicks there: for a word inside an editor line. */

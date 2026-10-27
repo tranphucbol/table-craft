@@ -1,8 +1,9 @@
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
+import { ACTION_ICONS, CopiedIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
+import { COPIED_LABEL, useCopyConfirmation } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
 
 /**
  * A toolbar button that is an action: its label, icon, tooltip and enabled state come from the
@@ -30,16 +31,24 @@ export function ActionButton({
   readonly tone?: "warning";
 }) {
   const enabled = useActionEnabled(actionId);
+  const confirmation = useCopyConfirmation();
   const action = registry.get(actionId);
   if (action === undefined) return null;
-  const Icon = action.icon === undefined ? null : ACTION_ICONS[action.icon];
+  const copies = action.icon === "copy";
+  const copied = copies && confirmation.copied;
+  const Icon = copied ? CopiedIcon : action.icon === undefined ? null : ACTION_ICONS[action.icon];
   const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
   return (
-    <Tooltip label={!enabled && reason != null ? reason : (hint ?? action.title)} shortcut={shortcut} side="bottom">
+    <Tooltip
+      label={copied ? COPIED_LABEL : !enabled && reason != null ? reason : (hint ?? action.title)}
+      shortcut={shortcut}
+      side="bottom"
+    >
       <button
         type="button"
         aria-label={compact ? action.title : undefined}
         aria-pressed={pressed}
+        data-copied={copied ? "" : undefined}
         // A disabled button gets no pointer events, so Radix never opens; the native tooltip still does.
         title={!enabled && reason != null ? reason : undefined}
         className={cn(
@@ -49,16 +58,25 @@ export function ActionButton({
             : compact && tone === "warning"
               ? "flex h-row shrink-0 items-center rounded border border-warning px-1 text-warning hover:bg-raised disabled:opacity-50"
               : compact
-                ? "flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-raised disabled:opacity-50 aria-pressed:bg-selection"
+                ? "press flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-raised disabled:opacity-50 aria-pressed:bg-selection"
                 : tone === "warning"
                   ? "flex h-row shrink-0 items-center gap-1 rounded border border-warning px-gap whitespace-nowrap text-warning disabled:opacity-50"
                   : "flex h-row shrink-0 items-center gap-1 rounded border border-line px-gap whitespace-nowrap text-ink disabled:opacity-50",
         )}
         disabled={!enabled}
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => invoke(actionId)}
+        onClick={() => {
+          if (copies) confirmation.arm();
+          invoke(actionId);
+        }}
       >
-        {Icon === null ? null : <Icon aria-hidden weight={compact ? "regular" : "fill"} className="size-icon" />}
+        {Icon === null ? null : (
+          <Icon
+            aria-hidden
+            weight={copied ? "bold" : compact ? "regular" : "fill"}
+            className={cn("size-icon", copied && "text-success")}
+          />
+        )}
         {compact ? null : action.title}
       </button>
     </Tooltip>

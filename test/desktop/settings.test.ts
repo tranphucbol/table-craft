@@ -29,6 +29,7 @@ const CHOSEN: Settings = {
       editor: { family: "Fira Code", sizePx: 15 },
       grid: { family: "Menlo", sizePx: 11 },
     },
+    motion: "reduced",
     systemTitleBar: true,
   },
   editor: {
@@ -36,7 +37,15 @@ const CHOSEN: Settings = {
     inspections: { enabled: false, disabled: ["SqlRedundantAlias", "AcmeOwnCheck"] },
   },
   console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30, runAllOnError: "continue" },
-  data: { nullText: "∅", groupDigits: true, pageRows: 100, fetchAllCap: 2_000, exportStallSeconds: 300 },
+  data: {
+    nullText: "∅",
+    groupDigits: true,
+    pageRows: 100,
+    fetchAllCap: 2_000,
+    exportStallSeconds: 300,
+    aggregates: ["sum", "avg"],
+    blobLimitMb: 64,
+  },
   log: { level: "debug" },
   updates: { checkAutomatically: false },
   plugins: { registryUrl: "http://127.0.0.1:4873" },
@@ -122,7 +131,15 @@ describe("settings document", () => {
     const read = readSettings({
       version: 1,
       appearance: { theme: "neon", density: "compact", fonts: { editor: { family: "a;b", sizePx: 99 } } },
-      data: { nullText: "", groupDigits: "yes", pageRows: 200, fetchAllCap: 100, exportStallSeconds: 5 },
+      data: {
+        nullText: "",
+        groupDigits: "yes",
+        pageRows: 200,
+        fetchAllCap: 100,
+        exportStallSeconds: 5,
+        aggregates: ["max", "median", "count"],
+        blobLimitMb: 0,
+      },
     });
 
     expect(read.appearance.theme).toBe("system");
@@ -134,6 +151,8 @@ describe("settings document", () => {
       pageRows: 200,
       fetchAllCap: 100_000,
       exportStallSeconds: 120,
+      aggregates: ["count", "max"],
+      blobLimitMb: 16,
     });
   });
 
@@ -188,6 +207,26 @@ describe("settings document", () => {
       readSettings({ ...CHOSEN, appearance: { ...appearance, systemTitleBar: "yes" } }).appearance.systemTitleBar,
     ).toBe(false);
     expect(readSettings(CHOSEN).appearance.systemTitleBar).toBe(true);
+  });
+
+  it("givenMotionMissing_whenRead_thenSystem", () => {
+    const { motion: _omitted, ...appearance } = CHOSEN.appearance;
+
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.motion).toBe("system");
+  });
+
+  it("givenMotionUnknown_whenRead_thenSystemAndOtherFieldsKept", () => {
+    const read = readSettings({ ...CHOSEN, appearance: { ...CHOSEN.appearance, motion: "minimal" } });
+
+    expect(read.appearance).toEqual({ ...CHOSEN.appearance, motion: "system" });
+    expect(read.data).toEqual(CHOSEN.data);
+  });
+
+  it("givenMotionOff_whenRead_thenOff", () => {
+    const read = readSettings({ ...CHOSEN, appearance: { ...CHOSEN.appearance, motion: "off" } });
+
+    expect(read.appearance.motion).toBe("off");
+    expect(settingsSchema.safeParse(read).success).toBe(true);
   });
 
   it("givenRunAllOnErrorMissingOrUnknown_whenRead_thenAsk", () => {

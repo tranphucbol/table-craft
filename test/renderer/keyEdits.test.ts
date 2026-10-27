@@ -106,6 +106,20 @@ describe("key changes", () => {
       changes: [{ kind: "setString", value: text("new"), original: text("old") }],
     });
   });
+
+  it("givenGetResultRowEdited_whenChanges_thenSetStringGuardedByTheRow", () => {
+    const buffer = setCell(EMPTY_BUFFER, { kind: "held", row: 0 }, 0, { kind: "text", text: "new" });
+    expect(keyChangesOf("string", ["value"], buffer, held([["old"]]))).toEqual({
+      changes: [{ kind: "setString", value: text("new"), original: text("old") }],
+    });
+  });
+
+  it("givenZrangeWithScoresRowEdited_whenChanges_thenSetScore", () => {
+    const buffer = setCell(EMPTY_BUFFER, { kind: "held", row: 0 }, 1, { kind: "text", text: "150" });
+    expect(keyChangesOf("zset", ["member", "score"], buffer, held([["ann", 120]]))).toEqual({
+      changes: [{ kind: "setScore", member: text("ann"), score: 150, original: 120 }],
+    });
+  });
 });
 
 describe("key expiry", () => {

@@ -1,4 +1,4 @@
-import type { CellInput, ColumnMeta, EditableIdentity } from "@table-craft/desktop/engine/protocol.js";
+import type { CellInput, ColumnMeta, EditableIdentity, TypeClass } from "@table-craft/desktop/engine/protocol.js";
 import { formatCell } from "@table-craft/desktop/renderer/grid/format.js";
 import {
   addRow,
@@ -45,14 +45,20 @@ export function isReadOnlyColumn(target: EditTarget, column: number): boolean {
   return target.readOnlyColumns?.[column] === true;
 }
 
-/** Whether a cell takes an edit: a live, not deleted row and a column the result can write. */
-export function canEditCell(target: EditTarget, cell: BufferCell): boolean {
+/** Whether a cell takes a new value: a live, not deleted row and a column the result can write. */
+export function canWriteCell(target: EditTarget, cell: BufferCell): boolean {
   const result = target.result;
   if (result === null || isReadOnlyColumn(target, cell.column)) return false;
-  // Bytes arrive as a preview only, so there is nothing whole to edit (plan 008 decision 9).
-  if (result.typeClasses[cell.column] === "bytes") return false;
   const row = bufferRowAt(target.buffer, shownHeld(result), cell.row);
   return row !== null && !(row.kind === "held" && target.buffer.deletes.has(row.row));
+}
+
+/**
+ * Whether a cell takes a typed edit. Bytes arrive as a preview only, so there is nothing whole to
+ * edit as text (plan 008 decision 9); a file loads into them instead (plan 043).
+ */
+export function canEditCell(target: EditTarget, cell: BufferCell): boolean {
+  return target.result?.typeClasses[cell.column] !== "bytes" && canWriteCell(target, cell);
 }
 
 /** The text a cell shows and edits from: its pending input, else its value; null and default edit as empty. */
@@ -62,10 +68,37 @@ export function editCellText(target: EditTarget, cell: BufferCell): string {
   const row = bufferRowAt(target.buffer, shownHeld(result), cell.row);
   if (row === null) return "";
   const pending = pendingInput(target.buffer, row, cell.column);
+  if (pending?.kind === "boolean") return String(pending.value);
   if (pending !== undefined) return pending.kind === "text" ? pending.text : "";
   if (row.kind === "inserted") return "";
   const value = rowAt(result.windows, cell.row)?.[cell.column];
   return value === undefined || value === null ? "" : formatCell(value);
+}
+
+const TRUE_TEXTS: ReadonlySet<string> = new Set(["true", "t", "1", "yes", "on"]);
+const FALSE_TEXTS: ReadonlySet<string> = new Set(["false", "f", "0", "no", "off"]);
+
+/** The boolean a cell's text reads as, as PostgreSQL reads one; null when it reads as neither. */
+export function booleanOfText(text: string): boolean | null {
+  const word = text.trim().toLowerCase();
+  if (TRUE_TEXTS.has(word)) return true;
+  return FALSE_TEXTS.has(word) ? false : null;
+}
+
+/**
+ * What a cell editor's text writes. A boolean column takes a boolean literal, which every dialect
+ * spells, and an empty editor as NULL; a text literal such as `'true'` is not a boolean in SQLite.
+ */
+export function committedInput(typeClass: TypeClass | undefined, text: string): CellInput {
+  if (typeClass !== "boolean") return { kind: "text", text };
+  if (text.trim() === "") return { kind: "null" };
+  const value = booleanOfText(text);
+  return value === null ? { kind: "text", text } : { kind: "boolean", value };
+}
+
+/** The value Toggle Boolean writes: the opposite of the cell's, and true for NULL. */
+export function toggledBoolean(target: EditTarget, cell: BufferCell): boolean {
+  return booleanOfText(editCellText(target, cell)) !== true;
 }
 
 /** The editor opened on `cell`, or null when the cell takes no edit. */
@@ -146,6 +179,16 @@ export function submittedScript(statements: readonly string[]): string {
 /** The notice after a submit. */
 export function submittedText(statements: number): string {
   return `Submitted ${String(statements)} ${statements === 1 ? "statement" : "statements"}`;
+}
+
+/** A whole-key result's submit as the Services tree names it (decision 119). */
+export function submitCommandsLabel(commands: number): string {
+  return `Submit ${String(commands)} ${commands === 1 ? "command" : "commands"}`;
+}
+
+/** A whole-key result's submit, which ran as one `MULTI` (decision 119). */
+export function submittedCommandsText(commands: number): string {
+  return `Submitted ${String(commands)} ${commands === 1 ? "command" : "commands"} as one MULTI`;
 }
 
 /** The result with its selection kept inside the rows and columns `buffer` draws. */

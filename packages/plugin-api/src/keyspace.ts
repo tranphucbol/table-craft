@@ -20,6 +20,19 @@ export interface KeyBytes {
 /** A key's name: bytes, since a key may be any binary string. */
 export type KeyName = KeyBytes;
 
+/**
+ * The one key a command's reply was read from (decision 119), so the host can open the key or
+ * edit the reply as the key. `whole` is true when the reply holds the entire key, such as
+ * `HGETALL` or `LRANGE k 0 -1`; its columns are then the ones `Keyspace.read` gives that type,
+ * without positions a key tab adds (a zset's `#`), and a string's is one `value` column.
+ */
+export interface KeySource {
+  readonly database: number;
+  readonly key: KeyName;
+  readonly type: KeyType;
+  readonly whole: boolean;
+}
+
 /** One logical database of the keyspace: Redis' `db0`–`db15`, or the one database of a cluster. */
 export interface KeyDatabase {
   readonly index: number;

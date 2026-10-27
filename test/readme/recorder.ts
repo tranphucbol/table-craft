@@ -12,7 +12,7 @@ import type { CDPSession, ElectronApplication, Page } from "playwright-core";
 
 export const GIF_WIDTH_PX = 1100;
 export const GIF_FPS = 12;
-/** Decision 22 of plan 016: one GIF at most 2 MB, all twelve at most 18 MB. */
+/** Decision 22 of plan 016: one GIF at most 2 MB, all of them together at most 18 MB. */
 export const GIF_MAX_BYTES = 2 * 1024 * 1024;
 export const GIFS_MAX_BYTES = 18 * 1024 * 1024;
 

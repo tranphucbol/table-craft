@@ -1,10 +1,18 @@
 import type { ColumnMeta, ForeignKey } from "./catalog.js";
+import type { KeySource } from "./keyspace.js";
 import type { SortDirection } from "./results.js";
 import type { ExecutedStatement } from "./sessions.js";
 
-/** Mirrors `CellInput` in core: text the database casts, `NULL`, or the column's default. */
+/**
+ * Mirrors `CellInput` in core: text the database casts, `NULL`, the column's default, a boolean, or
+ * a file's bytes staged in the engine by `result.loadBytes` (plan 043).
+ */
 export type CellInput =
-  { readonly kind: "text"; readonly text: string } | { readonly kind: "null" } | { readonly kind: "default" };
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "null" }
+  | { readonly kind: "default" }
+  | { readonly kind: "boolean"; readonly value: boolean }
+  | { readonly kind: "bytes"; readonly id: string; readonly length: number; readonly preview: string };
 
 /** Mirrors `RowEdit` in core; `row` indexes the table result's held rows. */
 export type RowEdit =
@@ -39,6 +47,8 @@ export interface ResultEditable {
   readonly columns: readonly ColumnMeta[];
   /** Per result column: a computed, aliased-expression or repeated column no edit may write. */
   readonly readOnlyColumns: readonly boolean[];
+  /** The whole key an editable command result holds: its edits apply to it as a key tab's do (decision 119). */
+  readonly key?: KeySource;
 }
 
 /** A foreign key of the relation at `path`.`relation` that points at another table. */

@@ -211,6 +211,8 @@ SSH tunnel, or one already in TableCraft, starts unticked; ticking a duplicate i
 `<name> (2)`, never overwriting the one you have. Folders and colours come along, under a
 `DataGrip` or `TablePro` folder unless you turn that off.
 
+![Import from DataGrip](docs/media/import-datasources.gif)
+
 Passwords:
 
 - **DataGrip** keeps them in the system keychain or in its own KeePass file. A KeePass file is read
@@ -232,6 +234,8 @@ their columns, keys, foreign keys and indexes. Expanding a disconnected data sou
 Typing in the tree starts speed search, `F1` shows Quick Documentation for the selected object, and
 `⌘B` opens its DDL. **Synchronize** (`⌥⌘Y`) reloads the tree from the database.
 
+![Database explorer](docs/media/explorer.gif)
+
 On a server with many databases, **Manage Shown Schemas…** on a data source picks which databases
 or schemas the tree lists, as DataGrip does; the data source then shows how many of them it lists,
 such as `3 of 40`. Ones created later stay hidden until you pick them, unless **All schemas** is on.
@@ -244,7 +248,7 @@ DDL statement, and its preview says so. Drop and Truncate name the object and it
 Cascade is a checkbox where the database has it. SQLite rebuilds a table for a change its `ALTER
 TABLE` cannot make.
 
-![Database explorer](docs/media/explorer.gif)
+![Modify Table](docs/media/modify-table.gif)
 
 See [Database explorer](docs/design/specification.md#database-explorer).
 
@@ -257,7 +261,8 @@ PostgreSQL's `RAISE NOTICE`); the result tab shows how many warnings there were.
 `UPDATE` or `DELETE` without a `WHERE`, `DROP` and `TRUNCATE` are listed in a confirmation before
 anything runs. Switch
 **Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**. Consoles
-are saved as files as you type.
+are saved as files as you type. Drag the line between the editor and its results to give either
+more room; every console keeps the split you last dragged to, across launches.
 
 **Open File…** (`⌘O`) opens `.sql` files from anywhere on disk, such as the migrations in your
 project, as file consoles on the data source you are in; each file remembers its data source and
@@ -273,6 +278,14 @@ Right-click an editor tab to close the others, all, or those to its right; to co
 show it in Finder (or its folder elsewhere) or rename it; to **Duplicate** it as a new console on
 the same data source and schema; or to **Pin** it at the left, where closing many tabs leaves it
 open. **Reopen Closed Tab** (`⇧⌘T`) brings back the consoles you closed, newest first.
+
+Drag a tab toward the left or right side of the editor, or right-click it and choose **Split Left**
+or **Split Right**, to work in two consoles side by side. Each side keeps its own selected tab;
+click inside one to send Run, shortcuts and new consoles there. Drag the divider to resize them.
+Splitting moves the existing console, keeping its text, results and connection. With two sides
+already open, splitting moves the tab to that side; **Unsplit** brings all tabs together. Closing
+the last tab on one side also removes the split. Bulk tab closing and next/previous tab stay within
+the selected side. Saved console and table tabs remember their sides and the divider width.
 
 **Run SQL Script…**, on a data source or schema in the Database pane, runs one or more `.sql` files
 without opening them: the files are streamed, so a multi-gigabyte dump uses flat memory, and the
@@ -296,6 +309,8 @@ a mark for its message and fixes; `⌥↩` (Show Context Actions) at the caret l
 **Suppress for statement**, which writes a `-- noinspection <Id>` line above it, and **Disable
 inspection**. `F2` / `⇧F2` visit these too, errors first. Settings → Editor → Inspections turns each
 check, or all of them, off. The checks know your tables once the data source is connected.
+
+![Inspections and a failing statement](docs/media/inspections.gif)
 
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
 back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
@@ -379,6 +394,8 @@ straight to disk, so a multi-gigabyte export uses flat memory, shows its progres
 in Services, and never leaves a half-written file behind when the network drops, the disk fills or
 you cancel.
 
+![Result grid](docs/media/grid.gif)
+
 **Find in Result** (`⌘F` in the grid) searches the fetched rows as the grid draws them, with Match
 Case, Regular Expression and Whole Cell toggles; `↩` and `⇧↩` step through the matches and
 **Filter Rows** hides the rows without one. A column header's menu filters by the focused row's
@@ -387,7 +404,13 @@ already fetched and say so; **Search All Rows** fetches the rest. Copy takes the
 Export asks whether to write the visible rows or the whole result. In the table editor the local
 filter sits beside the `WHERE` bar, which still filters on the server.
 
-![Result grid](docs/media/grid.gif)
+Select two or more cells and the line under the grid shows their count, distinct values and, for
+numbers, an exact sum, average, minimum and maximum; click it to copy, and its menu picks which
+show. **Transpose** (`⌥⌘T`) turns records into columns, handy for a wide row. A binary value's
+panel saves it to a file, loads a file into the cell, and draws it when it holds a PNG, JPEG, GIF
+or WebP image.
+
+![Find, filter and aggregate in the grid](docs/media/grid-helpers.gif)
 
 See [Result grid](docs/design/specification.md#result-grid).
 
@@ -397,7 +420,9 @@ See [Result grid](docs/design/specification.md#result-grid).
 place, add rows with `⌘N` and delete them with `⌘⌫`; changes stay pending and highlighted until you
 submit. **Preview Pending Changes** (`⇧⌘P`) shows the SQL, and **Submit** (`⌘↩`) runs it in one
 transaction: if any statement fails or touches more than one row, everything rolls back and your
-edits stay. `⌘B` on a foreign key cell opens the referenced row.
+edits stay. `⌘B` on a foreign key cell opens the referenced row. A boolean cell edits in a
+true/false/NULL list and `Space` flips it; a date or timestamp cell has a calendar picker beside its
+text.
 
 A console result is editable too when it reads one table and shows its primary key, as
 `SELECT * FROM orders WHERE …` does: the same chords edit it, and **Submit** runs on the console's
@@ -421,6 +446,8 @@ connection rolls everything back. Choose **Commit every N rows** to keep what wa
 **Resume** from the first row that was not, and **Skip** to set bad rows aside in
 `<file>.rejected.csv` with the reason for each.
 
+![Import](docs/media/import.gif)
+
 See [Import](docs/design/specification.md#import).
 
 ### DDL and SQL generation
@@ -442,6 +469,8 @@ what comes back, and the SQL it will run is shown as you type. **Run** opens a n
 routine's schema with that SQL and runs it, values bound rather than pasted in, so the result, the
 OUT values and server messages show in the usual result tabs and Output. **Open in Console** opens
 the same console without running it. PostgreSQL and MySQL support it.
+
+![Execute a routine](docs/media/routine.gif)
 
 See [Execute a routine](docs/design/specification.md#execute-a-routine).
 
@@ -469,6 +498,8 @@ anything. **Show in Sessions** on an execution in Services selects the console's
 PostgreSQL, MySQL and TiDB support it; when your account cannot see everything, the tab says which
 grant to ask for.
 
+![Sessions](docs/media/sessions.gif)
+
 See [Sessions](docs/design/specification.md#sessions).
 
 ### Redis
@@ -494,8 +525,19 @@ has no ACL users: leave Username empty and give the password alone.
   from the server's command docs, and key names complete from a scan. `FLUSHDB` and `FLUSHALL` ask
   you to type the data source's name; `KEYS` and other heavy reads are underlined, with a fix such as
   **Use SCAN**. In a cluster, **Run on** sends a command to one node or every primary.
+- **Console results.** A value read (`GET`, `HGET`, `LINDEX`…) opens a one-row `value` tab as well
+  as its Output line; a number or status stays in Output, where **Show as Result** opens it as a
+  tab. The value panel reads a result's values as the key tab does, Auto first (JSON, gzip,
+  MessagePack…), and remembers your format per key pattern. When a result reads one key, **Open
+  Key** (`⌘B`) opens it in a key tab. A result that reads a whole key (`GET`, `HGETALL`,
+  `SMEMBERS`, `LRANGE key 0 -1`, `ZRANGE key 0 -1 WITHSCORES`) takes edits with the key tab's
+  columns and submits them as one guarded `MULTI`; other results say why they are read-only.
 - **Server tab.** `INFO` as cards with auto-refresh, every node of a cluster at a glance, and the
   slow log. **Show Sessions…** lists `CLIENT LIST` and unblocks or kills a client.
+
+![Redis key tree and key tab](docs/media/redis-keys.gif)
+
+![Redis console](docs/media/redis-console.gif)
 
 See [Command consoles](docs/design/specification.md#command-consoles),
 [Key browser](docs/design/specification.md#key-browser) and
@@ -529,7 +571,8 @@ See [Shell and actions](docs/design/specification.md#shell-and-actions).
 dropdown: type to filter by name or source, and the theme under the arrow keys or the mouse
 previews live; Enter or a click keeps it, Escape puts the previous one back. Themes and density
 change live; Follow system picks Dark, Light or High contrast from the operating system. `⌘=`, `⌘-` and
-`⌘0` zoom the editor font.
+`⌘0` zoom the editor font. Menus, popovers and dialogs fade in briefly and close at once; **Motion**
+turns that down to Reduced or Off, or follows the operating system's Reduce Motion (System).
 
 ![Settings and appearance](docs/media/settings.gif)
 
@@ -581,6 +624,7 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Drop…                     | `⌘⌫`    | `Ctrl+Backspace`       |
 | Go to DDL                 | `⌘B`    | `Ctrl+B`               |
 | Go to Declaration         | `⌘B`    | `Ctrl+B`               |
+| Open Key                  | `⌘B`    | `Ctrl+B`               |
 | Parameter Info            | `⌘P`    | `Ctrl+P`               |
 | Quick Documentation       | `F1`    | `F1`                   |
 | Open Data                 | `F4`    | `F4`                   |
@@ -589,6 +633,8 @@ See [App log and diagnostics](docs/design/specification.md#app-log-and-diagnosti
 | Preview Pending Changes   | `⇧⌘P`   | `Ctrl+Shift+P`         |
 | Submit                    | `⌘↩`    | `Ctrl+Enter`           |
 | Find in Result            | `⌘F`    | `Ctrl+F`               |
+| Transpose                 | `⌥⌘T`   | `Ctrl+Alt+T`           |
+| Toggle Boolean            | `Space` | `Space`                |
 | Settings…                 | `⌘,`    | `Ctrl+,`               |
 | Increase Editor Font Size | `⌘=`    | `Ctrl+=`               |
 | Decrease Editor Font Size | `⌘-`    | `Ctrl+-`               |
@@ -603,33 +649,36 @@ Settings live in `settings.json` in your [profile folder](#where-your-data-lives
 dialog writes it; you can also edit it by hand, and a field that is missing or out of range falls
 back to its default without affecting the others.
 
-| Field                                  | Values                                                                                         | Default                      |
-| :------------------------------------- | :--------------------------------------------------------------------------------------------- | :--------------------------- |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`    | `system`                     |
-| `appearance.density`                   | `comfortable`, `compact`                                                                       | `comfortable`                |
-| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                    | `false`                      |
-| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 13                   |
-| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 13                   |
-| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                              | `null`, 12                   |
-| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                          | `aligned`                    |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                 | `upper`                      |
-| `editor.format.indentWidth`            | 1–8 spaces                                                                                     | 2                            |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                | 1                            |
-| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                 | `true`                       |
-| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                         | `true`                       |
-| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                            | `[]`                         |
-| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                             | `true`                       |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                             | 0                            |
-| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                             | 5                            |
-| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure  | `ask`                        |
-| `data.nullText`                        | 1–16 characters                                                                                | `<null>`                     |
-| `data.groupDigits`                     | `true`, `false`                                                                                | `false`                      |
-| `data.pageRows`                        | 10–10,000                                                                                      | 500                          |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                           | 100,000                      |
-| `log.level`                            | `info`, `debug`                                                                                | `info`                       |
-| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                              | 120                          |
-| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                 | `true`                       |
-| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from | `https://registry.npmjs.org` |
+| Field                                  | Values                                                                                          | Default                                        |
+| :------------------------------------- | :---------------------------------------------------------------------------------------------- | :--------------------------------------------- |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](#themes), `user:<file stem>`     | `system`                                       |
+| `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable`                                  |
+| `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                              | `system`                                       |
+| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
+| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
+| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
+| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 12                                     |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                           | `aligned`                                      |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                  | `upper`                                        |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                      | 2                                              |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                 | 1                                              |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                  | `true`                                         |
+| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                          | `true`                                         |
+| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                             | `[]`                                           |
+| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                              | `true`                                         |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                              | 0                                              |
+| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                              | 5                                              |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure   | `ask`                                          |
+| `data.nullText`                        | 1–16 characters                                                                                 | `<null>`                                       |
+| `data.groupDigits`                     | `true`, `false`                                                                                 | `false`                                        |
+| `data.pageRows`                        | 10–10,000                                                                                       | 500                                            |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                            | 100,000                                        |
+| `data.aggregates`                      | which of `count`, `distinct`, `sum`, `avg`, `min`, `max` the grid's selection line shows        | `["count","distinct","sum","avg","min","max"]` |
+| `data.blobLimitMb`                     | 1–128; the largest file, in MiB, Load from File puts into a binary cell, and Save to File reads | 16                                             |
+| `log.level`                            | `info`, `debug`                                                                                 | `info`                                         |
+| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                               | 120                                            |
+| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                  | `true`                                         |
+| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then
@@ -754,7 +803,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.2.0",
+  "apiVersion": "1.3.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -889,7 +938,6 @@ Updates…** or install a plugin.
 
 ## Not in v1
 
-- Planned for v1.1: saved query files.
 - Later: ER diagrams, schema compare and migrations, XLSX and JSON import, a plugin marketplace, a MongoDB
   plugin, a CLI, AI assistance, Git integration, a debugger, notebooks, Docker and
   Kubernetes integration.

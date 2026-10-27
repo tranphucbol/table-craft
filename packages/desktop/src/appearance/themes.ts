@@ -5,6 +5,7 @@
  * ported themes are generated into `themes/` by `scripts/generate-themes.ts` (decision 064).
  */
 import type { ContrastLevel } from "./contrast.js";
+import { MOTION, type MotionTokens } from "./motion.js";
 import { PORTED_THEME_IDS, PORTED_THEMES, type PortedThemeId } from "./themes/index.js";
 
 export * from "./contrast.js";
@@ -123,6 +124,7 @@ export interface Appearance {
   readonly colors: ColorTokens;
   readonly fonts: FontTokens;
   readonly density: DensityTokens;
+  readonly motion: MotionTokens;
 }
 
 /** TableCraft's own themes, the ones Follow system chooses between. */
@@ -365,6 +367,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   colors: DARK_COLORS,
   fonts: DEFAULT_FONTS,
   density: COMFORTABLE_DENSITY,
+  motion: MOTION.full,
 };
 
 /** Every colour token a user theme may override; `syntax` and `datasource` are partial in turn. */

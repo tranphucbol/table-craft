@@ -1,10 +1,10 @@
-# 118: SQL snippets are profile templates
+# 122: SQL snippets are profile templates
 
 Status: Accepted
 
-Decision 119 supersedes the SQL-only model, scope selection and version-1 storage described here.
+Decision 123 supersedes the SQL-only model, scope selection and version-1 storage described here.
 This record preserves the original decision; profile ownership, plain-text storage and native
-template expansion remain in effect. See [119](119-snippets-are-scoped-text-templates.md) for the
+template expansion remain in effect. See [123](123-snippets-are-scoped-text-templates.md) for the
 generic model and lossless version-1 migration.
 
 ## Decision

@@ -127,6 +127,10 @@ export interface KeyTabsState {
   readonly setLayout: KeyTabsHost["setLayout"];
   readonly select: KeyTabsHost["select"];
   readonly extract: KeyTabsHost["extract"];
+  readonly aggregate: KeyTabsHost["aggregate"];
+  readonly cellBytes: KeyTabsHost["cellBytes"];
+  readonly saveBytes: KeyTabsHost["saveBytes"];
+  readonly loadBytes: KeyTabsHost["loadBytes"];
   readonly exportTo: KeyTabsHost["exportTo"];
   readonly search: KeyTabsHost["search"];
   readonly findNext: KeyTabsHost["findNext"];
@@ -158,6 +162,10 @@ interface KeyTabsHost {
   readonly setLayout: (id: string, resultId: string, layout: ResultTab["layout"]) => void;
   readonly select: (id: string, resultId: string, selection: ResultTab["selection"]) => void;
   readonly extract: ResultWindows["extract"];
+  readonly aggregate: ResultWindows["aggregate"];
+  readonly cellBytes: ResultWindows["cellBytes"];
+  readonly saveBytes: ResultWindows["saveBytes"];
+  readonly loadBytes: ResultWindows["loadBytes"];
   readonly exportTo: (...args: Parameters<ResultWindows["exportTo"]>) => Promise<boolean>;
   readonly search: ResultWindows["search"];
   readonly findNext: ResultWindows["findNext"];
@@ -562,6 +570,10 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       },
 
       extract: windows.extract,
+      aggregate: windows.aggregate,
+      cellBytes: windows.cellBytes,
+      saveBytes: windows.saveBytes,
+      loadBytes: windows.loadBytes,
 
       async exportTo(...args) {
         return (await windows.exportTo(...args)) !== null;

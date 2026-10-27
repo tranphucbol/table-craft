@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import {
@@ -26,7 +27,14 @@ import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/da
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
-import { otherTabIds, rightTabIds, unpinnedTabIds, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
+import {
+  groupOf,
+  groupStrip,
+  otherTabIds,
+  rightTabIds,
+  unpinnedTabIds,
+  useTabs,
+} from "@table-craft/desktop/renderer/state/tabs.js";
 
 /** Action ids other modules name: the menu declaration, toolbar buttons, the palette. */
 export const ACTION_IDS = {
@@ -46,6 +54,9 @@ export const ACTION_IDS = {
   togglePinTab: "tab.togglePin",
   reopenClosedTab: "tab.reopenClosed",
   duplicateTab: "tab.duplicate",
+  splitLeft: "tab.splitLeft",
+  splitRight: "tab.splitRight",
+  unsplit: "tab.unsplit",
   copyTabPath: "tab.copyPath",
   revealTab: "tab.reveal",
   nextTab: "tab.next",
@@ -154,6 +165,25 @@ async function toggleTransactionMode(consoleId: string): Promise<void> {
 }
 
 export const APP_ACTIONS: readonly AnyAction[] = [
+  ...(["left", "right"] as const).map((side) =>
+    defineAction<TabArgs | undefined>({
+      id: side === "left" ? ACTION_IDS.splitLeft : ACTION_IDS.splitRight,
+      title: side === "left" ? "Split Left" : "Split Right",
+      category: "Editor Tabs",
+      when: hasSeveralTabs,
+      run: (context, args) => {
+        const id = targetTab(context, args);
+        if (id !== null) useTabs.getState().moveToGroup(id, side);
+      },
+    }),
+  ),
+  defineAction({
+    id: ACTION_IDS.unsplit,
+    title: "Unsplit",
+    category: "Editor Tabs",
+    when: () => useTabs.getState().tabs.some((tab) => groupOf(tab) === "right"),
+    run: () => useTabs.getState().unsplit(),
+  }),
   defineAction({
     id: ACTION_IDS.run,
     title: "Run",
@@ -274,7 +304,8 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     run: async (context, args) => {
       const id = targetTab(context, args);
       if (id === null) return;
-      await closeTabs(otherTabIds(context, id), () => useTabs.getState().closeOthers(id));
+      const strip = groupStrip(useTabs.getState(), groupOf(context.tabs.find((tab) => tab.id === id)));
+      await closeTabs(otherTabIds(strip, id), () => useTabs.getState().closeOthers(id));
     },
   }),
   defineAction({
@@ -283,7 +314,8 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     category: "Editor Tabs",
     when: hasTabs,
     run: async (context) => {
-      await closeTabs(unpinnedTabIds(context), () => useTabs.getState().closeAll());
+      const strip = groupStrip(useTabs.getState(), groupOf(context.activeTab));
+      await closeTabs(unpinnedTabIds(strip), () => useTabs.getState().closeAll());
     },
   }),
   defineAction<TabArgs | undefined>({
@@ -294,7 +326,8 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     run: async (context, args) => {
       const id = targetTab(context, args);
       if (id === null) return;
-      await closeTabs(rightTabIds(context, id), () => useTabs.getState().closeRight(id));
+      const strip = groupStrip(useTabs.getState(), groupOf(context.tabs.find((tab) => tab.id === id)));
+      await closeTabs(rightTabIds(strip, id), () => useTabs.getState().closeRight(id));
     },
   }),
   defineAction<TabArgs | undefined>({
@@ -308,7 +341,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
       if (id === null) return;
       try {
         const path = await consoleFilePath(id);
-        if (path !== null) await navigator.clipboard.writeText(path);
+        if (path !== null) await writeClipboard(path);
       } catch (cause) {
         await noticeTabFailure("Could not copy the path", cause);
       }
@@ -489,7 +522,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     run: async (context) => {
       if (context.datasource === null) return;
       const answer = await bridge().datasourceUrl(context.datasource.view.id);
-      if (answer.ok) await navigator.clipboard.writeText(answer.value);
+      if (answer.ok) await writeClipboard(answer.value);
       else {
         await useModal.getState().ask({
           kind: "notice",

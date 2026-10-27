@@ -9,9 +9,12 @@ import {
   type ExecutedStatement,
   type ExportFormat,
   type ExtractorKind,
+  type KeySource,
   type OnErrorChoice,
   type Reconnection,
+  type ResultPaging,
   type RowRange,
+  type SelectionAggregates,
   type ServerMessage,
   type SortKey,
   type TransactionMode,
@@ -45,6 +48,7 @@ import {
   type ParameterValues,
 } from "@table-craft/desktop/renderer/model/parameters.js";
 import { caretAfterReformat } from "@table-craft/desktop/renderer/model/reformat.js";
+import type { ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
   serverMessageText,
   serverMessageTone,
@@ -52,12 +56,20 @@ import {
 } from "@table-craft/desktop/renderer/model/serverMessages.js";
 import { statementsToRun, type RunScope, type TextSpan } from "@table-craft/desktop/renderer/model/statementAt.js";
 import { EMPTY_BUFFER, pendingCount, pendingText, toEdits } from "@table-craft/desktop/renderer/model/editBuffer.js";
-import { submitLabel, submittedScript, submittedText } from "@table-craft/desktop/renderer/model/resultEdits.js";
+import {
+  submitLabel,
+  submitCommandsLabel,
+  submittedCommandsText,
+  submittedScript,
+  submittedText,
+} from "@table-craft/desktop/renderer/model/resultEdits.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import {
   createConsoleEdits,
+  keyProblemError,
   pendingEditsOf,
   pendingResults,
+  resultKeyChanges,
   type ConsoleEdits,
   type ConsoleResultEdits,
 } from "@table-craft/desktop/renderer/state/consoleEdits.js";
@@ -82,7 +94,7 @@ import {
   type ResultSearch,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
-import { createResultWindows, toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
+import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import {
   currentFormatOptions,
   currentFormats,
@@ -132,6 +144,36 @@ export interface OutputEntry {
   readonly message: string;
   readonly hint: string | null;
   readonly tone: OutputTone;
+  /** A reply's one-row result, held in the engine, that Show as Result opens (decision 119). */
+  readonly result?: OutputResult;
+  /** The one key the command read, which Open Key opens (decision 119). */
+  readonly key?: KeySource;
+}
+
+/** What Show as Result opens as a tab: the statement's held result, as it ran. */
+export interface OutputResult {
+  readonly executed: Omit<ExecutedStatement, "transactionOpen" | "namespace" | "reconnected">;
+  readonly sql: string;
+  readonly paging: ResultPaging;
+}
+
+/** Whether a result opens a tab as it runs: rows do, and a reply only when it is a value read (decision 119). */
+function opensTab(executed: Pick<ExecutedStatement, "columns" | "reply">): boolean {
+  return executed.columns.length > 0 && (executed.reply === undefined || executed.reply.read === true);
+}
+
+/** The Output line's links for a command's result: Show as Result for a reply without a tab, and Open Key. */
+function outputLinks(
+  executed: Omit<ExecutedStatement, "transactionOpen" | "namespace" | "reconnected">,
+  sql: string,
+  paging: ResultPaging,
+): Pick<OutputEntry, "result" | "key"> {
+  return {
+    ...(executed.reply !== undefined && !opensTab(executed) && executed.columns.length > 0
+      ? { result: { executed, sql, paging } }
+      : {}),
+    ...(executed.source === undefined ? {} : { key: executed.source }),
+  };
 }
 
 export type RunOutcome = "succeeded" | "failed" | "cancelled";
@@ -307,6 +349,7 @@ export interface ConsolesState extends ConsoleEdits {
   readonly answerError: (id: string, answer: ErrorAnswer) => void;
   /** Puts the editor's caret at `span.from` and flashes `span`, as Go to Declaration lands. */
   readonly jumpTo: (id: string, span: TextSpan) => void;
+  readonly jumped: (id: string, seq: number) => void;
   /** Asks the editor to replace its selection with `text`, or insert it at the caret, as one undo step. */
   readonly insert: (id: string, text: string, values?: ParameterValues) => void;
   /** The editor applied the insertion numbered `seq`. */
@@ -342,6 +385,10 @@ export interface ConsolesState extends ConsoleEdits {
    * a plan tab explains again in the same mode.
    */
   readonly rerun: (id: string, resultId: string) => Promise<void>;
+  /** Opens the reply an Output line holds as a result tab, or brings its open tab forward (decision 119). */
+  readonly showReply: (id: string, entryId: number) => void;
+  /** The value panel's format of a result with no source key (decision 119). */
+  readonly setValueFormat: (id: string, resultId: string, format: ValueFormat) => void;
   /** The plan tab's view, selected node or collapsed nodes. */
   readonly updatePlan: (
     id: string,
@@ -356,6 +403,19 @@ export interface ConsolesState extends ConsoleEdits {
     rows: readonly RowRange[],
     columns: readonly number[],
   ) => Promise<string | null>;
+  /** What the selected cells add up to, or null when the engine refused. */
+  readonly aggregate: (
+    id: string,
+    resultId: string,
+    rows: readonly RowRange[],
+    columns: readonly number[],
+  ) => Promise<SelectionAggregates | null>;
+  /** Every byte of a held cell, for an image preview; null when the engine refused. */
+  readonly cellBytes: ResultWindows["cellBytes"];
+  /** Writes a held cell's bytes to a file main chose (plan 043). */
+  readonly saveBytes: ResultWindows["saveBytes"];
+  /** Reads a file main chose into the engine for this result's edits (plan 043). */
+  readonly loadBytes: ResultWindows["loadBytes"];
   /** Writes the result to `path`, draining its open cursor, and logs what it wrote. */
   readonly exportTo: (
     id: string,
@@ -382,6 +442,8 @@ export const OUTPUT_TAB = "output";
 export const OUTPUT_LIMIT = 500;
 export const DEFAULT_CONSOLE_NAME = "console";
 const RESULT_TITLE = "Result";
+/** The console has no Overwrite of its own; the key tab has (decision 115). */
+const CONSOLE_CONFLICT_HINT = "Refresh the result to see the other change and edit again, or Open Key to overwrite it.";
 /** Whether Run can start from this status; it reconnects from the last two. */
 export function canRun(status: ConsoleStatus): boolean {
   return status === "ready" || status === "disconnected" || status === "failed";
@@ -794,6 +856,21 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           void client.call("result.release", { handle: result.handle }).catch(() => undefined);
         }
       }
+      forgetReplies(id, new Set(results.flatMap((result) => (result.kind === "rows" ? [result.handle] : []))));
+    }
+
+    /** Drops Show as Result from Output lines whose result was released with its tab. */
+    function forgetReplies(id: string, handles: ReadonlySet<string>): void {
+      const output = get().consoles[id]?.output;
+      const released = (entry: OutputEntry) => entry.result !== undefined && handles.has(entry.result.executed.handle);
+      if (output === undefined || !output.some(released)) return;
+      patch(id, {
+        output: output.map((entry) => {
+          if (!released(entry)) return entry;
+          const { result: _released, ...rest } = entry;
+          return rest;
+        }),
+      });
     }
 
     function tabOf(id: string, resultId: string): ConsoleTab | undefined {
@@ -976,12 +1053,17 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             message: null,
             ...messagesOf(executed),
           });
-          log(id, { sql, message: executedText(executed, elapsed, statement.kind), tone: "success" });
+          log(id, {
+            sql,
+            message: executedText(executed, elapsed, statement.kind),
+            tone: "success",
+            ...outputLinks(executed, statement.sql, paging),
+          });
           logMessages(id, executed.messages);
           const current = get().consoles[id];
           if (current === undefined) return "cancelled";
           const datasourceId = current.datasourceId;
-          if (executed.columns.length > 0) {
+          if (opensTab(executed)) {
             const tab = resultTabOf(
               executed,
               { id: `${id}/result-${++resultIds}`, title: nextResultTitle(current.results) },
@@ -1083,6 +1165,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       sessionId: string,
       edits: ConsoleResultEdits,
     ): Promise<boolean> {
+      if (edits.key !== undefined) return submitKeyEdits(id, resultId, client, edits, edits.key);
       const changes = toEdits(edits.buffer);
       const preview = await client.call("edits.preview", { handle: edits.handle, edits: changes }).catch(() => null);
       const script = preview === null ? "" : submittedScript(preview);
@@ -1124,6 +1207,64 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         patch(id, {
           status: latest?.status === "disconnected" || latest?.status === "failed" ? latest.status : "ready",
         });
+        return false;
+      }
+    }
+
+    /**
+     * Applies a whole-key result's edits as the key tab does (decision 119): one guarded `MULTI` on
+     * the engine's helper session, which fails with `conflict` when the key changed since the read;
+     * then the result runs again to show the key as stored.
+     */
+    async function submitKeyEdits(
+      id: string,
+      resultId: string,
+      client: EngineClient,
+      edits: ConsoleResultEdits,
+      key: KeySource,
+    ): Promise<boolean> {
+      const result = resultOf(id, resultId);
+      if (result === undefined) return false;
+      const pending = resultKeyChanges(result, key, edits.buffer);
+      if ("problem" in pending) {
+        setEdits(id, resultId, { ...edits, error: keyProblemError(pending.problem) });
+        return false;
+      }
+      if (pending.changes.length === 0) return false;
+      const options = { type: key.type, guard: true };
+      const preview = await client
+        .call("keyspace.preview", { key: key.key, changes: pending.changes, options })
+        .catch(() => null);
+      const script = preview === null ? "" : preview.join("\n");
+      const ended = started(id, script, submitCommandsLabel(preview?.length ?? pending.changes.length));
+      const startedAt = dependencies.now();
+      try {
+        const applied = await client.call("keyspace.apply", {
+          database: key.database,
+          key: key.key,
+          changes: pending.changes,
+          options,
+        });
+        ended({
+          durationMs: dependencies.now() - startedAt,
+          outcome: "success",
+          rowCount: null,
+          message: null,
+          sql: applied.commands.join("\n"),
+        });
+        log(id, { sql: "", message: submittedCommandsText(applied.commands.length), tone: "success" });
+        const latest = get().consoles[id]?.edits[resultId];
+        if (latest !== undefined)
+          setEdits(id, resultId, { ...latest, buffer: EMPTY_BUFFER, editing: null, panel: null, error: null });
+        await get().rerun(id, resultId);
+        return true;
+      } catch (cause) {
+        const thrown = toError(cause);
+        const error = thrown.code === "conflict" ? { ...thrown, hint: CONSOLE_CONFLICT_HINT } : thrown;
+        ended(failureEnd(error, dependencies.now() - startedAt));
+        logError(id, firstLine(script), error);
+        const kept = get().consoles[id]?.edits[resultId];
+        if (kept !== undefined) setEdits(id, resultId, { ...kept, error });
         return false;
       }
     }
@@ -1547,6 +1688,11 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         });
       },
 
+      jumped(id, seq) {
+        if (get().consoles[id]?.jump?.seq !== seq) return;
+        patch(id, { jump: null });
+      },
+
       async switchNamespace(id, path) {
         const before = get().consoles[id];
         if (before === undefined || !canRun(before.status)) return;
@@ -1762,7 +1908,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               ...messagesOf(executed),
             });
             ended = null;
-            log(id, { sql, message: executedText(executed, elapsed, kind), tone: "success" });
+            log(id, {
+              sql,
+              message: executedText(executed, elapsed, kind),
+              tone: "success",
+              ...(executed.source === undefined ? {} : { key: executed.source }),
+            });
             logMessages(id, executed.messages);
             const latest = resultOf(id, resultId);
             if (latest === undefined) {
@@ -1787,6 +1938,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
                 ...fresh,
                 ...state,
                 pinned: latest.pinned,
+                ...(latest.valueFormat === undefined ? {} : { valueFormat: latest.valueFormat }),
                 layout,
                 autoChars: kept ? latest.autoChars : fresh.autoChars,
                 sort,
@@ -1817,6 +1969,10 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       },
 
       extract: windows.extract,
+      aggregate: windows.aggregate,
+      cellBytes: windows.cellBytes,
+      saveBytes: windows.saveBytes,
+      loadBytes: windows.loadBytes,
 
       async exportTo(id, resultId, format, path, columns, shownOnly) {
         const task = await windows.exportTo(id, resultId, format, path, columns, shownOnly);
@@ -1842,6 +1998,29 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         if (current === undefined) return;
         if (resultId !== OUTPUT_TAB && !current.results.some((result) => result.id === resultId)) return;
         patch(id, { activeResult: resultId });
+      },
+
+      showReply(id, entryId) {
+        const current = get().consoles[id];
+        const shown = current?.output.find((entry) => entry.id === entryId)?.result;
+        if (current === undefined || shown === undefined) return;
+        const open = current.results.find((tab) => tab.kind === "rows" && tab.handle === shown.executed.handle);
+        if (open !== undefined) {
+          patch(id, { activeResult: open.id });
+          return;
+        }
+        const tab = resultTabOf(
+          shown.executed,
+          { id: `${id}/result-${++resultIds}`, title: nextResultTitle(current.results) },
+          shown.sql,
+          shown.paging,
+          currentFormats(),
+        );
+        patch(id, { results: [...current.results, tab], activeResult: tab.id });
+      },
+
+      setValueFormat(id, resultId, format) {
+        updateResult(id, resultId, (result) => ({ ...result, valueFormat: format }));
       },
 
       updatePlan(id, planId, change) {

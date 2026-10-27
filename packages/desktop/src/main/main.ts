@@ -476,9 +476,14 @@ async function chooseFile(contents: WebContents, title: string): Promise<string 
   return picked.canceled ? null : (picked.filePaths[0] ?? null);
 }
 
-async function openFile(contents: WebContents, title: string): Promise<string | null> {
+/** The open dialog for one existing file: one to import, or with `anyFile` one to load into a binary cell. */
+async function openFile(contents: WebContents, title: string, anyFile = false): Promise<string | null> {
   const parent = BrowserWindow.fromWebContents(contents);
-  const options: OpenDialogOptions = { title, properties: ["openFile"], filters: IMPORT_FILE_FILTERS };
+  const options: OpenDialogOptions = {
+    title,
+    properties: ["openFile"],
+    ...(anyFile ? {} : { filters: IMPORT_FILE_FILTERS }),
+  };
   const picked = parent === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
   return picked.canceled ? null : (picked.filePaths[0] ?? null);
 }
@@ -768,7 +773,8 @@ void app.whenReady().then(async () => {
       if (failure !== "") throw new Error(`${themes.path} could not be opened: ${failure}`);
     },
     chooseFile,
-    openFile,
+    openFile: (contents, title) => openFile(contents, title),
+    openAnyFile: (contents, title) => openFile(contents, title, true),
     saveFile,
     revealFile: (path) => shell.showItemInFolder(path),
     answerHostKey,

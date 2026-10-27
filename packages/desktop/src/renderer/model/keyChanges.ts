@@ -202,6 +202,14 @@ function update(type: KeyType, values: Row, cells: ReadonlyMap<number, CellInput
     }
     case "stream":
       throw new Problem("Stream entries cannot change; delete the entry and add a new one.");
+    case "string":
+      return [
+        {
+          kind: "setString",
+          value: inputBytes(cell("value"), values[column("value")]),
+          original: bytesOfValue(values[column("value")]),
+        },
+      ];
     default:
       throw new Problem(`A ${type} key has no rows to change.`);
   }

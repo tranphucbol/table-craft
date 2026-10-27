@@ -17,7 +17,11 @@ import {
   selectedCells,
   selectedRows,
 } from "@table-craft/desktop/renderer/actions/resultEditing.js";
+import { GRID_HELPER_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridHelperActions.js";
 import { relationKey } from "@table-craft/desktop/renderer/model/explorerTree.js";
+import { canWriteCell, toggledBoolean } from "@table-craft/desktop/renderer/model/resultEdits.js";
+import type { BufferCell } from "@table-craft/desktop/renderer/model/editBuffer.js";
+import type { EditSurface } from "@table-craft/desktop/renderer/actions/resultEditing.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { canReload, useTables, type TableSession } from "@table-craft/desktop/renderer/state/tables.js";
@@ -30,6 +34,7 @@ export const TABLE_ACTION_IDS = {
   editCell: "table.editCell",
   setNull: "table.setNull",
   setDefault: "table.setDefault",
+  toggleBoolean: "table.toggleBoolean",
   addRow: "table.addRow",
   duplicateRow: "table.duplicateRow",
   deleteRows: "table.deleteRows",
@@ -44,11 +49,34 @@ export const TABLE_ACTION_IDS = {
   applyValue: "table.applyValue",
 } as const;
 
+/**
+ * The selected boolean cells Toggle Boolean writes, and the value: the focused cell's opposite.
+ * Key tabs hold no boolean columns, and their edits are commands, not literals.
+ */
+function booleanToggle(
+  context: ActionContext,
+): { readonly surface: EditSurface; readonly cells: readonly BufferCell[]; readonly value: boolean } | null {
+  if (context.keyTab !== null || !hasEditableSelection(context)) return null;
+  const surface = editableSurfaceOf(context);
+  const result = surface?.target.result;
+  if (surface == null || result == null) return null;
+  const cells = selectedCells(surface.target).filter(
+    (cell) => result.typeClasses[cell.column] === "boolean" && canWriteCell(surface.target, cell),
+  );
+  const focus = result.selection?.focus;
+  const column = focusedColumn(surface.target);
+  const lead = cells.find((cell) => cell.row === focus?.row && cell.column === column) ?? cells[0];
+  return lead === undefined ? null : { surface, cells, value: toggledBoolean(surface.target, lead) };
+}
+
 /** The grid's cell menu in the data editor; null is a separator. */
 export const TABLE_CELL_MENU: readonly (string | null)[] = [
   TABLE_ACTION_IDS.editCell,
   TABLE_ACTION_IDS.setNull,
   TABLE_ACTION_IDS.setDefault,
+  TABLE_ACTION_IDS.toggleBoolean,
+  GRID_HELPER_ACTION_IDS.loadBytes,
+  GRID_HELPER_ACTION_IDS.saveBytes,
   null,
   TABLE_ACTION_IDS.addRow,
   TABLE_ACTION_IDS.duplicateRow,
@@ -198,6 +226,18 @@ export const TABLE_ACTIONS: readonly AnyAction[] = [
     run: (context) => {
       const surface = editableSurfaceOf(context);
       surface?.setCells(selectedCells(surface.target), { kind: "default" });
+    },
+  }),
+  defineAction({
+    id: TABLE_ACTION_IDS.toggleBoolean,
+    title: "Toggle Boolean",
+    category: "Table Editor",
+    shortcut: "Space",
+    shortcutRegion: "grid",
+    when: (context) => booleanToggle(context) !== null,
+    run: (context) => {
+      const toggle = booleanToggle(context);
+      toggle?.surface.setCells(toggle.cells, { kind: "boolean", value: toggle.value });
     },
   }),
   defineAction({

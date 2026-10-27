@@ -1,3 +1,4 @@
+import { Group, Panel, type Layout } from "react-resizable-panels";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { EXPLAIN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/explainActions.js";
@@ -19,11 +20,27 @@ import {
   type ErrorQuestion,
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { MIN_CONSOLE_PANE_PERCENT, useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { groupOf, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
 import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
+
+/** Panel ids are also the DOM ids and test ids the library sets, so they must not clash with the Shell's `editor`. */
+const EDITOR_PANEL = "console-editor";
+const RESULTS_PANEL = "console-results";
+const MIN_PANE_SIZE = String(MIN_CONSOLE_PANE_PERCENT);
+/** The library's panels scroll by default; the editor and the result tabs scroll themselves. */
+const PANEL_STYLE = { overflow: "hidden" } as const;
+
+/** Only a drag is remembered; the sizes the library settles on at mount or a window resize are not. */
+function persistConsoleEditor(layout: Layout, meta: { readonly isUserInteraction: boolean }, panelId: string): void {
+  const size = layout[panelId];
+  if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeConsoleEditor(size);
+}
 
 const STATUS_TEXT = {
   connecting: "Connecting…",
@@ -114,6 +131,12 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
   const notice = useSnippetsDialog((state) => state.notice);
+  const editorSize = useLayout((state) => state.layout.consoleEditor);
+  const split = useTabs(
+    (state) => state.tabs.some((tab) => groupOf(tab) === "left") && state.tabs.some((tab) => groupOf(tab) === "right"),
+  );
+  const editorPanelId = split ? `${EDITOR_PANEL}-${consoleId}` : EDITOR_PANEL;
+  const resultsPanelId = split ? `${RESULTS_PANEL}-${consoleId}` : RESULTS_PANEL;
   if (session === undefined) return null;
   const { status } = session;
   // While the run asks about a failure, the banner shows it; the toolbar has no room for both.
@@ -126,7 +149,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
       <div
         role="toolbar"
         aria-label="Console toolbar"
-        className="flex items-center gap-gap border-b border-line bg-panel p-gap"
+        className="flex shrink-0 items-center gap-gap overflow-x-auto border-b border-line bg-panel p-gap"
       >
         <ActionButton actionId={ACTION_IDS.run} primary />
         <ActionButton actionId={ACTION_IDS.runAll} />
@@ -202,31 +225,50 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         )}
       </div>
       {session.diskChanged === null ? null : <DiskChangedBanner change={session.diskChanged} />}
-      <div
-        className={cn(
-          "min-h-0 flex-1 basis-1/2 overflow-hidden border-b border-line",
-          color !== null && `border-2 ${TINT_BORDER[color]}`,
-        )}
+      <Group
+        orientation="vertical"
+        className="min-h-0 flex-1"
+        onLayoutChanged={(layout, meta) => persistConsoleEditor(layout, meta, editorPanelId)}
       >
-        <Editor consoleId={consoleId} />
-      </div>
-      {notice?.consoleId === consoleId ? (
-        <div role="status" className="flex shrink-0 items-center gap-gap bg-success px-gap py-cell text-accent-ink">
-          <span className="min-w-0 flex-1">
-            ✓ Snippet “{notice.snippet.name}” created. Type <code className="font-editor">{notice.snippet.prefix}</code>{" "}
-            to use it.
-          </span>
-          <button
-            type="button"
-            className="shrink-0 hover:underline"
-            onClick={() => invoke(SNIPPET_ACTION_IDS.openCreated)}
-          >
-            Open Snippets
-          </button>
-        </div>
-      ) : null}
-      {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
-      <ResultTabs consoleId={consoleId} session={session} />
+        <Panel
+          id={editorPanelId}
+          data-testid={EDITOR_PANEL}
+          defaultSize={String(editorSize)}
+          minSize={MIN_PANE_SIZE}
+          className="flex flex-col"
+          style={PANEL_STYLE}
+        >
+          <div className={cn("min-h-0 flex-1 overflow-hidden", color !== null && `border-2 ${TINT_BORDER[color]}`)}>
+            <Editor consoleId={consoleId} />
+          </div>
+          {notice?.consoleId === consoleId ? (
+            <div role="status" className="flex shrink-0 items-center gap-gap bg-success px-gap py-cell text-accent-ink">
+              <span className="min-w-0 flex-1">
+                ✓ Snippet “{notice.snippet.name}” created. Type{" "}
+                <code className="font-editor">{notice.snippet.prefix}</code> to use it.
+              </span>
+              <button
+                type="button"
+                className="shrink-0 hover:underline"
+                onClick={() => invoke(SNIPPET_ACTION_IDS.openCreated)}
+              >
+                Open Snippets
+              </button>
+            </div>
+          ) : null}
+        </Panel>
+        <Handle axis="horizontal" />
+        <Panel
+          id={resultsPanelId}
+          data-testid={RESULTS_PANEL}
+          minSize={MIN_PANE_SIZE}
+          className="flex flex-col"
+          style={PANEL_STYLE}
+        >
+          {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
+          <ResultTabs consoleId={consoleId} session={session} />
+        </Panel>
+      </Group>
     </div>
   );
 }

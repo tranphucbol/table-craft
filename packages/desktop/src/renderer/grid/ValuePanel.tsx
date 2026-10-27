@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Column, WireValue } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { EDITOR_THEME } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import { BytesView } from "@table-craft/desktop/renderer/grid/BytesView.js";
 import { NULL_TEXT, panelValue } from "@table-craft/desktop/renderer/grid/format.js";
 import { Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { isBytesWire } from "@table-craft/desktop/renderer/model/binaryCells.js";
 import { prettyJson } from "@table-craft/desktop/renderer/model/prettyJson.js";
 import {
   decodeValue,
@@ -21,7 +23,7 @@ import {
 const FORMAT_LABEL = "Format";
 const FORMAT_OPTIONS = VALUE_FORMATS.map((format) => ({ value: format, label: FORMAT_LABELS[format] }));
 
-/** How a key tab's value panel reads bytes (plan 058 decision 15); the console's and table's panels have none. */
+/** How a key-value value panel reads bytes (plan 058 decision 15, decision 119); SQL panels have none. */
 export interface ValueFormatChoice {
   readonly format: ValueFormat;
   readonly onChange: (format: ValueFormat) => void;
@@ -283,12 +285,9 @@ export function ValuePanel({
       ) : shown.kind === "json" ? (
         <JsonView text={shown.text} />
       ) : shown.kind === "bytes" ? (
-        <div className="min-h-0 flex-1 overflow-auto p-cell">
-          <pre data-testid="value-bytes" className="whitespace-pre text-ink">
-            {shown.hex}
-          </pre>
-          <p className="pt-gap text-ink-muted">{shown.note}</p>
-        </div>
+        isBytesWire(value) ? (
+          <BytesView value={value} hex={shown.hex} note={shown.note} />
+        ) : null
       ) : (
         <pre
           data-testid="value-text"

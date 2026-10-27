@@ -1,4 +1,4 @@
-import type { Row, ServerMessage } from "./wire.js";
+import type { Row, ServerMessage, WireValue } from "./wire.js";
 
 /** Mirrors `ResultWindow` in core; `matches` are flat `row, column` pairs while a find is set. */
 export interface ResultWindow {
@@ -68,4 +68,29 @@ export interface FoundMatch {
   readonly index: number;
   readonly row: number;
   readonly column: number;
+}
+
+/** Mirrors `SelectionAggregates` in core: what the selected cells add up to (plan 043). */
+export interface SelectionAggregates {
+  readonly cells: number;
+  readonly distinct: number;
+  readonly kind: "numeric" | "temporal" | "other";
+  readonly sum: string | null;
+  readonly avg: string | null;
+  readonly min: WireValue;
+  readonly max: WireValue;
+}
+
+/** A cell's bytes, every one of them, as lower-case hex (plan 043). */
+export interface CellBytes {
+  readonly kind: "bytes";
+  readonly preview: string;
+  readonly length: number;
+}
+
+/** A file's bytes the engine read and holds for an edit; the renderer sees only their first bytes. */
+export interface StagedBytes {
+  readonly id: string;
+  readonly length: number;
+  readonly preview: string;
 }

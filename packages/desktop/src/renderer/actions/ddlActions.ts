@@ -1,3 +1,4 @@
+import { writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import type { Capability, GeneratorStatement } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE, type ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { openConsole } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
@@ -44,10 +45,6 @@ function capabilitiesOfDatasource(datasourceId: string): readonly Capability[] {
   const { datasources, plugins } = useDatasources.getState();
   const view = datasources.find((datasource) => datasource.id === datasourceId);
   return view === undefined ? [] : capabilitiesOf(plugins, view.pluginId);
-}
-
-async function writeClipboard(text: string): Promise<void> {
-  await navigator.clipboard.writeText(text);
 }
 
 const canReadDefinition = (context: ActionContext) => {

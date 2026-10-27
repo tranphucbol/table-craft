@@ -64,6 +64,7 @@ export {
   typeClass,
   type TypeClass,
 } from "./results/compare.js";
+export { aggregateCells, type SelectionAggregates } from "./results/aggregate.js";
 export {
   RESULT_FETCH_ALL_CAP,
   RESULT_PAGE_ROWS,
