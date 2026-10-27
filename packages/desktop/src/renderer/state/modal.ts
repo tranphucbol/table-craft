@@ -84,6 +84,7 @@ export type ModalRequest =
       readonly items?: readonly ModalItem[];
       /** Shown before Cancel, the first one focused. */
       readonly choices: readonly ModalChoice[];
+      readonly focusedChoice?: string;
     }
   | {
       /**

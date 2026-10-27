@@ -112,3 +112,5 @@ started, not when it is merged.
 | 119 | [Console replies name the key they read, and whole-key replies edit like the key tab](119-console-replies-name-their-key.md)                                           |
 | 120 | [Motion is plain CSS, and surfaces animate in only](120-motion-is-plain-css-and-surfaces-animate-in-only.md)                                                           |
 | 121 | [Editor groups move tabs without duplicating sessions](121-editor-groups-move-tabs-without-duplicating-sessions.md)                                                    |
+| 122 | [SQL snippets are profile templates](122-sql-snippets-are-profile-templates.md) (SQL-only model superseded by 123)                                                     |
+| 123 | [Snippets are scoped text templates](123-snippets-are-scoped-text-templates.md)                                                                                        |

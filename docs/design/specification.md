@@ -923,6 +923,50 @@ cursors, undo and completion (see Completion and navigation); its colours and fo
 as CSS variables (`renderer/console/editorTheme.ts`). The datasource colour tints the editor's
 border. The editor's accessible name is `SQL console`.
 
+### Snippets
+
+**Snippets…**, available through Find Action, manages profile-local text templates for SQL and
+command consoles (decision 123, superseding decision 122's SQL-only scope). Its searchable master/detail manager supports create, read, update and delete, with a body
+preview, validation, unsaved-edit guards and actionable load/save errors. A new profile has no
+seeded snippets.
+
+Each `TextSnippet` is `{ id, name, prefix, body, scope }`. Scope means all text consoles, all SQL
+consoles, or one plugin identity. A migrated legacy SQL scope may additionally retain its old
+highlight restriction; that restriction is migration compatibility, not a new plugin selector.
+Eligibility requires `sql` or `commands`; the scope then filters eligible consoles. All SQL never
+includes a command-only console. A per-plugin scope matches manifest id, not `highlight` or one
+datasource id. **Applies to** lists installed eligible plugins dynamically by id/name, without
+hardcoded plugin identities. New drafts default to the active datasource type, otherwise all
+consoles. An unavailable saved scope must remain intact rather than silently becoming broader.
+
+The editor is labeled **Snippet body**. The manager preview always renders plain text, without
+syntax highlighting. Console highlighting separately follows capability and language metadata,
+not scope identity. Unknown command highlighters render plain text and do not receive SQL keyword
+completion. Template editing and native expansion work offline; SQL/command language services
+remain the plugin's responsibility.
+
+Prefix matches join the completion popup without replacing engine or keyword suggestions. `Tab`
+or `Enter` accepts the selected snippet; during field editing `Tab` and `Shift+Tab` navigate the
+fields without breaking ordinary completion or indentation outside a snippet. `${table}`,
+`${schema}` and arbitrary named fields are editable text, not database-autofilled values. Repeated
+names are linked. `${cursor}` is a final zero-width caret stop, not an editable field or literal
+text. Expansion uses native CodeMirror snippet support, with no new dependency or SQL parser in
+the renderer. It inserts text only; execution and its guards are unchanged.
+
+Main owns the strict version-2 `<userData>/snippets.json` document and serializes atomic CRUD writes.
+It also accepts strict version-1 SQL documents: `dialect: null` becomes all SQL, and a string becomes
+a legacy SQL scope retaining that highlight. Migration is in memory on read, never a read-triggered
+write. The next successful CRUD mutation atomically writes version 2. Ids, names, prefixes, bodies
+and restrictions are preserved; old all-SQL snippets never broaden to all consoles. Invalid
+documents and failed writes leave prior content intact and report actionable errors.
+Typed, validated IPC carries snippet operations through preload; the renderer never accesses the
+file directly. The document is separate from `settings.json`, contains plain-text user content,
+and is not a secret store. Invalid documents and I/O failures must be reported rather than silently
+overwriting the user's templates. No plugin API or engine language contract changes are required.
+No driver, dependency or future database plugin is added. A future plugin can participate through
+the existing SQL/command text-console hooks; that does not itself provide execution support for
+etcd, Kafka, MongoDB or another system.
+
 ### Run scopes
 
 The renderer sends the text to `script.split` only when the user runs, and picks the statements

@@ -36,6 +36,8 @@ import { createCredentialReader, runCommand } from "@table-craft/desktop/main/im
 import { nodeImportFiles } from "@table-craft/desktop/main/import/nodeFiles.js";
 import { parseTableProDefaults, TABLEPRO_DEFAULTS_DOMAIN } from "@table-craft/desktop/main/import/tablepro.js";
 import { registerIpc } from "@table-craft/desktop/main/ipc.js";
+import { createSnippetsService } from "@table-craft/desktop/main/snippets.js";
+import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 import {
   DIAGNOSTICS_HISTORY_RUNS,
   diagnosticsEntries,
@@ -286,10 +288,9 @@ const cipher: Cipher = {
   decrypt: (cipherText) => safeStorage.decryptString(Buffer.from(cipherText, CIPHER_ENCODING)),
 };
 
-function broadcast(
-  channel: string,
-  payload: DatasourceList | EngineExited | SettingsChanged | UpdateState | PluginsState | readonly LogRecord[],
-): void {
+type BroadcastState = DatasourceList | EngineExited | SettingsChanged | UpdateState | PluginsState;
+
+function broadcast(channel: string, payload: BroadcastState | readonly (LogRecord | TextSnippet)[]): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
 }
 
@@ -761,6 +762,11 @@ void app.whenReady().then(async () => {
     }),
     history,
     settings,
+    snippets: createSnippetsService({
+      directory,
+      files,
+      onChanged: (snippets) => broadcast(CHANNELS.snippetsChanged, snippets),
+    }),
     async openThemesFolder() {
       await files.makeDirectory(themes.path);
       const failure = await shell.openPath(themes.path);

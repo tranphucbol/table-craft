@@ -18,6 +18,8 @@ import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPromp
 import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
+import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
+import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 
 /** A visible editor's controls describe its own tab, even while another group has focus. */
 export const ActionTabContext = createContext<string | undefined>(undefined);
@@ -48,6 +50,8 @@ const STORES = [
   useObjects,
   useSessions,
   useWindowState,
+  useSnippets,
+  useSnippetsDialog,
 ] as const;
 
 /** Calls `listener` whenever a store an action's `when` might read changes. */

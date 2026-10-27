@@ -4,6 +4,7 @@ import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js"
 import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import { useActionAvailable } from "@table-craft/desktop/renderer/actions/index.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
+
 import { MAIN_MENU_ANCHOR_ATTRIBUTE, WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { tabCaption, windowTitle } from "@table-craft/desktop/renderer/model/windowTitle.js";
 import { DatasourceWidget } from "@table-craft/desktop/renderer/shell/DatasourceWidget.js";

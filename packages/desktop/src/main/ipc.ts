@@ -7,6 +7,12 @@ import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors
 import { SecretStoreError } from "@table-craft/desktop/main/secrets.js";
 import { SqlFileError, type SqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { settingsSchema, type SettingsService } from "@table-craft/desktop/main/settings.js";
+import {
+  SnippetError,
+  snippetSchema,
+  snippetIdSchema,
+  type SnippetsService,
+} from "@table-craft/desktop/main/snippets.js";
 import { DatasourceError, type DatasourceService } from "@table-craft/desktop/main/service.js";
 import {
   HISTORY_OUTCOMES,
@@ -135,6 +141,7 @@ export interface IpcOptions<Sender> {
   /** The renderer's answer to `CHANNELS.hostKeyPrompt` (decision 071). */
   readonly answerHostKey: (requestId: number, trust: boolean) => void;
   readonly settings: SettingsService;
+  readonly snippets: SnippetsService;
   /** Creates `<userData>/themes/` if missing and shows it in the file manager. */
   readonly openThemesFolder: () => Promise<void>;
   readonly appInfo: () => AppInfo;
@@ -195,6 +202,7 @@ function failureOf(cause: unknown): BridgeFailure | null {
     cause instanceof SecretStoreError ||
     cause instanceof ConsoleFileError ||
     cause instanceof SqlFileError ||
+    cause instanceof SnippetError ||
     cause instanceof PluginInstallError
   ) {
     return { message: cause.message, hint: cause.hint };
@@ -317,6 +325,27 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.recentSqlFiles, noRequest, () => sqlFiles.recent());
 
   const { settings } = options;
+  handle(INVOKE_CHANNELS.readSnippets, noRequest, () => options.snippets.read());
+  handle(INVOKE_CHANNELS.saveSnippet, snippetSchema, (snippet) => options.snippets.save(snippet));
+  handle(INVOKE_CHANNELS.deleteSnippet, z.strictObject({ id: snippetIdSchema }), ({ id }) =>
+    options.snippets.remove(id),
+  );
+  handle(INVOKE_CHANNELS.importSnippets, noRequest, async (_request, sender) => {
+    const filePath = await options.chooseFile(sender, "Import Snippets");
+    if (filePath === null) return options.snippets.read();
+    return options.snippets.importSnippets(filePath);
+  });
+  handle(
+    INVOKE_CHANNELS.exportSnippets,
+    z.strictObject({ snippets: z.array(snippetSchema) }),
+    async ({ snippets }, sender) => {
+      const filePath = await options.saveFile(sender, "Export Snippets", "snippets.json");
+      if (filePath === null) return null;
+      await options.snippets.exportSnippets(filePath, snippets);
+      return null;
+    },
+  );
+
   handle(INVOKE_CHANNELS.readSettings, noRequest, () => settings.snapshot());
   handle(INVOKE_CHANNELS.writeSettings, settingsSchema, async (document) => {
     await settings.write(document);

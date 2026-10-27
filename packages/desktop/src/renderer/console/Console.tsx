@@ -26,6 +26,8 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
+import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 
 /** Panel ids are also the DOM ids and test ids the library sets, so they must not clash with the Shell's `editor`. */
 const EDITOR_PANEL = "console-editor";
@@ -128,6 +130,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const session = useConsoles((state) => state.consoles[consoleId]);
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
+  const notice = useSnippetsDialog((state) => state.notice);
   const editorSize = useLayout((state) => state.layout.consoleEditor);
   const split = useTabs(
     (state) => state.tabs.some((tab) => groupOf(tab) === "left") && state.tabs.some((tab) => groupOf(tab) === "right"),
@@ -238,6 +241,21 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           <div className={cn("min-h-0 flex-1 overflow-hidden", color !== null && `border-2 ${TINT_BORDER[color]}`)}>
             <Editor consoleId={consoleId} />
           </div>
+          {notice?.consoleId === consoleId ? (
+            <div role="status" className="flex shrink-0 items-center gap-gap bg-success px-gap py-cell text-accent-ink">
+              <span className="min-w-0 flex-1">
+                ✓ Snippet “{notice.snippet.name}” created. Type{" "}
+                <code className="font-editor">{notice.snippet.prefix}</code> to use it.
+              </span>
+              <button
+                type="button"
+                className="shrink-0 hover:underline"
+                onClick={() => invoke(SNIPPET_ACTION_IDS.openCreated)}
+              >
+                Open Snippets
+              </button>
+            </div>
+          ) : null}
         </Panel>
         <Handle axis="horizontal" />
         <Panel

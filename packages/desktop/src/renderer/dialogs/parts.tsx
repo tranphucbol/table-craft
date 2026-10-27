@@ -7,12 +7,13 @@ export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -tran
 export const INPUT_CLASS =
   "h-row min-w-0 rounded border border-line bg-canvas px-cell text-ink outline-none focus:border-accent disabled:opacity-60 aria-invalid:border-danger";
 
-type ButtonVariant = "primary" | "secondary" | "danger";
+type ButtonVariant = "primary" | "secondary" | "danger" | "dangerOutline";
 
 const BUTTON_CLASS: Readonly<Record<ButtonVariant, string>> = {
   primary: "bg-accent text-accent-ink",
   secondary: "border border-line text-ink hover:bg-raised",
   danger: "bg-danger text-accent-ink",
+  dangerOutline: "border border-danger bg-raised text-danger enabled:hover:bg-danger/10 disabled:cursor-not-allowed",
 };
 
 export function Button({
@@ -23,7 +24,12 @@ export function Button({
   return (
     <button
       type="button"
-      className={cn("h-row shrink-0 rounded px-gap disabled:opacity-50", BUTTON_CLASS[variant], className)}
+      className={cn(
+        "h-row shrink-0 rounded px-gap",
+        variant === "dangerOutline" ? "disabled:opacity-40" : "disabled:opacity-50",
+        BUTTON_CLASS[variant],
+        className,
+      )}
       {...props}
     />
   );
