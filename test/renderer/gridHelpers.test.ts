@@ -23,7 +23,12 @@ import {
   toggledBoolean,
   type EditTarget,
 } from "@table-craft/desktop/renderer/model/resultEdits.js";
-import { pickedText, pickerKindOf, pickerValueOf } from "@table-craft/desktop/renderer/model/temporalPicker.js";
+import {
+  pickedText,
+  pickerKindOf,
+  pickerValueAt,
+  pickerValueOf,
+} from "@table-craft/desktop/renderer/model/temporalPicker.js";
 import { resultTabOf, type ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { AGGREGATE_NAMES } from "@table-craft/desktop/settings/settings.js";
 
@@ -162,27 +167,64 @@ describe("binary cells", () => {
 });
 
 describe("temporal picker", () => {
-  it("givenColumnTypes_whenPickerChosen_thenNativeKindPerType", () => {
+  it("givenColumnTypes_whenPickerChosen_thenKindPerType", () => {
     expect(pickerKindOf("DATE")).toBe("date");
-    expect(pickerKindOf("timestamp(3) with time zone")).toBe("datetime-local");
-    expect(pickerKindOf("DATETIME")).toBe("datetime-local");
+    expect(pickerKindOf("timestamp(3) with time zone")).toBe("datetime");
+    expect(pickerKindOf("DATETIME")).toBe("datetime");
     expect(pickerKindOf("time")).toBe("time");
     expect(pickerKindOf("interval")).toBeNull();
     expect(pickerKindOf(null)).toBeNull();
   });
 
   it("givenTemporalCell_whenPickDate_thenWrittenInTheCellsShape", () => {
-    expect(pickerValueOf("datetime-local", "2024-01-15 10:30:00")).toBe("2024-01-15T10:30:00");
-    expect(pickerValueOf("date", "2024-01-15T00:00:00.000Z")).toBe("2024-01-15");
-    expect(pickerValueOf("time", "garbage")).toBe("");
+    expect(pickerValueOf("datetime", "2024-01-15 10:30:00")).toEqual({
+      day: "2024-01-15",
+      time: { hour: 10, minute: 30, second: 0 },
+    });
+    expect(pickerValueOf("date", "2024-01-15T00:00:00.000Z")).toEqual({ day: "2024-01-15", time: null });
+    expect(pickerValueOf("datetime", "2024-01-15")).toEqual({
+      day: "2024-01-15",
+      time: { hour: 0, minute: 0, second: 0 },
+    });
 
-    expect(pickedText("date", "2024-02-29", "2024-01-15")).toBe("2024-02-29");
-    expect(pickedText("datetime-local", "2024-02-29T08:05", "2024-01-15 10:30:00")).toBe("2024-02-29 08:05:00");
-    expect(pickedText("datetime-local", "2024-02-29T08:05:07", "2024-01-15T10:30:00.000Z")).toBe(
-      "2024-02-29T08:05:07Z",
+    expect(pickedText("date", { day: "2024-02-29", time: null }, "2024-01-15")).toBe("2024-02-29");
+    expect(pickedText("datetime", { day: "2024-02-29", time: at(8, 5, 0) }, "2024-01-15 10:30:00")).toBe(
+      "2024-02-29 08:05:00",
     );
-    expect(pickedText("datetime-local", "2024-02-29T08:05", "")).toBe("2024-02-29 08:05:00");
-    expect(pickedText("time", "08:05", "10:30:00+02")).toBe("08:05:00+02");
-    expect(pickedText("date", "", "2024-01-15")).toBe("2024-01-15");
+    expect(pickedText("datetime", { day: "2024-02-29", time: null }, "")).toBe("2024-02-29 00:00:00");
+    expect(pickedText("time", { day: null, time: at(8, 5, 0) }, "10:30:00+02")).toBe("08:05:00+02");
+    expect(pickedText("date", { day: null, time: null }, "2024-01-15")).toBe("2024-01-15");
+    expect(pickedText("date", { day: "2024-03-15", time: null }, "garbage")).toBe("2024-03-15");
+  });
+
+  it("givenMicroseconds_whenPickDay_thenFractionKept", () => {
+    const current = "2026-02-25 16:54:26.742623";
+    const picked = { ...pickerValueOf("datetime", current), day: "2026-02-10" };
+    expect(pickedText("datetime", picked, current)).toBe("2026-02-10 16:54:26.742623");
+  });
+
+  it("givenFractionAndZone_whenPickTime_thenBothKept", () => {
+    expect(pickedText("datetime", { day: "2024-01-15", time: at(8, 5, 7) }, "2024-01-15T10:30:00.000Z")).toBe(
+      "2024-01-15T08:05:07.000Z",
+    );
+    expect(pickedText("time", { day: null, time: at(8, 5, 7) }, "10:30:00.25+02:00")).toBe("08:05:07.25+02:00");
+  });
+
+  it("givenNow_whenKeepFractionFalse_thenFractionDropped", () => {
+    const now = pickerValueAt(new Date(2026, 9, 27, 9, 8, 7, 654));
+    expect(now).toEqual({ day: "2026-10-27", time: at(9, 8, 7) });
+    expect(pickedText("datetime", now, "2026-02-25T16:54:26.742623Z", { keepFraction: false })).toBe(
+      "2026-10-27T09:08:07Z",
+    );
+  });
+
+  it("givenUnparsableText_whenPickerValueOf_thenNoDayNoTime", () => {
+    expect(pickerValueOf("time", "garbage")).toEqual({ day: null, time: null });
+    expect(pickerValueOf("datetime", "")).toEqual({ day: null, time: null });
+    expect(pickerValueOf("date", "soon")).toEqual({ day: null, time: null });
   });
 });
+
+function at(hour: number, minute: number, second: number): { hour: number; minute: number; second: number } {
+  return { hour, minute, second };
+}

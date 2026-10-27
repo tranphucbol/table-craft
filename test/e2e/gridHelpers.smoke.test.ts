@@ -41,6 +41,15 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("043");
+const pickerEvidence = evidenceFor("111");
+const COMPLETION_WAIT_MS = 1_000;
+const PICKER_APPEARANCES = [
+  ["DarkComfortable", "dark", "comfortable"],
+  ["HighContrastCompact", "highContrast", "compact"],
+] as const;
+const FIELD_FOCUSED = "document.activeElement?.matches('[data-editing] input') === true";
+const PICKER_SETTLED =
+  "Promise.all(document.querySelector('[data-testid=temporal-picker]').getAnimations({ subtree: true }).map((a) => a.finished))";
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -205,6 +214,46 @@ async function loadIntoCell(running: RunningApp, cell: Locator, path: string): P
   await answerOpenDialog(running.app, path);
   await cell.click({ button: "right" });
   await running.page.getByRole("menuitem", { name: "Load File into Cell…" }).click();
+}
+
+function picker(page: Page) {
+  return page.getByTestId("temporal-picker");
+}
+
+function cellField(page: Page) {
+  return editor(page).locator("[data-editing] input");
+}
+
+/** Opens the picker from the calendar button and waits out its entry, so a capture shows it whole. */
+async function clickPicker(page: Page, name: string): Promise<void> {
+  await editor(page)
+    .getByRole("button", { name: `Pick ${name}` })
+    .click();
+  await picker(page).waitFor();
+  await page.evaluate(PICKER_SETTLED);
+}
+
+/** Edits the cell and opens its picker from the calendar button. */
+async function openPicker(page: Page, row: number, column: number, name: string): Promise<void> {
+  await cellIn(editor(page), row, column).click();
+  await page.keyboard.press("Enter");
+  await clickPicker(page, name);
+}
+
+/**
+ * The completion popup over the grid would take the clicks that follow, and while it is open
+ * Enter accepts a completion instead of applying the clause, so it is closed first.
+ */
+async function orderById(page: Page): Promise<void> {
+  const clause = editor(page).getByTestId("filter-order-by").locator(".cm-content");
+  const completions = page.locator(".cm-tooltip-autocomplete");
+  await clause.fill("id");
+  await completions.waitFor({ timeout: COMPLETION_WAIT_MS }).catch(() => undefined);
+  if (await completions.isVisible()) await clause.press("Escape");
+  await clause.press("Enter");
+  await expect.poll(() => editor(page).getByTestId("filter-order-by").getAttribute("data-invalid")).toBe("false");
+  await expect.poll(() => cellIn(editor(page), 0, 0).textContent()).toBe("1");
+  await completions.waitFor({ state: "hidden" });
 }
 
 async function previewTexts(page: Page): Promise<string[]> {
@@ -546,20 +595,32 @@ describe.runIf(DATABASES_ENABLED)("grid helpers live test", () => {
     async () => {
       const { page } = await launch(MYSQL);
       await openFromTree(page, "type_probe");
+      await orderById(page);
+      const field = cellField(page);
 
-      await cellIn(editor(page), 0, DAY).click();
-      await page.keyboard.press("Enter");
-      await editor(page).getByRole("button", { name: "Pick day" }).waitFor();
-      await editor(page).locator('[data-cell-picker="date"]').fill("2024-03-15");
-      const field = editor(page).locator("[data-editing] input:not([data-cell-picker])");
-      await expect.poll(() => field.inputValue()).toBe("2024-03-15");
+      await openPicker(page, 0, DAY, "day");
+      expect(await picker(page).locator("[data-picker-kind]").getAttribute("data-picker-kind")).toBe("date");
+      expect(await picker(page).locator("[data-month]").getAttribute("data-month")).toBe("2024-02");
       await captureWindow(page, "temporal-picker");
+      await pickerEvidence(page, "date-picker");
+      await picker(page).getByRole("button", { name: "Next month" }).click();
+      await picker(page).getByRole("gridcell", { name: "2024-03-15" }).click();
+      await expect.poll(() => picker(page).count()).toBe(0);
+      await expect.poll(() => field.inputValue()).toBe("2024-03-15");
+      await expect.poll(() => page.evaluate(FIELD_FOCUSED)).toBe(true);
       await field.press("Enter");
 
-      await cellIn(editor(page), 0, MOMENT).click();
-      await page.keyboard.press("Enter");
-      await editor(page).locator('[data-cell-picker="datetime-local"]').fill("2024-03-15T08:30");
+      await openPicker(page, 0, MOMENT, "moment");
+      expect(await picker(page).locator("[data-picker-kind]").getAttribute("data-picker-kind")).toBe("datetime");
+      await picker(page).getByRole("button", { name: "Next month" }).click();
+      await picker(page).getByRole("gridcell", { name: "2024-03-15" }).click();
+      await expect.poll(() => field.inputValue()).toBe("2024-03-15 13:45:30");
+      await picker(page).getByRole("spinbutton", { name: "Hour" }).click();
+      await page.keyboard.type("083000");
       await expect.poll(() => field.inputValue()).toBe("2024-03-15 08:30:00");
+      await pickerEvidence(page, "datetime-picker");
+      await page.keyboard.press("Enter");
+      await expect.poll(() => picker(page).count()).toBe(0);
       await field.press("Enter");
 
       await expect.poll(() => cellIn(editor(page), 0, DAY).textContent()).toBe("2024-03-15");
@@ -577,16 +638,121 @@ describe.runIf(DATABASES_ENABLED)("grid helpers live test", () => {
     async () => {
       const { page } = await launch(POSTGRES);
       await openFromTree(page, "type_probe");
-      await editor(page).getByTestId("filter-order-by").locator(".cm-content").fill("id");
-      await editor(page).getByTestId("filter-order-by").locator(".cm-content").press("Enter");
+      await orderById(page);
       await expect.poll(() => cellIn(editor(page), 0, MOMENT).textContent()).toBe("2024-02-29 13:45:30");
+      const field = cellField(page);
+
+      await openPicker(page, 0, MOMENT, "moment");
+      await picker(page).getByRole("gridcell", { name: "2024-02-01" }).click();
+      const hour = picker(page).getByRole("spinbutton", { name: "Hour" });
+      await hour.click();
+      await page.keyboard.press("ArrowUp");
+      await expect.poll(() => field.inputValue()).toBe("2024-02-01 14:45:30");
+      await hour.hover();
+      await page.mouse.wheel(0, 100);
+      await expect.poll(() => field.inputValue()).toBe("2024-02-01 13:45:30");
+      await captureWindow(page, "temporal-postgres");
+      await pickerEvidence(page, "datetime-postgres");
+      await page.keyboard.press("Escape");
+      await expect.poll(() => picker(page).count()).toBe(0);
+      await expect.poll(() => field.inputValue()).toBe("2024-02-01 13:45:30");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  for (const [appearance, theme, density] of PICKER_APPEARANCES)
+    it.skipIf(WITHOUT_POSTGRES)(
+      `given${appearance}_whenPickerOpens_thenItTakesTheTheme`,
+      async () => {
+        const userDataDir = newProfile();
+        seedSettings(userDataDir, { version: 1, appearance: { theme, density } });
+        const { page } = await launch(POSTGRES, userDataDir);
+        await openFromTree(page, "type_probe");
+        await orderById(page);
+
+        await openPicker(page, 0, MOMENT, "moment");
+        await expect
+          .poll(() => picker(page).getByRole("gridcell", { selected: true }).getAttribute("aria-label"))
+          .toBe("2024-02-29");
+        await pickerEvidence(page, `picker-${theme}-${density}`);
+      },
+      SCENARIO_TIMEOUT_MS,
+    );
+
+  it.skipIf(WITHOUT_POSTGRES)(
+    "givenPostgresMicroseconds_whenDayPicked_thenFractionKept",
+    async () => {
+      const { page } = await launch(POSTGRES);
+      await openFromTree(page, "type_probe");
+      await orderById(page);
+      const field = cellField(page);
 
       await cellIn(editor(page), 0, MOMENT).click();
       await page.keyboard.press("Enter");
-      await editor(page).locator('[data-cell-picker="datetime-local"]').fill("2025-01-02T03:04:05");
-      const field = editor(page).locator("[data-editing] input:not([data-cell-picker])");
-      await expect.poll(() => field.inputValue()).toBe("2025-01-02 03:04:05");
-      await captureWindow(page, "temporal-postgres");
+      await field.fill("2026-02-25 16:54:26.742623");
+      await clickPicker(page, "moment");
+      expect(await picker(page).locator("[data-month]").getAttribute("data-month")).toBe("2026-02");
+      await picker(page).getByRole("gridcell", { name: "2026-02-20" }).click();
+      await expect.poll(() => field.inputValue()).toBe("2026-02-20 16:54:26.742623");
+      await pickerEvidence(page, "fraction-kept");
+      await page.keyboard.press("Enter");
+      await field.press("Enter");
+
+      await expect.poll(() => cellIn(editor(page), 0, MOMENT).textContent()).toBe("2026-02-20 16:54:26.742623");
+      const texts = await previewTexts(page);
+      expect(texts[0]).toContain("'2026-02-20 16:54:26.742623'");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenDatePicker_whenKeyboardOnly_thenArrowsAndEnterPick",
+    async () => {
+      const { page } = await launch(MYSQL);
+      await openFromTree(page, "type_probe");
+      await orderById(page);
+      const field = cellField(page);
+
+      await openPicker(page, 0, DAY, "day");
+      const cursor = picker(page).locator("[data-cursor]");
+      await expect.poll(() => cursor.getAttribute("aria-label")).toBe("2024-02-29");
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("ArrowDown");
+      await expect.poll(() => cursor.getAttribute("aria-label")).toBe("2024-03-08");
+      await page.keyboard.press("PageDown");
+      await expect.poll(() => cursor.getAttribute("aria-label")).toBe("2024-04-08");
+      await page.keyboard.press("Shift+PageUp");
+      await expect.poll(() => cursor.getAttribute("aria-label")).toBe("2023-04-08");
+      await page.keyboard.press("PageUp");
+      await expect.poll(() => picker(page).locator("[data-month]").getAttribute("data-month")).toBe("2023-03");
+      await pickerEvidence(page, "keyboard-cursor");
+      await page.keyboard.press("Enter");
+
+      await expect.poll(() => picker(page).count()).toBe(0);
+      await expect.poll(() => field.inputValue()).toBe("2023-03-08");
+      await page.keyboard.press("Enter");
+      await expect.poll(() => cellIn(editor(page), 0, DAY).textContent()).toBe("2023-03-08");
+      await expect.poll(() => pending(page).count()).toBe(1);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenOpenPicker_whenClickAnotherCell_thenEditCommits",
+    async () => {
+      const { page } = await launch(MYSQL);
+      await openFromTree(page, "type_probe");
+      await orderById(page);
+
+      await openPicker(page, 0, MOMENT, "moment");
+      await picker(page).getByRole("gridcell", { name: "2024-02-15" }).click();
+      await expect.poll(() => cellField(page).inputValue()).toBe("2024-02-15 13:45:30");
+      await cellIn(editor(page), 0, DAY).click();
+
+      await expect.poll(() => picker(page).count()).toBe(0);
+      await expect.poll(() => cellField(page).count()).toBe(0);
+      await expect.poll(() => cellIn(editor(page), 0, MOMENT).textContent()).toBe("2024-02-15 13:45:30");
+      await pickerEvidence(page, "outside-commit");
     },
     SCENARIO_TIMEOUT_MS,
   );
