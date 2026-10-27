@@ -22,6 +22,8 @@ import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/da
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
+import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 
 const STATUS_TEXT = {
   connecting: "Connecting…",
@@ -111,6 +113,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const session = useConsoles((state) => state.consoles[consoleId]);
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
+  const notice = useSnippetsDialog((state) => state.notice);
   if (session === undefined) return null;
   const { status } = session;
   // While the run asks about a failure, the banner shows it; the toolbar has no room for both.
@@ -207,6 +210,21 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
       >
         <Editor consoleId={consoleId} />
       </div>
+      {notice?.consoleId === consoleId ? (
+        <div role="status" className="flex shrink-0 items-center gap-gap bg-success px-gap py-cell text-accent-ink">
+          <span className="min-w-0 flex-1">
+            ✓ Snippet “{notice.snippet.name}” created. Type <code className="font-editor">{notice.snippet.prefix}</code>{" "}
+            to use it.
+          </span>
+          <button
+            type="button"
+            className="shrink-0 hover:underline"
+            onClick={() => invoke(SNIPPET_ACTION_IDS.openCreated)}
+          >
+            Open Snippets
+          </button>
+        </div>
+      ) : null}
       {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
       <ResultTabs consoleId={consoleId} session={session} />
     </div>

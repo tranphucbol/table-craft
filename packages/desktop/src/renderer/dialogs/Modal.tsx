@@ -76,7 +76,7 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
       onSubmit={(event) => {
         event.preventDefault();
         if (blocked) return;
-        if (request.kind === "choice") answer(request.choices[0]?.id ?? null);
+        if (request.kind === "choice") answer(request.focusedChoice ?? request.choices[0]?.id ?? null);
         else answer(request.kind === "text" ? text : "");
       }}
     >
@@ -136,10 +136,18 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
           request.choices.map((choice, index) => (
             <Button
               key={choice.id}
-              type={index === 0 ? "submit" : "button"}
-              autoFocus={index === 0}
+              type={
+                (request.focusedChoice === undefined ? index === 0 : choice.id === request.focusedChoice)
+                  ? "submit"
+                  : "button"
+              }
+              autoFocus={request.focusedChoice === undefined ? index === 0 : choice.id === request.focusedChoice}
               variant={choice.variant ?? "secondary"}
-              onClick={index === 0 ? undefined : () => answer(choice.id)}
+              onClick={
+                (request.focusedChoice === undefined ? index === 0 : choice.id === request.focusedChoice)
+                  ? undefined
+                  : () => answer(choice.id)
+              }
             >
               {choice.label}
             </Button>

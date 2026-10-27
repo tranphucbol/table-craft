@@ -327,6 +327,22 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.deleteSnippet, z.strictObject({ id: snippetIdSchema }), ({ id }) =>
     options.snippets.remove(id),
   );
+  handle(INVOKE_CHANNELS.importSnippets, noRequest, async (_request, sender) => {
+    const filePath = await options.chooseFile(sender, "Import Snippets");
+    if (filePath === null) return options.snippets.read();
+    return options.snippets.importSnippets(filePath);
+  });
+  handle(
+    INVOKE_CHANNELS.exportSnippets,
+    z.strictObject({ snippets: z.array(snippetSchema) }),
+    async ({ snippets }, sender) => {
+      const filePath = await options.saveFile(sender, "Export Snippets", "snippets.json");
+      if (filePath === null) return null;
+      await options.snippets.exportSnippets(filePath, snippets);
+      return null;
+    },
+  );
+
   handle(INVOKE_CHANNELS.readSettings, noRequest, () => settings.snapshot());
   handle(INVOKE_CHANNELS.writeSettings, settingsSchema, async (document) => {
     await settings.write(document);

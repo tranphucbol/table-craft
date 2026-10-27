@@ -80,6 +80,8 @@ export const INVOKE_CHANNELS = {
   readSnippets: "table-craft:snippets.read",
   saveSnippet: "table-craft:snippets.save",
   deleteSnippet: "table-craft:snippets.delete",
+  importSnippets: "table-craft:snippets.import",
+  exportSnippets: "table-craft:snippets.export",
   writeSettings: "table-craft:settings.write",
   reloadThemes: "table-craft:themes.reload",
   openThemesFolder: "table-craft:themes.open-folder",
@@ -657,6 +659,8 @@ export interface TableCraftBridge {
   readSnippets(): Promise<InvokeResult<readonly TextSnippet[]>>;
   saveSnippet(snippet: TextSnippet): Promise<InvokeResult<readonly TextSnippet[]>>;
   deleteSnippet(id: string): Promise<InvokeResult<readonly TextSnippet[]>>;
+  importSnippets(): Promise<InvokeResult<readonly TextSnippet[]>>;
+  exportSnippets(snippets: readonly TextSnippet[]): Promise<InvokeResult<null>>;
   onSnippetsChanged(listener: (snippets: readonly TextSnippet[]) => void): () => void;
   appInfo(): Promise<InvokeResult<AppInfo>>;
   /** Saves the whole document; every window, this one included, hears it on `onSettingsChanged`. */

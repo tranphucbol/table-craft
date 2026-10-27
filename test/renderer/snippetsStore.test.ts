@@ -23,6 +23,13 @@ function setup() {
     readSnippets: vi.fn((): Promise<Answer> => Promise.resolve(success([SNIPPET]))),
     saveSnippet: vi.fn((snippet: TextSnippet): Promise<Answer> => Promise.resolve(success([snippet]))),
     deleteSnippet: vi.fn((_id: string): Promise<Answer> => Promise.resolve(success([]))),
+    importSnippets: vi.fn((): Promise<Answer> => Promise.resolve(success([]))),
+    exportSnippets: vi.fn(
+      (
+        _snippets: readonly TextSnippet[],
+      ): Promise<{ ok: true; value: null } | { ok: false; error: { message: string; hint: string } }> =>
+        Promise.resolve({ ok: true, value: null }),
+    ),
     onSnippetsChanged: vi.fn((listener: typeof changed) => {
       changed = listener;
       return unsubscribe;

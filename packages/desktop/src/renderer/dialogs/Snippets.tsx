@@ -5,7 +5,6 @@ import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippe
 import {
   Button,
   CONTENT_CLASS,
-  FieldRow,
   INPUT_CLASS,
   OVERLAY_CLASS,
   TextInput,
@@ -15,6 +14,7 @@ import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.
 import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
 import {
   snippetDraftDirty,
+  snippetFieldProblems,
   snippetScopeLabel,
   snippetScopeOptions,
   snippetScopeValue,
@@ -22,6 +22,7 @@ import {
 } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
+import { snippetPreview } from "@table-craft/desktop/renderer/console/snippetCompletion.js";
 
 const PLACEHOLDER_HELP =
   "Use ${name} for an editable placeholder. Repeated names stay linked. ${cursor} marks the final stop. After insertion, Tab and Shift+Tab move between placeholders.";
@@ -34,86 +35,104 @@ function SnippetForm({
   draft,
   disabled,
   isNew,
+  compact = false,
 }: {
   readonly draft: TextSnippet;
   readonly disabled: boolean;
   readonly isNew: boolean;
+  readonly compact?: boolean;
 }) {
   const plugins = useDatasources((state) => state.plugins);
   const name = useRef<HTMLInputElement>(null);
   const scopes = snippetScopeOptions(plugins, draft.scope);
+  const validated = useSnippetsDialog((state) => state.validated);
+  const snippets = useSnippets((state) => state.snippets);
+  const problems = validated ? snippetFieldProblems(draft, snippets) : {};
   useEffect(() => {
-    if (isNew) name.current?.focus();
-  }, [draft.id, isNew]);
+    if (isNew && !disabled) name.current?.focus();
+  }, [draft.id, isNew, disabled]);
 
   return (
-    <fieldset disabled={disabled} className="flex min-h-0 min-w-0 flex-1 flex-col gap-gap overflow-y-auto p-gap">
-      <div className="grid grid-cols-[6rem_1fr] items-center gap-x-gap gap-y-1">
-        <FieldRow label="Name" htmlFor="snippet-name">
+    <fieldset
+      disabled={disabled}
+      className="flex min-h-0 min-w-0 flex-1 flex-col gap-gap overflow-y-auto bg-canvas p-gap"
+    >
+      <div className="flex flex-col gap-gap">
+        <label className="flex flex-col gap-1 text-ink-muted" htmlFor="snippet-name">
+          Name
           <input
             ref={name}
             id="snippet-name"
-            className={cn(INPUT_CLASS, "flex-1")}
+            className={cn(INPUT_CLASS, "bg-raised")}
             value={draft.name}
+            placeholder="Snippet name"
+            aria-invalid={problems.name !== undefined}
             spellCheck={false}
             onChange={(event) => change({ name: event.target.value })}
           />
-        </FieldRow>
-        <FieldRow label="Prefix" htmlFor="snippet-prefix">
-          <TextInput
-            id="snippet-prefix"
-            className="flex-1 font-editor"
-            value={draft.prefix}
-            placeholder="e.g. my_snippet"
-            aria-describedby="snippet-prefix-help"
-            onChange={(event) => change({ prefix: event.target.value })}
-          />
-        </FieldRow>
-        <p id="snippet-prefix-help" className="col-start-2 text-ink-muted">
-          Type this prefix in a matching text console to find the snippet in completion.
-        </p>
-        <FieldRow label="Applies to" htmlFor="snippet-scope">
-          <select
-            id="snippet-scope"
-            className={cn(INPUT_CLASS, "flex-1")}
-            value={snippetScopeValue(draft.scope)}
-            onChange={(event) => {
-              const selected = scopes.find((option) => option.value === event.target.value);
-              if (selected !== undefined) change({ scope: selected.scope });
-            }}
-          >
-            {scopes.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </FieldRow>
+        </label>
+        <div className={cn("grid min-w-0 gap-gap", !compact && "grid-cols-2")}>
+          <label className="flex min-w-0 flex-col gap-1 text-ink-muted" htmlFor="snippet-prefix">
+            Prefix
+            <TextInput
+              id="snippet-prefix"
+              className="bg-raised font-editor"
+              value={draft.prefix}
+              placeholder="e.g. my_snippet"
+              aria-invalid={problems.prefix !== undefined}
+              onChange={(event) => change({ prefix: event.target.value })}
+            />
+          </label>
+          <label className="flex min-w-0 flex-col gap-1 text-ink-muted" htmlFor="snippet-scope">
+            Applies to
+            <select
+              id="snippet-scope"
+              className={cn(INPUT_CLASS, "bg-raised")}
+              value={snippetScopeValue(draft.scope)}
+              aria-invalid={problems.scope !== undefined}
+              onChange={(event) => {
+                const selected = scopes.find((option) => option.value === event.target.value);
+                if (selected !== undefined) change({ scope: selected.scope });
+              }}
+            >
+              {scopes.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       <label htmlFor="snippet-body" className="font-semibold text-ink-muted">
         Snippet body
       </label>
       <textarea
         id="snippet-body"
-        className="min-h-24 flex-1 resize-y rounded border border-line bg-canvas p-cell font-editor text-editor text-ink outline-none focus:border-accent disabled:opacity-60"
+        className={cn(
+          "min-h-24 resize-y rounded border border-line bg-raised p-cell font-editor text-editor text-ink outline-none focus:border-accent disabled:opacity-60 aria-invalid:border-danger",
+          !compact && "flex-1",
+        )}
         rows={5}
         spellCheck={false}
         value={draft.body}
+        placeholder="Type snippet body with ${placeholders}…"
+        aria-invalid={problems.body !== undefined}
         aria-describedby="snippet-placeholder-help"
         onChange={(event) => change({ body: event.target.value })}
       />
-      <p id="snippet-placeholder-help" className="text-ink-muted">
+      <span id="snippet-placeholder-help" className="sr-only">
         {PLACEHOLDER_HELP}
-      </p>
+      </span>
       <section aria-label="Snippet preview" className="flex min-h-0 flex-col gap-1">
-        <h3 className="border-b border-line pb-1 font-semibold text-ink-muted">Preview</h3>
+        <h3 className="font-semibold text-ink-muted">Preview</h3>
         <pre
           aria-label="Snippet preview"
           tabIndex={0}
           data-testid="snippet-preview"
-          className="h-24 shrink-0 overflow-auto rounded border border-line bg-canvas p-cell font-editor text-editor whitespace-pre-wrap"
+          className="min-h-8 max-h-24 shrink-0 overflow-auto rounded border border-line bg-raised p-cell font-editor text-editor whitespace-pre-wrap text-ink-muted"
         >
-          {draft.body}
+          {snippetPreview(draft.body) || "(empty)"}
         </pre>
       </section>
     </fieldset>
@@ -122,8 +141,12 @@ function SnippetForm({
 
 function SnippetsEditor() {
   const plugins = useDatasources((state) => state.plugins);
-  const { draft, original, query, working, problem } = useSnippetsDialog();
+  const { draft, original, query, working, problem, validated, errorDismissed, importConsoleId } = useSnippetsDialog();
   const { snippets, busy, loaded, error } = useSnippets();
+  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (loaded && importConsoleId === null) search.current?.focus();
+  }, [loaded, importConsoleId]);
   const disabled = working || busy;
   const dirty = snippetDraftDirty({ draft, original });
   const needle = query.trim().toLocaleLowerCase();
@@ -134,24 +157,82 @@ function SnippetsEditor() {
       value.toLocaleLowerCase().includes(needle),
     ),
   );
-  const message = problem ?? error;
+  const invalid = draft === null ? {} : snippetFieldProblems(draft, snippets);
+  const message = (!errorDismissed && validated ? Object.values(invalid)[0] : null) ?? problem ?? error;
+  const saveDisabled = disabled || !loaded || !dirty || (validated && Object.keys(invalid).length > 0);
+
+  if (importConsoleId !== null && draft !== null)
+    return (
+      <>
+        <Dialog.Title className="px-gap pt-gap font-semibold">Import into Snippet</Dialog.Title>
+        <SnippetForm draft={draft} disabled={disabled} isNew compact />
+        {message === null ? null : (
+          <div className="flex items-center gap-gap border-t border-danger bg-danger/10 px-gap py-cell">
+            <p role="alert" className="min-w-0 flex-1 text-danger">
+              {message}
+            </p>
+            {error !== null ? (
+              <Button disabled={disabled} onClick={() => invoke(SNIPPET_ACTION_IDS.reload)}>
+                Retry Load
+              </Button>
+            ) : null}
+            <Button disabled={disabled} onClick={() => invoke(SNIPPET_ACTION_IDS.dismissError)}>
+              Dismiss
+            </Button>
+          </div>
+        )}
+        <div className="flex shrink-0 justify-end gap-gap p-gap">
+          <Button disabled={disabled} onClick={() => invoke(SNIPPET_ACTION_IDS.cancelImport)}>
+            Cancel
+          </Button>
+          <Button variant="primary" disabled={saveDisabled} onClick={() => invoke(SNIPPET_ACTION_IDS.save)}>
+            Create Snippet
+          </Button>
+        </div>
+      </>
+    );
 
   return (
     <>
-      <Dialog.Title className="shrink-0 border-b border-line px-gap py-cell font-semibold">Snippets</Dialog.Title>
+      <Dialog.Title className="shrink-0 border-b border-line px-gap py-cell text-center font-semibold text-ink-muted">
+        Snippets
+      </Dialog.Title>
       <div className="flex min-h-0 flex-1">
         <aside aria-label="Snippet library" className="flex w-dialog-list shrink-0 flex-col border-r border-line">
-          <div className="flex flex-col gap-gap p-gap">
-            <TextInput
+          <div className="border-b border-line p-cell">
+            <input
+              ref={search}
               autoFocus
               aria-label="Search snippets"
               placeholder="Search snippets"
               value={query}
-              disabled={disabled}
+              disabled={disabled || listed.length === 0}
               onChange={(event) => invoke(SNIPPET_ACTION_IDS.search, event.target.value)}
+              className={cn(INPUT_CLASS, "w-full bg-raised")}
+              spellCheck={false}
             />
-            <Button disabled={disabled || !loaded} onClick={() => invoke(SNIPPET_ACTION_IDS.new)}>
-              New Snippet
+          </div>
+          <div className="border-b border-line p-cell">
+            <Button
+              variant="primary"
+              aria-label="New Snippet"
+              className="w-full"
+              disabled={disabled || !loaded}
+              onClick={() => invoke(SNIPPET_ACTION_IDS.new)}
+            >
+              + New Snippet
+            </Button>
+          </div>
+          <div className="flex gap-cell border-b border-line p-cell">
+            <Button className="flex-1 bg-raised" disabled={disabled} onClick={() => invoke(SNIPPET_ACTION_IDS.import)}>
+              Import…
+            </Button>
+            <Button
+              className="flex-1 bg-raised"
+              disabled={disabled || snippets.length === 0}
+              onClick={() => invoke(SNIPPET_ACTION_IDS.export)}
+            >
+              Export…
             </Button>
           </div>
           <nav aria-label="Snippets" className="min-h-0 flex-1 overflow-y-auto p-1">
@@ -167,41 +248,39 @@ function SnippetsEditor() {
                 )}
                 onClick={() => invoke(SNIPPET_ACTION_IDS.select, snippet.id)}
               >
-                <span className="w-full truncate">
+                <span className="w-full truncate font-medium">
                   {snippet.name || "Untitled snippet"}
-                  {snippet.id === draft?.id && dirty ? " *" : ""}
+                  {snippet.id === draft?.id && dirty ? <span className="text-danger"> *</span> : null}
                 </span>
-                <span className="w-full truncate font-editor text-ink-muted">{snippet.prefix || "No prefix yet"}</span>
+                <span className="w-full truncate font-editor text-ink-muted">{snippet.prefix || "—"}</span>
+                <span className="w-full truncate text-accent">{snippetScopeLabel(snippet.scope, plugins)}</span>
               </button>
             ))}
             {matches.length === 0 ? (
-              <p className="p-cell text-ink-muted">
-                {disabled && !loaded
-                  ? "Loading snippets…"
-                  : needle !== ""
-                    ? "No matching snippets."
-                    : "No snippets yet."}
-              </p>
+              <div className="flex h-full flex-col items-center justify-center gap-1 p-cell text-center text-ink-muted">
+                <p>
+                  {disabled && !loaded
+                    ? "Loading snippets…"
+                    : needle !== ""
+                      ? "No matching snippets."
+                      : "No snippets yet."}
+                </p>
+                {!disabled && needle === "" ? <p>Create one or import from file</p> : null}
+              </div>
             ) : null}
           </nav>
-          <p className="border-t border-line px-gap py-cell text-ink-muted">
-            {listed.length} {listed.length === 1 ? "snippet" : "snippets"}
-          </p>
         </aside>
         {draft === null ? (
-          <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-gap p-gap text-center">
-            <h3 className="font-semibold">Your text, ready to reuse</h3>
-            <p className="max-w-popover text-ink-muted">
-              Save text with a short prefix, then insert it from completion in any matching text console.
-            </p>
-            <p className="text-ink-muted">Choose a snippet or select New Snippet to get started.</p>
+          <div className="flex min-w-0 flex-1 flex-col items-center justify-center gap-gap bg-canvas p-gap text-center text-ink-muted">
+            <p>Select a snippet or create a new one</p>
+            <p>Prefix activates completion in matching consoles</p>
           </div>
         ) : (
           <SnippetForm draft={draft} disabled={disabled} isNew={original === null} />
         )}
       </div>
       {message === null ? null : (
-        <div className="flex shrink-0 items-center gap-gap border-t border-line px-gap py-cell">
+        <div className="flex shrink-0 items-center gap-gap border-t border-danger bg-danger/10 px-gap py-cell">
           <p role="alert" className="min-w-0 flex-1 text-danger">
             {message}
           </p>
@@ -216,17 +295,25 @@ function SnippetsEditor() {
         </div>
       )}
       <div className="flex shrink-0 items-center gap-gap border-t border-line p-gap">
+        <span
+          role="status"
+          aria-live="polite"
+          className={cn("min-w-0 flex-1", dirty ? "text-danger" : "text-ink-muted")}
+        >
+          {disabled ? "Please wait…" : dirty ? "Unsaved changes" : "Saved in this TableCraft profile."}
+        </span>
         <Button
-          variant="danger"
-          disabled={disabled || draft === null}
+          variant="dangerOutline"
+          disabled={disabled || original === null}
           onClick={() => invoke(SNIPPET_ACTION_IDS.delete)}
         >
           Delete…
         </Button>
-        <span role="status" aria-live="polite" className="min-w-0 flex-1 text-ink-muted">
-          {disabled ? "Please wait…" : dirty ? "Unsaved changes" : "Saved in this TableCraft profile."}
-        </span>
-        <Button variant="primary" disabled={disabled || !dirty} onClick={() => invoke(SNIPPET_ACTION_IDS.save)}>
+        <Button
+          variant={dirty ? "primary" : "secondary"}
+          disabled={saveDisabled}
+          onClick={() => invoke(SNIPPET_ACTION_IDS.save)}
+        >
           Save
         </Button>
         <Button disabled={disabled} onClick={() => invoke(SNIPPET_ACTION_IDS.close)}>
@@ -239,11 +326,12 @@ function SnippetsEditor() {
 
 export function SnippetsDialog() {
   const open = useSnippetsDialog((state) => state.open);
+  const importing = useSnippetsDialog((state) => state.importConsoleId !== null);
   return (
     <Dialog.Root
       open={open}
       onOpenChange={(next) => {
-        if (!next) invoke(SNIPPET_ACTION_IDS.close);
+        if (!next) invoke(importing ? SNIPPET_ACTION_IDS.cancelImport : SNIPPET_ACTION_IDS.close);
       }}
     >
       <Dialog.Portal>
@@ -252,7 +340,8 @@ export function SnippetsDialog() {
           aria-describedby={undefined}
           className={cn(
             CONTENT_CLASS,
-            "flex h-dialog-height max-h-[95vh] w-dialog max-w-[95vw] flex-col overflow-hidden",
+            "flex max-h-[95vh] max-w-[95vw] flex-col overflow-hidden",
+            importing ? "w-popover" : "h-dialog-height w-dialog",
           )}
           onInteractOutside={(event) => event.preventDefault()}
           onCloseAutoFocus={(event) => {

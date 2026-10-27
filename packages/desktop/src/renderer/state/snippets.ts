@@ -3,7 +3,10 @@ import type { InvokeResult, TableCraftBridge } from "@table-craft/desktop/preloa
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
-type SnippetsBridge = Pick<TableCraftBridge, "readSnippets" | "saveSnippet" | "deleteSnippet" | "onSnippetsChanged">;
+type SnippetsBridge = Pick<
+  TableCraftBridge,
+  "readSnippets" | "saveSnippet" | "deleteSnippet" | "importSnippets" | "exportSnippets" | "onSnippetsChanged"
+>;
 
 export interface SnippetsState {
   readonly snippets: readonly TextSnippet[];
@@ -13,6 +16,8 @@ export interface SnippetsState {
   load(): Promise<void>;
   save(snippet: TextSnippet): Promise<boolean>;
   remove(id: string): Promise<boolean>;
+  importSnippets(): Promise<boolean>;
+  exportSnippets(): Promise<boolean>;
   dismissError(): void;
   changed(snippets: readonly TextSnippet[]): void;
 }
@@ -80,6 +85,34 @@ export function createSnippetsStore(options: SnippetsStoreOptions) {
       },
       save: (snippet) => mutate(() => options.bridge().saveSnippet(snippet)),
       remove: (id) => mutate(() => options.bridge().deleteSnippet(id)),
+      importSnippets: () => mutate(() => options.bridge().importSnippets()),
+      exportSnippets: async () => {
+        if (!get().loaded) {
+          set({
+            error: get().error ?? "Load snippets successfully before making changes. Retry loading the snippets.",
+          });
+          return false;
+        }
+        pending += 1;
+        set({ busy: true });
+        try {
+          const answer = await options.bridge().exportSnippets(get().snippets);
+          if (!answer.ok) {
+            set({ error: `${answer.error.message} ${answer.error.hint}` });
+            return false;
+          }
+          set({ error: null });
+          return true;
+        } catch (cause) {
+          set({
+            error: `Could not access snippets: ${cause instanceof Error ? cause.message : String(cause)}. Try again.`,
+          });
+          return false;
+        } finally {
+          pending -= 1;
+          set({ busy: pending > 0 });
+        }
+      },
       dismissError: () => set({ error: null }),
       changed(snippets) {
         revision += 1;

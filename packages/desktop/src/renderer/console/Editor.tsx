@@ -17,11 +17,14 @@ import {
   rectangularSelection,
   type DecorationSet,
 } from "@codemirror/view";
+import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useEffect, useRef } from "react";
+import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
+import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
-import { registry } from "@table-craft/desktop/renderer/actions/index.js";
+import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
@@ -55,6 +58,7 @@ import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { connectionOf, pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
+import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { withInspection } from "@table-craft/desktop/settings/settings.js";
 
 /** The manifest's `highlight` names one of these; anything else gets standard SQL (plan 006 decision 1). */
@@ -68,6 +72,9 @@ const DIALECTS: Readonly<Record<string, SQLDialect>> = {
 
 export const EDITOR_LABEL = "SQL console";
 const FLASH_MS = 900;
+const EDITOR_MENU_ITEM =
+  "flex cursor-default items-center gap-gap rounded px-gap py-1 outline-none data-[highlighted]:bg-raised data-[disabled]:opacity-40";
+const CodeIcon = ACTION_ICONS.generate;
 /** CodeMirror's `Mod-Enter` inserts a blank line; here it is Run, which the registry owns. */
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
 
@@ -182,6 +189,8 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   );
   const inspectionSettings = useSettings((state) => state.settings.editor.inspections);
   const dialectRef = useRef(keywordDialectOf(plugin));
+  const selection = useConsoles((state) => state.consoles[consoleId]?.selection);
+  const hasSelection = selection !== undefined && selection.from !== selection.to;
 
   useEffect(() => {
     void useSnippets.getState().load();
@@ -339,5 +348,42 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     view.focus();
   }, [jump]);
 
-  return <div ref={hostRef} data-testid="sql-editor" className="h-full min-h-0 overflow-hidden" />;
+  return (
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>
+        <div ref={hostRef} data-testid="sql-editor" className="h-full min-h-0 overflow-hidden" />
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content
+          className="z-50 min-w-56 rounded border border-line bg-panel p-1 text-ui text-ink shadow-lg"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (!useSnippetsDialog.getState().open) viewRef.current?.focus();
+          }}
+        >
+          {(["cut", "copy", "paste"] as const).map((command) => (
+            <ContextMenu.Item
+              key={command}
+              disabled={command !== "paste" && !hasSelection}
+              className={EDITOR_MENU_ITEM}
+              onSelect={() => invoke(SNIPPET_ACTION_IDS[command])}
+            >
+              {command === "cut" ? "Cut" : command === "copy" ? "Copy" : "Paste"}
+              <span className="ml-auto font-editor text-ink-muted">
+                {formatChord(`Mod+${command === "cut" ? "X" : command === "copy" ? "C" : "V"}`, currentPlatform())}
+              </span>
+            </ContextMenu.Item>
+          ))}
+          <ContextMenu.Separator className="my-1 h-px bg-line" />
+          <ContextMenu.Item
+            disabled={!hasSelection}
+            className={EDITOR_MENU_ITEM}
+            onSelect={() => invoke(SNIPPET_ACTION_IDS.importSelection)}
+          >
+            <CodeIcon aria-hidden className="size-icon text-ink-muted" /> Import into Snippet…
+          </ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
+  );
 }

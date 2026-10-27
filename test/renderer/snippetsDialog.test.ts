@@ -6,11 +6,14 @@ import {
 } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import type { PluginInfo } from "@table-craft/desktop/preload/bridge.js";
-import { DISCONNECTED } from "@table-craft/desktop/renderer/state/datasources.js";
+import { DISCONNECTED, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
 import {
   snippetDraftDirty,
+  snippetFieldProblems,
+  snippetSuggestions,
   snippetScopeOptions,
   snippetScopeLabel,
   useSnippetsDialog,
@@ -35,6 +38,8 @@ const SECOND: TextSnippet = {
 };
 const initialDialog = useSnippetsDialog.getState();
 const initialSnippets = useSnippets.getState();
+const initialConsoles = useConsoles.getState();
+const initialDatasources = useDatasources.getState();
 
 function run(id: string, args?: unknown): Promise<void> {
   const action = SNIPPET_ACTIONS.find((action) => action.id === id);
@@ -52,10 +57,49 @@ afterEach(() => {
   useModal.getState().answer(null);
   useSnippetsDialog.setState(initialDialog, true);
   useSnippets.setState(initialSnippets, true);
+  useConsoles.setState(initialConsoles, true);
+  useDatasources.setState(initialDatasources, true);
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("text snippets dialog commands", () => {
+  it("givenNewDraft_whenDeleteChecked_thenDisabledWithoutConfirmation", async () => {
+    await run(SNIPPET_ACTION_IDS.new);
+    expect(SNIPPET_ACTIONS.find((action) => action.id === SNIPPET_ACTION_IDS.delete)?.when?.(IDLE_CONTEXT)).toBe(false);
+    await run(SNIPPET_ACTION_IDS.delete);
+    expect(useModal.getState().pending).toBeNull();
+  });
+
+  it("givenKnownInvalidDraft_whenEditing_thenSaveStaysDisabledUntilValid", async () => {
+    await run(SNIPPET_ACTION_IDS.change, { prefix: "not valid" });
+    await run(SNIPPET_ACTION_IDS.save);
+    const save = SNIPPET_ACTIONS.find((action) => action.id === SNIPPET_ACTION_IDS.save)!;
+    expect(save.when?.(IDLE_CONTEXT)).toBe(false);
+    useSnippetsDialog.getState().setProblem(null);
+    expect(save.when?.(IDLE_CONTEXT)).toBe(false);
+    await run(SNIPPET_ACTION_IDS.change, { prefix: "123" });
+    expect(save.when?.(IDLE_CONTEXT)).toBe(false);
+    await run(SNIPPET_ACTION_IDS.change, { prefix: "valid" });
+    expect(save.when?.(IDLE_CONTEXT)).toBe(true);
+  });
+
+  it("givenDuplicatePrefix_whenValidated_thenIdentifiesPrefixOnlyInSameScope", () => {
+    expect(snippetFieldProblems({ ...FIRST, id: "new", prefix: "SEL" }, [FIRST]).prefix).toContain("already used");
+    expect(snippetFieldProblems({ ...FIRST, id: "new", scope: { kind: "sql" } }, [FIRST])).toEqual({});
+    expect(snippetFieldProblems({ ...FIRST, name: "", body: " " }, []).name).toContain("name");
+    expect(snippetFieldProblems({ ...FIRST, body: " " }, []).body).toContain("text");
+  });
+
+  it("givenDirtyDraft_whenGuardOpened_thenOrdersDiscardBeforeSaveAndFocusesSave", async () => {
+    await run(SNIPPET_ACTION_IDS.change, { name: "Changed" });
+    const closing = run(SNIPPET_ACTION_IDS.close);
+    const request = useModal.getState().pending?.request;
+    expect(request?.kind === "choice" && request.choices.map((choice) => choice.id)).toEqual(["discard", "save"]);
+    expect(request?.kind === "choice" && request.focusedChoice).toBe("save");
+    useModal.getState().answer(null);
+    await closing;
+  });
   it("givenNewDraft_whenUntouched_thenStillNeedsSaving", () => {
     expect(snippetDraftDirty({ draft: FIRST, original: null })).toBe(true);
     expect(snippetDraftDirty({ draft: FIRST, original: FIRST })).toBe(false);
@@ -148,6 +192,79 @@ describe("text snippets dialog commands", () => {
       SNIPPET_ACTION_IDS.close,
     ]) {
       expect(SNIPPET_ACTIONS.find((action) => action.id === id)?.when?.(IDLE_CONTEXT)).toBe(false);
+    }
+  });
+});
+
+describe("selection import", () => {
+  async function contextWithSelection(): Promise<ActionContext> {
+    vi.stubGlobal("document", { activeElement: null });
+    vi.stubGlobal("HTMLElement", class {});
+    await useConsoles
+      .getState()
+      .open("console", "source", { connect: false, sql: "before SELECT ${field}${cursor} after" });
+    useConsoles.getState().setSelection("console", { from: 7, to: 30 });
+    useDatasources.setState({ plugins: [POSTGRES_PLUGIN] });
+    return {
+      ...IDLE_CONTEXT,
+      activeTab: { kind: "console", id: "console", title: "Console" },
+      console: useConsoles.getState().consoles["console"]!,
+      datasources: [view({ id: "source", name: "Source", pluginId: POSTGRES_PLUGIN.id })],
+    };
+  }
+
+  it("givenSelection_whenImportCancelled_thenDraftNotSavedAndSelectionUnchanged", async () => {
+    const context = await contextWithSelection();
+    const action = SNIPPET_ACTIONS.find((item) => item.id === SNIPPET_ACTION_IDS.importSelection)!;
+    useSnippetsDialog.getState().hide();
+    expect(action.when?.({ ...context, paletteOpen: true })).toBe(true);
+    await action.run(context, undefined as never);
+    expect(useSnippetsDialog.getState().importConsoleId).toBe("console");
+    expect(useSnippetsDialog.getState().draft?.body).toBe(context.console!.sql.slice(7, 30));
+    expect(useSnippetsDialog.getState().draft?.scope).toEqual({ kind: "plugin", pluginId: POSTGRES_PLUGIN.id });
+    await run(SNIPPET_ACTION_IDS.cancelImport);
+    expect(useSnippetsDialog.getState().open).toBe(false);
+    expect(useConsoles.getState().consoles["console"]?.selection).toEqual(context.console!.selection);
+    expect(useSnippets.getState().snippets).toEqual([FIRST, SECOND]);
+  });
+
+  it("givenNoSelection_whenImportCheckedOrRun_thenDoesNotImportWholeDocument", async () => {
+    const context = await contextWithSelection();
+    const empty = { ...context, console: { ...context.console!, selection: { from: 0, to: 0 } } };
+    const action = SNIPPET_ACTIONS.find((item) => item.id === SNIPPET_ACTION_IDS.importSelection)!;
+    useSnippetsDialog.getState().hide();
+    expect(action.when?.(empty)).toBe(false);
+    await action.run(empty, undefined as never);
+    expect(useSnippetsDialog.getState().open).toBe(false);
+  });
+
+  it("givenImportedDraft_whenSaved_thenClosesAndOpenNoticeSelectsSavedItem", async () => {
+    const context = await contextWithSelection();
+    await SNIPPET_ACTIONS.find((item) => item.id === SNIPPET_ACTION_IDS.importSelection)!.run(
+      context,
+      undefined as never,
+    );
+    const draft = useSnippetsDialog.getState().draft!;
+    useSnippets.setState({
+      save: vi.fn((snippet: TextSnippet) => {
+        useSnippets.setState({ snippets: [FIRST, SECOND, snippet] });
+        return Promise.resolve(true);
+      }),
+    });
+    await run(SNIPPET_ACTION_IDS.save);
+    expect(useSnippetsDialog.getState().open).toBe(false);
+    expect(useSnippetsDialog.getState().notice).toEqual({ consoleId: "console", snippet: draft });
+    await run(SNIPPET_ACTION_IDS.openCreated);
+    expect(useSnippetsDialog.getState().draft).toEqual(draft);
+    expect(useSnippetsDialog.getState().original).toEqual(draft);
+    expect(useSnippetsDialog.getState().importConsoleId).toBeNull();
+  });
+
+  it("givenNumericUnicodeOrLongSelection_whenSuggested_thenNameAndPrefixAreValid", () => {
+    for (const text of ["123 result", "你好", "SELECT " + "x".repeat(100), "\nSELECT name FROM users", "!!!"]) {
+      const suggestion = snippetSuggestions(text);
+      expect(suggestion.name.length).toBeGreaterThan(0);
+      expect(suggestion.prefix).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/);
     }
   });
 });

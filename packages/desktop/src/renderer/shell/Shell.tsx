@@ -1,5 +1,6 @@
 import { Group, Panel, type Layout } from "react-resizable-panels";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
+import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import { DatabasePane } from "@table-craft/desktop/renderer/panes/DatabasePane.js";
 import { LogPane } from "@table-craft/desktop/renderer/panes/LogPane.js";
 import { ServicesPane } from "@table-craft/desktop/renderer/panes/ServicesPane.js";
@@ -11,7 +12,10 @@ import { ToolWindow } from "@table-craft/desktop/renderer/shell/ToolWindow.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 
-const LEFT_STRIPE_TOP = [{ toolWindow: "database", actionId: ACTION_IDS.toggleDatabase }] as const;
+const LEFT_STRIPE_TOP = [
+  { toolWindow: "database", actionId: ACTION_IDS.toggleDatabase },
+  { actionId: SNIPPET_ACTION_IDS.show },
+] as const;
 const LEFT_STRIPE_BOTTOM = [{ toolWindow: "services", actionId: ACTION_IDS.toggleServices }] as const;
 const RIGHT_STRIPE_TOP = [{ toolWindow: "log", actionId: ACTION_IDS.toggleLog }] as const;
 const MIN_TOOL_WINDOW_PERCENT = "10";

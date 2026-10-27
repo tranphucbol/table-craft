@@ -7,6 +7,14 @@ const PLACEHOLDER = /(\\*)\$\{([^{}\r\n]+)\}/g;
 const ABBREVIATION = /[A-Za-z_][A-Za-z0-9_]*$/;
 const LITERAL_CONTEXT = /String|Comment|QuotedIdentifier/;
 
+/** The text inserted before a user edits any named fields. */
+export function snippetPreview(body: string): string {
+  return body.replace(PLACEHOLDER, (match: string, slashes: string, name: string) => {
+    if (slashes.length % 2 !== 0) return match.slice(1);
+    return slashes + (name === "cursor" ? "" : name);
+  });
+}
+
 /** Translates named fields to ordered native fields without interpreting text or literal braces. */
 export function snippetTemplate(
   body: string,

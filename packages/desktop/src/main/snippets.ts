@@ -71,6 +71,8 @@ export interface SnippetsService {
   read(): Promise<readonly TextSnippet[]>;
   save(snippet: TextSnippet): Promise<readonly TextSnippet[]>;
   remove(id: string): Promise<readonly TextSnippet[]>;
+  importSnippets(filePath: string): Promise<readonly TextSnippet[]>;
+  exportSnippets(filePath: string, snippets: readonly TextSnippet[]): Promise<void>;
 }
 
 export interface SnippetsServiceOptions {
@@ -92,6 +94,7 @@ function collectionProblem(snippets: readonly TextSnippet[]): string | null {
   return null;
 }
 
+export type { TextSnippet };
 export function createSnippetsService(options: SnippetsServiceOptions): SnippetsService {
   const path = join(options.directory, SNIPPETS_FILE);
   let pending: Promise<unknown> = Promise.resolve();
@@ -156,6 +159,51 @@ export function createSnippetsService(options: SnippetsServiceOptions): Snippets
           throw new SnippetError("This snippet no longer exists.", "Reload the snippets and select one again.");
         return write(current.filter((item) => item.id !== id));
       });
+    },
+    importSnippets(filePath) {
+      return serialized(async () => {
+        const text = await options.files.readText(filePath);
+        if (text === null)
+          throw new SnippetError("Could not read the selected file.", "Choose a readable JSON file and try again.");
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          throw new SnippetError("Invalid JSON file.", "Choose a valid snippets JSON file and try again.");
+        }
+        const snippets = Array.isArray(parsed) ? parsed : (parsed as { snippets?: unknown })?.snippets;
+        if (!Array.isArray(snippets))
+          throw new SnippetError("Invalid snippets file.", "Expected an array or { snippets: [...] }.");
+        const validated: TextSnippet[] = [];
+        for (const snippet of snippets) {
+          const result = snippetSchema.safeParse(snippet);
+          if (!result.success)
+            throw new SnippetError(`Invalid snippet: ${result.error.message}`, "Fix the file and try again.");
+          validated.push(result.data);
+        }
+        const current = await read();
+        const merged = [...current];
+        for (const snippet of validated) {
+          const idx = merged.findIndex((s) => s.id === snippet.id);
+          if (idx >= 0) merged[idx] = snippet;
+          else merged.push(snippet);
+        }
+        const problem = collectionProblem(merged);
+        if (problem !== null) throw new SnippetError(problem, "Fix the imported snippets and try again.");
+        await writeAtomically(
+          options.files,
+          path,
+          `${JSON.stringify({ version: SNIPPETS_VERSION, snippets: merged }, null, JSON_INDENT)}\n`,
+        );
+        options.onChanged(merged);
+        return merged;
+      });
+    },
+    async exportSnippets(filePath, snippets) {
+      await options.files.writeText(
+        filePath,
+        `${JSON.stringify({ version: SNIPPETS_VERSION, snippets }, null, JSON_INDENT)}\n`,
+      );
     },
   };
 }

@@ -12,7 +12,11 @@ import type { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import { replacingRestOfWord, restOfWordFilter } from "@table-craft/desktop/renderer/console/completionKeys.js";
 import { engineCompletionSource } from "@table-craft/desktop/renderer/console/completionSource.js";
-import { applySnippet, snippetSource } from "@table-craft/desktop/renderer/console/snippetCompletion.js";
+import {
+  applySnippet,
+  snippetSource,
+  snippetPreview,
+} from "@table-craft/desktop/renderer/console/snippetCompletion.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
 const ITEM: TextSnippet = {
@@ -55,6 +59,17 @@ function context(doc: string, pos = doc.length) {
 }
 
 describe("text snippet fields", () => {
+  it("givenPlaceholdersAndEscapes_whenPreviewed_thenMatchesInitialInsertedText", () => {
+    for (const body of [
+      ITEM.body,
+      "${field} ${field} ${cursor} ${2}",
+      "\\${field} \\\\${field} {json}",
+      "",
+      "${unterminated",
+    ]) {
+      expect(snippetPreview(body)).toBe(expand(body).state.doc.toString());
+    }
+  });
   it("givenNamedFields_whenExpanded_thenRepeatedNamesAreLinkedAndNavigateInTextOrder", () => {
     const view = expand("${table} ${schema} ${table} ${custom}");
     expect(selected(view)).toEqual(["table", "table"]);

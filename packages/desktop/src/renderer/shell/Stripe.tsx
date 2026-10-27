@@ -10,6 +10,12 @@ export interface StripeButton {
   readonly actionId: string;
 }
 
+export interface StripeAction {
+  readonly actionId: string;
+}
+
+export type StripeEntry = StripeButton | StripeAction;
+
 function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
   const action = registry.get(actionId);
   const open = useLayout((state) => state.layout.visible[toolWindow]);
@@ -36,10 +42,31 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
   );
 }
 
+function ActionButton2({ actionId }: StripeAction) {
+  const action = registry.get(actionId);
+  const enabled = useActionEnabled(actionId);
+  if (action === undefined) return null;
+  const Icon = action.icon === undefined ? null : ACTION_ICONS[action.icon];
+  const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
+  return (
+    <Tooltip label={action.title} shortcut={shortcut}>
+      <button
+        type="button"
+        aria-label={action.title}
+        disabled={!enabled}
+        className="flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink"
+        onClick={() => invoke(actionId)}
+      >
+        {Icon === null ? action.title : <Icon aria-hidden className="size-icon" />}
+      </button>
+    </Tooltip>
+  );
+}
+
 export interface StripeProps {
   readonly side: "left" | "right";
-  readonly top?: readonly StripeButton[];
-  readonly bottom?: readonly StripeButton[];
+  readonly top?: readonly StripeEntry[];
+  readonly bottom?: readonly StripeEntry[];
 }
 
 /** The column of tool-window buttons at a window edge; each button is an action (decision 015). */
@@ -53,14 +80,22 @@ export function Stripe({ side, top = [], bottom = [] }: StripeProps) {
       )}
     >
       <div className="flex flex-col gap-1">
-        {top.map((button) => (
-          <ToolWindowButton key={button.toolWindow} {...button} />
-        ))}
+        {top.map((entry, i) =>
+          "toolWindow" in entry ? (
+            <ToolWindowButton key={entry.toolWindow} {...entry} />
+          ) : (
+            <ActionButton2 key={entry.actionId + i} actionId={entry.actionId} />
+          ),
+        )}
       </div>
       <div className="flex flex-col gap-1">
-        {bottom.map((button) => (
-          <ToolWindowButton key={button.toolWindow} {...button} />
-        ))}
+        {bottom.map((entry, i) =>
+          "toolWindow" in entry ? (
+            <ToolWindowButton key={entry.toolWindow} {...entry} />
+          ) : (
+            <ActionButton2 key={entry.actionId + i} actionId={entry.actionId} />
+          ),
+        )}
       </div>
     </nav>
   );

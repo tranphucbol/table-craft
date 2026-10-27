@@ -126,7 +126,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_REDIS)("Redis snippet scope live te
       await createSnippet(page, REDIS_SNIPPET, "Redis");
       await expect
         .poll(() => snippetDialog(page).getByTestId("snippet-preview").textContent())
-        .toContain(REDIS_SNIPPET.body);
+        .toBe("MGET first second first");
       await captureWindow(page, "redis-snippets-manager");
       await snippetDialog(page).getByRole("button", { name: "Close", exact: true }).click();
 
