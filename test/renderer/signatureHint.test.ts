@@ -45,6 +45,42 @@ describe("signature hint", () => {
     expect(rendered(now)).toEqual([{ text: "now() → datetime", active: [], fits: true }]);
   });
 
+  it("givenLeadParameter_whenHint_thenKeywordBeforeIt", () => {
+    const extract: SignatureHelp = {
+      ...SUBSTR,
+      name: "extract",
+      argument: 1,
+      signatures: [{ parameters: [{ name: "unit" }, { name: "date", lead: "FROM" }], returns: "integer" }],
+    };
+    const jsonValue: SignatureHelp = {
+      ...SUBSTR,
+      name: "json_value",
+      argument: 2,
+      signatures: [
+        {
+          parameters: [{ name: "doc" }, { name: "path" }, { name: "type", optional: true, lead: "RETURNING" }],
+          returns: "value",
+        },
+      ],
+    };
+
+    expect(rendered(extract)).toEqual([{ text: "extract(unit FROM date) → integer", active: ["date"], fits: true }]);
+    expect(rendered(jsonValue)).toEqual([
+      { text: "json_value(doc, path [RETURNING type]) → value", active: ["[RETURNING type]"], fits: true },
+    ]);
+  });
+
+  it("givenProcedure_whenRendered_thenNoReturnArrow", () => {
+    const putLine: SignatureHelp = {
+      ...SUBSTR,
+      name: "dbms_output.put_line",
+      argument: 0,
+      signatures: [{ parameters: [{ name: "line" }], returns: "" }],
+    };
+
+    expect(rendered(putLine)).toEqual([{ text: "dbms_output.put_line(line)", active: ["line"], fits: true }]);
+  });
+
   it("givenTypedOpenParenOrComma_whenChecked_thenTriggers", () => {
     const start = EditorState.create({ doc: "SELECT upper" });
     const paren = start.update({
