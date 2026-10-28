@@ -1,9 +1,12 @@
 import { createConnector, type LoadedPlugin } from "@table-craft/core";
 import { PluginError, type DatasourcePlugin, type PluginManifest, type Session } from "@table-craft/plugin-api";
+import mssql from "@table-craft/plugin-mssql";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import { describe, expect, it } from "vitest";
 import {
+  MSSQL_BEHIND_BASTION,
+  MSSQL_TLS_CONFIG,
   MYSQL_TLS_BEHIND_BASTION,
   MYSQL_TLS_CONFIG,
   POSTGRES_TLS_BEHIND_BASTION,
@@ -13,7 +16,7 @@ import {
   databaseEnabled,
   type DatabaseId,
 } from "../support/databases.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MSSQL_MANIFEST, MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /** No certificate names this host, so it stands in for a server reached under the wrong name. */
 const WRONG_HOST_NAME = "wrong-name.example";
@@ -182,3 +185,92 @@ for (const target of TARGETS) {
     });
   });
 }
+
+/** SQL Server has no client certificates: its cases are the encrypt modes and the CA check. */
+describe.skipIf(!databaseEnabled("mssql"))("mssql over TLS", () => {
+  const connect = (overrides: Readonly<Record<string, unknown>>, serverName?: string) =>
+    mssql.connect(
+      mssql.connectionSchema.parse({ ...MSSQL_TLS_CONFIG, ...overrides }),
+      serverName === undefined ? { readOnly: false } : { readOnly: false, serverName },
+    );
+
+  async function connectsAndQueries(overrides: Readonly<Record<string, unknown>>, serverName?: string) {
+    const session = await connect(overrides, serverName);
+    try {
+      expect(await firstValue(session, "SELECT note FROM tls_probe")).toBe("reached over TLS");
+      return session.tls;
+    } finally {
+      await session.close();
+    }
+  }
+
+  async function failure(overrides: Readonly<Record<string, unknown>>, serverName?: string): Promise<PluginError> {
+    const cause: unknown = await connect(overrides, serverName).then(
+      async (session) => {
+        await session.close();
+        return null;
+      },
+      (error: unknown) => error,
+    );
+    expect(cause).toBeInstanceOf(PluginError);
+    expect(cause).toMatchObject({ code: "connectionFailed" });
+    return cause as PluginError;
+  }
+
+  it("givenMandatoryWithCa_whenConnected_thenTlsDescribed", async () => {
+    const tls = await connectsAndQueries({ sslRootCert: TLS_FILES.ca });
+    expect(tls?.protocol).toMatch(TLS_PROTOCOL);
+    expect(tls?.cipher).not.toBe("");
+  });
+
+  it("givenOptional_whenConnected_thenNoTls", async () => {
+    expect(await connectsAndQueries({ encrypt: "optional" })).toBeNull();
+  });
+
+  it("givenTrustServerCertificate_whenNoCa_thenConnects", async () => {
+    await connectsAndQueries({ trustServerCertificate: true });
+  });
+
+  it("givenMandatoryWithoutCa_whenConnect_thenAsksForCaFile", async () => {
+    const error = await failure({});
+    expect(error.message).toContain("not signed by a CA this system trusts");
+    expect(error.message).toContain("Server CA certificate");
+  });
+
+  it("givenWrongCa_whenMandatory_thenFailsNamingCertificate", async () => {
+    const error = await failure({ sslRootCert: TLS_FILES.wrongCa });
+    expect(error.message).toContain(`not signed by the CA in ${TLS_FILES.wrongCa}`);
+  });
+
+  it("givenWrongHostName_whenMandatory_thenFailsNamingHost", async () => {
+    const error = await failure({ sslRootCert: TLS_FILES.ca }, WRONG_HOST_NAME);
+    expect(error.message).toContain(`not valid for host ${WRONG_HOST_NAME}`);
+  });
+
+  it("givenTunnelAndMandatory_whenConnect_thenChecksConfiguredHost", async () => {
+    const tunnel = createConnector({
+      plugins: [{ status: "loaded", directory: "plugins/mssql", manifest: MSSQL_MANIFEST, plugin: mssql }],
+      pluginId: "mssql",
+      config: { ...MSSQL_TLS_CONFIG, ...MSSQL_BEHIND_BASTION, sslRootCert: TLS_FILES.ca },
+      ssh: {
+        host: SSH_BASTION.host,
+        port: SSH_BASTION.port,
+        user: SSH_BASTION.user,
+        auth: "password",
+        password: SSH_BASTION.password,
+      },
+      verifyHostKey: () => Promise.resolve(),
+    });
+    try {
+      const session = await tunnel.connect({ readOnly: false });
+      try {
+        expect(await firstValue(session, "SELECT note FROM tls_probe")).toBe("reached over TLS");
+        expect(session.tls?.protocol).toMatch(TLS_PROTOCOL);
+      } finally {
+        await session.close();
+      }
+    } finally {
+      await tunnel.close();
+    }
+  });
+});

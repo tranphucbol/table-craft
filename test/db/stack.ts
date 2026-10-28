@@ -55,7 +55,7 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   "postgres-tls": ["tls/postgres.sql", "tls/pg_hba.conf", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   "mysql-tls": ["tls/mysql.sql", "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   oracle: ["schema/oracle"],
-  mssql: ["schema/mssql.sql"],
+  mssql: ["schema/mssql.sql", "tls/mssql.conf", "tls/server.crt", "tls/server.key"],
   redis: REDIS_STANDALONE_SEED,
   "redis-tls": [...REDIS_STANDALONE_SEED, "tls/ca.crt", "tls/server.crt", "tls/server.key"],
   "redis-6": REDIS_STANDALONE_SEED,

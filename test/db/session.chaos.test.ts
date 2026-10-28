@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import { isPluginError, type DatasourcePlugin, type Session } from "@table-craft/plugin-api";
+import mssql from "@table-craft/plugin-mssql";
 import mysql from "@table-craft/plugin-mysql";
 import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
@@ -9,13 +10,14 @@ import type { DatasourceConfig, EngineResponse, ExecutedStatement } from "@table
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
 import {
+  MSSQL_CONFIG,
   MYSQL_CONFIG,
   ORACLE_CONFIG,
   POSTGRES_CONFIG,
   databaseEnabled,
   type DatabaseId,
 } from "../support/databases.js";
-import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MSSQL_MANIFEST, MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /** Plan 025: a console over a link that resets or goes silent, and a statement that overruns. */
 
@@ -56,6 +58,13 @@ const TARGETS: readonly Target[] = [
     loaded: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
     config: ORACLE_CONFIG,
     sleep: "BEGIN DBMS_SESSION.SLEEP(30); END;",
+  },
+  {
+    name: "mssql",
+    plugin: mssql,
+    loaded: { status: "loaded", directory: "plugins/mssql", manifest: MSSQL_MANIFEST, plugin: mssql },
+    config: MSSQL_CONFIG,
+    sleep: "WAITFOR DELAY '00:00:30'",
   },
 ];
 

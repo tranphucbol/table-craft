@@ -27,7 +27,7 @@ rm wrong-ca.key
 
 # No IP address in the names: a test that reaches the server at 127.0.0.1 through a tunnel passes
 # verify-full only when the configured host name is what gets checked.
-signed server "localhost" "subjectAltName=DNS:localhost,DNS:postgres-tls,DNS:mysql-tls,DNS:redis-tls
+signed server "localhost" "subjectAltName=DNS:localhost,DNS:postgres-tls,DNS:mysql-tls,DNS:redis-tls,DNS:mssql
 extendedKeyUsage=serverAuth"
 signed client "tc_cert" "extendedKeyUsage=clientAuth"
 openssl pkcs8 -topk8 -v2 aes-256-cbc -in client.key -out client-encrypted.key -passout "pass:$KEY_PASSPHRASE"
