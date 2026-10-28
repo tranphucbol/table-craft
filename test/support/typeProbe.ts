@@ -43,3 +43,37 @@ export const TYPE_PROBE_COPY_SQLITE = `CREATE TABLE type_probe_copy (
   day TEXT,
   moment TEXT
 )`;
+
+/**
+ * Oracle's row: `NUMBER(1)` reads as the integer it is, and `DATE` carries a time of day, so the
+ * flag and the day differ from every other database's.
+ */
+export const ORACLE_TYPE_PROBE_EXPECTED: readonly Row[] = [
+  [
+    1,
+    42,
+    { kind: "bigint", value: "9007199254740993" },
+    "1234567890123456.7890",
+    "héllo, 世界 🌍",
+    1,
+    { kind: "json", text: '{"a": 1, "b": [true, null]}' },
+    { kind: "bytes", preview: "deadbeef", length: 4 },
+    "2024-02-29 00:00:00",
+    "2024-02-29 13:45:30",
+  ],
+  [2, null, null, null, null, null, null, null, null, null],
+];
+
+/** Oracle's `CREATE TABLE … AS` drops the `IS JSON` check that makes `doc` read as JSON, so it is spelled out. */
+export const TYPE_PROBE_COPY_ORACLE = `CREATE TABLE type_probe_copy (
+  id NUMBER(10),
+  small_int NUMBER(5),
+  big_int NUMBER(19),
+  exact_decimal NUMBER(20, 4),
+  unicode_text NVARCHAR2(100),
+  flag NUMBER(1),
+  doc CLOB CHECK (doc IS JSON),
+  payload BLOB,
+  day DATE,
+  moment TIMESTAMP
+)`;

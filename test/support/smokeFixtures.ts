@@ -296,14 +296,14 @@ async function redisAnswersOne(
   }
 }
 
-/** node-oracledb in thin mode, the driver plan 054's plugin will use. */
+/** node-oracledb in thin mode, the Oracle plugin's driver. */
 async function oracleHasRow(sql: string): Promise<boolean> {
   const { default: oracledb } = await import("oracledb");
-  const { host, port, serviceName, user, password } = ORACLE_CONFIG;
+  const { host, port, service, user, password } = ORACLE_CONFIG;
   const connection = await oracledb.getConnection({
     user,
     password,
-    connectString: `${host}:${String(port)}/${serviceName}`,
+    connectString: `${host}:${String(port)}/${service}`,
     connectTimeout: CONNECT_TIMEOUT_MS / MS_PER_SECOND,
   });
   try {
