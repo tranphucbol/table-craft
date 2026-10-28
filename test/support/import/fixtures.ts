@@ -146,6 +146,8 @@ export interface ImportFixtureOptions {
   readonly password: string;
   /** Adds an Oracle and a SQL Server data source to the `shop` project, which no built-in plugin reads. */
   readonly oracleAndSqlServer?: boolean;
+  /** Points the Oracle data source at a reachable server as `table_craft`, its password in KeePass. */
+  readonly oracle?: ServerAddress;
 }
 
 /** DataGrip's uuids in the fixture, by the connection each names. */
@@ -198,6 +200,12 @@ function dataSources(entries: readonly string[]): string {
     "</project>",
     "",
   ].join("\n");
+}
+
+function oracleAddress(options: ImportFixtureOptions): string {
+  return options.oracle === undefined
+    ? "oracle.internal:1521"
+    : `${options.oracle.host}:${String(options.oracle.port)}`;
 }
 
 function shared(driver: string, url: string, extra = ""): string {
@@ -280,7 +288,7 @@ export function writeImportFixture(home: string, options: ImportFixtureOptions):
             dataSource(
               DATAGRIP_IDS.ledgerOracle,
               FOREIGN_DIALECT_SOURCES.oracle,
-              shared("oracle", "jdbc:oracle:thin:@//oracle.internal:1521/FREEPDB1"),
+              shared("oracle", `jdbc:oracle:thin:@//${oracleAddress(options)}/FREEPDB1`),
             ),
             dataSource(
               DATAGRIP_IDS.billingSqlServer,
@@ -306,7 +314,11 @@ export function writeImportFixture(home: string, options: ImportFixtureOptions):
       dataSource(DATAGRIP_IDS.bastion, "Prod via bastion", local("app")),
       ...(options.oracleAndSqlServer === true
         ? [
-            dataSource(DATAGRIP_IDS.ledgerOracle, FOREIGN_DIALECT_SOURCES.oracle, local("ledger")),
+            dataSource(
+              DATAGRIP_IDS.ledgerOracle,
+              FOREIGN_DIALECT_SOURCES.oracle,
+              local(options.oracle === undefined ? "ledger" : "table_craft"),
+            ),
             dataSource(DATAGRIP_IDS.billingSqlServer, FOREIGN_DIALECT_SOURCES.sqlServer, local("sa")),
           ]
         : []),
@@ -362,7 +374,12 @@ export function writeImportFixture(home: string, options: ImportFixtureOptions):
     write(
       join(configDir, "c.kdbx"),
       writeKdbx(
-        [DATAGRIP_IDS.shopMysql, DATAGRIP_IDS.shopPostgres, DATAGRIP_IDS.global].map((uuid) => ({
+        [
+          DATAGRIP_IDS.shopMysql,
+          DATAGRIP_IDS.shopPostgres,
+          DATAGRIP_IDS.global,
+          ...(options.oracle === undefined ? [] : [DATAGRIP_IDS.ledgerOracle]),
+        ].map((uuid) => ({
           title: dataGripService(uuid),
           user: "table_craft",
           password,
