@@ -2,7 +2,7 @@
  * The plugin contract's version, by semver (decision 106): a host loads a plugin built for the same
  * major and an older or equal minor. Typed `string` so a bump does not change the API report.
  */
-export const API_VERSION: string = "1.4.0";
+export const API_VERSION: string = "1.5.0";
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
