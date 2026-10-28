@@ -117,6 +117,11 @@ function significantDigits(text: string): number {
   return mantissa.replace(".", "").replace(/^0+/u, "").length;
 }
 
+/** Trailing zeros of an integer are exact in a double, so `1e18` keeps its one digit. */
+function integerDigits(text: string): number {
+  return significantDigits(text.replace(/0+$/u, ""));
+}
+
 function sheetStart(selected: boolean): string {
   return (
     `${XML_DECLARATION}<worksheet xmlns="${MAIN_NS}"><sheetViews><sheetView ${selected ? 'tabSelected="1" ' : ""}workbookViewId="0">` +
@@ -176,7 +181,10 @@ export function xlsxEncoder(columns: readonly Column[], options: XlsxOptions = {
     const ref = `${letters[column] ?? columnLetters(column)}${String(rowNumber)}`;
     if (typeof value === "boolean") return `<c r="${ref}" t="b"><v>${value ? "1" : "0"}</v></c>`;
     if (typeof value === "number") {
-      return Number.isFinite(value) ? `<c r="${ref}"><v>${String(value)}</v></c>` : inline(ref, String(value), "");
+      const text = String(value);
+      // A double is already approximate, so only an exact integer is worth keeping as text.
+      const loses = !Number.isFinite(value) || (Number.isSafeInteger(value) && integerDigits(text) > EXCEL_DIGITS);
+      return loses ? inline(ref, text, "") : `<c r="${ref}"><v>${text}</v></c>`;
     }
     if (typeof value === "string") {
       const asNumber = numeric[column] === true && NUMERIC_TEXT.test(value) && significantDigits(value) <= EXCEL_DIGITS;
