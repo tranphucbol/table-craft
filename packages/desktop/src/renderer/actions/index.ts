@@ -71,3 +71,9 @@ export function useActionAvailable(id: string): boolean {
   const tabId = useContext(ActionTabContext);
   return useSyncExternalStore(subscribeToActions, () => registry.isAvailable(id, currentContext(tabId)));
 }
+
+/** Whether `id`'s work is under way now (its `busy`), re-read like `useActionEnabled`. */
+export function useActionBusy(id: string): boolean {
+  const tabId = useContext(ActionTabContext);
+  return useSyncExternalStore(subscribeToActions, () => registry.isBusy(id, currentContext(tabId)));
+}

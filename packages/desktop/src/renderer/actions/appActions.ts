@@ -145,6 +145,9 @@ async function noticeTabFailure(title: string, cause: unknown): Promise<void> {
   });
 }
 const canRunConsole = (context: ActionContext) => context.console !== null && canRun(context.console.status);
+/** Asking about a failed statement waits on the user, not the server, so it is not busy (plan 112 decision 2). */
+const consoleBusy = (context: ActionContext) =>
+  context.console?.status === "running" && context.console.question === null;
 const hasTransactionsCapability = (context: ActionContext) => context.capabilities.includes("transactions");
 const hasTransactions = (context: ActionContext) => context.console !== null && hasTransactionsCapability(context);
 /** Commit and Rollback are offered only while a transaction is open (decision 14). */
@@ -192,6 +195,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     shortcut: "Mod+Enter",
     tabKind: "console",
     when: canRunConsole,
+    busy: consoleBusy,
     run: (context) => runActive(context, "caret"),
   }),
   defineAction({
@@ -201,6 +205,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     icon: "runAll",
     shortcut: "Mod+Shift+Enter",
     when: canRunConsole,
+    busy: consoleBusy,
     run: (context) => runActive(context, "all"),
   }),
   defineAction({

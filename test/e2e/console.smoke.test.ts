@@ -17,20 +17,24 @@ import {
   activeEditorTab,
   closeApp,
   commitButton,
+  computedOpacity,
   DATABASES_ENABLED,
   editorTabs,
   enginePids,
   EVIDENCE_WINDOW,
   evidenceFor,
   gridText,
+  iconSpin,
   LAUNCH_TIMEOUT_MS,
   launchApp,
+  mainToolbarButton,
   newProfile,
   openConsoleOn,
   pressChord,
   readProfileFile,
   rollbackButton,
   runAllButton,
+  runButton,
   SCENARIO_TIMEOUT_MS,
   seedDatasources,
   seedSettings,
@@ -42,10 +46,12 @@ import {
   type LaunchOptions,
   type RunningApp,
   waitUntilReady,
+  waitUntilSpinning,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("006");
 const captureSelection = evidenceFor("113");
+const captureSpinner = evidenceFor("112");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -83,6 +89,20 @@ const KEYWORD_IS_COLOURED = `(() => {
   if (!content || !keyword) return false;
   return getComputedStyle(keyword).color !== getComputedStyle(content).color;
 })()`;
+/** Counts far enough that SQLite is still busy when the spinner is checked (as `motion.smoke` does). */
+const LONG_QUERY =
+  "WITH RECURSIVE g(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < 500000000) SELECT count(*) FROM g";
+const IN_MEMORY_SQLITE: Datasource = { id: "lite", pluginId: "sqlite", config: { path: ":memory:" } };
+/** Records, from now on, whether any button ever turns `aria-busy`; read back with `BUSY_SEEN`. */
+const WATCH_BUSY = `(() => {
+  window.__busySeen = false;
+  new MutationObserver((records) => {
+    if (records.some((record) => record.target.getAttribute('aria-busy') === 'true')) window.__busySeen = true;
+  }).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-busy'] });
+})()`;
+const BUSY_SEEN = "window.__busySeen === true";
+/** Past the spinner's 300 ms delay (plan 112 decision 3), with room for a render. */
+const PAST_SPINNER_DELAY_MS = 1_000;
 
 /** Runs `statements` straight through the plugin, outside the app, one at a time. */
 async function asOwner(plugin: DatasourcePlugin, config: unknown, statements: readonly string[]): Promise<void> {
@@ -592,6 +612,63 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
 
       await expect.poll(() => editorText(page)).toBe('SELECT * FROM "public"."orders"');
       await captureWindow(page, "drag-qualified-name");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenLongQuery_whenRun_thenRunRunAllAndTitleBarRunSpin",
+    async () => {
+      const page = await launch(IN_MEMORY_SQLITE);
+      await typeScript(page, LONG_QUERY);
+
+      await pressChord(page, "Enter");
+
+      for (const button of [runButton(page), runAllButton(page), mainToolbarButton(page, "Run")]) {
+        await waitUntilSpinning(button);
+        expect(await button.isEnabled()).toBe(false);
+        expect(await computedOpacity(button)).toBe("1");
+      }
+      expect(await runButton(page).textContent()).toBe("Run");
+      await captureSpinner(page, "01-spinning");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenFastQuery_whenRun_thenRunNeverSpins",
+    async () => {
+      const page = await launch(IN_MEMORY_SQLITE);
+      await typeScript(page, "SELECT 1 AS one");
+      await page.evaluate(WATCH_BUSY);
+
+      await pressChord(page, "Enter");
+      await page.getByRole("columnheader").first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await waitUntilReady(page);
+      await page.waitForTimeout(PAST_SPINNER_DELAY_MS);
+
+      expect(await page.evaluate(BUSY_SEEN)).toBe(false);
+      expect(await runButton(page).isEnabled()).toBe(true);
+      expect((await iconSpin(runButton(page))).name).toBe("none");
+      await captureSpinner(page, "02-fast");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenMotionOff_whenLongQueryRuns_thenRunSpinnerShownButPaused",
+    async () => {
+      const userDataDir = newProfile();
+      seedSettings(userDataDir, { version: 1, appearance: { motion: "off" } });
+      const page = await launch(IN_MEMORY_SQLITE, { userDataDir });
+      await typeScript(page, LONG_QUERY);
+
+      await pressChord(page, "Enter");
+
+      await expect.poll(() => runButton(page).getAttribute("aria-busy"), { timeout: LAUNCH_TIMEOUT_MS }).toBe("true");
+      expect(await iconSpin(runButton(page))).toEqual({ name: "spin", state: "paused" });
+      expect(await iconSpin(runAllButton(page))).toEqual({ name: "spin", state: "paused" });
+      await captureSpinner(page, "04-off");
     },
     SCENARIO_TIMEOUT_MS,
   );

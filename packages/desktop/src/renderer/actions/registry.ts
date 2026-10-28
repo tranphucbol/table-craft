@@ -103,6 +103,11 @@ export interface Action<A = void> {
   readonly available?: (context: ActionContext) => boolean;
   /** Whether the action can run now; absent means always. */
   readonly when?: (context: ActionContext) => boolean;
+  /**
+   * Whether the work this action starts is under way now, so its buttons show progress rather than
+   * look idle, as Run spins while its console runs (plan 112); absent means never.
+   */
+  readonly busy?: (context: ActionContext) => boolean;
   readonly run: (context: ActionContext, args: A) => void | Promise<void>;
 }
 
@@ -122,6 +127,8 @@ export interface ActionRegistry {
   isEnabled(id: string, context?: ActionContext): boolean;
   /** False when the action's `available` says it does not apply now. */
   isAvailable(id: string, context?: ActionContext): boolean;
+  /** False for an unknown action or one without `busy`. */
+  isBusy(id: string, context?: ActionContext): boolean;
   get(id: string): AnyAction | undefined;
   all(): readonly AnyAction[];
   /** Called after every action that ran, with its id. */
@@ -173,6 +180,9 @@ export function createActionRegistry(
     isAvailable(id, context = contextOf()) {
       const action = actions.get(id);
       return action !== undefined && (action.available?.(context) ?? true);
+    },
+    isBusy(id, context = contextOf()) {
+      return actions.get(id)?.busy?.(context) ?? false;
     },
     get: (id) => actions.get(id),
     all: () => [...actions.values()],

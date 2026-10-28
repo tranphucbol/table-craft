@@ -310,20 +310,21 @@ tokens.
 
 Node icons are Phosphor glyphs named in `renderer/ui/icons.ts`, drawn by `panes/explorerLabels.tsx`:
 
-| Node                        | Icon (`ui/icons.ts`)                                          | Colour                                 |
-| --------------------------- | ------------------------------------------------------------- | -------------------------------------- |
-| database namespace          | `DatabaseIcon` (Database)                                     | `text-ink-muted`; `text-danger` failed |
-| schema namespace            | `SchemaIcon` (TreeStructure)                                  | `text-ink-muted`; `text-danger` failed |
-| group                       | `FolderIcon`                                                  | `text-ink-muted`                       |
-| table, view, materialized   | `TableIcon`, `ViewIcon` (Eye), `MaterializedViewIcon` (Stack) | `text-accent`                          |
-| column                      | `ColumnIcon` (Columns)                                        | `text-ink-muted`                       |
-| primary-key column, key     | `KeyIcon`                                                     | `text-key-icon`                        |
-| foreign-key column, FK node | `KeyIcon`                                                     | `text-accent`                          |
-| index                       | `IndexIcon` (ListDashes)                                      | `text-ink-muted`                       |
-| routine, sequence           | `RoutineIcon` (Function), `SequenceIcon` (ListNumbers)        | `text-ink-muted`                       |
-| NOT NULL, after the type    | `NotNullIcon` (Asterisk), 12 px                               | `text-ink-muted`                       |
-| loading, synchronizing      | `SpinnerIcon`, spinning                                       | `text-ink-muted`                       |
-| error row                   | `WarningIcon`                                                 | `text-danger`                          |
+| Node                          | Icon (`ui/icons.ts`)                                          | Colour                                 |
+| ----------------------------- | ------------------------------------------------------------- | -------------------------------------- |
+| database namespace            | `DatabaseIcon` (Database)                                     | `text-ink-muted`; `text-danger` failed |
+| schema namespace              | `SchemaIcon` (TreeStructure)                                  | `text-ink-muted`; `text-danger` failed |
+| group                         | `FolderIcon`                                                  | `text-ink-muted`                       |
+| table, view, materialized     | `TableIcon`, `ViewIcon` (Eye), `MaterializedViewIcon` (Stack) | `text-accent`                          |
+| column                        | `ColumnIcon` (Columns)                                        | `text-ink-muted`                       |
+| primary-key column, key       | `KeyIcon`                                                     | `text-key-icon`                        |
+| foreign-key column, FK node   | `KeyIcon`                                                     | `text-accent`                          |
+| index                         | `IndexIcon` (ListDashes)                                      | `text-ink-muted`                       |
+| routine, sequence             | `RoutineIcon` (Function), `SequenceIcon` (ListNumbers)        | `text-ink-muted`                       |
+| NOT NULL, after the type      | `NotNullIcon` (Asterisk), 12 px                               | `text-ink-muted`                       |
+| loading, synchronizing        | `SpinnerIcon`, spinning                                       | `text-ink-muted`                       |
+| running action (Run, Run All) | `SpinnerIcon`, spinning                                       | the button's ink                       |
+| error row                     | `WarningIcon`                                                 | `text-danger`                          |
 
 A row's name keeps its width and truncates last; the detail after it (type, count, columns, hint)
 is `text-ink-muted` and gives way first. A failed namespace and its error row are `text-danger`.
