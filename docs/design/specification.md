@@ -44,7 +44,7 @@ built into the first root and goes through the same loader as a user plugin. Eac
 ### Distribution
 
 SQLite and MySQL ship in the installer. Every other plugin TableCraft offers is optional
-(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL, Redis and Oracle) and listed in a compiled-in
+(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL, Redis, Oracle and SQL Server) and listed in a compiled-in
 catalog (decision 108). Each release publishes it to npm as `@tablecraft-app/plugin-<id>` at the app's
 version, with `"tableCraft": { "id", "apiVersion" }` in its `package.json`, and attaches the
 `.tgz` to the GitHub release (decision 109).
@@ -336,6 +336,7 @@ answers `begin`, `end` or `null`, and for the copy extractor `quoteIdentifierWit
 | PostgreSQL | dollar quotes, nested block comments, `BEGIN … END` bodies; `"x"`, `'\x…'::bytea`                                |
 | MySQL      | backslash escapes, `DELIMITER`, `#` comments, `BEGIN … END` bodies; `` `x` ``, `X'…'`, backslash-escaped strings |
 | SQLite     | `BEGIN … END` bodies; `"x"`, `X'…'`                                                                              |
+| SQL Server | `[x]`, `N'…'`, `GO` lines, `variables` (`@x`, `@@x`, `#t` are words); `0x…`, booleans as `1`/`0`                 |
 
 For Oracle and SQL Server plugins the kit also offers, each off by default (decision 100):
 `bracketIdentifiers` (`[a]]b]`, and `quoteIdentifierWith('[')`), `qQuotes` (Oracle `q'[…]'`),
@@ -343,7 +344,10 @@ For Oracle and SQL Server plugins the kit also offers, each off by default (deci
 `slash`. A separator is a whole line outside quotes and comments: `GO`, optionally `GO <n>`
 (`repeat: n` on the span it ends), or `/` alone; it belongs to no statement. Under a separator, a
 routine definition (and under `slash` an anonymous `DECLARE`/`BEGIN` block) runs to the next
-separator line, keeping its own `;`.
+separator line, keeping its own `;`. The host passes a span's `repeat` to `execute` as
+`ExecuteOptions.repeat`; the plugin runs the batch that many times and answers with the last run.
+`variables` makes `@`, `@@` and `#` part of a word, so `@@version` completes as one name and the
+inspector names no `#temp` or `@table` as an unknown relation.
 
 A span runs from the statement's first token to its last, so comments around it stay out. A
 `BEGIN … END` body opens only inside `CREATE TRIGGER`, `FUNCTION`, `PROCEDURE` or `EVENT`, so
@@ -359,8 +363,10 @@ asks before `EXPLAIN ANALYZE DELETE FROM orders` (decision 031).
 In manual mode the plugin opens a transaction before the first statement that is not itself a
 transaction statement: `BEGIN` on PostgreSQL and SQLite, `SET autocommit = 0` on MySQL. In either
 mode `transactionEffect` tracks an explicit `BEGIN`, `START TRANSACTION`, `COMMIT` or `ROLLBACK`,
-and on MySQL a DDL statement's implicit commit closes the transaction. Closing a session with a
-transaction open rolls it back.
+and on MySQL a DDL statement's implicit commit closes the transaction. SQL Server's manual mode is
+`SET IMPLICIT_TRANSACTIONS ON`, and whether a transaction is open follows the server's own
+begin/commit/rollback notices, so `BEGIN TRAN`, `COMMIT` inside a batch and DDL are all tracked
+(decision 124). Closing a session with a transaction open rolls it back.
 
 `sqlFormatter(options)` gives `format`, bundled into each plugin. It formats statement by statement
 as the plugin's dialect, cases keywords as `keywordCase` says (`upper`, `lower`, `preserve`), indents
@@ -383,6 +389,7 @@ marker inside a string, a quoted identifier, a comment, a dollar quote or a `::c
 | PostgreSQL | `:name`, `$1` | `$1`               | `$1 … $1`, one value          |
 | MySQL      | `:name`, `?`  | `?`                | `? … ?`, the value twice      |
 | SQLite     | `:name`, `?`  | `?`                | `? … ?`, the value twice      |
+| SQL Server | `:name`, `?`  | `@p1`              | `@p1 … @p1`, one value        |
 
 Two more native forms serve Oracle and SQL Server (decision 100): `colonNumbered` binds `:1, :2,
 :3`, one value per occurrence, and `atNumbered` binds `@p1`, one value per name.
@@ -408,9 +415,13 @@ The namespace is the unit of introspection (decision 022). A `Namespace` is
 | PostgreSQL | the connected database `[db]`, then its schemas `[db, schema]`   | `"public"."orders"`             |
 | MySQL      | each database as `[db]`, kind `schema`                           | `` `table_craft`.`orders` ``    |
 | SQLite     | `main`, `temp` and attached databases as `[name]`, kind `schema` | `"main"."orders"`               |
+| SQL Server | each accessible database `[db]`, then its schemas `[db, schema]` | `[table_craft].[dbo].[orders]`  |
 
 System namespaces are `pg_catalog`, `information_schema` and `pg_toast`; `information_schema`,
-`mysql`, `performance_schema` and `sys`; and SQLite's `temp`. `describe(path)` answers a
+`mysql`, `performance_schema` and `sys`; SQLite's `temp`; and on SQL Server `master`, `model`,
+`msdb`, `tempdb` with every schema in them, plus `sys`, `INFORMATION_SCHEMA`, `guest` and the
+`db_*` role schemas. SQL Server's catalog reads go through three-part names, so one session
+describes every database; Azure SQL Database lists only the connected one. `describe(path)` answers a
 `NamespaceCatalog { path, relations, routines, sequences }`. A `Relation` is a table, view or
 materialized view with its comment, `columns` (`name`, `position`, `type` as the database writes
 it, `nullable`, `default` as database text, `comment`, `autoIncrement`), `primaryKey`,
@@ -452,6 +463,11 @@ fixed by decision 017, so the same row reads the same on every database:
 | `boolean`, MySQL `TINYINT(1)`, SQLite column declared `BOOLEAN` | `true` / `false`                                            |
 | `json`, `jsonb`, MySQL `JSON`, SQLite column declared `JSON`    | the `json` tag with the database's text                     |
 | `bytea`, `BLOB`, `BINARY`, `VARBINARY`                          | the `bytes` tag                                             |
+
+SQL Server's driver hands back lossy numbers and `Date`s, so the plugin decodes those columns from
+the wire itself (decision 124): `decimal`, `numeric`, `money` as exact text, `datetime2` and `time`
+with every digit of their scale, `datetimeoffset` as local time with its `+HH:MM`, `bit` as a
+boolean with `typeClass: "boolean"`, `uniqueidentifier`, `xml` and `nvarchar(max)` JSON as text.
 
 The `date` tag stays for plugins whose driver only hands back a `Date`.
 
@@ -1058,7 +1074,9 @@ The warnings and notices the server left about a statement (decision 066, capabi
 many more. A statement with warnings is still a success. Its result or plan tab carries a warning
 badge with the count, the messages as its tooltip, and so does its execution in Services; history
 keeps the count, never the text. A streamed result's messages arrive with the page that completes
-it.
+it. On SQL Server `PRINT` is an info line without a code and `RAISERROR` up to severity 10 a note
+with its number; a batch that returns several result sets shows the first and adds
+`N more result sets in this batch; separate statements with ; to see each.` (decision 125).
 
 ### Result grid
 
@@ -1273,7 +1291,10 @@ on TiDB, which knows neither format before v6, plain `EXPLAIN …` or `EXPLAIN A
 its table (the tree from the `id` column's `└─`/`├─` prefixes, `estRows` or TiDB 3's `count` as the
 estimate, `actRows` and the `time:` of `execution info` as actuals, `access object` as the target,
 `operator info` as the detail, `task`, `execution info`, `memory`, `disk` and the `Build`/`Probe`
-role as properties); SQLite `EXPLAIN QUERY PLAN …`. It reads the answer into an `ExplainedPlan`:
+role as properties); SQLite `EXPLAIN QUERY PLAN …`; SQL Server the statement between
+`SET SHOWPLAN_XML ON` and `OFF`, or `SET STATISTICS XML ON` and `OFF` to analyse (the showplan's
+`RelOp` tree, `RunTimeInformation` as actuals, predicates as properties; a login without `SHOWPLAN`
+gets a hint to ask for it). It reads the answer into an `ExplainedPlan`:
 
 ```ts
 interface PlanNode {
@@ -1559,11 +1580,12 @@ cache; the renderer sends text and a caret and never parses SQL. `SqlLanguage` h
 `complete(request, catalog)` and `resolve(request, catalog)`; the built-ins spread
 `sqlCompleter(options)` from `@table-craft/plugin-api/sql`, which a third-party plugin may use too:
 
-| Plugin     | `identifierFolding` | `plainIdentifier`           | Quotes         | Extra keywords / functions                                    |
-| ---------- | ------------------- | --------------------------- | -------------- | ------------------------------------------------------------- |
-| PostgreSQL | `lower`             | `^[a-z_][a-z0-9_$]*$`       | `"Line Items"` | `ILIKE`, `LATERAL`, `RETURNING`; `array_agg`, `string_agg`, … |
-| MySQL      | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$` | `` `x` ``      | `STRAIGHT_JOIN`, `REPLACE`; the full built-in list (below)    |
-| SQLite     | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$` | `"x"`          | `GLOB`, `PRAGMA`; `datetime`, `json_extract`, …               |
+| Plugin     | `identifierFolding` | `plainIdentifier`             | Quotes         | Extra keywords / functions                                    |
+| ---------- | ------------------- | ----------------------------- | -------------- | ------------------------------------------------------------- |
+| PostgreSQL | `lower`             | `^[a-z_][a-z0-9_$]*$`         | `"Line Items"` | `ILIKE`, `LATERAL`, `RETURNING`; `array_agg`, `string_agg`, … |
+| MySQL      | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$`   | `` `x` ``      | `STRAIGHT_JOIN`, `REPLACE`; the full built-in list (below)    |
+| SQLite     | `none`              | `^[A-Za-z_][A-Za-z0-9_$]*$`   | `"x"`          | `GLOB`, `PRAGMA`; `datetime`, `json_extract`, …               |
+| SQL Server | `none`              | `^[A-Za-z_][A-Za-z0-9_@#$]*$` | `[Line Items]` | `APPLY`, `OUTPUT`, `TOP`; the full built-in list (below)      |
 
 `scopeAt` reads the statement around the caret (cut at the lexer's `;` delimiters) into the clause
 the caret is in, any `x.` qualifier before it, and the sources in scope: FROM and JOIN relations with
@@ -1588,7 +1610,8 @@ labels quoted. Items are `{ label, kind, detail, apply, boost, info, caret }`; `
 column's type or a relation's namespace, the foreign key's name for a join, or a function's first
 overload (`(date, format) → string`). The engine orders them (join 50, column
 40, CTE 35, table and view 30, alias 20, namespace 10, function 0, keyword −10) and the popup keeps
-that order between equal fuzzy scores. `validFor` is `^[A-Za-z0-9_$]*$` unless the prefix is quoted.
+that order between equal fuzzy scores. `validFor` is `^[A-Za-z0-9_$]*$` unless the prefix is quoted,
+and `^[@#]*[A-Za-z0-9_$]*$` under the `variables` dialect option.
 
 The engine answers from `CatalogCache` through `core/catalog/completionCatalog.ts`. A namespace not
 yet described is described on demand, waiting at most `COMPLETION_DESCRIBE_DEADLINE_MS = 1_500`;
@@ -1634,6 +1657,17 @@ the TiDB v4.0 manual leaves out but its current manual lists are offered from Ti
 (`TIDB_AFTER_4`). PostgreSQL and SQLite wrap their short lists as specs; their full lists are a
 later plan.
 
+The SQL Server plugin (plan 055) covers every function category of the Transact-SQL reference in
+`plugins/mssql/src/functions/`. `manualIndex.ts` lists every name the reference indexes, by
+section, and `NOT_OFFERED` the few left out with the reason (Fabric- or Synapse-only, deprecated,
+or syntax rather than a call such as `NEXT VALUE FOR`); a test fails when a name is neither offered
+nor excused. Its flavours are `mssql`, the major of `ProductVersion` (14 for 2017 through 17 for
+2025: `GREATEST` from 16, `REGEXP_LIKE` from 17), and `azure`, an `EngineEdition` of 5 or 8, which
+gets the newest list without `OPENQUERY`, `OPENROWSET` and the other server-only names; the
+session's `serverVersion` reads `Azure SQL 12.0.2000.8` there. `CURRENT_TIMESTAMP`, the niladic
+users and every `@@` variable are bare; `CAST(x AS type)`, `PARSE(s AS type USING culture)` and
+`TRIM(LEADING|TRAILING|BOTH chars FROM s)` are written with leads.
+
 `signatureAt(request, catalog)` finds the innermost unclosed call before the caret in the
 statement's tokens, so commas in strings, comments and quoted names never count, and grouping
 parentheses are looked through. `callAt` lists the call's top-level commas and upper-cased words
@@ -1667,6 +1701,7 @@ Plan 022, decision 048. Unqualified names complete and resolve against the first
 | MySQL      | `USE db`                                                                                       | `[DATABASE()]`, null before a database is set |
 | SQLite     | none                                                                                           | not declared                                  |
 | Oracle     | `ALTER SESSION SET CURRENT_SCHEMA = x` (`alterSessionSchema`)                                  | `[SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')]`  |
+| SQL Server | `USE db`, `USE [db]`                                                                           | `[DB_NAME(), SCHEMA_NAME()]`                  |
 
 `classify` marks a switching statement `setsNamespace`. With `currentNamespace` declared, the engine
 reads the session's namespace when it opens, after a statement that sets the namespace or a
@@ -1708,6 +1743,7 @@ relation answers `definitionNotFound`, whose hint says Synchronize.
 | PostgreSQL | assembled: `CREATE TABLE` with `format_type` types, identity, generated and `pg_get_expr` defaults, then constraints (`pg_get_constraintdef`, p u f c x); `CREATE INDEX` for indexes backing no constraint; `pg_get_viewdef(oid, true)` for views and materialized views; `COMMENT ON` the relation and columns |
 | MySQL      | `SHOW CREATE TABLE` or `SHOW CREATE VIEW`, verbatim (`DEFINER`, `AUTO_INCREMENT=` included)                                                                                                                                                                                                                     |
 | SQLite     | `sqlite_master.sql` for the relation, then its explicit indexes' and triggers'                                                                                                                                                                                                                                  |
+| SQL Server | assembled from `sys.*`: `CREATE TABLE` with identity, computed columns and named defaults, then key, foreign key and check constraints; `CREATE INDEX` for the rest; `OBJECT_DEFINITION` for views; `sp_addextendedproperty` for `MS_Description` comments                                                      |
 
 `sql.generate { path, name, statement }` answers `create` with the definition, and `drop`, `select`,
 `insert` and `update` with `language.generate(statement, relation, qualifiedName)`, the relation
@@ -1769,10 +1805,11 @@ its name, mode and type, a value field, a NULL toggle and, when it has a default
 that starts on; OUT parameters are listed as what comes back. The SQL below is the plugin's, asked
 for with `routine.call` as the values change:
 
-| Plugin     | Function                                   | Procedure                                                                           |
-| ---------- | ------------------------------------------ | ----------------------------------------------------------------------------------- |
-| PostgreSQL | `SELECT * FROM f(CAST(:a AS numeric), …);` | `CALL p(CAST(:a AS integer), CAST(NULL AS numeric));`, OUT values as the CALL's row |
-| MySQL      | `SELECT f(:a) AS f;`                       | `SET @out3 = :c;`, `CALL p(:a, @out2, @out3);`, `SELECT @out2 AS b, @out3 AS c;`    |
+| Plugin     | Function                                                                               | Procedure                                                                                                                                 |
+| ---------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL | `SELECT * FROM f(CAST(:a AS numeric), …);`                                             | `CALL p(CAST(:a AS integer), CAST(NULL AS numeric));`, OUT values as the CALL's row                                                       |
+| MySQL      | `SELECT f(:a) AS f;`                                                                   | `SET @out3 = :c;`, `CALL p(:a, @out2, @out3);`, `SELECT @out2 AS b, @out3 AS c;`                                                          |
+| SQL Server | `SELECT [s].[f](CAST(:a AS int), DEFAULT) AS [f];`, a table function `SELECT * FROM …` | one batch: `DECLARE` the return and OUT variables, `EXEC @r = [s].[p] @a = :a, @b = @o2 OUTPUT`, `SELECT @r AS RETURN_VALUE, @o2 AS [b];` |
 
 Every value is a named placeholder bound by the driver (decision 043), never pasted into the text.
 PostgreSQL casts each value to its declared type, except pseudo-types such as `anyelement`, which
@@ -1850,12 +1887,13 @@ workers, and `cancel` and `terminate`, the exact statements Cancel Query and Ter
 null where none is safe. `SessionListing.notes` say what the account cannot see and the grant to ask
 for.
 
-| Dialect    | Lists                                                                                                                                                      | Cancel / Terminate                                                                                                                                       |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PostgreSQL | `pg_stat_activity` with `pg_blocking_pids`; without `pg_read_all_stats` other users' rows read `<insufficient privilege>` and a note says so               | `SELECT pg_cancel_backend(pid)` / `SELECT pg_terminate_backend(pid)`; `false` rejects                                                                    |
-| MySQL      | `information_schema.PROCESSLIST`, `INNODB_TRX` ages, `performance_schema.data_lock_waits` else `sys.innodb_lock_waits`; notes for `PROCESS` and lock waits | `KILL QUERY id` / `KILL id`                                                                                                                              |
-| TiDB       | `information_schema.CLUSTER_PROCESSLIST`, transaction age from `TxnStart`'s TSO; no lock waits                                                             | from 6.1 `KILL TIDB QUERY id` / `KILL TIDB id`; before, no cancel, and terminate runs only on a connection that proved it reached the session's instance |
-| Oracle     | `GV$SESSION` with `GV$TRANSACTION` and `GV$SQL`, id `sid,serial#`, `BLOCKING_SESSION`; without `SELECT_CATALOG_ROLE` only the own session and a note       | `ALTER SYSTEM CANCEL SQL 'sid,serial#[,@inst]'` / `ALTER SYSTEM KILL SESSION 'sid,serial#[,@inst]' IMMEDIATE`; both need `ALTER SYSTEM`                  |
+| Dialect    | Lists                                                                                                                                                                                              | Cancel / Terminate                                                                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL | `pg_stat_activity` with `pg_blocking_pids`; without `pg_read_all_stats` other users' rows read `<insufficient privilege>` and a note says so                                                       | `SELECT pg_cancel_backend(pid)` / `SELECT pg_terminate_backend(pid)`; `false` rejects                                                                    |
+| MySQL      | `information_schema.PROCESSLIST`, `INNODB_TRX` ages, `performance_schema.data_lock_waits` else `sys.innodb_lock_waits`; notes for `PROCESS` and lock waits                                         | `KILL QUERY id` / `KILL id`                                                                                                                              |
+| TiDB       | `information_schema.CLUSTER_PROCESSLIST`, transaction age from `TxnStart`'s TSO; no lock waits                                                                                                     | from 6.1 `KILL TIDB QUERY id` / `KILL TIDB id`; before, no cancel, and terminate runs only on a connection that proved it reached the session's instance |
+| Oracle     | `GV$SESSION` with `GV$TRANSACTION` and `GV$SQL`, id `sid,serial#`, `BLOCKING_SESSION`; without `SELECT_CATALOG_ROLE` only the own session and a note                                               | `ALTER SYSTEM CANCEL SQL 'sid,serial#[,@inst]'` / `ALTER SYSTEM KILL SESSION 'sid,serial#[,@inst]' IMMEDIATE`; both need `ALTER SYSTEM`                  |
+| SQL Server | `sys.dm_exec_sessions` with requests, connections, transactions and the input buffer; without `VIEW SERVER STATE` (2022: `VIEW SERVER PERFORMANCE STATE`) only the login's own sessions and a note | no cancel (`KILL` ends the session) / `KILL id`                                                                                                          |
 
 Stopping runs on a fresh connection. The engine (`sessions.list`, `sessions.cancel`,
 `sessions.terminate`) reads on the catalog's introspection session, tags each row whose id is the

@@ -2,8 +2,8 @@
 
 # TableCraft
 
-A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite, Oracle and
-Redis.
+A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite, Oracle,
+SQL Server and Redis.
 Connections, a database explorer, SQL consoles with schema-aware completion, a result grid, a table
 data editor, DDL and SQL generation, query history and EXPLAIN plans, in one Electron app. Databases
 are reached through datasource plugins loaded at runtime.
@@ -31,9 +31,9 @@ are reached through datasource plugins loaded at runtime.
   tabs with guarded edits, a `redis-cli` console with completion from the server, and a Server tab.
 - [Oracle without the Instant Client](#oracle): schemas, packages and their members in the tree,
   `DBMS_OUTPUT` in Output, every SQL function of the manual in completion, sessions and plans.
-- [Plugins for any database](#plugins): PostgreSQL, MySQL and SQLite are plugins, loaded the same
-  way yours would be. SQLite and MySQL come in the box; PostgreSQL, Oracle and Redis download the
-  first time you need them.
+- [Plugins for any database](#plugins): PostgreSQL, MySQL, SQLite, Oracle and SQL Server are
+  plugins, loaded the same way yours would be. SQLite and MySQL come in the box; PostgreSQL, Oracle,
+  SQL Server and Redis download the first time you need them.
 
 ## Install
 
@@ -159,10 +159,12 @@ in memory, and _Never_ asks on every connect.
 
 Paste a connection URL such as `postgresql://alice:secret@db.example.com:5432/sales?sslmode=require`
 into the URL row, or into Host, and the fields fill themselves; the password goes to its save mode,
-never to `datasources.json`. A SQLite file takes a path or a `sqlite:` URL. **Copy as URL** in a data
+never to `datasources.json`. A SQL Server data source also takes a JDBC URL such as
+`jdbc:sqlserver://db.example.com:1433;databaseName=sales;encrypt=true`. A SQLite file takes a path
+or a `sqlite:` URL. **Copy as URL** in a data
 source's context menu copies its URL without the password.
 
-A PostgreSQL or MySQL data source can go through an **SSH tunnel**: tick _Use SSH tunnel_ in the
+A PostgreSQL, MySQL, Oracle or SQL Server data source can go through an **SSH tunnel**: tick _Use SSH tunnel_ in the
 SSH/SSL section and give the bastion's host, port and user, then sign in with a password, a private
 key (OpenSSH or PEM, with its passphrase if it has one) or the running SSH agent. The host and port
 above stay the database's address as the bastion sees it. The SSH password and passphrase take save
@@ -917,13 +919,14 @@ launch. PostgreSQL is a plugin TableCraft downloads when you need it, about 190 
 [`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres).
 Redis downloads the same way, about 290 KB, as
 [`@tablecraft-app/plugin-redis`](https://www.npmjs.com/package/@tablecraft-app/plugin-redis),
-and Oracle, about 360 KB, as
-[`@tablecraft-app/plugin-oracle`](https://www.npmjs.com/package/@tablecraft-app/plugin-oracle); SQL
-Server will follow
+Oracle, about 360 KB, as
+[`@tablecraft-app/plugin-oracle`](https://www.npmjs.com/package/@tablecraft-app/plugin-oracle), and
+SQL Server (2017 and later, and Azure SQL), about 760 KB, as
+[`@tablecraft-app/plugin-mssql`](https://www.npmjs.com/package/@tablecraft-app/plugin-mssql)
 ([decision 108](docs/decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
 
-- **Data Sources +** lists PostgreSQL, Redis and Oracle with **Download**. Choosing it shows the progress, then the
-  connection form.
+- **Data Sources +** lists PostgreSQL, Redis, Oracle and SQL Server with **Download**. Choosing it
+  shows the progress, then the connection form.
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the
   background on the first start, with no question.
