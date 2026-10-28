@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import type { PlanNode, Row } from "@table-craft/plugin-api";
 import { explainStatement, planFormat, readJson, readTidbTable, readTree } from "@table-craft/plugin-mysql/explain";
+import { readPlan as readShowplan } from "@table-craft/plugin-mssql/explain";
 import { explainDialect } from "@table-craft/plugin-mysql/server";
 import { readPlan } from "@table-craft/plugin-postgres/explain";
 import { readPlanRows } from "@table-craft/plugin-sqlite/explain";
 import { describe, expect, it } from "vitest";
 
-/** Captured from the `test:db` containers (postgres:17, mysql:8.4, mariadb:10.11, TiDB v4.0.14) and node:sqlite on the fixture schema. */
+/** Captured from the `test:db` containers (postgres:17, mysql:8.4, mariadb:10.11, TiDB v4.0.14, SQL Server 2022) and node:sqlite on the fixture schema. */
 function captured(name: string): string {
   return readFileSync(new URL(`../support/plans/${name}`, import.meta.url), "utf8").trimEnd();
 }
@@ -34,6 +35,36 @@ describe("plan readers", () => {
     expect(lookup?.properties).toContainEqual({ name: "Index Cond", value: "(id = o.customer_id)" });
     expect(lookup?.properties.map((property) => property.name)).not.toContain("Index Name");
     expect(plan.summary).toEqual([]);
+  });
+
+  it("givenSqlServerShowplan_whenRead_thenNestedOperatorsWithTargetsAndPredicates", () => {
+    const plan = readShowplan(captured("mssql-explain.xml"), "SET SHOWPLAN_XML ON; …", false);
+    expect(plan.roots.map(shape)).toEqual([
+      {
+        operation: "Nested Loops (Inner Join)",
+        children: [
+          { operation: "Clustered Index Scan", children: [] },
+          { operation: "Clustered Index Seek", children: [] },
+        ],
+      },
+    ]);
+    const [scan, seek] = plan.roots[0]?.children ?? [];
+    expect(scan).toMatchObject({ target: "dbo.orders o", estimatedRows: 2, actualRows: null, loops: null });
+    expect(scan?.detail).toMatch(/^using PK__orders__/);
+    expect(scan?.properties.find((property) => property.name === "Predicate")?.value).toContain("[total]>(10.00)");
+    expect(seek?.properties.find((property) => property.name === "Seek Predicate")?.value).toContain("[customer_id]");
+    expect(plan.summary).toContainEqual({ name: "StatementType", value: "SELECT" });
+  });
+
+  it("givenSqlServerStatisticsXml_whenRead_thenActualRowsLoopsAndTimes", () => {
+    const plan = readShowplan(captured("mssql-analyze.xml"), "SET STATISTICS XML ON; …", true);
+    expect(plan.roots[0]).toMatchObject({ actualRows: 2, loops: 1, actualTimeMs: 0 });
+    expect(plan.roots[0]?.children[1]).toMatchObject({ actualRows: 2, loops: 2 });
+    expect(plan.summary.map((entry) => entry.name)).toEqual(expect.arrayContaining(["CPU Time", "Elapsed Time"]));
+  });
+
+  it("givenNoShowplan_whenRead_thenStatementFailed", () => {
+    expect(() => readShowplan("<nothing/>", "SET SHOWPLAN_XML ON; …", false)).toThrow(/no XML plan/);
   });
 
   it("givenPostgresAnalysedJson_whenRead_thenActualsAndTimesInSummary", () => {

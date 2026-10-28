@@ -1,4 +1,5 @@
 import { errorPositionOf, offsetOfPosition, PluginError } from "@table-craft/plugin-api";
+import { serverErrorPosition as mssqlErrorPosition } from "@table-craft/plugin-mssql/errorPosition";
 import { syntaxErrorPosition } from "@table-craft/plugin-mysql/errorPosition";
 import { serverErrorPosition } from "@table-craft/plugin-postgres/errorPosition";
 import { sqliteErrorPosition } from "@table-craft/plugin-sqlite/errorPosition";
@@ -111,5 +112,23 @@ describe("sqlite error position", () => {
 
   it("givenIncompleteInput_whenRun_thenEndOfStatement", () => {
     expect(sqliteErrorPosition("SELECT (1 ", "incomplete input")).toEqual({ offset: 9 });
+  });
+});
+
+describe("mssql error positions", () => {
+  it("givenErrorOnLineThree_whenRead_thenFirstTextOfThatLine", () => {
+    expect(mssqlErrorPosition("PRINT 1\nPRINT 2\n    SELECT * FROM nope", { lineNumber: 3, procName: "" })).toEqual({
+      line: 3,
+      column: 5,
+    });
+  });
+
+  it("givenErrorInsideProcedure_whenRead_thenNoPosition", () => {
+    expect(mssqlErrorPosition("EXEC p", { lineNumber: 7, procName: "p" })).toBeUndefined();
+  });
+
+  it("givenLineBeyondText_whenRead_thenNoPosition", () => {
+    expect(mssqlErrorPosition("SELECT 1", { lineNumber: 4 })).toBeUndefined();
+    expect(mssqlErrorPosition("SELECT 1", { lineNumber: 0 })).toBeUndefined();
   });
 });

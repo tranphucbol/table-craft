@@ -18,6 +18,7 @@ function manifest(id: string): PluginManifest {
 const POSTGRES = manifest("postgres");
 const MYSQL = manifest("mysql");
 const SQLITE = manifest("sqlite");
+const MSSQL = manifest("mssql");
 
 describe("parseConnectionUrl", () => {
   it("givenFullPostgresUrl_whenParsed_thenFillsFieldsAndKeepsPasswordApart", () => {
@@ -228,5 +229,57 @@ describe("connection url sets", () => {
   it("givenConfigHoldingASchemesValues_whenFormatted_thenThatSchemeIsWritten", () => {
     expect(formatConnectionUrl(KEY_VALUE, { host: "h", tlsMode: "require" })).toBe("rediss://h");
     expect(formatConnectionUrl(KEY_VALUE, { host: "h", tlsMode: "disable" })).toBe("redis://h");
+  });
+});
+
+describe("semicolon parameters", () => {
+  it("givenJdbcUrlWithSemicolonParams_whenParsed_thenFieldsFilled", () => {
+    const parsed = parseConnectionUrl(
+      MSSQL,
+      "jdbc:sqlserver://db.example.com:1533;databaseName=sales;user=alice;password={pa;ss};encrypt=true;trustServerCertificate=true;loginTimeout=5;sendStringParametersAsUnicode=false",
+    );
+
+    expect(parsed).toEqual({
+      values: {
+        host: "db.example.com",
+        port: 1533,
+        database: "sales",
+        user: "alice",
+        encrypt: "mandatory",
+        trustServerCertificate: true,
+        connectTimeout: 5,
+      },
+      secrets: { password: "pa;ss" },
+      ignored: ["sendStringParametersAsUnicode"],
+    });
+  });
+
+  it("givenNamedInstance_whenParsed_thenInstanceAndNoPort", () => {
+    expect(parseConnectionUrl(MSSQL, "sqlserver://sqlhost\\SQLEXPRESS;databaseName=app").values).toEqual({
+      host: "sqlhost",
+      instance: "SQLEXPRESS",
+      database: "app",
+    });
+  });
+
+  it("givenBadPort_whenParsed_thenSaysSo", () => {
+    expect(() => parseConnectionUrl(MSSQL, "sqlserver://h:abc")).toThrow(ConnectionUrlError);
+  });
+
+  it("givenSqlServerConfig_whenFormatted_thenSemicolonFormRoundTrips", () => {
+    const config = {
+      host: "db.example.com",
+      port: 1533,
+      database: "a;b",
+      user: "alice",
+      password: "never",
+      encrypt: "strict",
+      connectTimeout: 10,
+    };
+    const url = formatConnectionUrl(MSSQL, config);
+
+    expect(url).toBe("sqlserver://db.example.com:1533;databaseName={a;b};user=alice;encrypt=strict");
+    const { password: _password, connectTimeout: _timeout, ...written } = config;
+    expect(parseConnectionUrl(MSSQL, url).values).toEqual(written);
   });
 });

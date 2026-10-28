@@ -83,6 +83,14 @@
         "vitest",
       ],
     },
+    "plugins/mssql": {
+      "name": "@table-craft/plugin-mssql",
+      "version": "0.0.0",
+      "dependencies": {
+        "@table-craft/plugin-api": "workspace:*",
+        "tedious": "^20.3.8",
+      },
+    },
     "plugins/mysql": {
       "name": "@table-craft/plugin-mysql",
       "version": "0.0.0",
@@ -437,6 +445,8 @@
     "@table-craft/desktop": ["@table-craft/desktop@workspace:packages/desktop"],
 
     "@table-craft/plugin-api": ["@table-craft/plugin-api@workspace:packages/plugin-api"],
+
+    "@table-craft/plugin-mssql": ["@table-craft/plugin-mssql@workspace:plugins/mssql"],
 
     "@table-craft/plugin-mysql": ["@table-craft/plugin-mysql@workspace:plugins/mysql"],
 
