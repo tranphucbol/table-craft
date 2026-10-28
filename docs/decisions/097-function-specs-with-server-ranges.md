@@ -63,3 +63,25 @@ built-ins; `mysql.help_topic` is often empty and TiDB has none); one list per se
 - A spec's `summary` is shown verbatim; keeping the lists current with new server releases is
   manual work, checked by `test/plugins/mysqlFunctions.test.ts`.
 - `CompletionItem` and `CompletionCatalog` changed shape, so the API is 0.28.0.
+
+## Amendment: call shapes (plan 115)
+
+Oracle and SQL Server write functions three ways the first shape could not say, so their lists would
+have inserted broken SQL or bolded the wrong parameter:
+
+- **Bare functions.** `FunctionSpec.bare` (written `"= type"`) marks a function called without
+  parentheses (`SYSDATE`, `CURRENT_USER`, `@@ROWCOUNT`); its item applies the name alone and it
+  has no hint. An entry mixing `"= type"` with called signatures throws: a function with both
+  forms (MySQL's `CURRENT_DATE`) is written `"-> type"` and stays called.
+- **Keyword-led parameters.** `FunctionParameter.lead` is the keyword before a parameter instead of
+  a comma (`EXTRACT(unit FROM date)`, `CAST(expr AS type)`), `|` separating alternatives. An
+  upper-case word right after a comma stays part of the argument's name (`date, INTERVAL expr
+unit`). `CallAt.separators` lists the call's top-level commas and words, and the shared
+  `signatureAt` walks them through the overload whose leads they follow most; a word no parameter
+  leads with moves nothing, so `CAST(x AS DECIMAL(10, 2))` stays in `type`.
+- **Package members.** A spec named `PKG.MEMBER` is offered after `pkg.` and `callAt` joins `pkg .
+member (` into one name; a plain name never matches it, and a relation of that name keeps its
+  columns first. A signature returning nothing (`"line ->"`) is a procedure's.
+
+All three are optional, so the API is 1.4.0. `CallAt.separators` is optional in the type though
+`callAt` always sets it, since a required member would break a value built against 1.3.0.

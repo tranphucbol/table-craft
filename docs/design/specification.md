@@ -1606,12 +1606,22 @@ step (decision 059). With no popup, Tab indents in the console and moves focus i
 ### Functions and parameter hints
 
 Plan 052, decisions 097 and 098. `CompleterOptions.functions` takes plain names or `FunctionSpec`s
-(`{ name, signatures: { parameters: { name, optional?, variadic? }[], returns }[], summary,
-category, available? }`) from `@table-craft/plugin-api/sql`. A spec's item is the lower-case name
+(`{ name, signatures: { parameters: { name, optional?, variadic?, lead? }[], returns }[], summary,
+category, available?, bare? }`) from `@table-craft/plugin-api/sql`. A spec's item is the lower-case name
 with `detail` its first overload, `info` every overload and the summary (the popup's side panel),
 `apply` `name()` and `caret` the offset inside the parentheses, or after them when no overload takes
 an argument. A function spelled like a keyword (`IF`, `LEFT`, `REPLACE`, `VALUES`) is offered once,
 as a function, where an expression goes; keyword positions keep the keyword.
+
+Plan 115 lets a spec say how it is called. A `bare` spec (written `"= date"`, such as Oracle's
+`SYSDATE`) applies its name alone, its detail `→ date`, and never shows a hint. A parameter's `lead`
+is the keyword written before it instead of a comma (`"unit FROM date -> integer"` gives `EXTRACT(unit
+FROM date)`; `"BOTH|LEADING|TRAILING remove FROM str"` leads with any of three); the detail, info and
+hint write it in the comma's place, inside the brackets of an optional parameter. A spec named
+`PKG.MEMBER` is a package member: offered, as `member()`, only after `pkg.` (after a relation's
+columns when a source or table has that name, before the namespace's relations when a namespace
+does), and `pkg.member(` shows its hint; a plain name never matches it. A signature returning
+nothing (`"line ->"`) is a procedure's and drops the `→`.
 
 `available` is a `ServerRange`: per flavour, space-separated comparators on a dotted version
 (`{ mysql: "<8.0", tidb: false }`); a flavour it does not name gets the function in every version.
@@ -1626,7 +1636,11 @@ later plan.
 
 `signatureAt(request, catalog)` finds the innermost unclosed call before the caret in the
 statement's tokens, so commas in strings, comments and quoted names never count, and grouping
-parentheses are looked through. It answers `{ name, summary, signatures, argument, from, to }`, or
+parentheses are looked through. `callAt` lists the call's top-level commas and upper-cased words
+before the caret (`separators`); `argument` is the parameter they walk to, a comma to the next
+parameter without a lead and a word to the next one it leads, in the overload whose leads the call
+follows most, so `EXTRACT(YEAR FROM |` is in `date` and a word nothing leads (`YEAR`, `DECIMAL`)
+moves nothing. It answers `{ name, summary, signatures, argument, from, to }`, or
 null in a literal, outside a call, inside a subquery, or when the name before `(` is not an
 available function (`IN (`, `VALUES (` after a table, `CREATE TABLE t (`). The engine method is
 `completion.signature`. The console and the table editor's bars ask when `(` or `,` is typed and

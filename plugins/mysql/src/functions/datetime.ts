@@ -38,7 +38,7 @@ export const DATETIME_FUNCTIONS: readonly FunctionSpec[] = functionSpecs("dateti
   ],
   [
     "GET_FORMAT",
-    "type, region -> string",
+    "DATE|TIME|DATETIME|TIMESTAMP, region -> string",
     "A ready-made DATE_FORMAT pattern for DATE, TIME or DATETIME in a region such as 'ISO' or 'EUR'.",
   ],
   ["HOUR", "time -> integer", "The hour of a time."],

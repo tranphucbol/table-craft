@@ -164,4 +164,31 @@ describe("mysql function completion", () => {
     expect(help).toMatchObject({ name: "tidb_parse_tso", argument: 0 });
     expect(help?.signatures[0]?.parameters.map((parameter) => parameter.name)).toEqual(["tso"]);
   });
+
+  async function signatureOn(marked: string) {
+    const offset = marked.indexOf("|");
+    const catalog = fakeCatalog(fixtureRelations(), undefined, MYSQL_8_4);
+    const help = await language.signatureAt?.({ text: marked.replace("|", ""), offset }, catalog);
+    const parameters = help?.signatures[0]?.parameters ?? [];
+    return { help, active: parameters[help?.argument ?? -1]?.name };
+  }
+
+  it("givenMysqlExtract_whenHintInDate_thenDateBold", async () => {
+    expect((await signatureOn("SELECT extract(YEAR FROM |) FROM orders")).active).toBe("date");
+    expect((await signatureOn("SELECT extract(YEAR|) FROM orders")).active).toBe("unit");
+  });
+
+  it("givenMysqlKeywordLedCalls_whenAsking_thenParameterAfterTheKeyword", async () => {
+    expect((await signatureOn("SELECT cast(total AS |)")).active).toBe("type");
+    expect((await signatureOn("SELECT position('a' IN |)")).active).toBe("str");
+    expect((await signatureOn("SELECT trim(LEADING '0' FROM |)")).help?.argument).toBe(1);
+    expect((await signatureOn("SELECT json_value(doc, '$.a' RETURNING |)")).help?.argument).toBe(2);
+    const convert = await signatureOn("SELECT convert(name USING |)");
+    expect(convert.help?.signatures[1]?.parameters[convert.help.argument]?.name).toBe("charset");
+  });
+
+  it("givenExtract_whenCompleting_thenDetailWithLead", async () => {
+    const items = await functionsOffered("SELECT extr", MYSQL_8_4);
+    expect(items.find((item) => item.label === "extract")?.detail).toBe("(unit FROM date) → integer");
+  });
 });
