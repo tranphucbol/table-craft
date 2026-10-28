@@ -14,6 +14,7 @@ import { OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js"
 import { pluginTarball, release, sha512, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
 
 const PACKAGE = "@tablecraft-app/plugin-postgres";
+const OUTSIDE_CATALOG = "duckdb";
 const SOURCE_PLUGINS = "plugins";
 
 let profile: string;
@@ -91,6 +92,7 @@ describe("plugin service", () => {
     expect(plugins.state().catalog).toEqual([
       expect.objectContaining({ id: "postgres", installedVersion: null, install: { status: "idle" } }),
       expect.objectContaining({ id: "redis", installedVersion: null, install: { status: "idle" } }),
+      expect.objectContaining({ id: "oracle", installedVersion: null, install: { status: "idle" } }),
     ]);
   });
 
@@ -210,7 +212,7 @@ describe("plugin service", () => {
   it("givenIdOutsideTheCatalog_whenInstalled_thenNotFound", async () => {
     const plugins = await started();
 
-    expect((await rejectionOf(plugins.install("oracle"))).failure).toBe("notFound");
+    expect((await rejectionOf(plugins.install(OUTSIDE_CATALOG))).failure).toBe("notFound");
   });
 
   it("givenPackageFile_whenInstalled_thenItIsManagedFromFileAndUpdatesSkipIt", async () => {
@@ -264,7 +266,7 @@ describe("plugin service", () => {
     users = { postgres: ["shop"] };
     const plugins = await started();
 
-    await plugins.installMissing(["postgres", "sqlite", "oracle"]);
+    await plugins.installMissing(["postgres", "sqlite", OUTSIDE_CATALOG]);
 
     expect(plugins.plugins().find((plugin) => plugin.id === "postgres")?.source).toBe("managed");
     expect(records.find((record) => record.msg === "plugin missing; installing")).toMatchObject({
