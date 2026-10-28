@@ -155,12 +155,14 @@ function hintPlugin(target: SignatureTarget) {
   return ViewPlugin.fromClass(
     class {
       latest = 0;
+      /** A request is out for a hint not shown yet; typing past `(` before it answers must ask again. */
+      awaiting = false;
 
       constructor(readonly view: EditorView) {}
 
       update(update: ViewUpdate): void {
         if (update.focusChanged && !update.view.hasFocus) {
-          this.latest += 1;
+          this.drop();
           if (update.state.field(helpField) !== null) queueMicrotask(() => closeHint(this.view));
           return;
         }
@@ -170,11 +172,18 @@ function hintPlugin(target: SignatureTarget) {
         const open = update.state.field(helpField) !== null;
         // A request still in flight when the hint closes (Escape, leaving the call) would reopen it.
         if (!open && !explicit && update.startState.field(helpField) !== null) {
-          this.latest += 1;
+          this.drop();
           return;
         }
         const moved = update.docChanged || update.selectionSet;
-        if (explicit || typedTrigger(update.state, update.transactions) || (open && moved)) this.ask();
+        if (explicit || typedTrigger(update.state, update.transactions) || ((open || this.awaiting) && moved)) {
+          this.ask();
+        }
+      }
+
+      drop(): void {
+        this.latest += 1;
+        this.awaiting = false;
       }
 
       ask(): void {
@@ -182,9 +191,11 @@ function hintPlugin(target: SignatureTarget) {
         const request = this.latest;
         const call = target.signature();
         if (call === null) {
+          this.awaiting = false;
           queueMicrotask(() => closeHint(this.view));
           return;
         }
+        this.awaiting = true;
         const state = this.view.state;
         const params = {
           text: state.doc.toString(),
@@ -193,6 +204,7 @@ function hintPlugin(target: SignatureTarget) {
         };
         const answer = (help: SignatureHelp | null) => {
           if (request !== this.latest || !this.view.dom.isConnected) return;
+          this.awaiting = false;
           if (help === null) closeHint(this.view);
           else this.view.dispatch({ effects: setHelp.of(help) });
         };
@@ -200,7 +212,7 @@ function hintPlugin(target: SignatureTarget) {
       }
 
       destroy(): void {
-        this.latest += 1;
+        this.drop();
       }
     },
   );
