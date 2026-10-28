@@ -54,7 +54,12 @@ import {
   serverMessageTone,
   warningCount,
 } from "@table-craft/desktop/renderer/model/serverMessages.js";
-import { statementsToRun, type RunScope, type TextSpan } from "@table-craft/desktop/renderer/model/statementAt.js";
+import {
+  selectionToRun,
+  statementsToRun,
+  type RunScope,
+  type TextSpan,
+} from "@table-craft/desktop/renderer/model/statementAt.js";
 import { EMPTY_BUFFER, pendingCount, pendingText, toEdits } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import {
   submitLabel,
@@ -930,12 +935,14 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       session: ConsoleSession,
       scope: RunScope,
     ): Promise<readonly ClassifiedStatement[]> {
+      const selected = selectionToRun(session.selection, scope);
+      if (selected !== null) {
+        const pieces = await client.call("script.split", { text: session.sql.slice(selected.from, selected.to) });
+        return pieces.map((piece) => ({ ...piece, from: piece.from + selected.from, to: piece.to + selected.from }));
+      }
       const statements = await client.call("script.split", { text: session.sql });
       const target = statementsToRun(statements, session.selection, scope);
-      if (target.kind === "nothing") return [];
-      if (target.kind === "statements") return target.statements;
-      const pieces = await client.call("script.split", { text: session.sql.slice(target.from, target.to) });
-      return pieces.map((piece) => ({ ...piece, from: piece.from + target.from, to: piece.to + target.from }));
+      return target.kind === "statements" ? target.statements : [];
     }
 
     function afterTransactionChange(id: string, datasourceId: string, open: boolean, committed: boolean): void {

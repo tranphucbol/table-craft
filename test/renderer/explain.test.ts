@@ -249,6 +249,17 @@ describe("explain in the console", () => {
     expect(output()).toEqual([[EXPLAIN_ONE_STATEMENT, "warning"]]);
   });
 
+  it("givenSelectionLeakingPastStatement_whenExplain_thenSelectedTextExplained", async () => {
+    const sql = "SELECT 1;\nSELECT * FROM orders WHERE id = 1;";
+    const { store, explained } = await opened(sql);
+    const from = sql.indexOf(";") + 1;
+    store.getState().setSelection("c1", { from, to: sql.indexOf(" WHERE") });
+
+    await store.getState().explain("c1", false);
+
+    expect(explained).toEqual([{ sql: "SELECT * FROM orders", analyze: false }]);
+  });
+
   it("givenCaretInSecondStatement_whenExplained_thenOnlyItIsExplained", async () => {
     const { store, explained } = await opened("SELECT 1;\nSELECT 2;");
     store.getState().setSelection("c1", { from: 12, to: 12 });
