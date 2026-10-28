@@ -71,8 +71,11 @@ describe("motion variables", () => {
       "--tc-motion-shift": "0px",
       "--tc-motion-enter-scale": "1",
       "--tc-motion-press-scale": "1",
+      "--tc-motion-press-scale-text": "1",
       "--tc-motion-progress": "paused",
       "--tc-motion-ambient": "paused",
+      "--tc-fill-hover-shade": "rgb(0 0 0 / 8%)",
+      "--tc-fill-press-shade": "rgb(0 0 0 / 16%)",
     });
   });
 
