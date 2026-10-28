@@ -1049,6 +1049,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             ...paging,
             ...limitOf(id),
             ...nodeOf(id),
+            ...(statement.repeat === undefined ? {} : { repeat: statement.repeat }),
           });
           const moved = namespaceAfter({ namespace, ...(reconnected === undefined ? {} : { reconnected }) });
           logReconnected(id, reconnected);

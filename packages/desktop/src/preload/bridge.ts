@@ -157,6 +157,7 @@ export interface ConnectionUrlSpec {
       }[]
     | undefined;
   readonly sets?: Readonly<Record<string, Readonly<Record<string, ConfigValue>>>> | undefined;
+  readonly semicolonParams?: boolean | undefined;
 }
 
 /** What a pasted connection URL fills in; `secrets` is what the user pasted, for the secret fields. */
