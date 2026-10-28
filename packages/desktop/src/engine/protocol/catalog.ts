@@ -139,6 +139,8 @@ export interface FunctionParameter {
   readonly name: string;
   readonly optional?: boolean;
   readonly variadic?: boolean;
+  /** The keyword written before it instead of a comma, such as `FROM`. */
+  readonly lead?: string;
 }
 
 /** Mirrors `FunctionSignature` in plugin-api. */

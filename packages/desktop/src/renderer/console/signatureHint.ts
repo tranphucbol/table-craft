@@ -55,9 +55,21 @@ export interface HintLine {
   readonly fits: boolean;
 }
 
+const COMMA_SEPARATOR = ", ";
+const LEAD_SEPARATOR = " ";
+
+/** An optional parameter keeps its lead inside the brackets, `[RETURNING type]`, as the popup's detail does. */
 function parameterLabel(parameter: FunctionParameter): string {
   const name = parameter.variadic === true ? `${parameter.name}...` : parameter.name;
-  return parameter.optional === true ? `[${name}]` : name;
+  if (parameter.optional === true) return parameter.lead === undefined ? `[${name}]` : `[${parameter.lead} ${name}]`;
+  return name;
+}
+
+/** What goes before a parameter: `, ` or its lead keyword; an optional one's lead sits in its brackets. */
+function parameterSeparator(parameter: FunctionParameter, index: number): string {
+  const lead = parameter.lead === undefined || parameter.optional === true ? "" : `${parameter.lead}${LEAD_SEPARATOR}`;
+  if (index === 0) return lead;
+  return parameter.lead === undefined ? COMMA_SEPARATOR : `${LEAD_SEPARATOR}${lead}`;
 }
 
 /** The parameter the `argument`-th argument fills, a variadic last one taking every argument after it; -1 for none. */
@@ -67,16 +79,17 @@ export function activeParameter(signature: FunctionSignature, argument: number):
   return signature.parameters.at(-1)?.variadic === true ? count - 1 : -1;
 }
 
-/** Every overload as `name(a, b) → type`, the parameter the caret is in marked active. */
+/** Every overload as `name(a, b) → type` or `name(unit FROM date) → type`, the parameter the caret is in marked active. */
 export function hintLines(help: SignatureHelp): readonly HintLine[] {
   return help.signatures.map((signature) => {
     const active = activeParameter(signature, help.argument);
     const segments: HintSegment[] = [{ text: `${help.name}(`, active: false }];
     signature.parameters.forEach((parameter, index) => {
-      if (index > 0) segments.push({ text: ", ", active: false });
+      const separator = parameterSeparator(parameter, index);
+      if (separator !== "") segments.push({ text: separator, active: false });
       segments.push({ text: parameterLabel(parameter), active: index === active });
     });
-    segments.push({ text: `) → ${signature.returns}`, active: false });
+    segments.push({ text: signature.returns === "" ? ")" : `) → ${signature.returns}`, active: false });
     return { segments, fits: active >= 0 || (help.argument === 0 && signature.parameters.length === 0) };
   });
 }
