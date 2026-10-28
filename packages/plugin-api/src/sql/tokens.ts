@@ -32,9 +32,10 @@ export type BatchSeparator = "go" | "slash";
 
 /**
  * `use` is MySQL's `USE db`; `searchPath` is PostgreSQL's `SET [SESSION | LOCAL] search_path`,
- * `SET SCHEMA` and `RESET search_path` / `RESET ALL`.
+ * `SET SCHEMA` and `RESET search_path` / `RESET ALL`; `alterSessionSchema` is Oracle's
+ * `ALTER SESSION SET CURRENT_SCHEMA = name`.
  */
-export type NamespaceStatementForm = "use" | "searchPath";
+export type NamespaceStatementForm = "use" | "searchPath" | "alterSessionSchema";
 
 export type TokenKind = "word" | "quoted" | "string" | "comment" | "symbol" | "delimiter";
 

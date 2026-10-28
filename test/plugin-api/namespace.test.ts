@@ -14,6 +14,11 @@ const POSTGRES: SqlDialectOptions = {
   nestedBlockComments: true,
   namespaceStatements: ["searchPath"],
 };
+const ORACLE: SqlDialectOptions = {
+  batchSeparator: "slash",
+  qQuotes: true,
+  namespaceStatements: ["alterSessionSchema"],
+};
 
 function candidates(sql: string, dialect: SqlDialectOptions): readonly (readonly [string, boolean])[] | null {
   const target = namespaceTarget(sql, dialect);
@@ -184,5 +189,49 @@ describe("namespaceSwitcher", () => {
     expect(() => postgres.statement([])).toThrow(/pick one/);
     expect(classifyTokens(postgres.statement(["x"]), POSTGRES).setsNamespace).toBe(true);
     expect(namespaceTarget(mysql.statement(["a`b"]), MYSQL)?.candidates[0]?.name).toBe("a`b");
+  });
+
+  it("givenAlterSessionSwitcher_whenStatementWritten_thenCurrentSchemaForm", () => {
+    const oracle = namespaceSwitcher("alterSessionSchema", quoteIdentifierWith('"'));
+
+    expect(oracle).toMatchObject({ targets: "schema", transactional: false });
+    expect(oracle.statement(["Archive"])).toBe('ALTER SESSION SET CURRENT_SCHEMA = "Archive"');
+    expect(namespaceTarget(oracle.statement(["Archive"]), ORACLE)?.candidates[0]?.name).toBe("Archive");
+  });
+});
+
+describe("alterSessionSchema form", () => {
+  it("givenAlterSessionCurrentSchema_whenParsed_thenTargetsSchema", () => {
+    expect(namespaceTarget("ALTER SESSION SET CURRENT_SCHEMA = archive", ORACLE)).toEqual({
+      kind: "schema",
+      candidates: [{ name: "archive", quoted: false, from: 35, to: 42 }],
+    });
+    expect(candidates('alter session set current_schema = "Archive"', ORACLE)).toEqual([["Archive", true]]);
+    expect(classifyTokens("ALTER SESSION SET CURRENT_SCHEMA = archive", ORACLE).setsNamespace).toBe(true);
+  });
+
+  it("givenOtherAlterSession_whenParsed_thenNull", () => {
+    for (const sql of [
+      "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY'",
+      "ALTER SESSION SET CURRENT_SCHEMA",
+      "ALTER SESSION SET CURRENT_SCHEMA = a b",
+      "ALTER SESSION SET CURRENT_SCHEMA = 'archive'",
+    ]) {
+      expect(namespaceTarget(sql, ORACLE), sql).toBeNull();
+    }
+    expect(namespaceTarget("ALTER SESSION SET CURRENT_SCHEMA = archive", POSTGRES)).toBeNull();
+  });
+
+  it("givenAlterSessionAndCaret_whenSlotRead_thenSchemaSlot", () => {
+    expect(slotAt("ALTER SESSION SET CURRENT_SCHEMA = |", ORACLE)).toEqual({
+      kind: "schema",
+      from: 35,
+      to: 35,
+      quote: null,
+      listed: [],
+    });
+    expect(slotAt("ALTER SESSION SET CURRENT_SCHEMA = arc|", ORACLE)).toMatchObject({ from: 35, to: 38 });
+    expect(slotAt("ALTER SESSION SET CURRENT_SCHEMA |", ORACLE)).toBeNull();
+    expect(slotAt("ALTER SESSION SET CURRENT_SCHEMA = archive |", ORACLE)).toBeNull();
   });
 });

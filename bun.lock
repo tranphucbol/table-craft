@@ -91,6 +91,17 @@
         "mysql2": "^3.24.6",
       },
     },
+    "plugins/oracle": {
+      "name": "@table-craft/plugin-oracle",
+      "version": "0.0.0",
+      "dependencies": {
+        "@table-craft/plugin-api": "workspace:*",
+        "oracledb": "^26.0.0",
+      },
+      "devDependencies": {
+        "@types/oracledb": "^26.0.0",
+      },
+    },
     "plugins/postgres": {
       "name": "@table-craft/plugin-postgres",
       "version": "0.0.0",
@@ -428,6 +439,8 @@
     "@table-craft/plugin-api": ["@table-craft/plugin-api@workspace:packages/plugin-api"],
 
     "@table-craft/plugin-mysql": ["@table-craft/plugin-mysql@workspace:plugins/mysql"],
+
+    "@table-craft/plugin-oracle": ["@table-craft/plugin-oracle@workspace:plugins/oracle"],
 
     "@table-craft/plugin-postgres": ["@table-craft/plugin-postgres@workspace:plugins/postgres"],
 

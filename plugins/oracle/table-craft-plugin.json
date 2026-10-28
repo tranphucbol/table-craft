@@ -1,0 +1,106 @@
+{
+  "id": "oracle",
+  "name": "Oracle",
+  "version": "0.0.0",
+  "apiVersion": "1.5.0",
+  "entry": "index.js",
+  "capabilities": [
+    "sql",
+    "cancel",
+    "schemaTree",
+    "transactions",
+    "ddl",
+    "explain",
+    "explainAnalyze",
+    "currentNamespace",
+    "keepAlive",
+    "bulkInsert",
+    "objects",
+    "serverMessages",
+    "sessions",
+    "routineCall"
+  ],
+  "highlight": "plsql",
+  "connection": {
+    "fields": [
+      { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
+      { "key": "port", "label": "Port", "kind": "number", "default": 1521, "required": true },
+      {
+        "key": "connectBy",
+        "label": "Connect by",
+        "kind": "select",
+        "default": "serviceName",
+        "options": [
+          { "value": "serviceName", "label": "Service name" },
+          { "value": "sid", "label": "SID" }
+        ]
+      },
+      { "key": "service", "label": "Service", "kind": "text", "placeholder": "FREEPDB1", "required": true },
+      { "key": "user", "label": "User", "kind": "text", "required": true },
+      { "key": "password", "label": "Password", "kind": "password", "secret": true },
+      {
+        "key": "role",
+        "label": "Role",
+        "kind": "select",
+        "default": "none",
+        "group": "advanced",
+        "options": [
+          { "value": "none", "label": "Default" },
+          { "value": "SYSDBA", "label": "SYSDBA" },
+          { "value": "SYSOPER", "label": "SYSOPER" },
+          { "value": "SYSBACKUP", "label": "SYSBACKUP" }
+        ]
+      },
+      {
+        "key": "sslMode",
+        "label": "SSL mode",
+        "kind": "select",
+        "default": "disable",
+        "group": "advanced",
+        "options": [
+          { "value": "disable", "label": "Disable" },
+          { "value": "verify-ca", "label": "Verify CA" },
+          { "value": "verify-full", "label": "Verify full" }
+        ]
+      },
+      { "key": "sslRootCert", "label": "SSL root certificate", "kind": "file", "group": "advanced" },
+      {
+        "key": "connectTimeout",
+        "label": "Connect timeout (s)",
+        "kind": "number",
+        "default": 10,
+        "group": "advanced"
+      },
+      {
+        "key": "applicationName",
+        "label": "Application name",
+        "kind": "text",
+        "default": "TableCraft",
+        "group": "advanced"
+      }
+    ],
+    "url": {
+      "schemes": ["oracle"],
+      "form": "server",
+      "parts": { "host": "host", "port": "port", "database": "service", "user": "user", "password": "password" },
+      "params": [
+        { "name": "connect_by", "key": "connectBy", "values": { "service_name": "serviceName", "sid": "sid" } },
+        {
+          "name": "role",
+          "key": "role",
+          "values": { "sysdba": "SYSDBA", "sysoper": "SYSOPER", "sysbackup": "SYSBACKUP" }
+        },
+        {
+          "name": "sslmode",
+          "key": "sslMode",
+          "values": { "disable": "disable", "verify-ca": "verify-ca", "verify-full": "verify-full" }
+        },
+        { "name": "sslrootcert", "key": "sslRootCert" },
+        { "name": "connect_timeout", "key": "connectTimeout" },
+        { "name": "application_name", "key": "applicationName" }
+      ]
+    },
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" },
+    "tls": { "mode": "sslMode", "verifyModes": ["verify-ca", "verify-full"], "caFile": "sslRootCert" }
+  }
+}

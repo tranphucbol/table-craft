@@ -76,7 +76,7 @@ describe("listPlugins", () => {
   it("givenBuiltInPluginSources_whenListed_thenFormsReadWithoutRunningCode", async () => {
     const plugins = await listPlugins([BUILT_IN_PLUGINS]);
 
-    expect(plugins.map((plugin) => plugin.id).sort()).toEqual(["mysql", "postgres", "redis", "sqlite"]);
+    expect(plugins.map((plugin) => plugin.id).sort()).toEqual(["mysql", "oracle", "postgres", "redis", "sqlite"]);
     expect(plugins.find((plugin) => plugin.id === "sqlite")?.fields).toEqual([
       expect.objectContaining({ key: "path", kind: "file" }),
     ]);

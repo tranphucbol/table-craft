@@ -103,10 +103,13 @@ const DEFAULT_MSSQL_PORT = 51433;
 export const ORACLE_CONFIG = {
   host: hostFromEnv("TABLE_CRAFT_ORACLE_HOST"),
   port: portFromEnv("TABLE_CRAFT_ORACLE_PORT", DEFAULT_ORACLE_PORT),
-  serviceName: "FREEPDB1",
+  service: "FREEPDB1",
   user: CREDENTIAL,
   password: CREDENTIAL,
 } as const;
+
+/** An account `test/db/schema/oracle/01-users.sql` makes with no catalog role: it sees only its own session. */
+export const ORACLE_LIMITED_CONFIG = { ...ORACLE_CONFIG, user: "table_craft_limited" } as const;
 
 /** The login `test/db/schema/mssql.sql` creates; `sa` is only the seed's. */
 export const MSSQL_CONFIG = {
@@ -171,6 +174,7 @@ export const SSH_BASTION = {
 
 export const POSTGRES_BEHIND_BASTION = { host: "postgres", port: 5432 } as const;
 export const MYSQL_BEHIND_BASTION = { host: "mysql", port: 3306 } as const;
+export const ORACLE_BEHIND_BASTION = { host: "oracle", port: 1521 } as const;
 
 const DEFAULT_POSTGRES_TLS_PORT = 55433;
 const DEFAULT_MYSQL_TLS_PORT = 53307;
@@ -324,7 +328,14 @@ export const WITHOUT_POSTGRES = !databaseEnabled("postgres");
 /** The smoke files' Redis scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
 export const WITHOUT_REDIS = !databaseEnabled("redis");
 
+/** The smoke files' Oracle scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
+export const WITHOUT_ORACLE = !databaseEnabled("oracle");
+
 /** Whether a scenario on a datasource of `pluginId` skips, because its server is not selected. */
 export function serverSkipped(pluginId: string): boolean {
-  return (pluginId === "postgres" && WITHOUT_POSTGRES) || (pluginId === "redis" && WITHOUT_REDIS);
+  return (
+    (pluginId === "postgres" && WITHOUT_POSTGRES) ||
+    (pluginId === "redis" && WITHOUT_REDIS) ||
+    (pluginId === "oracle" && WITHOUT_ORACLE)
+  );
 }

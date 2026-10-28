@@ -14,7 +14,11 @@ import { SMOKE_ENABLED } from "./harness.js";
 const BUILT_PLUGINS_ROOT = resolve(import.meta.dirname, "../../packages/desktop/dist/resources/plugins");
 /** Decision 108: built for development runs and npm, never packaged. */
 const OPTIONAL_PLUGINS_ROOT = resolve(import.meta.dirname, "../../packages/desktop/dist/optional-plugins");
-const ROOT_OF: Readonly<Record<string, string>> = { postgres: OPTIONAL_PLUGINS_ROOT, redis: OPTIONAL_PLUGINS_ROOT };
+const ROOT_OF: Readonly<Record<string, string>> = {
+  postgres: OPTIONAL_PLUGINS_ROOT,
+  redis: OPTIONAL_PLUGINS_ROOT,
+  oracle: OPTIONAL_PLUGINS_ROOT,
+};
 const PLUGIN_ENTRY_FILE = "index.js";
 /** Port 1 (tcpmux) is reserved and closed on any machine running these tests. */
 const UNREACHABLE = { host: "127.0.0.1", port: 1, database: "none", user: "none" };
@@ -63,7 +67,9 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
     const results = await loadPlugins([OPTIONAL_PLUGINS_ROOT]);
 
     expect(results.filter((result) => result.status === "unavailable")).toEqual([]);
-    expect(results.map((result) => result.manifest?.id)).toEqual(expect.arrayContaining(["postgres", "redis"]));
+    expect(results.map((result) => result.manifest?.id)).toEqual(
+      expect.arrayContaining(["postgres", "redis", "oracle"]),
+    );
   });
 
   it.each(["postgres", "mysql"])(

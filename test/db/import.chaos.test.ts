@@ -6,10 +6,17 @@ import { finished as streamFinished } from "node:stream/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { CSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ImportTask } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
 import {
   execute,
   exportHarness,
@@ -18,7 +25,7 @@ import {
   startImport,
   type ExportHarness,
 } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /**
  * Plan 021: imports over a link that goes quiet, resets or vanishes, and what each leaves committed
@@ -43,6 +50,8 @@ interface Target {
   readonly config: { readonly host: string; readonly port: number };
   readonly path: readonly string[];
   readonly create: string;
+  /** How the server folds an unquoted name: Oracle's upper case. */
+  readonly fold?: (name: string) => string;
 }
 
 const TARGETS: readonly Target[] = [
@@ -59,6 +68,14 @@ const TARGETS: readonly Target[] = [
     config: MYSQL_CONFIG,
     path: ["table_craft"],
     create: `CREATE TABLE ${TABLE} (id BIGINT PRIMARY KEY, label VARCHAR(64) NOT NULL, payload VARBINARY(64) NOT NULL)`,
+  },
+  {
+    name: "oracle",
+    plugin: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    path: ["TABLE_CRAFT"],
+    create: `CREATE TABLE ${TABLE} (id NUMBER(19) PRIMARY KEY, label VARCHAR2(64 CHAR) NOT NULL, payload RAW(64) NOT NULL)`,
+    fold: (name) => name.toUpperCase(),
   },
 ];
 
@@ -87,6 +104,7 @@ for (const target of TARGETS) {
     `import chaos: ${target.name}`,
     { timeout: CHAOS_TEST_TIMEOUT_MS },
     () => {
+      const fold = target.fold ?? ((name: string) => name);
       const cleanup: (() => Promise<void>)[] = [];
       afterEach(async () => {
         for (const step of cleanup.splice(0).reverse()) await step();
@@ -153,11 +171,11 @@ for (const target of TARGETS) {
                 target: {
                   kind: "table",
                   path: target.path,
-                  relation: TABLE,
+                  relation: fold(TABLE),
                   mapping: [
-                    { column: "id", field: 0 },
-                    { column: "label", field: 1 },
-                    { column: "payload", field: 2 },
+                    { column: fold("id"), field: 0 },
+                    { column: fold("label"), field: 1 },
+                    { column: fold("payload"), field: 2 },
                   ],
                 },
                 transaction,

@@ -65,7 +65,7 @@ const captureTunnel = evidenceFor("036");
 const LOOP_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
 const BUILT_IN_KINDS = ["MySQL", "SQLite"];
 /** Downloaded on demand (plans 057 and 058): absent from the bundle, offered in the picker. */
-const DOWNLOADABLE_KINDS = ["postgres", "redis"];
+const DOWNLOADABLE_KINDS = ["oracle", "postgres", "redis"];
 /** Not the default on a light-mode host, so the relaunched window shows it was kept. */
 const CHOSEN_THEME = "Dark";
 const CHOSEN_THEME_ID = "dark";
