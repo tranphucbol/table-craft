@@ -96,6 +96,8 @@ started, not when it is merged.
 | 099 | [Normal runs test MySQL and the remote TiDB](099-normal-runs-test-mysql-and-remote-tidb.md)                                                                            |
 | 100 | [Dialect options for Oracle and T-SQL](100-dialect-options-for-oracle-and-t-sql.md)                                                                                    |
 | 101 | [A plugin may name a column's type class](101-a-plugin-may-name-a-column-type-class.md)                                                                                |
+| 102 | [The Oracle plugin runs node-oracledb in thin mode only](102-oracle-plugin-thin-mode-only.md)                                                                          |
+| 103 | [Oracle schemas are namespaces, and packages are routine owners](103-oracle-schemas-are-namespaces-and-packages-are-routine-owners.md)                                 |
 | 106 | [Plugin API 1.0 follows semver](106-plugin-api-1-0-follows-semver.md)                                                                                                  |
 | 107 | [Plugin API compatibility is checked, not promised](107-plugin-api-compatibility-is-checked.md)                                                                        |
 | 108 | [SQLite and MySQL ship in the box; other plugins download on demand](108-sqlite-and-mysql-ship-other-plugins-download.md)                                              |

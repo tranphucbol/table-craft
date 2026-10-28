@@ -44,7 +44,7 @@ built into the first root and goes through the same loader as a user plugin. Eac
 ### Distribution
 
 SQLite and MySQL ship in the installer. Every other plugin TableCraft offers is optional
-(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL) and listed in a compiled-in
+(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL, Redis and Oracle) and listed in a compiled-in
 catalog (decision 108). Each release publishes it to npm as `@tablecraft-app/plugin-<id>` at the app's
 version, with `"tableCraft": { "id", "apiVersion" }` in its `package.json`, and attaches the
 `.tgz` to the GitHub release (decision 109).
@@ -1666,6 +1666,7 @@ Plan 022, decision 048. Unqualified names complete and resolve against the first
 | PostgreSQL | `SET [SESSION \| LOCAL] search_path {TO \| =} …`, `SET SCHEMA 'x'`, `RESET search_path \| ALL` | `[current_database(), current_schema()]`      |
 | MySQL      | `USE db`                                                                                       | `[DATABASE()]`, null before a database is set |
 | SQLite     | none                                                                                           | not declared                                  |
+| Oracle     | `ALTER SESSION SET CURRENT_SCHEMA = x` (`alterSessionSchema`)                                  | `[SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')]`  |
 
 `classify` marks a switching statement `setsNamespace`. With `currentNamespace` declared, the engine
 reads the session's namespace when it opens, after a statement that sets the namespace or a
@@ -1854,6 +1855,7 @@ for.
 | PostgreSQL | `pg_stat_activity` with `pg_blocking_pids`; without `pg_read_all_stats` other users' rows read `<insufficient privilege>` and a note says so               | `SELECT pg_cancel_backend(pid)` / `SELECT pg_terminate_backend(pid)`; `false` rejects                                                                    |
 | MySQL      | `information_schema.PROCESSLIST`, `INNODB_TRX` ages, `performance_schema.data_lock_waits` else `sys.innodb_lock_waits`; notes for `PROCESS` and lock waits | `KILL QUERY id` / `KILL id`                                                                                                                              |
 | TiDB       | `information_schema.CLUSTER_PROCESSLIST`, transaction age from `TxnStart`'s TSO; no lock waits                                                             | from 6.1 `KILL TIDB QUERY id` / `KILL TIDB id`; before, no cancel, and terminate runs only on a connection that proved it reached the session's instance |
+| Oracle     | `GV$SESSION` with `GV$TRANSACTION` and `GV$SQL`, id `sid,serial#`, `BLOCKING_SESSION`; without `SELECT_CATALOG_ROLE` only the own session and a note       | `ALTER SYSTEM CANCEL SQL 'sid,serial#[,@inst]'` / `ALTER SYSTEM KILL SESSION 'sid,serial#[,@inst]' IMMEDIATE`; both need `ALTER SYSTEM`                  |
 
 Stopping runs on a fresh connection. The engine (`sessions.list`, `sessions.cancel`,
 `sessions.terminate`) reads on the catalog's introspection session, tags each row whose id is the
@@ -1883,6 +1885,24 @@ cluster a node picker offers Overview (node, role, slots, memory, ops/s per node
 The Slow log view lists `SLOWLOG GET 128` (every primary in a cluster): time, duration, command,
 client and node, with Open in Console. Redis' sessions (Sessions view) come from `CLIENT LIST`
 on every primary; Cancel Query sends `CLIENT UNBLOCK <id> ERROR`, Terminate `CLIENT KILL ID <id>`.
+
+## Oracle
+
+Plan 054, decisions 102 and 103. The optional `oracle` plugin uses node-oracledb in thin mode only;
+the thick client is never loaded, and a server older than 12.1 is refused by name.
+
+| Area         | Oracle                                                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connect      | host, port, Service name or SID, user, password, role (SYSDBA, SYSOPER, SYSBACKUP); `oracle://user@host:1521/service`, `?connect_by=sid`       |
+| TLS          | TCPS with the CA file as wallet content; `verify-ca` and `verify-full` (`sslServerDNMatch`); no `require`, thin mode always checks the chain   |
+| Namespaces   | schemas (`ALL_USERS` with objects, current first, `ORACLE_MAINTAINED` ones system); `ALTER SESSION SET CURRENT_SCHEMA` switches                |
+| Routines     | standalone and package members `PKG.MEMBER`, overloads by `SUBPROGRAM_ID`; calls are one anonymous block returning implicit result sets        |
+| Values       | `NUMBER(p)` integer, `NUMBER(p,s)` decimal padded to scale, unconstrained by value; `DATE`, `TIMESTAMP` to the millisecond; `''` is NULL       |
+| Statements   | `/` lines separate; a trailing `;` is dropped except after PL/SQL; `:1` placeholders; `DBMS_OUTPUT` drained after each statement               |
+| Transactions | DDL commits implicitly and closes the transaction; `SET TRANSACTION` opens one; `RELEASE SAVEPOINT` is a no-op; read-only via `READ ONLY`      |
+| Explain      | `EXPLAIN PLAN SET STATEMENT_ID … FOR` and `PLAN_TABLE`; Analyse runs with `STATISTICS_LEVEL = ALL` and reads `V$SQL_PLAN_STATISTICS_ALL`       |
+| Cancel       | `ALTER SYSTEM CANCEL SQL` on a second connection, `break()` when that fails                                                                    |
+| Functions    | the whole _SQL Functions_ chapter (19c, 21c, 23ai ranges) checked against `manualIndex.ts`, plus members of supplied `DBMS_*`/`UTL_*` packages |
 
 ## Datasources and secrets
 
