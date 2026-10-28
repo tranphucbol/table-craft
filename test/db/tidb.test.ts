@@ -207,6 +207,56 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     ]);
   });
 
+  it("givenReadOnlySession_whenConnected_thenNoReadOnlyTransactionIsSet", async () => {
+    const sent = spySql();
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: true });
+    cleanup.push(() => session.close());
+
+    const result = await session.execute("SELECT 1 AS one");
+    const rows = [];
+    for await (const row of result.rows) rows.push(row);
+
+    expect(rows).toEqual([[1]]);
+    expect(sent.filter((sql) => /READ\s+ONLY/i.test(sql))).toEqual([]);
+  });
+
+  it("givenReadOnlySession_whenWriteOrDdl_thenRefusedBeforeSent", async () => {
+    const writer = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => writer.close());
+    await withOrderEvents(writer);
+    const sent = spySql();
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: true });
+    cleanup.push(() => session.close());
+
+    for (const sql of [
+      `INSERT INTO ${EVENTS_TABLE} VALUES (4, 30, 'new')`,
+      `UPDATE ${EVENTS_TABLE} SET state = 'gone'`,
+      `DROP TABLE ${EVENTS_TABLE}`,
+    ]) {
+      await expect(session.execute(sql)).rejects.toMatchObject({ code: "statementFailed" });
+    }
+    await expect(
+      session.insertRows?.(
+        {
+          table: EVENTS_TABLE,
+          columns: [
+            { name: "id", type: "BIGINT" },
+            { name: "shop_id", type: "INT" },
+            { name: "state", type: "VARCHAR" },
+          ],
+        },
+        [["5", "40", "new"]],
+      ),
+    ).rejects.toMatchObject({ code: "statementFailed" });
+
+    const result = await session.execute(`SELECT COUNT(*) AS n, MAX(state) AS state FROM ${EVENTS_TABLE}`);
+    const rows = [];
+    for await (const row of result.rows) rows.push(row);
+
+    expect(rows).toEqual([[3, "new"]]);
+    expect(sent.filter((sql) => /\b(INSERT|UPDATE|DROP)\b/i.test(sql))).toEqual([]);
+  });
+
   it("givenTidbSyntaxError_whenExecuted_thenPositionFoundOnItsLine", async () => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
