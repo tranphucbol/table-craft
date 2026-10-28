@@ -2,7 +2,7 @@
   "id": "redis",
   "name": "Redis",
   "version": "0.0.0",
-  "apiVersion": "1.3.0",
+  "apiVersion": "1.4.0",
   "entry": "index.js",
   "capabilities": ["commands", "cancel", "keepAlive", "keyValue", "nodes", "serverInfo", "sessions"],
   "highlight": "redis",

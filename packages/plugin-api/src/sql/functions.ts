@@ -41,9 +41,15 @@ export interface FunctionSpec {
   readonly summary: string;
   readonly category: FunctionCategory;
   readonly available?: ServerRange;
+  /** Written without parentheses, such as Oracle's `SYSDATE`; the call is the name alone and has no hint. */
+  readonly bare?: true;
 }
 
-/** `[name, signatures, summary, available?]`, a signature written `"date, format -> string"`. */
+/**
+ * `[name, signatures, summary, available?]`, a signature written `"date, format -> string"`, a
+ * keyword-led parameter `"unit FROM date -> integer"`, a bare function `"= date"` and a procedure
+ * `"str ->"`. A name `PKG.MEMBER` is offered after `pkg.`.
+ */
 export type FunctionEntry = readonly [
   name: string,
   signatures: string | readonly string[],
@@ -56,36 +62,99 @@ const SHOWN_ARROW = "→";
 const OPTIONAL_MARK = "?";
 const VARIADIC_MARK = "...";
 const COMPARATOR = /^(>=|<=|>|<|=)?(\d+(?:\.\d+)*)$/;
+const BARE_MARK = "=";
+const LEAD_WORD = /^[A-Z][A-Z_]*$/;
+const LEAD_CHOICE = "|";
+const PARAMETER_SEPARATOR = ",";
+const COMMA_SHOWN = ", ";
+const MEMBER_SEPARATOR = ".";
 
-function parameter(written: string): FunctionParameter {
+function parameter(written: string, lead: string | null): FunctionParameter {
   let name = written.trim();
   const variadic = name.endsWith(VARIADIC_MARK);
   if (variadic) name = name.slice(0, -VARIADIC_MARK.length).trim();
   const optional = name.endsWith(OPTIONAL_MARK);
   if (optional) name = name.slice(0, -OPTIONAL_MARK.length).trim();
-  return { name, ...(optional ? { optional } : {}), ...(variadic ? { variadic } : {}) };
+  return {
+    name,
+    ...(optional ? { optional } : {}),
+    ...(variadic ? { variadic } : {}),
+    ...(lead === null ? {} : { lead }),
+  };
 }
 
-/** Reads `"str, len? -> string"`: `?` marks an optional parameter, `...` one that repeats. */
+function isLeadWord(word: string): boolean {
+  return word.split(LEAD_CHOICE).every((choice) => LEAD_WORD.test(choice));
+}
+
+/** Whether `lead` is `word` or offers it among its `|` alternatives. */
+export function leadMatches(lead: string, word: string): boolean {
+  return lead.split(LEAD_CHOICE).includes(word);
+}
+
+/**
+ * One comma-separated part: an upper-case word between names leads the next, as one before the
+ * first parameter does; one standing alone is a keyword choice. After a comma the keyword is the
+ * argument's own (`date, INTERVAL expr unit`), since the comma already separates it.
+ */
+function leadParameters(part: string, index: number): FunctionParameter[] {
+  const words = part.trim().split(/\s+/);
+  const parameters: FunctionParameter[] = [];
+  let lead: string | null = null;
+  let name: string[] = [];
+  const flush = (): void => {
+    if (name.length > 0) parameters.push(parameter(name.join(" "), lead));
+    name = [];
+    lead = null;
+  };
+  words.forEach((word, at) => {
+    const next = words[at + 1];
+    const afterComma = at === 0 && index > 0;
+    if (!afterComma && isLeadWord(word) && next !== undefined && !isLeadWord(next)) {
+      flush();
+      lead = word;
+    } else name.push(word);
+  });
+  flush();
+  return parameters;
+}
+
+function isBareSignature(written: string): boolean {
+  return written.trim().startsWith(BARE_MARK);
+}
+
+/**
+ * Reads `"str, len? -> string"`: `?` marks an optional parameter, `...` one that repeats, an
+ * upper-case word between names the keyword before the next (`"unit FROM date -> integer"`).
+ * `"= date"` is a bare function's and `"str ->"` a procedure's, which returns nothing.
+ */
 export function parseSignature(written: string): FunctionSignature {
+  if (isBareSignature(written)) return { parameters: [], returns: written.trim().slice(BARE_MARK.length).trim() };
   const arrow = written.lastIndexOf(RETURNS_ARROW);
   if (arrow < 0) throw new Error(`Signature "${written}" has no "${RETURNS_ARROW} type"; add what it returns.`);
   const list = written.slice(0, arrow).trim();
   return {
-    parameters: list === "" ? [] : list.split(",").map(parameter),
+    parameters: list === "" ? [] : list.split(PARAMETER_SEPARATOR).flatMap(leadParameters),
     returns: written.slice(arrow + RETURNS_ARROW.length).trim(),
   };
 }
 
 /** Specs for one category, from compact entries a plugin's data file lists. */
 export function functionSpecs(category: FunctionCategory, entries: readonly FunctionEntry[]): FunctionSpec[] {
-  return entries.map(([name, signatures, summary, available]) => ({
-    name,
-    signatures: (typeof signatures === "string" ? [signatures] : signatures).map(parseSignature),
-    summary,
-    category,
-    ...(available === undefined ? {} : { available }),
-  }));
+  return entries.map(([name, signatures, summary, available]) => {
+    const written = typeof signatures === "string" ? [signatures] : signatures;
+    const bare = written.filter(isBareSignature).length;
+    if (bare > 0 && bare < written.length)
+      throw new Error(`${name} mixes "${BARE_MARK} type" with called signatures; write the bare form as "-> type".`);
+    return {
+      name,
+      signatures: written.map(parseSignature),
+      summary,
+      category,
+      ...(available === undefined ? {} : { available }),
+      ...(bare > 0 ? { bare: true as const } : {}),
+    };
+  });
 }
 
 function compareVersions(left: readonly number[], right: readonly number[]): number {
@@ -126,39 +195,72 @@ export function isAvailable(spec: FunctionSpec, server: ServerIdentity | null): 
     .every((comparator) => satisfies(server.version, comparator));
 }
 
-function shownParameter(parameter: FunctionParameter): string {
+function shownParameter(parameter: FunctionParameter, index: number): string {
   const name = parameter.variadic === true ? `${parameter.name}${VARIADIC_MARK}` : parameter.name;
-  return parameter.optional === true ? `[${name}]` : name;
+  const led = parameter.lead === undefined ? name : `${parameter.lead} ${name}`;
+  const separator = index === 0 ? "" : parameter.lead === undefined ? COMMA_SHOWN : " ";
+  return separator + (parameter.optional === true ? `[${led}]` : led);
 }
 
-/** `(date, format) → string`, the popup's detail for one signature. */
+function returnsLabel(returns: string): string {
+  return returns === "" ? "" : `${SHOWN_ARROW} ${returns}`;
+}
+
+/** `(date, format) → string`, the popup's detail for one signature; a lead replaces the comma, a procedure has no `→`. */
 export function signatureLabel(signature: FunctionSignature): string {
-  return `(${signature.parameters.map(shownParameter).join(", ")}) ${SHOWN_ARROW} ${signature.returns}`;
+  const list = `(${signature.parameters.map(shownParameter).join("")})`;
+  const returns = returnsLabel(signature.returns);
+  return returns === "" ? list : `${list} ${returns}`;
+}
+
+function shownSignature(spec: FunctionSpec, signature: FunctionSignature): string {
+  return spec.bare === true ? returnsLabel(signature.returns) : signatureLabel(signature);
 }
 
 /** Every signature on its own line, then the summary. */
 export function functionInfo(spec: FunctionSpec): string {
   const label = spec.name.toLowerCase();
-  const lines = spec.signatures.map((signature) => `${label}${signatureLabel(signature)}`);
+  const gap = spec.bare === true ? " " : "";
+  const lines = spec.signatures.map((signature) => `${label}${gap}${shownSignature(spec, signature)}`);
   return `${lines.join("\n")}\n\n${spec.summary}`;
 }
 
-/** A spec as an item: `name()` with the caret between the parentheses when it takes arguments. */
-export function functionItem(spec: FunctionSpec | string, boost: number): CompletionItem {
-  if (typeof spec === "string")
-    return { label: spec, kind: "function", detail: null, apply: spec, boost, info: null, caret: null };
-  const label = spec.name.toLowerCase();
+/**
+ * A spec as an item: `name()` with the caret between the parentheses when it takes arguments, or
+ * the name alone for a bare one. `label` is what the popup offers, the member alone after `pkg.`.
+ */
+function specItem(spec: FunctionSpec, label: string, boost: number): CompletionItem {
   const first = spec.signatures[0];
   const takesArguments = spec.signatures.some((signature) => signature.parameters.length > 0);
+  const bare = spec.bare === true;
   return {
     label,
     kind: "function",
-    detail: first === undefined ? null : signatureLabel(first),
-    apply: `${label}()`,
+    detail: first === undefined ? null : shownSignature(spec, first),
+    apply: bare ? label : `${label}()`,
     boost,
     info: functionInfo(spec),
-    caret: takesArguments ? label.length + 1 : null,
+    caret: takesArguments && !bare ? label.length + 1 : null,
   };
+}
+
+/** A spec as an item: `name()` with the caret between the parentheses when it takes arguments, the name alone when bare. */
+export function functionItem(spec: FunctionSpec | string, boost: number): CompletionItem {
+  if (typeof spec === "string")
+    return { label: spec, kind: "function", detail: null, apply: spec, boost, info: null, caret: null };
+  return specItem(spec, spec.name.toLowerCase(), boost);
+}
+
+/** The package a spec named `PKG.MEMBER` belongs to, upper case; null for a plain function. */
+export function functionPackage(spec: FunctionSpec | string): string | null {
+  const name = functionName(spec);
+  const dot = name.lastIndexOf(MEMBER_SEPARATOR);
+  return dot < 0 ? null : name.slice(0, dot).toUpperCase();
+}
+
+/** A package member as offered after `pkg.`: the member's name alone, the info naming it in full. */
+export function memberItem(spec: FunctionSpec, boost: number): CompletionItem {
+  return specItem(spec, spec.name.slice(spec.name.lastIndexOf(MEMBER_SEPARATOR) + 1).toLowerCase(), boost);
 }
 
 /** The name a function entry is offered under, either form. */

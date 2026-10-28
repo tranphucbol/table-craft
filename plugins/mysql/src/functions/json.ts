@@ -84,8 +84,8 @@ export const JSON_FUNCTIONS: readonly FunctionSpec[] = functionSpecs("json", [
   ["JSON_VALID", "value -> integer", "Whether the value is valid JSON."],
   [
     "JSON_VALUE",
-    "doc, path -> value",
-    "The scalar at a path, optionally cast with RETURNING type.",
+    "doc, path RETURNING type? -> value",
+    "The scalar at a path, optionally cast to a type.",
     since("8.0.21", false),
   ],
 ]);

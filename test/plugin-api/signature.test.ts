@@ -1,13 +1,16 @@
 import type { SignatureHelp } from "@table-craft/plugin-api";
 import {
+  functionItem,
   functionSpecs,
+  parseSignature,
   quoteIdentifierWith,
+  signatureLabel,
   SQL_FUNCTIONS,
   SQL_KEYWORDS,
   sqlCompleter,
 } from "@table-craft/plugin-api/sql";
 import { describe, expect, it } from "vitest";
-import { fakeCatalog, PUBLIC } from "../support/completionCatalog.js";
+import { fakeCatalog, fixtureRelations, PUBLIC, relation } from "../support/completionCatalog.js";
 
 const FUNCTIONS = [
   ...SQL_FUNCTIONS,
@@ -19,6 +22,13 @@ const FUNCTIONS = [
   ...functionSpecs("datetime", [
     ["NOW", "-> datetime", "The current time."],
     ["OLD_ONLY", "-> integer", "Exists only before 8.0.", { mysql: "<8.0" }],
+    ["EXTRACT", "unit FROM date -> integer", "One part of a date."],
+    ["SYSDATE", "= date", "The current date, written without parentheses."],
+  ]),
+  ...functionSpecs("string", [["CHAR", "code... USING charset -> string", "A string from character codes."]]),
+  ...functionSpecs("misc", [
+    ["DBMS_OUTPUT.PUT_LINE", "line ->", "Writes a line to the output buffer."],
+    ["DBMS_LOB.SUBSTR", "lob, amount?, offset? -> string", "Part of a large object."],
   ]),
 ];
 
@@ -41,6 +51,125 @@ function signature(marked: string, serverVersion: string | null = null): Promise
   const offset = marked.indexOf(CARET);
   return mysql.signatureAt({ text: marked.replace(CARET, ""), offset }, fakeCatalog(undefined, PUBLIC, serverVersion));
 }
+
+function spec(name: string) {
+  const found = FUNCTIONS.find((candidate) => candidate.name === name);
+  if (found === undefined) throw new Error(`The test list has no ${name}.`);
+  return found;
+}
+
+async function completeAt(marked: string, catalog = fakeCatalog()) {
+  const offset = marked.indexOf(CARET);
+  return (await mysql.complete({ text: marked.replace(CARET, ""), offset }, catalog)).items;
+}
+
+describe("function call shapes", () => {
+  it("givenBareSpec_whenItem_thenNameOnlyCaretAtEnd", () => {
+    const sysdate = spec("SYSDATE");
+
+    expect(sysdate.bare).toBe(true);
+    expect(functionItem(sysdate, 0)).toMatchObject({
+      label: "sysdate",
+      apply: "sysdate",
+      caret: null,
+      detail: "→ date",
+    });
+    expect(functionItem(sysdate, 0).info).toContain("sysdate → date");
+  });
+
+  it("givenBareAndCalledSignatures_whenRead_thenThrows", () => {
+    expect(() => functionSpecs("misc", [["MIXED", ["= date", "x -> date"], "Both."]])).toThrow(/-> type/);
+  });
+
+  it("givenBareSpec_whenCallAt_thenNull", async () => {
+    expect(await signature("SELECT sysdate(|")).toBeNull();
+  });
+
+  it("givenLeadSignature_whenParsed_thenLeadOnParameter", () => {
+    expect(parseSignature("unit FROM date -> integer").parameters).toEqual([
+      { name: "unit" },
+      { name: "date", lead: "FROM" },
+    ]);
+    expect(parseSignature("BOTH|LEADING|TRAILING remove FROM str -> string").parameters).toEqual([
+      { name: "remove", lead: "BOTH|LEADING|TRAILING" },
+      { name: "str", lead: "FROM" },
+    ]);
+    expect(parseSignature("DATE|TIME, region -> string").parameters).toEqual([
+      { name: "DATE|TIME" },
+      { name: "region" },
+    ]);
+    expect(parseSignature("date, INTERVAL expr unit -> date").parameters).toEqual([
+      { name: "date" },
+      { name: "INTERVAL expr unit" },
+    ]);
+    expect(signatureLabel(parseSignature("doc, path RETURNING type? -> value"))).toBe(
+      "(doc, path [RETURNING type]) → value",
+    );
+    expect(signatureLabel(parseSignature("unit FROM date -> integer"))).toBe("(unit FROM date) → integer");
+  });
+
+  it("givenProcedureSignature_whenLabelled_thenNoArrow", () => {
+    expect(signatureLabel(parseSignature("line ->"))).toBe("(line)");
+  });
+
+  it("givenExtractYearFrom_whenSignatureAt_thenArgumentOne", async () => {
+    expect(await signature("SELECT extract(|")).toMatchObject({ name: "extract", argument: 0 });
+    expect(await signature("SELECT extract(YEAR FROM |)")).toMatchObject({ name: "extract", argument: 1 });
+    expect(await signature("SELECT extract(year from |)")).toMatchObject({ argument: 1 });
+  });
+
+  it("givenCastAsDecimalWithPrecision_whenSignatureAt_thenArgumentOne", async () => {
+    expect(await signature("SELECT cast(x AS |)")).toMatchObject({ name: "cast", argument: 1 });
+    expect(await signature("SELECT cast(x AS DECIMAL(10, 2)|)")).toMatchObject({ name: "cast", argument: 1 });
+  });
+
+  it("givenUnknownWordInCall_whenSignatureAt_thenArgumentUnchanged", async () => {
+    expect(await signature("SELECT extract(YEAR_MONTH |")).toMatchObject({ argument: 0 });
+    expect(await signature("SELECT substr(name, 1 + LENGTH |")).toMatchObject({ argument: 1 });
+  });
+
+  it("givenVariadicBeforeLead_whenCommas_thenStaysOnVariadic", async () => {
+    expect(await signature("SELECT char(77, 121, |")).toMatchObject({ argument: 0 });
+    expect(await signature("SELECT char(77, 121 USING |")).toMatchObject({ argument: 1 });
+  });
+
+  it("givenQualifiedSpec_whenCallAt_thenJoinedName", async () => {
+    const text = "BEGIN dbms_output.put_line(|); END";
+    expect(await signature(text)).toMatchObject({ name: "dbms_output.put_line", argument: 0, from: 6 });
+    expect(await signature("SELECT dbms_lob.substr(doc, |")).toMatchObject({ name: "dbms_lob.substr", argument: 1 });
+    expect(await signature("CALL dbms_output.put_line(|")).toMatchObject({ name: "dbms_output.put_line" });
+    expect(await signature("SELECT put_line(|")).toBeNull();
+    expect(await signature("SELECT other.put_line(|")).toBeNull();
+  });
+
+  it("givenQualifiedSpec_whenCompleteAfterPackageDot_thenMembers", async () => {
+    const items = await completeAt("SELECT dbms_output.|");
+
+    expect(items.map((item) => item.label)).toEqual(["put_line"]);
+    expect(items[0]).toMatchObject({
+      kind: "function",
+      apply: "put_line()",
+      caret: "put_line(".length,
+      detail: "(line)",
+    });
+    expect(items[0]?.info).toContain("dbms_output.put_line(line)");
+    expect((await completeAt("SELECT dbms_|")).map((item) => item.label)).not.toContain("dbms_output.put_line");
+  });
+
+  it("givenTableNamedLikePackage_whenCompleteAfterDot_thenColumnsFirst", async () => {
+    const relations = fixtureRelations();
+    relations.set(JSON.stringify(PUBLIC), [
+      ...(relations.get(JSON.stringify(PUBLIC)) ?? []),
+      relation("dbms_lob", [["id", "integer"]]),
+    ]);
+    const items = await completeAt("SELECT dbms_lob.| FROM dbms_lob", fakeCatalog(relations));
+
+    expect(items.map((item) => [item.kind, item.label])).toEqual([
+      ["column", "id"],
+      ["function", "substr"],
+    ]);
+  });
+});
 
 describe("sqlCompleter.signatureAt", () => {
   it("givenOpenCall_whenAsking_thenFirstArgumentAndSpan", async () => {
