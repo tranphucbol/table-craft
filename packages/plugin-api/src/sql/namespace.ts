@@ -90,6 +90,19 @@ function searchPathTarget(text: string, tokens: readonly Token[]): NamespaceTarg
   return { kind: "schema", candidates: names };
 }
 
+const ALTER_SESSION_PREFIX = ["ALTER", "SESSION", "SET", "CURRENT_SCHEMA", "="];
+
+function alterSessionPrefix(text: string, tokens: readonly Token[]): boolean {
+  return ALTER_SESSION_PREFIX.every((word, at) => wordAt(text, tokens, at) === word);
+}
+
+function alterSessionTarget(text: string, tokens: readonly Token[]): NamespaceTarget | null {
+  if (tokens.length !== ALTER_SESSION_PREFIX.length + 1 || !alterSessionPrefix(text, tokens)) return null;
+  const token = tokens[ALTER_SESSION_PREFIX.length];
+  const name = identifier(text, token);
+  return name === null || token?.kind === "string" ? null : { kind: "schema", candidates: [name] };
+}
+
 /** The caret's place in a session-namespace statement's target list. */
 export interface NamespaceSlot {
   readonly kind: NamespaceTarget["kind"];
@@ -152,7 +165,8 @@ function searchPathListStart(text: string, tokens: readonly Token[]): { at: numb
 
 /**
  * Where the caret at `offset` names a namespace a session-namespace statement of the dialect moves
- * to: `USE |` or the elements of `SET search_path TO a, |` and `SET SCHEMA |`. Null anywhere else,
+ * to: `USE |`, `ALTER SESSION SET CURRENT_SCHEMA = |` or the elements of `SET search_path TO a, |`
+ * and `SET SCHEMA |`. Null anywhere else,
  * and after a name whose closing quote is typed.
  */
 export function namespaceSlotAt(text: string, offset: number, dialect: SqlDialectOptions): NamespaceSlot | null {
@@ -179,6 +193,11 @@ export function namespaceSlotAt(text: string, offset: number, dialect: SqlDialec
       if (prefix?.kind === "string" || before.length !== 1 || wordAt(text, before, 0) !== USE) continue;
       return { kind: "database", from, to: offset, quote, listed: [] };
     }
+    if (form === "alterSessionSchema") {
+      if (prefix?.kind === "string" || before.length !== ALTER_SESSION_PREFIX.length) continue;
+      if (!alterSessionPrefix(text, before)) continue;
+      return { kind: "schema", from, to: offset, quote, listed: [] };
+    }
     const start = searchPathListStart(text, before);
     if (start === null) continue;
     if (start.single && before.length !== start.at) continue;
@@ -198,15 +217,30 @@ export function namespaceTarget(sql: string, dialect: SqlDialectOptions): Namesp
   if (forms.length === 0) return null;
   const tokens = significantTokens(sql, dialect).filter((token) => token.kind !== "delimiter");
   for (const form of forms) {
-    const target = form === "use" ? useTarget(sql, tokens) : searchPathTarget(sql, tokens);
+    const target = TARGET_READERS[form](sql, tokens);
     if (target !== null) return target;
   }
   return null;
 }
 
+const TARGET_READERS: Readonly<
+  Record<NamespaceStatementForm, (text: string, tokens: readonly Token[]) => NamespaceTarget | null>
+> = {
+  use: useTarget,
+  searchPath: searchPathTarget,
+  alterSessionSchema: alterSessionTarget,
+};
+
 const SWITCH_TARGETS: Readonly<Record<NamespaceStatementForm, NamespaceSwitch["targets"]>> = {
   use: "topLevel",
   searchPath: "schema",
+  alterSessionSchema: "schema",
+};
+
+const SWITCH_STATEMENTS: Readonly<Record<NamespaceStatementForm, (quoted: string) => string>> = {
+  use: (quoted) => `USE ${quoted}`,
+  searchPath: (quoted) => `SET search_path TO ${quoted}`,
+  alterSessionSchema: (quoted) => `ALTER SESSION SET CURRENT_SCHEMA = ${quoted}`,
 };
 
 /**
@@ -226,7 +260,7 @@ export function namespaceSwitcher(
       if (name === undefined) {
         throw new PluginError("statementFailed", "A namespace switch names no namespace; pick one from the list.");
       }
-      return form === "use" ? `USE ${quoteIdentifier(name)}` : `SET search_path TO ${quoteIdentifier(name)}`;
+      return SWITCH_STATEMENTS[form](quoteIdentifier(name));
     },
   };
 }

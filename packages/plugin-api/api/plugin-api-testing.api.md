@@ -27,6 +27,7 @@ interface ContractFixture {
   readonly catalog?: { readonly path: readonly string[]; readonly quoted: { readonly name: string; readonly qualified: string; }; readonly lineItems: string; readonly ordersCheck: string; readonly customersComment: string | null; };
   readonly commands?: CommandsFixture;
   readonly config: unknown;
+  readonly emptyTextIsNull?: boolean;
   readonly foldName?: (name: string) => string;
   readonly keyspace?: KeyspaceFixture;
   readonly manifest: PluginManifest;
@@ -41,6 +42,7 @@ interface ContractFixture {
 }
 
 interface ContractSql {
+  readonly awkwardIdentifier?: string;
   readonly begin?: string;
   readonly dropTableIfExists?: (name: string) => string;
   readonly explainJoin?: string;
