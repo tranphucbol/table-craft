@@ -21,18 +21,22 @@ import {
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
+  expectNotSpinning,
   LAUNCH_TIMEOUT_MS,
   launchApp,
+  runButton,
   SCENARIO_TIMEOUT_MS,
   setWindowSize,
   startStatement,
   toolWindow,
   waitUntilReady,
+  waitUntilSpinning,
   type Datasource,
   type RunningApp,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("027");
+const captureSpinner = evidenceFor("112");
 
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
 const TIDB: Datasource = { id: "tidb", pluginId: "mysql", config: TIDB_CONFIG };
@@ -165,12 +169,16 @@ describe.runIf(DATABASES_ENABLED)("closing result live test", () => {
 
       await startStatement(page, "SELECT SLEEP(30) AS slept");
       await expect.poll(() => cancelButton(page).isEnabled()).toBe(true);
+      await waitUntilSpinning(runButton(page));
+      await captureSpinner(page, "03-cancel-tidb-spinning");
       const started = Date.now();
       await cancelButton(page).click();
       await waitUntilReady(page);
       const elapsedMs = Date.now() - started;
 
       expect(elapsedMs).toBeLessThan(CANCEL_DEADLINE_MS);
+      await expectNotSpinning(runButton(page));
+      await captureSpinner(page, "03-cancel-tidb-after");
       await showOutput(page);
       await expect
         .poll(() => outputText(page))
