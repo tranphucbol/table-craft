@@ -1,3 +1,4 @@
+import { fillShades, shadeColor } from "@table-craft/desktop/appearance/press.js";
 import {
   EDITOR_TOOLTIP_RADIUS_PX,
   TRAFFIC_LIGHT_INSET_PX,
@@ -12,6 +13,8 @@ function kebab(name: string): string {
 /** The CSS variables `app.css` maps onto Tailwind's theme. */
 export function appearanceVariables(appearance: Appearance): Readonly<Record<string, string>> {
   const { colors, fonts, density, motion } = appearance;
+  const accentShades = fillShades(colors.accent, colors.accentInk);
+  const dangerShades = fillShades(colors.danger, colors.accentInk);
   return {
     "--tc-canvas": colors.canvas,
     "--tc-editor-tooltip-radius": `${EDITOR_TOOLTIP_RADIUS_PX}px`,
@@ -75,8 +78,13 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-motion-shift": `${motion.shiftPx}px`,
     "--tc-motion-enter-scale": String(motion.enterScale),
     "--tc-motion-press-scale": String(motion.pressScale),
+    "--tc-motion-press-scale-text": String(motion.pressScaleText),
     "--tc-motion-progress": motion.progress,
     "--tc-motion-ambient": motion.ambient,
+    "--tc-fill-hover-shade": shadeColor(accentShades.hover),
+    "--tc-fill-press-shade": shadeColor(accentShades.press),
+    "--tc-danger-hover-shade": shadeColor(dangerShades.hover),
+    "--tc-danger-press-shade": shadeColor(dangerShades.press),
   };
 }
 
