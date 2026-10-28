@@ -1,4 +1,5 @@
 import etcd from "@table-craft/plugin-etcd";
+import { randomUUID } from "node:crypto";
 import type { KeyName, Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { describe, expect, it } from "vitest";
@@ -94,6 +95,113 @@ describe.runIf(databaseEnabled("etcd")).each(SERVERS)("etcd $version server", ({
   });
 
   describe("keyspace", () => {
+    it("givenDeleteRecreateAndBinaryValues_whenHistoryPaged_thenExactEventsAndPinnedSnapshot", async () => {
+      await withEtcd(config, async (session) => {
+        const keyspace = keyspaceOf(session);
+        const key = {
+          text: "history binary",
+          hex: `${Buffer.from(`/contract/history/${randomUUID()}/`).toString("hex")}ff00`,
+        };
+        await keyspace.remove(DATABASE, [key]);
+        try {
+          const save = (hex: string) =>
+            keyspace.apply(DATABASE, key, [{ kind: "setString", value: { text: "binary", hex }, original: null }], {
+              type: "string",
+              guard: false,
+            });
+          await save("ff00");
+          await keyspace.remove(DATABASE, [key]);
+          await save("00fe");
+          if (keyspace.history === undefined) throw new Error("history unavailable");
+          const request = { database: DATABASE, key, cursor: null, count: 1, maxBytes: 4096, timeoutMs: 2000 };
+          const first = await keyspace.history(request);
+          expect(first.stopReason).toBe("pageLimit");
+          await withEtcd(config, async (otherSession) => {
+            const other = keyspaceOf(otherSession);
+            if (other.history === undefined) throw new Error("history unavailable");
+            await expect(other.history({ ...request, cursor: first.cursor })).rejects.toThrow(/invalid cursor/);
+          });
+          await save("ff01");
+          const events = [...first.events];
+          let page = first;
+          while (page.cursor !== null) {
+            page = await keyspace.history({ ...request, cursor: page.cursor });
+            expect(page.snapshotRevision).toBe(first.snapshotRevision);
+            events.push(...page.events);
+          }
+          expect(page.complete).toBe(true);
+          expect(events.map((event) => [event.kind, event.value?.hex ?? event.value?.text ?? null])).toEqual([
+            ["PUT", "ff00"],
+            ["DELETE", null],
+            ["PUT", "00fe"],
+          ]);
+        } finally {
+          await keyspace.remove(DATABASE, [key]);
+        }
+      });
+    });
+
+    it("givenAbsentKey_whenHistoryDeadline_thenExplicitPartialNeverComplete", async () => {
+      await withEtcd(config, async (session) => {
+        const keyspace = keyspaceOf(session);
+        const key = text("/contract/history-absent");
+        await keyspace.remove(DATABASE, [key]);
+        if (keyspace.history === undefined) throw new Error("history unavailable");
+        const page = await keyspace.history({
+          database: DATABASE,
+          key,
+          cursor: null,
+          count: 10,
+          maxBytes: 4096,
+          timeoutMs: 100,
+        });
+        expect(page).toMatchObject({ complete: false, terminalRevision: null, stopReason: "deadline" });
+      });
+    });
+
+    it("givenSameValueAbaAndDeleteRecreate_whenRevisionGuarded_thenConflictAndCurrentLeaseKept", async () => {
+      await withEtcd(config, async (session) => {
+        const keyspace = keyspaceOf(session);
+        const key = text("/contract/revision-aba");
+        await keyspace.remove(DATABASE, [key]);
+        try {
+          await put(session, key, "original", null, false);
+          const baseline = await keyspace.read(DATABASE, key, { window: READ_WINDOW });
+          const revision = baseline.details.revision;
+          if (revision === undefined) throw new Error("missing revision");
+          const restore = () =>
+            keyspace.apply(DATABASE, key, [{ kind: "setString", value: text("restore"), original: text("original") }], {
+              type: "string",
+              guard: false,
+              revisionGuard: { modRevision: revision.modRevision },
+            });
+          await put(session, key, "original", "original", false);
+          const abaCurrent = await keyspace.read(DATABASE, key, { window: READ_WINDOW });
+          await expect(restore()).rejects.toMatchObject({
+            code: "conflict",
+            current: { database: DATABASE, key, value: text("original"), revision: abaCurrent.details.revision },
+          });
+          await keyspace.remove(DATABASE, [key]);
+          await put(session, key, "original", null, false);
+          expect(await rejectionCode(restore())).toBe("conflict");
+          await keyspace.expire(DATABASE, key, { inMs: EXPIRY_MS });
+          const current = await keyspace.read(DATABASE, key, { window: READ_WINDOW });
+          if (current.details.revision === undefined) throw new Error("missing revision");
+          await keyspace.apply(
+            DATABASE,
+            key,
+            [{ kind: "setString", value: text("historical value"), original: text("original") }],
+            { type: "string", guard: true, revisionGuard: { modRevision: current.details.revision.modRevision } },
+          );
+          const restored = await keyspace.read(DATABASE, key, { window: READ_WINDOW });
+          expect(restored.details.revision?.lease).toBe(current.details.revision.lease);
+          expect(restored.details.ttlMs).toBeGreaterThan(0);
+        } finally {
+          await keyspace.remove(DATABASE, [key]);
+        }
+      });
+    });
+
     it("givenKeyChangedSinceRead_whenGuardedSave_thenConflictAndValueKept", async () => {
       await withEtcd(config, async (session) => {
         const keyspace = keyspaceOf(session);

@@ -97,6 +97,13 @@ import {
   type KeyDetails,
   type KeyExpiry,
   type KeyInfo,
+  type KeyConflictSnapshot,
+  type KeyHistoryRequest,
+  type KeyHistoryPage,
+  type KeyHistoryEvent,
+  type KeyHistoryGap,
+  type KeyRevision,
+  type KeyspaceFeatures,
   type KeyScan,
   type ServerInfo,
   type ServerNode,
@@ -118,6 +125,15 @@ import * as protocol from "@table-craft/desktop/engine/protocol.js";
 import * as bridge from "@table-craft/desktop/preload/bridge.js";
 
 describe("engine protocol", () => {
+  it("givenKeyHistoryTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.KeyConflictSnapshot>().toEqualTypeOf<KeyConflictSnapshot>();
+    expectTypeOf<protocol.KeyHistoryRequest>().toEqualTypeOf<KeyHistoryRequest>();
+    expectTypeOf<protocol.KeyHistoryPage>().toEqualTypeOf<KeyHistoryPage>();
+    expectTypeOf<protocol.KeyHistoryEvent>().toEqualTypeOf<KeyHistoryEvent>();
+    expectTypeOf<protocol.KeyHistoryGap>().toEqualTypeOf<KeyHistoryGap>();
+    expectTypeOf<protocol.KeyRevision>().toEqualTypeOf<KeyRevision>();
+    expectTypeOf<protocol.KeyspaceFeatures>().toEqualTypeOf<KeyspaceFeatures>();
+  });
   it("givenProtocolConstants_whenComparedWithCore_thenEqual", () => {
     expect(protocol.RESULT_WINDOW_ROWS).toBe(RESULT_WINDOW_ROWS);
     expect(protocol.RESULT_PAGE_ROWS).toBe(RESULT_PAGE_ROWS);

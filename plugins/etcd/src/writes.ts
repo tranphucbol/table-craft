@@ -77,12 +77,19 @@ export function applyPlan(
   const put = (existing: boolean) =>
     withLease ? putOp(name, value, newLease, false) : putOp(name, value, NO_LEASE, existing);
   let txn: Txn;
-  if (options.guard) {
+  if (options.guard || options.revisionGuard !== undefined) {
+    if (options.revisionGuard !== undefined && !/^(0|[1-9]\d*)$/.test(options.revisionGuard.modRevision)) {
+      throw new PluginError("statementFailed", "Invalid etcd revision guard. Reload the key before saving.");
+    }
     const compare: TxnCompare =
-      change.original === null
-        ? { target: "create", key: name, operator: "=", value: NO_LEASE }
-        : { target: "value", key: name, operator: "=", value: bytesOf(change.original) };
-    txn = { compares: [compare], success: [put(change.original !== null)], failure: [rangeOp(name)] };
+      options.revisionGuard !== undefined
+        ? { target: "mod", key: name, operator: "=", value: options.revisionGuard.modRevision }
+        : change.original === null
+          ? { target: "create", key: name, operator: "=", value: NO_LEASE }
+          : { target: "value", key: name, operator: "=", value: bytesOf(change.original) };
+    const existing =
+      options.revisionGuard === undefined ? change.original !== null : options.revisionGuard.modRevision !== "0";
+    txn = { compares: [compare], success: [put(existing)], failure: [rangeOp(name)] };
   } else {
     const exists: TxnCompare = { target: "create", key: name, operator: ">", value: NO_LEASE };
     txn = { compares: [exists], success: [put(true)], failure: [put(false)] };
@@ -90,7 +97,13 @@ export function applyPlan(
   const leaseSeconds = withLease ? Math.max(1, Math.ceil((options.ttlMs ?? 0) / MS_PER_SECOND)) : null;
   // The placeholder only ever reaches the preview's text; a real apply passes the granted id.
   const request = lease === null && withLease ? { compare: [], success: [], failure: [] } : txnRequestOf(txn);
-  return { txn, request, original: change.original, guarded: options.guard, leaseSeconds };
+  return {
+    txn,
+    request,
+    original: change.original,
+    guarded: options.guard || options.revisionGuard !== undefined,
+    leaseSeconds,
+  };
 }
 
 /** The plan as the console commands that do the same: `lease grant` first when it grants one. */

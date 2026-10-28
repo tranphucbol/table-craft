@@ -12,6 +12,8 @@ import { ValueEditor, ValuePanel } from "@table-craft/desktop/renderer/grid/Valu
 import { KeyDetailsPanel } from "@table-craft/desktop/renderer/keys/KeyDetailsPanel.js";
 import { KeyFilterBar } from "@table-craft/desktop/renderer/keys/KeyFilterBar.js";
 import { KeyHeader } from "@table-craft/desktop/renderer/keys/KeyHeader.js";
+import { KeyHistoryView } from "@table-craft/desktop/renderer/keys/KeyHistoryView.js";
+import { KeyMergeView } from "@table-craft/desktop/renderer/keys/KeyMergeView.js";
 import { StringValueEditor } from "@table-craft/desktop/renderer/keys/StringValueEditor.js";
 import { visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { bufferRowAt, pendingText } from "@table-craft/desktop/renderer/model/editBuffer.js";
@@ -46,6 +48,7 @@ const STATUS_TEXT = {
 const STALE_TEXT = "The connection closed; Reload reads the key again.";
 /** Plan 058 decision 16: where the table editor reads `Tx: Auto`. */
 const SUBMIT_TEXT = "Submit applies changes atomically · not undoable";
+const GUARDED_TEXT = "Saves only if no one changed it since you opened it";
 const RECREATE_PENDING_TEXT = "; Submit writes it back as it was read";
 const ERROR_CLASS = "shrink-0 border-b border-line bg-panel px-gap py-1 break-words text-danger";
 
@@ -154,7 +157,15 @@ function MissingBanner({
 }
 
 /** A guarded Submit found the key changed (decision 115): reload it, or write over the change. */
-function ConflictBanner({ tabId, conflict }: { readonly tabId: string; readonly conflict: EngineError }) {
+function ConflictBanner({
+  tabId,
+  conflict,
+  revisionAware,
+}: {
+  readonly tabId: string;
+  readonly conflict: EngineError;
+  readonly revisionAware: boolean;
+}) {
   const store = useKeyTabs.getState;
   return (
     <div
@@ -173,9 +184,11 @@ function ConflictBanner({ tabId, conflict }: { readonly tabId: string; readonly 
       >
         Reload
       </BannerButton>
-      <BannerButton testId="key-conflict-overwrite" onClick={() => void store().submit(tabId, false)}>
-        Overwrite
-      </BannerButton>
+      {revisionAware ? null : (
+        <BannerButton testId="key-conflict-overwrite" onClick={() => void store().submit(tabId, false)}>
+          Overwrite
+        </BannerButton>
+      )}
       <BannerButton onClick={() => store().dismissConflict(tabId)}>Dismiss</BannerButton>
     </div>
   );
@@ -186,7 +199,11 @@ function Footer({ tab }: { readonly tab: KeyTabState }) {
   const pending = pendingText(pendingKeyCount(tab));
   return (
     <div className="flex h-row shrink-0 items-center gap-gap border-t border-line bg-panel px-gap text-ink-muted">
-      {pending === null ? null : (
+      {pending === null ? (
+        tab.revisionGuardAvailable === true ? (
+          <span>No unsaved changes</span>
+        ) : null
+      ) : (
         <span data-testid="pending-changes" className="text-ink">
           {pending}
         </span>
@@ -209,7 +226,10 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
   const datasource = useConsoleDatasource(tabId);
   const pattern = tab === undefined ? null : formatPatternOf(tab);
   const format = useLayout((state) => (pattern === null ? undefined : state.layout.valueFormats[pattern])) ?? "auto";
-  const onExpired = useCallback(() => void useKeyTabs.getState().reload(tabId), [tabId]);
+  const onExpired = useCallback(() => {
+    const current = useKeyTabs.getState().tabs[tabId];
+    if (current !== undefined && pendingKeyCount(current) === 0) void useKeyTabs.getState().reload(tabId);
+  }, [tabId]);
   const detailsOpen = useKeyDetails((state) => state.open[tabId] === true);
   if (tab === undefined) return null;
   const withDetails = hasAttributes(tab);
@@ -240,8 +260,16 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
     <>
       <ActionButton actionId={TABLE_ACTION_IDS.preview} compact />
       <ActionButton actionId={TABLE_ACTION_IDS.submit} compact />
-      <span data-testid="tx-mode" className="shrink-0 px-1 text-ink-muted">
-        {SUBMIT_TEXT}
+      <span
+        data-testid="tx-mode"
+        className="min-w-0 truncate px-1 text-ink-muted"
+        title={
+          tab.revisionGuardAvailable === true
+            ? `Submit writes only if the key is still at modified rev ${tab.merge?.snapshot.revision?.modRevision ?? tab.details?.revision?.modRevision ?? "0"}; otherwise you get to merge.`
+            : SUBMIT_TEXT
+        }
+      >
+        {tab.revisionGuardAvailable === true ? GUARDED_TEXT : SUBMIT_TEXT}
       </span>
     </>
   );
@@ -265,7 +293,9 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
       ) : (
         <KeyFilterBar tabId={tabId} tab={tab} />
       )}
-      {tab.conflict === null ? null : <ConflictBanner tabId={tabId} conflict={tab.conflict} />}
+      {tab.conflict === null || tab.merge != null ? null : (
+        <ConflictBanner tabId={tabId} conflict={tab.conflict} revisionAware={tab.revisionGuardAvailable === true} />
+      )}
       {tab.error === null ? null : (
         <div role="alert" data-testid="key-error" className={ERROR_CLASS}>
           {tab.error.message} <span className="text-ink-muted">{tab.error.hint}</span>
@@ -286,7 +316,12 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
           <span className="truncate">Read-only: {tab.readOnly}</span>
         </div>
       )}
-      {result !== null ? (
+      {tab.merge?.visible === true ? (
+        <div className="flex min-h-0 flex-1">
+          <KeyMergeView tab={tab} tabId={tabId} editable={editable} />
+          {details}
+        </div>
+      ) : result !== null ? (
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             <ResultGrid
@@ -321,7 +356,7 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
           </div>
           {details}
         </div>
-      ) : tab.value !== null ? (
+      ) : tab.value !== null || tab.historyAvailable === true ? (
         <>
           {tab.details?.type === "string" && !missing ? (
             <div className="flex h-row shrink-0 items-center gap-1 border-b border-line bg-panel px-gap">
@@ -334,7 +369,38 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
           ) : null}
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
-              <StringValueEditor tab={tab} tabId={tabId} format={format} editable={editable} />
+              {tab.historyAvailable ? (
+                <div
+                  className="flex h-row shrink-0 items-center gap-1 border-b border-line bg-canvas px-gap"
+                  role="group"
+                  aria-label="Key view"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={tab.history?.mode !== "history"}
+                    className="rounded px-gap text-ink-muted hover:bg-raised aria-pressed:bg-selection aria-pressed:text-ink"
+                    onClick={() => {
+                      if (tab.history?.mode === "history") void invoke(KEY_ACTION_IDS.history);
+                    }}
+                  >
+                    Value
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={tab.history?.mode === "history"}
+                    className="rounded px-gap text-ink-muted hover:bg-raised aria-pressed:bg-selection aria-pressed:text-ink"
+                    onClick={() => {
+                      if (tab.history?.mode !== "history") void invoke(KEY_ACTION_IDS.history);
+                    }}
+                  >
+                    History
+                  </button>
+                </div>
+              ) : null}
+              <div className={cn("min-h-0 flex-1 flex-col", tab.history?.mode === "history" ? "hidden" : "flex")}>
+                <StringValueEditor tab={tab} tabId={tabId} format={format} editable={editable} />
+              </div>
+              {tab.history?.mode === "history" ? <KeyHistoryView tab={tab} /> : null}
             </div>
             {details}
           </div>

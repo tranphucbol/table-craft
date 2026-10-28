@@ -1,6 +1,11 @@
 {
   "classifications": [
     {
+      "key": "ConflictError.constructor",
+      "kind": "addition",
+      "reason": "ConflictErrorOptions extends ErrorOptions with only optional current; every constructor argument accepted before remains valid and old conflicts still omit the snapshot."
+    },
+    {
       "key": "FORMAT_DIALECTS",
       "kind": "addition",
       "reason": "Gains the plsql and transactsql keys; the existing keys and their values are unchanged (decision 100)."

@@ -75,6 +75,7 @@ describe("smoke fixture sentinels (smokeFixtures.ts)", () => {
         "redis-5-cluster",
         "etcd",
         "etcd-3-5",
+        "etcd-tls",
       ]),
     );
   });

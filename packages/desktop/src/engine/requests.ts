@@ -8,7 +8,15 @@ import {
   TRANSACTION_MODES,
   z,
 } from "@table-craft/plugin-api";
-import { ERROR_ANSWERS, ON_ERROR_CHOICES, type EngineRequest } from "@table-craft/desktop/engine/protocol.js";
+import {
+  ERROR_ANSWERS,
+  ON_ERROR_CHOICES,
+  KEY_HISTORY_MAX_COUNT,
+  KEY_HISTORY_MAX_BYTES,
+  KEY_HISTORY_MAX_TIMEOUT_MS,
+  KEY_HISTORY_MAX_CURSOR_LENGTH,
+  type EngineRequest,
+} from "@table-craft/desktop/engine/protocol.js";
 import {
   EXPORT_STALL_SECONDS_RANGE,
   FETCH_ALL_CAP_RANGE,
@@ -54,6 +62,7 @@ const keyChange = z.discriminatedUnion("kind", [
 ]);
 const keyChanges = z.array(keyChange).min(1);
 const keyApplyOptions = z.strictObject({
+  revisionGuard: z.strictObject({ modRevision: z.string().regex(/^(?:0|[1-9][0-9]*)$/) }).optional(),
   type: z.enum(KEY_TYPES),
   guard: z.boolean(),
   ttlMs: z.number().int().positive().optional(),
@@ -364,6 +373,16 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     limit: z.number().int().positive().max(SLOW_LOG_MAX),
   }),
   z.strictObject({ id: requestId, type: z.literal("keyspace.databases") }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("keyspace.history"),
+    database: index,
+    key: keyName,
+    cursor: z.string().min(1).max(KEY_HISTORY_MAX_CURSOR_LENGTH).nullable(),
+    count: z.number().int().min(1).max(KEY_HISTORY_MAX_COUNT),
+    maxBytes: z.number().int().min(1).max(KEY_HISTORY_MAX_BYTES),
+    timeoutMs: z.number().int().min(1).max(KEY_HISTORY_MAX_TIMEOUT_MS),
+  }),
   z.strictObject({
     id: requestId,
     type: z.literal("keyspace.scan"),

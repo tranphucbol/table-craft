@@ -33,7 +33,8 @@ export type SeededService =
   | "redis-5"
   | "redis-5-cluster"
   | "etcd"
-  | "etcd-3-5";
+  | "etcd-3-5"
+  | "etcd-tls";
 
 /** What a Redis server reads at start (`redis/*.sh`): its users, its start script and the seeds. */
 const REDIS_STANDALONE_SEED = [
@@ -69,6 +70,15 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   "redis-5-cluster": REDIS_CLUSTER_SEED,
   etcd: ETCD_SEED,
   "etcd-3-5": ETCD_SEED,
+  "etcd-tls": [
+    "etcd/Dockerfile",
+    "etcd/transport-seed.sh",
+    "etcd/server.crt",
+    "etcd/server.key",
+    "tls/ca.crt",
+    "tls/client.crt",
+    "tls/client.key",
+  ],
 };
 
 /** The variable `compose.yml` interpolates into each service's `table-craft.seed` label. */
@@ -89,6 +99,7 @@ export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   "redis-5-cluster": "TABLE_CRAFT_REDIS5_CLUSTER_SEED",
   etcd: "TABLE_CRAFT_ETCD_SEED",
   "etcd-3-5": "TABLE_CRAFT_ETCD35_SEED",
+  "etcd-tls": "TABLE_CRAFT_ETCD_TLS_SEED",
 };
 
 const SERVICES = Object.keys(SEED_FILES) as SeededService[];
@@ -102,6 +113,7 @@ const RECREATED_WITH: Partial<Readonly<Record<SeededService, readonly string[]>>
   mssql: ["mssql-seed"],
   etcd: ["etcd-3-5", "etcd-seed"],
   "etcd-3-5": ["etcd", "etcd-seed"],
+  "etcd-tls": ["etcd-tls-seed"],
 };
 
 function seedFiles(directory: string, path: string): string[] {

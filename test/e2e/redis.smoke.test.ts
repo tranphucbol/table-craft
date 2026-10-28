@@ -264,7 +264,9 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       const page = await launch(REDIS);
       await openKey(page, EDIT_KEY);
 
-      expect(await keyTab(page).getByTestId("tx-mode").textContent()).toBe("Submit applies changes atomically · not undoable");
+      expect(await keyTab(page).getByTestId("tx-mode").textContent()).toBe(
+        "Submit applies changes atomically · not undoable",
+      );
       await editKeyCell(page, 0, 1, "Bo");
       await keyButton(page, "Add Row").click();
       await editKeyCell(page, 1, 0, "city");

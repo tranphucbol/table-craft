@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { ValuePanel, type ValueTextEdit } from "@table-craft/desktop/renderer/grid/ValuePanel.js";
@@ -28,7 +28,6 @@ export function StringValueEditor({
   readonly format: ValueFormat;
   readonly editable: boolean;
 }) {
-  const [problem, setProblem] = useState<string | null>(null);
   const read = tab.value;
   const shown = useMemo(() => {
     if (tab.stringValue === null) return read ?? undefined;
@@ -38,15 +37,14 @@ export function StringValueEditor({
   }, [read, tab.stringValue]);
   const edit: ValueTextEdit | undefined = editable
     ? {
-        revision: String(tab.readAt),
-        problem,
+        revision: `${String(tab.readAt)}:${String(tab.editorGeneration ?? 0)}`,
+        problem: tab.stringProblem ?? null,
         onChange: (text, concrete) => {
           const encoded = encodeValue(text, concrete);
           if (!encoded.ok) {
-            setProblem(encoded.error);
+            useKeyTabs.getState().setStringProblem(tabId, encoded.error);
             return;
           }
-          setProblem(null);
           const before = valueBytes(read ?? undefined);
           const same = before !== null && hexOf(before) === hexOf(encoded.bytes);
           useKeyTabs.getState().setStringValue(tabId, same ? null : keyBytesOf(encoded.bytes));

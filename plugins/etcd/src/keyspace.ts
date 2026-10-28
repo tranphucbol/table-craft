@@ -10,6 +10,8 @@ import {
   type KeyDetails,
   type KeyExpiry,
   type KeyInfo,
+  type KeyHistoryRequest,
+  type KeyHistoryPage,
   type KeyName,
   type KeyReadRequest,
   type KeyScan,
@@ -20,6 +22,7 @@ import type { IKeyValue, IRequestOp } from "etcd3";
 import type { Call } from "./admin.js";
 import { errorText, isPermissionDenied } from "./client.js";
 import { bytesOf, keyBytesOf } from "./keyBytes.js";
+import { HistoryState, keyHistory, revisionOf } from "./history.js";
 import { bytesCell, leaseCell } from "./results.js";
 import { decodeCursor, encodeCursor, globMatches, literalPrefix, NO_END, prefixEnd } from "./scan.js";
 import { applyPlan, planText, type ApplyPlan } from "./writes.js";
@@ -33,6 +36,7 @@ const MAX_TXN_OPS = 128;
 const COMPACTED = /required revision has been compacted/i;
 const NO_LEASE = "0";
 const NONE = "none";
+const MAX_CONFLICT_BYTES = 1024 * 1024;
 
 /** What the keyspace needs from its session. */
 export interface KeyspaceHost {
@@ -51,8 +55,10 @@ function requireDatabase(database: number): void {
 
 /** The etcd keyspace (decisions 3–7 of plan 110): one database whose every key holds one string value. */
 export class EtcdKeyspace implements Keyspace {
+  readonly features = { revisionGuard: true };
   readonly delimiter: string;
   readonly #host: KeyspaceHost;
+  readonly #history = new HistoryState();
 
   constructor(host: KeyspaceHost) {
     this.#host = host;
@@ -73,6 +79,17 @@ export class EtcdKeyspace implements Keyspace {
       }
       return [{ index: DATABASE, keys, expires: 0, current: true }];
     });
+  }
+
+  history(request: KeyHistoryRequest): Promise<KeyHistoryPage> {
+    return this.#queued(() => {
+      requireDatabase(request.database);
+      return keyHistory(this.#host.call, request, this.#history);
+    });
+  }
+
+  close(): void {
+    this.#history.close();
   }
 
   scan(request: KeyScanRequest): Promise<KeyScan> {
@@ -168,6 +185,7 @@ export class EtcdKeyspace implements Keyspace {
         encoding: null,
         idleSeconds: null,
         attributes: attributesOf(kv),
+        revision: revisionOf(kv),
       };
       return { details, result: null, value: bytesCell(kv.value, { fullBytes: true }), readOnly: null };
     });
@@ -179,13 +197,29 @@ export class EtcdKeyspace implements Keyspace {
 
   apply(database: number, key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): Promise<KeyApplied> {
     return this.#writing("put", database, async () => {
+      // Validate before acquiring a lease: a rejected plan cannot own server resources.
+      applyPlan(key, changes, options, null);
       const lease = options.ttlMs === undefined ? null : await this.#grant(options.ttlMs);
       const plan = applyPlan(key, changes, options, lease);
-      const response = await this.#host.call((etcd) => etcd.kv.txn(plan.request));
+      const response = await this.#withOwnedLease(lease, () => this.#host.call((etcd) => etcd.kv.txn(plan.request)));
       if (plan.guarded && !response.succeeded) {
         if (lease !== null) await this.#revoke(lease);
-        const now = response.responses[0]?.response_range?.kvs[0];
-        throw new ConflictError(key.text, now === undefined ? "it is gone" : nowText(now, plan));
+        const currentRange = response.responses[0]?.response_range;
+        const now = currentRange?.kvs[0];
+        throw new ConflictError(key.text, now === undefined ? "it is gone" : nowText(now, plan), {
+          ...(currentRange === undefined ||
+          (now !== undefined && now.key.length + now.value.length > MAX_CONFLICT_BYTES)
+            ? {}
+            : {
+                current: {
+                  database,
+                  key,
+                  value: now === undefined ? null : keyBytesOf(now.value),
+                  revision: now === undefined ? null : revisionOf(now),
+                  snapshotRevision: response.header.revision,
+                },
+              }),
+        });
       }
       return { commands: planText(plan) };
     });
@@ -240,11 +274,13 @@ export class EtcdKeyspace implements Keyspace {
       const lease = ms === null ? NO_LEASE : await this.#grant(ms);
       // Re-put with the new lease and the value as it is; the old lease is never revoked, since
       // other keys may hold it.
-      const response = await this.#host.call((etcd) =>
-        etcd.kv.txn({
-          compare: [{ key: name, target: "Create", result: "Greater", create_revision: 0 }],
-          success: [{ request_put: { key: name, lease, ignore_value: true } }],
-        }),
+      const response = await this.#withOwnedLease(lease === NO_LEASE ? null : lease, () =>
+        this.#host.call((etcd) =>
+          etcd.kv.txn({
+            compare: [{ key: name, target: "Create", result: "Greater", create_revision: 0 }],
+            success: [{ request_put: { key: name, lease, ignore_value: true } }],
+          }),
+        ),
       );
       if (!response.succeeded) {
         if (lease !== NO_LEASE) await this.#revoke(lease);
@@ -288,6 +324,23 @@ export class EtcdKeyspace implements Keyspace {
 
   async #revoke(lease: string): Promise<void> {
     await this.#host.call((etcd) => etcd.leaseClient.leaseRevoke({ ID: lease })).catch(() => undefined);
+  }
+
+  async #withOwnedLease<T>(lease: string | null, work: () => Promise<T>): Promise<T> {
+    try {
+      return await work();
+    } catch (cause) {
+      // Transport errors may arrive after commit; revoking then would delete the saved key.
+      if (
+        lease !== null &&
+        /permission denied|invalid argument|request is too large|too many operations|duplicate key/i.test(
+          errorText(cause),
+        )
+      ) {
+        await this.#revoke(lease);
+      }
+      throw cause;
+    }
   }
 
   #writing<T>(command: string, database: number, work: () => Promise<T>): Promise<T> {

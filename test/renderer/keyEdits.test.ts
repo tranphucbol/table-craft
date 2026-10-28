@@ -259,7 +259,7 @@ describe("key tab edits", () => {
       options: { type: "hash", guard: true },
     });
     const tab = store.getState().tabs["key-0"];
-    expect(tab).toMatchObject({ status: "ready", conflict: null, notice: "Submitted as one MULTI" });
+    expect(tab).toMatchObject({ status: "ready", conflict: null, notice: "Changes saved atomically" });
     expect(tab !== undefined && pendingKeyCount(tab)).toBe(0);
     expect(engine.call.mock.calls.filter(([type]) => type === "keyspace.open")).toHaveLength(2);
   });
