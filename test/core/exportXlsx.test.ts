@@ -163,6 +163,25 @@ describe("xlsx writer", () => {
     expect(sheet).not.toContain('r="H2"');
   });
 
+  it("givenIntegerPastExcelDigits_whenWritten_thenTextKeepsEveryDigit", () => {
+    const columns: readonly Column[] = [
+      { name: "sixteen", type: "int8" },
+      { name: "negative", type: "int8" },
+      { name: "fifteen", type: "int8" },
+      { name: "round", type: "int8" },
+      { name: "double", type: "float8" },
+    ];
+    const row: Row = [1_234_567_890_123_456, -9_007_199_254_740_991, 123_456_789_012_345, 1e18, 0.1 + 0.2];
+
+    const sheet = workbook(columns, [row]).text("xl/worksheets/sheet1.xml");
+
+    expect(sheet).toContain('<c r="A2" t="inlineStr"><is><t xml:space="preserve">1234567890123456</t></is></c>');
+    expect(sheet).toContain('<c r="B2" t="inlineStr"><is><t xml:space="preserve">-9007199254740991</t></is></c>');
+    expect(sheet).toContain('<c r="C2"><v>123456789012345</v></c>');
+    expect(sheet).toContain('<c r="D2"><v>1000000000000000000</v></c>');
+    expect(sheet).toContain('<c r="E2"><v>0.30000000000000004</v></c>');
+  });
+
   it("givenColumnIndex_whenLettered_thenExcelStyle", () => {
     expect([0, 25, 26, 51, 701, 702].map(columnLetters)).toEqual(["A", "Z", "AA", "AZ", "ZZ", "AAA"]);
   });
