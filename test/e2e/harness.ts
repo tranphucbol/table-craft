@@ -273,6 +273,44 @@ export function runAllButton(page: Page) {
   return consoleToolbar(page).getByRole("button", { name: "Run All", exact: true });
 }
 
+/** The few DOM members `iconSpin` touches; the e2e program is compiled without the DOM lib. */
+interface StyledElement {
+  readonly ownerDocument: {
+    readonly defaultView: {
+      getComputedStyle(element: StyledElement): {
+        readonly animationName: string;
+        readonly animationPlayState: string;
+        readonly opacity: string;
+      };
+    };
+  };
+}
+
+/** The CSS animation on a button's icon: `spin` while it is busy (plan 112), `none` for its own glyph. */
+export async function iconSpin(button: Locator): Promise<{ readonly name: string; readonly state: string }> {
+  return button.locator("svg").evaluate((element: StyledElement) => {
+    const computed = element.ownerDocument.defaultView.getComputedStyle(element);
+    return { name: computed.animationName, state: computed.animationPlayState };
+  });
+}
+
+/** The computed opacity of `element`: `"1"` for a busy button, which is disabled but not dimmed. */
+export async function computedOpacity(element: Locator): Promise<string> {
+  return element.evaluate((node: StyledElement) => node.ownerDocument.defaultView.getComputedStyle(node).opacity);
+}
+
+/** Resolves once `button` shows its busy spinner: `aria-busy` and a spinning icon (plan 112). */
+export async function waitUntilSpinning(button: Locator): Promise<void> {
+  await expect.poll(() => button.getAttribute("aria-busy"), { timeout: LAUNCH_TIMEOUT_MS }).toBe("true");
+  expect((await iconSpin(button)).name).toBe("spin");
+}
+
+/** Asserts `button` is back to its own glyph: no `aria-busy`, no spin. */
+export async function expectNotSpinning(button: Locator): Promise<void> {
+  expect(await button.getAttribute("aria-busy")).toBeNull();
+  expect((await iconSpin(button)).name).toBe("none");
+}
+
 /** The console's CodeMirror editor, by the accessible name its content carries. */
 export function sqlEditor(page: Page) {
   return page.getByRole("textbox", { name: "SQL console", exact: true });

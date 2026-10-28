@@ -19,6 +19,7 @@ import {
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
+  expectNotSpinning,
   gridText,
   launchApp,
   runButton,
@@ -27,11 +28,13 @@ import {
   setWindowSize,
   startStatement,
   waitUntilReady,
+  waitUntilSpinning,
   type Datasource,
   type RunningApp,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("002");
+const captureSpinner = evidenceFor("112");
 
 const TYPE_PROBE_SQL = "SELECT * FROM type_probe ORDER BY id";
 const TYPE_PROBE_HEADERS = [
@@ -140,6 +143,8 @@ describe.runIf(DATABASES_ENABLED)("desktop against real databases", () => {
         await startStatement(page, target.sleepSql ?? "");
         await expect.poll(() => cancel.isEnabled()).toBe(true);
         await page.waitForTimeout(CANCEL_DELAY_MS);
+        await waitUntilSpinning(runButton(page));
+        await captureSpinner(page, `03-cancel-${target.name}-spinning`);
         const clickedAt = Date.now();
         await cancel.click();
 
@@ -148,7 +153,9 @@ describe.runIf(DATABASES_ENABLED)("desktop against real databases", () => {
         expect(await consoleAlert(page).textContent()).toContain("The statement was cancelled.");
         await waitUntilReady(page);
         expect(await cancel.isEnabled()).toBe(false);
+        await expectNotSpinning(runButton(page));
         await captureWindow(page, `${target.name}-cancelled`);
+        await captureSpinner(page, `03-cancel-${target.name}-after`);
         await runStatement(page, TYPE_PROBE_SQL);
         expect((await gridText(page)).cells).toEqual(TYPE_PROBE_CELLS);
       },

@@ -888,6 +888,11 @@ comfortable, 32 px compact) in the panel colour with a bottom border. Left to ri
 
 Every button is an action button (`ui/ActionButton.tsx`) that invokes its action and keeps focus
 where it was (`mousedown` is prevented), so Run from the toolbar runs the statement at the caret.
+An action may be busy (its `busy(context)`): once that has lasted 300 ms its button swaps its icon
+for a spinning `SpinnerIcon`, drawn at full strength rather than dimmed, with `aria-busy`. Run and
+Run All are busy while their console runs, whatever started the run, but not while it asks about a
+failed statement or waits for a destructive statement's confirmation; they stay disabled, and
+Cancel stops the run.
 The console toolbar keeps its own Run, Cancel, Commit and Rollback; it is named "Console toolbar".
 `document.title` is `windowTitle(tab, datasource)` (`model/windowTitle.ts`), `console [pg] —
 TableCraft` or `TableCraft`, which Electron mirrors to the window's title for the Dock, the
