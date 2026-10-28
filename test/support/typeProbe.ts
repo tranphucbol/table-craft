@@ -21,6 +21,15 @@ export const TYPE_PROBE_EXPECTED: readonly Row[] = [
   [2, null, null, null, null, null, null, null, null, null],
 ];
 
+const DOC_COLUMN = 6;
+
+/** SQL Server 2022 has no JSON type: `doc` is `nvarchar(max)` with an ISJSON check, so it reads as text. */
+export const MSSQL_TYPE_PROBE_EXPECTED: readonly Row[] = TYPE_PROBE_EXPECTED.map((row) =>
+  row.map((value, index) =>
+    index === DOC_COLUMN && value !== null && typeof value === "object" && "text" in value ? value.text : value,
+  ),
+);
+
 /** Rewrites one cell with its own value: a real write that leaves the fixture as it was. */
 export const TYPE_PROBE_WRITE = "UPDATE type_probe SET small_int = small_int WHERE id = 1";
 

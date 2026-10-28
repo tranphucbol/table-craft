@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
+import mssql from "@table-craft/plugin-mssql";
 import mysql from "@table-craft/plugin-mysql";
 import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportTask } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
 import {
+  MSSQL_CONFIG,
   MYSQL_CONFIG,
   ORACLE_CONFIG,
   POSTGRES_CONFIG,
@@ -24,7 +26,7 @@ import {
   startExport,
   type ExportHarness,
 } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MSSQL_MANIFEST, MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /** Plan 018: exports over a link that is slow, goes quiet, resets or vanishes. */
 
@@ -82,6 +84,15 @@ const TARGETS: readonly Target[] = [
       `SELECT n AS "id", h AS "label", HEXTORAW(RPAD(h, ${String(MD5_HEX_CHARS * PAYLOAD_REPEATS)}, h)) AS "payload" FROM ` +
       `(SELECT LEVEL AS n, LOWER(RAWTOHEX(STANDARD_HASH(TO_CHAR(LEVEL), 'MD5'))) AS h FROM DUAL CONNECT BY LEVEL <= ${String(ROWS)}) ` +
       `ORDER BY n`,
+  },
+  {
+    name: "mssql",
+    plugin: { status: "loaded", directory: "plugins/mssql", manifest: MSSQL_MANIFEST, plugin: mssql },
+    config: MSSQL_CONFIG,
+    rows:
+      `SELECT value AS id, LOWER(CONVERT(char(32), HASHBYTES('MD5', CAST(value AS varchar(10))), 2)) AS label, ` +
+      `CONVERT(varbinary(max), REPLICATE(CONVERT(varchar(max), CONVERT(char(32), HASHBYTES('MD5', CAST(value AS varchar(10))), 2)), ${String(PAYLOAD_REPEATS)}), 2) AS payload ` +
+      `FROM GENERATE_SERIES(1, ${String(ROWS)}) ORDER BY value`,
   },
 ];
 

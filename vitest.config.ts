@@ -113,6 +113,16 @@ export default defineConfig({
         replacement: resolve(WORKSPACE_ROOT, "plugins/oracle/src/$1.ts"),
       },
       { find: "@table-craft/plugin-oracle", replacement: resolve(WORKSPACE_ROOT, "plugins/oracle/src/index.ts") },
+      // The SQL Server plugin's parts, which its unit tests drive without a server (plan 055).
+      {
+        find: "@table-craft/plugin-mssql/functions",
+        replacement: resolve(WORKSPACE_ROOT, "plugins/mssql/src/functions/index.ts"),
+      },
+      {
+        find: /^@table-craft\/plugin-mssql\/(batch|bulk|errorPosition|explain|introspect|language|messages|objects|routines|server|sessions|tls|values)$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/mssql/src/$1.ts"),
+      },
+      { find: "@table-craft/plugin-mssql", replacement: resolve(WORKSPACE_ROOT, "plugins/mssql/src/index.ts") },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },
       { find: "@table-craft/plugin-mysql", replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/index.ts") },

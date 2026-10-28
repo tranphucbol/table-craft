@@ -123,6 +123,8 @@ const BOOST: Readonly<Record<CompletionKind, number>> = {
   keyword: -10,
 };
 const UNQUOTED_WORD = "^[A-Za-z0-9_$]*$";
+/** Where `@` and `#` start a name (`variables`), the typed `@@` stays part of what is filtered. */
+const VARIABLE_WORD = "^[@#]*[A-Za-z0-9_$]*$";
 const ALIAS_WORD_BREAK = /[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/;
 const FALLBACK_ALIAS = "t";
 const QUOTES = new Set(['"', "`", "["]);
@@ -190,6 +192,7 @@ export function sqlCompleter(
   options: CompleterOptions,
 ): Pick<SqlLanguage, "complete" | "resolve"> & Required<Pick<SqlLanguage, "selectSource" | "signatureAt">> {
   const reserved = new Set(options.keywords.map((keyword) => keyword.toUpperCase()));
+  const unquotedWord = options.dialect.variables === true ? VARIABLE_WORD : UNQUOTED_WORD;
   const { denotes, sameIdentifier, cteNamed, sourceNamed, serverOf, Lookup } = nameRules(options);
   const specs = new Map<string, FunctionSpec[]>();
   for (const spec of options.functions) {
@@ -465,7 +468,7 @@ export function sqlCompleter(
         const lookup = new Lookup(catalog);
         await lookup.follow(request.text, request.offset);
         const items = await namespaceItems(slot, lookup);
-        return { from: slot.from, to: slot.to, items, validFor: slot.quote === null ? UNQUOTED_WORD : null };
+        return { from: slot.from, to: slot.to, items, validFor: slot.quote === null ? unquotedWord : null };
       }
     }
     const { text, offset, shift } = wrap(request);
@@ -478,7 +481,7 @@ export function sqlCompleter(
       from: scope.prefixFrom - shift,
       to: offset - shift,
       items: typedQuote ? quotedLabels(items) : items,
-      validFor: typedQuote ? null : UNQUOTED_WORD,
+      validFor: typedQuote ? null : unquotedWord,
     };
   }
 

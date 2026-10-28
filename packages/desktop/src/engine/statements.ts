@@ -17,6 +17,7 @@ import {
   type Capability,
   type Column,
   type ColumnMeta,
+  type ExecuteOptions,
   type ExecuteResult,
   type KeyType,
   type Row,
@@ -144,7 +145,7 @@ export function statementRunners(live: LiveContext) {
     parameters: Readonly<Record<string, ParameterValue>> | undefined,
     paging: ResultPaging,
     timeoutSeconds: number,
-    node?: string,
+    executeOptions?: Pick<ExecuteOptions, "node" | "repeat">,
   ): Promise<ExecutedStatement> {
     const open = sessionFor(sessionId);
     let bound: BoundStatement = { sql, params: [] };
@@ -154,7 +155,6 @@ export function statementRunners(live: LiveContext) {
     } catch (cause) {
       throw statementFailed(cause, options.datasource.readOnly);
     }
-    const executeOptions = node === undefined ? undefined : { node };
     open.running += 1;
     try {
       const { value: summary, reconnected } = await onLiveSession(

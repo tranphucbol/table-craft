@@ -403,7 +403,22 @@ describe("importer", () => {
       warnings: [],
     });
     expect(row(rows, FOREIGN_DIALECT_SOURCES.sqlServer)).toMatchObject({
-      pluginId: null,
+      pluginId: "mssql",
+      pluginName: "SQL Server",
+      target: "mssql.internal:1433/billing",
+      status: "ready",
+      warnings: [],
+    });
+  });
+
+  it("givenSqlServerNotInstalled_whenMapped_thenUnsupportedRowNamesTheDownloadablePlugin", async () => {
+    const { home } = fixture({ oracleAndSqlServer: true });
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader, "darwin", ["mssql"]);
+
+    const { rows } = ready(await importer.preview({ source: "datagrip" }));
+
+    expect(row(rows, FOREIGN_DIALECT_SOURCES.sqlServer)).toMatchObject({
+      pluginId: "mssql",
       pluginName: "sqlserver.ms",
       status: "unsupported",
       warnings: ["No installed plugin reads sqlserver: URLs."],
