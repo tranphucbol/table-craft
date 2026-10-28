@@ -290,7 +290,9 @@ export function sqlCompleter(
       .filter((word) => word !== "")
       .map((word) => word.charAt(0).toLowerCase())
       .join("");
-    const base = initials === "" || !options.plainIdentifier.test(initials) ? FALLBACK_ALIAS : initials;
+    // Unquoted, an alias folds like any name; `c` is written as is and reads back as `C` under upper folding.
+    const folded = options.identifierFolding === "upper" ? initials.toUpperCase() : initials;
+    const base = initials === "" || !options.plainIdentifier.test(folded) ? FALLBACK_ALIAS : initials;
     let alias = base;
     for (let suffix = 1; taken.has(alias) || reserved.has(alias.toUpperCase()); suffix += 1)
       alias = `${base}${String(suffix)}`;
@@ -328,7 +330,9 @@ export function sqlCompleter(
       const near =
         source.alias === null
           ? relationReference(found.path, found.relation.name, lookup.current)
-          : quoted(source.alias.name);
+          : source.alias.quoted
+            ? options.quoteIdentifier(source.alias.name)
+            : source.alias.name;
       for (const key of found.relation.foreignKeys) {
         const alias = aliasFor(key.target.relation, new Set(taken));
         const on = key.columns

@@ -98,7 +98,7 @@ interface NamespaceSlot {
   readonly to: number;
 }
 
-type NamespaceStatementForm = "use" | "searchPath";
+type NamespaceStatementForm = "use" | "searchPath" | "alterSessionSchema";
 
 interface NamespaceTarget {
   readonly candidates: readonly Identifier[];

@@ -153,6 +153,8 @@ export interface ContractFixture {
    * default. `LINE_ITEMS_TABLE` is quoted in every dialect and never folded.
    */
   readonly foldName?: (name: string) => string;
+  /** The database stores an empty string as NULL, as Oracle does, so an empty text reads back null. */
+  readonly emptyTextIsNull?: boolean;
 }
 
 /** Dialect-specific text the suite runs; every member is optional (decision 100). */
@@ -171,6 +173,8 @@ export interface ContractSql {
   readonly temporaryTable?: (name: string, columns: string) => { readonly create: string; readonly name: string };
   /** Opens a transaction explicitly in auto-commit mode. */
   readonly begin?: string;
+  /** A name only quoting makes legal, which the dialect accepts; Oracle refuses a `"` inside one. */
+  readonly awkwardIdentifier?: string;
 }
 
 /** A command and the result tab it opens: column names and rows as wire values. */
@@ -406,6 +410,7 @@ export function contractSql(fixture: Pick<ContractFixture, "sql">): Required<Con
       fixture.sql?.temporaryTable ??
       ((name: string, columns: string) => ({ create: `CREATE TEMPORARY TABLE ${name} (${columns})`, name })),
     begin: fixture.sql?.begin ?? "BEGIN",
+    awkwardIdentifier: fixture.sql?.awkwardIdentifier ?? AWKWARD_IDENTIFIER,
   };
 }
 const ROWS_READ_BEFORE_RETURN = 3;
@@ -1053,10 +1058,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenAwkwardIdentifier_whenQuotedAndSelected_thenNameReadsBack", async () => {
         await withSession(plugin, fixture, async (session) => {
           const result = await session.execute(
-            dialectSql.select(`1 AS ${language().quoteIdentifier(AWKWARD_IDENTIFIER)}`),
+            dialectSql.select(`1 AS ${language().quoteIdentifier(dialectSql.awkwardIdentifier)}`),
           );
           await collect(result.rows);
-          expect(result.columns.map((column) => column.name)).toEqual([AWKWARD_IDENTIFIER]);
+          expect(result.columns.map((column) => column.name)).toEqual([dialectSql.awkwardIdentifier]);
         });
       });
 
@@ -1268,7 +1273,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await insertRowsOf(session)(target, rows);
 
           expect(await run(session, `SELECT unicode_text FROM ${TYPE_PROBE_COPY_TABLE} ORDER BY id`)).toEqual(
-            texts.map((text) => [text]),
+            texts.map((text) => [text === "" && fixture.emptyTextIsNull === true ? null : text]),
           );
         });
       });
@@ -1313,7 +1318,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       }
 
       async function relationOf(session: Session, name: string): Promise<Relation | undefined> {
-        return (await introspectorOf(session).describe(path())).relations.find((relation) => relation.name === name);
+        return (await introspectorOf(session).describe(path())).relations.find(
+          (relation) => relation.name === fold(name),
+        );
       }
 
       /** Runs a script as the engine does: prepare, the statements in one transaction where it says so, verify, finish. */
@@ -1352,15 +1359,15 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       }
 
       function column(name: string, type: string, nullable = true): ColumnDesign {
-        return { name, type, nullable, default: null, autoIncrement: false, comment: null, original: null };
+        return { name: fold(name), type, nullable, default: null, autoIncrement: false, comment: null, original: null };
       }
 
       function parentDesign(): TableDesign {
         return {
-          name: OBJECT_PARENT_TABLE,
+          name: fold(OBJECT_PARENT_TABLE),
           comment: null,
           columns: [column("id", OBJECT_KEY_TYPE, false)],
-          primaryKey: ["id"],
+          primaryKey: [fold("id")],
           primaryKeyName: null,
           indexes: [],
           foreignKeys: [],
@@ -1370,7 +1377,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       function childDesign(): TableDesign {
         return {
-          name: OBJECT_CHILD_TABLE,
+          name: fold(OBJECT_CHILD_TABLE),
           comment: null,
           columns: [
             column("id", OBJECT_KEY_TYPE, false),
@@ -1378,14 +1385,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             column("label", OBJECT_NARROW_TYPE),
             column("obsolete", OBJECT_NARROW_TYPE),
           ],
-          primaryKey: ["id"],
+          primaryKey: [fold("id")],
           primaryKeyName: null,
-          indexes: [{ name: OBJECT_INDEX, columns: ["label"], unique: false, original: null }],
+          indexes: [{ name: fold(OBJECT_INDEX), columns: [fold("label")], unique: false, original: null }],
           foreignKeys: [
             {
-              name: OBJECT_FOREIGN_KEY,
-              columns: ["parent_id"],
-              target: { path: path(), relation: OBJECT_PARENT_TABLE, columns: ["id"] },
+              name: fold(OBJECT_FOREIGN_KEY),
+              columns: [fold("parent_id")],
+              target: { path: path(), relation: fold(OBJECT_PARENT_TABLE), columns: [fold("id")] },
               onDelete: "CASCADE",
               onUpdate: null,
               original: null,
@@ -1430,8 +1437,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           ...described,
           columns: [
             ...described.columns
-              .filter((entry) => entry.name !== "obsolete")
-              .map((entry) => (entry.name === "label" ? { ...entry, type: OBJECT_WIDE_TYPE } : entry)),
+              .filter((entry) => entry.name !== fold("obsolete"))
+              .map((entry) => (entry.name === fold("label") ? { ...entry, type: OBJECT_WIDE_TYPE } : entry)),
             column("note", OBJECT_NARROW_TYPE),
           ],
           ...extra,
@@ -1442,11 +1449,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withTables(async (session) => {
           const child = await relationOf(session, OBJECT_CHILD_TABLE);
 
-          expect(child?.columns.map((entry) => entry.name)).toEqual(["id", "parent_id", "label", "obsolete"]);
-          expect(child?.primaryKey?.columns).toEqual(["id"]);
-          expect(child?.indexes.map((index) => index.name)).toContain(OBJECT_INDEX);
+          expect(child?.columns.map((entry) => entry.name)).toEqual(["id", "parent_id", "label", "obsolete"].map(fold));
+          expect(child?.primaryKey?.columns).toEqual([fold("id")]);
+          expect(child?.indexes.map((index) => index.name)).toContain(fold(OBJECT_INDEX));
           expect(child?.foreignKeys.map((key) => [key.target.relation, key.target.columns, key.onDelete])).toEqual([
-            [OBJECT_PARENT_TABLE, ["id"], "CASCADE"],
+            [fold(OBJECT_PARENT_TABLE), [fold("id")], "CASCADE"],
           ]);
         });
       });
@@ -1459,7 +1466,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const script = await scriptOf(session, {
             kind: "alterTable",
             path: path(),
-            relation: OBJECT_CHILD_TABLE,
+            relation: fold(OBJECT_CHILD_TABLE),
             design: editorOf().design(relation),
           });
 
@@ -1473,14 +1480,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
           await apply(
             session,
-            await scriptOf(session, { kind: "alterTable", path: path(), relation: OBJECT_CHILD_TABLE, design }),
+            await scriptOf(session, { kind: "alterTable", path: path(), relation: fold(OBJECT_CHILD_TABLE), design }),
           );
 
           const child = await relationOf(session, OBJECT_CHILD_TABLE);
-          expect(child?.columns.map((entry) => entry.name)).toEqual(["id", "parent_id", "label", "note"]);
-          expect(child?.columns.find((entry) => entry.name === "label")?.type).toMatch(OBJECT_WIDE_LENGTH);
+          expect(child?.columns.map((entry) => entry.name)).toEqual(["id", "parent_id", "label", "note"].map(fold));
+          expect(child?.columns.find((entry) => entry.name === fold("label"))?.type).toMatch(OBJECT_WIDE_LENGTH);
           expect(child?.foreignKeys).toHaveLength(1);
-          expect(child?.indexes.map((index) => index.name)).toContain(OBJECT_INDEX);
+          expect(child?.indexes.map((index) => index.name)).toContain(fold(OBJECT_INDEX));
           expect(await run(session, `SELECT label FROM ${OBJECT_CHILD_TABLE}`)).toEqual([["kept"]]);
         });
       });
@@ -1495,13 +1502,13 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
               ...design,
               indexes: [
                 ...design.indexes,
-                { name: OBJECT_PARENT_TABLE, columns: ["note"], unique: false, original: null },
+                { name: fold(OBJECT_PARENT_TABLE), columns: [fold("note")], unique: false, original: null },
               ],
             };
             const script = await scriptOf(session, {
               kind: "alterTable",
               path: path(),
-              relation: OBJECT_CHILD_TABLE,
+              relation: fold(OBJECT_CHILD_TABLE),
               design: clashing,
             });
             if (!script.transactional) return;
@@ -1509,7 +1516,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             await expect(apply(session, script)).rejects.toThrow();
 
             const child = await relationOf(session, OBJECT_CHILD_TABLE);
-            expect(child?.columns.map((entry) => entry.name)).toEqual(["id", "parent_id", "label", "obsolete"]);
+            expect(child?.columns.map((entry) => entry.name)).toEqual(
+              ["id", "parent_id", "label", "obsolete"].map(fold),
+            );
             expect(await run(session, `SELECT label FROM ${OBJECT_CHILD_TABLE}`)).toEqual([["kept"]]);
           });
         },
@@ -1522,8 +1531,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             await scriptOf(session, {
               kind: "rename",
               path: path(),
-              object: { kind: "table", name: OBJECT_CHILD_TABLE },
-              name: OBJECT_RENAMED_TABLE,
+              object: { kind: "table", name: fold(OBJECT_CHILD_TABLE) },
+              name: fold(OBJECT_RENAMED_TABLE),
             }),
           );
 
@@ -1536,7 +1545,12 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withTables(async (session) => {
           await apply(
             session,
-            await scriptOf(session, { kind: "truncate", path: path(), relation: OBJECT_CHILD_TABLE, cascade: false }),
+            await scriptOf(session, {
+              kind: "truncate",
+              path: path(),
+              relation: fold(OBJECT_CHILD_TABLE),
+              cascade: false,
+            }),
           );
 
           expect(await run(session, `SELECT id FROM ${OBJECT_CHILD_TABLE}`)).toEqual([]);
@@ -1551,7 +1565,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             await scriptOf(session, {
               kind: "drop",
               path: path(),
-              object: { kind: "table", name: OBJECT_CHILD_TABLE },
+              object: { kind: "table", name: fold(OBJECT_CHILD_TABLE) },
               cascade: false,
             }),
           );
@@ -1877,7 +1891,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           await withCompletion(async (language, catalog) => {
             const result = await language.complete(at("SELECT * FROM orders o JOIN |", "|"), catalog);
             const first = [...result.items].sort((left, right) => right.boost - left.boost)[0];
-            expect(first).toMatchObject({ kind: "join", apply: "customers c ON c.id = o.customer_id" });
+            expect(first).toMatchObject({
+              kind: "join",
+              apply: `${fold("customers")} c ON c.${fold("id")} = o.${fold("customer_id")}`,
+            });
           });
         });
 
@@ -1979,7 +1996,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withSession(plugin, fixture, async (session) => {
           const read = session.introspector?.definition?.bind(session.introspector);
           if (read === undefined) throw new Error("A ddl session needs introspector.definition.");
-          definition = await read(path, name);
+          definition = await read(path, fold(name));
         });
         return definition;
       }
