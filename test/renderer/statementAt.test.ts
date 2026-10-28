@@ -45,14 +45,14 @@ describe("statementsToRun", () => {
     expect(sqlOf(statementsToRun(leading, caret(0), "caret"))).toEqual(["SELECT 1"]);
   });
 
-  it("givenSelectionAcrossTwoStatements_whenResolved_thenRunsBoth", () => {
+  it("givenSelectionAcrossTwoStatements_whenResolved_thenRunsSelectedTextOnly", () => {
     const selection = { from: SCRIPT.indexOf("1"), to: SCRIPT.indexOf("2") };
-    expect(sqlOf(statementsToRun(STATEMENTS, selection, "caret"))).toEqual(["SELECT 1", "SELECT 2"]);
+    expect(sqlOf(statementsToRun(STATEMENTS, selection, "caret"))).toBe("1;\n\nSELECT ");
   });
 
-  it("givenSelectionOfWholeScript_whenResolved_thenRunsEveryStatement", () => {
+  it("givenSelectionOfWholeScript_whenResolved_thenRunsSelectedText", () => {
     const selection = { from: 0, to: SCRIPT.length };
-    expect(sqlOf(statementsToRun(STATEMENTS, selection, "caret"))).toEqual(["SELECT 1", "SELECT 2", "SELECT 3"]);
+    expect(sqlOf(statementsToRun(STATEMENTS, selection, "caret"))).toBe(SCRIPT);
   });
 
   it("givenSelectionInsideOneStatement_whenResolved_thenRunsSelectedTextAlone", () => {
@@ -60,16 +60,32 @@ describe("statementsToRun", () => {
     expect(sqlOf(statementsToRun(STATEMENTS, { from, to: from + "SELECT".length }, "caret"))).toBe("SELECT");
   });
 
-  it("givenSelectionOfExactlyOneStatement_whenResolved_thenRunsThatStatement", () => {
+  it("givenSelectionOfExactlyOneStatement_whenResolved_thenRunsSelectedText", () => {
     const [, second] = STATEMENTS;
-    expect(sqlOf(statementsToRun(STATEMENTS, { from: second?.from ?? 0, to: second?.to ?? 0 }, "caret"))).toEqual([
+    expect(sqlOf(statementsToRun(STATEMENTS, { from: second?.from ?? 0, to: second?.to ?? 0 }, "caret"))).toBe(
       "SELECT 2",
-    ]);
+    );
   });
 
-  it("givenSelectionOfOnlyWhitespace_whenResolved_thenNothing", () => {
-    const from = SCRIPT.indexOf("\n\n");
-    expect(sqlOf(statementsToRun(STATEMENTS, { from, to: from + 2 }, "caret"))).toBe("nothing");
+  it("givenSelectionFromCommentIntoStatement_whenResolved_thenRunsSelectedText", () => {
+    const from = SCRIPT.indexOf("-- note");
+    const selection = { from, to: SCRIPT.indexOf("SELECT 3") + "SELECT".length };
+    expect(sqlOf(statementsToRun(STATEMENTS, selection, "caret"))).toBe("-- note\nSELECT");
+  });
+
+  it("givenBackwardSelection_whenResolved_thenNormalisedSpan", () => {
+    const from = SCRIPT.indexOf("SELECT 2");
+    const to = from + "SELECT".length;
+    expect(statementsToRun(STATEMENTS, { from: to, to: from }, "caret")).toEqual({ kind: "selection", from, to });
+  });
+
+  it("givenSelectionAndRunAll_whenResolved_thenEveryStatement", () => {
+    const from = SCRIPT.indexOf("SELECT 2");
+    expect(sqlOf(statementsToRun(STATEMENTS, { from, to: from + "SELECT".length }, "all"))).toEqual([
+      "SELECT 1",
+      "SELECT 2",
+      "SELECT 3",
+    ]);
   });
 
   it("givenNoStatements_whenResolved_thenNothing", () => {

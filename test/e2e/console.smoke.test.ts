@@ -45,6 +45,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("006");
+const captureSelection = evidenceFor("113");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -168,6 +169,18 @@ async function chooseTransactionMode(page: Page, mode: "auto" | "manual"): Promi
   await expect.poll(() => select.inputValue()).toBe(mode);
 }
 
+/** Extends the selection by `characters`, one Shift+→ each, as a user would. */
+async function selectRight(page: Page, characters: number): Promise<void> {
+  for (let typed = 0; typed < characters; typed++) await page.keyboard.press("Shift+ArrowRight");
+}
+
+/** Selects from the start of the console's first line through `prefix` at the start of its second. */
+async function selectLineOneAndStartOfLineTwo(page: Page, prefix: string): Promise<void> {
+  await pressChord(page, "Home");
+  await page.keyboard.press("Shift+ArrowDown");
+  await selectRight(page, prefix.length);
+}
+
 describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
   let running: RunningApp | null = null;
   let drivingUpdates = 0;
@@ -261,6 +274,110 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
       expect(entries[1]).toMatch(/1 row affected in \d+ ms/);
       expect(entries[2]).toMatch(/1 row retrieved in \d+ ms/);
       await captureWindow(page, "run-selection");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenCommentAndPartOfStatementSelected_whenModEnter_thenOnlySelectedColumnsReturn",
+    async () => {
+      const page = await launch(MYSQL);
+      await typeScript(page, "-- pick one\nSELECT 'b' AS second, 'c' AS third;");
+
+      await selectLineOneAndStartOfLineTwo(page, "SELECT 'b' AS second");
+      await pressChord(page, "Enter");
+      await waitUntilReady(page);
+
+      await expect.poll(() => resultTabs(page).allTextContents()).toEqual(["Output", "Result 1"]);
+      expect(await resultTab(page, "Result 1").getAttribute("title")).toBe("SELECT 'b' AS second");
+      expect((await gridText(page)).headers).toEqual(["second"]);
+      await captureSelection(page, "run-selection-comment");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenSelectionAcrossTwoStatements_whenModEnter_thenEachSelectedPieceRuns",
+    async () => {
+      const page = await launch(MYSQL);
+      await typeScript(page, "SELECT 'a' AS first;\nSELECT 'b' AS second, 'c' AS third;");
+
+      await selectLineOneAndStartOfLineTwo(page, "SELECT 'b' AS second");
+      await pressChord(page, "Enter");
+      await waitUntilReady(page);
+
+      await expect.poll(() => resultTabs(page).allTextContents()).toEqual(["Output", "Result 1", "Result 2"]);
+      expect((await gridText(page)).headers).toEqual(["second"]);
+      await resultTab(page, "Result 1").click();
+      expect((await gridText(page)).headers).toEqual(["first"]);
+      await resultTab(page, "Output").click();
+      await expect.poll(() => outputEntries(page).count()).toBe(2);
+      await resultTab(page, "Result 2").click();
+      await captureSelection(page, "run-selection-partial");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenOnlyBlankLineSelected_whenModEnter_thenOutputSaysNothingToRun",
+    async () => {
+      const page = await launch(MYSQL);
+      await typeScript(page, "SELECT 'a' AS first;\n\nSELECT 'b' AS second;");
+
+      await pressChord(page, "Home");
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("Shift+ArrowDown");
+      await pressChord(page, "Enter");
+      await waitUntilReady(page);
+
+      await expect.poll(() => outputEntries(page).count()).toBe(1);
+      expect(await outputEntries(page).first().textContent()).toMatch(/Nothing to run$/);
+      expect(await resultTabs(page).allTextContents()).toEqual(["Output"]);
+      await captureSelection(page, "run-selection-empty");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenCaretInSecondStatementWithoutSelection_whenModEnter_thenThatStatementRuns",
+    async () => {
+      const page = await launch(MYSQL);
+      await typeScript(page, "SELECT 'a' AS first;\nSELECT 'b' AS second, 'c' AS third;");
+
+      await editorLines(page).nth(1).click();
+      await pressChord(page, "Enter");
+      await waitUntilReady(page);
+
+      await expect.poll(() => resultTabs(page).allTextContents()).toEqual(["Output", "Result 1"]);
+      expect(await resultTab(page, "Result 1").getAttribute("title")).toBe("SELECT 'b' AS second, 'c' AS third");
+      expect((await gridText(page)).headers).toEqual(["second", "third"]);
+      await captureSelection(page, "run-at-caret");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenSelectionLeakingPastStatement_whenExplained_thenPlanIsForTheSelectedText",
+    async () => {
+      const page = await launch(MYSQL);
+      await typeScript(page, "SELECT 1 AS one;\nSELECT * FROM orders WHERE id = 1;");
+
+      await pressChord(page, "Home");
+      await page.keyboard.press("End");
+      await selectRight(page, "\nSELECT * FROM orders".length);
+      await pressChord(page, "Shift+E");
+
+      const plan = resultTab(page, "Plan");
+      await plan.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await page
+        .getByRole("treegrid")
+        .locator("tbody")
+        .getByRole("row")
+        .first()
+        .waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await waitUntilReady(page);
+      expect(await plan.getAttribute("title")).toBe("SELECT * FROM orders");
+      await captureSelection(page, "explain-selection");
     },
     SCENARIO_TIMEOUT_MS,
   );

@@ -26,13 +26,18 @@ import type { HistoryEntry } from "@table-craft/desktop/preload/bridge.js";
 const SESSION_ID = "s1";
 const ANSWER_AFTER_MS = 10_000;
 
-/** Splits on `;` and classifies by the first word, enough to drive the store the way a plugin would. */
+const LEADING_COMMENTS = /^(?:\s|--[^\n]*(?:\n|$))*/;
+
+/**
+ * Splits on `;`, starts a statement after leading `--` comments as the real splitter does, and
+ * classifies by the first word, enough to drive the store the way a plugin would.
+ */
 function split(text: string): ClassifiedStatement[] {
   const statements: ClassifiedStatement[] = [];
   let start = 0;
   for (const piece of text.split(";")) {
-    const lead = piece.length - piece.trimStart().length;
-    const sql = piece.trim();
+    const lead = LEADING_COMMENTS.exec(piece)?.[0].length ?? 0;
+    const sql = piece.slice(lead).trim();
     if (sql !== "") {
       const from = start + lead;
       const verb = sql.split(/\s+/)[0]?.toUpperCase() ?? "";
@@ -313,6 +318,42 @@ describe("console runs", () => {
 
     expect(executed).toEqual(["SELECT 1"]);
     expect(session().flash).toMatchObject({ from: 0, to: 8 });
+  });
+
+  it("givenSelectionFromCommentIntoStatement_whenRun_thenOnlySelectedPartRuns", async () => {
+    const sql = "-- totals\nSELECT 1 + 2 AS n;";
+    const { store, executed, session } = await opened(sql);
+    const from = sql.indexOf("SELECT 1");
+    store.getState().setSelection("c1", { from: 0, to: from + "SELECT 1".length });
+
+    await store.getState().run("c1", "caret");
+
+    expect(executed).toEqual(["SELECT 1"]);
+    expect(session().flash).toMatchObject({ from, to: from + "SELECT 1".length });
+  });
+
+  it("givenSelectionAcrossTwoStatementsPartly_whenRun_thenSelectedPiecesRunAtTheirOffsets", async () => {
+    const sql = "SELECT 1 AS a;\nSELECT 2 AS b;";
+    const { store, executed, session } = await opened(sql);
+    const second = sql.indexOf("SELECT 2");
+    store.getState().setSelection("c1", { from: 0, to: second + "SELECT 2".length });
+
+    await store.getState().run("c1", "caret");
+
+    expect(executed).toEqual(["SELECT 1 AS a", "SELECT 2"]);
+    expect(session().flash).toMatchObject({ from: second, to: second + "SELECT 2".length });
+  });
+
+  it("givenSelectionOfOnlyWhitespace_whenRun_thenOutputSaysNothingToRun", async () => {
+    const sql = "SELECT 1;\n\n\nSELECT 2;";
+    const { store, executed, messages } = await opened(sql);
+    const from = sql.indexOf("\n\n");
+    store.getState().setSelection("c1", { from, to: from + 2 });
+
+    await store.getState().run("c1", "caret");
+
+    expect(executed).toEqual([]);
+    expect(messages()).toEqual(["Nothing to run"]);
   });
 
   it("givenEmptyConsole_whenRun_thenOutputSaysNothingToRun", async () => {
