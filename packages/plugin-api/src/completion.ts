@@ -36,6 +36,8 @@ export interface FunctionParameter {
   readonly optional?: boolean;
   /** Repeats: the call may pass it any number of times. */
   readonly variadic?: boolean;
+  /** The keyword written before it instead of a comma, such as `FROM` in `EXTRACT(unit FROM date)`; `|` separates alternatives. */
+  readonly lead?: string;
 }
 
 /** One way to call a function: its parameters in order and what it returns. */
@@ -49,7 +51,10 @@ export interface SignatureHelp {
   readonly name: string;
   readonly summary: string;
   readonly signatures: readonly FunctionSignature[];
-  /** The zero-based argument the caret is in: the top-level commas before it inside the call. */
+  /**
+   * The zero-based parameter the caret is in: the top-level commas before it inside the call, or,
+   * when the signature has keyword-led parameters (`lead`), the one the separators walk to.
+   */
   readonly argument: number;
   /** The call's name to the end of its arguments, or to the caret while it is still open. */
   readonly from: number;

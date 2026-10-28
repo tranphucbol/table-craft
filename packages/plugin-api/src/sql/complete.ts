@@ -5,14 +5,24 @@ import type {
   CompletionRequest,
   CompletionResult,
   Declaration,
+  FunctionSignature,
   Relation,
   ResolveRequest,
   SelectSource,
   SignatureHelp,
   SqlLanguage,
 } from "@table-craft/plugin-api";
-import { functionItem, functionName, isAvailable, type FunctionSpec, type ServerIdentity } from "./functions.js";
-import { callAt } from "./signature.js";
+import {
+  functionItem,
+  functionName,
+  functionPackage,
+  isAvailable,
+  leadMatches,
+  memberItem,
+  type FunctionSpec,
+  type ServerIdentity,
+} from "./functions.js";
+import { callAt, type CallAt } from "./signature.js";
 import { parseSimpleSelect, SELECT_READ_ONLY_REASONS, type SimpleSelect } from "./select.js";
 import { scopeAt, type Identifier, type Query, type RelationSource, type ScopeAt, type Source } from "./scope.js";
 import { namespaceSlotAt, type NamespaceSlot, type NamespaceTarget } from "./namespace.js";
@@ -119,6 +129,57 @@ const QUOTES = new Set(['"', "`", "["]);
 /** Below every other namespace: `USE mysql` is legitimate but rarely meant. */
 const SYSTEM_NAMESPACE_BOOST = -20;
 const CURRENT_DETAIL = "current";
+const COMMA = ",";
+const MEMBER_SEPARATOR = ".";
+
+interface ArgumentAt {
+  readonly argument: number;
+  /** The separators that moved it by a parameter's lead; the overload with most is the one being written. */
+  readonly led: number;
+}
+
+/**
+ * Walks `separators` through `signature`: a comma moves to the next parameter without a lead, a
+ * word to the next one it leads. A word nothing leads is an argument's own (`YEAR`, `DECIMAL`).
+ * Past the last parameter a comma keeps counting, as the hint's variadic rule expects; a variadic
+ * parameter keyword-led ones follow (`CHAR(code... USING charset)`) takes every comma.
+ */
+function argumentAt(signature: FunctionSignature, separators: readonly string[]): ArgumentAt {
+  const { parameters } = signature;
+  let at = 0;
+  let entered = false;
+  let led = 0;
+  for (const separator of separators) {
+    if (separator === COMMA) {
+      const next = parameters.findIndex((parameter, index) => index > at && parameter.lead === undefined);
+      if (next >= 0) at = next;
+      else if (!(parameters[at]?.variadic === true && at < parameters.length - 1)) at += 1;
+      entered = true;
+      continue;
+    }
+    const next = parameters.findIndex(
+      (parameter, index) =>
+        (index > at || (index === at && !entered)) &&
+        parameter.lead !== undefined &&
+        leadMatches(parameter.lead, separator),
+    );
+    if (next < 0) continue;
+    at = next;
+    entered = true;
+    led += 1;
+  }
+  return { argument: at, led };
+}
+
+/** The argument the caret is in, by the overload whose leads the call follows most; the first on a tie. */
+function argumentOf(spec: FunctionSpec, call: CallAt): number {
+  let best: ArgumentAt | null = null;
+  for (const signature of spec.signatures) {
+    const found = argumentAt(signature, call.separators ?? []);
+    if (best === null || found.led > best.led) best = found;
+  }
+  return best?.argument ?? call.argument;
+}
 
 function relationKind(relation: Relation): CompletionKind {
   return relation.kind === "table" ? "table" : "view";
@@ -139,6 +200,14 @@ export function sqlCompleter(
 
   function specNamed(name: string, server: ServerIdentity | null): FunctionSpec | undefined {
     return specs.get(name.toUpperCase())?.find((spec) => isAvailable(spec, server));
+  }
+
+  /** The members of the package `qualifier` names, as offered after its dot. */
+  function memberItems(qualifier: readonly Identifier[], server: ServerIdentity | null): CompletionItem[] {
+    const name = qualifier.map((part) => part.name.toUpperCase()).join(MEMBER_SEPARATOR);
+    return availableFunctions(server, true)
+      .filter((spec): spec is FunctionSpec => typeof spec !== "string" && functionPackage(spec) === name)
+      .map((spec) => memberItem(spec, BOOST.function));
   }
 
   function quoted(name: string): string {
@@ -168,10 +237,12 @@ export function sqlCompleter(
       .map((keyword) => item("keyword", keyword, keyword, null));
   }
 
-  function availableFunctions(server: ServerIdentity | null): (string | FunctionSpec)[] {
+  /** Plain functions, or with `members` the package members only: a bare name never offers `pkg.member`. */
+  function availableFunctions(server: ServerIdentity | null, members = false): (string | FunctionSpec)[] {
     const offered = new Set<string>();
     return options.functions.filter((spec) => {
       const name = functionName(spec).toUpperCase();
+      if ((functionPackage(spec) !== null) !== members) return false;
       if (offered.has(name) || (typeof spec !== "string" && !isAvailable(spec, server))) return false;
       offered.add(name);
       return true;
@@ -183,17 +254,18 @@ export function sqlCompleter(
     const last = qualifier.at(-1);
     if (last === undefined) return [];
     const relational = clause === "relation" || clause === "join";
+    const members = relational ? [] : memberItems(qualifier, lookup.server);
     if (qualifier.length === 1 && !relational) {
       const source = sourceNamed(query, last);
-      if (source !== undefined) return columnItems(await lookup.columnsOf(source, query));
+      if (source !== undefined) return [...columnItems(await lookup.columnsOf(source, query)), ...members];
       const cte = cteNamed(query, last);
-      if (cte !== undefined) return columnItems(await lookup.cteColumns(cte, 1));
+      if (cte !== undefined) return [...columnItems(await lookup.cteColumns(cte, 1)), ...members];
     }
     const namespace = await lookup.namespace(qualifier);
-    if (namespace !== undefined) return relationItems(await lookup.relations(namespace.path), null);
+    if (namespace !== undefined) return [...members, ...relationItems(await lookup.relations(namespace.path), null)];
     if (relational) return [];
     const found = await lookup.relation(qualifier.slice(0, -1), last);
-    return found === null ? [] : columnItems(found.relation.columns);
+    return found === null ? members : [...columnItems(found.relation.columns), ...members];
   }
 
   async function relationContextItems(scope: ScopeAt, lookup: Lookup): Promise<CompletionItem[]> {
@@ -530,14 +602,18 @@ export function sqlCompleter(
   function signatureAt(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null> {
     const { text, offset, shift } = wrap(request);
     const server = serverOf(catalog);
-    const call = callAt(text, offset, options.dialect, reserved, (name) => specNamed(name, server) !== undefined);
+    const callable = (name: string): boolean => {
+      const spec = specNamed(name, server);
+      return spec !== undefined && spec.bare !== true;
+    };
+    const call = callAt(text, offset, options.dialect, reserved, callable);
     const spec = call === null ? undefined : specNamed(call.name, server);
     if (call === null || spec === undefined) return Promise.resolve(null);
     return Promise.resolve({
       name: spec.name.toLowerCase(),
       summary: spec.summary,
       signatures: spec.signatures,
-      argument: call.argument,
+      argument: argumentOf(spec, call),
       from: call.from - shift,
       to: call.to - shift,
     });
