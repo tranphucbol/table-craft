@@ -32,7 +32,7 @@ const captureWindow = evidenceFor("110");
 
 const LONG_NAME = `orders_archive_${"partitioned_by_month_".repeat(4)}eu_west`;
 const QUERY = "SELECT 1 AS id, 'TableCraft' AS name";
-/** Past the 100 ms press transition, so the capture shows the settled pressed state. */
+/** Past the 100 ms release fade; the press itself lands on its first frame (plan 114). */
 const PRESS_SETTLE_MS = 250;
 
 /** The DOM members these scenarios read; the e2e program has no DOM lib. */
