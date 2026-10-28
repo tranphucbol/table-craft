@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { DIALOG_MOTION, OVERLAY_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
+import { FILLED_DANGER_PRESS, FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
 export const OVERLAY_CLASS = `fixed inset-0 z-40 bg-canvas/60 ${OVERLAY_MOTION}`;
 export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl outline-none ${DIALOG_MOTION}`;
@@ -9,11 +10,11 @@ export const INPUT_CLASS =
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "dangerOutline";
 
-const BUTTON_CLASS: Readonly<Record<ButtonVariant, string>> = {
-  primary: "bg-accent text-accent-ink",
-  secondary: "border border-line text-ink hover:bg-raised",
-  danger: "bg-danger text-accent-ink",
-  dangerOutline: "border border-danger bg-raised text-danger enabled:hover:bg-danger/10 disabled:cursor-not-allowed",
+export const BUTTON_CLASS: Readonly<Record<ButtonVariant, string>> = {
+  primary: `${FILLED_PRESS} bg-accent text-accent-ink`,
+  secondary: `${TEXT_PRESS} border border-line text-ink hover:bg-raised`,
+  danger: `${FILLED_DANGER_PRESS} bg-danger text-accent-ink`,
+  dangerOutline: `${TEXT_PRESS} border border-danger bg-raised text-danger enabled:hover:bg-danger/10 disabled:cursor-not-allowed`,
 };
 
 export function Button({

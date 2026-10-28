@@ -2,6 +2,7 @@ import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/acti
 import { invoke, registry, useActionBusy, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS, CopiedIcon, SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 import { COPIED_LABEL, useCopyConfirmation } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
 import { useDelayedFlag } from "@table-craft/desktop/renderer/ui/useDelayedFlag.js";
@@ -60,14 +61,14 @@ export function ActionButton({
         className={cn(
           "app-no-drag",
           primary
-            ? "flex h-row shrink-0 items-center gap-1 rounded bg-accent px-gap whitespace-nowrap text-accent-ink disabled:not-aria-busy:opacity-50"
+            ? `${FILLED_PRESS} flex h-row shrink-0 items-center gap-1 rounded bg-accent px-gap whitespace-nowrap text-accent-ink disabled:not-aria-busy:opacity-50`
             : compact && tone === "warning"
-              ? "flex h-row shrink-0 items-center rounded border border-warning px-1 text-warning hover:bg-raised disabled:not-aria-busy:opacity-50"
+              ? "press flex h-row shrink-0 items-center rounded border border-warning px-1 text-warning hover:bg-raised disabled:not-aria-busy:opacity-50"
               : compact
                 ? "press flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-raised disabled:not-aria-busy:opacity-50 aria-pressed:bg-selection"
                 : tone === "warning"
-                  ? "flex h-row shrink-0 items-center gap-1 rounded border border-warning px-gap whitespace-nowrap text-warning disabled:not-aria-busy:opacity-50"
-                  : "flex h-row shrink-0 items-center gap-1 rounded border border-line px-gap whitespace-nowrap text-ink disabled:not-aria-busy:opacity-50",
+                  ? `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-warning px-gap whitespace-nowrap text-warning hover:bg-raised disabled:not-aria-busy:opacity-50`
+                  : `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-line px-gap whitespace-nowrap text-ink hover:bg-raised disabled:not-aria-busy:opacity-50`,
         )}
         disabled={!enabled}
         onMouseDown={(event) => event.preventDefault()}
