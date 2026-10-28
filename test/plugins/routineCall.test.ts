@@ -1,3 +1,4 @@
+import mssql from "@table-craft/plugin-mssql";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
 import {
@@ -105,6 +106,45 @@ describe("postgres routineCall", () => {
   it("givenDefaultWithoutOne_whenCall_thenStatementFailed", () => {
     const target = routine("function", [parameter("a", "integer")]);
     expect(failure(() => call(postgres, target, [DEFAULT]))).toMatch(/has no default/);
+  });
+});
+
+describe("mssql routineCall", () => {
+  it("givenScalarFunction_whenCall_thenSelectWithCastsAndDefault", () => {
+    const target = routine(
+      "function",
+      [parameter("amount", "decimal(12,2)"), parameter("rate", "decimal(6,4)", "in", true)],
+      "calc_fee",
+    );
+    expect(call(mssql, target, [value("100"), DEFAULT])).toEqual({
+      sql: "SELECT s.calc_fee(CAST(:amount AS decimal(12,2)), DEFAULT) AS calc_fee;",
+      params: { ":amount": "100" },
+    });
+  });
+
+  it("givenTableFunction_whenCall_thenSelectFrom", () => {
+    const target = { ...routine("function", [parameter("customer", "int")]), returns: "TABLE(id int)" };
+    expect(call(mssql, target, [value("1")]).sql).toBe("SELECT * FROM s.f(CAST(:customer AS int));");
+  });
+
+  it("givenProcedureWithOutput_whenCall_thenDeclareExecSelectInOneBatch", () => {
+    const target = routine("procedure", [
+      parameter("id", "int"),
+      parameter("total", "decimal(12,2)", "out"),
+      parameter("note", "nvarchar(64)", "inout"),
+      parameter("flag", "bit", "in", true),
+    ]);
+    const called = call(mssql, target, [value("3"), value(null), value("x"), DEFAULT]);
+    expect(called.sql.split("\n")).toEqual([
+      "DECLARE @table_craft_return int",
+      "DECLARE @table_craft_out2 decimal(12,2)",
+      "DECLARE @table_craft_out3 nvarchar(64)",
+      "SET @table_craft_out3 = :note",
+      "EXEC @table_craft_return = s.f @id = :id, @total = @table_craft_out2 OUTPUT, @note = @table_craft_out3 OUTPUT",
+      "SELECT @table_craft_return AS RETURN_VALUE, @table_craft_out2 AS total, @table_craft_out3 AS note;",
+    ]);
+    expect(called.params).toEqual({ ":id": "3", ":note": "x" });
+    expect(mssql.language?.split(called.sql)).toHaveLength(1);
   });
 });
 

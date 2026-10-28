@@ -1,4 +1,5 @@
 import { omittedMessages, SERVER_MESSAGE_LIMIT } from "@table-craft/plugin-api";
+import { infoMessage as mssqlInfo, MessageCollector } from "@table-craft/plugin-mssql/messages";
 import { warningCount, warningMessages } from "@table-craft/plugin-mysql/warnings";
 import { NoticeCollector, noticeMessage } from "@table-craft/plugin-postgres/notices";
 import { describe, expect, it } from "vitest";
@@ -59,5 +60,26 @@ describe("postgres notices", () => {
 
     expect(messages).toHaveLength(SERVER_MESSAGE_LIMIT + 1);
     expect(messages.at(-1)).toEqual(omittedMessages(2));
+  });
+});
+
+describe("mssql info messages", () => {
+  it("givenPrintAndRaiserror_whenRead_thenInfoAndNotice", () => {
+    expect(mssqlInfo({ number: 0, class: 0, message: "hello" })).toEqual({ level: "info", code: null, text: "hello" });
+    expect(mssqlInfo({ number: 50000, class: 10, message: "careful" })).toEqual({
+      level: "notice",
+      code: "50000",
+      text: "careful",
+    });
+  });
+
+  it("givenMoreThanTheLimit_whenCollected_thenRestCounted", () => {
+    const collector = new MessageCollector();
+    for (let index = 0; index < SERVER_MESSAGE_LIMIT + 3; index += 1) {
+      collector.add(mssqlInfo({ number: 0, class: 0, message: String(index) }));
+    }
+    const messages = collector.messages();
+    expect(messages).toHaveLength(SERVER_MESSAGE_LIMIT + 1);
+    expect(messages.at(-1)).toEqual(omittedMessages(3));
   });
 });

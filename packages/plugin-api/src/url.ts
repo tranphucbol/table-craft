@@ -31,6 +31,7 @@ export interface ConnectionUrlSpec {
       }[]
     | undefined;
   readonly sets?: Readonly<Record<string, Readonly<Record<string, ConnectionValue>>>> | undefined;
+  readonly semicolonParams?: boolean | undefined;
 }
 
 interface UrlField {
@@ -52,6 +53,9 @@ const SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 const WINDOWS_DRIVE_PATH = /^\/[A-Za-z]:[/\\]/;
 const LEADING_SLASHES = /^\/+/;
 const LOCAL_HOSTS = new Set(["", "localhost"]);
+/** `host`, `[v6]`, then SQL Server's `\instance` and the port, as the JDBC driver reads them. */
+const SEMICOLON_AUTHORITY = /^(\[[^\]]*\]|[^\\:]*)(?:\\([^:]*))?(?::([^:]*))?$/;
+const INSTANCE_PARAM = "instanceName";
 
 /** libpq's names for the parts of the URL, accepted as query parameters by every server form. */
 const PART_PARAMS: Readonly<Record<string, ConnectionUrlPart>> = {
@@ -147,6 +151,7 @@ function parseServer(form: ConnectionForm, url: ConnectionUrlSpec, text: string)
   if (scheme === undefined || !url.schemes.includes(scheme) || !text.slice(scheme.length + 1).startsWith("//")) {
     throw new ConnectionUrlError(`Expected a URL starting with ${schemeList(url)}.`);
   }
+  if (url.semicolonParams === true) return parseSemicolon(form, url, scheme, text);
   let parsed: URL;
   try {
     parsed = new URL(text);
@@ -163,6 +168,56 @@ function parseServer(form: ConnectionForm, url: ConnectionUrlSpec, text: string)
   collected.part("user", decoded(parsed.username));
   collected.part("password", decoded(parsed.password));
   collected.query(parsed.search);
+  return collected.done();
+}
+
+/** Splits on `;` outside `{…}`, which the JDBC driver uses to put a `;` in a value. */
+function semicolonPairs(text: string): string[] {
+  const pairs: string[] = [];
+  let current = "";
+  let braced = false;
+  for (const char of text) {
+    if (char === "{") braced = true;
+    else if (char === "}") braced = false;
+    if (char === ";" && !braced) {
+      pairs.push(current);
+      current = "";
+    } else current += char;
+  }
+  pairs.push(current);
+  return pairs.filter((pair) => pair.trim() !== "");
+}
+
+function unbraced(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.startsWith("{") && trimmed.endsWith("}") ? trimmed.slice(1, -1) : trimmed;
+}
+
+function parseSemicolon(
+  form: ConnectionForm,
+  url: ConnectionUrlSpec,
+  scheme: string,
+  text: string,
+): ParsedConnectionUrl {
+  const [authority = "", ...pairs] = semicolonPairs(text.slice(scheme.length + "://".length));
+  const match = SEMICOLON_AUTHORITY.exec(authority.trim());
+  if (match === null) {
+    throw new ConnectionUrlError(`"${authority}" is not host, host\\instance or host:port.`);
+  }
+  const [, host = "", instance, port] = match;
+  if (port !== undefined && !/^\d+$/.test(port)) {
+    throw new ConnectionUrlError(`The port "${port}" is not a number.`);
+  }
+  const collected = new Collected(form, url);
+  Object.assign(collected.values, url.sets?.[scheme]);
+  collected.part("host", host.replace(/^\[(.*)\]$/, "$1"));
+  if (port !== undefined) collected.part("port", port);
+  if (instance !== undefined && instance !== "") collected.param(INSTANCE_PARAM, instance);
+  for (const pair of pairs) {
+    const equals = pair.indexOf("=");
+    if (equals < 0) collected.ignored.push(pair.trim());
+    else collected.param(pair.slice(0, equals).trim(), unbraced(pair.slice(equals + 1)));
+  }
   return collected.done();
 }
 
@@ -218,6 +273,41 @@ function written(value: ConnectionValue): string {
   return String(value);
 }
 
+function bracedValue(value: string): string {
+  return /[;{}=]/.test(value) || value !== value.trim() ? `{${value}}` : value;
+}
+
+/** Every parameter after a `;`, one per field, so a part a parameter also names is written once. */
+function semicolonUrl(
+  form: ConnectionForm,
+  url: ConnectionUrlSpec,
+  scheme: string,
+  config: Readonly<Record<string, unknown>>,
+): string {
+  const text = (key: string | undefined): string => {
+    if (key === undefined || fieldOf(form, key)?.secret === true) return "";
+    const value = config[key];
+    return isConnectionValue(value) ? written(value) : "";
+  };
+  const host = text(url.parts.host);
+  const port = text(url.parts.port);
+  const pairs: string[] = [];
+  const keys = new Set([url.parts.host, url.parts.port]);
+  for (const param of url.params ?? []) {
+    if (keys.has(param.key)) continue;
+    keys.add(param.key);
+    const value = config[param.key];
+    const field = fieldOf(form, param.key);
+    if (field?.secret === true || !isConnectionValue(value) || value === "" || value === field?.default) continue;
+    const shown =
+      param.values === undefined
+        ? written(value)
+        : Object.entries(param.values).find(([, mapped]) => mapped === value)?.[0];
+    if (shown !== undefined) pairs.push(`;${param.name}=${bracedValue(shown)}`);
+  }
+  return `${scheme}://${host.includes(":") ? `[${host}]` : host}${port === "" ? "" : `:${port}`}${pairs.join("")}`;
+}
+
 function encodedPath(path: string): string {
   return encodeURI(path).replaceAll("?", "%3F").replaceAll("#", "%23");
 }
@@ -238,6 +328,7 @@ export function formatConnectionUrl(form: ConnectionForm, config: Readonly<Recor
     url.schemes.find((candidate) => url.sets?.[candidate] === undefined) ??
     url.schemes[0] ??
     "";
+  if (url.semicolonParams === true) return semicolonUrl(form, url, scheme, config);
   const valueOf = (part: ConnectionUrlPart): string => {
     const key = url.parts[part];
     if (key === undefined || fieldOf(form, key)?.secret === true) return "";

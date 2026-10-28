@@ -52,8 +52,8 @@ function messageOf(cause: unknown): string {
 
 /** The script's own session, already in the namespace it runs in; `close` settles in bounded time. */
 export interface ScriptSession {
-  /** Runs one statement and reads its result to the end. */
-  execute(sql: string): Promise<void>;
+  /** Runs one statement, `repeat` times when the script says so (`GO 3`), and reads its result to the end. */
+  execute(sql: string, repeat?: number): Promise<void>;
   /** Stops the statement in flight, where the plugin can. */
   cancel(): void;
   close(): Promise<void>;
@@ -227,7 +227,7 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
       for (;;) {
         if (controller.signal.aborted) throw cancelled();
         try {
-          await abortable(open.execute(statement.sql), controller.signal);
+          await abortable(open.execute(statement.sql, statement.repeat), controller.signal);
           update({ statements: entry.task.statements + 1 });
           progress();
           return;

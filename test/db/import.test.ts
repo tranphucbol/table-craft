@@ -3,11 +3,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CSV_FORMAT, TSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
+import mssql from "@table-craft/plugin-mssql";
 import mysql from "@table-craft/plugin-mysql";
 import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportFormat, ImportPreview } from "@table-craft/desktop/engine/protocol.js";
 import {
+  MSSQL_CONFIG,
   MYSQL_CONFIG,
   ORACLE_CONFIG,
   POSTGRES_CONFIG,
@@ -23,8 +25,13 @@ import {
   startImport,
   type ExportHarness,
 } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
-import { ORACLE_TYPE_PROBE_EXPECTED, TYPE_PROBE_COPY_ORACLE, TYPE_PROBE_EXPECTED } from "../support/typeProbe.js";
+import { MSSQL_MANIFEST, MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import {
+  MSSQL_TYPE_PROBE_EXPECTED,
+  ORACLE_TYPE_PROBE_EXPECTED,
+  TYPE_PROBE_COPY_ORACLE,
+  TYPE_PROBE_EXPECTED,
+} from "../support/typeProbe.js";
 
 /** Plan 021: files the exporter wrote, and files with inferred types, imported through the engine. */
 
@@ -101,6 +108,16 @@ const TARGETS: readonly Target[] = [
       [2, 25, 2000, "2024-02-29 00:00:00", "héllo"],
       [3, "-0.5", 5, "1999-12-31 00:00:00", "line\nbreak"],
     ],
+  },
+  {
+    name: "mssql",
+    plugin: { status: "loaded", directory: "plugins/mssql", manifest: MSSQL_MANIFEST, plugin: mssql },
+    config: MSSQL_CONFIG,
+    path: ["table_craft", "dbo"],
+    fold: SAME,
+    roundTripAs: `SELECT * INTO ${ROUND_TRIP_TABLE} FROM type_probe WHERE 1 = 0`,
+    expected: MSSQL_TYPE_PROBE_EXPECTED,
+    inferred: INFERRED,
   },
 ];
 

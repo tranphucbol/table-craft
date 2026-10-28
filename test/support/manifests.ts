@@ -1,4 +1,5 @@
 import { API_VERSION, pluginManifestSchema, type PluginManifest } from "@table-craft/plugin-api";
+import mssqlJson from "../../plugins/mssql/table-craft-plugin.json" with { type: "json" };
 import mysqlJson from "../../plugins/mysql/table-craft-plugin.json" with { type: "json" };
 import oracleJson from "../../plugins/oracle/table-craft-plugin.json" with { type: "json" };
 import postgresJson from "../../plugins/postgres/table-craft-plugin.json" with { type: "json" };
@@ -11,6 +12,7 @@ export const POSTGRES_MANIFEST: PluginManifest = pluginManifestSchema.parse(post
 export const MYSQL_MANIFEST: PluginManifest = pluginManifestSchema.parse(mysqlJson);
 export const REDIS_MANIFEST: PluginManifest = pluginManifestSchema.parse(redisJson);
 export const ORACLE_MANIFEST: PluginManifest = pluginManifestSchema.parse(oracleJson);
+export const MSSQL_MANIFEST: PluginManifest = pluginManifestSchema.parse(mssqlJson);
 
 /** A valid manifest for a fake plugin; the connection form is one optional text field. */
 export function fakeManifest(overrides: Partial<PluginManifest> & { readonly id: string }): PluginManifest {

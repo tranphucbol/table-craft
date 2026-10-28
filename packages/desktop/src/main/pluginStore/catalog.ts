@@ -42,6 +42,13 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     schemes: ["oracle"],
     approximateBytes: 360_000,
   },
+  {
+    id: "mssql",
+    name: "SQL Server",
+    packageName: officialPackage("mssql"),
+    schemes: ["sqlserver", "mssql"],
+    approximateBytes: 760_000,
+  },
 ];
 
 export function catalogEntry(id: string): CatalogEntry | undefined {
