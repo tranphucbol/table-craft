@@ -118,6 +118,8 @@ export const MSSQL_CONFIG = {
   database: CREDENTIAL,
   user: CREDENTIAL,
   password: CREDENTIAL,
+  // The container serves a certificate it made itself.
+  trustServerCertificate: true,
 } as const;
 
 /**
@@ -175,6 +177,7 @@ export const SSH_BASTION = {
 export const POSTGRES_BEHIND_BASTION = { host: "postgres", port: 5432 } as const;
 export const MYSQL_BEHIND_BASTION = { host: "mysql", port: 3306 } as const;
 export const ORACLE_BEHIND_BASTION = { host: "oracle", port: 1521 } as const;
+export const MSSQL_BEHIND_BASTION = { host: "mssql", port: 1433 } as const;
 
 const DEFAULT_POSTGRES_TLS_PORT = 55433;
 const DEFAULT_MYSQL_TLS_PORT = 53307;
@@ -211,6 +214,14 @@ export const MYSQL_TLS_CONFIG = {
   ...MYSQL_CONFIG,
   host: tlsHostFromEnv("TABLE_CRAFT_MYSQL_TLS_HOST"),
   port: portFromEnv("TABLE_CRAFT_MYSQL_TLS_PORT", DEFAULT_MYSQL_TLS_PORT),
+} as const;
+
+/** The `mssql` service presents the test certificate but leaves encryption to the client. */
+export const MSSQL_TLS_CONFIG = {
+  ...MSSQL_CONFIG,
+  host: tlsHostFromEnv("TABLE_CRAFT_MSSQL_HOST"),
+  encrypt: "mandatory",
+  trustServerCertificate: false,
 } as const;
 
 export const POSTGRES_TLS_BEHIND_BASTION = { host: "postgres-tls", port: 5432 } as const;
@@ -330,12 +341,15 @@ export const WITHOUT_REDIS = !databaseEnabled("redis");
 
 /** The smoke files' Oracle scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
 export const WITHOUT_ORACLE = !databaseEnabled("oracle");
+/** The smoke files' SQL Server scenarios skip unless `TABLE_CRAFT_DATABASES` selects it. */
+export const WITHOUT_MSSQL = !databaseEnabled("mssql");
 
 /** Whether a scenario on a datasource of `pluginId` skips, because its server is not selected. */
 export function serverSkipped(pluginId: string): boolean {
   return (
     (pluginId === "postgres" && WITHOUT_POSTGRES) ||
     (pluginId === "redis" && WITHOUT_REDIS) ||
-    (pluginId === "oracle" && WITHOUT_ORACLE)
+    (pluginId === "oracle" && WITHOUT_ORACLE) ||
+    (pluginId === "mssql" && WITHOUT_MSSQL)
   );
 }

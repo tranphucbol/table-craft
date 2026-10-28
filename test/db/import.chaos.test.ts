@@ -5,12 +5,14 @@ import { join } from "node:path";
 import { finished as streamFinished } from "node:stream/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { CSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
+import mssql from "@table-craft/plugin-mssql";
 import mysql from "@table-craft/plugin-mysql";
 import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ImportTask } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
 import {
+  MSSQL_CONFIG,
   MYSQL_CONFIG,
   ORACLE_CONFIG,
   POSTGRES_CONFIG,
@@ -25,7 +27,7 @@ import {
   startImport,
   type ExportHarness,
 } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MSSQL_MANIFEST, MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /**
  * Plan 021: imports over a link that goes quiet, resets or vanishes, and what each leaves committed
@@ -76,6 +78,13 @@ const TARGETS: readonly Target[] = [
     path: ["TABLE_CRAFT"],
     create: `CREATE TABLE ${TABLE} (id NUMBER(19) PRIMARY KEY, label VARCHAR2(64 CHAR) NOT NULL, payload RAW(64) NOT NULL)`,
     fold: (name) => name.toUpperCase(),
+  },
+  {
+    name: "mssql",
+    plugin: { status: "loaded", directory: "plugins/mssql", manifest: MSSQL_MANIFEST, plugin: mssql },
+    config: MSSQL_CONFIG,
+    path: ["table_craft", "dbo"],
+    create: `CREATE TABLE ${TABLE} (id BIGINT PRIMARY KEY, label NVARCHAR(64) NOT NULL, payload VARBINARY(64) NOT NULL)`,
   },
 ];
 

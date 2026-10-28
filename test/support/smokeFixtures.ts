@@ -90,6 +90,7 @@ export const SENTINELS: readonly Sentinel[] = [
   },
   { service: "oracle", object: "table seed_probe", sql: "SELECT 1 FROM user_tables WHERE table_name = 'SEED_PROBE'" },
   { service: "mssql", object: "table seed_probe", sql: "SELECT 1 FROM sys.tables WHERE name = 'seed_probe'" },
+  { service: "mssql", object: "table tls_probe", sql: "SELECT 1 FROM sys.tables WHERE name = 'tls_probe'" },
   ...REDIS_SERVICES.map((service) => ({
     service,
     object: "key seed:probe",
