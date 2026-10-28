@@ -8,12 +8,13 @@ import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
+import { FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 
-const TONE_CLASSES: Readonly<Record<UpdateButtonTone, string>> = {
-  accent: "bg-accent text-accent-ink",
-  neutral: "border border-line text-ink hover:bg-raised",
-  danger: "border border-danger text-danger hover:bg-raised",
+export const TONE_CLASSES: Readonly<Record<UpdateButtonTone, string>> = {
+  accent: `${FILLED_PRESS} bg-accent text-accent-ink`,
+  neutral: `${TEXT_PRESS} border border-line text-ink hover:bg-raised`,
+  danger: `${TEXT_PRESS} border border-danger text-danger hover:bg-raised`,
 };
 
 /** The popover's actions, primary first; each shows only while main's state allows it. */
