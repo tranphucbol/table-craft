@@ -156,6 +156,7 @@ interface SqlDialectOptions {
   readonly nationalStrings?: boolean;
   readonly nestedBlockComments?: boolean;
   readonly qQuotes?: boolean;
+  readonly variables?: boolean;
 }
 
 interface SqlLiteralOptions {

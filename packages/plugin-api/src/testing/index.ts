@@ -132,6 +132,16 @@ export interface ContractFixture {
     readonly sleepQuery?: string;
     /** An account that sees only its own sessions, and what the listing's note must say about it. */
     readonly limited?: { readonly config: unknown; readonly note: RegExp };
+    /**
+     * False where the dialect cannot interrupt another session's statement and keep it connected,
+     * as SQL Server's `KILL` cannot: every row's `cancel` is null and `cancelSession` rejects.
+     */
+    readonly cancels?: boolean;
+    /**
+     * A session id no session has, for servers that hand a closed session's id to the next login
+     * (SQL Server): without it the test closes a session of its own and waits for its id to go.
+     */
+    readonly missingId?: string;
   };
   /** Required when the plugin declares `routineCall`, which also needs `catalog`. */
   readonly routines?: {
@@ -175,6 +185,8 @@ export interface ContractSql {
   readonly begin?: string;
   /** A name only quoting makes legal, which the dialect accepts; Oracle refuses a `"` inside one. */
   readonly awkwardIdentifier?: string;
+  /** What `ExplainedPlan.statement` starts with; `EXPLAIN` by default, `SET SHOWPLAN_XML ON` on SQL Server. */
+  readonly explainStatement?: RegExp;
 }
 
 /** A command and the result tab it opens: column names and rows as wire values. */
@@ -411,8 +423,10 @@ export function contractSql(fixture: Pick<ContractFixture, "sql">): Required<Con
       ((name: string, columns: string) => ({ create: `CREATE TEMPORARY TABLE ${name} (${columns})`, name })),
     begin: fixture.sql?.begin ?? "BEGIN",
     awkwardIdentifier: fixture.sql?.awkwardIdentifier ?? AWKWARD_IDENTIFIER,
+    explainStatement: fixture.sql?.explainStatement ?? DEFAULT_EXPLAIN_STATEMENT,
   };
 }
+const DEFAULT_EXPLAIN_STATEMENT = /^EXPLAIN\b/i;
 const ROWS_READ_BEFORE_RETURN = 3;
 /** Longer than `BYTES_PREVIEW_LENGTH` and within every fixture's `payload` column (MySQL's is `VARBINARY(64)`). */
 const LONG_BYTES_LENGTH = 48;
@@ -1496,13 +1510,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         "givenTransactionalScript_whenStatementFails_thenNothingApplied",
         async () => {
           await withTables(async (session) => {
-            // An index named like a table clashes in every dialect whose index names share the table namespace.
+            // A second index under the table's own index name clashes in every dialect; one named like a
+            // table does not where index names are per table, as on SQL Server.
             const design = await widenedChild(session, {});
             const clashing: TableDesign = {
               ...design,
               indexes: [
                 ...design.indexes,
-                { name: fold(OBJECT_PARENT_TABLE), columns: [fold("note")], unique: false, original: null },
+                { name: fold(OBJECT_INDEX), columns: [fold("note")], unique: false, original: null },
               ],
             };
             const script = await scriptOf(session, {
@@ -2147,7 +2162,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withSession(plugin, fixture, async (session) => {
           const plan = await explained(session, dialectSql.explainJoin, false);
           expect(plan.analyzed).toBe(false);
-          expect(plan.statement).toMatch(/^EXPLAIN\b/i);
+          expect(plan.statement).toMatch(dialectSql.explainStatement);
           expect(plan.statement).toContain(dialectSql.explainJoin);
           expect(plan.raw).toMatch(/\S/);
           const nodes = planNodes(plan.roots);
@@ -2321,10 +2336,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const { path } = namespaceSwitch();
         const written = switcher();
         await withSession(plugin, fixture, async (session) => {
+          // A database switch reaches [database, default schema] on SQL Server, so the target may be a prefix.
           const listed = (await session.introspector?.namespaces()) ?? [];
-          const target = listed.find((namespace) => namespace.path.join(".") === path.join("."));
-          expect(target === undefined ? false : switchableTo(written.targets, target)).toBe(true);
-          const sql = written.statement(path);
+          const target = listed
+            .filter((namespace) => namespace.path.every((part, index) => part === path[index]))
+            .filter((namespace) => switchableTo(written.targets, namespace))
+            .sort((a, b) => b.path.length - a.path.length)[0];
+          expect(target).toBeDefined();
+          const sql = written.statement(target?.path ?? path);
           expect(plugin.language?.classify(sql).setsNamespace).toBe(true);
           await collect((await session.execute(sql)).rows);
           expect(await current(session)).toEqual(path);
@@ -2848,7 +2867,19 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenActiveQuery_whenCancel_thenQueryCancelled", async () => {
+      it.runIf(fixture.sessions?.cancels === false)("givenNoCancel_whenCancelSession_thenRejects", async () => {
+        await withMonitor(async (monitor) => {
+          await withSleeper(async (sleeper) => {
+            const row = await present(monitor, idOf(sleeper), (listed) => listed.state === "active");
+            expect(row.cancel).toBeNull();
+            expect(await rejectionCode(monitor.cancelSession({ id: row.id, instance: row.instance }))).toBe(
+              "statementFailed",
+            );
+          });
+        });
+      });
+
+      it.runIf(fixture.sessions?.cancels !== false)("givenActiveQuery_whenCancel_thenQueryCancelled", async () => {
         await withMonitor(async (monitor) => {
           await withSleeper(async (sleeper, running) => {
             const row = await present(monitor, idOf(sleeper), (listed) => listed.state === "active");
@@ -2877,6 +2908,17 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
 
       it("givenMissingSession_whenTerminate_thenRejects", async () => {
+        const missingId = sessionsFixture().missingId;
+        if (missingId !== undefined) {
+          await withMonitor(async (monitor) => {
+            const listed = await monitor.list();
+            expect(listed.sessions.map((session) => session.id)).not.toContain(missingId);
+            expect(await rejectionCode(monitor.terminateSession({ id: missingId, instance: null }))).toBe(
+              "statementFailed",
+            );
+          });
+          return;
+        }
         const victim = await connect(plugin, fixture.config);
         const id = idOf(victim);
         await victim.close();

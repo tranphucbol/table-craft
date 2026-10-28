@@ -26,6 +26,8 @@ export interface SqlDialectOptions {
   readonly qQuotes?: boolean;
   /** `N'…'` national character strings. */
   readonly nationalStrings?: boolean;
+  /** SQL Server `@local`, `@@global` and `#temp` names: `@` and `#` are part of a word. */
+  readonly variables?: boolean;
 }
 
 export type BatchSeparator = "go" | "slash";
@@ -64,6 +66,7 @@ const Q_QUOTE_PAIRS: ReadonlyMap<string, string> = new Map([
 const STRING_QUOTE = "'";
 const BRACKET_OPEN = "[";
 const BRACKET_CLOSE = "]";
+const VARIABLE_CHARS: ReadonlySet<string> = new Set(["@", "#"]);
 
 function isSpace(char: string): boolean {
   return char === " " || char === "\t" || char === "\n" || char === "\r" || char === "\f" || char === "\v";
@@ -112,10 +115,14 @@ export class Lexer {
     else if (char === BRACKET_OPEN && this.options.bracketIdentifiers === true) token = this.#bracketed(at);
     else if (char === "$" && this.options.dollarQuotes === true && this.#dollarTag(at) !== null) {
       token = this.#dollarQuoted(at, this.#dollarTag(at) ?? "");
-    } else if (isWordChar(char)) token = this.#word(at, delimiter);
+    } else if (this.#isWordChar(char)) token = this.#word(at, delimiter);
     else token = { kind: "symbol", from: at, to: at + 1 };
     this.position = token.to;
     return token;
+  }
+
+  #isWordChar(char: string): boolean {
+    return isWordChar(char) || (this.options.variables === true && VARIABLE_CHARS.has(char));
   }
 
   #lineComment(from: number): Token {
@@ -199,7 +206,7 @@ export class Lexer {
     const text = this.text;
     const customDelimiter = delimiter !== DEFAULT_DELIMITER;
     let at = from;
-    while (at < text.length && isWordChar(text.charAt(at))) {
+    while (at < text.length && this.#isWordChar(text.charAt(at))) {
       if (customDelimiter && at > from && text.startsWith(delimiter, at)) break;
       at += 1;
     }

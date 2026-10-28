@@ -167,6 +167,12 @@ export interface ExecuteOptions {
    * leads each row with a `node` column, and anything else is a `ServerNode.id`.
    */
   readonly node?: string;
+  /**
+   * `StatementSpan.repeat` of the statement, at least 2, when the script asks for it to run more
+   * than once (SQL Server's `GO 3`, decision 100). A plugin that splits such scripts runs it that
+   * many times and answers with the last run; any other plugin never receives it.
+   */
+  readonly repeat?: number;
 }
 
 /** `ExecuteOptions.node`: the plugin routes the command by its keys (decision 114). */
@@ -370,7 +376,8 @@ export interface StatementSpan {
   readonly sql: string;
   /**
    * How many times the script asks for the statement to run: SQL Server's `GO 3` after it
-   * (decision 100). Absent means once. The host never repeats a statement; a plugin may.
+   * (decision 100). Absent means once. The host never repeats a statement; it passes the count
+   * as `ExecuteOptions.repeat` and the plugin runs it that many times.
    */
   readonly repeat?: number;
 }
