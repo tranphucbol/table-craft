@@ -163,6 +163,33 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
+  it(
+    "givenIntegersPastExcelDigits_whenExportedAsXlsx_thenCellsKeepEveryDigit",
+    async () => {
+      const page = await launch(sqlite());
+      const path = join(folder(), "long-integers.xlsx");
+      await query(
+        page,
+        "SELECT 1234567890123456 AS sixteen, 9007199254740993 AS past_double, 123456789012345 AS fifteen",
+      );
+
+      await resultToolbarButton(page, "Export Data…").click();
+      const dialog = exportDialog(page);
+      await dialog.getByRole("radio", { name: "Excel (XLSX)", exact: true }).click();
+      await dialog.getByTestId("export-file").fill(path);
+      await dialog.getByRole("button", { name: "Export", exact: true }).click();
+
+      await exportRows(page, "done").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      const sheet = readZip(readFileSync(path)).entries.find((entry) => entry.name === "xl/worksheets/sheet1.xml");
+      const xml = sheet?.text() ?? "";
+      expect(xml).toContain('<c r="A2" t="inlineStr"><is><t xml:space="preserve">1234567890123456</t></is></c>');
+      expect(xml).toContain('<c r="B2" t="inlineStr"><is><t xml:space="preserve">9007199254740993</t></is></c>');
+      expect(xml).toContain('<c r="C2"><v>123456789012345</v></c>');
+      await captureWindow(page, "xlsx-long-integers");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
   it.runIf(!WITHOUT_POSTGRES && DATABASES_ENABLED)(
     "givenLongPostgresExport_whenCancelledFromServices_thenCancelledAndNoFileLeft",
     async () => {
