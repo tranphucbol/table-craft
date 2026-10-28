@@ -168,8 +168,8 @@ export function transferContext(base: BaseContext) {
       throw statementFailed(cause, options.datasource.readOnly);
     }
     return {
-      execute: async (sql) => {
-        await drained(await session.execute(sql));
+      execute: async (sql, repeat) => {
+        await drained(await session.execute(sql, [], repeat === undefined ? undefined : { repeat }));
       },
       cancel: () => void session.cancel?.().catch(() => undefined),
       close: () => session.close(),

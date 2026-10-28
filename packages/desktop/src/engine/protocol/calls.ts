@@ -89,6 +89,8 @@ export interface EngineCalls {
       readonly parameters?: Readonly<Record<string, ParameterValue>>;
       /** Where a command runs on a `nodes` datasource: `auto`, `allPrimaries` or a node id (decision 114). */
       readonly node?: string;
+      /** The statement's `ClassifiedStatement.repeat`: the plugin runs it that many times. */
+      readonly repeat?: number;
     } & ResultPaging &
       StatementLimit;
     result: ExecutedStatement;
