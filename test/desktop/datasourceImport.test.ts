@@ -396,11 +396,11 @@ describe("importer", () => {
     const { rows } = ready(await importer.preview({ source: "datagrip" }));
 
     expect(row(rows, FOREIGN_DIALECT_SOURCES.oracle)).toMatchObject({
-      pluginId: null,
-      pluginName: "oracle",
-      status: "unsupported",
-      selected: false,
-      warnings: ["No installed plugin reads oracle: URLs."],
+      pluginId: "oracle",
+      pluginName: "Oracle",
+      status: "ready",
+      selected: true,
+      warnings: [],
     });
     expect(row(rows, FOREIGN_DIALECT_SOURCES.sqlServer)).toMatchObject({
       pluginId: null,

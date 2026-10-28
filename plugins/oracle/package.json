@@ -1,0 +1,33 @@
+{
+  "name": "@table-craft/plugin-oracle",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Optional oracle datasource plugin for table-craft",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./language": "./src/language.ts",
+    "./statements": "./src/statements.ts",
+    "./connect": "./src/connect.ts",
+    "./values": "./src/values.ts",
+    "./explain": "./src/explain.ts",
+    "./output": "./src/output.ts",
+    "./sessions": "./src/sessions.ts",
+    "./routines": "./src/routines.ts",
+    "./bulk": "./src/bulk.ts",
+    "./objects": "./src/objects.ts",
+    "./errorPosition": "./src/errorPosition.ts",
+    "./introspect": "./src/introspect.ts",
+    "./server": "./src/server.ts",
+    "./functions": "./src/functions/index.ts",
+    "./manualIndex": "./src/functions/manualIndex.ts"
+  },
+  "dependencies": {
+    "@table-craft/plugin-api": "workspace:*",
+    "oracledb": "^26.0.0"
+  },
+  "devDependencies": {
+    "@types/oracledb": "^26.0.0"
+  }
+}

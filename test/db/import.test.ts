@@ -4,9 +4,16 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CSV_FORMAT, TSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportFormat, ImportPreview } from "@table-craft/desktop/engine/protocol.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
 import {
   execute,
   exportHarness,
@@ -16,8 +23,8 @@ import {
   startImport,
   type ExportHarness,
 } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
-import { TYPE_PROBE_EXPECTED } from "../support/typeProbe.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { ORACLE_TYPE_PROBE_EXPECTED, TYPE_PROBE_COPY_ORACLE, TYPE_PROBE_EXPECTED } from "../support/typeProbe.js";
 
 /** Plan 021: files the exporter wrote, and files with inferred types, imported through the engine. */
 
@@ -46,7 +53,19 @@ interface Target {
   readonly plugin: PluginLoadResult;
   readonly config: object;
   readonly path: readonly string[];
+  /** How the server folds an unquoted name: Oracle's upper case. */
+  readonly fold: (name: string) => string;
+  readonly roundTripAs: string;
+  readonly expected: readonly (readonly unknown[])[];
+  /** `SELECT id + 1, score * 2, ratio * 2, born, note` of the inferred table. */
+  readonly inferred: readonly (readonly unknown[])[];
 }
+
+const SAME = (name: string): string => name;
+const INFERRED = [
+  [2, expect.stringMatching(/^25\.0+$/u), 2000, "2024-02-29", "héllo"],
+  [3, expect.stringMatching(/^-0\.50+$/u), 5, "1999-12-31", "line\nbreak"],
+];
 
 const TARGETS: readonly Target[] = [
   {
@@ -54,12 +73,34 @@ const TARGETS: readonly Target[] = [
     plugin: { status: "loaded", directory: "plugins/postgres", manifest: POSTGRES_MANIFEST, plugin: postgres },
     config: POSTGRES_CONFIG,
     path: ["table_craft", "public"],
+    fold: SAME,
+    roundTripAs: ROUND_TRIP_AS,
+    expected: TYPE_PROBE_EXPECTED,
+    inferred: INFERRED,
   },
   {
     name: "mysql",
     plugin: { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql },
     config: MYSQL_CONFIG,
     path: ["table_craft"],
+    fold: SAME,
+    roundTripAs: ROUND_TRIP_AS,
+    expected: TYPE_PROBE_EXPECTED,
+    inferred: INFERRED,
+  },
+  {
+    name: "oracle",
+    plugin: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    path: ["TABLE_CRAFT"],
+    fold: (name) => name.toUpperCase(),
+    roundTripAs: TYPE_PROBE_COPY_ORACLE.replace("type_probe_copy", ROUND_TRIP_TABLE),
+    expected: ORACLE_TYPE_PROBE_EXPECTED,
+    // A product of decimals is an unconstrained NUMBER, an integer when its value is; DATE keeps its time.
+    inferred: [
+      [2, 25, 2000, "2024-02-29 00:00:00", "héllo"],
+      [3, "-0.5", 5, "1999-12-31 00:00:00", "line\nbreak"],
+    ],
   },
 ];
 
@@ -93,9 +134,14 @@ for (const target of TARGETS) {
         const file = join(folder, `type_probe.${format}`);
         await run(`DROP TABLE IF EXISTS ${ROUND_TRIP_TABLE}`);
         cleanup.push(async () => void (await run(`DROP TABLE IF EXISTS ${ROUND_TRIP_TABLE}`)));
-        await run(ROUND_TRIP_AS);
+        await run(target.roundTripAs);
         const exported = await startExport(engine.connection, {
-          source: { kind: "table", path: target.path, relation: "type_probe", columns: TYPE_PROBE_COLUMNS },
+          source: {
+            kind: "table",
+            path: target.path,
+            relation: target.fold("type_probe"),
+            columns: TYPE_PROBE_COLUMNS.map(target.fold),
+          },
           format,
           path: file,
         });
@@ -107,16 +153,16 @@ for (const target of TARGETS) {
           target: {
             kind: "table",
             path: target.path,
-            relation: ROUND_TRIP_TABLE,
-            mapping: TYPE_PROBE_COLUMNS.map((column, field) => ({ column, field })),
+            relation: target.fold(ROUND_TRIP_TABLE),
+            mapping: TYPE_PROBE_COLUMNS.map((column, field) => ({ column: target.fold(column), field })),
           },
           transaction: ALL,
           errors: STOP,
         });
         const done = await engine.imported(task.taskId);
 
-        expect(done).toMatchObject({ state: "done", committed: TYPE_PROBE_EXPECTED.length });
-        expect(await run(`SELECT * FROM ${ROUND_TRIP_TABLE} ORDER BY id`)).toEqual(TYPE_PROBE_EXPECTED);
+        expect(done).toMatchObject({ state: "done", committed: target.expected.length });
+        expect(await run(`SELECT * FROM ${ROUND_TRIP_TABLE} ORDER BY id`)).toEqual(target.expected);
       });
     }
 
@@ -139,7 +185,7 @@ for (const target of TARGETS) {
       const task = await startImport(engine.connection, {
         file,
         format: CSV_FORMAT,
-        target: { kind: "new", path: target.path, relation: NEW_TABLE, columns },
+        target: { kind: "new", path: target.path, relation: target.fold(NEW_TABLE), columns },
         transaction: ALL,
         errors: STOP,
       });
@@ -147,10 +193,9 @@ for (const target of TARGETS) {
 
       expect(preview.kinds).toEqual(["integer", "date", "decimal", "double", "boolean", "timestamp", "text"]);
       expect(done).toMatchObject({ state: "done", committed: 2, created: true });
-      expect(await run(`SELECT id + 1, score * 2, ratio * 2, born, note FROM ${NEW_TABLE} ORDER BY id`)).toEqual([
-        [2, expect.stringMatching(/^25\.0+$/u), 2000, "2024-02-29", "héllo"],
-        [3, expect.stringMatching(/^-0\.50+$/u), 5, "1999-12-31", "line\nbreak"],
-      ]);
+      expect(await run(`SELECT id + 1, score * 2, ratio * 2, born, note FROM ${NEW_TABLE} ORDER BY id`)).toEqual(
+        target.inferred,
+      );
     });
   });
 }

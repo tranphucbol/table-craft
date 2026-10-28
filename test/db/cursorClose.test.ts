@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type {
@@ -10,9 +11,16 @@ import type {
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, TIDB_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
-import { tenThousandRows } from "../support/manyRows.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  TIDB_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { oracleRows, tenThousandRows } from "../support/manyRows.js";
 
 /** Plan 027: a console that runs again while its previous result still has rows to send. */
 
@@ -24,6 +32,7 @@ interface Target {
   readonly pluginId: string;
   readonly loaded: PluginLoadResult;
   readonly config: DatasourceConfig["config"];
+  readonly manyRows: string;
 }
 
 const TARGETS: readonly Target[] = [
@@ -32,18 +41,28 @@ const TARGETS: readonly Target[] = [
     pluginId: "postgres",
     loaded: { status: "loaded", directory: "plugins/postgres", manifest: POSTGRES_MANIFEST, plugin: postgres },
     config: POSTGRES_CONFIG,
+    manyRows: tenThousandRows(),
   },
   {
     name: "mysql",
     pluginId: "mysql",
     loaded: { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql },
     config: MYSQL_CONFIG,
+    manyRows: tenThousandRows(),
   },
   {
     name: "tidb",
     pluginId: "mysql",
     loaded: { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql },
     config: TIDB_CONFIG,
+    manyRows: tenThousandRows(),
+  },
+  {
+    name: "oracle",
+    pluginId: "oracle",
+    loaded: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    manyRows: oracleRows(10_000),
   },
 ];
 
@@ -84,7 +103,7 @@ for (const target of TARGETS) {
         type: "statement.execute",
         ...PAGING,
         sessionId,
-        sql: tenThousandRows(),
+        sql: target.manyRows,
       });
       const result = resultOf<ExecutedStatement>(response);
       expect(result).toMatchObject({ rowCount: RESULT_PAGE_ROWS, complete: false, cursorOpen: true });

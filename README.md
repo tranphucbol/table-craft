@@ -2,7 +2,8 @@
 
 # TableCraft
 
-A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite and Redis.
+A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite, Oracle and
+Redis.
 Connections, a database explorer, SQL consoles with schema-aware completion, a result grid, a table
 data editor, DDL and SQL generation, query history and EXPLAIN plans, in one Electron app. Databases
 are reached through datasource plugins loaded at runtime.
@@ -28,9 +29,11 @@ are reached through datasource plugins loaded at runtime.
   roles, and a compact layout.
 - [Redis, standalone and Cluster](#redis): a key tree that scans instead of blocking, typed key
   tabs with guarded edits, a `redis-cli` console with completion from the server, and a Server tab.
+- [Oracle without the Instant Client](#oracle): schemas, packages and their members in the tree,
+  `DBMS_OUTPUT` in Output, every SQL function of the manual in completion, sessions and plans.
 - [Plugins for any database](#plugins): PostgreSQL, MySQL and SQLite are plugins, loaded the same
-  way yours would be. SQLite and MySQL come in the box; PostgreSQL downloads the first time you
-  need it.
+  way yours would be. SQLite and MySQL come in the box; PostgreSQL, Oracle and Redis download the
+  first time you need them.
 
 ## Install
 
@@ -123,8 +126,8 @@ bun run desktop:package    # an installer for this machine in packages/desktop/r
 ## Quick start
 
 1. Press `⌘N` (`Ctrl+N`) in the Database pane, or pick **New Data Source…** from the data source
-   widget in the toolbar, and choose PostgreSQL, MySQL or SQLite. PostgreSQL shows **Download**
-   the first time: TableCraft fetches its plugin, then opens the form
+   widget in the toolbar, and choose PostgreSQL, MySQL, SQLite or Oracle. PostgreSQL and Oracle
+   show **Download** the first time: TableCraft fetches the plugin, then opens the form
    ([Databases in the box and on demand](#databases-in-the-box-and-on-demand)).
 2. Fill in the connection, click **Test Connection**, then **OK**. The data source appears in the
    Database tree.
@@ -204,9 +207,10 @@ file…** reads a DataGrip `dataSources.xml` or a TablePro `.tablepro` export in
 
 The next step lists every connection with its type, address, user, folder and where its password
 comes from. MySQL, MariaDB and TiDB open in the MySQL plugin, PostgreSQL in the PostgreSQL plugin,
-SQLite in the SQLite plugin; anything else is listed as not supported. A PostgreSQL connection
-found before its plugin is installed offers **Install** in its row and maps once the plugin
-arrives. A connection that needs an
+SQLite in the SQLite plugin and Oracle in the Oracle plugin (a `jdbc:oracle:thin:@//host:1521/service`
+URL or its `@host:1521:SID` form); anything else is listed as not supported. A PostgreSQL or Oracle
+connection found before its plugin is installed offers **Install** in its row and maps once the
+plugin arrives. A connection that needs an
 SSH tunnel, or one already in TableCraft, starts unticked; ticking a duplicate imports a copy named
 `<name> (2)`, never overwriting the one you have. Folders and colours come along, under a
 `DataGrip` or `TablePro` folder unless you turn that off.
@@ -463,12 +467,13 @@ See [DDL and SQL generation](docs/design/specification.md#ddl-and-sql-generation
 ### Execute a routine
 
 The tree lists each function and procedure under Routines with its arguments, so every PostgreSQL
-overload has its own row. **Execute Routine…** on one opens a dialog with a field per argument, a
+or Oracle overload has its own row; an Oracle package's members are listed as `PACKAGE.MEMBER`. **Execute Routine…** on one opens a dialog with a field per argument, a
 NULL toggle and, where the argument has a default, a DEFAULT toggle; OUT arguments are listed as
 what comes back, and the SQL it will run is shown as you type. **Run** opens a new console on the
 routine's schema with that SQL and runs it, values bound rather than pasted in, so the result, the
 OUT values and server messages show in the usual result tabs and Output. **Open in Console** opens
-the same console without running it. PostgreSQL and MySQL support it.
+the same console without running it. PostgreSQL, MySQL and Oracle support it; an Oracle
+`SYS_REFCURSOR` comes back as a result tab.
 
 ![Execute a routine](docs/media/routine.gif)
 
@@ -495,8 +500,8 @@ again, and Auto-refresh does so every few seconds. Select a session to see its f
 in a console or explain it, cancel its query, or terminate it after confirming the exact statement.
 On a data source coloured red you type the PID to confirm, and a read-only data source cannot stop
 anything. **Show in Sessions** on an execution in Services selects the console's own session.
-PostgreSQL, MySQL and TiDB support it; when your account cannot see everything, the tab says which
-grant to ask for.
+PostgreSQL, MySQL, TiDB and Oracle support it; when your account cannot see everything, the tab
+says which grant to ask for.
 
 ![Sessions](docs/media/sessions.gif)
 
@@ -543,12 +548,39 @@ See [Command consoles](docs/design/specification.md#command-consoles),
 [Key browser](docs/design/specification.md#key-browser) and
 [Server tab](docs/design/specification.md#server-tab).
 
+### Oracle
+
+The Oracle plugin connects to Oracle Database 12.1 or later in thin mode: nothing else to install,
+no Instant Client. Connect by **Service name** or **SID**, optionally as SYSDBA, SYSOPER or
+SYSBACKUP, or paste `oracle://user@host:1521/FREEPDB1`. SSL is _Verify CA_ or _Verify full_ over
+TCPS with the server's CA file; thin mode always checks the certificate, so there is no _Require_.
+
+- **Schemas** are the tree's namespaces, yours first and Oracle-maintained ones under System.
+  Packages list their members as `PACKAGE.MEMBER`, one row per overload. `ALTER SESSION SET
+CURRENT_SCHEMA` moves the console and its completion to that schema.
+- **Values.** `NUMBER` keeps every digit; a `NUMBER(p)` column is an integer and `NUMBER(p,s)` a
+  decimal padded to its scale. `DATE` shows its time, `CLOB` reads as text (JSON when it has an
+  `IS JSON` check) and `BLOB` and `RAW` as bytes. Oracle stores `''` as NULL, so an empty cell you
+  submit reads back as NULL.
+- **Scripts.** A PL/SQL block ends at a `/` line and keeps its `;`; a plain statement loses its
+  trailing `;` before it is sent. `DBMS_OUTPUT.PUT_LINE` lines show in Output after each statement,
+  and a procedure that compiles with errors lists them, with line and column, as warnings.
+- **Transactions.** Oracle commits each DDL statement on its own, so `CREATE TABLE` in a manual
+  transaction commits what came before it; the table designer says so before it runs.
+- **Completion** offers every function of the _SQL Functions_ chapter for the server's version
+  (`SYSDATE` without parentheses, `EXTRACT(YEAR FROM …)` with its argument in bold) and the members
+  of `DBMS_OUTPUT`, `DBMS_LOB`, `DBMS_STATS`, `UTL_RAW` and other supplied packages after `pkg.`.
+- **Sessions** need `SELECT_CATALOG_ROLE` to list other sessions and `ALTER SYSTEM` to cancel or
+  kill them; without it the tab lists your own session and says what to ask for.
+
+See [Oracle](docs/design/specification.md#oracle).
+
 ### Explain
 
 **Explain Plan** (`⇧⌘E`) shows the plan of the statement at the caret as a tree with estimated rows
 and cost; select a node to see its details. **Explain Analyse** runs the statement and adds actual
-rows, time and loops; when the statement writes, it asks first. PostgreSQL, MySQL and TiDB support
-both; SQLite has Explain Plan only. Warnings the server gives while planning, such as a hint it
+rows, time and loops; when the statement writes, it asks first. PostgreSQL, MySQL, TiDB and Oracle
+support both (Oracle's Explain Analyse needs `SELECT_CATALOG_ROLE`); SQLite has Explain Plan only. Warnings the server gives while planning, such as a hint it
 could not apply, show in Output and on the plan tab.
 
 ![Explain](docs/media/explain.gif)
@@ -803,7 +835,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.4.0",
+  "apiVersion": "1.5.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -884,11 +916,13 @@ SQLite and MySQL (with MariaDB and TiDB) ship inside the app and work offline fr
 launch. PostgreSQL is a plugin TableCraft downloads when you need it, about 190 KB, from npm as
 [`@tablecraft-app/plugin-postgres`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres).
 Redis downloads the same way, about 290 KB, as
-[`@tablecraft-app/plugin-redis`](https://www.npmjs.com/package/@tablecraft-app/plugin-redis);
-Oracle and SQL Server will follow
+[`@tablecraft-app/plugin-redis`](https://www.npmjs.com/package/@tablecraft-app/plugin-redis),
+and Oracle, about 360 KB, as
+[`@tablecraft-app/plugin-oracle`](https://www.npmjs.com/package/@tablecraft-app/plugin-oracle); SQL
+Server will follow
 ([decision 108](docs/decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
 
-- **Data Sources +** lists PostgreSQL and Redis with **Download**. Choosing it shows the progress, then the
+- **Data Sources +** lists PostgreSQL, Redis and Oracle with **Download**. Choosing it shows the progress, then the
   connection form.
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the

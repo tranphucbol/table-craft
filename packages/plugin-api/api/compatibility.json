@@ -41,6 +41,11 @@
       "reason": "Widens through CAPABILITIES, visibleWhen and sets above; every manifest valid before still parses the same."
     },
     {
+      "key": "NamespaceStatementForm",
+      "kind": "addition",
+      "reason": "Gains alterSessionSchema, Oracle's ALTER SESSION SET CURRENT_SCHEMA; a plugin passes the form in its dialect options and to namespaceSwitcher, so a plugin naming use or searchPath gets the same parsing and statements (decision 103)."
+    },
+    {
       "key": "ContractFixture.sessions",
       "kind": "addition",
       "reason": "Gains the optional sleepQuery; a plugin supplies the fixture, so the shape only widens what it may pass."

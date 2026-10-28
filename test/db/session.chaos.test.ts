@@ -2,13 +2,20 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import { isPluginError, type DatasourcePlugin, type Session } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type { DatasourceConfig, EngineResponse, ExecutedStatement } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /** Plan 025: a console over a link that resets or goes silent, and a statement that overruns. */
 
@@ -42,6 +49,13 @@ const TARGETS: readonly Target[] = [
     loaded: { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql },
     config: MYSQL_CONFIG,
     sleep: "SELECT SLEEP(30)",
+  },
+  {
+    name: "oracle",
+    plugin: oracle,
+    loaded: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    sleep: "BEGIN DBMS_SESSION.SLEEP(30); END;",
   },
 ];
 
