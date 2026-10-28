@@ -1,0 +1,142 @@
+{
+  "id": "mssql",
+  "name": "SQL Server",
+  "version": "0.0.0",
+  "apiVersion": "1.5.0",
+  "entry": "index.js",
+  "capabilities": [
+    "sql",
+    "cancel",
+    "schemaTree",
+    "transactions",
+    "ddl",
+    "explain",
+    "explainAnalyze",
+    "currentNamespace",
+    "keepAlive",
+    "bulkInsert",
+    "objects",
+    "serverMessages",
+    "sessions",
+    "routineCall"
+  ],
+  "highlight": "mssql",
+  "connection": {
+    "fields": [
+      { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
+      { "key": "port", "label": "Port", "kind": "number", "default": 1433 },
+      { "key": "instance", "label": "Instance", "kind": "text", "placeholder": "Named instance, instead of a port" },
+      { "key": "database", "label": "Database", "kind": "text", "placeholder": "The login's default database" },
+      {
+        "key": "authentication",
+        "label": "Authentication",
+        "kind": "select",
+        "default": "sql",
+        "options": [
+          { "value": "sql", "label": "SQL Server" },
+          { "value": "ntlm", "label": "Windows (NTLM)" },
+          { "value": "azure-active-directory-password", "label": "Microsoft Entra password" },
+          { "value": "azure-active-directory-default", "label": "Microsoft Entra default credential" }
+        ]
+      },
+      { "key": "user", "label": "User", "kind": "text" },
+      { "key": "password", "label": "Password", "kind": "password", "secret": true },
+      {
+        "key": "domain",
+        "label": "Domain",
+        "kind": "text",
+        "visibleWhen": { "key": "authentication", "equals": "ntlm" }
+      },
+      {
+        "key": "clientId",
+        "label": "Client ID",
+        "kind": "text",
+        "visibleWhen": { "key": "authentication", "equals": "azure-active-directory-password" }
+      },
+      {
+        "key": "tenantId",
+        "label": "Tenant ID",
+        "kind": "text",
+        "visibleWhen": { "key": "authentication", "equals": "azure-active-directory-password" }
+      },
+      {
+        "key": "encrypt",
+        "label": "Encrypt",
+        "kind": "select",
+        "default": "mandatory",
+        "group": "advanced",
+        "options": [
+          { "value": "optional", "label": "Optional" },
+          { "value": "mandatory", "label": "Mandatory" },
+          { "value": "strict", "label": "Strict (TDS 8.0)" }
+        ]
+      },
+      {
+        "key": "trustServerCertificate",
+        "label": "Trust server certificate",
+        "kind": "checkbox",
+        "default": false,
+        "group": "advanced"
+      },
+      { "key": "sslRootCert", "label": "Server CA certificate", "kind": "file", "group": "advanced" },
+      {
+        "key": "connectTimeout",
+        "label": "Connect timeout (s)",
+        "kind": "number",
+        "default": 10,
+        "group": "advanced"
+      },
+      {
+        "key": "applicationName",
+        "label": "Application name",
+        "kind": "text",
+        "default": "TableCraft",
+        "group": "advanced"
+      }
+    ],
+    "url": {
+      "schemes": ["sqlserver", "mssql"],
+      "form": "server",
+      "semicolonParams": true,
+      "parts": { "host": "host", "port": "port", "database": "database", "user": "user", "password": "password" },
+      "params": [
+        { "name": "instanceName", "key": "instance" },
+        { "name": "portNumber", "key": "port" },
+        { "name": "databaseName", "key": "database" },
+        { "name": "user", "key": "user" },
+        {
+          "name": "authentication",
+          "key": "authentication",
+          "values": {
+            "SqlPassword": "sql",
+            "NTLM": "ntlm",
+            "ActiveDirectoryPassword": "azure-active-directory-password",
+            "ActiveDirectoryDefault": "azure-active-directory-default"
+          }
+        },
+        { "name": "domain", "key": "domain" },
+        {
+          "name": "encrypt",
+          "key": "encrypt",
+          "values": {
+            "false": "optional",
+            "true": "mandatory",
+            "strict": "strict",
+            "optional": "optional",
+            "mandatory": "mandatory"
+          }
+        },
+        { "name": "trustServerCertificate", "key": "trustServerCertificate" },
+        { "name": "trustStore", "key": "sslRootCert" },
+        { "name": "loginTimeout", "key": "connectTimeout" },
+        { "name": "applicationName", "key": "applicationName" }
+      ]
+    },
+    "network": { "host": "host", "port": "port", "connectTimeout": "connectTimeout" },
+    "tls": {
+      "mode": "encrypt",
+      "verifyModes": ["mandatory", "strict"],
+      "caFile": "sslRootCert"
+    }
+  }
+}

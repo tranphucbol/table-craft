@@ -1,0 +1,29 @@
+{
+  "name": "@table-craft/plugin-mssql",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Optional SQL Server datasource plugin for table-craft",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./batch": "./src/batch.ts",
+    "./bulk": "./src/bulk.ts",
+    "./errorPosition": "./src/errorPosition.ts",
+    "./explain": "./src/explain.ts",
+    "./functions": "./src/functions/index.ts",
+    "./introspect": "./src/introspect.ts",
+    "./language": "./src/language.ts",
+    "./messages": "./src/messages.ts",
+    "./objects": "./src/objects.ts",
+    "./routines": "./src/routines.ts",
+    "./server": "./src/server.ts",
+    "./sessions": "./src/sessions.ts",
+    "./tls": "./src/tls.ts",
+    "./values": "./src/values.ts"
+  },
+  "dependencies": {
+    "@table-craft/plugin-api": "workspace:*",
+    "tedious": "^20.3.8"
+  }
+}
