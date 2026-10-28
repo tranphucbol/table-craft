@@ -18,6 +18,7 @@ const ROOT_OF: Readonly<Record<string, string>> = {
   postgres: OPTIONAL_PLUGINS_ROOT,
   redis: OPTIONAL_PLUGINS_ROOT,
   oracle: OPTIONAL_PLUGINS_ROOT,
+  mssql: OPTIONAL_PLUGINS_ROOT,
 };
 const PLUGIN_ENTRY_FILE = "index.js";
 /** Port 1 (tcpmux) is reserved and closed on any machine running these tests. */
@@ -31,11 +32,11 @@ const IN_MEMORY = { path: ":memory:" };
  * failed where the engine runs it, in a real ES module without one.
  */
 const PROBE_SCRIPT = `
-const [entry, config] = process.argv.slice(2);
+const [entry, config, sql = "SELECT 1 AS one"] = process.argv.slice(2);
 const plugin = (await import(entry)).default;
 try {
   const session = await plugin.connect(plugin.connectionSchema.parse(JSON.parse(config)), { readOnly: false });
-  const result = await session.execute("SELECT 1 AS one");
+  const result = await session.execute(sql);
   const rows = [];
   for await (const row of result.rows) rows.push(row);
   await session.close();
@@ -45,12 +46,16 @@ try {
 }
 `;
 
-function probe(pluginId: string, config: unknown): unknown {
+function probe(pluginId: string, config: unknown, sql?: string): unknown {
   const entry = pathToFileURL(join(ROOT_OF[pluginId] ?? BUILT_PLUGINS_ROOT, pluginId, PLUGIN_ENTRY_FILE)).href;
-  const child = spawnSync(process.execPath, ["--input-type=module", "-", entry, JSON.stringify(config)], {
-    input: PROBE_SCRIPT,
-    encoding: "utf8",
-  });
+  const child = spawnSync(
+    process.execPath,
+    ["--input-type=module", "-", entry, JSON.stringify(config), ...(sql === undefined ? [] : [sql])],
+    {
+      input: PROBE_SCRIPT,
+      encoding: "utf8",
+    },
+  );
   if (child.status !== 0) throw new Error(`The ${pluginId} bundle crashed:\n${child.stderr}`);
   return JSON.parse(child.stdout);
 }
@@ -63,16 +68,16 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
     expect(results.map((result) => result.manifest?.id).sort()).toEqual(["mysql", "sqlite"]);
   });
 
-  it("givenBuiltOptionalPlugins_whenLoaded_thenPostgresAndRedisAreAvailableOutsideTheBuiltInRoot", async () => {
+  it("givenBuiltOptionalPlugins_whenLoaded_thenEveryOptionalPluginIsAvailableOutsideTheBuiltInRoot", async () => {
     const results = await loadPlugins([OPTIONAL_PLUGINS_ROOT]);
 
     expect(results.filter((result) => result.status === "unavailable")).toEqual([]);
     expect(results.map((result) => result.manifest?.id)).toEqual(
-      expect.arrayContaining(["postgres", "redis", "oracle"]),
+      expect.arrayContaining(["postgres", "redis", "oracle", "mssql"]),
     );
   });
 
-  it.each(["postgres", "mysql"])(
+  it.each(["postgres", "mysql", "mssql"])(
     "givenBuilt %s bundle in a plain ES module_whenConnectingToClosedPort_thenRejectsWithConnectionFailed",
     (pluginId) => {
       expect(probe(pluginId, UNREACHABLE)).toMatchObject({ code: "connectionFailed" });
