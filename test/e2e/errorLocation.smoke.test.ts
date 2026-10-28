@@ -20,12 +20,14 @@ import {
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
+  expectNotSpinning,
   findAction,
   LAUNCH_TIMEOUT_MS,
   launchApp,
   newProfile,
   pressChord,
   runAllButton,
+  runButton,
   SCENARIO_TIMEOUT_MS,
   seedSettings,
   setWindowSize,
@@ -38,6 +40,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("042");
+const captureSpinner = evidenceFor("112");
 
 const SQLITE: Datasource = { id: "lite", pluginId: "sqlite", config: { path: seededSqliteFile() } };
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
@@ -59,6 +62,10 @@ const TWO_FAILURES = [
   `SELECT 3 AS three ${SECOND_TOKEN} 1;`,
   "SELECT 4 AS four;",
 ].join("\n");
+
+const FAIL_THEN_SELECT = [`SELECT 1 ORDER ${ERROR_TOKEN} 1;`, "SELECT 2 AS two;"].join("\n");
+/** Past the Run spinner's 300 ms delay (plan 112 decision 3), with room for a render. */
+const PAST_SPINNER_DELAY_MS = 1_000;
 
 const ON_ERROR = { ask: "ask", continue: "continue" } as const;
 
@@ -165,6 +172,28 @@ describe.runIf(SMOKE_ENABLED)("error location live test", () => {
     "givenSyntaxErrorOnMysql_whenRunAllAsksAndSkipped_thenUnderlinedAndRunGoesOn",
     async () => {
       await askThenSkip(MYSQL, "mysql");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it.runIf(DATABASES_ENABLED)(
+    "givenFailedStatementOnMysql_whenRunAllAsks_thenRunAndRunAllDoNotSpin",
+    async () => {
+      const { page } = await launch(MYSQL);
+      await typeScript(page, FAIL_THEN_SELECT);
+      await runAllButton(page).click();
+
+      const question = errorQuestion(page);
+      await question.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await page.waitForTimeout(PAST_SPINNER_DELAY_MS);
+
+      for (const button of [runButton(page), runAllButton(page)]) {
+        await expectNotSpinning(button);
+        expect(await button.isEnabled()).toBe(false);
+      }
+      await captureSpinner(page, "05-asking");
+      await question.getByRole("button", { name: "Skip", exact: true }).click();
+      await waitUntilReady(page);
     },
     SCENARIO_TIMEOUT_MS,
   );
