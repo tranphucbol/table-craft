@@ -30,6 +30,7 @@ const COLUMN_CLAUSES = new Set([
 /** Symbols right before a word that make it a parameter or variable: `:name`, `@var`, `x::type`. */
 const PARAMETER_MARKS = new Set([":", "@", "?"]);
 const PARAMETER_START = /^[$@:]/;
+const PARAMETER_OR_TEMPORARY = /^[@#]/;
 /** Rows a statement may name without declaring them: PostgreSQL's `EXCLUDED`, a trigger's `NEW` and `OLD`. */
 const PSEUDO_RELATIONS = new Set(["EXCLUDED", "NEW", "OLD"]);
 const RELATION_INTRODUCERS = new Set(["FROM", "JOIN", "UPDATE", "INTO", "STRAIGHT_JOIN"]);
@@ -141,6 +142,8 @@ async function unresolvedRelation(view: StatementView, query: Query, source: Rel
   if (view.verb === "SELECT" && view.roleOf(source) === "target") return [];
   if (source.qualifier.length === 0 && view.rules.cteNamed(query, source.name) !== undefined) return [];
   if (!source.name.quoted && NOT_RELATION_NAMES.has(source.name.name.toUpperCase())) return [];
+  // SQL Server's `#temp` and `@table` live in no catalog the explorer reads.
+  if (!source.name.quoted && PARAMETER_OR_TEMPORARY.test(source.name.name)) return [];
   const { lookup } = view;
   let path = lookup.current;
   if (source.qualifier.length > 0) {

@@ -94,6 +94,11 @@ export const connectionUrlSchema = z.strictObject({
       z.record(z.string().regex(FIELD_KEY), z.union([z.string(), z.number(), z.boolean()])),
     )
     .optional(),
+  /**
+   * The JDBC SQL Server form, `scheme://host[\instance][:port][;name=value…]` (plan 055): parameters
+   * follow `;`, a `{…}` value may hold one, and `\instance` is the parameter `instanceName`.
+   */
+  semicolonParams: z.boolean().optional(),
 });
 
 export type ConnectionUrl = z.infer<typeof connectionUrlSchema>;
