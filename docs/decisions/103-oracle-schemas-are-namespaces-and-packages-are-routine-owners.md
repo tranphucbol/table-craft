@@ -1,6 +1,6 @@
 # 103: Oracle schemas are namespaces, and packages are routine owners
 
-Status: Accepted. Plan 054. Plugin API 1.4.0 (added before its release tag).
+Status: Accepted. Plan 054. Plugin API 1.5.0.
 
 ## Decision
 
