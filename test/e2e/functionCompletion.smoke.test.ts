@@ -1,9 +1,11 @@
 /**
  * Plan 052's live test: built-in function completion with signatures and the parameter hint, on
  * MySQL 8.4 from `test/db/compose.yml`, the run's TiDB, and PostgreSQL and SQLite for the shared
- * names. Gated, because it needs a display, a fresh build and the databases:
+ * names; plan 115's keyword-led parameters (`EXTRACT(unit FROM date)`, `CAST(expr AS type)`) on
+ * MySQL. Gated, because it needs a display, a fresh build and the databases:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/052 bun run test:smoke:db:headless test/e2e/functionCompletion.smoke.test.ts
+ *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/115 bun run test:smoke:db:headless test/e2e/functionCompletion.smoke.test.ts
  *
  * Nothing here writes to the databases.
  */
@@ -29,6 +31,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("052");
+const captureCallShapes = evidenceFor("115");
 
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
 const TIDB: Datasource = { id: "tidb", pluginId: "mysql", config: TIDB_CONFIG };
@@ -256,6 +259,66 @@ describe.runIf(DATABASES_ENABLED)("function completion live test", () => {
       expect(labels[0]).toBe("customer_id");
       expect(labels).toContain("ceil");
       await captureWindow(page, "052-ranking");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenMysqlExtr_whenBasicCompletion_thenExtractDetailWritesItsLead",
+    async () => {
+      const page = await launch(MYSQL);
+
+      await completeAt(page, "SELECT extr FROM orders", "SELECT extr".length);
+
+      await option(page, "extract").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      expect(await option(page, "extract").locator(".cm-completionDetail").textContent()).toBe(
+        "(unit FROM date) → integer",
+      );
+      await expect
+        .poll(() => page.locator(".cm-completionInfo").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .toContain("extract(unit FROM date) → integer");
+      await captureCallShapes(page, "115-extract-popup");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenExtractYearFrom_whenParameterInfo_thenDateBold",
+    async () => {
+      const page = await launch(MYSQL);
+
+      await typeAt(page, "SELECT extract() FROM orders", "SELECT extract(".length);
+      await pressChord(page, "P");
+      await expect.poll(() => activeParameter(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toBe("unit");
+
+      const sql = "SELECT extract(YEAR FROM placed_at) FROM orders";
+      await typeAt(page, sql, "SELECT extract(YEAR FROM ".length);
+      await pressChord(page, "P");
+      await expect.poll(() => activeParameter(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toBe("date");
+      expect(await hint(page).textContent()).toContain("extract(unit FROM date) → integer");
+      await captureCallShapes(page, "115-extract-hint");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenCastAs_whenParameterInfo_thenTypeBold",
+    async () => {
+      const page = await launch(MYSQL);
+
+      await typeAt(page, "SELECT cast(total AS ) FROM orders", "SELECT cast(total AS ".length);
+      await pressChord(page, "P");
+      await expect.poll(() => activeParameter(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toBe("type");
+      expect(await hint(page).textContent()).toContain("cast(expr AS type) → value");
+      await captureCallShapes(page, "115-cast-hint");
+
+      await typeAt(
+        page,
+        "SELECT cast(total AS DECIMAL(10, 2)) FROM orders",
+        "SELECT cast(total AS DECIMAL(10, 2)".length,
+      );
+      await pressChord(page, "P");
+      await expect.poll(() => activeParameter(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toBe("type");
     },
     SCENARIO_TIMEOUT_MS,
   );
