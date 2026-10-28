@@ -120,6 +120,7 @@ export class EtcdSession implements Session {
   }
 
   close(): Promise<void> {
+    this.keyspace.close();
     this.#connection.client.close();
     return Promise.resolve();
   }

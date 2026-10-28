@@ -5,6 +5,8 @@ import type {
   KeyBytes,
   KeyDetails,
   KeyName,
+  KeyHistoryEvent,
+  KeyApplyOptions,
   KeyReadRange,
   KeyType,
   Row,
@@ -14,6 +16,18 @@ import type {
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { carriedLayout } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import {
+  appendHistory,
+  EMPTY_KEY_HISTORY,
+  historyEventId,
+  type KeyHistoryState,
+} from "@table-craft/desktop/renderer/model/keyHistory.js";
+import { mergeKeyText } from "@table-craft/desktop/renderer/model/keyMerge.js";
+import {
+  beginKeyMerge,
+  canSaveKeyMerge,
+  type KeyMergeSession,
+} from "@table-craft/desktop/renderer/model/keyMergeSession.js";
+import {
   EMPTY_BUFFER,
   pendingCount,
   type BufferCell,
@@ -21,6 +35,7 @@ import {
 } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import {
   editsRows,
+  bytesOfValue,
   keyChangesOf,
   keyReadOnlyColumns,
   recreateChanges,
@@ -77,6 +92,10 @@ export interface KeyRangeDraft {
 export const EMPTY_RANGE: KeyRangeDraft = { match: "", from: "", to: "" };
 
 export interface KeyTab extends KeyTarget {
+  readonly merge?: KeyMergeSession | null;
+  readonly history?: KeyHistoryState;
+  readonly historyAvailable?: boolean;
+  readonly revisionGuardAvailable?: boolean;
   readonly sessionId: string | null;
   readonly status: KeyTabStatus;
   /** What went wrong reaching the server. */
@@ -101,6 +120,9 @@ export interface KeyTab extends KeyTarget {
   readonly readOnlyColumns: readonly boolean[];
   /** A string key's pending value; null while it is unchanged. */
   readonly stringValue: KeyBytes | null;
+  /** Replaces the editor document without changing the server revision or read-time baseline. */
+  readonly editorGeneration?: number;
+  readonly stringProblem?: string | null;
   /** The type the key had before it went missing: its last rows stay shown, for Recreate. */
   readonly lostType: KeyType | null;
   /** Recreate is pending: Submit writes the last rows back as a new key. */
@@ -112,6 +134,17 @@ export interface KeyTab extends KeyTarget {
 }
 
 export interface KeyTabsState {
+  readonly editMerge: (id: string, text: string) => void;
+  readonly chooseMerge: (id: string, path: string, side: "theirs" | "yours") => void;
+  readonly acknowledgeMerge: (id: string) => void;
+  readonly nextMergeConflict: (id: string) => void;
+  readonly cancelMerge: (id: string) => void;
+  readonly discardMerge: (id: string) => void;
+  readonly saveMerge: (id: string) => Promise<boolean>;
+  readonly historyMode: (id: string, mode: "value" | "history") => void;
+  readonly loadHistory: (id: string) => Promise<void>;
+  readonly selectHistory: (id: string, eventId: string) => void;
+  readonly restoreHistory: (id: string) => boolean;
   readonly tabs: Readonly<Record<string, KeyTab>>;
   readonly open: (id: string, target: KeyTarget, options?: { readonly connect?: boolean }) => Promise<void>;
   readonly close: (id: string) => void;
@@ -148,6 +181,7 @@ export interface KeyTabsState {
   readonly revertAll: (id: string) => void;
   /** A string key's new value; null drops the change. */
   readonly setStringValue: (id: string, value: KeyBytes | null) => void;
+  readonly setStringProblem: (id: string, problem: string) => void;
   /** Makes the last rows of a key that went missing pending, to submit as a new key. */
   readonly recreate: (id: string) => void;
   readonly preview: (id: string) => Promise<readonly string[] | null>;
@@ -185,7 +219,11 @@ export interface KeyTabsDependencies {
 const LOAD_LABEL = "Read key";
 const SUBMIT_LABEL = "Submit key changes";
 const RECREATE_UNLOADED = "Recreate writes back the rows read last; fetch them all first.";
-const SUBMITTED_NOTICE = "Submitted as one MULTI";
+const SUBMITTED_NOTICE = "Changes saved atomically";
+const HISTORY_COUNT = 20;
+const HISTORY_BYTES = 1_048_576;
+const HISTORY_TIMEOUT_MS = 5_000;
+const RESTORE_NOTICE = "Historical value staged. The current lease is kept; an old lease is not restored.";
 
 /** Which filter fields a key type reads: streams page by id, the scanned types by MATCH. */
 export function rangeFields(type: KeyType | null): "match" | "ids" | null {
@@ -217,7 +255,7 @@ export function keyMissing(tab: KeyTab): boolean {
 }
 
 export function canReloadKey(status: KeyTabStatus): boolean {
-  return status !== "connecting" && status !== "loading";
+  return status !== "connecting" && status !== "loading" && status !== "submitting";
 }
 
 function typeOf(tab: KeyTab): KeyType {
@@ -238,6 +276,7 @@ function newTab(target: KeyTarget): KeyTab {
     details: null,
     readAt: null,
     value: null,
+    editorGeneration: 0,
     readOnly: null,
     result: null,
     applied: EMPTY_RANGE,
@@ -250,10 +289,12 @@ function newTab(target: KeyTarget): KeyTab {
 }
 
 const NO_EDITS = {
+  merge: null,
   buffer: EMPTY_BUFFER,
   editing: null,
   panel: null,
   stringValue: null,
+  stringProblem: null,
   recreating: false,
   conflict: null,
 } as const;
@@ -266,6 +307,7 @@ export function keyEditTarget(tab: KeyTab): EditTarget {
 /** Whether the tab takes edits now: a live, writable key of a type edited row by row or as a string. */
 export function isKeyEditable(tab: KeyTab | undefined, datasourceReadOnly: boolean): tab is KeyTab {
   if (tab === undefined || datasourceReadOnly || tab.status !== "ready" || tab.readOnly !== null) return false;
+  if ((tab.merge != null || tab.recreating) && tab.lostType === "string") return true;
   if (keyMissing(tab) || tab.recreating) return false;
   if (tab.details?.type === "string") return true;
   return editsRows(tab.details?.type ?? null) && tab.result !== null && !tab.result.stale;
@@ -273,8 +315,17 @@ export function isKeyEditable(tab: KeyTab | undefined, datasourceReadOnly: boole
 
 /** The tab's pending changes as changes to the key; a problem when one cannot be written. */
 export function pendingKeyChanges(tab: KeyTab): KeyChanges {
+  if (tab.stringProblem != null) return { problem: tab.stringProblem };
+  if (tab.merge != null) {
+    if (!canSaveKeyMerge(tab.merge)) return { problem: "Resolve every conflict before saving the merged value." };
+    return {
+      changes: [{ kind: "setString", value: { text: tab.merge.text, hex: null }, original: tab.merge.snapshot.value }],
+    };
+  }
   const columns = tab.result?.columns.map((column) => column.name) ?? [];
   if (tab.recreating && tab.lostType !== null) {
+    if (tab.lostType === "string" && tab.stringValue !== null)
+      return { changes: [{ kind: "setString", value: tab.stringValue, original: null }] };
     const rows: Row[] = [];
     const count = tab.result?.rowCount ?? 0;
     for (let row = 0; row < count; row++) {
@@ -294,6 +345,8 @@ export function pendingKeyChanges(tab: KeyTab): KeyChanges {
 
 /** Rows touched, or one for a changed string or a pending Recreate. */
 export function pendingKeyCount(tab: KeyTab): number {
+  if (tab.merge != null) return 1;
+  if (tab.stringProblem != null) return 1;
   if (tab.recreating) return 1;
   if (tab.stringValue !== null) return 1;
   return pendingCount(tab.buffer);
@@ -301,6 +354,8 @@ export function pendingKeyCount(tab: KeyTab): number {
 
 export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
   const clients = new Map<string, EngineClient>();
+  const historyRequests = new Map<string, symbol>();
+  const lifetimes = new Map<string, symbol>();
   const clock = dependencies.clock ?? (() => Date.now());
   const executions = dependencies.executions ?? NO_EXECUTION_REPORTER;
   let resultIds = 0;
@@ -322,6 +377,16 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       set({ tabs: { ...get().tabs, [id]: { ...current, ...change } } });
     }
 
+    function applyOptions(tab: KeyTab, guard = true): KeyApplyOptions {
+      const revision = tab.merge != null ? tab.merge.snapshot.revision : tab.details?.revision;
+      const revisionAware = tab.revisionGuardAvailable === true || tab.merge != null;
+      return {
+        type: typeOf(tab),
+        guard: revisionAware ? true : guard,
+        ...(revisionAware ? { revisionGuard: { modRevision: revision?.modRevision ?? "0" } } : {}),
+      };
+    }
+
     function resultOf(id: string, resultId: string): ResultTab | undefined {
       const result = get().tabs[id]?.result;
       return result?.id === resultId ? result : undefined;
@@ -335,11 +400,12 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
     async function openSession(id: string): Promise<boolean> {
       const current = get().tabs[id];
       if (current === undefined) return false;
+      const lifetime = lifetimes.get(id);
       patch(id, { status: "connecting", error: null });
       try {
         const client = await dependencies.connect(current.datasourceId);
         const opened = await client.call("session.open", {});
-        if (get().tabs[id] === undefined) {
+        if (lifetimes.get(id) !== lifetime) {
           void client.call("session.close", { sessionId: opened.sessionId }).catch(() => undefined);
           return false;
         }
@@ -347,7 +413,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
         patch(id, { sessionId: opened.sessionId, status: "ready", error: null });
         return true;
       } catch (cause) {
-        patch(id, { status: "failed", error: toError(cause) });
+        if (lifetimes.get(id) === lifetime) patch(id, { status: "failed", error: toError(cause) });
         return false;
       }
     }
@@ -386,7 +452,15 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       const current = get().tabs[id];
       const client = clients.get(id);
       if (current?.sessionId == null || client === undefined) return false;
-      patch(id, { status: "loading", error: null, draft });
+      const lifetime = lifetimes.get(id);
+      const live = () => lifetimes.get(id) === lifetime && get().tabs[id]?.sessionId === current.sessionId;
+      historyRequests.delete(id);
+      patch(id, {
+        status: "loading",
+        error: null,
+        draft,
+        history: { ...EMPTY_KEY_HISTORY, mode: current.history?.mode ?? "value" },
+      });
       const executionId = executions.start(id, { label: LOAD_LABEL, sql: current.key.text, startedAt: clock() });
       const begun = clock();
       try {
@@ -400,6 +474,8 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           ...paging,
           ...(timeoutSeconds > 0 ? { timeoutSeconds } : {}),
         });
+        const discovery = await client.call("keyspace.databases", {});
+        const features = discovery?.features;
         const rowCount = answer.statement?.rowCount ?? null;
         executions.finish(id, executionId, {
           outcome: "success",
@@ -408,7 +484,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           durationMs: Math.max(0, clock() - begun),
         });
         const latest = get().tabs[id];
-        if (latest === undefined) {
+        if (latest === undefined || !live()) {
           if (answer.statement !== null) {
             void client.call("result.release", { handle: answer.statement.handle }).catch(() => undefined);
           }
@@ -418,7 +494,15 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
         const lostType = answer.details.type === null ? (latest.details?.type ?? latest.lostType) : null;
         if (lostType !== null) {
           // The rows read last stay, for Recreate to write back.
-          patch(id, { details: answer.details, readAt: clock(), lostType, ...NO_EDITS, queryError: null });
+          patch(id, {
+            details: answer.details,
+            historyAvailable: features?.history === true,
+            revisionGuardAvailable: features?.revisionGuard === true,
+            readAt: clock(),
+            lostType,
+            ...NO_EDITS,
+            queryError: null,
+          });
           return true;
         }
         release(id, previous);
@@ -440,6 +524,8 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
         }
         patch(id, {
           details: answer.details,
+          historyAvailable: features?.history === true,
+          revisionGuardAvailable: features?.revisionGuard === true,
           readAt: clock(),
           value: answer.value,
           readOnly: answer.readOnly,
@@ -460,11 +546,16 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           message: error.message,
           durationMs: Math.max(0, clock() - begun),
         });
-        if (error.code === "statementFailed") patch(id, { queryError: error });
-        else patch(id, { error });
+        if (live()) {
+          if (error.code === "statementFailed") patch(id, { queryError: error });
+          else patch(id, { error });
+        }
         return false;
       } finally {
-        patch(id, { status: settled(id) });
+        if (live()) {
+          patch(id, { status: settled(id) });
+          if (get().tabs[id]?.history?.mode === "history") void get().loadHistory(id);
+        }
       }
     }
 
@@ -472,11 +563,14 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       tabs: {},
 
       async open(id, target, options = {}) {
+        lifetimes.set(id, Symbol());
         set({ tabs: { ...get().tabs, [id]: newTab(target) } });
         if (options.connect ?? true) await read(id, EMPTY_RANGE);
       },
 
       close(id) {
+        lifetimes.delete(id);
+        historyRequests.delete(id);
         const closing = get().tabs[id];
         if (closing === undefined) return;
         const { [id]: _closed, ...rest } = get().tabs;
@@ -491,6 +585,8 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       detach(datasourceId, error) {
         for (const [id, tab] of Object.entries(get().tabs)) {
           if (tab.datasourceId !== datasourceId) continue;
+          lifetimes.set(id, Symbol());
+          historyRequests.delete(id);
           clients.delete(id);
           if (tab.result !== null) windows.invalidate(tab.result.id);
           patch(id, {
@@ -498,6 +594,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
             status: error === null ? "disconnected" : "failed",
             error: error ?? tab.error,
             result: tab.result === null ? null : { ...tab.result, stale: true, cursorOpen: false, fetching: null },
+            history: { ...(tab.history ?? EMPTY_KEY_HISTORY), loading: false },
           });
         }
       },
@@ -631,11 +728,173 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       revert: (id, cells) => editBuffer(id, (target) => withReverted(target, cells)),
 
       revertAll(id) {
-        if (get().tabs[id] !== undefined) patch(id, { ...NO_EDITS });
+        const tab = get().tabs[id];
+        if (tab !== undefined) patch(id, { ...NO_EDITS, editorGeneration: (tab.editorGeneration ?? 0) + 1 });
       },
 
       setStringValue(id, value) {
-        if (editableTab(id) !== null) patch(id, { stringValue: value, notice: null });
+        if (editableTab(id) !== null) patch(id, { stringValue: value, stringProblem: null, notice: null, merge: null });
+      },
+
+      setStringProblem(id, problem) {
+        if (editableTab(id) !== null) patch(id, { stringProblem: problem });
+      },
+
+      editMerge(id, text) {
+        const merge = get().tabs[id]?.merge;
+        if (merge != null && editableTab(id) !== null && !merge.binary)
+          patch(id, { merge: { ...merge, text, manual: true, acknowledged: false } });
+      },
+
+      chooseMerge(id, path, side) {
+        const merge = get().tabs[id]?.merge;
+        if (merge == null || editableTab(id) === null || merge.binary || merge.manual) return;
+        if (merge.snapshot.value === null) {
+          if (side === "yours") patch(id, { merge: { ...merge, acknowledged: true } });
+          else get().discardMerge(id);
+          return;
+        }
+        const choices = { ...merge.choices, [path]: side };
+        const merged = mergeKeyText(merge.base, merge.snapshot.value.text, merge.yours, choices);
+        patch(id, { merge: { ...merge, choices, merged, text: merged.text, conflictIndex: 0 } });
+      },
+
+      acknowledgeMerge(id) {
+        const merge = get().tabs[id]?.merge;
+        if (merge != null && editableTab(id) !== null && !merge.binary)
+          patch(id, { merge: { ...merge, acknowledged: true } });
+      },
+
+      nextMergeConflict(id) {
+        const merge = get().tabs[id]?.merge;
+        if (merge != null && merge.merged.conflicts.length > 0)
+          patch(id, { merge: { ...merge, conflictIndex: (merge.conflictIndex + 1) % merge.merged.conflicts.length } });
+      },
+
+      cancelMerge(id) {
+        const tab = get().tabs[id];
+        const merge = tab?.merge;
+        if (merge != null && tab?.status === "ready")
+          patch(id, {
+            merge: { ...merge, visible: false },
+            stringValue: merge.binary ? tab.stringValue : { text: merge.text, hex: null },
+            editorGeneration: (tab.editorGeneration ?? 0) + 1,
+          });
+      },
+
+      discardMerge(id) {
+        if (editableTab(id) === null) return;
+        get().revertAll(id);
+        void get().reload(id);
+      },
+
+      async saveMerge(id) {
+        const merge = get().tabs[id]?.merge;
+        if (merge == null || !canSaveKeyMerge(merge) || editableTab(id) === null) return false;
+        return get().submit(id);
+      },
+
+      historyMode(id, mode) {
+        const tab = get().tabs[id];
+        if (tab === undefined || !tab.historyAvailable || tab.merge?.visible === true) return;
+        patch(id, { history: { ...(tab.history ?? EMPTY_KEY_HISTORY), mode } });
+        if (mode === "history" && tab.history?.page == null) void get().loadHistory(id);
+      },
+
+      async loadHistory(id) {
+        const tab = get().tabs[id];
+        const client = clients.get(id);
+        const history = tab?.history ?? EMPTY_KEY_HISTORY;
+        if (
+          tab === undefined ||
+          !tab.historyAvailable ||
+          client === undefined ||
+          tab.status !== "ready" ||
+          history.loading
+        )
+          return;
+        if (history.page !== null && history.page.cursor === null) return;
+        const request = Symbol();
+        historyRequests.set(id, request);
+        patch(id, { history: { ...history, loading: true, error: null } });
+        try {
+          const page = await client.call("keyspace.history", {
+            database: tab.database,
+            key: tab.key,
+            cursor: history.page?.cursor ?? null,
+            count: HISTORY_COUNT,
+            maxBytes: HISTORY_BYTES,
+            timeoutMs: HISTORY_TIMEOUT_MS,
+          });
+          if (historyRequests.get(id) !== request || get().tabs[id]?.sessionId !== tab.sessionId) return;
+          const latest = get().tabs[id]?.history ?? history;
+          const events = appendHistory(history.events, page.events);
+          const gaps = [...(history.page?.gaps ?? []), ...page.gaps].filter(
+            (gap, index, all) =>
+              all.findIndex(
+                (candidate) => candidate.fromRevision === gap.fromRevision && candidate.toRevision === gap.toRevision,
+              ) === index,
+          );
+          patch(id, {
+            history: {
+              ...latest,
+              events,
+              page: {
+                ...page,
+                gaps,
+                unavailableThrough: page.unavailableThrough ?? history.page?.unavailableThrough ?? null,
+              },
+              selected: latest.selected ?? (events[0] === undefined ? null : historyEventId(events[0])),
+              loading: false,
+            },
+          });
+        } catch (cause) {
+          if (historyRequests.get(id) !== request) return;
+          const latest = get().tabs[id]?.history ?? history;
+          patch(id, { history: { ...latest, loading: false, error: toError(cause) } });
+        }
+      },
+
+      selectHistory(id, eventId) {
+        const history = get().tabs[id]?.history;
+        if (history?.events.some((event) => historyEventId(event) === eventId)) {
+          patch(id, { history: { ...history, selected: eventId } });
+        }
+      },
+
+      restoreHistory(id) {
+        const tab = get().tabs[id];
+        if (
+          tab === undefined ||
+          tab.status !== "ready" ||
+          dependencies.readOnly?.(tab.datasourceId) === true ||
+          tab.readOnly !== null ||
+          !tab.historyAvailable ||
+          !tab.revisionGuardAvailable ||
+          pendingKeyCount(tab) > 0 ||
+          tab.details === null ||
+          (tab.details.type !== "string" && tab.details.type !== null)
+        )
+          return false;
+        const event: KeyHistoryEvent | undefined = tab.history?.events.find(
+          (candidate) => historyEventId(candidate) === tab.history?.selected,
+        );
+        if (
+          event?.kind !== "PUT" ||
+          event.value === null ||
+          event.value.hex !== null ||
+          tab.history === undefined ||
+          event.modRevision === tab.details.revision?.modRevision
+        )
+          return false;
+        patch(id, {
+          stringValue: event.value,
+          editorGeneration: (tab.editorGeneration ?? 0) + 1,
+          ...(keyMissing(tab) ? { recreating: true, lostType: "string" } : {}),
+          history: { ...tab.history, mode: "value" },
+          notice: RESTORE_NOTICE,
+        });
+        return true;
       },
 
       recreate(id) {
@@ -652,7 +911,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           patch(id, { queryError: problemError(pending.problem) });
           return null;
         }
-        const options = { type: typeOf(current), guard: true };
+        const options = applyOptions(current);
         try {
           return await client.call("keyspace.preview", { key: current.key, changes: pending.changes, options });
         } catch (cause) {
@@ -666,13 +925,26 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
         get().applyPanel(id);
         const current = get().tabs[id];
         const client = clients.get(id);
-        if (current === undefined || client === undefined || current.status !== "ready") return false;
+        if (
+          current === undefined ||
+          client === undefined ||
+          current.status !== "ready" ||
+          dependencies.readOnly?.(current.datasourceId) === true ||
+          current.readOnly !== null
+        )
+          return false;
+        if (current.merge != null && !current.merge.visible) {
+          patch(id, { merge: { ...current.merge, visible: true } });
+          return false;
+        }
         const pending = pendingKeyChanges(current);
         if ("problem" in pending) {
           patch(id, { queryError: problemError(pending.problem) });
           return false;
         }
         if (pending.changes.length === 0) return false;
+        const lifetime = lifetimes.get(id);
+        const live = () => lifetimes.get(id) === lifetime && get().tabs[id]?.sessionId === current.sessionId;
         patch(id, { status: "submitting", error: null, queryError: null, conflict: null });
         const begun = clock();
         const executionId = executions.start(id, { label: SUBMIT_LABEL, sql: current.key.text, startedAt: begun });
@@ -683,20 +955,46 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
             database: current.database,
             key: current.key,
             changes: pending.changes,
-            options: { type: typeOf(current), guard },
+            options: applyOptions(current, guard),
           });
           finish("success", null);
+          if (!live()) return false;
           patch(id, { status: settled(id), ...NO_EDITS, lostType: null });
           await read(id, current.applied);
-          patch(id, { notice: SUBMITTED_NOTICE });
+          if (live()) patch(id, { notice: SUBMITTED_NOTICE });
           return true;
         } catch (cause) {
           const error = toError(cause);
           finish("error", error.message);
-          patch(id, error.code === "conflict" ? { conflict: error } : { error });
+          if (!live()) return false;
+          const edited =
+            current.merge == null
+              ? (current.stringValue ??
+                (current.recreating && current.lostType === "string" ? bytesOfValue(current.value) : null))
+              : { text: current.merge.text, hex: null };
+          const snapshot = error.keyConflict;
+          if (
+            error.code === "conflict" &&
+            snapshot !== undefined &&
+            current.revisionGuardAvailable === true &&
+            edited !== null &&
+            snapshot.database === current.database &&
+            snapshot.key.text === current.key.text &&
+            snapshot.key.hex === current.key.hex
+          ) {
+            patch(id, {
+              conflict: error,
+              merge: beginKeyMerge(
+                snapshot,
+                current.recreating || current.value === null ? null : bytesOfValue(current.value),
+                edited,
+                current.merge,
+              ),
+            });
+          } else patch(id, error.code === "conflict" ? { conflict: error } : { error });
           return false;
         } finally {
-          patch(id, { status: settled(id) });
+          if (live()) patch(id, { status: settled(id) });
         }
       },
 

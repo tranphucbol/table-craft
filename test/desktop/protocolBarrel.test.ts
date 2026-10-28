@@ -94,6 +94,7 @@ const METHODS = [
   "server.info",
   "server.slowLog",
   "keyspace.databases",
+  "keyspace.history",
   "keyspace.scan",
   "keyspace.describe",
   "keyspace.open",

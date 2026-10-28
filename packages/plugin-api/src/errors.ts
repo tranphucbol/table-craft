@@ -1,3 +1,5 @@
+import type { KeyConflictSnapshot } from "./keyspace.js";
+
 /** Failures the host tells apart; anything else a plugin throws is reported as `statementFailed`. */
 export const PLUGIN_ERROR_CODES = [
   "cancelled",
@@ -123,13 +125,21 @@ export function isTlsSettingsError(error: unknown): error is TlsSettingsError {
  * A guarded `Keyspace.apply` found `target` changed since it was read (decision 115): `detail`
  * says what differs, such as `field name is now "Bo"`. Nothing was written.
  */
+export interface ConflictErrorOptions extends ErrorOptions {
+  /** Omit when a complete bounded current value cannot be read safely. */
+  readonly current?: KeyConflictSnapshot;
+}
+
 export class ConflictError extends PluginError {
+  readonly current?: KeyConflictSnapshot;
+
   constructor(
     readonly target: string,
     readonly detail: string,
-    options?: ErrorOptions,
+    options?: ConflictErrorOptions,
   ) {
     super("conflict", `${target} changed since it was read: ${detail}. Reload it, or overwrite the change.`, options);
+    if (options?.current !== undefined) this.current = options.current;
   }
 }
 

@@ -180,7 +180,7 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
 
       await expect
         .poll(() => keyTab(page).getByTestId("key-notice").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
-        .toMatch(/^Submitted/);
+        .toBe("Changes saved atomically");
       await expect.poll(() => valueEditor(page).textContent()).toBe("after");
       expect(await valueOn(ETCD_CONFIG, EDIT_KEY)).toBe("after");
       await expect.poll(() => keyTab(page).getByTestId("key-facts").textContent()).toMatch(/^v2 · /);
@@ -190,7 +190,7 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
   );
 
   it.skipIf(WITHOUT_ETCD)(
-    "givenValueChangedElsewhere_whenSubmitted_thenConflictThenReload",
+    "givenValueChangedElsewhere_whenSubmitted_thenMergeThenDiscardMine",
     async () => {
       await onEtcd(ETCD_CONFIG, [`put ${CONFLICT_KEY} ann`]);
       const page = await launch(ETCD);
@@ -200,12 +200,12 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
       await onEtcd(ETCD_CONFIG, [`put ${CONFLICT_KEY} zed`]);
 
       await keyButton(page, "Submit").click();
-      const conflict = keyTab(page).getByTestId("key-conflict");
+      const conflict = keyTab(page).getByTestId("key-merge");
       await conflict.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       expect(await valueOn(ETCD_CONFIG, CONFLICT_KEY)).toBe("zed");
       await captureWindow(page, "05-conflict");
 
-      await keyTab(page).getByTestId("key-conflict-reload").click();
+      await conflict.getByRole("button", { name: "Discard mine, use theirs", exact: true }).click();
       await expect.poll(() => conflict.count()).toBe(0);
       await expect.poll(() => valueEditor(page).textContent()).toBe("zed");
     },

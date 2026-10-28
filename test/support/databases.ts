@@ -331,6 +331,19 @@ export const REDIS5_CLUSTER_CONFIG = {
 
 const DEFAULT_ETCD_PORT = 52379;
 const DEFAULT_ETCD35_PORT = 52380;
+const DEFAULT_ETCD_TLS_PORT = 52381;
+
+/** Test-only mTLS server; its server trust anchor is separate from the shared client CA. */
+export const ETCD_TLS_CONFIG = {
+  host: tlsHostFromEnv("TABLE_CRAFT_ETCD_TLS_HOST"),
+  port: portFromEnv("TABLE_CRAFT_ETCD_TLS_PORT", DEFAULT_ETCD_TLS_PORT),
+  tlsMode: "verify-full",
+  tlsCa: join(import.meta.dirname, "..", "db", "etcd", "server.crt"),
+  tlsCert: TLS_FILES.clientCert,
+  tlsKey: TLS_FILES.clientKey,
+} as const;
+
+export const ETCD_TLS_BEHIND_BASTION = { host: "etcd-tls", port: 2379 } as const;
 
 /** The `etcd` service: etcd 3.6 with auth on, keys seeded from `schema/etcd.etcd` (plan 110). */
 export const ETCD_CONFIG = {

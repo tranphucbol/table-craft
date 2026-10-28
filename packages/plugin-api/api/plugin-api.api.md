@@ -149,9 +149,14 @@ interface CompletionServer {
 }
 
 class ConflictError extends PluginError {
-  constructor(target: string, detail: string, options?: ErrorOptions);
+  constructor(target: string, detail: string, options?: ConflictErrorOptions);
+  readonly current?: KeyConflictSnapshot;
   readonly detail: string;
   readonly target: string;
+}
+
+interface ConflictErrorOptions extends ErrorOptions {
+  readonly current?: KeyConflictSnapshot;
 }
 
 interface ConnectOptions {
@@ -381,6 +386,7 @@ interface KeyApplied {
 
 interface KeyApplyOptions {
   readonly guard: boolean;
+  readonly revisionGuard?: { readonly modRevision: string; };
   readonly ttlMs?: number;
   readonly type: KeyType;
 }
@@ -396,6 +402,14 @@ interface KeyBytes {
 }
 
 type KeyChange = { readonly kind: "setString"; readonly value: KeyBytes; readonly original: KeyBytes | null; } | { readonly kind: "setField"; readonly field: KeyBytes; readonly value: KeyBytes; readonly original: KeyBytes | null; } | { readonly kind: "deleteField"; readonly field: KeyBytes; readonly original: KeyBytes; } | { readonly kind: "setIndex"; readonly index: number; readonly value: KeyBytes; readonly original: KeyBytes; } | { readonly kind: "deleteIndex"; readonly index: number; readonly original: KeyBytes; } | { readonly kind: "push"; readonly value: KeyBytes; } | { readonly kind: "addMember"; readonly member: KeyBytes; } | { readonly kind: "deleteMember"; readonly member: KeyBytes; } | { readonly kind: "setScore"; readonly member: KeyBytes; readonly score: number; readonly original: number | null; } | { readonly kind: "addEntry"; readonly fields: readonly (readonly [ KeyBytes, KeyBytes ])[]; } | { readonly kind: "deleteEntry"; readonly id: string; };
+
+interface KeyConflictSnapshot {
+  readonly database: number;
+  readonly key: KeyBytes;
+  readonly revision: KeyRevision | null;
+  readonly snapshotRevision: string;
+  readonly value: KeyBytes | null;
+}
 
 interface KeyContents {
   readonly details: KeyDetails;
@@ -417,9 +431,44 @@ interface KeyDetails extends KeyInfo {
   readonly idleSeconds: number | null;
   readonly length: number | null;
   readonly memoryBytes: number | null;
+  readonly revision?: KeyRevision;
 }
 
 type KeyExpiry = { readonly inMs: number; } | { readonly at: string; } | null;
+
+interface KeyHistoryEvent extends KeyRevision {
+  readonly key: KeyBytes;
+  readonly kind: "PUT" | "DELETE";
+  readonly value: KeyBytes | null;
+}
+
+interface KeyHistoryGap {
+  readonly fromRevision: string;
+  readonly reason: "compacted";
+  readonly toRevision: string;
+}
+
+interface KeyHistoryPage {
+  readonly complete: boolean;
+  readonly cursor: string | null;
+  readonly events: readonly KeyHistoryEvent[];
+  readonly gaps: readonly KeyHistoryGap[];
+  readonly snapshotRevision: string;
+  readonly stopReason: KeyHistoryStopReason;
+  readonly terminalRevision: string | null;
+  readonly unavailableThrough: string | null;
+}
+
+interface KeyHistoryRequest {
+  readonly count: number;
+  readonly cursor: string | null;
+  readonly database: number;
+  readonly key: KeyBytes;
+  readonly maxBytes: number;
+  readonly timeoutMs: number;
+}
+
+type KeyHistoryStopReason = "snapshotEnd" | "pageLimit" | "byteLimit" | "deadline" | "compacted";
 
 interface KeyInfo {
   readonly key: KeyName;
@@ -436,6 +485,13 @@ interface KeyReadRequest {
   readonly offset?: number;
   readonly to?: string;
   readonly window: number;
+}
+
+interface KeyRevision {
+  readonly createRevision: string;
+  readonly lease: string;
+  readonly modRevision: string;
+  readonly version: string;
 }
 
 interface KeyScan {
@@ -467,11 +523,17 @@ interface Keyspace {
   readonly delimiter: string;
   describe(database: number, keys: readonly KeyName[]): Promise<readonly KeyInfo[]>;
   expire(database: number, key: KeyName, expiry: KeyExpiry): Promise<void>;
+  readonly features?: KeyspaceFeatures;
+  history?(request: KeyHistoryRequest): Promise<KeyHistoryPage>;
   preview(key: KeyName, changes: readonly KeyChange[], options: KeyApplyOptions): readonly string[];
   read(database: number, key: KeyName, request: KeyReadRequest): Promise<KeyContents>;
   remove(database: number, keys: readonly KeyName[]): Promise<number>;
   rename(database: number, key: KeyName, to: KeyName, overwrite: boolean): Promise<void>;
   scan(request: KeyScanRequest): Promise<KeyScan>;
+}
+
+interface KeyspaceFeatures {
+  readonly revisionGuard?: boolean;
 }
 
 type KeywordCase = (typeof KEYWORD_CASES)[number];

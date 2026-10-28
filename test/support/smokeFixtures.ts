@@ -12,6 +12,7 @@ import {
   DATABASES_ENV,
   ETCD35_CONFIG,
   ETCD_CONFIG,
+  ETCD_TLS_CONFIG,
   MARIADB_CONFIG,
   MSSQL_CONFIG,
   MYSQL_CONFIG,
@@ -53,7 +54,7 @@ const REDIS_SERVICES = [
   "redis-5-cluster",
 ] as const satisfies readonly SeededService[];
 
-const ETCD_SERVICES = ["etcd", "etcd-3-5"] as const satisfies readonly SeededService[];
+const ETCD_SERVICES = ["etcd", "etcd-3-5", "etcd-tls"] as const satisfies readonly SeededService[];
 
 /**
  * One per seed file: its oldest object, which proves the seed ran, and its newest, which proves it
@@ -310,6 +311,40 @@ interface EtcdTarget {
   readonly password: string;
 }
 
+interface EtcdConnection {
+  readonly kv: {
+    range(request: { key: Buffer; count_only: boolean }, options: { deadline: number }): Promise<{ count: string }>;
+  };
+  close(): void;
+}
+
+const etcd = createRequire(new URL("../../plugins/etcd/package.json", import.meta.url))("etcd3") as {
+  Etcd3: new (options: Record<string, unknown>) => EtcdConnection;
+};
+
+/** The JSON gateway's internal client presents the server cert, not a cert from the fixture's client CA. */
+async function etcdTlsHasKey(key: string): Promise<boolean> {
+  const target = ETCD_TLS_CONFIG;
+  const connection = new etcd.Etcd3({
+    hosts: [`https://${target.host}:${String(target.port)}`],
+    credentials: {
+      rootCertificate: readFileSync(target.tlsCa),
+      certChain: readFileSync(target.tlsCert),
+      privateKey: readFileSync(target.tlsKey),
+    },
+    dialTimeout: CONNECT_TIMEOUT_MS,
+  });
+  try {
+    const range = await connection.kv.range(
+      { key: Buffer.from(key), count_only: true },
+      { deadline: Date.now() + CONNECT_TIMEOUT_MS },
+    );
+    return BigInt(range.count) > 0n;
+  } finally {
+    connection.close();
+  }
+}
+
 /**
  * Whether `key` exists, over etcd's JSON gateway on the client port, so the check needs no driver:
  * keys travel base64-encoded, and with auth on a token from `/v3/auth/authenticate` goes in the
@@ -413,6 +448,8 @@ export const serverQuery: SentinelQuery = (service, sql) => {
       return etcdHasKey(ETCD_CONFIG, sql);
     case "etcd-3-5":
       return etcdHasKey(ETCD35_CONFIG, sql);
+    case "etcd-tls":
+      return etcdTlsHasKey(sql);
   }
 };
 

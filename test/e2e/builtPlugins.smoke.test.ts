@@ -25,6 +25,7 @@ const PLUGIN_ENTRY_FILE = "index.js";
 /** Port 1 (tcpmux) is reserved and closed on any machine running these tests. */
 const UNREACHABLE = { host: "127.0.0.1", port: 1, database: "none", user: "none" };
 const UNREACHABLE_REDIS = { host: "127.0.0.1", port: 1 };
+const UNREACHABLE_ETCD = { host: "127.0.0.1", port: 1, connectTimeout: 2 };
 const IN_MEMORY = { path: ":memory:" };
 
 /**
@@ -87,6 +88,10 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
 
   it("givenBuiltRedisBundle in a plain ES module_whenConnectingToClosedPort_thenRejectsWithConnectionFailed", () => {
     expect(probe("redis", UNREACHABLE_REDIS)).toMatchObject({ code: "connectionFailed" });
+  });
+
+  it("givenBuiltEtcdBundle in a plain ES module_whenConnectingToClosedPort_thenRejectsWithConnectionFailed", () => {
+    expect(probe("etcd", UNREACHABLE_ETCD)).toMatchObject({ code: "connectionFailed" });
   });
 
   it("givenBuiltSqliteBundle in a plain ES module_whenOpeningInMemory_thenSelectsALiteral", () => {

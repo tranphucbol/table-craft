@@ -61,6 +61,7 @@ describe("seed hashes (test/db/stack.ts)", () => {
       mariadb: "n",
       etcd: "o",
       "etcd-3-5": "p",
+      "etcd-tls": "q",
     });
 
     expect(env).toEqual({
@@ -80,6 +81,7 @@ describe("seed hashes (test/db/stack.ts)", () => {
       [SEED_ENV.mariadb]: "n",
       [SEED_ENV.etcd]: "o",
       [SEED_ENV["etcd-3-5"]]: "p",
+      [SEED_ENV["etcd-tls"]]: "q",
     });
   });
 
@@ -169,6 +171,7 @@ describe("database selector (decision 099)", () => {
         "redis-5-cluster",
         "etcd",
         "etcd-3-5",
+        "etcd-tls",
       ],
     });
     expect(stackFor(databases, REMOTE_TIDB).profiles).not.toContain("tidb");

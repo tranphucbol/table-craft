@@ -13,6 +13,64 @@ export interface KeyBytes {
 
 export type KeyName = KeyBytes;
 
+export interface KeyRevision {
+  readonly createRevision: string;
+  readonly modRevision: string;
+  readonly version: string;
+  readonly lease: string;
+}
+
+export interface KeyConflictSnapshot {
+  readonly database: number;
+  readonly key: KeyBytes;
+  readonly value: KeyBytes | null;
+  readonly revision: KeyRevision | null;
+  readonly snapshotRevision: string;
+}
+
+export interface KeyspaceFeatures {
+  readonly revisionGuard?: boolean;
+}
+
+export interface KeyHistoryRequest {
+  readonly database: number;
+  readonly key: KeyBytes;
+  readonly cursor: string | null;
+  readonly count: number;
+  readonly maxBytes: number;
+  readonly timeoutMs: number;
+}
+
+export interface KeyHistoryEvent extends KeyRevision {
+  readonly kind: "PUT" | "DELETE";
+  readonly key: KeyBytes;
+  readonly value: KeyBytes | null;
+}
+
+export interface KeyHistoryGap {
+  readonly fromRevision: string;
+  readonly toRevision: string;
+  readonly reason: "compacted";
+}
+
+export type KeyHistoryStopReason = "snapshotEnd" | "pageLimit" | "byteLimit" | "deadline" | "compacted";
+
+export interface KeyHistoryPage {
+  readonly events: readonly KeyHistoryEvent[];
+  readonly snapshotRevision: string;
+  readonly terminalRevision: string | null;
+  readonly cursor: string | null;
+  readonly complete: boolean;
+  readonly unavailableThrough: string | null;
+  readonly gaps: readonly KeyHistoryGap[];
+  readonly stopReason: KeyHistoryStopReason;
+}
+
+export const KEY_HISTORY_MAX_COUNT = 100;
+export const KEY_HISTORY_MAX_BYTES = 1_048_576;
+export const KEY_HISTORY_MAX_TIMEOUT_MS = 5_000;
+export const KEY_HISTORY_MAX_CURSOR_LENGTH = 8_192;
+
 /** Mirrors `KeySource` in plugin-api: the one key a command's reply read (decision 119). */
 export interface KeySource {
   readonly database: number;
@@ -31,6 +89,7 @@ export interface KeyDatabase {
 
 /** The databases of a `keyValue` datasource and the delimiter its key tree folds names on. */
 export interface KeyDatabases {
+  readonly features?: KeyspaceFeatures & { readonly history?: boolean };
   readonly delimiter: string;
   readonly databases: readonly KeyDatabase[];
 }
@@ -52,6 +111,7 @@ export interface KeyInfo {
 
 /** Mirrors `KeyDetails` in plugin-api: each fact null when the server would not say. */
 export interface KeyDetails extends KeyInfo {
+  readonly revision?: KeyRevision;
   readonly length: number | null;
   readonly memoryBytes: number | null;
   readonly encoding: string | null;
@@ -110,6 +170,7 @@ export type KeyChange =
 
 /** Mirrors `KeyApplyOptions` in plugin-api. */
 export interface KeyApplyOptions {
+  readonly revisionGuard?: { readonly modRevision: string };
   readonly type: KeyType;
   readonly guard: boolean;
   readonly ttlMs?: number;
