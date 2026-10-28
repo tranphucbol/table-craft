@@ -161,7 +161,7 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
   );
 
   it(
-    "givenDataGripOracleAndSqlServer_whenPreviewed_thenOracleMapsAndSqlServerIsUnsupportedByName",
+    "givenDataGripOracleAndSqlServer_whenPreviewed_thenBothReadyInTheirPlugins",
     async () => {
       const home = fixture("native", { oracleAndSqlServer: true });
       const { page } = await launch(home.home);
@@ -171,9 +171,8 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await expect.poll(() => oracle.getAttribute("data-status")).toBe("ready");
       await expect.poll(() => oracle.textContent()).toContain("Oracle");
       const sqlServer = importRow(page, FOREIGN_DIALECT_SOURCES.sqlServer);
-      await expect.poll(() => sqlServer.getAttribute("data-status")).toBe("unsupported");
-      await expect.poll(() => sqlServer.getByRole("checkbox").isDisabled()).toBe(true);
-      await expect.poll(() => sqlServer.textContent()).toContain("No installed plugin reads sqlserver: URLs.");
+      await expect.poll(() => sqlServer.getAttribute("data-status")).toBe("ready");
+      await expect.poll(() => sqlServer.textContent()).toContain("SQL Server");
       await sqlServer.scrollIntoViewIfNeeded();
       await captureFoundation(page, "04-import-unsupported");
     },
