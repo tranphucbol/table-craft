@@ -25,6 +25,7 @@ import {
   type Session,
   type SessionMonitor,
   type SqlLanguage,
+  type StatementKind,
   type TlsInfo,
   type TransactionMode,
   type Transactions,
@@ -74,7 +75,7 @@ import {
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { mysqlRoutineCall } from "./routines.js";
-import { explainDialect, killStatementFor, serverIdentity, tidbGlobalKill } from "./server.js";
+import { explainDialect, isTidb, killStatementFor, serverIdentity, tidbGlobalKill } from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
@@ -179,6 +180,9 @@ const RELEASE_SQL = "RELEASE SAVEPOINT table_craft_insert";
 const ROLLBACK_TO_SQL = "ROLLBACK TO SAVEPOINT table_craft_insert";
 const OPEN_TRANSACTION_MESSAGE = "A transaction is open; commit or roll it back before switching to auto-commit.";
 const BUSY_MESSAGE = "Another statement is still running in this session.";
+const READ_ONLY_REFUSED_MESSAGE =
+  "This session is read-only, so the statement was not sent. Turn off Read-only on the data source to change data or schema.";
+const WRITING_KINDS: ReadonlySet<StatementKind> = new Set(["write", "ddl"]);
 
 const DEFAULT_PORT = 3306;
 const MAX_PORT = 65_535;
@@ -408,17 +412,25 @@ interface Identity {
   readonly kill: string | null;
   readonly serverSessionId: string;
   readonly serverInstance: string | null;
+  /** The session refuses writes itself, because the server would not. */
+  readonly refusesWrites: boolean;
 }
 
 /**
  * Configures a fresh connection and reads what the server reports about itself. The id comes from
  * `CONNECTION_ID()`, not the handshake: a proxy in front of the server may hand out its own.
+ *
+ * TiDB has no read-only session: 4.x accepts `SET SESSION TRANSACTION READ ONLY` and ignores it,
+ * and 5.x and later refuse it unless `tidb_enable_noop_functions` is on, which failed every
+ * read-only connection. On TiDB the session refuses writes and DDL before sending them instead.
  */
 async function prepareConnection(connection: mysql.Connection, options: ConnectOptions): Promise<Identity> {
-  if (options.readOnly) await query(connection, READ_ONLY_SQL);
   const rows = (await query(connection, IDENTITY_SQL)) as readonly { version?: unknown; id?: unknown }[];
   const version = rows[0]?.version;
   const serverVersion = typeof version === "string" && version !== "" ? version : null;
+  const readOnly = options.readOnly === true;
+  const refusesWrites = readOnly && isTidb(serverVersion);
+  if (readOnly && !refusesWrites) await query(connection, READ_ONLY_SQL);
   const reported = rows[0]?.id;
   // bigNumberStrings hands a TiDB Global Kill id over as text.
   const serverSessionId =
@@ -429,6 +441,7 @@ async function prepareConnection(connection: mysql.Connection, options: ConnectO
     kill: Number.isSafeInteger(id) ? killStatementFor(serverVersion, id) : null,
     serverSessionId,
     serverInstance: tidbGlobalKill(serverVersion) === false ? await tidbInstanceOf(connection).catch(() => null) : null,
+    refusesWrites,
   };
 }
 
@@ -584,6 +597,7 @@ class MysqlSession implements Session {
   readonly #serverName: string | undefined;
   readonly #connection: mysql.Connection;
   readonly #kill: string | null;
+  readonly #refusesWrites: boolean;
   /** Set by the connection's `error` event; a broken connection is reported, not thrown at random. */
   #broken: Error | null = null;
   #running: Running | null = null;
@@ -603,6 +617,7 @@ class MysqlSession implements Session {
     this.#serverName = serverName;
     this.#connection = connection;
     this.#kill = identity.kill;
+    this.#refusesWrites = identity.refusesWrites;
     this.serverVersion = identity.serverVersion;
     this.tls = tlsInfoOf((connection as unknown as WithStream).stream);
     this.introspector = mysqlIntrospector(connection);
@@ -638,6 +653,9 @@ class MysqlSession implements Session {
       throw new PluginError("connectionLost", `The connection was lost: ${this.#broken.message}`);
     }
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
+    if (this.#refusesWrites && WRITING_KINDS.has(language.classify(sql).kind)) {
+      throw new PluginError("statementFailed", READ_ONLY_REFUSED_MESSAGE);
+    }
     await this.#cancelling.catch(() => undefined);
     const running: Running = { cancelRequested: false, reset: false, inFlight: null };
     this.#running = running;
@@ -704,6 +722,7 @@ class MysqlSession implements Session {
       throw new PluginError("connectionFailed", `The connection was lost: ${this.#broken.message}`);
     }
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
+    if (this.#refusesWrites) throw new PluginError("statementFailed", READ_ONLY_REFUSED_MESSAGE);
     if (rows.length === 0) return;
     await this.#cancelling.catch(() => undefined);
     const running: Running = { cancelRequested: false, reset: false, inFlight: null };
