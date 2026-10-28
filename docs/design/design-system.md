@@ -172,17 +172,18 @@ the animations (`animate-surface-in`, `animate-menu-in`, `animate-tooltip-in`, `
 `animate-overlay-in`) and the easing, and `renderer/ui/motion.ts` holds the class each surface
 adds. No component writes a duration.
 
-| Token (`appearance/motion.ts`) | CSS variable              | Full    | Reduced | Off    |
-| ------------------------------ | ------------------------- | ------- | ------- | ------ |
-| `fastMs`                       | `--tc-motion-fast`        | 100 ms  | 100 ms  | 0 ms   |
-| `baseMs`                       | `--tc-motion-base`        | 150 ms  | 150 ms  | 0 ms   |
-| `slowMs`                       | `--tc-motion-slow`        | 200 ms  | 200 ms  | 0 ms   |
-| `flashMs`                      | `--tc-motion-flash`       | 600 ms  | 600 ms  | 0 ms   |
-| `shiftPx`                      | `--tc-motion-shift`       | 4 px    | 0 px    | 0 px   |
-| `enterScale`                   | `--tc-motion-enter-scale` | 0.98    | 1       | 1      |
-| `pressScale`                   | `--tc-motion-press-scale` | 0.92    | 1       | 1      |
-| `progress` (spinners)          | `--tc-motion-progress`    | running | running | paused |
-| `ambient` (connecting pulse)   | `--tc-motion-ambient`     | running | paused  | paused |
+| Token (`appearance/motion.ts`) | CSS variable                   | Full    | Reduced | Off    |
+| ------------------------------ | ------------------------------ | ------- | ------- | ------ |
+| `fastMs`                       | `--tc-motion-fast`             | 100 ms  | 100 ms  | 0 ms   |
+| `baseMs`                       | `--tc-motion-base`             | 150 ms  | 150 ms  | 0 ms   |
+| `slowMs`                       | `--tc-motion-slow`             | 200 ms  | 200 ms  | 0 ms   |
+| `flashMs`                      | `--tc-motion-flash`            | 600 ms  | 600 ms  | 0 ms   |
+| `shiftPx`                      | `--tc-motion-shift`            | 4 px    | 0 px    | 0 px   |
+| `enterScale`                   | `--tc-motion-enter-scale`      | 0.98    | 1       | 1      |
+| `pressScale`                   | `--tc-motion-press-scale`      | 0.92    | 1       | 1      |
+| `pressScaleText`               | `--tc-motion-press-scale-text` | 0.97    | 1       | 1      |
+| `progress` (spinners)          | `--tc-motion-progress`         | running | running | paused |
+| `ambient` (connecting pulse)   | `--tc-motion-ambient`          | running | paused  | paused |
 
 Two easings: `--ease-standard` (`cubic-bezier(0.2, 0, 0, 1)`) for entering, `linear` for fades and
 progress. No springs, bounce or overshoot.
@@ -207,10 +208,20 @@ targets use `border-accent`, a translucent `bg-selection`, and a `bg-panel` labe
 target strengthens the selection fill. Splits, moves and resizing do not animate. Narrow groups
 keep their own scrolling tab strip and console toolbar instead of overflowing into their neighbor.
 
-Pressed and confirmed (plan 110): every enabled `<button>` takes an inset `--tc-press-tint` (14 %
-`--tc-ink`) while held, from one `@layer base` rule in `app.css`, so a press reads on any
-background; icon buttons add the `press` utility and also shrink to `--tc-motion-press-scale`. A
-copy button swaps its glyph for a bold `Check` in `text-success` and its tooltip for "Copied" for
+Pressed and confirmed (plans 110, 114): every enabled `<button>` takes an inset `--tc-press-tint`
+(14 % `--tc-ink`) while held, from one `@layer base` rule in `app.css`, so a press reads on any
+background. The press lands on its first frame (`transition-duration: 0s` while `:active`) and
+fades out over `--tc-motion-fast` on release, since an ordinary click is released before a fade-in
+would show. Filled buttons (accent and danger) add `press-fill` through `FILLED_PRESS` or
+`FILLED_DANGER_PRESS` (`ui/pressClasses.ts`): the tint becomes black, `--tc-fill-hover-shade` (8 %)
+on hover and `--tc-fill-press-shade` (16 %) while held, because ink barely moves a light accent.
+`appearance/press.ts` caps both, per theme and per fill, at the deepest 1 % step that keeps
+`accentInk` at AA while held (most dark themes, whose label is dark on a light fill), keeping hover
+at half the press; `press-fill-danger` swaps in the danger fill's `--tc-danger-*-shade`. Icon
+buttons add `press` and shrink to `--tc-motion-press-scale`; text buttons add `press-text`
+(`TEXT_PRESS`) and shrink less, to `--tc-motion-press-scale-text`, so a wide label moves about
+2 px. Bordered text buttons take `hover:bg-raised`. The tint and shade are state and stay at every
+motion level; the shrink is motion and stops at Reduced and Off. A copy button swaps its glyph for a bold `Check` in `text-success` and its tooltip for "Copied" for
 1.5 s after the clipboard write it caused (`ui/useCopyConfirmation.ts`); a failed copy never
 confirms.
 
