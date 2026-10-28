@@ -254,7 +254,7 @@ See [Database explorer](docs/design/specification.md#database-explorer).
 
 ### SQL console
 
-`⌘↩` runs the statement at the caret, or the selection; `⇧⌘↩` runs the whole console. Each result
+`⌘↩` runs the statement at the caret, or exactly the selected text; `⇧⌘↩` runs the whole console. Each result
 opens its own tab next to **Output**, which logs every statement with its row count and time,
 followed by the warnings and notices the server left about it (MySQL's and TiDB's `SHOW WARNINGS`,
 PostgreSQL's `RAISE NOTICE`); the result tab shows how many warnings there were.

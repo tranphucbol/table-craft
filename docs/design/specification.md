@@ -972,15 +972,15 @@ etcd, Kafka, MongoDB or another system.
 The renderer sends the text to `script.split` only when the user runs, and picks the statements
 with `renderer/model/statementAt.ts`:
 
-| Run                | Caret or selection                            | Runs                                  |
-| ------------------ | --------------------------------------------- | ------------------------------------- |
-| `console.run` (⌘↩) | caret inside a statement                      | that statement                        |
-|                    | caret in whitespace or a comment after one    | the statement before it               |
-|                    | caret before the first statement              | the first statement                   |
-|                    | selection touching several statements         | each of them, in order                |
-|                    | selection inside one statement, not all of it | the selected text, as one statement   |
-| `console.runAll`   | anything                                      | every statement                       |
-| either             | no statements                                 | nothing; Output says `Nothing to run` |
+| Run                | Caret or selection                         | Runs                                                       |
+| ------------------ | ------------------------------------------ | ---------------------------------------------------------- |
+| `console.run` (⌘↩) | caret inside a statement                   | that statement                                             |
+|                    | caret in whitespace or a comment after one | the statement before it                                    |
+|                    | caret before the first statement           | the first statement                                        |
+|                    | any selection                              | the selected text, split into statements, at their offsets |
+|                    | selection of only whitespace or comments   | nothing; Output says `Nothing to run`                      |
+| `console.runAll`   | anything                                   | every statement                                            |
+| either             | no statements                              | nothing; Output says `Nothing to run`                      |
 
 The statement about to run flashes in the editor. Statements run one after another on the
 console's session; a cancel stops the batch, and Output says how many were skipped. Before

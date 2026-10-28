@@ -9,7 +9,7 @@ export type RunScope = "caret" | "all";
 
 export type RunTarget<S extends TextSpan> =
   | { readonly kind: "statements"; readonly statements: readonly S[] }
-  /** The selection lies inside one statement: run the selected text alone. */
+  /** A non-empty selection: run exactly the selected text, whatever statements it touches. */
   | { readonly kind: "selection"; readonly from: number; readonly to: number }
   | { readonly kind: "nothing" };
 
@@ -23,26 +23,28 @@ function atCaret<S extends TextSpan>(statements: readonly S[], caret: number): S
 }
 
 /**
- * What Run executes (plan 006, decision 6). With no selection, the statement at the caret; in the
- * whitespace or comments between two, the one before; before the first, the first. A selection runs
- * every statement it touches, unless it lies inside one, when the selected text runs on its own.
+ * The text Run executes on its own (plan 113, decision 1): a non-empty selection under Run, as a
+ * forward span. Null for a bare caret or Run All, which resolve against the console's statements.
+ */
+export function selectionToRun(selection: TextSpan, scope: RunScope): TextSpan | null {
+  if (scope === "all" || selection.from === selection.to) return null;
+  return { from: Math.min(selection.from, selection.to), to: Math.max(selection.from, selection.to) };
+}
+
+/**
+ * What Run executes (plans 006 and 113). A selection runs exactly the selected text. With no
+ * selection, the statement at the caret; in the whitespace or comments between two, the one before;
+ * before the first, the first. Run All takes every statement and ignores the selection.
  */
 export function statementsToRun<S extends TextSpan>(
   statements: readonly S[],
   selection: TextSpan,
   scope: RunScope,
 ): RunTarget<S> {
+  const selected = selectionToRun(selection, scope);
+  if (selected !== null) return { kind: "selection", ...selected };
   if (statements.length === 0) return NOTHING;
   if (scope === "all") return { kind: "statements", statements };
-  if (selection.from === selection.to) {
-    const statement = atCaret(statements, selection.from);
-    return statement === undefined ? NOTHING : { kind: "statements", statements: [statement] };
-  }
-  const touched = statements.filter((statement) => statement.from < selection.to && statement.to > selection.from);
-  const [only] = touched;
-  if (only === undefined) return NOTHING;
-  const inside = touched.length === 1 && selection.from >= only.from && selection.to <= only.to;
-  const whole = selection.from === only.from && selection.to === only.to;
-  if (inside && !whole) return { kind: "selection", from: selection.from, to: selection.to };
-  return { kind: "statements", statements: touched };
+  const statement = atCaret(statements, selection.from);
+  return statement === undefined ? NOTHING : { kind: "statements", statements: [statement] };
 }
