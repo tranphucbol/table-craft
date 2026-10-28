@@ -99,6 +99,20 @@ export default defineConfig({
         replacement: resolve(WORKSPACE_ROOT, "plugins/redis/src/$1.ts"),
       },
       { find: "@table-craft/plugin-redis", replacement: resolve(WORKSPACE_ROOT, "plugins/redis/src/index.ts") },
+      // The Oracle plugin's parts, which its unit tests drive without a server (plan 054).
+      {
+        find: /^@table-craft\/plugin-oracle\/functions$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/oracle/src/functions/index.ts"),
+      },
+      {
+        find: /^@table-craft\/plugin-oracle\/manualIndex$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/oracle/src/functions/manualIndex.ts"),
+      },
+      {
+        find: /^@table-craft\/plugin-oracle\/([A-Za-z]+)$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/oracle/src/$1.ts"),
+      },
+      { find: "@table-craft/plugin-oracle", replacement: resolve(WORKSPACE_ROOT, "plugins/oracle/src/index.ts") },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },
       { find: "@table-craft/plugin-mysql", replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/index.ts") },

@@ -22,7 +22,7 @@ export const BUILT_IN_PLUGINS = ["sqlite", "mysql"] as const;
  * Published to npm and downloaded on demand (decisions 108-110). A development run and the smoke
  * harness load them from `dist/optional-plugins/`; the packaged app never does.
  */
-export const OPTIONAL_PLUGINS = ["postgres", "redis"] as const;
+export const OPTIONAL_PLUGINS = ["postgres", "redis", "oracle"] as const;
 type BuiltPlugin = (typeof BUILT_IN_PLUGINS)[number] | (typeof OPTIONAL_PLUGINS)[number];
 /** pg's optional libpq binding; pg only loads it when asked for `pg.native`, which no plugin does. */
 const OPTIONAL_DRIVER_MODULES = ["pg-native"];
