@@ -7,18 +7,21 @@ import {
 } from "@table-craft/core";
 import type { DatasourcePlugin, PluginManifest, Session } from "@table-craft/plugin-api";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import { describe, expect, it } from "vitest";
 import {
   MYSQL_BEHIND_BASTION,
   MYSQL_CONFIG,
+  ORACLE_BEHIND_BASTION,
+  ORACLE_CONFIG,
   POSTGRES_BEHIND_BASTION,
   POSTGRES_CONFIG,
   SSH_BASTION,
   databaseEnabled,
   type DatabaseId,
 } from "../support/databases.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 const PASSWORD_AUTH: SshEndpoint = {
   host: SSH_BASTION.host,
@@ -51,6 +54,12 @@ const TARGETS: readonly Target[] = [
     config: { ...POSTGRES_CONFIG, ...POSTGRES_BEHIND_BASTION },
   },
   { name: "mysql", plugin: mysql, manifest: MYSQL_MANIFEST, config: { ...MYSQL_CONFIG, ...MYSQL_BEHIND_BASTION } },
+  {
+    name: "oracle",
+    plugin: oracle,
+    manifest: ORACLE_MANIFEST,
+    config: { ...ORACLE_CONFIG, ...ORACLE_BEHIND_BASTION },
+  },
 ];
 
 function loaded(target: Target): LoadedPlugin {

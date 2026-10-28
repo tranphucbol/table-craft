@@ -16,3 +16,8 @@ export function tenThousandRows(): string {
 export function hundredThousandRows(): string {
   return `SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n AS n, REPEAT('x', 200) AS pad FROM ${DIGITS} a, ${DIGITS} b, ${DIGITS} c, ${DIGITS} d, ${DIGITS} e`;
 }
+
+/** `count` rows of the same shape on Oracle, which has neither `REPEAT` nor a FROM-less `UNION` chain this long. */
+export function oracleRows(count: number): string {
+  return `SELECT LEVEL - 1 AS n, RPAD('x', 200, 'x') AS pad FROM DUAL CONNECT BY LEVEL <= ${String(count)}`;
+}

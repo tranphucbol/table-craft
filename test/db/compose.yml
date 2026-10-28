@@ -186,9 +186,9 @@ services:
       retries: 120
 
   # The bastion plan 036 tunnels through: it reaches the databases by service name, so a tunnel
-  # targets postgres:5432 and mysql:3306 wherever the test runs. Keys in ./ssh are test-only.
+  # targets postgres:5432, mysql:3306 and oracle:1521 wherever the test runs. Keys in ./ssh are test-only.
   ssh:
-    profiles: ["mysql", "postgres"]
+    profiles: ["mysql", "postgres", "oracle"]
     build: ./ssh
     image: table-craft-ssh:local
     ports:
@@ -407,6 +407,7 @@ services:
       - node-modules-mysql:/work/plugins/mysql/node_modules
       - node-modules-sqlite:/work/plugins/sqlite/node_modules
       - node-modules-redis:/work/plugins/redis/node_modules
+      - node-modules-oracle:/work/plugins/oracle/node_modules
       - bun-cache:/root/.bun/install/cache
       - electron-cache:/root/.cache/electron
 
@@ -508,6 +509,7 @@ volumes:
   node-modules-mysql:
   node-modules-sqlite:
   node-modules-redis:
+  node-modules-oracle:
   # Downloads only, shared by every checkout; node_modules stay per checkout.
   bun-cache:
     name: table-craft-e2e-bun-cache

@@ -8,11 +8,18 @@ import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportTask } from "@table-craft/desktop/engine/protocol.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
 import { execute, exportHarness, openSession, startExport } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /**
  * Plan 018: one export of at least 3 GB per server database, checked byte for byte against the
@@ -38,6 +45,11 @@ const RSS_SAMPLE_MS = 250;
 const LARGE_TEST_TIMEOUT_MS = 30 * 60_000;
 const HASH_BATCH_LINES = 10_000;
 const HEADER = "id,label,payload\n";
+
+/** An MD5 digest in hex. */
+const MD5_HEX_CHARS = 32;
+/** Oracle counts to ROWS as ROWS / this outer rows times this many inner ones. */
+const ORACLE_LOW_ROWS = 1_000;
 
 const DIGITS =
   "(SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)";
@@ -74,6 +86,18 @@ const TARGETS: readonly Target[] = [
       `(SELECT /*+ NO_BNL() */ h.d * 1000000 + ${MYSQL_PLACES.map((place, index) => `${place}.d * ${String(10 ** (MYSQL_PLACES.length - 1 - index))}`).join(" + ")} + 1 AS n ` +
       `FROM ${DIGITS} h ${MYSQL_PLACES.map((place) => `STRAIGHT_JOIN ${DIGITS} ${place}`).join(" ")} ` +
       `WHERE h.d < ${String(ROWS / 1_000_000)}) t`,
+  },
+  {
+    name: "oracle",
+    plugin: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    // CONNECT BY holds every level in memory; a nested loop of two short ones counts as far with none.
+    rows:
+      `SELECT n AS "id", h AS "label", RPAD(h, ${String(MD5_HEX_CHARS * PAYLOAD_REPEATS)}, h) AS "payload" FROM ` +
+      `(SELECT /*+ ORDERED USE_NL(low) */ high.d * ${String(ORACLE_LOW_ROWS)} + low.d AS n, ` +
+      `LOWER(RAWTOHEX(STANDARD_HASH(TO_CHAR(high.d * ${String(ORACLE_LOW_ROWS)} + low.d), 'MD5'))) AS h ` +
+      `FROM (SELECT LEVEL - 1 AS d FROM DUAL CONNECT BY LEVEL <= ${String(ROWS / ORACLE_LOW_ROWS)}) high, ` +
+      `(SELECT LEVEL AS d FROM DUAL CONNECT BY LEVEL <= ${String(ORACLE_LOW_ROWS)}) low)`,
   },
 ];
 

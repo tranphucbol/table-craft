@@ -5,10 +5,17 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
 import type { ExportTask } from "@table-craft/desktop/engine/protocol.js";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
 import {
   execute,
   exportHarness,
@@ -17,7 +24,7 @@ import {
   startExport,
   type ExportHarness,
 } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /** Plan 018: exports over a link that is slow, goes quiet, resets or vanishes. */
 
@@ -34,6 +41,9 @@ const RELEASE_POLL_MS = 100;
 const CHAOS_TEST_TIMEOUT_MS = 90_000;
 const ORIGINAL_TARGET = "the file the user already had\n";
 const EXPORTED_COLUMNS = [0, 1, 2];
+
+/** An MD5 digest in hex. */
+const MD5_HEX_CHARS = 32;
 
 const DIGITS =
   "(SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9)";
@@ -63,6 +73,15 @@ const TARGETS: readonly Target[] = [
       `(SELECT a.d + 10 * b.d + 100 * c.d + 1000 * e.d + 10000 * f.d + 1 AS n ` +
       `FROM ${DIGITS} a CROSS JOIN ${DIGITS} b CROSS JOIN ${DIGITS} c CROSS JOIN ${DIGITS} e CROSS JOIN ${DIGITS} f ` +
       `WHERE f.d < ${String(ROWS / 10_000)}) t ORDER BY n`,
+  },
+  {
+    name: "oracle",
+    plugin: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    rows:
+      `SELECT n AS "id", h AS "label", HEXTORAW(RPAD(h, ${String(MD5_HEX_CHARS * PAYLOAD_REPEATS)}, h)) AS "payload" FROM ` +
+      `(SELECT LEVEL AS n, LOWER(RAWTOHEX(STANDARD_HASH(TO_CHAR(LEVEL), 'MD5'))) AS h FROM DUAL CONNECT BY LEVEL <= ${String(ROWS)}) ` +
+      `ORDER BY n`,
   },
 ];
 

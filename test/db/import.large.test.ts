@@ -7,10 +7,17 @@ import { finished as streamFinished } from "node:stream/promises";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { CSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
 import mysql from "@table-craft/plugin-mysql";
+import oracle from "@table-craft/plugin-oracle";
 import postgres from "@table-craft/plugin-postgres";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, databaseEnabled, type DatabaseId } from "../support/databases.js";
+import {
+  MYSQL_CONFIG,
+  ORACLE_CONFIG,
+  POSTGRES_CONFIG,
+  databaseEnabled,
+  type DatabaseId,
+} from "../support/databases.js";
 import { execute, exportHarness, openSession, startImport } from "../support/engineExports.js";
-import { MYSQL_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
+import { MYSQL_MANIFEST, ORACLE_MANIFEST, POSTGRES_MANIFEST } from "../support/manifests.js";
 
 /**
  * Plan 021: one import of a CSV over 2 GiB per server database, generated on the fly, checked by
@@ -43,6 +50,8 @@ interface Target {
   readonly path: readonly string[];
   readonly create: string;
   readonly checksum: string;
+  /** How the server folds an unquoted name: Oracle's upper case. */
+  readonly fold?: (name: string) => string;
 }
 
 const TARGETS: readonly Target[] = [
@@ -65,6 +74,17 @@ const TARGETS: readonly Target[] = [
     checksum:
       `SELECT CAST(COUNT(*) AS CHAR), CAST(COUNT(DISTINCT id) AS CHAR), ` +
       `CAST(SUM(CAST(CONV(SUBSTR(MD5(payload), 1, ${String(CHECKSUM_HEX_CHARS)}), 16, 10) AS UNSIGNED)) AS CHAR) FROM ${TABLE}`,
+  },
+  {
+    name: "oracle",
+    plugin: { status: "loaded", directory: "plugins/oracle", manifest: ORACLE_MANIFEST, plugin: oracle },
+    config: ORACLE_CONFIG,
+    path: ["TABLE_CRAFT"],
+    create: `CREATE TABLE ${TABLE} (id NUMBER(19) PRIMARY KEY, label VARCHAR2(64 CHAR) NOT NULL, payload VARCHAR2(600 CHAR) NOT NULL)`,
+    checksum:
+      `SELECT TO_CHAR(COUNT(*)), TO_CHAR(COUNT(DISTINCT id)), ` +
+      `TO_CHAR(SUM(TO_NUMBER(SUBSTR(RAWTOHEX(STANDARD_HASH(payload, 'MD5')), 1, ${String(CHECKSUM_HEX_CHARS)}), '${"X".repeat(CHECKSUM_HEX_CHARS)}'))) FROM ${TABLE}`,
+    fold: (name) => name.toUpperCase(),
   },
 ];
 
@@ -136,6 +156,7 @@ describe.runIf(ENABLED)("large import", { timeout: LARGE_TEST_TIMEOUT_MS }, () =
     it.skipIf(!databaseEnabled(target.name))(
       `givenMultiGigabyteCsv_whenImportedInto_${target.name}_thenCountAndChecksumMatchAndMemoryFlat`,
       async () => {
+        const fold = target.fold ?? ((name: string) => name);
         const engine = exportHarness(
           {
             id: target.name,
@@ -161,11 +182,11 @@ describe.runIf(ENABLED)("large import", { timeout: LARGE_TEST_TIMEOUT_MS }, () =
           target: {
             kind: "table",
             path: target.path,
-            relation: TABLE,
+            relation: fold(TABLE),
             mapping: [
-              { column: "id", field: 0 },
-              { column: "label", field: 1 },
-              { column: "payload", field: 2 },
+              { column: fold("id"), field: 0 },
+              { column: fold("label"), field: 1 },
+              { column: fold("payload"), field: 2 },
             ],
           },
           transaction: { mode: "all" },
