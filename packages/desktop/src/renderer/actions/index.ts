@@ -15,6 +15,7 @@ import { useObjects } from "@table-craft/desktop/renderer/state/objects.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { useHostKeyPrompt } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
+import { useServicesTree } from "@table-craft/desktop/renderer/state/servicesTree.js";
 import { useSessions } from "@table-craft/desktop/renderer/state/sessions.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
@@ -52,6 +53,7 @@ const STORES = [
   useWindowState,
   useSnippets,
   useSnippetsDialog,
+  useServicesTree,
 ] as const;
 
 /** Calls `listener` whenever a store an action's `when` might read changes. */

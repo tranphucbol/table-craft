@@ -350,6 +350,27 @@ export function expandable(row: ServiceRow): boolean {
   return row.kind === "session" && row.node.executions.length > 0;
 }
 
+/** Keys of every node with children, whatever is collapsed; `allRows` is built with nothing collapsed. */
+export function expandableKeys(allRows: readonly ServiceRow[]): readonly string[] {
+  return allRows.filter(expandable).map((row) => row.key);
+}
+
+/**
+ * The line to select once `selected` is hidden: its nearest shown ancestor, the top-level line
+ * after Collapse All; `selected` itself when shown or gone from the tree.
+ */
+export function visibleAncestor(
+  allRows: readonly ServiceRow[],
+  visible: readonly ServiceRow[],
+  selected: string | null,
+): string | null {
+  const shown = new Set(visible.map((row) => row.key));
+  const byKey = new Map(allRows.map((row) => [row.key, row]));
+  let row = selected === null ? undefined : byKey.get(selected);
+  while (row !== undefined && !shown.has(row.key)) row = "parent" in row ? byKey.get(row.parent) : undefined;
+  return row?.key ?? selected;
+}
+
 export interface TreeMove {
   readonly selected: string | null;
   readonly collapsed: ReadonlySet<string>;
