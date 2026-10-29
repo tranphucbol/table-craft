@@ -1,6 +1,12 @@
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
-import { clockTime, firstLine, formatDuration, rowsText } from "@table-craft/desktop/renderer/model/format.js";
+import {
+  approvalWaitText,
+  clockTime,
+  firstLine,
+  formatDuration,
+  rowsText,
+} from "@table-craft/desktop/renderer/model/format.js";
 import {
   CALL_EXECUTION_OUTCOMES,
   CALL_OUTCOME_LABELS,
@@ -63,7 +69,7 @@ export function AgentCallLine({ call }: { readonly call: McpActivityView }) {
       <span className="ml-auto flex shrink-0 items-center gap-cell text-ink-muted tabular-nums">
         {call.outcome === "ok" || call.outcome === "capped" ? null : <span>{CALL_OUTCOME_LABELS[call.outcome]}</span>}
         {call.rowCount === null ? null : <span>{rowsText(call.rowCount)}</span>}
-        <span>{formatDuration(call.durationMs)}</span>
+        <span title={approvalWaitText(call.approvalWaitMs) ?? undefined}>{formatDuration(call.durationMs)}</span>
         <span>{clockTime(call.at)}</span>
       </span>
     </>

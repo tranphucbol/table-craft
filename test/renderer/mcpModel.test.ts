@@ -11,6 +11,7 @@ import {
   mcpChip,
   mcpStatusText,
 } from "@table-craft/desktop/renderer/model/mcp.js";
+import { approvalWaitText } from "@table-craft/desktop/renderer/model/format.js";
 import {
   effectiveAccess,
   mcpClientConfig,
@@ -232,5 +233,15 @@ describe("MCP round 2 model", () => {
 
   it("givenToken_whenHinted_thenOnlyTheLastFourShow", () => {
     expect(tokenHint("tc_abcdefgh3f9a")).toBe("tc_••••3f9a");
+  });
+});
+
+describe("agent call time", () => {
+  it("givenWait_whenFormatted_thenSaysNotCounted", () => {
+    expect(approvalWaitText(23_900)).toBe("Waited 23.9 s for approval, not counted");
+  });
+
+  it("givenNoWait_whenFormatted_thenNull", () => {
+    expect(approvalWaitText(0)).toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import {
   mcpStatusText,
   type McpChipTone,
 } from "@table-craft/desktop/renderer/model/mcp.js";
+import { approvalWaitText } from "@table-craft/desktop/renderer/model/format.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
@@ -47,7 +48,10 @@ function LastCall({ call }: { readonly call: McpCallView }) {
     call.datasourceId === null ? null : (datasourceById(state, call.datasourceId)?.name ?? call.datasourceId),
   );
   return (
-    <span className={cn("truncate font-mono", call.outcome === "ok" ? "text-ink-muted" : "text-warning")}>
+    <span
+      className={cn("truncate font-mono", call.outcome === "ok" ? "text-ink-muted" : "text-warning")}
+      title={approvalWaitText(call.approvalWaitMs) ?? undefined}
+    >
       {call.tool}
       {name === null ? "" : ` · ${name}`} · {String(call.durationMs)} ms · {CALL_OUTCOME_LABELS[call.outcome]}
     </span>
