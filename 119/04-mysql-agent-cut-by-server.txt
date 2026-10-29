@@ -1,0 +1,5 @@
+-- An agent's run_query on MySQL, paused 4 s with its result open:
+-- SELECT a.n + 10 * b.n + 100 * c.n + 1000 * d.n + 10000 * e.n + 100000 * f.n AS id, REPEAT(…
+-- fetch_rows({ handle: "r1", offset: 90000 }) answered:
+-- MySQL stopped the statement at its 2 s limit (max_execution_time).
+-- Narrow it with LIMIT or WHERE and run it again, or raise the statement timeout; rows already read stay readable.

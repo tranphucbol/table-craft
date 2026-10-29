@@ -1,0 +1,5 @@
+-- An agent's run_query on PostgreSQL, paused 4 s with its result open:
+-- SELECT g AS id, repeat('x', 500) AS pad FROM generate_series(1, 1000000) AS g…
+-- fetch_rows({ handle: "r1", offset: 90000 }) answered:
+-- PostgreSQL stopped the statement at its 2 s limit (statement_timeout).
+-- Narrow it with LIMIT or WHERE and run it again, or raise the statement timeout; rows already read stay readable.
