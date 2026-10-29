@@ -10,97 +10,40 @@ the process model, the plugin contract, or where data lives.
 
 ## Commands
 
-Run from the repository root.
+Run from the repository root. Load the `local-testing` skill (`.agents/skills/local-testing/`)
+before running `test:db`, any `test:smoke*` suite, a plan's Live test or the app against a test
+database: it holds the servers and their ports, parallel checkouts, the headless box, evidence and
+what to do when a run fails.
 
 - `bun install`
 - `bun run test` - Vitest, unit tests plus the plugin contract suite against SQLite
-- `bun run test:db` - the contract suite against MySQL (port 53306) in `docker compose`, seeded
-  from `test/db/schema/`, plus the TiDB 4 suite (`test/db/tidb.test.ts`, port 54000, root with no
-  password; an amd64 image, emulated on Apple silicon, and heavy), and the MySQL plugin's contract
-  against MariaDB 10.11 (`test/db/mariadb.test.ts`, port 53310, same seed). That is the normal flow
-  (decision 099): `TABLE_CRAFT_DATABASES` (comma list of `mysql`, `tidb`, `mariadb`, `postgres`,
-  `oracle`, `mssql`, `redis`, or `all`; unset, `mysql,tidb,mariadb`) picks the servers `test/db/up.ts` starts, by compose
-  profile, and the suites that run. `test:db:postgres` (port 55432), `test:db:oracle` (Oracle 23ai
-  Free, port 51521, about 2 GB), `test:db:mssql` (SQL Server 2022, port 51433, amd64-emulated),
-  `test:db:redis` and `test:db:all` set it; run the one for a plugin you touch. `redis` selects seven
-  services (decision 116): `redis` (7.4, port 56379, ACL users `table_craft` and `limited`),
-  `redis-tls` (56380), `redis-6` (6.2, 56362), `redis-5` (5.0, 56350, password `table_craft` and
-  no ACL users), `redis-cluster` (7.4, three primaries and three replicas on 47001-47006),
-  `redis-6-cluster` (6.2, three primaries on 47011-47013) and `redis-5-cluster` (5.0, three
-  primaries and three replicas on 47021-47026), each cluster one container running every node
-  (`test/db/redis/cluster.sh`), all seeded by `test/db/redis/seed.sh` from `schema/redis.redis`.
-  SQLite always runs.
-  `test/db/up.ts` starts the containers and recreates any whose seed files changed (a
-  `table-craft.seed` label holds their hash, `test/db/stack.ts`), so an edit under `schema/` or
-  `tls/` reseeds on the next run with no `down`; when a git-ignored `.env` names a remote TiDB
-  (`TABLE_CRAFT_TIDB_REMOTE_HOST`, `_PORT`, `_USER`, `_PASSWORD`, see `.env.example`) and it
-  answers, the TiDB container is left out and every suite, on the host and in the headless box,
-  uses that server instead (`test/db/tidbTarget.ts`). Either way a run works only in its own
-  `tc_run_*` database (`test/support/tidbScratch.ts`, read through `TIDB_DATABASE` and
-  `tidbScratchDatabase` in `test/support/databases.ts`) and drops it after: never write to,
-  create users in, or kill sessions outside what the run made, since the remote server is shared.
-  Prefer the remote whenever `.env` names it: never pass `--profile tidb` to compose, never
-  start the `tidb` service or any TiDB container by hand; go through `test:db`, `test:smoke:db`,
-  their headless forms or `bun test/db/up.ts`. A log line `TiDB: local container` with `.env`
-  present means the remote did not answer: say so, and stop that container when the run ends.
-  The SSH tunnel suite (`test/db/tunnel.test.ts`) runs through the `ssh` bastion (port 2222, user
-  `tunnel`, test-only keys in `test/db/ssh/`). The certificate suite (`test/db/tls.test.ts`) uses
-  the TLS-only `postgres-tls` (port 55433) and `mysql-tls` (port 53307) servers and the test-only
-  CA, server and client certificates in `test/db/tls/` (`generate.sh` remakes them).
-  A second checkout (a parallel worktree) sets `COMPOSE_PROJECT_NAME`, `TABLE_CRAFT_PG_PORT`,
-  `TABLE_CRAFT_MYSQL_PORT`, `TABLE_CRAFT_TIDB_PORT`, `TABLE_CRAFT_SSH_PORT`,
-  `TABLE_CRAFT_PG_TLS_PORT`, `TABLE_CRAFT_MYSQL_TLS_PORT`, `TABLE_CRAFT_MARIADB_PORT`, `TABLE_CRAFT_ORACLE_PORT`,
-  `TABLE_CRAFT_MSSQL_PORT`, `TABLE_CRAFT_REDIS_PORT`, `TABLE_CRAFT_REDIS_TLS_PORT`,
-  `TABLE_CRAFT_REDIS6_PORT`, `TABLE_CRAFT_REDIS5_PORT`, `TABLE_CRAFT_REDIS_CLUSTER_PORTS`,
-  `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` and `TABLE_CRAFT_REDIS5_CLUSTER_PORTS` (a range such as
-  `47101-47106`; a node's bus port is its port + 10000, so keep cluster ports below 55536) for
-  every `test:db`,
-  `test:smoke:db` and `docker compose` command so it gets its own containers, and copies the
-  main checkout's `.env` into its root (`cp <main checkout>/.env .env`, when the main checkout has
-  one) right after the worktree is made, before any test or plan work
-- `bun run test:smoke` - build the app and drive it under Playwright; needs a display
-- `bun run test:smoke:db` - the same against MySQL, TiDB and SQLite, plus PostgreSQL when
-  `TABLE_CRAFT_DATABASES` names it (its scenarios carry `it.skipIf(WITHOUT_POSTGRES)`); set
-  `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/NNN` to save a window PNG per scenario for plan NNN's
-  live test (each suite captures only for its own plan, via `evidenceFor("NNN")`).
-  `test/e2e/harness.ts` holds the launch, run, dialog and capture helpers
-- `bun run test:smoke:headless` / `bun run test:smoke:db:headless` - the same two suites in the
-  headless box (decision 063): a Linux container under Xvfb with its own keyring, so nothing takes
-  the screen, keyboard or clipboard. Agents and plan sessions run live tests here, with the same
-  compose variables and `TABLE_CRAFT_EVIDENCE_DIR`; paths narrow the run like `vitest run`
-  (`bun run test:smoke:db:headless test/e2e/namespace.smoke.test.ts`) and `-` arguments go to
-  Vitest. `test:smoke:db:headless:postgres`, `:oracle`, `:mssql`, `:redis` and `:all` add that
-  server to `mysql,tidb`, and the first line names the selected set. Files run `TABLE_CRAFT_SMOKE_WORKERS`
-  at a time, one display each (decision 096): unset, 3 on a Docker VM of 8 GiB or more and 1
-  below, shared with headless runs already on the VM, as the first line of the run says. The
-  files in `SERIAL_SMOKE_FILES` (`test/e2e/serialFiles.ts`) run after, one by one; a file that
-  flakes beside others moves there with its reason, never to a longer timeout. A run fails at
-  setup when a database container predates its seed; `bun test/db/up.ts` (with the compose
-  variables) fixes it. Evidence is Linux evidence;
-  macOS-only checks (`titleBar.smoke`, `update.live`, the packaged app) still run on the host
+- `bun run test:db` - the contract suites against MySQL, TiDB and MariaDB in `docker compose`
+  (decision 099); `TABLE_CRAFT_DATABASES` picks the servers, and `test:db:postgres`, `:oracle`,
+  `:mssql`, `:redis` and `:all` set it. Run the one for a plugin you touch. A git-ignored `.env`
+  names a shared remote TiDB the suites use instead of the container: never start a TiDB container
+  by hand or pass `--profile tidb`, and never touch that server outside the run's own `tc_run_*`
+  database. A worktree copies the main checkout's `.env` into its root
+  (`cp <main checkout>/.env .env`, when the main checkout has one) right after it is made, and one
+  running beside another checkout sets its own compose project and ports
+- `bun run test:smoke` / `bun run test:smoke:db` - build the app and drive it under Playwright on
+  the host; needs a display
+- `bun run test:smoke:headless` / `bun run test:smoke:db:headless` - the same suites in the headless
+  box (decision 063), where agents and plan sessions run live tests; `TABLE_CRAFT_EVIDENCE_DIR`
+  saves a plan's screenshots. `test/e2e/harness.ts` holds the helpers
 - `bun run typecheck` - `tsc --noEmit`, every program: the root one, the renderer
   (`packages/desktop/src/renderer/tsconfig.json`) and the renderer tests (`test/renderer/tsconfig.json`)
 - `bun run lint` / `bun run lint:fix` - ESLint, including the architecture fences
 - `bun run format:check` / `bun run format` - Prettier
-- `bun run desktop` - build and launch the app. It shows the datasources saved in the profile's
-  `datasources.json`, empty at first; add them in the Data Sources dialog (⌘N in the Database
-  pane). `TABLE_CRAFT_DATASOURCE` adds one ephemeral datasource on top, never saved, and opens a
-  console on it, e.g.
-  `{"id":"pg","pluginId":"postgres","config":{"host":"127.0.0.1","port":55432,"database":"table_craft","user":"table_craft","password":"table_craft"}}`
-  for the `test:db:postgres` Postgres (decision 018 and its amendment). `TABLE_CRAFT_USER_DATA`
-  points the profile (layout, datasources, secrets, settings, themes, user plugins) at another
-  directory; the smoke harness gives every launch a fresh one, seeds `datasources.json` with
-  `seedDatasources`, `settings.json` with `seedSettings` and a user theme with `seedTheme`, and
-  on macOS passes `--use-mock-keychain` so `safeStorage` never touches the real keychain
+- `bun run desktop` - build and launch the app; `TABLE_CRAFT_DATASOURCE` adds one ephemeral
+  datasource and opens a console on it (decision 018), `TABLE_CRAFT_USER_DATA` points the profile
+  at another directory
 - `bun run desktop:package` - the installer for this host's platform and architecture in
   `packages/desktop/release/`, versioned from git by `scripts/version.ts`; macOS is first-class,
   Windows and Linux best-effort. After a build, `bun run --cwd packages/desktop package --x64`
   makes an Intel DMG on Apple silicon. Never commit `release/`
-- `bun run desktop:package:dir` - only the unpacked app, which the packaged suite launches
-- `bun run test:smoke:packaged` - build the unpacked app and run `test/e2e/packaged.smoke.test.ts`
-  against it on SQLite; `test:smoke:packaged:db` adds MySQL (and PostgreSQL when selected).
-  `TABLE_CRAFT_APP_EXECUTABLE` points the harness at a packaged binary instead of the dev build
-- `bun run readme:media` - record the README GIFs into `docs/media/` (decision 036): builds the app,
+- `bun run desktop:package:dir` - only the unpacked app; `bun run test:smoke:packaged` runs the
+  packaged suite against it on the host
+- `bun run readme:media` - record the GIFs of the README and the guide into `docs/media/` (decision 036): builds the app,
   reloads the demo `shop` database in the `test:db:postgres` Postgres and the demo keys in db 3 of
   the `test:db:redis` Redis, and drives one scene per GIF. Needs Docker, ffmpeg and a display;
   `README_MEDIA=explain,grid` re-records only those. Re-record after a UI change a GIF shows
@@ -128,7 +71,8 @@ Bun is the toolchain only. Electron runs Node, so nothing under `packages/*/src`
 `plugins/*/src` may use `Bun.*` APIs, and drivers must be Node-compatible (decision 001).
 
 Nothing in the tree names the version; the root `package.json` is `0.0.0`. A git tag cuts a
-release.
+release, following `RELEASING.md`; only a maintainer tags, publishes a draft or approves the
+`release` and `plugins` environments.
 
 ## Verify
 
@@ -266,7 +210,9 @@ test/                      Vitest suites, `givenX_whenY_thenZ`
                            release is published
 docs/design/               specification.md, design-system.md
 docs/decisions/            one numbered file per durable decision
-docs/media/                the README's GIFs, recorded by `readme:media` and nothing else
+docs/guide/                the user guide, one page per topic, indexed from the README
+docs/media/                the GIFs of the README and the guide, recorded by `readme:media` and
+                           nothing else
 docs/plans/                one plan per feature with its Live test section; untracked
                            except TEMPLATE.md (decision 035)
 docs/evidence/NNN/         screenshots from each plan's live test; untracked (decision 035)
@@ -324,7 +270,13 @@ or a named constant over a comment.
   is filled in. Plans and evidence stay out of git; never commit them (decision 035). A plan
   worked in its own worktree starts by copying the main checkout's `.env` there, so its TiDB
   suites use the remote server; `.env` is git-ignored and never committed.
-- `README.md` is for users. `test/renderer/readme.test.ts` checks it against the code: images,
-  anchors, the shortcut table against the action registry, the settings table against the defaults,
-  the plugin capabilities, and the `bun run` scripts. Change the README with the behaviour it
-  describes, and re-record a GIF whose scene changed.
+- `README.md` and `docs/guide/` are for users, `CONTRIBUTING.md` for contributors (decision 132).
+  `test/renderer/userDocs.test.ts` checks them against the code: images and links relative to each
+  page, anchors across pages, the README's Documentation index against the guide pages and its
+  200-line budget, the shortcut table against the action registry, the settings table against the
+  defaults, the plugin capabilities, and CONTRIBUTING's `bun run` scripts. Document a behaviour in
+  the guide page it belongs to, change the README only for a Highlight, the Quick start or the
+  index, and re-record a GIF whose scene changed.
+- Branch names, commit subjects and pull requests follow `CONTRIBUTING.md` (Branches, Commits,
+  Pull requests); a pull request's description fills in `.github/pull_request_template.md`, drafted
+  and opened with the project skill `.agents/skills/create-pr`.
