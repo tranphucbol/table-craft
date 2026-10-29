@@ -135,6 +135,37 @@ describe("pluginManifestSchema", () => {
   });
 });
 
+describe("pluginManifestSchema brands", () => {
+  const parses = (brands: unknown): boolean => pluginManifestSchema.safeParse({ ...VALID_MANIFEST, brands }).success;
+
+  it("givenDistinctSlugBrands_whenManifestParsed_thenAccepted", () => {
+    expect(
+      parses([
+        { id: "mysql", name: "MySQL" },
+        { id: "tidb", name: "TiDB" },
+      ]),
+    ).toBe(true);
+  });
+
+  it("givenDuplicateBrandIds_whenManifestParsed_thenRejected", () => {
+    expect(
+      parses([
+        { id: "mysql", name: "MySQL" },
+        { id: "mysql", name: "Percona" },
+      ]),
+    ).toBe(false);
+  });
+
+  it("givenBrandIdWithCapitals_whenManifestParsed_thenRejected", () => {
+    expect(parses([{ id: "MySQL", name: "MySQL" }])).toBe(false);
+    expect(parses([])).toBe(false);
+  });
+
+  it("givenNoBrands_whenManifestParsed_thenAccepted", () => {
+    expect(pluginManifestSchema.parse(VALID_MANIFEST).brands).toBeUndefined();
+  });
+});
+
 describe("pluginManifestSchema network", () => {
   const PORT = { key: "port", label: "Port", kind: "number" };
   const TIMEOUT = { key: "connectTimeout", label: "Timeout", kind: "number" };

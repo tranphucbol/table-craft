@@ -162,6 +162,8 @@ class OracleSession implements Session {
   #explained = 0;
 
   readonly serverVersion: string | null;
+  /** The manifest's one brand. */
+  readonly serverBrand = "oracle";
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;

@@ -209,6 +209,17 @@ function urlSetsDeclared(connection: {
   );
 }
 
+/** A simple-icons slug, the one public catalogue of database product ids (decision 128). */
+export const BRAND_ID = /^[a-z0-9_]+$/;
+
+/** A database product a plugin speaks; `id` is a simple-icons slug, `name` what a row shows. */
+export const brandSchema = z.strictObject({
+  id: z.string().regex(BRAND_ID, { message: "expected a simple-icons slug: lower-case letters, digits and underscores" }),
+  name: z.string().min(1),
+});
+
+export type Brand = z.infer<typeof brandSchema>;
+
 function includesAny(capabilities: readonly string[], ...wanted: readonly string[]): boolean {
   return wanted.some((capability) => capabilities.includes(capability));
 }
@@ -224,6 +235,14 @@ export const pluginManifestSchema = z
     capabilities: z.array(z.enum(CAPABILITIES)),
     /** The highlighter the console uses for this plugin's dialect (decision 008). */
     highlight: z.string().min(1),
+    /** The database products the plugin speaks, its default first (decision 128). Absent: rows name the plugin. */
+    brands: z
+      .array(brandSchema)
+      .min(1)
+      .refine((brands) => new Set(brands.map((brand) => brand.id)).size === brands.length, {
+        message: "brand ids must be unique",
+      })
+      .optional(),
     /** The connection form, readable without running plugin code (decision 019). */
     connection: z
       .strictObject({

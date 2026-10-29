@@ -692,6 +692,16 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
     });
 
+    const brands = fixture.manifest.brands;
+    it.runIf(brands !== undefined)("givenBrands_whenSessionOpens_thenServerBrandIsDeclared", async () => {
+      await withSession(plugin, fixture, (session) => {
+        if (session.serverBrand !== undefined) {
+          expect(brands?.map((brand) => brand.id)).toContain(session.serverBrand);
+        }
+        return Promise.resolve();
+      });
+    });
+
     it("givenSession_whenConnected_thenTlsIsNullOrDescribed", async () => {
       await withSession(plugin, fixture, (session) => {
         if (session.tls !== undefined && session.tls !== null) {

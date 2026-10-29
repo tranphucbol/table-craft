@@ -98,6 +98,8 @@ export {
   type TableDesign,
 } from "./objects.js";
 export {
+  BRAND_ID,
+  brandSchema,
   CONNECTION_FIELD_GROUPS,
   CONNECTION_FIELD_KINDS,
   CONNECTION_URL_FORMS,
@@ -109,6 +111,7 @@ export {
   pluginManifestSchema,
   TLS_FIELD_ROLES,
   tlsSpecSchema,
+  type Brand,
   type ConnectionField,
   type ConnectionFieldGroup,
   type ConnectionFieldKind,

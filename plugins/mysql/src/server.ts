@@ -23,8 +23,10 @@ function release(match: RegExpExecArray): number[] {
     .map(Number);
 }
 
-/** The servers the MySQL plugin speaks to. */
-export type MysqlServerKind = "mysql" | "mariadb" | "tidb";
+/** The servers the MySQL plugin speaks to; each is a manifest `brands` id, the session's `serverBrand`. */
+export const MYSQL_SERVER_KINDS = ["mysql", "mariadb", "tidb"] as const;
+
+export type MysqlServerKind = (typeof MYSQL_SERVER_KINDS)[number];
 
 /** Which server answered, and its own release: TiDB's after its marker, MariaDB's past the handshake prefix. */
 export interface ServerDialect {
