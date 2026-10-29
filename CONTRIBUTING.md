@@ -155,14 +155,34 @@ Name it `<kind>/<what-it-does>`, in lower-case words joined by hyphens:
 A commit is one step a reviewer can read on its own: a change and its tests together, and the
 checks still pass after it.
 
-- The subject is an imperative sentence about what the app or the code now does, capitalised,
-  with no type prefix (`feat:`, `fix(ui):`) and no full stop: _Let a datasource have the database
-  enforce its console statement timeout_, _Draw datasource rows with their database logos_.
-- Keep the subject near 72 characters; name the thing, not the files.
+The subject follows [Conventional Commits](https://www.conventionalcommits.org/):
+`<type>(<scope>): <summary>`, as in `feat(mssql): add the optional SQL Server plugin on tedious`.
+
+| Type       | For                                                                   |
+| ---------- | --------------------------------------------------------------------- |
+| `feat`     | something the app, a plugin or the plugin API can now do              |
+| `fix`      | a behaviour that was wrong and now is right                           |
+| `docs`     | the README, the guide, CONTRIBUTING, RELEASING, decisions, AGENTS.md  |
+| `test`     | tests, fixtures and the test harness, with no change to the app       |
+| `refactor` | a change to the code that keeps its behaviour                         |
+| `build`    | dependencies, the lockfile, packaging and build scripts               |
+| `ci`       | `.github/workflows/`                                                  |
+| `chore`    | anything else a user cannot see: agent skills, editor and repo config |
+
+- The scope is the area touched, in lower case: a plugin id (`mysql`, `redis`, `oracle`), a
+  package or process (`plugin-api`, `core`, `engine`, `desktop`, `renderer`, `mcp`), a part of the
+  window (`console`, `grid`, `explorer`, `settings`, `ui`), or a suite (`e2e`, `db`). Join two with a
+  comma (`feat(plugin-api,mysql): ...`); leave it out when the change has no single area
+  (`docs: ...`).
+- The summary is imperative and lower case, with no full stop: _fix(console): ask for the
+  parameter hint again when typing outruns it_. Name the thing, not the files.
+- Keep the whole subject within 72 characters.
+- A change that needs a new major of the plugin API (decision 106) adds `!` after the scope,
+  `feat(plugin-api)!: ...`, and says what breaks in a `BREAKING CHANGE:` line of the body.
 - Add a body, wrapped at 72, when the why or a limit is not obvious from the subject and the diff:
   what the user sees, what a plugin must now declare, a decision number.
-- A new decision record goes in its own commit: _Record decision 128: plugins name the products
-  they speak_. So does a lockfile change alone: _Lock simple-icons_.
+- A new decision record goes in its own commit: _docs: record decision 128, plugins name the
+  products they speak_. So does a lockfile change alone: _build: lock simple-icons_.
 - Never commit `docs/plans/`, `docs/evidence/`, `.env`, `gdb/`, `release/` or `dist/`.
 
 ## Pull requests
