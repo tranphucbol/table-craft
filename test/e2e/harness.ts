@@ -67,8 +67,8 @@ export interface SavedDatasource {
   readonly comment?: string;
   readonly keepAliveSeconds?: number;
   readonly statementTimeoutSeconds?: number;
-  /** Plan 117's per-datasource MCP access; absent is off. */
-  readonly agentAccess?: "off" | "read" | "ask";
+  /** Plans 117 and 120's per-datasource MCP access; absent is off. */
+  readonly agentAccess?: "off" | "askReads" | "read" | "ask";
   /** Plan 118's remembered product, a manifest brand id such as `tidb`. */
   readonly brand?: string;
   readonly config: Readonly<Record<string, string | number | boolean>>;
