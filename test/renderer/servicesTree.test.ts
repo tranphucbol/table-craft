@@ -129,6 +129,7 @@ const AGENT_STATUS: McpStatus = {
       datasourceId: "pg",
       at: 0,
       durationMs: 4,
+      approvalWaitMs: 0,
       outcome: "ok",
       target: "SELECT 2",
       rowCount: 1,

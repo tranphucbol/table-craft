@@ -79,6 +79,7 @@ describe("agent activity and runs", () => {
     datasourceId: "shop",
     at: NOW,
     durationMs: 4,
+    approvalWaitMs: 0,
     outcome: "ok",
     clientId: "mcp-1",
     clientName: "Claude Code",

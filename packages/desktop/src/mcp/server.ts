@@ -12,6 +12,7 @@ import {
 } from "@table-craft/desktop/mcp/jsonrpc.js";
 import { TOOL_DEFINITIONS, isToolName, type Tools } from "@table-craft/desktop/mcp/tools.js";
 import { APPROVAL_REFUSALS } from "@table-craft/desktop/mcp/approvals.js";
+import { approvalWait } from "@table-craft/desktop/mcp/toolKit.js";
 import { getPrompt, listPrompts, RESOURCE_TEMPLATES } from "@table-craft/desktop/mcp/resources.js";
 import type { McpActivityView, McpCallView, McpClientView } from "@table-craft/desktop/settings/mcp.js";
 
@@ -120,6 +121,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       datasourceId: entry.datasourceId,
       at: entry.at,
       durationMs: entry.durationMs,
+      approvalWaitMs: entry.approvalWaitMs,
       outcome: entry.outcome,
     };
     options.onCall({ ...entry, clientId: session.id, clientName: session.name });
@@ -139,6 +141,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         datasourceId: null,
         at: started,
         durationMs: options.now() - started,
+        approvalWaitMs: 0,
         outcome: "refused",
         target: null,
         rowCount: null,
@@ -149,15 +152,18 @@ export function createMcpServer(options: McpServerOptions): McpServer {
     if (options.paused()) return refused(APPROVAL_REFUSALS.paused);
     const blocked = await options.admit(session.name, session.version);
     if (blocked !== null) return refused(blocked);
+    const waits = approvalWait();
     const answer = await options.tools.call(name, params.arguments ?? {}, {
       sessionId: session.id,
       clientName: session.name,
+      waits,
     });
     finished(session, {
       tool: name,
       datasourceId: answer.datasourceId,
       at: started,
-      durationMs: options.now() - started,
+      durationMs: Math.max(0, options.now() - started - waits.ms()),
+      approvalWaitMs: waits.ms(),
       outcome: answer.outcome,
       target: answer.target,
       rowCount: answer.rowCount,

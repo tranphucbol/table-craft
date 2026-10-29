@@ -132,6 +132,7 @@ function call(id: number, clientName: string, outcome: McpActivityView["outcome"
     datasourceId: "shop",
     at: id,
     durationMs: 1,
+    approvalWaitMs: 0,
     outcome,
     target: "SELECT 1",
     rowCount: 1,

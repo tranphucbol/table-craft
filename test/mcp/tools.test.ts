@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { ASK_READS_REASON, READ_ONLY_REASON, TRANSACTION_REASON } from "@table-craft/desktop/mcp/access.js";
 import { APPROVAL_REFUSALS } from "@table-craft/desktop/mcp/approvals.js";
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
+import { createMcpServer } from "@table-craft/desktop/mcp/server.js";
 import { TOOL_DEFINITIONS } from "@table-craft/desktop/mcp/tools.js";
-import { AGENT_CALLER, agentHarness, textOf, waitingApproval } from "../support/mcpHarness.js";
+import type { McpActivityView } from "@table-craft/desktop/settings/mcp.js";
+import { agentCaller, agentHarness, textOf, waitingApproval, type AgentHarness } from "../support/mcpHarness.js";
 
 const SHOP: AgentDatasource = { id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access: "ask" };
 const READ_ONLY_SHOP: AgentDatasource = { ...SHOP, access: "read" };
@@ -56,7 +58,7 @@ describe("MCP tools", () => {
   it("givenOneDatasourceOff_whenListingDatasources_thenOnlyExposedOnesAreNamed", async () => {
     const harness = agentHarness([SHOP, { ...SHOP, id: "hidden", name: "Hidden", access: "off" }]);
 
-    const answer = await harness.tools.call("list_datasources", {}, AGENT_CALLER);
+    const answer = await harness.tools.call("list_datasources", {}, agentCaller());
 
     expect(answer.outcome).toBe("ok");
     expect(answer.result.structuredContent).toEqual({
@@ -67,7 +69,7 @@ describe("MCP tools", () => {
   it("givenDatasourceOff_whenQueried_thenRefusedWithoutConnecting", async () => {
     const harness = agentHarness([{ ...SHOP, access: "off" }]);
 
-    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: "SELECT 1" }, AGENT_CALLER);
+    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: "SELECT 1" }, agentCaller());
 
     expect(answer.outcome).toBe("refused");
     expect(answer.result.isError).toBe(true);
@@ -92,7 +94,7 @@ describe("MCP tools", () => {
   it("givenShownNamespacesWithoutMain_whenListingSchemas_thenMainIsHidden", async () => {
     const harness = agentHarness([{ ...SHOP, schemas: ["elsewhere"] }]);
 
-    const tables = await harness.tools.call("list_tables", { datasource: "shop", schema: "main" }, AGENT_CALLER);
+    const tables = await harness.tools.call("list_tables", { datasource: "shop", schema: "main" }, agentCaller());
 
     expect(tables.result.isError).toBe(true);
     expect(textOf(tables.result)).toContain('No schema "main" is shown');
@@ -140,7 +142,7 @@ describe("MCP tools", () => {
   it("givenReadAccess_whenWriting_thenRefusedAndRecordedCancelled", async () => {
     const harness = agentHarness([READ_ONLY_SHOP]);
 
-    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, AGENT_CALLER);
+    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, agentCaller());
 
     expect(answer.outcome).toBe("refused");
     expect(textOf(answer.result)).toBe(READ_ONLY_REASON);
@@ -191,7 +193,7 @@ describe("MCP tools", () => {
   it("givenUserDenies_whenWriting_thenNothingChangesAndHistorySaysCancelled", async () => {
     const harness = agentHarness([SHOP]);
 
-    const running = harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, AGENT_CALLER);
+    const running = harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, agentCaller());
     harness.approvals.answer(await waitingApproval(harness.approvals), "deny");
     const answer = await running;
 
@@ -259,7 +261,7 @@ describe("MCP tools", () => {
   it("givenAskReads_whenSelectDenied_thenRefusedAndRecordedCancelled", async () => {
     const harness = agentHarness([ASK_READS_SHOP]);
 
-    const running = harness.tools.call("run_query", { datasource: "shop", sql: SELECT_NAMES }, AGENT_CALLER);
+    const running = harness.tools.call("run_query", { datasource: "shop", sql: SELECT_NAMES }, agentCaller());
     harness.approvals.answer(await waitingApproval(harness.approvals), "deny");
     const answer = await running;
 
@@ -274,7 +276,7 @@ describe("MCP tools", () => {
   it("givenAskReads_whenUpdate_thenRefusedWithoutAsking", async () => {
     const harness = agentHarness([ASK_READS_SHOP]);
 
-    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, AGENT_CALLER);
+    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, agentCaller());
 
     expect(answer.outcome).toBe("refused");
     expect(textOf(answer.result)).toBe(ASK_READS_REASON);
@@ -331,7 +333,7 @@ describe("MCP tools", () => {
     const harness = agentHarness([ASK_READS_SHOP]);
     harness.approvals.setWindows(false);
 
-    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: SELECT_NAMES }, AGENT_CALLER);
+    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: SELECT_NAMES }, agentCaller());
 
     expect(answer.outcome).toBe("denied");
     expect(textOf(answer.result)).toBe(APPROVAL_REFUSALS.noWindow);
@@ -355,5 +357,106 @@ describe("MCP tools", () => {
 
     expect(answer.isError).toBe(true);
     expect(textOf(answer)).toContain("Invalid arguments");
+  });
+});
+
+const USER_THINKS_MS = 20_000;
+const WORKING_TIME_BOUND_MS = 1_000;
+
+/** The MCP server over the harness's tools, so a test reads what Services and Agent Activity get. */
+function served(harness: AgentHarness) {
+  const calls: Omit<McpActivityView, "id">[] = [];
+  const server = createMcpServer({
+    tools: harness.tools,
+    resources: { list: () => ({ resources: [] }), read: () => Promise.resolve({}) },
+    admit: () => Promise.resolve(null),
+    onCall: (entry) => calls.push(entry),
+    serverVersion: "1.0.0",
+    paused: () => false,
+    now: harness.context.now,
+    newSessionId: () => "mcp-1",
+    onChange: () => undefined,
+    onEnded: () => undefined,
+  });
+  let id = 0;
+  const rpc = (sessionId: string | null, method: string, params: unknown) =>
+    server.handle(sessionId, JSON.stringify({ jsonrpc: "2.0", id: (id += 1), method, params }));
+  const session = rpc(null, "initialize", { clientInfo: { name: "Claude Code" } }).then(
+    (reply) => reply.sessionId ?? "",
+  );
+  return {
+    calls,
+    call: async (name: string, args: unknown) => rpc(await session, "tools/call", { name, arguments: args }),
+  };
+}
+
+/** Starts a call, lets the user take USER_THINKS_MS to give `answer`, and waits for it to end. */
+async function answeredLate(
+  harness: AgentHarness,
+  running: Promise<unknown>,
+  answer: Parameters<AgentHarness["approvals"]["answer"]>[1],
+): Promise<void> {
+  const approvalId = await waitingApproval(harness.approvals);
+  harness.advance(USER_THINKS_MS);
+  harness.approvals.answer(approvalId, answer);
+  await running;
+}
+
+describe("MCP tools, the wait for approval", () => {
+  it("givenAskBeforeWrites_whenUserAllowsAfter20s_thenCallTimeLeavesOutTheWait", async () => {
+    const harness = agentHarness([SHOP]);
+    const server = served(harness);
+
+    await answeredLate(harness, server.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }), "allowOnce");
+
+    const [call] = server.calls;
+    expect(call?.outcome).toBe("ok");
+    expect(call?.approvalWaitMs).toBeGreaterThanOrEqual(USER_THINKS_MS);
+    expect(call?.durationMs).toBeLessThan(WORKING_TIME_BOUND_MS);
+  });
+
+  it("givenAskBeforeReads_whenUserAllowsAfter20s_thenHistoryDurationLeavesOutTheWait", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+    const server = served(harness);
+
+    await answeredLate(harness, server.call("run_query", { datasource: "shop", sql: SELECT_NAMES }), "allowOnce");
+
+    expect(harness.history).toMatchObject([{ sql: SELECT_NAMES, outcome: "success" }]);
+    expect(harness.history[0]?.durationMs).toBeLessThan(WORKING_TIME_BOUND_MS);
+    expect(harness.history[0]?.startedAt).toBeLessThan(USER_THINKS_MS);
+  });
+
+  it("givenAllowedForSession_whenSecondWrite_thenApprovalWaitIsZero", async () => {
+    const harness = agentHarness([SHOP]);
+    const server = served(harness);
+
+    await answeredLate(harness, server.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }), "allowKind");
+    await server.call("run_query", { datasource: "shop", sql: "UPDATE customers SET name = 'Grace' WHERE id = 2" });
+
+    expect(server.calls.map((call) => call.outcome)).toEqual(["ok", "ok"]);
+    expect(server.calls[0]?.approvalWaitMs).toBeGreaterThanOrEqual(USER_THINKS_MS);
+    expect(server.calls[1]?.approvalWaitMs).toBe(0);
+  });
+
+  it("givenApprovalDenied_whenCallEnds_thenWaitIsReportedAndDurationNearZero", async () => {
+    const harness = agentHarness([SHOP]);
+    const server = served(harness);
+
+    await answeredLate(harness, server.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }), "deny");
+
+    const [call] = server.calls;
+    expect(call?.outcome).toBe("denied");
+    expect(call?.approvalWaitMs).toBeGreaterThanOrEqual(USER_THINKS_MS);
+    expect(call?.durationMs).toBeLessThan(WORKING_TIME_BOUND_MS);
+    expect(harness.history[0]?.durationMs).toBeLessThan(WORKING_TIME_BOUND_MS);
+  });
+
+  it("givenReadAccess_whenQueryRuns_thenApprovalWaitIsZero", async () => {
+    const harness = agentHarness([READ_ONLY_SHOP]);
+    const server = served(harness);
+
+    await server.call("run_query", { datasource: "shop", sql: SELECT_NAMES });
+
+    expect(server.calls).toMatchObject([{ outcome: "ok", approvalWaitMs: 0 }]);
   });
 });
