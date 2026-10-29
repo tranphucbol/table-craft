@@ -217,9 +217,10 @@ plugin API stays compatible. A plugin should pass `runPluginContract` from
 
 ## Releases
 
-A maintainer cuts a release by pushing a `v*` tag; nothing in the tree names the version. Never push
-a tag yourself, and never run `bun run plugins:publish` without `--dry-run`: only the publish
-workflow publishes the plugin packages.
+A maintainer cuts a release by pushing a `v*` tag; nothing in the tree names the version.
+[RELEASING.md](RELEASING.md) is the checklist they follow, from choosing the version to checking
+what reached npm. Never push a tag yourself, and never run `bun run plugins:publish` without
+`--dry-run`: only the publish workflow publishes the plugin packages.
 
 ## License
 

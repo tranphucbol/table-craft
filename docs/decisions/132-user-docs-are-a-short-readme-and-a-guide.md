@@ -12,12 +12,16 @@ documented in the guide page it belongs to.
 `CONTRIBUTING.md` at the repository root is the contributor's on-ramp: setting up, which tests a
 change needs, the rules review checks and why, and how to report a bug. It links to `AGENTS.md` for
 every command and to the `local-testing` skill (decision 133) for every test server, environment
-variable and port rather than copying them.
+variable and port rather than copying them. `RELEASING.md` beside it is the maintainer's
+checklist for a release, from choosing the version to checking what reached npm; it describes the
+workflows and links decisions 044, 106, 107 and 109 rather than restating them.
 
-One test, `test/renderer/userDocs.test.ts`, checks the README, CONTRIBUTING and every guide page:
+One test, `test/renderer/userDocs.test.ts`, checks the README, CONTRIBUTING, RELEASING and every
+guide page:
 images and links resolve relative to the page that has them, as GitHub resolves them, anchors are
 checked against the target page's headings, the Documentation index lists every guide page once,
-and the tables are checked in the page that holds them.
+and the tables are checked in the page that holds them. RELEASING's job table must list the jobs
+of `ci.yml` in order, and it must name every environment and secret the workflows use.
 
 Old links to README sections get no redirect anchors.
 
