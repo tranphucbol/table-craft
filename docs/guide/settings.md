@@ -41,6 +41,7 @@ back to its default without affecting the others.
 | `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure   | `ask`                                          |
 | `data.nullText`                        | 1–16 characters                                                                                 | `<null>`                                       |
 | `data.groupDigits`                     | `true`, `false`                                                                                 | `false`                                        |
+| `data.detectJson`                      | `true`, `false`; open a text value holding a JSON object or array formatted in the value panel  | `true`                                         |
 | `data.pageRows`                        | 10–10,000                                                                                       | 500                                            |
 | `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                            | 100,000                                        |
 | `data.aggregates`                      | which of `count`, `distinct`, `sum`, `avg`, `min`, `max` the grid's selection line shows        | `["count","distinct","sum","avg","min","max"]` |

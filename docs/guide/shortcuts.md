@@ -56,6 +56,7 @@ See [Shell and actions](../design/specification.md#shell-and-actions).
 | Submit                    | `⌘↩`    | `Ctrl+Enter`           |
 | Find in Result            | `⌘F`    | `Ctrl+F`               |
 | Transpose                 | `⌥⌘T`   | `Ctrl+Alt+T`           |
+| Toggle JSON View          | `⌥⌘J`   | `Ctrl+Alt+J`           |
 | Toggle Boolean            | `Space` | `Space`                |
 | Settings…                 | `⌘,`    | `Ctrl+,`               |
 | Increase Editor Font Size | `⌘=`    | `Ctrl+=`               |

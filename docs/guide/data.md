@@ -30,6 +30,13 @@ show. **Transpose** (`⌥⌘T`) turns records into columns, handy for a wide row
 panel saves it to a file, loads a file into the cell, and draws it when it holds a PNG, JPEG, GIF
 or WebP image.
 
+The value panel shows JSON formatted and coloured: a `json` or `jsonb` column, and a text column
+whose value is a JSON object or array, such as a `varchar` holding `{"domain":"PAYMENT",…}`. A
+muted line says it is shown formatted and stored as is. `{}` in the panel's header, or **Toggle
+JSON View** (`⌥⌘J`), switches that column back to the exact stored text and keeps it so as you move
+between rows, until the next run. Turn off **Detect JSON in text values** in Settings → Data Editor
+to open text raw by default.
+
 ![Find, filter and aggregate in the grid](../media/grid-helpers.gif)
 
 See [Result grid](../design/specification.md#result-grid).
@@ -49,6 +56,10 @@ A console result is editable too when it reads one table and shows its primary k
 own session, so in manual commit mode your edits wait in its open transaction for **Commit**.
 Joins, aggregates, `DISTINCT` and results without a key stay read-only, and the toolbar says why;
 computed columns in an editable result take no edits.
+
+The value panel edits JSON formatted too. A value stored compact is written back compact, with only
+your change; one stored indented is written as you typed it. Text that is no longer JSON is saved
+as typed, under a `Not valid JSON — saved as typed` warning.
 
 ![Table data editor](../media/table-editor.gif)
 
