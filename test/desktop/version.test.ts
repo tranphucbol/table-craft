@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { appVersion, notesStartTag, previousTag, VersionError } from "../../packages/desktop/scripts/version.js";
-import { channelOf } from "@table-craft/desktop/settings/channel.js";
+import { channelOf, effectiveChannel } from "@table-craft/desktop/settings/channel.js";
 import type { Git } from "../../packages/desktop/scripts/version.js";
 
 const SHORT_SHA = "8379c80";
@@ -89,5 +89,14 @@ describe("release tags", () => {
     ["1.16.0-rc.1", "stable"],
   ])("givenVersion %s_whenChannelOf_thenChannel %s", (version, channel) => {
     expect(channelOf(version)).toBe(channel);
+  });
+
+  it.each([
+    ["auto", "1.16.0-beta.2", "beta"],
+    ["auto", "1.15.0", "stable"],
+    ["stable", "1.16.0-beta.2", "stable"],
+    ["beta", "1.15.0", "beta"],
+  ] as const)("givenSetting %s on %s_whenEffectiveChannel_thenChannel %s", (setting, version, channel) => {
+    expect(effectiveChannel(setting, version)).toBe(channel);
   });
 });

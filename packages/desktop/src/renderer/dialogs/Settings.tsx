@@ -37,9 +37,11 @@ import {
   useSettingsDialog,
   type SettingsPage,
 } from "@table-craft/desktop/renderer/state/settingsDialog.js";
+import { useUpdate } from "@table-craft/desktop/renderer/state/update.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { effectiveChannel } from "@table-craft/desktop/settings/channel.js";
 import {
   BRAND_ICON_COLORS,
   type BrandIconColor,
@@ -674,8 +676,11 @@ function DataEditorPage() {
 function AdvancedPage() {
   const level = useSettings((state) => state.settings.log.level);
   const checkAutomatically = useSettings((state) => state.settings.updates.checkAutomatically);
+  const channel = useSettings((state) => state.settings.updates.channel);
+  const appVersion = useUpdate((store) => store.state.current);
   const debugId = useId();
   const updatesId = useId();
+  const betaId = useId();
   return (
     <>
       <SectionTitle>Log</SectionTitle>
@@ -712,7 +717,10 @@ function AdvancedPage() {
             type="checkbox"
             checked={checkAutomatically}
             onChange={(event) =>
-              update((current) => ({ ...current, updates: { checkAutomatically: event.target.checked } }))
+              update((current) => ({
+                ...current,
+                updates: { ...current.updates, checkAutomatically: event.target.checked },
+              }))
             }
           />
           Check for updates automatically
@@ -720,6 +728,27 @@ function AdvancedPage() {
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
         Looks once after launch and then daily. Nothing downloads or installs until you click Update in the toolbar.
+      </p>
+      <FieldRow label="Beta versions" htmlFor={betaId}>
+        <label className="flex items-center gap-cell">
+          <input
+            id={betaId}
+            type="checkbox"
+            data-testid="settings-beta-channel"
+            checked={effectiveChannel(channel, appVersion) === "beta"}
+            onChange={(event) =>
+              update((current) => ({
+                ...current,
+                updates: { ...current.updates, channel: event.target.checked ? "beta" : "stable" },
+              }))
+            }
+          />
+          Get beta versions
+        </label>
+      </FieldRow>
+      <p className="col-start-2 text-ink-muted">
+        Betas come before each release and may have rough edges; plugins follow the same choice. Turning this off keeps
+        the beta you have until a newer release is out.
       </p>
       <FieldRow label="Check now">
         <ActionButton actionId={UPDATE_ACTION_IDS.check} />

@@ -1,0 +1,64 @@
+# Decision 134: GitHub's releases/latest skips pre-releases, so publishing a beta commits its signed
+# update manifest to beta/ on the orphan branch update-channels, where beta-channel apps read it.
+# The app trusts the Ed25519 signature, not the branch; channel-manifest.ts refuses an older beta, so
+# republishing an old pre-release cannot move anyone back. Protect the branch so only this workflow
+# pushes to it.
+name: Publish the beta channel
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-channels
+  cancel-in-progress: false
+
+jobs:
+  beta:
+    if: github.event.release.prerelease && contains(github.event.release.tag_name, '-beta.')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Pushes to update-channels.
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+      CHANNEL_BRANCH: update-channels
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Download the signed manifest
+        run: gh release download "$TAG" --pattern 'update-manifest.json*' --dir channel-release --repo "$GITHUB_REPOSITORY"
+      - name: Check out the channel branch
+        run: |
+          if git ls-remote --exit-code --heads origin "$CHANNEL_BRANCH"; then
+            git fetch --depth 1 origin "$CHANNEL_BRANCH"
+            git worktree add -B "$CHANNEL_BRANCH" channels FETCH_HEAD
+          else
+            git worktree add --orphan -b "$CHANNEL_BRANCH" channels
+          fi
+      - name: Check the manifest against the published beta
+        id: verdict
+        run: |
+          verdict=$(bun packages/desktop/scripts/channel-manifest.ts --tag "$TAG" \
+            --manifest channel-release/update-manifest.json --published channels/beta/update-manifest.json)
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+      - name: Commit it to beta/
+        if: steps.verdict.outputs.verdict == 'publish'
+        working-directory: channels
+        run: |
+          mkdir -p beta
+          cp ../channel-release/update-manifest.json ../channel-release/update-manifest.json.sig beta/
+          git add beta
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -m "chore(release): beta channel at $TAG"
+          git push origin "$CHANNEL_BRANCH"

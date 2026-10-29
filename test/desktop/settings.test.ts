@@ -49,7 +49,7 @@ const CHOSEN: Settings = {
     blobLimitMb: 64,
   },
   log: { level: "debug" },
-  updates: { checkAutomatically: false },
+  updates: { checkAutomatically: false, channel: "beta" },
   plugins: { registryUrl: "http://127.0.0.1:4873" },
   mcp: {
     enabled: true,
@@ -109,6 +109,23 @@ describe("settings store", () => {
     const { store: loading } = store(memoryFiles({ [PATH]: JSON.stringify(file) }));
 
     expect((await loading.load()).settings.log).toEqual({ level: "info" });
+  });
+
+  it("givenFileWithoutChannel_whenLoaded_thenAuto", async () => {
+    const file = { ...CHOSEN, updates: { checkAutomatically: false } };
+    const { store: loading } = store(memoryFiles({ [PATH]: JSON.stringify(file) }));
+
+    expect((await loading.load()).settings.updates).toEqual({ checkAutomatically: false, channel: "auto" });
+  });
+
+  it("givenUnknownChannel_whenLoaded_thenAuto", async () => {
+    const file = { ...CHOSEN, updates: { checkAutomatically: true, channel: "nightly" } };
+    const { store: loading } = store(memoryFiles({ [PATH]: JSON.stringify(file) }));
+
+    const loaded = await loading.load();
+
+    expect(loaded.settings.updates.channel).toBe("auto");
+    expect(loaded.warning).toBeNull();
   });
 
   it("givenOneOutOfRangeField_whenLoaded_thenOnlyThatFieldFallsBack", async () => {
