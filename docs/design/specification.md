@@ -517,7 +517,7 @@ handles belong to the port that created them and are released when it closes.
 
 | Request                 | Params                                                                                            | Result                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `session.open`          | none                                                                                              | `{ sessionId, pluginName, capabilities, serverVersion, serverBrand, namespace }`; `namespace` needs `currentNamespace`                           |
+| `session.open`          | none                                                                                              | `{ sessionId, pluginName, capabilities, serverVersion, serverBrand, namespace, serverTimeout }`; `namespace` needs `currentNamespace`            |
 | `script.split`          | `text`                                                                                            | `ClassifiedStatement[]`: `{ from, to, sql, kind, destructive, parameters }`                                                                      |
 | `sql.format`            | `text`, `options: FormatOptions`                                                                  | the formatted text, or `formatFailed`                                                                                                            |
 | `statement.execute`     | `sessionId`, `sql`, `parameters?`, `pageRows`, `fetchAllCap`, `timeoutSeconds?`, `node?`          | `{ handle, columns, typeClasses, rowCount, complete, cursorOpen, rowsAffected, firstWindow, transactionOpen, namespace?, reconnected?, reply? }` |
@@ -638,6 +638,9 @@ keepalive with the datasource's `keepAliveSeconds` (0 off). `timeoutSeconds` (0�
 0 waits), resolved by the renderer from the datasource and the `console.statementTimeoutSeconds`
 setting, limits a statement until its first page arrives: past it the engine cancels and answers
 `statementTimedOut`, and drops the session when the cancel goes unanswered for `CANCEL_GRACE_MS`.
+With `serverEnforced: true` beside it, on a session whose `serverTimeout` is not null, the engine
+also sends `serverTimeoutMs` so the server stops the statement by itself (decision 129); a
+statement the server stops answers `statementTimedOut` with the plugin's message, on any route.
 Before a statement on a session idle for the keepalive interval, a `keepAlive` plugin's `ping`
 runs, bounded by `PING_TIMEOUT_MS`; a failed ping, or an `execute` rejecting `connectionLost`,
 opens a new session, restores manual mode, and runs the statement there; the result carries
@@ -663,30 +666,30 @@ the UTF-16 offset in the request's SQL where the database says the statement fai
 plugin from its driver's error (`PluginError.position`); a statement run with bound parameters
 carries none, since binding rewrote the text (decision 082).
 
-| Code                  | Raised when                                                              |
-| --------------------- | ------------------------------------------------------------------------ |
-| `unknownPlugin`       | No plugin has the datasource's `pluginId`                                |
-| `pluginUnavailable`   | The plugin exists but failed to load; the message carries the reason     |
-| `invalidConfig`       | The datasource config fails the plugin's `connectionSchema`              |
-| `unknownSession`      | `sessionId` is not open on this port                                     |
-| `unknownHandle`       | The handle was released, or belongs to another port                      |
-| `connectionFailed`    | The plugin could not connect; the message is the driver's                |
-| `statementFailed`     | The database rejected the statement; the message is the driver's         |
-| `cancelled`           | `statement.cancel` stopped the statement                                 |
-| `introspectionFailed` | The database refused to describe a namespace; the hint says Synchronize  |
-| `definitionNotFound`  | `catalog.definition` named a relation the database no longer has         |
-| `explainUnsupported`  | `statement.explain` got a statement the plugin cannot explain; why       |
-| `timedOut`            | Test Connection got no answer within `PROBE_TIMEOUT_MS`                  |
-| `statementTimedOut`   | A statement ran past its `timeoutSeconds` and was cancelled              |
-| `connectionLost`      | The session was lost with a transaction open, or while a statement ran   |
-| `editRejected`        | Submit rolled back; `statementIndex` names the failing statement         |
-| `invalidRequest`      | The request did not parse, or asks a plugin for a capability it lacks    |
-| `sshAuthFailed`       | The bastion refused the SSH user, password, key or agent                 |
-| `sshHostUnreachable`  | The bastion did not answer, or the SSH handshake failed                  |
-| `sshHostKeyChanged`   | The bastion's key differs from the recorded one; names both and the file |
-| `sshHostKeyUnknown`   | The user did not trust the bastion's key, or no window could ask         |
-| `sshTunnelLost`       | The SSH connection under the session dropped                             |
-| `internal`            | Anything else; a bug                                                     |
+| Code                  | Raised when                                                                                         |
+| --------------------- | --------------------------------------------------------------------------------------------------- |
+| `unknownPlugin`       | No plugin has the datasource's `pluginId`                                                           |
+| `pluginUnavailable`   | The plugin exists but failed to load; the message carries the reason                                |
+| `invalidConfig`       | The datasource config fails the plugin's `connectionSchema`                                         |
+| `unknownSession`      | `sessionId` is not open on this port                                                                |
+| `unknownHandle`       | The handle was released, or belongs to another port                                                 |
+| `connectionFailed`    | The plugin could not connect; the message is the driver's                                           |
+| `statementFailed`     | The database rejected the statement; the message is the driver's                                    |
+| `cancelled`           | `statement.cancel` stopped the statement                                                            |
+| `introspectionFailed` | The database refused to describe a namespace; the hint says Synchronize                             |
+| `definitionNotFound`  | `catalog.definition` named a relation the database no longer has                                    |
+| `explainUnsupported`  | `statement.explain` got a statement the plugin cannot explain; why                                  |
+| `timedOut`            | Test Connection got no answer within `PROBE_TIMEOUT_MS`                                             |
+| `statementTimedOut`   | A statement ran past its `timeoutSeconds` and was cancelled, or the server stopped it at that limit |
+| `connectionLost`      | The session was lost with a transaction open, or while a statement ran                              |
+| `editRejected`        | Submit rolled back; `statementIndex` names the failing statement                                    |
+| `invalidRequest`      | The request did not parse, or asks a plugin for a capability it lacks                               |
+| `sshAuthFailed`       | The bastion refused the SSH user, password, key or agent                                            |
+| `sshHostUnreachable`  | The bastion did not answer, or the SSH handshake failed                                             |
+| `sshHostKeyChanged`   | The bastion's key differs from the recorded one; names both and the file                            |
+| `sshHostKeyUnknown`   | The user did not trust the bastion's key, or no window could ask                                    |
+| `sshTunnelLost`       | The SSH connection under the session dropped                                                        |
+| `internal`            | Anything else; a bug                                                                                |
 
 ## Shell and actions
 
@@ -1988,7 +1991,11 @@ migrated on load. A file that is not JSON, fails the schema, or has an unknown v
 the reason once. Two optional keys sit beside `readOnly` (decision 054): `keepAliveSeconds`
 (0–7,200; absent means 30, 0 turns keepalive off) and `statementTimeoutSeconds` (0–86,400; absent
 follows the `console.statementTimeoutSeconds` setting, 0 waits). The Data Sources dialog shows
-them in Advanced, the first for a plugin with `keepAlive`, the second for one with `cancel`. An
+them in Advanced, the first for a plugin with `keepAlive`, the second for one with `cancel`.
+`enforceTimeoutOnServer: true` (stored only when true, decision 129) has the database stop console,
+table editor and Explain statements at that limit too; its checkbox needs `serverTimeout`, and the
+hint under it says what the tested server stops. `agentTimeoutSeconds` (1–3,600) is the agents'
+override (MCP). An
 imported datasource carries `origin: { app: "datagrip" | "tablepro", id }` (decision 068), the
 other app's id for it, so a second import knows it; editing keeps it, and nothing else reads it.
 
@@ -2317,6 +2324,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `mcp.enabled`                          | boolean; serve AI agents ([Agents (MCP)](#agents-mcp))                                        | `false`       |
 | `mcp.port`                             | 1,024–65,535, on 127.0.0.1                                                                    | 47,820        |
 | `mcp.rowCap`                           | 1–1,000 rows an agent's query returns at once                                                 | 100           |
+| `mcp.statementTimeoutSeconds`          | 1–3,600 seconds an agent's statement runs, also on the server (decision 129)                  | 120           |
 
 Each field is read on its own: a missing or out-of-range one takes its default and the rest stand.
 A file that is not JSON, not an object or from a newer version is renamed to
@@ -2570,7 +2578,8 @@ datasources cap at `read`, and the MCP Server settings cannot raise a red dataso
 more than one statement. `read` runs on the agent's read-only session (`session.open` with
 `readOnly: true`); `write`, `ddl` and `other` are refused under `read`, and under `ask` wait for
 approval, then run on the agent's writable session; `transaction` is refused. Statements time out
-after 120 seconds. Rows come back as a fixed-width text table and as `structuredContent` (cells
+after `mcp.statementTimeoutSeconds` (default 120) or the datasource's `agentTimeoutSeconds`, and
+always ask the server to stop them there too (decision 129). Rows come back as a fixed-width text table and as `structuredContent` (cells
 cut at 1000 characters); when more rows exist the result is kept under a handle (`r1`, …, at most
 16, the oldest released) for `fetch_rows`.
 
@@ -2591,7 +2600,8 @@ the call is refused. The name is what the client says it is; the token is the au
 
 **Per-datasource policy.** `agentSchemas` (top-level namespace names; absent, the shown
 namespaces) narrows `list_schemas`, `list_tables`, `describe_table`, `get_ddl` and resources, never
-SQL (decision 008). `agentRowCap` (1–1,000) overrides `rowCap`. Both are set over
+SQL (decision 008). `agentRowCap` (1–1,000) overrides `rowCap`, and `agentTimeoutSeconds`
+(1–3,600) overrides `statementTimeoutSeconds`. All three are set over
 `datasources.setAgentPolicy`.
 
 **More tools.** `check_sql` (`inspection.inspect`, problems with line and column), `scan_keys` and
