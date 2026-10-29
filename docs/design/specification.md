@@ -1314,6 +1314,7 @@ interface PlanNode {
   readonly loops: number | null; // analysed only
   readonly properties: readonly { name: string; value: string }[]; // every other key, in order
   readonly children: readonly PlanNode[];
+  readonly warnings?: readonly string[]; // decision 130, e.g. "Full table scan: reads every row of orders."
 }
 
 interface ExplainedPlan {
@@ -2596,6 +2597,26 @@ on that datasource for the rest of the MCP session (**Allow reads on …** for a
 `key`: its badge reads `KEY`, and a **Key** row with the key and its database number replaces the
 SQL. Unanswered for 60 seconds the request is denied; with no window open, or while agents are
 paused, it is denied at once. A denied read is recorded as cancelled, like a denied write.
+
+**Plan** (decision 130). When the datasource's plugin declares `explain`, a statement request (not
+a key) offers a **SQL / Plan** toggle above the statement. Plan runs the action Explain Agent
+Request (`mcp.explainRequest`), which `renderer/state/approvalPlans.ts` answers: `sql.explainable`
+with `analyze: false`, then `statement.explain` with `analyze: false` on a `session.open` of its
+own, timed out after 10 seconds with `serverEnforced`, and closed after. That session is read-only
+for a read; for a write it takes the datasource's own mode, because MySQL refuses even a plain
+`EXPLAIN UPDATE` inside a READ ONLY transaction, and `explainable` has already refused a second
+statement, a nested EXPLAIN and analysing, so only the plain EXPLAIN reaches the server. It
+never analyses, never touches the agent's sessions, answers nothing and records nothing; the
+countdown keeps running, and a plan arriving after the answer is dropped. The plan shows every
+step expanded with Rows (est.) and, when any step has one, Cost (est.); a step with `warnings` is
+amber, and each distinct warning is listed once under the tree, so partitions of one table warn
+once. A timeout reads "The plan took longer than 10 s, so it was abandoned; the request is still
+waiting." The dialog keeps its own 10-second limit too, since the engine times nothing out where
+it cannot cancel (TiDB before 6.1, decision 088), and closes the session once the statement ends.
+The MySQL plugin warns about a full table scan (`Table scan on` in the
+tree, `access_type` `ALL`, or `index` on `PRIMARY`, in JSON, TiDB's `TableFullScan`, TiDB 3's `TableScan` over
+`range:[-inf,+inf]`) and about TiDB's `stats:pseudo` estimates. The `explain` tool lists the same
+warnings under the tree.
 
 **Open in Console.** The approval dialog can also hand the statement to a new console instead:
 the agent hears `handedOff`, and nothing runs.
