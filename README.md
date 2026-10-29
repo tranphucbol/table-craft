@@ -128,7 +128,7 @@ plugins. The [specification](docs/design/specification.md) describes the whole o
 
 Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setting up,
 which tests a change needs and the rules review checks; [AGENTS.md](AGENTS.md) is the full reference
-for commands and conventions.
+for commands and conventions, and [RELEASING.md](RELEASING.md) is how a maintainer cuts a release.
 
 ## License
 

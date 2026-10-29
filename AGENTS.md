@@ -71,7 +71,8 @@ Bun is the toolchain only. Electron runs Node, so nothing under `packages/*/src`
 `plugins/*/src` may use `Bun.*` APIs, and drivers must be Node-compatible (decision 001).
 
 Nothing in the tree names the version; the root `package.json` is `0.0.0`. A git tag cuts a
-release.
+release, following `RELEASING.md`; only a maintainer tags, publishes a draft or approves the
+`release` and `plugins` environments.
 
 ## Verify
 

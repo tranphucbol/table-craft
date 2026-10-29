@@ -35,6 +35,9 @@ import {
 const ROOT = resolve(import.meta.dirname, "../..");
 const README = "README.md";
 const CONTRIBUTING = "CONTRIBUTING.md";
+const RELEASING = "RELEASING.md";
+const WORKFLOWS = [".github/workflows/ci.yml", ".github/workflows/publish-plugins.yml"];
+const CI_WORKFLOW = ".github/workflows/ci.yml";
 const GUIDE_DIRECTORY = "docs/guide";
 const README_LINE_BUDGET = 200;
 const MEDIA_DIRECTORY = "docs/media";
@@ -79,9 +82,9 @@ function guidePages(): string[] {
     .map((file) => `${GUIDE_DIRECTORY}/${file}`);
 }
 
-/** README, CONTRIBUTING and every guide page, as paths from the repo root. */
+/** README, CONTRIBUTING, RELEASING and every guide page, as paths from the repo root. */
 function userDocs(): string[] {
-  return [README, CONTRIBUTING, ...guidePages()];
+  return [README, CONTRIBUTING, RELEASING, ...guidePages()];
 }
 
 /** A path written in `file`, as a path from the repo root, the way GitHub resolves it. */
@@ -124,6 +127,27 @@ function images(markdown: string): string[] {
     ...[...markdown.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((match) => match[1] ?? ""),
     ...[...markdown.matchAll(/<img src="([^"]+)"/g)].map((match) => match[1] ?? ""),
   ];
+}
+
+function scriptsNamed(file: string): string[] {
+  return [...read(file).matchAll(/\bbun run (\w[\w:-]*)/g)].map((match) => match[1] ?? "");
+}
+
+function packageScripts(): string[] {
+  const { scripts } = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
+  return Object.keys(scripts);
+}
+
+/** The ids under `jobs:` in a workflow, which sit two spaces in. */
+function workflowJobs(file: string): string[] {
+  const jobs = read(file).split("\njobs:\n")[1] ?? "";
+  return [...jobs.matchAll(/^ {2}([\w-]+):$/gm)].map((match) => match[1] ?? "");
+}
+
+function workflowValues(pattern: RegExp): string[] {
+  return [
+    ...new Set(WORKFLOWS.flatMap((file) => [...read(file).matchAll(pattern)].map((match) => match[1] ?? ""))),
+  ].sort();
 }
 
 function manifestName(pluginId: string): string {
@@ -313,10 +337,31 @@ describe("user docs", () => {
   });
 
   it("givenContributing_whenScriptsListed_thenEveryScriptExistsAndTheFourChecksAreNamed", () => {
-    const { scripts } = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
-    const listed = [...read(CONTRIBUTING).matchAll(/\bbun run (\w[\w:-]*)/g)].map((match) => match[1] ?? "");
+    const listed = scriptsNamed(CONTRIBUTING);
 
     expect(listed).toEqual(expect.arrayContaining(["readme:media", ...VERIFY_SCRIPTS]));
-    for (const script of listed) expect(Object.keys(scripts), `bun run ${script}`).toContain(script);
+    for (const script of listed) expect(packageScripts(), `bun run ${script}`).toContain(script);
+  });
+
+  it("givenReleasing_whenScriptsListed_thenEveryScriptExists", () => {
+    const listed = scriptsNamed(RELEASING);
+
+    expect(listed).toEqual(expect.arrayContaining(["api:check", "plugins:publish"]));
+    for (const script of listed) expect(packageScripts(), `bun run ${script}`).toContain(script);
+  });
+
+  it("givenReleasingJobTable_whenComparedWithCi_thenEveryJobIsDescribedInOrder", () => {
+    const described = tableRows(section(RELEASING, "Let CI build the draft")).map((row) => codeSpans(row[0] ?? "")[0]);
+
+    expect(described).toEqual(workflowJobs(CI_WORKFLOW));
+  });
+
+  it("givenReleasing_whenRead_thenItNamesEveryEnvironmentAndSecretTheWorkflowsUse", () => {
+    const releasing = read(RELEASING);
+    const environments = workflowValues(/^\s+environment: ([\w-]+)$/gm);
+    const secrets = workflowValues(/secrets\.(\w+)/g);
+
+    expect(environments).toEqual(["plugins", "release"]);
+    for (const name of [...environments, ...secrets]) expect(releasing).toContain(`\`${name}\``);
   });
 });
