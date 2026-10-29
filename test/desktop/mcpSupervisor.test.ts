@@ -168,7 +168,12 @@ describe("MCP supervisor", () => {
     await supervisor.settingsChanged({ ...ON, rowCap: 5 });
 
     expect(processes).toHaveLength(1);
-    expect(processes[0]?.posted.at(-1)).toEqual({ kind: MCP_CONFIG_MESSAGE, rowCap: 5, timeoutSeconds: 120, clients: [] });
+    expect(processes[0]?.posted.at(-1)).toEqual({
+      kind: MCP_CONFIG_MESSAGE,
+      rowCap: 5,
+      timeoutSeconds: 120,
+      clients: [],
+    });
   });
 
   it("givenStatementTimeoutChange_whenRunning_thenConfigSentWithoutRestart", async () => {
@@ -178,7 +183,12 @@ describe("MCP supervisor", () => {
     await supervisor.settingsChanged({ ...ON, statementTimeoutSeconds: 30 });
 
     expect(processes).toHaveLength(1);
-    expect(processes[0]?.posted.at(-1)).toEqual({ kind: MCP_CONFIG_MESSAGE, rowCap: 100, timeoutSeconds: 30, clients: [] });
+    expect(processes[0]?.posted.at(-1)).toEqual({
+      kind: MCP_CONFIG_MESSAGE,
+      rowCap: 100,
+      timeoutSeconds: 30,
+      clients: [],
+    });
   });
 
   it("givenHostMessages_whenReceived_thenStatusRelayedAndHistoryTaggedAgent", async () => {

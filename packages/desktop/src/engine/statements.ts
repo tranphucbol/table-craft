@@ -170,13 +170,13 @@ export function statementRunners(live: LiveContext) {
               ...serverTimeoutOptions(limit, session, open.capabilities),
             })
             .then(async (result) => {
-            const put = await results.put(heldOf(result), paging);
-            return {
-              ...put,
-              ...(result.reply === undefined ? {} : { reply: result.reply }),
-              ...(result.source === undefined ? {} : { source: result.source }),
-            };
-          }),
+              const put = await results.put(heldOf(result), paging);
+              return {
+                ...put,
+                ...(result.reply === undefined ? {} : { reply: result.reply }),
+                ...(result.source === undefined ? {} : { source: result.source }),
+              };
+            }),
         (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
         (late) => void results.release(late.handle),
       );

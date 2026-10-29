@@ -141,6 +141,8 @@ describe("mysql server timeout", () => {
     expect(stoppedAtLimit(serverDialect("8.4.7"), 1317, 1_600, 1_500)).toBe(false);
     expect(stoppedAtLimit(serverDialect("8.4.7"), 3024, 0, null)).toBe(true);
     expect(stoppedAtLimit(serverDialect("10.11.6-MariaDB"), 1969, 0, null)).toBe(true);
-    expect(stoppedAtLimitMessage(tidb, 1_500)).toBe("TiDB stopped the statement at its 1.5 s limit (max_execution_time).");
+    expect(stoppedAtLimitMessage(tidb, 1_500)).toBe(
+      "TiDB stopped the statement at its 1.5 s limit (max_execution_time).",
+    );
   });
 });

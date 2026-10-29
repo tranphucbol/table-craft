@@ -749,8 +749,11 @@ class MysqlSession implements Session {
     if (this.serverTimeout === null) return null;
     if (requested === undefined && this.#appliedTimeoutMs === null) return null;
     if (this.#ownTimeoutMs === null) {
-      const rows = (await query(this.#connection, readServerTimeoutSql(this.#dialect), "statementFailed")) as readonly
-        Record<string, unknown>[];
+      const rows = (await query(
+        this.#connection,
+        readServerTimeoutSql(this.#dialect),
+        "statementFailed",
+      )) as readonly Record<string, unknown>[];
       this.#ownTimeoutMs = ownTimeoutMs(this.#dialect, Object.values(rows[0] ?? {})[0]);
     }
     const own = this.#ownTimeoutMs;
