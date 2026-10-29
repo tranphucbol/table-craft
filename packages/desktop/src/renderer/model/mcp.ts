@@ -1,6 +1,8 @@
+import type { ExecutionOutcome } from "@table-craft/desktop/renderer/state/executions.js";
 import type {
   McpActivityView,
   McpCallOutcome,
+  McpConsoleRequest,
   McpRunView,
   McpServerState,
   McpStatus,
@@ -125,33 +127,74 @@ export function connectedFor(since: number, now: number): string {
   return minutes === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(minutes)} min`;
 }
 
+/** Finished calls kept under one client's datasource in Services, as a console session keeps its executions. */
+export const AGENT_CALLS_PER_DATASOURCE = 50;
+
+/** How a finished call reads beside console executions: a refusal, denial or hand-off did not run. */
+export const CALL_EXECUTION_OUTCOMES: Readonly<Record<McpCallOutcome, Exclude<ExecutionOutcome, "running">>> = {
+  ok: "success",
+  capped: "success",
+  error: "error",
+  denied: "cancelled",
+  refused: "cancelled",
+  handedOff: "cancelled",
+};
+
+const SQL_TOOLS: ReadonlySet<string> = new Set(["run_query", "explain", "check_sql", "open_in_console"]);
+
+/** The console a finished call opens, when it carried a statement for a datasource. */
+export function activityConsoleRequest(entry: McpActivityView): McpConsoleRequest | null {
+  if (entry.datasourceId === null || entry.target === null || !SQL_TOOLS.has(entry.tool)) return null;
+  return { datasourceId: entry.datasourceId, sql: entry.target };
+}
+
 export interface AgentDatasourceGroup {
   readonly datasourceId: string;
   readonly runs: readonly McpRunView[];
+  /** Newest first. */
+  readonly calls: readonly McpActivityView[];
 }
 
 export interface AgentClientGroup {
-  readonly clientId: string;
   readonly clientName: string;
+  /** False once every session of this client has ended; its calls stay listed. */
+  readonly connected: boolean;
   readonly datasources: readonly AgentDatasourceGroup[];
 }
 
-/** The Services tree's Agents node: client, then datasource, then each running call. */
+interface MutableDatasourceGroup {
+  readonly runs: McpRunView[];
+  readonly calls: McpActivityView[];
+}
+
+/**
+ * The Services tree's Agents node: client, then datasource, then its running calls and the finished
+ * ones the server still remembers. Clients group by name, so a client that reconnects keeps its calls.
+ */
 export function agentGroups(status: McpStatus): readonly AgentClientGroup[] {
-  type Grouped = { readonly name: string; readonly byDatasource: Map<string, McpRunView[]> };
-  const grouped = (name: string): Grouped => ({ name, byDatasource: new Map<string, McpRunView[]>() });
-  const clients = new Map<string, Grouped>();
-  for (const client of status.clients) clients.set(client.id, grouped(client.name));
-  for (const run of status.running) {
-    const client = clients.get(run.clientId) ?? grouped(run.clientName);
-    clients.set(run.clientId, client);
-    const runs = client.byDatasource.get(run.datasourceId) ?? [];
-    client.byDatasource.set(run.datasourceId, [...runs, run]);
+  const clients = new Map<string, { connected: boolean; byDatasource: Map<string, MutableDatasourceGroup> }>();
+  const clientNamed = (name: string) => {
+    const client = clients.get(name) ?? { connected: false, byDatasource: new Map<string, MutableDatasourceGroup>() };
+    clients.set(name, client);
+    return client;
+  };
+  const datasourceOf = (name: string, datasourceId: string): MutableDatasourceGroup => {
+    const { byDatasource } = clientNamed(name);
+    const group = byDatasource.get(datasourceId) ?? { runs: [], calls: [] };
+    byDatasource.set(datasourceId, group);
+    return group;
+  };
+  for (const client of status.clients) clientNamed(client.name).connected = true;
+  for (const run of status.running) datasourceOf(run.clientName, run.datasourceId).runs.push(run);
+  for (const entry of status.activity) {
+    if (entry.datasourceId === null) continue;
+    const { calls } = datasourceOf(entry.clientName, entry.datasourceId);
+    if (calls.length < AGENT_CALLS_PER_DATASOURCE) calls.push(entry);
   }
-  return [...clients].map(([clientId, client]) => ({
-    clientId,
-    clientName: client.name,
-    datasources: [...client.byDatasource].map(([datasourceId, runs]) => ({ datasourceId, runs })),
+  return [...clients].map(([clientName, client]) => ({
+    clientName,
+    connected: client.connected,
+    datasources: [...client.byDatasource].map(([datasourceId, group]) => ({ datasourceId, ...group })),
   }));
 }
 
