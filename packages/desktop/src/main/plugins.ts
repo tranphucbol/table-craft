@@ -38,14 +38,21 @@ export async function manifestProblem(directory: string, id: string, hostVersion
   return null;
 }
 
+/**
+ * `packageVersionOf` names the npm version a downloaded plugin was installed at. It wins over the
+ * manifest's, which must be `major.minor.patch` and so drops a beta's `-beta.N` (plan 124).
+ */
 export async function discoverInstalled(
   roots: readonly PluginRoot[],
   sourceOf: (directory: string) => PluginSource,
+  packageVersionOf: (directory: string) => string | undefined = () => undefined,
 ): Promise<InstalledPlugins> {
   const found = await discoverPlugins(roots);
+  const versionOf = (entry: (typeof found)[number]): string | null =>
+    packageVersionOf(entry.directory) ?? entry.manifest?.version ?? null;
   const report = found.map((entry): PluginReport => ({
     id: entry.manifest?.id ?? basename(entry.directory),
-    version: entry.manifest?.version ?? null,
+    version: versionOf(entry),
     apiVersion: entry.manifest?.apiVersion ?? null,
     directory: entry.directory,
     status: entry.status === "unavailable" ? "unavailable" : "available",
@@ -57,7 +64,7 @@ export async function discoverInstalled(
       id: manifest?.id ?? basename(entry.directory),
       name: manifest?.name ?? basename(entry.directory),
       source: sourceOf(entry.directory),
-      version: manifest?.version ?? null,
+      version: versionOf(entry),
       unavailableReason: entry.status === "unavailable" ? entry.reason : null,
       capabilities: manifest?.capabilities ?? [],
       fields: manifest?.connection.fields ?? [],

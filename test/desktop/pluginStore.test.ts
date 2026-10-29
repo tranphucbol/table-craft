@@ -188,6 +188,17 @@ describe("plugin service", () => {
     expect(await plugins.updateAll()).toEqual([{ id: "postgres", version: "1.1.0-beta.1", changed: true }]);
   });
 
+  it("givenBetaPluginInstalled_whenListed_thenItsNpmVersionNotTheManifestOne", async () => {
+    const plugins = service(registry.url, { channel: () => "beta" });
+    registry.publish(PACKAGE, [release({ id: "postgres", version: "1.1.0-beta.1" })]);
+    await plugins.start();
+    await plugins.install("postgres");
+
+    expect(plugins.plugins().find((plugin) => plugin.id === "postgres")?.version).toBe("1.1.0-beta.1");
+    expect(plugins.state().catalog.find((entry) => entry.id === "postgres")?.installedVersion).toBe("1.1.0-beta.1");
+    expect(plugins.report().find((entry) => entry.id === "postgres")?.version).toBe("1.1.0-beta.1");
+  });
+
   it("givenStableChannelAndBetaInstalled_whenUpdateAll_thenKeepsBeta", async () => {
     let channel: ReleaseChannel = "beta";
     const plugins = service(registry.url, { channel: () => channel });
