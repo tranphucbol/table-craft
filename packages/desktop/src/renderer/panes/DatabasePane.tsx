@@ -354,7 +354,8 @@ function DatasourceLabel({
     <>
       <DatasourceGlyph
         brand={brand}
-        className={cn("size-icon shrink-0", failed ? "text-danger" : missing ? "text-ink-muted" : "text-accent")}
+        tone={failed ? "danger" : missing ? "muted" : null}
+        className="size-icon shrink-0"
       />
       <span className={cn("contents", missing && "text-ink-muted")}>
         <Highlighted text={datasource.name} positions={positions} />

@@ -17,9 +17,11 @@ session or Test Connection reports another. The renderer resolves a row's brand 
 session's, then the stored one if the plugin still declares it, then the plugin's default.
 
 Brand ids choose a glyph and a name, never behaviour; the UI still branches on capabilities
-(decision 007). The renderer bundles the Simple Icons paths it knows, drawn monochrome in
-`currentColor` with the classes the generic glyph had, so connected, failed and missing rows keep
-their colours. A brand without a bundled path (Oracle, SQL Server) draws the generic glyph.
+(decision 007). The renderer bundles the Simple Icons paths it knows, each drawn in its brand's
+Simple Icons colour, moved toward the theme's ink just far enough to hold WCAG non-text contrast
+(3:1) on the canvas, panel, raised and selection surfaces (`appearance/brandInk.ts`). A failed row
+paints its logo `danger` and a missing plugin's `inkMuted`, so the state still outranks the brand.
+A brand without a bundled path (Oracle, SQL Server) draws the generic glyph in the accent.
 
 `appearance.brandIcons`, on by default, turns the logos on (View → Brand Icons, the Toggle Brand
 Icons action, Settings › Appearance). With logos on, a row that draws a logo drops its trailing
@@ -36,7 +38,10 @@ disconnected row show the right logo, and the live report keeps it honest when a
 turns out to be TiDB.
 
 Simple Icons slugs give a stable, public vocabulary and CC0 paths, so no artwork is drawn or
-licensed here. Monochrome logos keep the tree calm and keep the status colours meaningful.
+licensed here. A first cut drew every logo in the accent, which made six products look alike;
+brand colours tell them apart at a glance, as DataGrip does. Raw brand colours fail on dark themes
+(MariaDB's and SQLite's navy vanish on a dark panel), so the colour is fitted per theme rather
+than shipped as is.
 
 ## Consequences
 

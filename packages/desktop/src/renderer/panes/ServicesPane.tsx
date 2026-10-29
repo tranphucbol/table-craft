@@ -243,7 +243,8 @@ function DatasourceLine({ row }: { readonly row: Extract<ServiceRow, { kind: "da
     <>
       <DatasourceGlyph
         brand={brand}
-        className={cn("size-icon shrink-0", connection.status === "failed" ? "text-danger" : "text-accent")}
+        tone={connection.status === "failed" ? "danger" : null}
+        className="size-icon shrink-0"
       />
       <span className="truncate">{row.node.name}</span>
       <span className={cn("truncate", connection.status === "failed" ? "text-danger" : "text-ink-muted")}>
