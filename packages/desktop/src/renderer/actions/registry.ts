@@ -47,6 +47,7 @@ export type ActionIcon =
   | "export"
   | "import"
   | "valuePanel"
+  | "jsonView"
   | "sortAscending"
   | "sortDescending"
   | "hide"

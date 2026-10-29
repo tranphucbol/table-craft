@@ -771,6 +771,7 @@ run either.
 | `grid.selectAll`                         | Select All Rows                       | `⌘A` ²   | `Ctrl+A` ²             |
 | `grid.export`                            | Export Data…                          |          |                        |
 | `grid.toggleValuePanel`                  | Value Panel                           | `⇧↵` ²   | `Shift+Enter` ²        |
+| `grid.toggleJsonView`                    | Toggle JSON View                      | `⌥⌘J` ⁸  | `Ctrl+Alt+J` ⁸         |
 | `grid.setExtractor`                      | Choose Extractor                      |          |                        |
 | `grid.sort`, `grid.clearSort`            | Sort, Clear Sort                      |          |                        |
 | `grid.hideColumn`, `grid.showAllColumns` | Hide Column, Show All Columns         |          |                        |
@@ -864,6 +865,7 @@ stays CodeMirror's search.
 ⁶ Only with focus in the find bar (region `gridFind`), so `⇧↩` in the grid is still Value Panel.
 ⁷ Only with focus in the Services tool window (region `services`), so `⌘=` and `⌘-` still zoom the
 SQL editor and `⌘-` is still the Database tool window's Collapse All.
+⁸ Only with focus in a result grid or its value panel (regions `grid`, `valuePanel`).
 
 Shortcuts are declared as platform-neutral chords (`Mod+Shift+A`, `Shift Shift`) and dispatched by
 one capture-phase `keydown` listener on the window. A chord whose action is disabled reaches the
@@ -1235,7 +1237,7 @@ italics, unlike the text `'<null>'`. With Group digits on, a number cell (`integ
 `float`) whose text is `^-?\d+(\.\d+)?$` draws `,` every three integer digits; exponents, `NaN`
 and `Infinity` draw as printed. Column widths measure the drawn text. Both are display only: the
 value panel, Copy, Export, the filters, the inline editor and history keep the database's text
-(decision 032). The value panel (⇧↵) shows the focused cell: JSON pretty-printed in a read-only editor, text wrapped,
+(decision 032). The value panel (⇧↵) shows the focused cell: JSON pretty-printed and highlighted in a read-only editor, text wrapped,
 bytes as hex lines with `32 of 2,048 bytes shown`, `NULL` muted. A binary value also offers
 **Save Value to File…** and **Load File into Cell…**, and draws a PNG, JPEG, GIF or WebP it holds
 as an image (by its signature, as a `data:` URL). Main only picks the path; the engine reads and
@@ -1243,6 +1245,16 @@ writes the file. When the grid holds just the preview, the engine re-reads the w
 read-only session by the table's key (a table tab or an editable console result; otherwise it
 says to open the table). Both refuse a value larger than Settings' BLOB file limit
 (`data.blobLimitMb`, 16 MiB).
+
+**JSON in text** (plan 126). A text value that, trimmed, is a JSON object or array of at most
+1,000,000 characters that `JSON.parse` accepts opens in the value panel formatted and highlighted
+like a `json` column, under `JSON · shown formatted, stored as is`, while `data.detectJson` is on
+(the default). The panel's `{}` button and Toggle JSON View (`grid.toggleJsonView`) switch the
+focused column of that result between formatted and the exact stored text, a `json` column's too;
+the choice lasts until the result is run again and is never saved. Grid cells, Copy and Export keep
+the stored text. An editable panel edits the formatted text and, when the stored text was compact,
+writes the edit compact; text that no longer parses is saved as typed under
+`Not valid JSON — saved as typed`.
 
 **Memory.** A tab keeps at most `MAX_LOADED_WINDOWS = 20` windows of `RESULT_WINDOW_ROWS`; loading
 another evicts the one furthest from it, and scrolling back fetches it again. When the engine
@@ -1542,7 +1554,8 @@ values; Show Referencing Rows… lists the foreign keys pointing at this table a
 one filtered to the selected row. Reload, a filter or sort change, Rerun, closing the tab,
 disconnecting and quitting with pending changes ask Submit, Discard or Cancel. A connection that
 closes on its own discards pending changes with a notice. The value panel edits text and JSON
-cells; ⌘↵ writes the buffer. There is no manual transaction mode in the editor: `Tx: Auto`.
+cells; ⌘↵ writes the buffer. A JSON value edits formatted and, when it was stored compact, is
+written compact (plan 126). There is no manual transaction mode in the editor: `Tx: Auto`.
 
 ## Import
 

@@ -195,6 +195,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   export: Export,
   import: FileArrowDown,
   valuePanel: SidebarSimple,
+  jsonView: BracketsCurly,
   sortAscending: SortAscending,
   sortDescending: SortDescending,
   hide: EyeSlash,

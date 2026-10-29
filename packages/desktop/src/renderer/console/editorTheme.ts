@@ -260,6 +260,8 @@ const HIGHLIGHT_STYLE = HighlightStyle.define([
   { tag: [tags.lineComment, tags.blockComment], color: "var(--tc-syntax-comment)", fontStyle: "italic" },
   // lang-sql tags a quoted identifier `special(string)` and a bind variable `special(name)`.
   { tag: tags.special(tags.string), color: "var(--tc-syntax-identifier)" },
+  // lang-json tags an object key `propertyName`; SQL leaves it unused.
+  { tag: tags.propertyName, color: "var(--tc-syntax-identifier)" },
   { tag: [tags.operator, tags.punctuation], color: "var(--tc-syntax-operator)" },
   { tag: tags.special(tags.name), color: "var(--tc-syntax-variable)" },
 ]);
