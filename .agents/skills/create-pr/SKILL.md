@@ -101,6 +101,22 @@ sentence case, ending with `(plan {plan_number})` when there is one.
   the diff when the branch name alone reads poorly
 - `feature/run-button-spinner` -> `Spin Run and Run All while a query runs`
 
+The title becomes a line of the release notes as written, so name what a user sees, not the code.
+
+**e) Pick the release-notes label (this repository):**
+
+Every pull request carries exactly one of the labels `.github/release.yml` sorts the release notes
+by (`CONTRIBUTING.md#pull-requests`). Pick it from the diff, after Step 3a, and store it as
+`{pr_label}`:
+
+- `enhancement` -- something a user can now do
+- `plugins` -- a change confined to one datasource plugin under `plugins/<id>/`
+- `bug` -- a fix of wrong behaviour
+- `documentation` -- only the README, `docs/guide/`, `CONTRIBUTING.md` or `RELEASING.md`
+- `internal` -- tests, CI, tooling, agent skills, decisions or refactors a user cannot see
+
+Show `{pr_label}` with the draft in Step 5, where the user may change it.
+
 ### Step 2: Fetch Issue Context (Optional)
 
 Skip this step entirely when `{issue_number}` is empty.
@@ -291,7 +307,8 @@ leave the draft unchanged.
 
 ### Step 5: Review Draft
 
-Display the full content of `gdb/{branch_name}.md` to the user.
+Display the full content of `gdb/{branch_name}.md` to the user, with the title and `{pr_label}`
+above it.
 
 ```
 header: "Review summary"
@@ -357,6 +374,7 @@ gh pr create \
   --base {default_branch} \
   --head {current_branch} \
   --title "{pr_title}" \
+  --label "{pr_label}" \
   --body-file "gdb/{branch_name}.md"
 ```
 
@@ -383,6 +401,9 @@ gh pr edit {number} --repo {repo} --body-file "gdb/{branch_name}.md"
 
 This touches only the body. It MUST preserve the existing title, base branch, reviewers, labels,
 milestone, and every other PR setting -- do not pass `--title` or `--base` here.
+
+When the existing PR carries none of the release-notes labels (Step 1e), say so in the result and
+offer `gh pr edit {number} --repo {repo} --add-label "{pr_label}"`; run it only when the user agrees.
 
 **e) Display the result:**
 

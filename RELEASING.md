@@ -144,15 +144,64 @@ Check that the draft has:
 - `update-manifest.json` and `update-manifest.json.sig`.
 - A `.tgz` for `@tablecraft-app/plugin-api` and one for each optional plugin.
 
-The notes are generated from the merged pull requests ("What's Changed" and the full changelog
-link). Leave that list as it is, so every release reads the same way. You may add a short paragraph
-above it for something a user must do, such as installing by hand after a signing key change. Do
-not add a `### Plugins on npm` heading: the publish workflow writes it, and skips writing it when
-one is already there.
-
 For a release that changes how the app starts, updates or packages, download the macOS `.zip` or
 `.dmg` for your machine and open it once before you publish ([Running the unsigned macOS
 app](docs/guide/install.md#running-the-unsigned-macos-app)).
+
+## Write the release notes
+
+Users read the notes: an installed app's update offer opens the release page. Every release's notes
+have the same three parts, in this order.
+
+1. **Highlights**, written by you: what a user can now do, not how it was built.
+2. **What's Changed**, generated: every merged pull request under the heading of its label, then
+   the full changelog link.
+3. **Plugins on npm**, appended by the publish workflow.
+
+The draft holds only the generated part. `.github/release.yml` sorts the pull requests by label,
+and each goes under the first heading whose label it carries:
+
+| Label           | Heading          | For                                                     |
+| --------------- | ---------------- | ------------------------------------------------------- |
+| `enhancement`   | New features     | something a user can do that they could not before      |
+| `plugins`       | Database plugins | a change confined to one datasource plugin              |
+| `bug`           | Fixes            | a behaviour that was wrong and now is right             |
+| `documentation` | Documentation    | the README, the guide, CONTRIBUTING or RELEASING        |
+| `internal`      | left out         | tests, CI, tooling and refactors a user cannot see      |
+| none            | Other changes    | a pull request merged without a label; label it instead |
+
+Read the generated list first. Give a pull request under Other changes its label, or move one under
+the wrong heading by changing its label, then generate the list again. Fix a title a user would not
+understand on the pull request itself, so the next generation keeps it. Leave the list otherwise as
+it is, so every release reads the same way.
+
+Then write the Highlights above it:
+
+```sh
+gh api repos/tranphucbol/table-craft/releases/generate-notes \
+  -f tag_name=v1.15.0 -f previous_tag_name=v1.14.0 --jq .body > /tmp/v1.15.0-notes.md
+# add the Highlights at the top of /tmp/v1.15.0-notes.md
+gh release edit v1.15.0 --notes-file /tmp/v1.15.0-notes.md
+```
+
+```markdown
+## Highlights
+
+- **Oracle databases.** Connect to Oracle Database 12.1 and later with nothing else to
+  install; TableCraft downloads the plugin the first time you pick Oracle. [Guide](https://github.com/tranphucbol/table-craft/blob/main/docs/guide/oracle.md)
+
+## Before you update
+
+Only when a user must act: install by hand after a signing key change, a setting that moved.
+```
+
+- One to three bullets, each a bold phrase in a user's words and a sentence or two on how to use it,
+  linking its guide page by full URL (a relative link breaks on the release page).
+- No plan numbers, decision numbers, file names or class names.
+- A patch release of fixes alone may skip Highlights and keep only the generated list.
+- Keep **Before you update** only when there is something to do, and say exactly what.
+- Do not add a `### Plugins on npm` heading: the publish workflow writes it, and skips writing it
+  when one is already there.
 
 ## Publish
 
@@ -193,7 +242,8 @@ Nothing goes back into the tree: there is no version file to bump and no changel
 | The release job fails on the signing key                  | The `TABLE_CRAFT_UPDATE_SIGNING_KEY` secret is missing or does not match the public key in `packages/desktop/src/main/update/manifest.ts`. Fix the secret and rerun the job |
 | `publish-plugins` failed partway                          | Rerun it (`gh run rerun <run id>`): versions already on npm are skipped                                                                                                     |
 | A published release is broken                             | Fix it on `main` and release the next patch. Never delete or retag a published release, and never unpublish from npm                                                        |
-| The signing key is lost or leaked                         | Follow decision 044: a release that changes the public key, which every user installs by hand once. Say so above the generated notes                                        |
+| The signing key is lost or leaked                         | Follow decision 044: a release that changes the public key, which every user installs by hand once. Say so under **Before you update**                                      |
+| A published release's notes are wrong                     | Edit them (`gh release edit v1.15.0 --notes-file ...`), keeping the `### Plugins on npm` list. Notes are the one thing you may change after publishing                      |
 
 ## One-time setup
 
