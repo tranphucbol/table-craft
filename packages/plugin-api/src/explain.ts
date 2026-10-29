@@ -48,6 +48,8 @@ export interface ExplainedPlan {
 export interface ExplainOptions {
   /** Run the statement and report what it did (Explain Analyse), not only how it would run. */
   readonly analyze: boolean;
+  /** `ExecuteOptions.serverTimeoutMs` for the statement `explain` runs (decision 129). */
+  readonly serverTimeoutMs?: number;
 }
 
 /**

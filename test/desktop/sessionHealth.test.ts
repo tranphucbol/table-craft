@@ -4,6 +4,7 @@ import {
   type Capability,
   type ConnectOptions,
   type DatasourcePlugin,
+  type ExecuteOptions,
   type SqlLanguage,
   type StatementClass,
 } from "@table-craft/plugin-api";
@@ -23,6 +24,10 @@ const PLUGIN_ID = "healthy";
 const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
 const USE = /^USE\s+(\w+)$/i;
 const SLEEP = /^SLEEP$/i;
+/** The fake server's own limit stopping a statement, as a plugin reports it. */
+const STOPPED = /^STOPPED$/i;
+const STOPPED_MESSAGE = "TestDB stopped the statement at its 1 s limit (statement_limit).";
+const SERVER_TIMEOUT = { setting: "statement_limit", covers: "all", counts: "statement" } as const;
 const KEEPALIVE_SECONDS = 30;
 const KEEPALIVE_MS = KEEPALIVE_SECONDS * 1_000;
 const ALL_CAPABILITIES: readonly Capability[] = ["sql", "cancel", "transactions", "currentNamespace", "keepAlive"];
@@ -43,6 +48,8 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
   const connects: ConnectOptions[] = [];
   const controls: Controls = { lostExecutes: 0, pingFails: false, connectsHang: false };
   const executed: string[] = [];
+  /** What each execute was asked, by the session it ran on (1 for the first connect). */
+  const options: { readonly session: number; readonly options: ExecuteOptions }[] = [];
   let clock = 0;
   const base = sqlite.language as SqlLanguage;
   const language: SqlLanguage = {
@@ -59,15 +66,18 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
       connects.push(connectOptions);
       if (controls.connectsHang) return new Promise(() => undefined);
       const session = await sqlite.connect(config, connectOptions);
+      const sessionNumber = connects.length;
       let current: readonly string[] = ["main"];
       let sleeping: ((cause: unknown) => void) | null = null;
       return {
-        execute: (sql, params) => {
+        execute: (sql, params, executeOptions = {}) => {
+          options.push({ session: sessionNumber, options: executeOptions });
           if (controls.lostExecutes > 0) {
             controls.lostExecutes -= 1;
             return Promise.reject(new PluginError("connectionLost", "The connection was lost: gone."));
           }
           executed.push(sql);
+          if (STOPPED.test(sql.trim())) return Promise.reject(new PluginError("timedOut", STOPPED_MESSAGE));
           if (SLEEP.test(sql.trim())) {
             return new Promise((_, reject) => {
               sleeping = reject;
@@ -95,6 +105,7 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
           : {}),
         ...(session.transactions === undefined ? {} : { transactions: session.transactions }),
         currentNamespace: () => Promise.resolve(current),
+        ...(capabilities.includes("serverTimeout") ? { serverTimeout: SERVER_TIMEOUT } : {}),
         serverVersion: session.serverVersion,
         close: () => session.close(),
       };
@@ -113,6 +124,7 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
     connects,
     controls,
     executed,
+    options,
     advance: (ms: number) => {
       clock += ms;
     },
@@ -130,7 +142,13 @@ async function open(connection: Connection): Promise<string> {
   return resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open" })).sessionId;
 }
 
-function execute(connection: Connection, sessionId: string, sql: string, timeoutSeconds?: number) {
+function execute(
+  connection: Connection,
+  sessionId: string,
+  sql: string,
+  timeoutSeconds?: number,
+  serverEnforced?: boolean,
+) {
   return connection.handle({
     id: 2,
     type: "statement.execute",
@@ -138,8 +156,11 @@ function execute(connection: Connection, sessionId: string, sql: string, timeout
     sessionId,
     sql,
     ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
+    ...(serverEnforced === undefined ? {} : { serverEnforced }),
   });
 }
+
+const ENFORCING: readonly Capability[] = [...ALL_CAPABILITIES, "serverTimeout"];
 
 afterEach(() => {
   vi.useRealTimers();
@@ -283,6 +304,40 @@ describe("engine session health", () => {
     });
     const after = resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1"));
     expect(after).not.toHaveProperty("reconnected");
+  });
+
+  it("givenServerEnforced_whenPluginTimedOut_thenStatementTimedOutWithPluginMessage", async () => {
+    const { connection, options } = healthyPlugin(ENFORCING, 0);
+    const sessionId = await open(connection);
+
+    const response = await execute(connection, sessionId, "STOPPED", 1, true);
+
+    expect(options.at(-1)?.options).toEqual({ serverTimeoutMs: 1_000 });
+    expect(response).toMatchObject({
+      type: "engine.error",
+      error: { code: "statementTimedOut", message: STOPPED_MESSAGE },
+    });
+    expect(response.type === "engine.error" ? response.error.hint : "").toMatch(/raise the statement timeout/);
+    resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1"));
+  });
+
+  it("givenNoCapability_whenServerEnforced_thenNoServerTimeoutMsSent", async () => {
+    const { connection, options } = healthyPlugin(ALL_CAPABILITIES, 0);
+    const sessionId = await open(connection);
+
+    resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1", 30, true));
+
+    expect(options.at(-1)?.options).not.toHaveProperty("serverTimeoutMs");
+  });
+
+  it("givenReconnect_whenServerEnforced_thenNewSessionGetsLimit", async () => {
+    const { connection, controls, options } = healthyPlugin(ENFORCING, 0);
+    const sessionId = await open(connection);
+    controls.lostExecutes = 1;
+
+    resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1", 30, true));
+
+    expect(options.at(-1)).toEqual({ session: 2, options: { serverTimeoutMs: 30_000 } });
   });
 
   it("givenTimeout_whenPluginLacksCancel_thenIgnored", async () => {

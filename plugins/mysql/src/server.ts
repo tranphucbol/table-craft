@@ -1,3 +1,4 @@
+import type { ServerTimeout } from "@table-craft/plugin-api";
 import type { ServerIdentity } from "@table-craft/plugin-api/sql";
 import { MYSQL_FLAVOUR, TIDB_FLAVOUR } from "./functions/ranges.js";
 
@@ -108,6 +109,92 @@ export function killStatementFor(serverVersion: string | null, connectionId: num
   const globalKill = tidbGlobalKill(serverVersion);
   if (globalKill === null) return `KILL QUERY ${String(connectionId)}`;
   return globalKill ? `KILL TIDB QUERY ${String(connectionId)}` : null;
+}
+
+/** The first releases with a session statement limit: MySQL's `max_execution_time`, MariaDB's `max_statement_time`. */
+const MYSQL_TIMEOUT_SINCE = [5, 7, 8] as const;
+const MARIADB_TIMEOUT_SINCE = [10, 1, 1] as const;
+/** From TiDB 6.4, `max_execution_time` covers only `SELECT`, as MySQL's does; before, every statement. */
+const TIDB_READS_ONLY_SINCE = [6, 4, 0] as const;
+const MAX_EXECUTION_TIME = "max_execution_time";
+const MAX_STATEMENT_TIME = "max_statement_time";
+/** A statement naming either setting may have changed it behind the plugin's back. */
+const TIMEOUT_SETTING = /max_(?:execution|statement)_time/i;
+/** MySQL's `ER_QUERY_TIMEOUT`, sent when `max_execution_time` stops a `SELECT`. */
+const QUERY_TIMEOUT_ERRNO = 3024;
+/** MariaDB's `ER_STATEMENT_TIMEOUT`, sent when `max_statement_time` stops a statement. */
+const STATEMENT_TIMEOUT_ERRNO = 1969;
+/**
+ * `ER_QUERY_INTERRUPTED`: what TiDB sends when `max_execution_time` stops a statement, the same
+ * errno a `KILL` gives, so only the time it ran tells the two apart.
+ */
+const QUERY_INTERRUPTED_ERRNO = 1317;
+const MS_PER_SECOND = 1000;
+const SERVER_NAMES: Record<MysqlServerKind, string> = { mysql: "MySQL", mariadb: "MariaDB", tidb: "TiDB" };
+
+/** What the server stops by itself under its session statement limit (decision 129); null when it has none. */
+export function serverTimeoutOf(dialect: ServerDialect): ServerTimeout | null {
+  const { kind, version } = dialect;
+  if (version === null) return null;
+  switch (kind) {
+    case "tidb":
+      return {
+        setting: MAX_EXECUTION_TIME,
+        covers: atLeast(version, TIDB_READS_ONLY_SINCE) ? "reads" : "all",
+        counts: "statement",
+      };
+    case "mariadb":
+      return atLeast(version, MARIADB_TIMEOUT_SINCE)
+        ? { setting: MAX_STATEMENT_TIME, covers: "all", counts: "statement" }
+        : null;
+    case "mysql":
+      return atLeast(version, MYSQL_TIMEOUT_SINCE)
+        ? { setting: MAX_EXECUTION_TIME, covers: "reads", counts: "statement" }
+        : null;
+  }
+}
+
+/** The `SET SESSION` that limits statements to `ms`, in the server's own unit; `ms` 0 means unlimited. */
+export function serverTimeoutSql(dialect: ServerDialect, ms: number): string {
+  if (dialect.kind === "mariadb") return `SET SESSION ${MAX_STATEMENT_TIME} = ${String(ms / MS_PER_SECOND)}`;
+  return `SET SESSION ${MAX_EXECUTION_TIME} = ${String(Math.round(ms))}`;
+}
+
+/** Reads the session's own limit, which `ownTimeoutMs` turns into milliseconds. */
+export function readServerTimeoutSql(dialect: ServerDialect): string {
+  return `SELECT @@SESSION.${dialect.kind === "mariadb" ? MAX_STATEMENT_TIME : MAX_EXECUTION_TIME}`;
+}
+
+/** The value `readServerTimeoutSql` read, in milliseconds; 0, as the server means it, is unlimited. */
+export function ownTimeoutMs(dialect: ServerDialect, value: unknown): number {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return dialect.kind === "mariadb" ? Math.round(amount * MS_PER_SECOND) : Math.round(amount);
+}
+
+export function namesServerTimeout(sql: string): boolean {
+  return TIMEOUT_SETTING.test(sql);
+}
+
+/**
+ * Whether `errno` is the server stopping a statement at the limit the plugin set, `limitMs`, after
+ * it ran `ranMs`; a cancel the plugin asked for is ruled out by the caller.
+ */
+export function stoppedAtLimit(
+  dialect: ServerDialect,
+  errno: number | undefined,
+  ranMs: number,
+  limitMs: number | null,
+): boolean {
+  if (errno === QUERY_TIMEOUT_ERRNO || errno === STATEMENT_TIMEOUT_ERRNO) return true;
+  return dialect.kind === "tidb" && errno === QUERY_INTERRUPTED_ERRNO && limitMs !== null && ranMs >= limitMs;
+}
+
+/** "TiDB stopped the statement at its 120 s limit (max_execution_time)." */
+export function stoppedAtLimitMessage(dialect: ServerDialect, limitMs: number | null): string {
+  const setting = serverTimeoutOf(dialect)?.setting ?? MAX_EXECUTION_TIME;
+  const limit = limitMs === null ? "" : ` ${String(limitMs / MS_PER_SECOND)} s`;
+  return `${SERVER_NAMES[dialect.kind]} stopped the statement at its${limit} limit (${setting}).`;
 }
 
 /** Whether a TiDB server's connection ids are cluster-wide; null when the server is not TiDB. */

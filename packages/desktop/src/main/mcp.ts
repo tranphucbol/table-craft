@@ -159,6 +159,7 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
           access,
           ...schemasOf(datasource),
           ...(datasource.agentRowCap === undefined ? {} : { rowCap: datasource.agentRowCap }),
+          ...(datasource.agentTimeoutSeconds === undefined ? {} : { timeoutSeconds: datasource.agentTimeoutSeconds }),
         },
       ];
     });
@@ -268,6 +269,7 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
       datasources: agentDatasources(),
       windows: options.windowsOpen(),
       rowCap: settings.rowCap,
+      timeoutSeconds: settings.statementTimeoutSeconds,
       clients: settings.clients,
     });
     options.log.info("mcp host started", { port: settings.port });
@@ -304,8 +306,17 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
       const previous = applied;
       applied = next;
       if (previous.enabled !== next.enabled || previous.port !== next.port) return queue(() => restart(next));
-      if (previous.rowCap !== next.rowCap || previous.clients !== next.clients)
-        running?.process.postMessage({ kind: MCP_CONFIG_MESSAGE, rowCap: next.rowCap, clients: next.clients });
+      if (
+        previous.rowCap !== next.rowCap ||
+        previous.statementTimeoutSeconds !== next.statementTimeoutSeconds ||
+        previous.clients !== next.clients
+      )
+        running?.process.postMessage({
+          kind: MCP_CONFIG_MESSAGE,
+          rowCap: next.rowCap,
+          timeoutSeconds: next.statementTimeoutSeconds,
+          clients: next.clients,
+        });
       return Promise.resolve();
     },
     datasourcesChanged() {

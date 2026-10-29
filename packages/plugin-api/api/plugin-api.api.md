@@ -30,7 +30,7 @@ interface BytesValue {
   readonly preview: string;
 }
 
-const CAPABILITIES: readonly [ "sql", "cancel", "schemaTree", "transactions", "ddl", "explain", "explainAnalyze", "currentNamespace", "keepAlive", "bulkInsert", "objects", "serverMessages", "sessions", "routineCall", "commands", "keyValue", "nodes", "serverInfo" ];
+const CAPABILITIES: readonly [ "sql", "cancel", "schemaTree", "transactions", "ddl", "explain", "explainAnalyze", "currentNamespace", "keepAlive", "bulkInsert", "objects", "serverMessages", "sessions", "routineCall", "commands", "keyValue", "nodes", "serverInfo", "serverTimeout" ];
 
 const COMPLETION_KINDS: readonly [ "namespace", "table", "view", "column", "alias", "cte", "join", "function", "keyword" ];
 
@@ -228,6 +228,7 @@ interface ExecuteOptions {
   readonly fullBytes?: boolean;
   readonly node?: string;
   readonly repeat?: number;
+  readonly serverTimeoutMs?: number;
 }
 
 interface ExecuteResult {
@@ -241,6 +242,7 @@ interface ExecuteResult {
 
 interface ExplainOptions {
   readonly analyze: boolean;
+  readonly serverTimeoutMs?: number;
 }
 
 type Explainability = { readonly ok: true; readonly writes: boolean; } | { readonly ok: false; readonly reason: string; };
@@ -528,7 +530,7 @@ type ObjectKind = (typeof OBJECT_KINDS)[number];
 
 const PARAMETER_STYLES: readonly [ "named", "numbered", "positional" ];
 
-const PLUGIN_ERROR_CODES: readonly [ "cancelled", "connectionFailed", "statementFailed", "introspectionFailed", "definitionNotFound", "explainUnsupported", "connectionLost", "sessionBusy", "conflict" ];
+const PLUGIN_ERROR_CODES: readonly [ "cancelled", "connectionFailed", "statementFailed", "introspectionFailed", "definitionNotFound", "explainUnsupported", "connectionLost", "sessionBusy", "conflict", "timedOut" ];
 
 const PROBLEM_SEVERITIES: readonly [ "error", "warning", "weak" ];
 
@@ -706,6 +708,12 @@ interface ServerSession {
 
 type ServerSessionState = (typeof SERVER_SESSION_STATES)[number];
 
+interface ServerTimeout {
+  readonly counts: "statement" | "serverWork";
+  readonly covers: "reads" | "all";
+  readonly setting: string;
+}
+
 interface Session {
   cancel?(): Promise<void>;
   close(): Promise<void>;
@@ -722,6 +730,7 @@ interface Session {
   serverInfo?(node: string | null): Promise<ServerInfo>;
   readonly serverInstance?: string;
   readonly serverSessionId?: string;
+  readonly serverTimeout?: ServerTimeout | null;
   readonly serverVersion: string | null;
   readonly sessions?: SessionMonitor;
   slowLog?(node: string | null, limit: number): Promise<readonly SlowCommand[]>;
@@ -918,7 +927,7 @@ function parseConnectionUrl(form: ConnectionForm, text: string): ParsedConnectio
 
 function parseVersion(text: string): Version | null;
 
-const pluginManifestSchema: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; apiVersion: z.ZodString; entry: z.ZodString; capabilities: z.ZodArray<z.ZodEnum<{ sql: "sql"; cancel: "cancel"; schemaTree: "schemaTree"; transactions: "transactions"; ddl: "ddl"; explain: "explain"; explainAnalyze: "explainAnalyze"; currentNamespace: "currentNamespace"; keepAlive: "keepAlive"; bulkInsert: "bulkInsert"; objects: "objects"; serverMessages: "serverMessages"; sessions: "sessions"; routineCall: "routineCall"; commands: "commands"; keyValue: "keyValue"; nodes: "nodes"; serverInfo: "serverInfo"; }>>; highlight: z.ZodString; brands: z.ZodOptional<z.ZodArray<z.ZodObject<{ id: z.ZodString; name: z.ZodString; }, z.core.$strict>>>; connection: z.ZodObject<{ fields: z.ZodArray<z.ZodObject<{ key: z.ZodString; label: z.ZodString; kind: z.ZodEnum<{ number: "number"; text: "text"; select: "select"; password: "password"; file: "file"; checkbox: "checkbox"; }>; default: z.ZodOptional<z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>; required: z.ZodOptional<z.ZodBoolean>; placeholder: z.ZodOptional<z.ZodString>; options: z.ZodOptional<z.ZodArray<z.ZodObject<{ value: z.ZodString; label: z.ZodString; }, z.core.$strict>>>; group: z.ZodOptional<z.ZodEnum<{ general: "general"; advanced: "advanced"; }>>; secret: z.ZodOptional<z.ZodBoolean>; visibleWhen: z.ZodOptional<z.ZodObject<{ key: z.ZodString; equals: z.ZodUnion<readonly [ z.ZodString, z.ZodBoolean ]>; }, z.core.$strict>>; }, z.core.$strict>>; url: z.ZodOptional<z.ZodObject<{ schemes: z.ZodArray<z.ZodString>; form: z.ZodEnum<{ file: "file"; server: "server"; }>; parts: z.ZodRecord<z.ZodEnum<{ database: "database"; path: "path"; password: "password"; host: "host"; port: "port"; user: "user"; }> & z.core.$partial, z.ZodString>; params: z.ZodOptional<z.ZodArray<z.ZodObject<{ name: z.ZodString; key: z.ZodString; values: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>; }, z.core.$strict>>>; sets: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodRecord<z.ZodString, z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>>>; semicolonParams: z.ZodOptional<z.ZodBoolean>; }, z.core.$strict>>; network: z.ZodOptional<z.ZodObject<{ host: z.ZodString; port: z.ZodString; connectTimeout: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; tls: z.ZodOptional<z.ZodObject<{ mode: z.ZodString; verifyModes: z.ZodArray<z.ZodString>; caFile: z.ZodOptional<z.ZodString>; certFile: z.ZodOptional<z.ZodString>; keyFile: z.ZodOptional<z.ZodString>; keyPassphrase: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; }, z.core.$strict>; }, z.core.$strict>;
+const pluginManifestSchema: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; apiVersion: z.ZodString; entry: z.ZodString; capabilities: z.ZodArray<z.ZodEnum<{ sql: "sql"; cancel: "cancel"; schemaTree: "schemaTree"; transactions: "transactions"; ddl: "ddl"; explain: "explain"; explainAnalyze: "explainAnalyze"; currentNamespace: "currentNamespace"; keepAlive: "keepAlive"; bulkInsert: "bulkInsert"; objects: "objects"; serverMessages: "serverMessages"; sessions: "sessions"; routineCall: "routineCall"; commands: "commands"; keyValue: "keyValue"; nodes: "nodes"; serverInfo: "serverInfo"; serverTimeout: "serverTimeout"; }>>; highlight: z.ZodString; brands: z.ZodOptional<z.ZodArray<z.ZodObject<{ id: z.ZodString; name: z.ZodString; }, z.core.$strict>>>; connection: z.ZodObject<{ fields: z.ZodArray<z.ZodObject<{ key: z.ZodString; label: z.ZodString; kind: z.ZodEnum<{ number: "number"; text: "text"; select: "select"; password: "password"; file: "file"; checkbox: "checkbox"; }>; default: z.ZodOptional<z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>; required: z.ZodOptional<z.ZodBoolean>; placeholder: z.ZodOptional<z.ZodString>; options: z.ZodOptional<z.ZodArray<z.ZodObject<{ value: z.ZodString; label: z.ZodString; }, z.core.$strict>>>; group: z.ZodOptional<z.ZodEnum<{ general: "general"; advanced: "advanced"; }>>; secret: z.ZodOptional<z.ZodBoolean>; visibleWhen: z.ZodOptional<z.ZodObject<{ key: z.ZodString; equals: z.ZodUnion<readonly [ z.ZodString, z.ZodBoolean ]>; }, z.core.$strict>>; }, z.core.$strict>>; url: z.ZodOptional<z.ZodObject<{ schemes: z.ZodArray<z.ZodString>; form: z.ZodEnum<{ file: "file"; server: "server"; }>; parts: z.ZodRecord<z.ZodEnum<{ database: "database"; path: "path"; password: "password"; host: "host"; port: "port"; user: "user"; }> & z.core.$partial, z.ZodString>; params: z.ZodOptional<z.ZodArray<z.ZodObject<{ name: z.ZodString; key: z.ZodString; values: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>; }, z.core.$strict>>>; sets: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodRecord<z.ZodString, z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>>>; semicolonParams: z.ZodOptional<z.ZodBoolean>; }, z.core.$strict>>; network: z.ZodOptional<z.ZodObject<{ host: z.ZodString; port: z.ZodString; connectTimeout: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; tls: z.ZodOptional<z.ZodObject<{ mode: z.ZodString; verifyModes: z.ZodArray<z.ZodString>; caFile: z.ZodOptional<z.ZodString>; certFile: z.ZodOptional<z.ZodString>; keyFile: z.ZodOptional<z.ZodString>; keyPassphrase: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; }, z.core.$strict>; }, z.core.$strict>;
 
 function switchableTo(targets: NamespaceSwitch["targets"], namespace: Namespace): boolean;
 

@@ -38,6 +38,7 @@ export const CAPABILITIES = [
   "keyValue",
   "nodes",
   "serverInfo",
+  "serverTimeout",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -173,6 +174,26 @@ export interface ExecuteOptions {
    * many times and answers with the last run; any other plugin never receives it.
    */
   readonly repeat?: number;
+  /**
+   * Have the server itself stop the statement after this many milliseconds, at least 1 (decision
+   * 129), through its own setting, never above a limit the server already had. The host sends it
+   * only to a session whose `serverTimeout` is not null. Absent: the plugin puts back the
+   * server's own value. A statement the server stops rejects with `timedOut`.
+   */
+  readonly serverTimeoutMs?: number;
+}
+
+/** What the connected server stops by itself once `ExecuteOptions.serverTimeoutMs` passes (decision 129). */
+export interface ServerTimeout {
+  /** The server's own name for it, for messages: `max_execution_time`, `statement_timeout`. */
+  readonly setting: string;
+  /** `reads`: only `SELECT` (and `SELECT … FOR UPDATE`); `all`: every statement. */
+  readonly covers: "reads" | "all";
+  /**
+   * `statement`: from the start until the last row is sent, so a result read slowly is cut too;
+   * `serverWork`: only while the server works on it.
+   */
+  readonly counts: "statement" | "serverWork";
 }
 
 /** `ExecuteOptions.node`: the plugin routes the command by its keys (decision 114). */
@@ -343,6 +364,12 @@ export interface Session {
    * (decision 072).
    */
   readonly tls?: TlsInfo | null;
+  /**
+   * Present exactly when the plugin declares `serverTimeout` (decision 129): what this server stops
+   * by itself under `ExecuteOptions.serverTimeoutMs`, read once at connect; null when this server
+   * version has no such setting.
+   */
+  readonly serverTimeout?: ServerTimeout | null;
 }
 
 /** What a TLS handshake agreed, as Node's socket names it: `TLSv1.3`, `TLS_AES_256_GCM_SHA384`. */

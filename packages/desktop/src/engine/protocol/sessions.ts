@@ -1,6 +1,6 @@
 import type { KeySource } from "./keyspace.js";
 import type { ResultState, ResultWindow } from "./results.js";
-import type { Capability, Column, CommandReply, TypeClass } from "./wire.js";
+import type { Capability, Column, CommandReply, ServerTimeout, TypeClass } from "./wire.js";
 
 /** Mirrors `ServerSessionState` in plugin-api. */
 export type ServerSessionState = "active" | "idle" | "idleInTransaction" | "blocked" | "other";
@@ -117,4 +117,6 @@ export interface OpenedSession {
   readonly serverBrand: string | null;
   /** Where the session starts; always null without `currentNamespace`. */
   readonly namespace: CurrentNamespace;
+  /** What the server stops by itself under `StatementLimit.serverEnforced`; null when nothing (decision 129). */
+  readonly serverTimeout: ServerTimeout | null;
 }

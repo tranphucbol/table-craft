@@ -18,7 +18,8 @@
     "objects",
     "serverMessages",
     "sessions",
-    "routineCall"
+    "routineCall",
+    "serverTimeout"
   ],
   "highlight": "postgresql",
   "brands": [{ "id": "postgresql", "name": "PostgreSQL" }],

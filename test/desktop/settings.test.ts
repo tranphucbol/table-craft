@@ -51,7 +51,13 @@ const CHOSEN: Settings = {
   log: { level: "debug" },
   updates: { checkAutomatically: false },
   plugins: { registryUrl: "http://127.0.0.1:4873" },
-  mcp: { enabled: true, port: 48_000, rowCap: 250, clients: [{ name: "Claude Code", allowed: true }] },
+  mcp: {
+    enabled: true,
+    port: 48_000,
+    rowCap: 250,
+    statementTimeoutSeconds: 45,
+    clients: [{ name: "Claude Code", allowed: true }],
+  },
 };
 
 function store(files = memoryFiles()) {
@@ -283,7 +289,22 @@ describe("settings document", () => {
   it("givenNoMcpSection_whenRead_thenServerOff", () => {
     const { mcp: _mcp, ...older } = CHOSEN;
 
-    expect(readSettings(older).mcp).toEqual({ enabled: false, port: 47_820, rowCap: 100, clients: [] });
+    expect(readSettings(older).mcp).toEqual({
+      enabled: false,
+      port: 47_820,
+      rowCap: 100,
+      statementTimeoutSeconds: 120,
+      clients: [],
+    });
+  });
+
+  it("givenMcpTimeoutOutOfRange_whenRead_thenDefault", () => {
+    const read = readSettings({ ...CHOSEN, mcp: { ...CHOSEN.mcp, statementTimeoutSeconds: 0 } });
+
+    expect(read.mcp).toEqual({ ...CHOSEN.mcp, statementTimeoutSeconds: DEFAULT_SETTINGS.mcp.statementTimeoutSeconds });
+    expect(
+      settingsSchema.safeParse({ ...CHOSEN, mcp: { ...CHOSEN.mcp, statementTimeoutSeconds: 3_601 } }).success,
+    ).toBe(false);
   });
 });
 

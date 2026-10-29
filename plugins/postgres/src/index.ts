@@ -23,6 +23,7 @@ import {
   type ParameterValue,
   type Row,
   type ServerMessage,
+  type ServerTimeout,
   type Session,
   type SessionMonitor,
   type SqlLanguage,
@@ -67,6 +68,14 @@ import { NoticeCollector, type Notice } from "./notices.js";
 import { postgresObjects } from "./objects.js";
 import { postgresRoutineCall } from "./routines.js";
 import { postgresSessions } from "./sessions.js";
+import {
+  FAILED_TRANSACTION,
+  namesServerTimeout,
+  POSTGRES_SERVER_TIMEOUT,
+  postgresDurationMs,
+  READ_TIMEOUT_SQL,
+  SET_TIMEOUT_SQL,
+} from "./timeout.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 
 const PLUGIN_ID = "postgres";
@@ -85,6 +94,7 @@ const CAPABILITIES: readonly Capability[] = [
   "serverMessages",
   "sessions",
   "routineCall",
+  "serverTimeout",
 ];
 
 /** Function bodies live in dollar quotes; `BEGIN ATOMIC … END` holds a SQL-standard body. */
@@ -166,6 +176,7 @@ const RELEASE_SQL = "RELEASE SAVEPOINT table_craft_insert";
 const ROLLBACK_TO_SQL = "ROLLBACK TO SAVEPOINT table_craft_insert";
 const OPEN_TRANSACTION_MESSAGE = "A transaction is open; commit or roll it back before switching to auto-commit.";
 const BUSY_MESSAGE = "Another statement is still running in this session.";
+const CANCELLED_MESSAGE = "The statement was cancelled.";
 
 const DEFAULT_PORT = 5432;
 const MAX_PORT = 65_535;
@@ -318,7 +329,21 @@ interface WithConnection {
 
 interface Running {
   cancelRequested: boolean;
+  /** When the statement was sent, which `statement_timeout` counts from. */
+  startedAt: number;
+  /** `statement_timeout` while it runs, in ms; null when there is none. */
+  limitMs: number | null;
 }
+
+function startRunning(): Running {
+  return { cancelRequested: false, startedAt: Date.now(), limitMs: null };
+}
+
+/**
+ * `#appliedTimeoutMs` once a transaction ended after the plugin set the limit: a `ROLLBACK` may
+ * have undone it, so the next statement sets it again whatever it asks for.
+ */
+const UNKNOWN_TIMEOUT = -1;
 
 interface TransactionState {
   mode: TransactionMode;
@@ -371,10 +396,15 @@ class PostgresSession implements Session {
   #notices: NoticeCollector | null = null;
   #cancelling: Promise<void> = Promise.resolve();
   readonly #transaction: TransactionState = { mode: "auto", open: false };
+  /** The session's own `statement_timeout` in ms, 0 for none; read before the first limited statement. */
+  #ownTimeoutMs: number | null = null;
+  /** The limit this plugin last set; null before it set one; `UNKNOWN_TIMEOUT` after a transaction ended. */
+  #appliedTimeoutMs: number | null = null;
 
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "postgresql";
+  readonly serverTimeout: ServerTimeout = POSTGRES_SERVER_TIMEOUT;
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
@@ -449,7 +479,7 @@ class PostgresSession implements Session {
     }
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     await this.#cancelling.catch(() => undefined);
-    const running: Running = { cancelRequested: false };
+    const running = startRunning();
     this.#running = running;
     const effect = transactionEffect(sql, DIALECT);
     const state = this.#transaction;
@@ -458,6 +488,10 @@ class PostgresSession implements Session {
         await this.#client.query(BEGIN_SQL);
         state.open = true;
       }
+      running.limitMs = await this.#applyTimeout(options.serverTimeoutMs);
+      if (namesServerTimeout(sql)) this.#appliedTimeoutMs = null;
+      if (running.cancelRequested) throw new Error(CANCELLED_MESSAGE);
+      running.startedAt = Date.now();
     } catch (cause) {
       this.#running = null;
       throw this.#failure(cause, running);
@@ -473,10 +507,11 @@ class PostgresSession implements Session {
     try {
       const first = await readBatch(cursor).catch((cause: unknown) => {
         // A failed COMMIT still ends the transaction; a failed statement inside one leaves it open.
-        if (effect === "end") state.open = false;
+        if (effect === "end") this.#transactionEnded();
         throw cause;
       });
-      if (effect !== null) state.open = effect === "begin";
+      if (effect === "end") this.#transactionEnded();
+      else if (effect !== null) state.open = true;
       const fields = first.result.fields;
       if (fields.length === 0) {
         this.#notices = null;
@@ -529,7 +564,7 @@ class PostgresSession implements Session {
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     if (rows.length === 0) return;
     await this.#cancelling.catch(() => undefined);
-    const running: Running = { cancelRequested: false };
+    const running = startRunning();
     this.#running = running;
     const state = this.#transaction;
     try {
@@ -580,7 +615,8 @@ class PostgresSession implements Session {
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     const statement = explainStatement(sql, options.analyze);
     const rows: Row[] = [];
-    const result = await this.execute(statement);
+    const limit = options.serverTimeoutMs;
+    const result = await this.execute(statement, [], limit === undefined ? {} : { serverTimeoutMs: limit });
     for await (const row of result.rows) rows.push(row);
     return { ...readPlan(planText(rows), statement, options.analyze), messages: result.messages ?? [] };
   }
@@ -619,8 +655,22 @@ class PostgresSession implements Session {
 
   #failure(cause: unknown, running: Running, sql?: string): PluginError {
     const code = (cause as { code?: unknown }).code;
+    const limit = running.limitMs;
+    // pg_cancel_backend and the timeout both send 57014; only a cancel the plugin asked for is one.
+    if (
+      !running.cancelRequested &&
+      code === QUERY_CANCELED &&
+      limit !== null &&
+      Date.now() - running.startedAt >= limit
+    ) {
+      return new PluginError(
+        "timedOut",
+        `PostgreSQL stopped the statement at its ${String(limit / MS_PER_SECOND)} s limit (statement_timeout).`,
+        { cause },
+      );
+    }
     if (running.cancelRequested || code === QUERY_CANCELED) {
-      return new PluginError("cancelled", "The statement was cancelled.", { cause });
+      return new PluginError("cancelled", CANCELLED_MESSAGE, { cause });
     }
     const position = sql === undefined ? undefined : serverErrorPosition(sql, cause);
     return new PluginError("statementFailed", messageOf(cause), { cause, position });
@@ -661,7 +711,39 @@ class PostgresSession implements Session {
     } catch (cause) {
       throw new PluginError("statementFailed", messageOf(cause), { cause });
     } finally {
-      this.#transaction.open = false;
+      this.#transactionEnded();
+    }
+  }
+
+  /** `statement_timeout` is transactional: a `ROLLBACK` undoes a `SET` made inside it. */
+  #transactionEnded(): void {
+    this.#transaction.open = false;
+    if (this.#appliedTimeoutMs !== null) this.#appliedTimeoutMs = UNKNOWN_TIMEOUT;
+  }
+
+  /**
+   * Sets `statement_timeout` to `requested`, never above the session's own, or puts the own back
+   * when nothing is requested; sends nothing when the value would not change (decision 129). In a
+   * failed transaction, which refuses the `SET`, it is skipped and the statement fails on its own.
+   * Returns the limit the statement runs under, null for none.
+   */
+  async #applyTimeout(requested: number | undefined): Promise<number | null> {
+    if (requested === undefined && this.#appliedTimeoutMs === null) return null;
+    try {
+      if (this.#ownTimeoutMs === null) {
+        const shown = await this.#client.query<{ statement_timeout?: string }>(READ_TIMEOUT_SQL);
+        this.#ownTimeoutMs = postgresDurationMs(shown.rows[0]?.statement_timeout ?? "0");
+      }
+      const own = this.#ownTimeoutMs;
+      const want = requested === undefined ? own : own === 0 ? requested : Math.min(own, requested);
+      if (want !== this.#appliedTimeoutMs) {
+        await this.#client.query(SET_TIMEOUT_SQL, [String(want)]);
+        this.#appliedTimeoutMs = want;
+      }
+      return want === 0 ? null : want;
+    } catch (cause) {
+      if ((cause as { code?: unknown }).code !== FAILED_TRANSACTION) throw cause;
+      return null;
     }
   }
 
