@@ -8,7 +8,6 @@ import {
   type PlanNode,
 } from "@table-craft/desktop/engine/protocol.js";
 import { accessVerdict } from "@table-craft/desktop/mcp/access.js";
-import { APPROVAL_REFUSALS } from "@table-craft/desktop/mcp/approvals.js";
 import { EngineCallError, type AgentEngine, type SessionMode } from "@table-craft/desktop/mcp/engines.js";
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
 import { jsonRows, textTable } from "@table-craft/desktop/mcp/render.js";
@@ -20,6 +19,7 @@ import {
   textResult,
   timeoutOf,
   ToolFailure,
+  waitForApproval,
   type Caller,
   type ToolContext,
   type ToolResult,
@@ -128,22 +128,17 @@ export function createQueryTools(context: ToolContext): QueryTools {
     const verdict = accessVerdict(datasource.access, statement);
     if (verdict.kind === "read") return "read";
     if (verdict.kind === "refuse") throw new ToolFailure(verdict.reason, "refused");
-    const request = {
-      sessionId: caller.sessionId,
-      clientName: caller.clientName,
-      datasourceId: datasource.id,
-      datasourceName: datasource.name,
+    await waitForApproval(context, caller, datasource, {
       sql: statement.sql,
       kind: verdict.approval,
+      subject: "statement",
+      database: null,
       destructive: statement.destructive,
       reason,
       allowable: verdict.allowable,
-    };
-    if (context.approvals.allowedAlready(request)) return "write";
-    const outcome = await context.approvals.request(request);
-    if (outcome !== "allowed")
-      throw new ToolFailure(APPROVAL_REFUSALS[outcome], outcome === "handedOff" ? "handedOff" : "denied");
-    return "write";
+    });
+    // An approved read keeps the read-only session, so the server still refuses a misclassified write.
+    return verdict.approval === "read" ? "read" : "write";
   }
 
   async function answer(datasource: AgentDatasource, executed: ExecutedStatement): Promise<ToolResult> {

@@ -10,6 +10,8 @@ export const NOT_EXPOSED_REASON =
   "This datasource is not exposed to agents. Turn its access on in TableCraft: Settings › MCP Server.";
 export const READ_ONLY_REASON =
   "This datasource is read only for agents; the statement would change data. Ask the user to run it, or to set its access to Ask before writes.";
+export const ASK_READS_REASON =
+  "This datasource lets agents read only with the user's approval; the statement would change data. Ask the user to run it, or to set its access to Ask before writes.";
 export const TRANSACTION_REASON = "Transaction statements are refused: every approved statement commits on its own.";
 
 /**
@@ -19,6 +21,12 @@ export const TRANSACTION_REASON = "Transaction statements are refused: every app
 export function accessVerdict(access: AgentAccess, statement: ClassifiedStatement): AccessVerdict {
   if (access === "off") return { kind: "refuse", reason: NOT_EXPOSED_REASON };
   if (statement.kind === "transaction") return { kind: "refuse", reason: TRANSACTION_REASON };
+  if (access === "askReads") {
+    // A read has no destructive case, so "allow reads for the session" is always offered.
+    return statement.kind === "read"
+      ? { kind: "approve", approval: "read", allowable: true }
+      : { kind: "refuse", reason: ASK_READS_REASON };
+  }
   if (statement.kind === "read") return { kind: "read" };
   if (access === "read") return { kind: "refuse", reason: READ_ONLY_REASON };
   const allowable = statement.kind !== "ddl" && statement.destructive === null;

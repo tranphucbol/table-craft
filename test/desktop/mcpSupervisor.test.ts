@@ -151,6 +151,22 @@ describe("MCP supervisor", () => {
     ]);
   });
 
+  it("givenAskReadsDatasource_whenBoot_thenExposedWithItsLevel", async () => {
+    const { supervisor, processes } = await supervised({
+      datasources: () => [
+        view("vault", { agentAccess: "askReads" }),
+        view("replica", { agentAccess: "askReads", readOnly: true }),
+      ],
+    });
+
+    await supervisor.start();
+
+    expect(processes[0]?.boot().datasources.map((datasource) => [datasource.id, datasource.access])).toEqual([
+      ["vault", "askReads"],
+      ["replica", "askReads"],
+    ]);
+  });
+
   it("givenStoredToken_whenRestarted_thenTheSameTokenIsReused", async () => {
     const { supervisor, processes } = await supervised();
 

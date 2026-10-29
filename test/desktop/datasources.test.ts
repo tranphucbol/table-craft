@@ -74,6 +74,20 @@ describe("datasource store", () => {
     });
   });
 
+  it("givenAskReads_whenSavedAndReloaded_thenKept", async () => {
+    const { files, store: first } = store();
+    const asking = { ...LOCAL_PG, agentAccess: "askReads" as const };
+    await first.save([asking]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({ datasources: [{ agentAccess: "askReads" }] });
+    expect(reloaded).toEqual({ datasources: [asking], warning: null });
+    expect(toDatasource(asking, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).toMatchObject({
+      agentAccess: "askReads",
+    });
+  });
+
   it("givenShownNamespaces_whenSavedAndLoaded_thenRoundTrip", async () => {
     const { files, store: first } = store();
     const filtered = { ...LOCAL_PG, shownNamespaces: ["table_craft", "shop"] };
