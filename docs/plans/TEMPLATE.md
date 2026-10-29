@@ -141,8 +141,8 @@ also runs `bun run test:db`.
 _Filled in by whoever implements the plan (decision 016). Build the app, drive it with Playwright
 (`playwright-core` `_electron`, as `test/e2e/` does), and exercise every user-visible behaviour the
 plan adds against every database it touches. Run it in the headless box
-(`bun run test:smoke:db:headless`, decision 063) unless the behaviour is macOS-only. Save one PNG
-per behaviour to `docs/evidence/NNN/` and list them here:_
+(`bun run test:smoke:db:headless`, decision 063) unless the behaviour is macOS-only, following the
+`local-testing` skill. Save one PNG per behaviour to `docs/evidence/NNN/` and list them here:_
 
 | #   | Scenario                   | Database                    | Result                               | Evidence                     |
 | --- | -------------------------- | --------------------------- | ------------------------------------ | ---------------------------- |
