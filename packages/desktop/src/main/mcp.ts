@@ -19,6 +19,7 @@ import {
   MCP_HISTORY_MESSAGE,
   MCP_LOG_MESSAGE,
   MCP_OPEN_CONSOLE_MESSAGE,
+  MCP_SERVER_SEEN_MESSAGE,
   MCP_SHUTDOWN_MESSAGE,
   MCP_STATUS_MESSAGE,
   type AgentDatasource,
@@ -26,7 +27,8 @@ import {
   type MainToMcp,
   type McpToMain,
 } from "@table-craft/desktop/mcp/messages.js";
-import type { ConnectResult, DatasourceView } from "@table-craft/desktop/preload/bridge.js";
+import type { ConnectResult, DatasourceView, ServerSeen } from "@table-craft/desktop/preload/bridge.js";
+import { serverSeenSchema } from "@table-craft/desktop/main/datasources.js";
 import {
   effectiveAccess,
   mcpClientConfig,
@@ -79,6 +81,8 @@ export interface McpSupervisorOptions {
   readonly secrets: SecretStore;
   readonly connect: (datasourceId: string, target: McpEngineTarget) => Promise<ConnectResult>;
   readonly history: Pick<QueryHistory, "record">;
+  /** What an agent session's server said of itself, for the datasource (decision 131). */
+  readonly rememberServer: (datasourceId: string, seen: ServerSeen) => Promise<void>;
   readonly onStatus: (status: McpStatus) => void;
   /** A record the host posted. */
   readonly forward: (record: unknown, process: string) => void;
@@ -209,6 +213,15 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
     if (running?.process === process) process.postMessage({ kind: MCP_ENGINE_ANSWER_MESSAGE, requestId, answer });
   }
 
+  function remember(datasourceId: string, seen: ServerSeen): void {
+    if (!agentDatasources().some((datasource) => datasource.id === datasourceId)) return;
+    const parsed = serverSeenSchema.safeParse({ brand: seen.brand, lastServer: seen.lastServer });
+    if (!parsed.success) return;
+    options.rememberServer(datasourceId, parsed.data).catch((cause: unknown) => {
+      options.log.warn("agent server facts not remembered", { err: cause });
+    });
+  }
+
   function received(process: McpProcess, message: unknown): void {
     if (!isMessage(message)) return;
     switch (message.kind) {
@@ -224,6 +237,9 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
         } catch (cause) {
           options.log.warn("agent history not recorded", { err: cause });
         }
+        return;
+      case MCP_SERVER_SEEN_MESSAGE:
+        remember(message.datasourceId, message);
         return;
       case MCP_LOG_MESSAGE:
         options.forward(message.record, MCP_LOG_PROCESS);
