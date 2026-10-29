@@ -156,7 +156,17 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bun run plugins:pack
+      # Plan 124: a plugin unchanged since the newest package on npm for this channel is attached
+      # as that package, so nothing republishes it. A tag must know; a branch only warns offline.
+      - name: Pack, reusing unchanged plugins
+        run: |
+          flags=(--reuse-published)
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then flags+=(--offline-ok); fi
+          bun run plugins:pack -- "${flags[@]}"
+      - name: Check the plugins build reproducibly
+        run: |
+          bun run plugins:pack -- --out dist/plugin-packages-again
+          bun scripts/plugins/fingerprint.ts --compare dist/plugin-packages dist/plugin-packages-again
       - run: bun run plugins:check
       - run: bun run plugins:publish -- --dry-run
       - if: startsWith(github.ref, 'refs/tags/v')

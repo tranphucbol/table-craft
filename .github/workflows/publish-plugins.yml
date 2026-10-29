@@ -1,5 +1,6 @@
 # Decision 109: publishing a TableCraft release publishes the plugin packages CI attached to it,
-# plugin-api first, with npm provenance. Versions already on npm are skipped, so a rerun is safe.
+# plugin-api first, with npm provenance. Versions already on npm are skipped, so a rerun is safe,
+# and so is a plugin that did not change: CI attached the package already on npm (plan 124).
 # Nothing publishes from a branch, a pull request or a draft.
 name: Publish plugins
 
@@ -50,7 +51,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ github.event.release.prerelease && 'next' || 'latest' }}
-        run: bun run plugins:publish -- --from plugin-packages --provenance --dist-tag "$DIST_TAG" --notes published.md
+        run: bun run plugins:publish -- --from plugin-packages --provenance --dist-tag "$DIST_TAG" --notes published.md --release "${TAG#v}"
       - name: Note the published versions in the release
         run: |
           gh release view "$TAG" --json body --jq .body --repo "$GITHUB_REPOSITORY" > notes.md

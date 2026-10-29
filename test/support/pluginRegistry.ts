@@ -126,8 +126,8 @@ export interface RegistryRelease {
   readonly integrity?: string;
 }
 
-export function release(plugin: PluginPackage, integrity?: string): RegistryRelease {
-  const bytes = pluginTarball(plugin);
+/** `plugin` as the registry serves it; `bytes` replaces the fixture tarball with a real `npm pack`. */
+export function release(plugin: PluginPackage, integrity?: string, bytes = pluginTarball(plugin)): RegistryRelease {
   return {
     version: plugin.version,
     apiVersion: plugin.apiVersion ?? "1.0.0",

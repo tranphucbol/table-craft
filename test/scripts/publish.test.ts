@@ -126,4 +126,25 @@ describe("publishing plugins", () => {
     expect(notes).toContain("`@tablecraft-app/plugin-api@1.0.0`");
     expect(notes).toContain("(already published)");
   });
+
+  it("givenReusedPackage_whenReleaseNotes_thenUnchangedStill", () => {
+    const notes = releaseNotes(
+      [
+        { ...POSTGRES, status: "skipped", distTag: "latest" },
+        { ...ORACLE, version: "0.5.0", status: "skipped", distTag: "latest" },
+        { ...PLUGIN_API, version: "0.5.0", status: "published", distTag: "latest" },
+      ],
+      "0.5.0",
+    );
+
+    expect(notes).toContain(
+      "plugin-postgres@0.4.0`](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres/v/0.4.0) (unchanged, still `0.4.0`)",
+    );
+    expect(notes).toContain(
+      "plugin-oracle@0.5.0`](https://www.npmjs.com/package/@tablecraft-app/plugin-oracle/v/0.5.0) (already published)",
+    );
+    expect(notes).toContain(
+      "plugin-api@0.5.0`](https://www.npmjs.com/package/@tablecraft-app/plugin-api/v/0.5.0) (`latest`)",
+    );
+  });
 });
