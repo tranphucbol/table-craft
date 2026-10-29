@@ -9,6 +9,7 @@ import { ValueEditor, ValuePanel } from "@table-craft/desktop/renderer/grid/Valu
 import { visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { bufferRowAt, pendingCount, pendingText } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
+import { jsonOwnerKey } from "@table-craft/desktop/renderer/model/jsonView.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { rowAt, shownHeld } from "@table-craft/desktop/renderer/state/resultTab.js";
 import {
@@ -56,6 +57,7 @@ function TablePanel({
   const result = session.result;
   const column = focus === null ? null : (result?.columns[focus.column] ?? null);
   if (result === null || focus === null) return <ValuePanel column={column} value={undefined} />;
+  const jsonOwner = jsonOwnerKey(tableId, result.handle);
   const row = bufferRowAt(session.buffer, shownHeld(result), focus.row);
   const typeClass = result.typeClasses[focus.column];
   const deleted = row?.kind === "held" && session.buffer.deletes.has(row.row);
@@ -68,13 +70,14 @@ function TablePanel({
         column={column}
         text={draft?.text ?? text}
         json={typeClass === "json"}
+        jsonOwner={jsonOwner}
         applyHint={shortcutText(TABLE_ACTION_IDS.applyValue)}
         onChange={(next) => useTables.getState().editPanel(tableId, focus, next)}
       />
     );
   }
   const value = row?.kind === "held" ? rowAt(result.windows, focus.row)?.[focus.column] : null;
-  return <ValuePanel column={column} value={value} />;
+  return <ValuePanel column={column} value={value} jsonOwner={jsonOwner} />;
 }
 
 function Footer({ session }: { readonly session: TableSession }) {

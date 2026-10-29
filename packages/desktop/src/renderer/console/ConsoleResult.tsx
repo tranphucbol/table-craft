@@ -9,6 +9,7 @@ import { ValueEditor, ValuePanel } from "@table-craft/desktop/renderer/grid/Valu
 import { visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { bufferRowAt, pendingCount, pendingText } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { canEditCell, editCellText } from "@table-craft/desktop/renderer/model/resultEdits.js";
+import { jsonOwnerKey } from "@table-craft/desktop/renderer/model/jsonView.js";
 import { formatPattern } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
   consoleReadOnlyReason,
@@ -58,6 +59,7 @@ function EditablePanel({
   const column = focus === null ? null : (result.columns[focus.column] ?? null);
   if (focus === null) return <ValuePanel column={column} value={undefined} />;
   const target = editTargetOf(result, edits);
+  const jsonOwner = jsonOwnerKey(consoleId, result.handle);
   if (editable && canEditCell(target, focus)) {
     const text = editCellText(target, focus);
     const draft = edits.panel?.row === focus.row && edits.panel.column === focus.column ? edits.panel : null;
@@ -67,6 +69,7 @@ function EditablePanel({
         column={column}
         text={draft?.text ?? text}
         json={result.typeClasses[focus.column] === "json"}
+        jsonOwner={jsonOwner}
         applyHint={shortcutText(TABLE_ACTION_IDS.applyValue)}
         onChange={(next) => useConsoles.getState().editPanel(consoleId, result.id, focus, next)}
       />
@@ -74,7 +77,7 @@ function EditablePanel({
   }
   const row = bufferRowAt(edits.buffer, shownHeld(result), focus.row);
   const value = row?.kind === "held" ? rowAt(result.windows, focus.row)?.[focus.column] : null;
-  return <ValuePanel column={column} value={value} />;
+  return <ValuePanel column={column} value={value} jsonOwner={jsonOwner} />;
 }
 
 function EditToolbar({ edits, editable }: { readonly edits: ConsoleResultEdits; readonly editable: boolean }) {

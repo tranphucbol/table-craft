@@ -26,6 +26,7 @@ import { ValuePanel } from "@table-craft/desktop/renderer/grid/ValuePanel.js";
 import { widerChars } from "@table-craft/desktop/renderer/grid/widths.js";
 import { focusedBinaryCell } from "@table-craft/desktop/renderer/model/binaryCells.js";
 import { columnTemplate, visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
+import { jsonOwnerKey } from "@table-craft/desktop/renderer/model/jsonView.js";
 import { gridRowCount } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import {
   contains,
@@ -146,6 +147,7 @@ export function ResultGrid({
             <ValuePanel
               column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
               value={focusValue}
+              jsonOwner={jsonOwnerKey(ownerId, result.handle)}
             />
           )}
         </div>
