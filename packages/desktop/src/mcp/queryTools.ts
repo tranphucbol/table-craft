@@ -92,6 +92,19 @@ function planLines(nodes: readonly PlanNode[], depth: number): string[] {
   });
 }
 
+/** Each distinct warning once: a scan over many partitions warns about its table once. */
+function planWarnings(nodes: readonly PlanNode[]): string[] {
+  const warnings = new Set<string>();
+  const walk = (level: readonly PlanNode[]): void => {
+    for (const node of level) {
+      for (const warning of node.warnings ?? []) warnings.add(warning);
+      walk(node.children);
+    }
+  };
+  walk(nodes);
+  return [...warnings];
+}
+
 export function createQueryTools(context: ToolContext): QueryTools {
   const results = new Map<string, OpenResult>();
   let next = 0;
@@ -297,7 +310,9 @@ export function createQueryTools(context: ToolContext): QueryTools {
       const { plan } = explained;
       const tree = planLines(plan.roots, 0);
       const summary = plan.summary.map((property) => `${property.name}: ${property.value}`);
-      return textResult([...tree, ...summary, "", "Raw:", plan.raw].join("\n"), {
+      const warnings = planWarnings(plan.roots);
+      const warned = warnings.length === 0 ? [] : ["", "Warnings:", ...warnings.map((warning) => `- ${warning}`)];
+      return textResult([...tree, ...summary, ...warned, "", "Raw:", plan.raw].join("\n"), {
         statement: plan.statement,
         raw: plan.raw,
       });

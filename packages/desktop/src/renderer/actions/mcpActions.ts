@@ -2,6 +2,7 @@ import type { InvokeResult } from "@table-craft/desktop/preload/bridge.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { openConsole } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { useApprovalPlans } from "@table-craft/desktop/renderer/state/approvalPlans.js";
 import { copied, writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
@@ -39,6 +40,7 @@ export const MCP_ACTION_IDS = {
   forgetClient: "mcp.forgetClient",
   cancel: "mcp.cancel",
   handOff: "mcp.handOff",
+  explainRequest: "mcp.explainRequest",
   activity: "mcp.activity",
   openInConsole: "mcp.openInConsole",
 } as const;
@@ -110,6 +112,15 @@ async function handOff(approvalId: string): Promise<void> {
     bridge().mcpControl({ action: "answer", approvalId, answer: "handOff" }),
     "Could not answer the agent",
   );
+}
+
+/** Plans a waiting statement for the dialog's Plan view; the request keeps waiting (decision 130). */
+function explainRequest(approvalId: string): Promise<void> | undefined {
+  const approval = useMcp.getState().status.approvals.find((pending) => pending.id === approvalId);
+  if (approval === undefined || approval.subject === "key") return undefined;
+  return useApprovalPlans
+    .getState()
+    .explain({ id: approval.id, datasourceId: approval.datasourceId, sql: approval.sql });
 }
 
 function showActivity(): void {
@@ -309,6 +320,17 @@ export const MCP_ACTIONS: readonly AnyAction[] = [
     run: (_context, approvalId) => {
       const target = approvalId ?? useMcp.getState().status.approvals[0]?.id;
       return target === undefined ? undefined : handOff(target);
+    },
+  }),
+  defineAction<string | undefined>({
+    id: MCP_ACTION_IDS.explainRequest,
+    title: "Explain Agent Request",
+    category: "App",
+    icon: "explain",
+    available: waiting,
+    run: (_context, approvalId) => {
+      const target = approvalId ?? useMcp.getState().status.approvals[0]?.id;
+      return target === undefined ? undefined : explainRequest(target);
     },
   }),
   defineAction<McpConsoleRequest | undefined>({

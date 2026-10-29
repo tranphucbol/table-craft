@@ -47,6 +47,17 @@ export function planRows(plan: Pick<ExplainedPlan, "roots" | "analyzed">, collap
   return rows;
 }
 
+/** Each distinct warning of the plan once, in tree order: a scan over many partitions warns once. */
+export function planWarnings(plan: Pick<ExplainedPlan, "roots">): string[] {
+  const warnings = new Set<string>();
+  function visit(node: PlanNode): void {
+    for (const warning of node.warnings ?? []) warnings.add(warning);
+    node.children.forEach(visit);
+  }
+  plan.roots.forEach(visit);
+  return [...warnings];
+}
+
 /** The node at `key`, a path `planRows` made. */
 export function planNodeAt(plan: Pick<ExplainedPlan, "roots">, key: string | null): PlanNode | null {
   if (key === null) return null;
