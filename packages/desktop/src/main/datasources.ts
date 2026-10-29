@@ -10,7 +10,12 @@ import {
   type Datasource,
   type DatasourceDraft,
 } from "@table-craft/desktop/preload/bridge.js";
-import { KEEPALIVE_SECONDS_RANGE, STATEMENT_TIMEOUT_SECONDS_RANGE } from "@table-craft/desktop/settings/settings.js";
+import { AGENT_ACCESS_LEVELS } from "@table-craft/desktop/settings/mcp.js";
+import {
+  KEEPALIVE_SECONDS_RANGE,
+  MCP_ROW_CAP_RANGE,
+  STATEMENT_TIMEOUT_SECONDS_RANGE,
+} from "@table-craft/desktop/settings/settings.js";
 
 export const DATASOURCES_FILE = "datasources.json";
 /** Bumped with a migration in `migrate` whenever the file's shape changes (decision 010). */
@@ -51,6 +56,9 @@ const datasourceSchema = z.strictObject({
   origin: z.strictObject({ app: z.enum(IMPORT_APPS), id: z.string().min(1) }).optional(),
   ssh: sshSchema.optional(),
   shownNamespaces: z.array(z.string()).readonly().optional(),
+  agentAccess: z.enum(AGENT_ACCESS_LEVELS).optional(),
+  agentSchemas: z.array(z.string()).readonly().optional(),
+  agentRowCap: z.number().int().min(MCP_ROW_CAP_RANGE.min).max(MCP_ROW_CAP_RANGE.max).optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -148,6 +156,9 @@ export function toDatasource(
     ...(draft.origin === undefined ? {} : { origin: { app: draft.origin.app, id: draft.origin.id } }),
     ...(ssh === undefined ? {} : { ssh: { ...ssh, host: ssh.host.trim(), user: ssh.user.trim() } }),
     ...(draft.shownNamespaces === undefined ? {} : { shownNamespaces: [...draft.shownNamespaces] }),
+    ...(draft.agentAccess === undefined || draft.agentAccess === "off" ? {} : { agentAccess: draft.agentAccess }),
+    ...(draft.agentSchemas === undefined ? {} : { agentSchemas: [...draft.agentSchemas] }),
+    ...(draft.agentRowCap === undefined ? {} : { agentRowCap: draft.agentRowCap }),
   };
 }
 

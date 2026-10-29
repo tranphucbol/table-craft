@@ -11,7 +11,13 @@ const EXECUTABLE = packagedExecutable(process.platform, process.arch);
 const RESOURCES =
   process.platform === "darwin" ? join(dirname(EXECUTABLE), "..", "Resources") : join(dirname(EXECUTABLE), "resources");
 const ARCHIVE = join(RESOURCES, "app.asar");
-const BUNDLES = ["dist/main/main.js", "dist/engine/main.js", "dist/preload/preload.cjs", "dist/renderer/index.html"];
+const BUNDLES = [
+  "dist/main/main.js",
+  "dist/engine/main.js",
+  "dist/mcp/main.js",
+  "dist/preload/preload.cjs",
+  "dist/renderer/index.html",
+];
 
 /** `bun run desktop:package:dir` builds the app these read; without it there is nothing to list. */
 const PACKAGED = existsSync(ARCHIVE);

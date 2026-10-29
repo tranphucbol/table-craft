@@ -174,6 +174,16 @@ describe("engine session health", () => {
     expect(connects).toHaveLength(2);
   });
 
+  it("givenReadOnlyOpen_whenReconnected_thenStillReadOnly", async () => {
+    const { connection, connects, controls } = healthyPlugin(ALL_CAPABILITIES, 0);
+    const opened = resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open", readOnly: true }));
+    controls.lostExecutes = 1;
+
+    resultOf<ExecutedStatement>(await execute(connection, opened.sessionId, "SELECT 1"));
+
+    expect(connects).toEqual([{ readOnly: true }, { readOnly: true }]);
+  });
+
   it("givenIdlePastKeepAlive_whenPingFails_thenReconnectsBeforeSending", async () => {
     const { connection, connects, controls, executed, advance } = healthyPlugin();
     const sessionId = await open(connection);

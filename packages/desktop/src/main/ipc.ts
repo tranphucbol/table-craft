@@ -36,6 +36,17 @@ import {
   type WindowState,
 } from "@table-craft/desktop/preload/bridge.js";
 import type { Logger, LogRecord } from "@table-craft/desktop/log/record.js";
+import {
+  AGENT_ACCESS_LEVELS,
+  APPROVAL_ANSWERS,
+  MCP_CLIENTS,
+  type AgentPolicy,
+  type McpActiveConsole,
+  type McpClient,
+  type McpStatus,
+  type McpUserControl,
+} from "@table-craft/desktop/settings/mcp.js";
+import { MCP_ROW_CAP_RANGE } from "@table-craft/desktop/settings/settings.js";
 
 /** Every record from `log.write` is the renderer's, whatever it claims (plan 017 decision 8). */
 const RENDERER_PROCESS = "renderer";
@@ -108,6 +119,35 @@ const menuPoint = z.strictObject({
   y: z.number().int().nonnegative(),
 }) satisfies z.ZodType<MenuPoint>;
 const noRequest = z.undefined();
+const agentAccessRequest = z.strictObject({ datasourceId: z.string().min(1), access: z.enum(AGENT_ACCESS_LEVELS) });
+const mcpControlRequest = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("answer"), approvalId: z.string().min(1), answer: z.enum(APPROVAL_ANSWERS) }),
+  z.strictObject({ action: z.literal("pause"), paused: z.boolean() }),
+  z.strictObject({ action: z.literal("disconnect"), clientId: z.string().min(1) }),
+  z.strictObject({ action: z.literal("cancel"), runId: z.string().min(1) }),
+]) satisfies z.ZodType<McpUserControl>;
+const agentPolicyRequest = z.strictObject({
+  datasourceId: z.string().min(1),
+  policy: z.strictObject({
+    schemas: z.array(z.string().min(1)).readonly().nullable(),
+    rowCap: z.number().int().min(MCP_ROW_CAP_RANGE.min).max(MCP_ROW_CAP_RANGE.max).nullable(),
+  }) satisfies z.ZodType<AgentPolicy>,
+});
+/** A console's text crosses to the MCP host only up to this; `get_active_context` cuts it further. */
+const MAX_CONTEXT_CHARS = 1_000_000;
+const mcpContextReply = z.strictObject({
+  requestId: z.number().int().positive(),
+  context: z
+    .strictObject({
+      datasourceId: z.string().min(1),
+      sql: z.string().max(MAX_CONTEXT_CHARS),
+      selectionFrom: z.number().int().nonnegative(),
+      selectionTo: z.number().int().nonnegative(),
+      namespace: z.array(z.string()).readonly().nullable(),
+    })
+    .nullable() satisfies z.ZodType<McpActiveConsole | null>,
+});
+const mcpClientRequest = z.strictObject({ client: z.enum(MCP_CLIENTS) });
 const pluginRequest = z.strictObject({ pluginId: z.string().min(1) });
 const importPreviewRequest = z.union([
   z.strictObject({ source: z.enum(IMPORT_APPS) }),
@@ -156,6 +196,17 @@ export interface IpcOptions<Sender> {
   readonly updates: UpdateChannels;
   readonly importer: ImportChannels<Sender>;
   readonly plugins: PluginChannels<Sender>;
+  readonly mcp: McpChannels;
+}
+
+/** The MCP server behind the `mcp.*` channels (decision 126); the token never crosses to a window. */
+export interface McpChannels {
+  status(): McpStatus;
+  control(control: McpUserControl): void;
+  copyClientConfig(client: McpClient): Promise<void>;
+  regenerateToken(): Promise<void>;
+  copyToken(): Promise<void>;
+  contextReply(requestId: number, context: McpActiveConsole | null): void;
 }
 
 /** Downloaded plugins behind the `plugins.*` channels (decision 110); package names never come from the renderer. */
@@ -431,6 +482,39 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   );
   handle(INVOKE_CHANNELS.historyClear, historyClearRequest, ({ datasourceId }) => {
     history.clear(datasourceId);
+    return null;
+  });
+
+  const { mcp } = options;
+  handle(INVOKE_CHANNELS.setAgentAccess, agentAccessRequest, async ({ datasourceId, access }) => {
+    await service.setAgentAccess(datasourceId, access);
+    return null;
+  });
+  handle(INVOKE_CHANNELS.mcpStatus, noRequest, () => mcp.status());
+  handle(INVOKE_CHANNELS.mcpControl, mcpControlRequest, (control) => {
+    mcp.control(control);
+    return null;
+  });
+  handle(INVOKE_CHANNELS.mcpCopyClientConfig, mcpClientRequest, async ({ client }) => {
+    await mcp.copyClientConfig(client);
+    return null;
+  });
+  handle(
+    INVOKE_CHANNELS.mcpRegenerateToken,
+    noRequest,
+    done(() => mcp.regenerateToken()),
+  );
+  handle(
+    INVOKE_CHANNELS.mcpCopyToken,
+    noRequest,
+    done(() => mcp.copyToken()),
+  );
+  handle(INVOKE_CHANNELS.setAgentPolicy, agentPolicyRequest, async ({ datasourceId, policy }) => {
+    await service.setAgentPolicy(datasourceId, policy);
+    return null;
+  });
+  handle(INVOKE_CHANNELS.mcpContextReply, mcpContextReply, ({ requestId, context }) => {
+    mcp.contextReply(requestId, context);
     return null;
   });
 }

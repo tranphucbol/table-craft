@@ -35,6 +35,8 @@ export interface Layout {
   /** Percent of a console's height its SQL editor takes, the rest going to its results (plan 060). */
   readonly consoleEditor: number;
   readonly editorGroupWidth: number;
+  /** Whether Settings › MCP Server shows the red data source warning; its (i) brings it back (plan 117). */
+  readonly productionNote: boolean;
 }
 
 /**
@@ -82,6 +84,7 @@ export const DEFAULT_LAYOUT: Layout = {
   valueFormats: {},
   consoleEditor: DEFAULT_CONSOLE_EDITOR_PERCENT,
   editorGroupWidth: DEFAULT_EDITOR_GROUP_WIDTH,
+  productionNote: true,
 };
 
 const MIN_SIZE_PERCENT = 5;
@@ -188,6 +191,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     valueFormats,
     consoleEditor,
     editorGroupWidth,
+    productionNote,
   } = saved as Record<string, unknown>;
   const visibleRead = recordOf(visible, isBoolean, DEFAULT_LAYOUT.visible);
   const sizesRead = recordOf(sizes, isSize, DEFAULT_LAYOUT.sizes);
@@ -205,6 +209,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     valueFormats: valueFormatsOf(valueFormats),
     consoleEditor: isConsoleEditorSize(consoleEditor) ? consoleEditor : DEFAULT_CONSOLE_EDITOR_PERCENT,
     editorGroupWidth: isGroupSize(editorGroupWidth) ? editorGroupWidth : DEFAULT_EDITOR_GROUP_WIDTH,
+    productionNote: productionNote !== false,
   };
 }
 
@@ -252,6 +257,7 @@ export interface LayoutState {
   readonly setOpenTables: (openTables: readonly OpenTable[]) => void;
   readonly setExtractor: (extractor: ExtractorKind) => void;
   readonly toggleValuePanel: () => void;
+  readonly setProductionNote: (shown: boolean) => void;
   readonly resizeConsoleEditor: (percent: number) => void;
   readonly resizeEditorGroups: (percent: number) => void;
   /** Remembers `format` for keys like `pattern`; Auto forgets it. */
@@ -286,6 +292,9 @@ export function createLayoutStore(storage: LayoutStorage) {
         if (extractor !== get().layout.extractor) update({ ...get().layout, extractor });
       },
       toggleValuePanel: () => update({ ...get().layout, valuePanel: !get().layout.valuePanel }),
+      setProductionNote(productionNote) {
+        if (productionNote !== get().layout.productionNote) update({ ...get().layout, productionNote });
+      },
       resizeConsoleEditor: (percent) => update(consoleEditorResized(get().layout, percent)),
       resizeEditorGroups: (percent) => {
         const editorGroupWidth = Math.min(MAX_EDITOR_GROUP_PERCENT, Math.max(MIN_EDITOR_GROUP_PERCENT, percent));

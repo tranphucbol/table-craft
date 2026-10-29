@@ -67,6 +67,8 @@ export interface SavedDatasource {
   readonly comment?: string;
   readonly keepAliveSeconds?: number;
   readonly statementTimeoutSeconds?: number;
+  /** Plan 117's per-datasource MCP access; absent is off. */
+  readonly agentAccess?: "off" | "read" | "ask";
   readonly config: Readonly<Record<string, string | number | boolean>>;
   readonly secretModes?: Readonly<Record<string, "forever" | "untilRestart" | "never">>;
   /** Plan 036's tunnel; its secrets are `ssh.password` and `ssh.passphrase` in `secretModes`. */

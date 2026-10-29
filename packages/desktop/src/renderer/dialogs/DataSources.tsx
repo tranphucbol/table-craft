@@ -9,6 +9,7 @@ import {
   type PluginInfo,
   type SecretMode,
 } from "@table-craft/desktop/preload/bridge.js";
+import { AGENT_ACCESS_LABELS, AGENT_ACCESS_LEVELS } from "@table-craft/desktop/settings/mcp.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { deleteDatasource } from "@table-craft/desktop/renderer/actions/datasourceCommands.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
@@ -19,6 +20,7 @@ import {
   FieldRow,
   INPUT_CLASS,
   OVERLAY_CLASS,
+  Select,
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { PluginPicker } from "@table-craft/desktop/renderer/dialogs/PluginPicker.js";
@@ -52,6 +54,11 @@ const TIMEOUT_HINT =
   "A console statement running longer is cancelled; 0 waits. Blank follows Settings → Editor → Running.";
 const URL_SEPARATOR = "://";
 const READ_ONLY_HINT = "A guard against accidents, not a security boundary: use a read-only database user for that.";
+const AGENT_ACCESS_OPTIONS = AGENT_ACCESS_LEVELS.map((value) => ({ value, label: AGENT_ACCESS_LABELS[value] }));
+const AGENT_ACCESS_NOTE = "What MCP clients may do while Settings → MCP Server is on";
+const AGENT_READ_ONLY_NOTE = "Read only while Read-only is on";
+const AGENT_ACCESS_HINT =
+  "Ask before writes shows each write in the MCP status chip for you to allow or deny. Agents never see passwords.";
 
 type TestState = { readonly kind: "testing" } | { readonly kind: "done"; readonly result: ProbeResult };
 
@@ -412,6 +419,21 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
           <ReadOnlyIcon aria-hidden className="size-icon text-ink-muted" />
           <span className="text-ink-muted">Refuse writes in this data source's sessions</span>
         </label>
+      </FieldRow>
+      <FieldRow label="AI agent access">
+        <Select
+          label="AI agent access"
+          testId="datasource-agent-access"
+          value={draft.agentAccess}
+          options={AGENT_ACCESS_OPTIONS}
+          onChange={(value) => {
+            const agentAccess = AGENT_ACCESS_LEVELS.find((level) => level === value);
+            if (agentAccess !== undefined) onChange({ agentAccess });
+          }}
+        />
+        <span className="truncate text-ink-muted" title={AGENT_ACCESS_HINT}>
+          {draft.readOnly && draft.agentAccess === "ask" ? AGENT_READ_ONLY_NOTE : AGENT_ACCESS_NOTE}
+        </span>
       </FieldRow>
       <FieldRow label="Colour">
         <div role="radiogroup" aria-label="Colour" className="flex items-center gap-1">
