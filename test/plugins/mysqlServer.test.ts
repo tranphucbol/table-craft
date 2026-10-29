@@ -1,5 +1,6 @@
-import { killStatementFor, serverDialect } from "@table-craft/plugin-mysql/server";
+import { killStatementFor, MYSQL_SERVER_KINDS, serverDialect } from "@table-craft/plugin-mysql/server";
 import { describe, expect, it } from "vitest";
+import { MYSQL_MANIFEST } from "../support/manifests.js";
 
 const CONNECTION_ID = 42;
 
@@ -26,6 +27,26 @@ describe("mysql server dialect", () => {
   it("givenUnreadableOrNull_whenDialect_thenMysqlWithoutRelease", () => {
     expect(serverDialect("unknown")).toEqual({ kind: "mysql", version: null });
     expect(serverDialect(null)).toEqual({ kind: "mysql", version: null });
+  });
+});
+
+describe("mysql server brand", () => {
+  it("givenTidbVersion_whenServerBrand_thenTidb", () => {
+    expect(serverDialect("8.0.11-TiDB-v7.5.1").kind).toBe("tidb");
+  });
+
+  it("givenMariadbVersion_whenServerBrand_thenMariadb", () => {
+    expect(serverDialect("5.5.5-10.11.8-MariaDB").kind).toBe("mariadb");
+  });
+
+  it("givenMysqlOrNullVersion_whenServerBrand_thenMysql", () => {
+    expect(serverDialect("8.4.3").kind).toBe("mysql");
+    expect(serverDialect(null).kind).toBe("mysql");
+  });
+
+  it("givenServerKinds_whenComparedWithManifestBrands_thenSameIdsDefaultFirst", () => {
+    expect(MYSQL_MANIFEST.brands?.map((brand) => brand.id)).toEqual([...MYSQL_SERVER_KINDS]);
+    expect(MYSQL_MANIFEST.brands?.[0]?.id).toBe(serverDialect(null).kind);
   });
 });
 

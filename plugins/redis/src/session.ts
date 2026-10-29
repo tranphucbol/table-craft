@@ -51,6 +51,8 @@ function errorText(cause: unknown): string {
 
 export class RedisSession implements Session {
   readonly serverVersion: string;
+  /** The manifest's one brand. */
+  readonly serverBrand = "redis";
   readonly tls = null;
   readonly delimiter: string;
   readonly keyspace: RedisKeyspace;
