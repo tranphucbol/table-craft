@@ -36,7 +36,7 @@ const COVERAGE_CELLS: Readonly<Record<Coverage, { icon: CoverageIcon; word: stri
 const TONE_CLASSES: Readonly<Record<TimeoutTone, string>> = {
   covered: "text-ink-muted",
   gap: "text-warning",
-  unseen: "rounded-full text-ink-muted outline-1 outline-line outline-dashed",
+  unseen: "rounded-full text-ink-muted outline-1 outline-ink-muted outline-dashed",
 };
 
 const COLUMNS = [

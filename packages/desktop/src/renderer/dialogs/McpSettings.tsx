@@ -249,18 +249,20 @@ function AccessRow({
       </td>
       <td className={CELL_CLASS}>
         {exposed ? (
-          <span className="flex min-w-0 items-center gap-1">
+          <span className="flex min-w-0 items-center justify-end gap-1">
             <TimeoutInfo datasource={datasource} defaultSeconds={defaults.timeoutSeconds} />
-            <CommitField
-              label={`Statement timeout for ${datasource.name}`}
-              testId="mcp-access-timeout"
-              title={TIMEOUT_HINT}
-              className="text-right font-editor tabular-nums placeholder:text-ink"
-              value={datasource.agentTimeoutSeconds === undefined ? "" : String(datasource.agentTimeoutSeconds)}
-              placeholder={String(defaults.timeoutSeconds)}
-              check={timeoutCheck}
-              onCommit={(text) => setPolicy(datasource, { timeoutSeconds: text.trim() === "" ? null : Number(text) })}
-            />
+            <span className="w-14 min-w-0">
+              <CommitField
+                label={`Statement timeout for ${datasource.name}`}
+                testId="mcp-access-timeout"
+                title={TIMEOUT_HINT}
+                className="text-right font-editor tabular-nums placeholder:text-ink"
+                value={datasource.agentTimeoutSeconds === undefined ? "" : String(datasource.agentTimeoutSeconds)}
+                placeholder={String(defaults.timeoutSeconds)}
+                check={timeoutCheck}
+                onCommit={(text) => setPolicy(datasource, { timeoutSeconds: text.trim() === "" ? null : Number(text) })}
+              />
+            </span>
           </span>
         ) : (
           <NotExposed className="text-right" />
