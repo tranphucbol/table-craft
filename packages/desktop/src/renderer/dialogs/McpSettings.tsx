@@ -6,13 +6,14 @@ import { Button, FieldRow, INPUT_CLASS, TextInput } from "@table-craft/desktop/r
 import { NumberField, SectionTitle, update } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { mcpStatusText, MCP_STATE_DOT } from "@table-craft/desktop/renderer/model/mcp.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Switch } from "@table-craft/desktop/renderer/ui/Switch.js";
 import { useCopyConfirmation, COPIED_LABEL } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
-import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { CloseIcon, InfoIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 import {
   AGENT_ACCESS_LABELS,
@@ -124,6 +125,15 @@ function rowCapCheck(text: string): string | null {
   return mcpRowCapError(Number(text));
 }
 
+/** A red datasource that agents may not ask to write through yet: the warning names it. */
+function heldAtReadOnly(datasource: DatasourceView): boolean {
+  return datasource.color === PRODUCTION_COLOR && datasource.agentAccess !== "ask";
+}
+
+function showProductionNote(shown: boolean): void {
+  invoke(MCP_ACTION_IDS.productionNote, shown);
+}
+
 function NotExposed({ className }: { readonly className?: string }) {
   return <span className={cn("block px-1 text-ink-muted", className)}>{NOT_EXPOSED}</span>;
 }
@@ -131,6 +141,7 @@ function NotExposed({ className }: { readonly className?: string }) {
 function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView; readonly rowCap: number }) {
   const access = datasource.agentAccess ?? "off";
   const exposed = access !== "off";
+  const noteHidden = useLayout((state) => !state.layout.productionNote);
   return (
     <tr data-testid="mcp-access-row" className="even:bg-raised">
       <td className={CELL_CLASS}>
@@ -145,6 +156,18 @@ function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView
           <span className="min-w-0 truncate">
             {datasource.name} <span className="text-ink-muted">{datasource.pluginId}</span>
           </span>
+          {noteHidden && heldAtReadOnly(datasource) ? (
+            <button
+              type="button"
+              aria-label={`Why ${datasource.name} stays at Read only`}
+              title={PRODUCTION_NOTE}
+              data-testid="mcp-production-note-show"
+              className="shrink-0 rounded text-warning hover:bg-raised"
+              onClick={() => showProductionNote(true)}
+            >
+              <InfoIcon aria-hidden className="size-icon" />
+            </button>
+          ) : null}
         </span>
       </td>
       <td className={CELL_CLASS}>
@@ -203,12 +226,11 @@ function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView
   );
 }
 
-/** Names the red datasources still held at Read only, so the disabled Ask option is explained once. */
+/** Names the red datasources still held at Read only, so the disabled Ask option is explained once; it can be closed. */
 function ProductionNote({ datasources }: { readonly datasources: readonly DatasourceView[] }) {
-  const capped = datasources.filter(
-    (datasource) => datasource.color === PRODUCTION_COLOR && datasource.agentAccess !== "ask",
-  );
-  if (capped.length === 0) return null;
+  const shown = useLayout((state) => state.layout.productionNote);
+  const capped = datasources.filter(heldAtReadOnly);
+  if (!shown || capped.length === 0) return null;
   return (
     <p
       role="note"
@@ -221,6 +243,16 @@ function ProductionNote({ datasources }: { readonly datasources: readonly Dataso
         Red data sources cannot go above <strong>Read only</strong> unless you allow it on its page in the Data Sources
         dialog.
       </span>
+      <button
+        type="button"
+        aria-label="Hide this warning"
+        title="Hide this warning; the (i) beside a red data source shows it again"
+        data-testid="mcp-production-note-close"
+        className="ml-auto shrink-0 rounded text-ink-muted hover:bg-raised hover:text-ink"
+        onClick={() => showProductionNote(false)}
+      >
+        <CloseIcon aria-hidden className="size-icon" />
+      </button>
     </p>
   );
 }

@@ -3,6 +3,7 @@ import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/acti
 import { openConsole } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { copied, writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
+import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
@@ -31,6 +32,7 @@ export const MCP_ACTION_IDS = {
   setAccess: "mcp.setAccess",
   setPolicy: "mcp.setPolicy",
   settings: "mcp.settings",
+  productionNote: "mcp.productionNote",
   copyToken: "mcp.copyToken",
   copyEndpoint: "mcp.copyEndpoint",
   decideClient: "mcp.decideClient",
@@ -332,5 +334,15 @@ export const MCP_ACTIONS: readonly AnyAction[] = [
     category: "App",
     icon: "settings",
     run: showSettings,
+  }),
+  defineAction<boolean | undefined>({
+    id: MCP_ACTION_IDS.productionNote,
+    title: "Toggle Red Data Source Warning",
+    category: "App",
+    // The palette passes no argument, so it flips the warning; the page's close and (i) say which.
+    run: (_context, shown) => {
+      const layout = useLayout.getState();
+      layout.setProductionNote(shown ?? !layout.layout.productionNote);
+    },
   }),
 ];

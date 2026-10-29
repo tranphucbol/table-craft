@@ -105,6 +105,7 @@ export {
   Minus as HideIcon,
   Terminal as ConsoleIcon,
   X as CloseIcon,
+  Info as InfoIcon,
   CaretDown as ExpandedIcon,
   CaretDown as DropdownIcon,
   CaretRight as CollapsedIcon,
