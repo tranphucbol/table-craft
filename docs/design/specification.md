@@ -2272,6 +2272,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
     "density": "comfortable",
     "systemTitleBar": false,
     "brandIcons": true,
+    "brandIconColor": "brand",
     "fonts": {
       "ui": { "family": null, "sizePx": 13 },
       "editor": { "family": null, "sizePx": 13 },
@@ -2298,6 +2299,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
 | `appearance.systemTitleBar`            | boolean; read once when the window is created                                                 | `false`       |
 | `appearance.brandIcons`                | boolean; datasource rows draw their database's logo (decision 128)                            | `true`        |
+| `appearance.brandIconColor`            | `brand` (the brand's colour fitted to the theme) or `gray` (muted ink)                        | `brand`       |
 | `appearance.fonts.*`                   | `{ family: string \| null, sizePx: 8–32 }`; `null` is the built-in stack                      | 13, 13, 12    |
 | `editor.format.style`                  | `aligned`, `standard`                                                                         | `aligned`     |
 | `editor.format.keywordCase`            | `upper`, `lower`, `preserve`                                                                  | `upper`       |

@@ -250,6 +250,8 @@ Each data source shows the logo of the database it is: MySQL, MariaDB or TiDB (w
 says it is on connect), PostgreSQL, SQLite or Redis, in the tree, the Data Sources dialog and the
 Services tool window. **View → Brand Icons**, **Toggle Brand Icons** in Find Action, or Settings ›
 Appearance › Data sources turns them off for the generic database glyph and the product's name.
+Logos take their brand's colour, fitted to the theme; Settings › Appearance › Data sources › Logo
+colour draws them in gray instead.
 
 The tree's context menu also changes the database: **New Table…** on a schema, **Modify Table…**
 (`⌘F6`) on a table, **Rename…** (`⇧F6`), **Truncate…** and **Drop…** (`⌘⌫`). Every change shows
@@ -728,6 +730,7 @@ back to its default without affecting the others.
 | `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                              | `system`                                       |
 | `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
 | `appearance.brandIcons`                | `true`, `false`; database logos on data sources                                                 | `true`                                         |
+| `appearance.brandIconColor`            | `brand`, `gray`; the logos' colour                                                              | `brand`                                        |
 | `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
 | `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
 | `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 12                                     |

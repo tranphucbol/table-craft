@@ -28,6 +28,11 @@ export interface FontSettings {
   readonly grid: FontSetting;
 }
 
+/** What colour a datasource logo takes: its brand's, fitted to the theme, or the theme's muted ink. */
+export const BRAND_ICON_COLORS = ["brand", "gray"] as const;
+
+export type BrandIconColor = (typeof BRAND_ICON_COLORS)[number];
+
 export interface AppearanceSettings {
   readonly theme: ThemeChoice;
   readonly density: DensityId;
@@ -38,6 +43,7 @@ export interface AppearanceSettings {
   readonly systemTitleBar: boolean;
   /** Draw each data source's database logo instead of the generic glyph (decision 128). */
   readonly brandIcons: boolean;
+  readonly brandIconColor: BrandIconColor;
 }
 
 export interface DataSettings {
@@ -213,6 +219,7 @@ export const DEFAULT_SETTINGS: Settings = {
     motion: "system",
     systemTitleBar: false,
     brandIcons: true,
+    brandIconColor: "brand",
   },
   editor: {
     format: { style: "aligned", keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1, alignAliases: true },
@@ -437,6 +444,9 @@ export function readSettings(input: unknown): Settings {
       systemTitleBar:
         typeof appearance.systemTitleBar === "boolean" ? appearance.systemTitleBar : defaults.appearance.systemTitleBar,
       brandIcons: typeof appearance.brandIcons === "boolean" ? appearance.brandIcons : defaults.appearance.brandIcons,
+      brandIconColor: BRAND_ICON_COLORS.includes(appearance.brandIconColor as BrandIconColor)
+        ? (appearance.brandIconColor as BrandIconColor)
+        : defaults.appearance.brandIconColor,
     },
     editor: {
       format: readFormat(editor.format, defaults.editor.format),

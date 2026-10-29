@@ -62,6 +62,7 @@ const GENERIC = "generic";
 const TOGGLE_BRAND_ICONS = "Toggle Brand Icons";
 /** A pattern, because the field row's "Icons" label also names the checkbox. */
 const BRAND_ICONS_CHECKBOX = /Show database logos on data sources/;
+const GRAY_LOGOS_RADIO = "Gray";
 /** A port nothing listens on, so a connect fails at once. */
 const CLOSED_PORT = 1;
 
@@ -174,6 +175,16 @@ async function expectGenericWithProducts(page: Page, rows: readonly Row[]): Prom
   for (const row of rows) {
     await expect.poll(() => glyphOf(page, row.saved.name)).toBe(GENERIC);
     await expect.poll(() => productOf(page, row.saved.name).textContent()).toBe(row.product);
+  }
+}
+
+/** Each logo still draws, without its brand's inline colour and in the theme's muted ink. */
+async function expectGrayLogos(page: Page, rows: readonly Row[]): Promise<void> {
+  await expectLogos(page, rows);
+  for (const row of rows) {
+    const glyph = treeNode(page, row.saved.name).locator("[data-glyph]").first();
+    await expect.poll(() => glyph.getAttribute("class")).toContain("text-ink-muted");
+    expect(await glyph.getAttribute("style")).toBeNull();
   }
 }
 
@@ -407,5 +418,35 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
       await captureWindow(page, "13-light-theme");
     },
     SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenLogoColourGray_whenChosenInSettings_thenEveryLogoIsGrayAfterRelaunch",
+    async () => {
+      const rows = everyBrand();
+      const profile = seeded(rows);
+      let page = await launch(profile);
+      await expectLogos(page, rows);
+
+      await pressChord(page, ",");
+      await settingsDialog(page).getByRole("tab", { name: "Appearance", exact: true }).click();
+      const gray = settingsDialog(page).getByRole("radio", { name: GRAY_LOGOS_RADIO });
+      await gray.check();
+      await expect.poll(() => gray.isChecked()).toBe(true);
+      await captureWindow(page, "14-gray-settings");
+      await page.keyboard.press("Escape");
+      await settingsDialog(page).waitFor({ state: "detached" });
+
+      await expectGrayLogos(page, rows);
+      await captureWindow(page, "15-gray-logos");
+
+      await closeApp(running?.app);
+      page = await launch(profile);
+      await expectGrayLogos(page, rows);
+      expect(JSON.parse(readProfileFile(profile, "settings.json") ?? "{}")).toMatchObject({
+        appearance: { brandIconColor: "gray" },
+      });
+    },
+    SCENARIO_TIMEOUT_MS * 2,
   );
 });

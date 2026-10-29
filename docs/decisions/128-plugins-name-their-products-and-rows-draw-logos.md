@@ -22,6 +22,8 @@ Simple Icons colour, moved toward the theme's ink just far enough to hold WCAG n
 (3:1) on the canvas, panel, raised and selection surfaces (`appearance/brandInk.ts`). A failed row
 paints its logo `danger` and a missing plugin's `inkMuted`, so the state still outranks the brand.
 A brand without a bundled path (Oracle, SQL Server) draws the generic glyph in the accent.
+`appearance.brandIconColor` set to `gray` draws every logo in `inkMuted` instead, for users who
+want the shapes without the colour.
 
 `appearance.brandIcons`, on by default, turns the logos on (View → Brand Icons, the Toggle Brand
 Icons action, Settings › Appearance). With logos on, a row that draws a logo drops its trailing

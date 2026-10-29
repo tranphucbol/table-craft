@@ -79,6 +79,11 @@ export function useBrandIcons(): boolean {
   return useSettings((state) => state.settings.appearance.brandIcons);
 }
 
+/** Whether logos take their brand's colour or the theme's gray (Settings › Appearance › Data sources). */
+function useGrayLogos(): boolean {
+  return useSettings((state) => state.settings.appearance.brandIconColor === "gray");
+}
+
 /** Whether `brand` draws its logo: brand icons are on and the app bundles one for it. */
 export function useBrandLogo(brand: Brand | null): boolean {
   const on = useBrandIcons();
@@ -95,6 +100,8 @@ export type GlyphTone = "danger" | "muted";
 
 const TONE_CLASS: Readonly<Record<GlyphTone, string>> = { danger: "text-danger", muted: "text-ink-muted" };
 
+const GRAY_LOGO_CLASS = "text-ink-muted";
+
 function BrandLogo({
   brand,
   glyph,
@@ -109,8 +116,9 @@ function BrandLogo({
 }
 
 /**
- * A datasource's icon: its product's logo in the brand's colour when brand icons are on and one is
- * bundled, else the generic glyph in the accent. A `tone` paints either in its state colour.
+ * A datasource's icon: its product's logo, in the brand's colour or gray as chosen, when brand icons
+ * are on and one is bundled, else the generic glyph in the accent. A `tone` paints either in its
+ * state colour.
  */
 export function DatasourceGlyph({
   brand,
@@ -122,6 +130,7 @@ export function DatasourceGlyph({
   readonly className?: string | undefined;
 }) {
   const on = useBrandIcons();
+  const gray = useGrayLogos();
   const glyph = on ? brandGlyph(brand) : undefined;
   const toneClass = tone == null ? undefined : TONE_CLASS[tone];
   if (glyph === undefined || brand === null) {
@@ -129,8 +138,8 @@ export function DatasourceGlyph({
       <DatabaseIcon aria-hidden data-glyph={GENERIC_GLYPH} className={cn(className, toneClass ?? "text-accent")} />
     );
   }
-  if (toneClass !== undefined) {
-    return <BrandIcon path={glyph.path} glyph={brand.id} className={cn(className, toneClass)} />;
+  if (toneClass !== undefined || gray) {
+    return <BrandIcon path={glyph.path} glyph={brand.id} className={cn(className, toneClass ?? GRAY_LOGO_CLASS)} />;
   }
   return <BrandLogo brand={brand} glyph={glyph} className={className} />;
 }
