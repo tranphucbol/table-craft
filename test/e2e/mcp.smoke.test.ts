@@ -11,7 +11,8 @@
  */
 import type { ElectronApplication, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, REDIS_CONFIG, WITHOUT_REDIS } from "../support/databases.js";
+import mysql from "@table-craft/plugin-mysql";
+import { MYSQL_CONFIG, REDIS_CONFIG, TIDB_CONFIG, WITHOUT_REDIS } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import { AgentClient, freePort } from "./mcpAgent.js";
 import {
@@ -61,6 +62,15 @@ const READ_REASON = "Checking the customer list";
 const KEY_NAME = "user:{42}:session";
 const { password: MYSQL_PASSWORD, ...MYSQL_PLAIN } = MYSQL_CONFIG;
 const { password: REDIS_PASSWORD, ...REDIS_PLAIN } = REDIS_CONFIG;
+const { password: TIDB_PASSWORD, ...TIDB_PLAIN } = TIDB_CONFIG;
+const GONE = "gone";
+/** No WHERE, so the plan reads every row; the user denies it, so it never runs. */
+const RENAME_EVERYONE = `UPDATE customers SET name = '${GONE}'`;
+/** Not analysed, so TiDB plans it with pseudo statistics. */
+const TIDB_EVENTS = "approval_events";
+const TIDB_UPDATE = `UPDATE ${TIDB_EVENTS} SET state = '${GONE}'`;
+
+type MysqlConfig = typeof MYSQL_CONFIG | typeof TIDB_CONFIG;
 
 interface AttributeHolder {
   getAttribute(name: string): string | null;
@@ -120,6 +130,29 @@ function askingRedis(): SavedDatasource {
     config: REDIS_PLAIN,
     secretModes: { password: "untilRestart" },
   };
+}
+
+function askingTidb(): SavedDatasource {
+  return {
+    id: "tidb",
+    name: "tidb",
+    pluginId: "mysql",
+    agentAccess: "ask",
+    config: TIDB_PLAIN,
+    ...(TIDB_PASSWORD === "" ? {} : { secretModes: { password: "untilRestart" } }),
+  };
+}
+
+/** Runs `sql` straight through the plugin, outside the app, and returns the first cell as a number. */
+async function countOn(config: MysqlConfig, sql: string): Promise<number> {
+  const session = await mysql.connect(config, { readOnly: false });
+  try {
+    let first: unknown = null;
+    for await (const row of (await session.execute(sql)).rows) first ??= row[0];
+    return Number(first ?? 0);
+  } finally {
+    await session.close();
+  }
 }
 
 function settingsDialog(page: Page) {
@@ -689,12 +722,98 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       expect(key).toContain(KEY_NAME);
       expect(key).toContain("database 0");
       expect(await dialog.getByTestId("mcp-approval-sql").count()).toBe(0);
+      expect(await dialog.getByTestId("mcp-approval-view").count()).toBe(0);
       await captureAskReads(page, "08-key");
 
       await dialog.getByTestId("mcp-allow").click();
       const answer = await value;
       expect(answer.isError).toBe(false);
       expect(answer.text).toContain("token-42");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  /** Opens the waiting request's Plan view and waits for the plan. */
+  async function planOf(page: Page) {
+    await chip(page).click();
+    const dialog = approval(page);
+    await dialog.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+    await dialog.getByTestId("mcp-approval-view").getByRole("button", { name: "Plan" }).click();
+    const plan = dialog.getByTestId("mcp-approval-plan");
+    const status = dialog.getByTestId("mcp-approval-plan-status");
+    await plan.or(dialog.getByRole("alert")).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+    if (!(await plan.isVisible())) throw new Error(`No plan: ${(await status.textContent()) ?? ""}`);
+    return dialog;
+  }
+
+  async function warnedRows(dialog: ReturnType<typeof approval>): Promise<number> {
+    return dialog.locator('[data-testid="mcp-approval-plan-row"][data-warned="true"]').count();
+  }
+
+  it.skipIf(!DATABASES_ENABLED)(
+    "givenWaitingUpdateOnMysql_whenPlanShown_thenFullScanAmberAndRequestStillWaits",
+    async () => {
+      const { page, port } = await launchServing([{ ...askingMysql(), agentAccess: "ask" }]);
+      const agent = await agentAs(page, port, "OpenCode");
+      await connectWithPassword(page, "mysql", MYSQL_PASSWORD);
+
+      const update = agent.tool("run_query", { datasource: "mysql", sql: RENAME_EVERYONE, reason: RENAME_REASON });
+      await untilWaiting(page);
+      const dialog = await planOf(page);
+
+      expect(await warnedRows(dialog)).toBeGreaterThan(0);
+      expect(await dialog.getByTestId("mcp-approval-plan-warnings").textContent()).toContain(
+        "Full table scan: reads every row of customers.",
+      );
+      expect(await dialog.getByTestId("mcp-approval-plan-note").textContent()).toContain("the statement did not run");
+      expect(await chip(page).getAttribute("data-tone")).toBe("waiting");
+      expect(await dialog.getByTestId("mcp-approval-countdown").isVisible()).toBe(true);
+      await captureAskReads(page, "10-plan-mysql");
+
+      await dialog.getByTestId("mcp-approval-view").getByRole("button", { name: "SQL" }).click();
+      expect(await dialog.getByTestId("mcp-approval-sql").textContent()).toContain(RENAME_EVERYONE);
+      await dialog.getByTestId("mcp-deny").click();
+      expect((await update).isError).toBe(true);
+      expect(await countOn(MYSQL_CONFIG, `SELECT COUNT(*) FROM customers WHERE name = '${GONE}'`)).toBe(0);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it.skipIf(!DATABASES_ENABLED)(
+    "givenWaitingUpdateOnTidb_whenPlanShown_thenFullScanAndGuessedEstimatesWarnedOnce",
+    async () => {
+      await countOn(TIDB_CONFIG, `DROP TABLE IF EXISTS ${TIDB_EVENTS}`);
+      await countOn(
+        TIDB_CONFIG,
+        `CREATE TABLE ${TIDB_EVENTS} (id BIGINT PRIMARY KEY, shop_id INT NOT NULL, state VARCHAR(16))`,
+      );
+      await countOn(TIDB_CONFIG, `INSERT INTO ${TIDB_EVENTS} VALUES (1, 10, 'new'), (2, 20, 'done')`);
+      try {
+        const { page, port } = await launchServing([askingTidb()]);
+        const agent = await agentAs(page, port, "Claude Code");
+        if (TIDB_PASSWORD === "") await openConsoleOn(page, "tidb");
+        else await connectWithPassword(page, "tidb", TIDB_PASSWORD);
+        // The server may be shared; its other databases stay out of the evidence.
+        await page.getByRole("button", { name: "Hide Database" }).click();
+        await toolWindow(page, "Database").waitFor({ state: "hidden" });
+
+        const update = agent.tool("run_query", { datasource: "tidb", sql: TIDB_UPDATE, reason: RENAME_REASON });
+        await untilWaiting(page);
+        const dialog = await planOf(page);
+
+        const warnings = await dialog.getByTestId("mcp-approval-plan-warnings").locator("li").allTextContents();
+        expect(warnings).toContain(`Full table scan: reads every row of ${TIDB_EVENTS}.`);
+        expect(warnings.filter((warning) => warning.startsWith("Full table scan"))).toHaveLength(1);
+        expect(await dialog.getByTestId("mcp-approval-plan").textContent()).toContain("TableFullScan");
+        expect(await chip(page).getAttribute("data-tone")).toBe("waiting");
+        await captureAskReads(page, "11-plan-tidb");
+
+        await dialog.getByTestId("mcp-deny").click();
+        expect((await update).isError).toBe(true);
+        expect(await countOn(TIDB_CONFIG, `SELECT COUNT(*) FROM ${TIDB_EVENTS} WHERE state = '${GONE}'`)).toBe(0);
+      } finally {
+        await countOn(TIDB_CONFIG, `DROP TABLE IF EXISTS ${TIDB_EVENTS}`);
+      }
     },
     SCENARIO_TIMEOUT_MS,
   );
