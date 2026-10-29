@@ -531,7 +531,9 @@ describe a table, read its DDL, run `SELECT`s, explain and format SQL; its state
 read-only session, and anything else is refused. **Ask before writes** also lets it propose one
 change at a time: the MCP chip in the status bar turns amber, and nothing runs until you open the
 request, read the statement and the agent's reason, and choose **Allow once**. Unanswered for a
-minute, a request is denied. A data source marked read-only stays at Read only, and one coloured
+minute, a request is denied. **Ask before reads** sits between Off and Read only: agents still
+browse schemas, tables, columns and key names, but every query that returns rows, and every key
+value, waits for you the same way, and writes are refused. A data source marked read-only stays at Read only, and one coloured
 red can be raised past Read only only on its own page in the Data Sources dialog. Answers carry at
 most `mcp.rowCap` rows, and a statement running past `mcp.statementTimeoutSeconds` is stopped,
 by the database too where it can, even if TableCraft cannot reach it; passwords never leave
