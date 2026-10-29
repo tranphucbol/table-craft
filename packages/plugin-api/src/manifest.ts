@@ -214,7 +214,9 @@ export const BRAND_ID = /^[a-z0-9_]+$/;
 
 /** A database product a plugin speaks; `id` is a simple-icons slug, `name` what a row shows. */
 export const brandSchema = z.strictObject({
-  id: z.string().regex(BRAND_ID, { message: "expected a simple-icons slug: lower-case letters, digits and underscores" }),
+  id: z
+    .string()
+    .regex(BRAND_ID, { message: "expected a simple-icons slug: lower-case letters, digits and underscores" }),
   name: z.string().min(1),
 });
 

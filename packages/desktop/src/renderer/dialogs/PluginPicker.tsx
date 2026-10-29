@@ -1,11 +1,17 @@
 import { useEffect, useRef } from "react";
-import type { CatalogPlugin, PluginInfo } from "@table-craft/desktop/preload/bridge.js";
+import type { Brand, CatalogPlugin, PluginInfo } from "@table-craft/desktop/preload/bridge.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { PLUGIN_ACTION_IDS, type PluginArgs } from "@table-craft/desktop/renderer/actions/pluginActions.js";
-import { downloadLabel, installText, pickerEntries } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
+import {
+  downloadLabel,
+  entryName,
+  installText,
+  pickerEntries,
+} from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { DatasourceGlyph } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { ACTION_ICONS, DatabaseIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 
 const ROW_CLASS =
   "flex min-h-row w-full items-center gap-cell rounded px-gap text-left hover:bg-raised disabled:opacity-50";
@@ -23,7 +29,7 @@ function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; rea
       className={ROW_CLASS}
       onClick={onDownload}
     >
-      <DatabaseIcon aria-hidden className="size-icon shrink-0 text-ink-muted" />
+      <DatasourceGlyph brand={entry.brands[0] ?? null} className="size-icon shrink-0 text-ink-muted" />
       <span className="shrink-0">{entry.name}</span>
       {progress === null ? (
         <span className="flex items-center gap-1 text-ink-muted">
@@ -51,7 +57,8 @@ export function PluginPicker({
 }: {
   readonly plugins: readonly PluginInfo[];
   readonly catalog: readonly CatalogPlugin[];
-  readonly onPick: (plugin: PluginInfo) => void;
+  /** `brand` is the product the row names; null for a plugin that names none. */
+  readonly onPick: (plugin: PluginInfo, brand: Brand | null) => void;
 }) {
   const waiting = useRef<(() => void) | null>(null);
   useEffect(() => () => waiting.current?.(), []);
@@ -63,7 +70,7 @@ export function PluginPicker({
       if (installed === undefined || installed.unavailableReason !== null) return;
       off();
       waiting.current = null;
-      onPick(installed);
+      onPick(installed, installed.brands[0] ?? null);
     });
     waiting.current = off;
     const args: PluginArgs = { pluginId };
@@ -77,16 +84,17 @@ export function PluginPicker({
       <ul aria-label="Database kinds" className="flex flex-col gap-1">
         {pickerEntries(plugins, catalog).map((item) =>
           item.kind === "plugin" ? (
-            <li key={item.plugin.id}>
+            <li key={`${item.plugin.id}:${item.brand?.id ?? ""}`}>
               <button
                 type="button"
+                data-brand={item.brand?.id}
                 disabled={item.plugin.unavailableReason !== null}
                 title={item.plugin.unavailableReason ?? undefined}
                 className={ROW_CLASS}
-                onClick={() => onPick(item.plugin)}
+                onClick={() => onPick(item.plugin, item.brand)}
               >
-                <DatabaseIcon aria-hidden className="size-icon shrink-0 text-accent" />
-                <span className="shrink-0">{item.plugin.name}</span>
+                <DatasourceGlyph brand={item.brand} className="size-icon shrink-0 text-accent" />
+                <span className="shrink-0">{entryName(item)}</span>
                 {item.plugin.unavailableReason === null ? null : (
                   <span className="text-ink-muted">{item.plugin.unavailableReason}</span>
                 )}
