@@ -1,18 +1,20 @@
 import type { ServerIdentity } from "@table-craft/plugin-api/sql";
 import { MYSQL_FLAVOUR, TIDB_FLAVOUR } from "./functions/ranges.js";
 
+/** The first TiDB release with Global Kill on by default, whose connection ids are cluster-wide. */
+const TIDB_GLOBAL_KILL = [6, 1] as const;
+
+/** The leading `major.minor[.patch]` of a version string. */
+const MYSQL_RELEASE = /^(\d+)\.(\d+)(?:\.(\d+))?/;
 /**
  * TiDB's `VERSION()` reads like `8.0.11-TiDB-v7.5.1`: a MySQL version, then its own after the
  * marker.
  */
-const TIDB_VERSION = /-TiDB-v(\d+)\.(\d+)/i;
-
-/** The first TiDB release with Global Kill on by default, whose connection ids are cluster-wide. */
-const TIDB_GLOBAL_KILL = { major: 6, minor: 1 } as const;
-
-/** The leading `major.minor[.patch]` of a version string, TiDB's after its marker. */
-const MYSQL_RELEASE = /^(\d+)\.(\d+)(?:\.(\d+))?/;
 const TIDB_RELEASE = /-TiDB-v(\d+)\.(\d+)(?:\.(\d+))?/i;
+/** MariaDB's `VERSION()` reads like `10.11.8-MariaDB-log`; its number is not a MySQL release. */
+const MARIADB_VERSION = /-MariaDB/i;
+/** The MySQL release MariaDB's handshake puts before its own, `5.5.5-10.11.8-MariaDB`, for old clients. */
+const MARIADB_HANDSHAKE_PREFIX = /^5\.5\.5-/;
 
 function release(match: RegExpExecArray): number[] {
   return match
@@ -21,20 +23,43 @@ function release(match: RegExpExecArray): number[] {
     .map(Number);
 }
 
-/** Which function list applies: TiDB by its own release, else MySQL; null when the version is unreadable. */
-export function serverIdentity(serverVersion: string): ServerIdentity | null {
+/** The servers the MySQL plugin speaks to. */
+export type MysqlServerKind = "mysql" | "mariadb" | "tidb";
+
+/** Which server answered, and its own release: TiDB's after its marker, MariaDB's past the handshake prefix. */
+export interface ServerDialect {
+  readonly kind: MysqlServerKind;
+  /** `[major, minor]` or `[major, minor, patch]`; null when the version is unreadable. */
+  readonly version: readonly number[] | null;
+}
+
+/** The one reading of `VERSION()` every server-specific choice of this plugin starts from. */
+export function serverDialect(serverVersion: string | null): ServerDialect {
+  if (serverVersion === null) return { kind: "mysql", version: null };
   const tidb = TIDB_RELEASE.exec(serverVersion);
-  if (tidb !== null) return { flavour: TIDB_FLAVOUR, version: release(tidb) };
+  if (tidb !== null) return { kind: "tidb", version: release(tidb) };
+  if (MARIADB_VERSION.test(serverVersion)) {
+    const mariadb = MYSQL_RELEASE.exec(serverVersion.replace(MARIADB_HANDSHAKE_PREFIX, ""));
+    return { kind: "mariadb", version: mariadb === null ? null : release(mariadb) };
+  }
   const mysql = MYSQL_RELEASE.exec(serverVersion);
-  return mysql === null ? null : { flavour: MYSQL_FLAVOUR, version: release(mysql) };
+  return { kind: "mysql", version: mysql === null ? null : release(mysql) };
+}
+
+/**
+ * Which function list applies: TiDB by its own release, else MySQL, MariaDB included; null when the
+ * version is unreadable.
+ */
+export function serverIdentity(serverVersion: string): ServerIdentity | null {
+  const { kind, version } = serverDialect(serverVersion);
+  if (version === null) return null;
+  return { flavour: kind === "tidb" ? TIDB_FLAVOUR : MYSQL_FLAVOUR, version: [...version] };
 }
 
 export function isTidb(serverVersion: string | null): boolean {
-  return serverVersion !== null && TIDB_VERSION.test(serverVersion);
+  return serverDialect(serverVersion).kind === "tidb";
 }
 
-/** MariaDB's `VERSION()` reads like `10.11.8-MariaDB-log`; its number is not a MySQL release. */
-const MARIADB_VERSION = /-MariaDB/i;
 /** The first MySQL releases with `EXPLAIN FORMAT=TREE` and with `EXPLAIN ANALYZE`. */
 const MYSQL_TREE = [8, 0, 16] as const;
 const MYSQL_ANALYZE = [8, 0, 18] as const;
@@ -58,12 +83,10 @@ export interface ExplainDialect {
 
 /** An unreadable version is taken for a current MySQL, as before servers were told apart. */
 export function explainDialect(serverVersion: string | null): ExplainDialect {
-  if (isTidb(serverVersion)) return { tidb: true, tree: false, analyze: "explainAnalyze" };
-  if (serverVersion !== null && MARIADB_VERSION.test(serverVersion)) {
-    return { tidb: false, tree: false, analyze: "analyzeJson" };
-  }
-  const mysql = serverVersion === null ? null : MYSQL_RELEASE.exec(serverVersion);
-  const version = mysql === null ? [...MYSQL_ANALYZE] : release(mysql);
+  const dialect = serverDialect(serverVersion);
+  if (dialect.kind === "tidb") return { tidb: true, tree: false, analyze: "explainAnalyze" };
+  if (dialect.kind === "mariadb") return { tidb: false, tree: false, analyze: "analyzeJson" };
+  const version = dialect.version ?? MYSQL_ANALYZE;
   return {
     tidb: false,
     tree: atLeast(version, MYSQL_TREE),
@@ -87,9 +110,7 @@ export function killStatementFor(serverVersion: string | null, connectionId: num
 
 /** Whether a TiDB server's connection ids are cluster-wide; null when the server is not TiDB. */
 export function tidbGlobalKill(serverVersion: string | null): boolean | null {
-  const tidb = serverVersion === null ? null : TIDB_VERSION.exec(serverVersion);
-  if (tidb === null) return null;
-  const major = Number(tidb[1]);
-  const minor = Number(tidb[2]);
-  return major > TIDB_GLOBAL_KILL.major || (major === TIDB_GLOBAL_KILL.major && minor >= TIDB_GLOBAL_KILL.minor);
+  const { kind, version } = serverDialect(serverVersion);
+  if (kind !== "tidb" || version === null) return null;
+  return atLeast(version, TIDB_GLOBAL_KILL);
 }

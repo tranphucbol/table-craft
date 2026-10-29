@@ -1,7 +1,33 @@
-import { killStatementFor } from "@table-craft/plugin-mysql/server";
+import { killStatementFor, serverDialect } from "@table-craft/plugin-mysql/server";
 import { describe, expect, it } from "vitest";
 
 const CONNECTION_ID = 42;
+
+describe("mysql server dialect", () => {
+  it("givenMysql_whenDialect_thenMysqlWithRelease", () => {
+    expect(serverDialect("8.4.3")).toEqual({ kind: "mysql", version: [8, 4, 3] });
+    expect(serverDialect("5.7.44-log")).toEqual({ kind: "mysql", version: [5, 7, 44] });
+  });
+
+  it("givenMariadb_whenDialect_thenMariadbWithItsOwnRelease", () => {
+    expect(serverDialect("10.11.8-MariaDB-log")).toEqual({ kind: "mariadb", version: [10, 11, 8] });
+    expect(serverDialect("11.4.2-MariaDB-ubu2404")).toEqual({ kind: "mariadb", version: [11, 4, 2] });
+  });
+
+  it("givenMariadbHandshakePrefix_whenDialect_thenReleasePastPrefix", () => {
+    expect(serverDialect("5.5.5-10.11.8-MariaDB")).toEqual({ kind: "mariadb", version: [10, 11, 8] });
+  });
+
+  it("givenTidb_whenDialect_thenTidbWithItsOwnRelease", () => {
+    expect(serverDialect("5.7.25-TiDB-v4.0.14")).toEqual({ kind: "tidb", version: [4, 0, 14] });
+    expect(serverDialect("8.0.11-TiDB-v7.5")).toEqual({ kind: "tidb", version: [7, 5] });
+  });
+
+  it("givenUnreadableOrNull_whenDialect_thenMysqlWithoutRelease", () => {
+    expect(serverDialect("unknown")).toEqual({ kind: "mysql", version: null });
+    expect(serverDialect(null)).toEqual({ kind: "mysql", version: null });
+  });
+});
 
 describe("mysql kill statement", () => {
   it("givenMysql_whenKillStatement_thenKillQuery", () => {
