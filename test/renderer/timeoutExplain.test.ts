@@ -43,6 +43,10 @@ describe("timeoutExplanation", () => {
     expect(explained).toMatchObject({
       tone: "unseen",
       summary: "Connect or test Shop to see how its timeout is enforced.",
+      sentences: [
+        "TableCraft has not reached Shop yet, so it cannot say what stops a statement there.",
+        "Connect or test it once and this shows what the server enforces.",
+      ],
       table: { app: { reads: "unknown", writes: "unknown" }, server: { reads: "unknown", writes: "unknown" } },
       seenAt: null,
       version: null,

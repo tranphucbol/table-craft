@@ -173,7 +173,10 @@ export function timeoutExplanation({
   const tone: TimeoutTone = unseen ? "unseen" : gaps.reads || gaps.writes ? "gap" : "covered";
   const timeout = plugin?.capabilities.includes("serverTimeout") === false ? null : last?.timeout;
   const sentences = unseen
-    ? [`TableCraft has not reached ${datasource.name} yet, so it cannot say what stops a statement there.`]
+    ? [
+        `TableCraft has not reached ${datasource.name} yet, so it cannot say what stops a statement there.`,
+        "Connect or test it once and this shows what the server enforces.",
+      ]
     : [
         appSentence(product, limit, app, last?.cancel),
         serverSentence(product, limit, timeout),
