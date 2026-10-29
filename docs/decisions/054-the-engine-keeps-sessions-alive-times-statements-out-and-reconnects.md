@@ -1,6 +1,6 @@
 # 054: The engine keeps sessions alive, times statements out and reconnects
 
-Status: Proposed. Amends 040 and 021.
+Status: Proposed. Amends 040 and 021. Amended by 129.
 
 ## Decision
 
