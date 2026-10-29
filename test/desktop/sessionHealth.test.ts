@@ -313,7 +313,10 @@ describe("engine session health", () => {
     const response = await execute(connection, sessionId, "STOPPED", 1, true);
 
     expect(options.at(-1)?.options).toEqual({ serverTimeoutMs: 1_000 });
-    expect(response).toMatchObject({ type: "engine.error", error: { code: "statementTimedOut", message: STOPPED_MESSAGE } });
+    expect(response).toMatchObject({
+      type: "engine.error",
+      error: { code: "statementTimedOut", message: STOPPED_MESSAGE },
+    });
     expect(response.type === "engine.error" ? response.error.hint : "").toMatch(/raise the statement timeout/);
     resultOf<ExecutedStatement>(await execute(connection, sessionId, "SELECT 1"));
   });

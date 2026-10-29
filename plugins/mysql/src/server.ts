@@ -180,7 +180,12 @@ export function namesServerTimeout(sql: string): boolean {
  * Whether `errno` is the server stopping a statement at the limit the plugin set, `limitMs`, after
  * it ran `ranMs`; a cancel the plugin asked for is ruled out by the caller.
  */
-export function stoppedAtLimit(dialect: ServerDialect, errno: number | undefined, ranMs: number, limitMs: number | null): boolean {
+export function stoppedAtLimit(
+  dialect: ServerDialect,
+  errno: number | undefined,
+  ranMs: number,
+  limitMs: number | null,
+): boolean {
   if (errno === QUERY_TIMEOUT_ERRNO || errno === STATEMENT_TIMEOUT_ERRNO) return true;
   return dialect.kind === "tidb" && errno === QUERY_INTERRUPTED_ERRNO && limitMs !== null && ranMs >= limitMs;
 }

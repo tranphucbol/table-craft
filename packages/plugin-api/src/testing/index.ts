@@ -2826,12 +2826,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenOwnLowerLimit_whenHigherAsked_thenOwnStops", async () => {
         await withLimitedSession(async (session) => {
           const own = fixture.statements?.sessionTimeout;
-          if (own === undefined) throw new Error("A server with a serverTimeout needs fixture.statements.sessionTimeout.");
+          if (own === undefined)
+            throw new Error("A server with a serverTimeout needs fixture.statements.sessionTimeout.");
           await runToEnd(session, own(SERVER_LIMIT_MS));
           const started = Date.now();
-          const code = await rejectionCode(
-            runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS),
-          );
+          const code = await rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS));
           expect(code).toBe("timedOut");
           expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
         });

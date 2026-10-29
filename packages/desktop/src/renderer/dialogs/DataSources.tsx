@@ -80,7 +80,10 @@ export function tlsSummary(tls: TlsHop | null): string {
 export function testSummary(result: Extract<ProbeResult, { ok: true }>, brands: readonly Brand[] = []): string {
   const product = brands.find((brand) => brand.id === result.serverBrand)?.name ?? result.pluginName;
   const server = result.serverVersion === null ? product : `${product} ${result.serverVersion}`;
-  const limit = result.serverTimeout === undefined || result.serverTimeout === null ? "" : ` · ${serverLimitText(result.serverTimeout)}`;
+  const limit =
+    result.serverTimeout === undefined || result.serverTimeout === null
+      ? ""
+      : ` · ${serverLimitText(result.serverTimeout)}`;
   return `Succeeded · ${server}${limit} · ${String(Math.round(result.elapsedMs))} ms`;
 }
 

@@ -156,7 +156,13 @@ function NotExposed({ className }: { readonly className?: string }) {
   return <span className={cn("block px-1 text-ink-muted", className)}>{NOT_EXPOSED}</span>;
 }
 
-function AccessRow({ datasource, defaults }: { readonly datasource: DatasourceView; readonly defaults: AgentDefaults }) {
+function AccessRow({
+  datasource,
+  defaults,
+}: {
+  readonly datasource: DatasourceView;
+  readonly defaults: AgentDefaults;
+}) {
   const access = datasource.agentAccess ?? "off";
   const exposed = access !== "off";
   const noteHidden = useLayout((state) => !state.layout.productionNote);

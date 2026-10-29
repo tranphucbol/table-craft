@@ -200,7 +200,9 @@ describe("datasource service", () => {
     const saved = await datasources.save(saving({ ...PG_DRAFT, statementTimeoutSeconds: 30 }, SECRET));
     await datasources.setAgentPolicy(saved.id, { schemas: ["shop"], rowCap: 20, timeoutSeconds: 15 });
 
-    await datasources.save(saving({ ...PG_DRAFT, id: saved.id, statementTimeoutSeconds: 30, enforceTimeoutOnServer: true }));
+    await datasources.save(
+      saving({ ...PG_DRAFT, id: saved.id, statementTimeoutSeconds: 30, enforceTimeoutOnServer: true }),
+    );
 
     expect(JSON.parse(files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`) ?? "")).toMatchObject({
       datasources: [{ enforceTimeoutOnServer: true, agentSchemas: ["shop"], agentRowCap: 20, agentTimeoutSeconds: 15 }],

@@ -657,7 +657,12 @@ class PostgresSession implements Session {
     const code = (cause as { code?: unknown }).code;
     const limit = running.limitMs;
     // pg_cancel_backend and the timeout both send 57014; only a cancel the plugin asked for is one.
-    if (!running.cancelRequested && code === QUERY_CANCELED && limit !== null && Date.now() - running.startedAt >= limit) {
+    if (
+      !running.cancelRequested &&
+      code === QUERY_CANCELED &&
+      limit !== null &&
+      Date.now() - running.startedAt >= limit
+    ) {
       return new PluginError(
         "timedOut",
         `PostgreSQL stopped the statement at its ${String(limit / MS_PER_SECOND)} s limit (statement_timeout).`,
@@ -726,8 +731,8 @@ class PostgresSession implements Session {
     if (requested === undefined && this.#appliedTimeoutMs === null) return null;
     try {
       if (this.#ownTimeoutMs === null) {
-        const shown = await this.#client.query<{ statement_timeout?: unknown }>(READ_TIMEOUT_SQL);
-        this.#ownTimeoutMs = postgresDurationMs(String(shown.rows[0]?.statement_timeout ?? "0"));
+        const shown = await this.#client.query<{ statement_timeout?: string }>(READ_TIMEOUT_SQL);
+        this.#ownTimeoutMs = postgresDurationMs(shown.rows[0]?.statement_timeout ?? "0");
       }
       const own = this.#ownTimeoutMs;
       const want = requested === undefined ? own : own === 0 ? requested : Math.min(own, requested);

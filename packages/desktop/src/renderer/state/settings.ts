@@ -205,7 +205,9 @@ export function statementTimeoutOf(
 }
 
 /** Whether the datasource has the database stop its console and grid statements at that limit too (decision 129). */
-export function serverEnforcedOf(datasource: { readonly enforceTimeoutOnServer?: true | undefined } | undefined): boolean {
+export function serverEnforcedOf(
+  datasource: { readonly enforceTimeoutOnServer?: true | undefined } | undefined,
+): boolean {
   return datasource?.enforceTimeoutOnServer === true;
 }
 

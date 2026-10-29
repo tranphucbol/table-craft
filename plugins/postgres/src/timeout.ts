@@ -5,7 +5,11 @@ import type { ServerTimeout } from "@table-craft/plugin-api";
  * keeps counting while a `pg-cursor` result waits to be read: the cursor's `Execute` is sent
  * without a `Sync`, so the statement is still running (decision 129).
  */
-export const POSTGRES_SERVER_TIMEOUT: ServerTimeout = { setting: "statement_timeout", covers: "all", counts: "statement" };
+export const POSTGRES_SERVER_TIMEOUT: ServerTimeout = {
+  setting: "statement_timeout",
+  covers: "all",
+  counts: "statement",
+};
 
 export const READ_TIMEOUT_SQL = "SHOW statement_timeout";
 export const SET_TIMEOUT_SQL = "SELECT set_config('statement_timeout', $1, false)";

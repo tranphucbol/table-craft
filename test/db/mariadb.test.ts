@@ -7,7 +7,10 @@ import { MYSQL_STATEMENTS, mysqlRoutines, runMysqlFamilyContract } from "./mysql
 describe.runIf(databaseEnabled("mariadb"))("mariadb server", () => {
   runMysqlFamilyContract(MARIADB_CONFIG, MARIADB_ROOT_CONFIG, {
     routines: mysqlRoutines("int(11)"),
-    statements: { ...MYSQL_STATEMENTS, sessionTimeout: (ms) => `SET SESSION max_statement_time = ${String(ms / 1000)}` },
+    statements: {
+      ...MYSQL_STATEMENTS,
+      sessionTimeout: (ms) => `SET SESSION max_statement_time = ${String(ms / 1000)}`,
+    },
     typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_LIKE },
   });
 

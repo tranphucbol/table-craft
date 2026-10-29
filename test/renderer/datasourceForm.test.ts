@@ -128,7 +128,10 @@ describe("datasource form", () => {
   });
 
   it("givenEnforce_whenSaved_thenStoredOnlyWhenTrue", () => {
-    const enforced = draftFromView({ ...SAVED, statementTimeoutSeconds: 30, enforceTimeoutOnServer: true }, POSTGRES_PLUGIN);
+    const enforced = draftFromView(
+      { ...SAVED, statementTimeoutSeconds: 30, enforceTimeoutOnServer: true },
+      POSTGRES_PLUGIN,
+    );
     const unticked = { ...enforced, enforceTimeoutOnServer: false };
 
     expect(enforced.enforceTimeoutOnServer).toBe(true);
