@@ -6,6 +6,7 @@
  * `sha256` each asset carries, which is only worth anything because it sits inside the signature.
  */
 import { createPublicKey, verify } from "node:crypto";
+import { isReleaseChannel, type ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 
 /**
  * The public half of TableCraft's update key. Committed, never fetched: a key the app downloads is
@@ -36,6 +37,11 @@ export interface UpdateAsset {
 export interface UpdateManifest {
   readonly schema: typeof MANIFEST_SCHEMA;
   readonly version: string;
+  /**
+   * Signed with the rest, so a beta manifest served where the stable one lives is refused by a
+   * stable-channel app (plan 124). A manifest without it is stable: every one before betas existed.
+   */
+  readonly channel: ReleaseChannel;
   readonly notesUrl: string;
   /** The oldest installed version that may update in place; an older one is sent to the release page. */
   readonly minimumVersion: string | null;
@@ -60,6 +66,7 @@ export interface ManifestTrust {
 
 export const RELEASE_TRUST: ManifestTrust = { publicKeyPem: UPDATE_PUBLIC_KEY, allowLoopbackHttp: false };
 
+const DEFAULT_CHANNEL: ReleaseChannel = "stable";
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const HTTPS = "https:";
@@ -154,6 +161,8 @@ function readManifest(value: unknown, trust: ManifestTrust): ManifestVerdict {
       detail: `schema ${String(document.schema)}, this build reads ${MANIFEST_SCHEMA}`,
     };
   if (!isVersion(document.version)) return malformed(`version "${String(document.version)}" is not semver`);
+  const channel = document.channel ?? DEFAULT_CHANNEL;
+  if (!isReleaseChannel(channel)) return malformed(`channel ${JSON.stringify(channel)} is neither stable nor beta`);
   if (typeof document.notesUrl !== "string" || !document.notesUrl.startsWith(`${HTTPS}//`))
     return malformed("notesUrl is not an https URL");
   const minimumVersion = document.minimumVersion ?? null;
@@ -171,6 +180,7 @@ function readManifest(value: unknown, trust: ManifestTrust): ManifestVerdict {
     manifest: {
       schema: MANIFEST_SCHEMA,
       version: document.version,
+      channel,
       notesUrl: document.notesUrl,
       minimumVersion,
       assets,

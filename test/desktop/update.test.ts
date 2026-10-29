@@ -283,6 +283,18 @@ describe("update manifest", () => {
     expect(UPDATE_PUBLIC_KEY).not.toMatch(/PRIVATE/);
   });
 
+  it("givenManifestWithoutChannel_whenVerified_thenStable", () => {
+    const { body, signature } = signed(manifestDocument());
+
+    expect(verifyManifest(body, signature, TRUST)).toMatchObject({ ok: true, manifest: { channel: "stable" } });
+  });
+
+  it("givenBetaChannel_whenVerified_thenBeta", () => {
+    const { body, signature } = signed(manifestDocument({ version: "0.2.0-beta.1", channel: "beta" }));
+
+    expect(verifyManifest(body, signature, TRUST)).toMatchObject({ ok: true, manifest: { channel: "beta" } });
+  });
+
   it("givenAnotherSchema_whenVerified_thenRejectedAsSchema", () => {
     const { body, signature } = signed(manifestDocument({ schema: 2 }));
 
@@ -291,6 +303,7 @@ describe("update manifest", () => {
 
   it.each([
     ["a version that is not semver", { version: "latest" }],
+    ["an unknown channel", { channel: "nightly" }],
     ["an http notes URL", { notesUrl: "http://example.com/notes" }],
     [
       "an http asset",
@@ -335,6 +348,7 @@ describe("update eligibility", () => {
   const manifest = (overrides: Partial<UpdateManifest> = {}): UpdateManifest => ({
     schema: 1,
     version: "0.2.0",
+    channel: "stable",
     notesUrl: NOTES_URL,
     minimumVersion: null,
     assets: { "darwin-arm64": { url: ASSET_URL, size: 1, sha256: "a".repeat(64) } },
@@ -1010,6 +1024,31 @@ describe("update manifest script", () => {
     ["TableCraft-0.1.0-arm64.zip", null],
   ])("givenInstaller %s_whenNamed_thenKey %s", (name, key) => {
     expect(installerKey(name, "0.2.0")).toBe(key);
+  });
+
+  it.each([
+    ["TableCraft-0.2.0-beta.1-arm64.zip", "darwin-arm64"],
+    ["TableCraft-0.2.0-beta.1-x64.exe", "win32-x64"],
+    ["TableCraft-0.2.0-arm64.zip", null],
+  ])("givenBetaInstaller %s_whenNamed_thenKey %s", (name, key) => {
+    expect(installerKey(name, "0.2.0-beta.1")).toBe(key);
+  });
+
+  it.each([
+    ["0.2.0", "stable"],
+    ["0.2.0-beta.1", "beta"],
+  ])("givenVersion %s_whenSigned_thenManifestChannel %s", (version, channel) => {
+    const body = manifestBody({
+      version,
+      notesUrl: NOTES_URL,
+      minimumVersion: null,
+      baseUrl: `https://updates.example/releases/download/v${version}/`,
+      installers: [{ name: `TableCraft-${version}-arm64.zip`, size: 10, sha256: "a".repeat(64) }],
+    });
+
+    const verdict = verifyManifest(body, signBody(body, KEYS.privatePem), TRUST);
+
+    expect(verdict.ok && verdict.manifest.channel).toBe(channel);
   });
 
   it("givenInstallers_whenSigned_thenTheAppVerifiesTheManifest", () => {

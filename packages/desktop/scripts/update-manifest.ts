@@ -23,12 +23,13 @@ import {
   verifyManifest,
   type UpdateAsset,
 } from "../src/main/update/manifest.js";
+import { channelOf } from "../src/settings/channel.js";
+import { releaseTagVersion } from "./version.js";
 
 export const SIGNING_KEY_ENV = "TABLE_CRAFT_UPDATE_SIGNING_KEY";
 /** The live test's build flag; a release must never be built with it (decision 044). */
 export const TEST_BUILD_ENV = "TABLE_CRAFT_UPDATE_TEST_BUILD";
 const REPOSITORY_URL = "https://github.com/tranphucbol/table-craft";
-const TAG = /^v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 /** electron-builder's `${productName}-${version}-${arch}.${ext}` (electron-builder.yml). */
 const INSTALLER = /^TableCraft-(.+)-(x64|arm64|x86_64|aarch64)\.(zip|exe|AppImage)$/;
 const PLATFORM_OF_EXTENSION: Readonly<Record<string, NodeJS.Platform>> = {
@@ -81,6 +82,7 @@ export function manifestBody(input: ManifestInput): Buffer {
   const document = {
     schema: MANIFEST_SCHEMA,
     version: input.version,
+    channel: channelOf(input.version),
     notesUrl: input.notesUrl,
     minimumVersion: input.minimumVersion,
     assets,
@@ -121,8 +123,9 @@ async function main(): Promise<void> {
       "public-key-file": { type: "string" },
     },
   });
-  const version = TAG.exec(values.tag ?? "")?.[1];
-  if (version === undefined) throw new ManifestScriptError(`--tag must be vX.Y.Z, not "${values.tag ?? ""}".`);
+  const version = releaseTagVersion(values.tag ?? "");
+  if (version === null)
+    throw new ManifestScriptError(`--tag must be vX.Y.Z or vX.Y.Z-beta.N, not "${values.tag ?? ""}".`);
   const testRelease = values["key-file"] !== undefined || values["base-url"] !== undefined;
   if ((process.env[TEST_BUILD_ENV] ?? "") !== "" && !testRelease)
     throw new ManifestScriptError(`${TEST_BUILD_ENV} is set; a release is never a test build. Unset it.`);
