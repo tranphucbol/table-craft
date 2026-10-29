@@ -1,8 +1,9 @@
 # Contributing to TableCraft
 
 Thanks for helping. This page is the on-ramp: how to set up, which tests a change needs, and the
-rules review checks. [AGENTS.md](AGENTS.md) is the full reference for every command, environment
-variable and port; this page links to it rather than repeating it.
+rules review checks. [AGENTS.md](AGENTS.md) is the full reference for every command and rule, and
+the [local-testing skill](.agents/skills/local-testing/SKILL.md) for every test server, port and
+environment variable; this page links to them rather than repeating them.
 
 ## Before you start
 
@@ -123,7 +124,11 @@ Each rule has a decision record that says why.
 - The headless suites run in a Linux container under Xvfb, so they never take your screen,
   keyboard or clipboard.
 - A second checkout running the database suites at the same time needs its own compose project and
-  ports; [AGENTS.md](AGENTS.md#commands) lists the variables.
+  ports; [the local-testing skill](.agents/skills/local-testing/references/parallel-checkouts.md)
+  lists the variables.
+- [The local-testing skill](.agents/skills/local-testing/SKILL.md) is how agents run these suites,
+  and a readable guide for people too: every server and port, the headless box, a plan's evidence,
+  and what a failed run means.
 
 ## Branches
 
