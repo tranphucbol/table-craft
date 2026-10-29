@@ -9,7 +9,7 @@ import type { KeyDeleteTask } from "@table-craft/desktop/renderer/state/keyDelet
 import type { ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
 import type { TableSession, TableStatus } from "@table-craft/desktop/renderer/state/tables.js";
 import type { Tab } from "@table-craft/desktop/renderer/state/tabs.js";
-import type { McpRunView } from "@table-craft/desktop/settings/mcp.js";
+import type { McpActivityView, McpRunView } from "@table-craft/desktop/settings/mcp.js";
 
 /** An open console or table tab: one session on its datasource (plan 011 decision 12). */
 export interface ServiceSession {
@@ -174,6 +174,13 @@ export type ServiceRow =
       readonly depth: 3;
       readonly parent: string;
       readonly node: McpRunView;
+    }
+  | {
+      readonly kind: "agentCall";
+      readonly key: string;
+      readonly depth: 3;
+      readonly parent: string;
+      readonly node: McpActivityView;
     };
 
 /** The Exports node's key: one node under the datasources, every background export below it (decision 040). */
@@ -188,7 +195,7 @@ export const SCRIPTS_ROW_KEY = "scripts";
 /** The Key Deletions node's key, after SQL Scripts (plan 058 decision 17). */
 export const KEY_DELETES_ROW_KEY = "keyDeletes";
 
-/** The Agents node's key, last: each MCP client, the datasources it is using, its running calls (plan 117). */
+/** The Agents node's key, last: each MCP client, the datasources it is using, its running and finished calls (plan 117). */
 export const AGENTS_ROW_KEY = "agents";
 
 export function datasourceRowKey(datasourceId: string): string {
@@ -298,7 +305,7 @@ function agentRows(rows: ServiceRow[], agents: readonly AgentClientGroup[], coll
   rows.push({ kind: "agents", key: AGENTS_ROW_KEY, depth: 0, count: agents.length });
   if (collapsed.has(AGENTS_ROW_KEY)) return;
   for (const client of agents) {
-    const clientKey = `agent:${client.clientId}`;
+    const clientKey = `agent:${client.clientName}`;
     rows.push({ kind: "agentClient", key: clientKey, depth: 1, parent: AGENTS_ROW_KEY, node: client });
     if (collapsed.has(clientKey)) continue;
     for (const datasource of client.datasources) {
@@ -307,6 +314,15 @@ function agentRows(rows: ServiceRow[], agents: readonly AgentClientGroup[], coll
       if (collapsed.has(datasourceKey)) continue;
       for (const run of datasource.runs) {
         rows.push({ kind: "agentRun", key: `agentRun:${run.id}`, depth: 3, parent: datasourceKey, node: run });
+      }
+      for (const call of datasource.calls) {
+        rows.push({
+          kind: "agentCall",
+          key: `agentCall:${String(call.id)}`,
+          depth: 3,
+          parent: datasourceKey,
+          node: call,
+        });
       }
     }
   }
@@ -325,7 +341,7 @@ export function expandable(row: ServiceRow): boolean {
     return row.count > 0;
   }
   if (row.kind === "agentClient") return row.node.datasources.length > 0;
-  if (row.kind === "agentDatasource") return row.node.runs.length > 0;
+  if (row.kind === "agentDatasource") return row.node.runs.length + row.node.calls.length > 0;
   return row.kind === "session" && row.node.executions.length > 0;
 }
 
