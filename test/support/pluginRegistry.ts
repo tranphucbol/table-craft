@@ -9,6 +9,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
+import { manifestVersion } from "../../scripts/plugins/pack.js";
 
 const BLOCK = 512;
 const NAME_BYTES = 100;
@@ -95,7 +96,7 @@ export function pluginTarball(plugin: PluginPackage): Buffer {
   const name = plugin.name ?? pluginPackageName(plugin.id);
   const manifest = plugin.manifest ?? {
     ...(JSON.parse(readFileSync(SOURCE_MANIFEST(plugin.id), "utf8")) as Record<string, unknown>),
-    version: plugin.version,
+    version: manifestVersion(plugin.version),
     apiVersion,
   };
   const packageJson = {

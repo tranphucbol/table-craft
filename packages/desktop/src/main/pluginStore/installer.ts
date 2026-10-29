@@ -19,6 +19,8 @@ import {
   type RegistryFetch,
 } from "@table-craft/desktop/main/pluginStore/registry.js";
 import { readPackageTarball, type PackageFile } from "@table-craft/desktop/main/pluginStore/tarball.js";
+import { compareVersions } from "@table-craft/desktop/main/update/manifest.js";
+import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 
 export type InstallProgress =
@@ -36,6 +38,8 @@ export interface InstallerOptions {
   readonly registryUrl: () => string;
   readonly fetch: RegistryFetch;
   readonly hostVersion?: string;
+  /** Which versions the registry offers; stable when absent. Read at every install. */
+  readonly channel?: () => ReleaseChannel;
   /** Null when the folder's manifest is valid, compatible and names `id`; otherwise why not. */
   readonly check: (directory: string, id: string) => Promise<string | null>;
   /** Plugin ids that ship inside the app; a file may not replace one. */
@@ -136,14 +140,24 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
     });
   }
 
+  /**
+   * A beta installed before the user left the beta channel stays until a stable release passes it,
+   * as the app itself does; replacing it with an older stable would undo its fixes and data formats.
+   */
+  async function keeps(current: ManagedPlugin, picked: string): Promise<boolean> {
+    if (current.version === picked) return true;
+    if (compareVersions(picked, current.version) > 0) return false;
+    return (await options.check(current.directory, current.id)) === null;
+  }
+
   async function download(id: string): Promise<InstallOutcome> {
     const entry = officialEntry(id);
     const registry = options.registryUrl();
     const packument = await fetchPackument(options.fetch, registry, entry.packageName);
-    const picked = pickVersion(packument, id, entry.packageName, options.hostVersion);
+    const picked = pickVersion(packument, id, entry.packageName, options.hostVersion, options.channel?.() ?? "stable");
     const current = (await listManaged(options.root)).find((plugin) => plugin.id === id);
-    if (current?.source === "registry" && current.version === picked.version) {
-      return { id, version: picked.version, changed: false };
+    if (current?.source === "registry" && (await keeps(current, picked.version))) {
+      return { id, version: current.version, changed: false };
     }
     log.info("plugin download started", { pluginId: id, version: picked.version, registry });
     const bytes = await downloadTarball(options.fetch, picked.tarball, (received, total) =>

@@ -8,7 +8,12 @@ import { PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js
 import { confirmationText, createPluginChannels } from "@table-craft/desktop/main/pluginStore/channels.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import { listManaged, pruneManaged } from "@table-craft/desktop/main/pluginStore/managed.js";
-import { createPluginService, type PluginService } from "@table-craft/desktop/main/pluginStore/service.js";
+import {
+  createPluginService,
+  type PluginService,
+  type PluginServiceOptions,
+} from "@table-craft/desktop/main/pluginStore/service.js";
+import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 import type { PluginsState } from "@table-craft/desktop/preload/bridge.js";
 import { OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
 import { pluginTarball, release, sha512, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
@@ -37,8 +42,12 @@ function managedRoot(): string {
   return join(profile, "managed-plugins");
 }
 
-function service(registryUrl = registry.url): PluginService {
+function service(
+  registryUrl = registry.url,
+  extra: Pick<PluginServiceOptions, "channel" | "hostVersion"> = {},
+): PluginService {
   return createPluginService({
+    ...extra,
     builtInRoot: join(profile, "built-in"),
     developmentRoots: [],
     managedRoot: managedRoot(),
@@ -165,6 +174,51 @@ describe("plugin service", () => {
     ]);
 
     expect(await plugins.updateAll()).toEqual([{ id: "postgres", version: "1.0.0", changed: false }]);
+  });
+
+  it("givenBetaChannel_whenUpdated_thenNewestBetaInstalls", async () => {
+    const plugins = service(registry.url, { channel: () => "beta" });
+    await plugins.start();
+    await plugins.install("postgres");
+    registry.publish(PACKAGE, [
+      release({ id: "postgres", version: "1.0.0" }),
+      release({ id: "postgres", version: "1.1.0-beta.1" }),
+    ]);
+
+    expect(await plugins.updateAll()).toEqual([{ id: "postgres", version: "1.1.0-beta.1", changed: true }]);
+  });
+
+  it("givenStableChannelAndBetaInstalled_whenUpdateAll_thenKeepsBeta", async () => {
+    let channel: ReleaseChannel = "beta";
+    const plugins = service(registry.url, { channel: () => channel });
+    await plugins.start();
+    registry.publish(PACKAGE, [
+      release({ id: "postgres", version: "1.0.0" }),
+      release({ id: "postgres", version: "1.1.0-beta.1" }),
+    ]);
+    await plugins.install("postgres");
+    channel = "stable";
+
+    expect(await plugins.updateAll()).toEqual([{ id: "postgres", version: "1.1.0-beta.1", changed: false }]);
+    registry.publish(PACKAGE, [
+      release({ id: "postgres", version: "1.1.0-beta.1" }),
+      release({ id: "postgres", version: "1.1.0" }),
+    ]);
+    expect(await plugins.updateAll()).toEqual([{ id: "postgres", version: "1.1.0", changed: true }]);
+  });
+
+  it("givenStableChannelAndBetaInstalledIncompatible_whenUpdateAll_thenInstallsStable", async () => {
+    registry.publish(PACKAGE, [
+      release({ id: "postgres", version: "1.0.0" }),
+      release({ id: "postgres", version: "1.1.0-beta.1", apiVersion: "1.1.0" }),
+    ]);
+    const beta = service(registry.url, { channel: () => "beta" });
+    await beta.start();
+    await beta.install("postgres");
+    const older = service(registry.url, { channel: () => "stable", hostVersion: "1.0.0" });
+    await older.start();
+
+    expect(await older.updateAll()).toEqual([{ id: "postgres", version: "1.0.0", changed: true }]);
   });
 
   it("givenTamperedTarball_whenInstalled_thenIntegrityFailsAndNothingIsWritten", async () => {
