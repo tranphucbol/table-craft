@@ -22,6 +22,7 @@ import {
   type Row,
   type PluginErrorCode,
   type ServerMessage,
+  type ServerTimeout,
   type Session,
   type SessionMonitor,
   type SqlLanguage,
@@ -78,8 +79,15 @@ import { mysqlRoutineCall } from "./routines.js";
 import {
   explainDialect,
   killStatementFor,
+  namesServerTimeout,
+  ownTimeoutMs,
+  readServerTimeoutSql,
   serverDialect,
   serverIdentity,
+  serverTimeoutOf,
+  serverTimeoutSql,
+  stoppedAtLimit,
+  stoppedAtLimitMessage,
   tidbGlobalKill,
   type ServerDialect,
 } from "./server.js";
@@ -103,6 +111,7 @@ const CAPABILITIES: readonly Capability[] = [
   "serverMessages",
   "sessions",
   "routineCall",
+  "serverTimeout",
 ];
 
 /** What the mysql client accepts: `'\''`, `# comments`, `DELIMITER //` and `BEGIN … END` routine bodies. */
@@ -519,6 +528,14 @@ interface Running {
   /** Set when cancel had to drop the connection, so the statement's error says so. */
   reset: boolean;
   inFlight: InFlight | null;
+  /** When the statement was sent, which the server's limit counts from. */
+  startedAt: number;
+  /** The server's own statement limit while it runs, in ms; null when it has none. */
+  limitMs: number | null;
+}
+
+function startRunning(): Running {
+  return { cancelRequested: false, reset: false, inFlight: null, startedAt: Date.now(), limitMs: null };
 }
 
 interface TransactionState {
@@ -613,9 +630,15 @@ class MysqlSession implements Session {
   #running: Running | null = null;
   #cancelling: Promise<void> = Promise.resolve();
   readonly #transaction: TransactionState = { mode: "auto", open: false };
+  readonly #dialect: ServerDialect;
+  /** The session's own statement limit in ms, 0 for none; read before the first limited statement. */
+  #ownTimeoutMs: number | null = null;
+  /** The limit this plugin last set; null before it set one, or once a statement may have changed it. */
+  #appliedTimeoutMs: number | null = null;
 
   readonly serverVersion: string | null;
   readonly serverBrand: string;
+  readonly serverTimeout: ServerTimeout | null;
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
@@ -631,6 +654,8 @@ class MysqlSession implements Session {
     this.#refusesWrites = identity.refusesWrites;
     this.serverVersion = identity.serverVersion;
     this.serverBrand = identity.dialect.kind;
+    this.#dialect = identity.dialect;
+    this.serverTimeout = serverTimeoutOf(this.#dialect);
     this.tls = tlsInfoOf((connection as unknown as WithStream).stream);
     this.introspector = mysqlIntrospector(connection);
     this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));
@@ -669,8 +694,17 @@ class MysqlSession implements Session {
       throw new PluginError("statementFailed", READ_ONLY_REFUSED_MESSAGE);
     }
     await this.#cancelling.catch(() => undefined);
-    const running: Running = { cancelRequested: false, reset: false, inFlight: null };
+    const running = startRunning();
     this.#running = running;
+    try {
+      running.limitMs = await this.#applyTimeout(options.serverTimeoutMs);
+      if (namesServerTimeout(sql)) this.#appliedTimeoutMs = null;
+      if (running.cancelRequested) throw this.#cancelled(running);
+    } catch (cause) {
+      this.#running = null;
+      throw this.#failure(cause, running);
+    }
+    running.startedAt = Date.now();
     const inFlight = start(this.#connection, sql, params, options);
     running.inFlight = inFlight;
     try {
@@ -706,6 +740,28 @@ class MysqlSession implements Session {
     }
   }
 
+  /**
+   * Sets the server's session limit to `requested`, never above the session's own, or puts the own
+   * back when nothing is requested; sends nothing when the value would not change (decision 129).
+   * Returns the limit the statement runs under, null for none.
+   */
+  async #applyTimeout(requested: number | undefined): Promise<number | null> {
+    if (this.serverTimeout === null) return null;
+    if (requested === undefined && this.#appliedTimeoutMs === null) return null;
+    if (this.#ownTimeoutMs === null) {
+      const rows = (await query(this.#connection, readServerTimeoutSql(this.#dialect), "statementFailed")) as readonly
+        Record<string, unknown>[];
+      this.#ownTimeoutMs = ownTimeoutMs(this.#dialect, Object.values(rows[0] ?? {})[0]);
+    }
+    const own = this.#ownTimeoutMs;
+    const want = requested === undefined ? own : own === 0 ? requested : Math.min(own, requested);
+    if (want !== this.#appliedTimeoutMs) {
+      await query(this.#connection, serverTimeoutSql(this.#dialect, want), "statementFailed");
+      this.#appliedTimeoutMs = want;
+    }
+    return want === 0 ? null : want;
+  }
+
   async currentNamespace(): Promise<readonly string[] | null> {
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     const rows = (await query(this.#connection, CURRENT_DATABASE_SQL, "statementFailed")) as readonly {
@@ -737,7 +793,7 @@ class MysqlSession implements Session {
     if (this.#refusesWrites) throw new PluginError("statementFailed", READ_ONLY_REFUSED_MESSAGE);
     if (rows.length === 0) return;
     await this.#cancelling.catch(() => undefined);
-    const running: Running = { cancelRequested: false, reset: false, inFlight: null };
+    const running = startRunning();
     this.#running = running;
     const state = this.#transaction;
     const { sql, values } = insertStatement(target.table, target.columns, quoteIdentifier, rows);
@@ -794,7 +850,8 @@ class MysqlSession implements Session {
     const format = planFormat(explainedVerb(sql, DIALECT), dialect, options.analyze);
     const statement = explainStatement(sql, options.analyze, format, dialect);
     const rows: Row[] = [];
-    const result = await this.execute(statement);
+    const limit = options.serverTimeoutMs;
+    const result = await this.execute(statement, [], limit === undefined ? {} : { serverTimeoutMs: limit });
     for await (const row of result.rows) rows.push(row);
     const plan = readPlan(format, result.columns, rows, statement, options.analyze);
     const messages = (result.messages ?? []).filter((message) => message.code !== REWRITTEN_QUERY_NOTE);
@@ -908,6 +965,13 @@ class MysqlSession implements Session {
   #failure(cause: unknown, running: Running, sql?: string): PluginError {
     if (cause instanceof PluginError) return cause;
     const errno = (cause as { errno?: unknown }).errno;
+    if (
+      !running.cancelRequested &&
+      typeof errno === "number" &&
+      stoppedAtLimit(this.#dialect, errno, Date.now() - running.startedAt, running.limitMs)
+    ) {
+      return new PluginError("timedOut", stoppedAtLimitMessage(this.#dialect, running.limitMs), { cause });
+    }
     if (running.cancelRequested || errno === QUERY_INTERRUPTED) {
       return new PluginError("cancelled", running.reset ? RESET_CANCELLED_MESSAGE : CANCELLED_MESSAGE, { cause });
     }
