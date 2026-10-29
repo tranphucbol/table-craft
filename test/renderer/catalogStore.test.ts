@@ -46,6 +46,7 @@ function catalogClient(describe: () => Promise<DescribedCatalog> = () => Promise
           serverBrand: null,
           namespace: null,
           serverTimeout: null,
+          cancelReach: null,
         };
         return Promise.resolve(opened);
       }
@@ -70,7 +71,7 @@ function wired() {
     connectEngine: () => Promise.resolve({ status: "connected", client }),
     disconnectEngine: () => Promise.resolve(),
     promptSecrets: () => Promise.resolve(null),
-    rememberBrand: () => Promise.resolve(),
+    rememberServer: () => Promise.resolve(),
   });
   datasources.getState().setPlugins([POSTGRES_PLUGIN]);
   datasources.getState().applyList({

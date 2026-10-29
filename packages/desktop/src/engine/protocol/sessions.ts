@@ -1,6 +1,6 @@
 import type { KeySource } from "./keyspace.js";
 import type { ResultState, ResultWindow } from "./results.js";
-import type { Capability, Column, CommandReply, ServerTimeout, TypeClass } from "./wire.js";
+import type { CancelReach, Capability, Column, CommandReply, ProbeResult, ServerTimeout, TypeClass } from "./wire.js";
 
 /** Mirrors `ServerSessionState` in plugin-api. */
 export type ServerSessionState = "active" | "idle" | "idleInTransaction" | "blocked" | "other";
@@ -119,4 +119,41 @@ export interface OpenedSession {
   readonly namespace: CurrentNamespace;
   /** What the server stops by itself under `StatementLimit.serverEnforced`; null when nothing (decision 129). */
   readonly serverTimeout: ServerTimeout | null;
+  /** What the app's cancel sends and reaches; null when the plugin does not say (decision 131). */
+  readonly cancelReach: CancelReach | null;
+}
+
+/**
+ * The facts a session or Test Connection last reported, kept on the datasource so Settings › MCP
+ * Server can say how a timeout is enforced without connecting (decision 131).
+ */
+export interface LastServer {
+  readonly version: string | null;
+  /** Absent without the `serverTimeout` capability; null when the server stops nothing itself. */
+  readonly timeout?: ServerTimeout | null | undefined;
+  /** Absent when the plugin does not say what its cancel reaches. */
+  readonly cancel?: CancelReach | undefined;
+  /** Epoch ms. */
+  readonly seenAt: number;
+}
+
+/** What one connection reported, for main to remember. */
+export interface ServerSeen {
+  /** One of the plugin's `brands` ids; null when the plugin names none. */
+  readonly brand: string | null;
+  readonly lastServer: LastServer;
+}
+
+/** What an opened session says of its server, as `rememberServer` takes it. */
+export function serverSeenOf(opened: OpenedSession, seenAt: number): ServerSeen {
+  const timeout = opened.capabilities.includes("serverTimeout") ? { timeout: opened.serverTimeout } : {};
+  const cancel = opened.cancelReach === null ? {} : { cancel: opened.cancelReach };
+  return { brand: opened.serverBrand, lastServer: { version: opened.serverVersion, ...timeout, ...cancel, seenAt } };
+}
+
+/** What a Test Connection that reached the server says of it, as `rememberServer` takes it. */
+export function probeSeenOf(probed: Extract<ProbeResult, { ok: true }>, seenAt: number): ServerSeen {
+  const timeout = probed.serverTimeout === undefined ? {} : { timeout: probed.serverTimeout };
+  const cancel = probed.cancelReach === null ? {} : { cancel: probed.cancelReach };
+  return { brand: probed.serverBrand, lastServer: { version: probed.serverVersion, ...timeout, ...cancel, seenAt } };
 }

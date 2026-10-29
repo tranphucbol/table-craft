@@ -4,6 +4,7 @@ import type {
   EngineError,
   ExecutedStatement,
   OpenedSession,
+  ServerSeen,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { DatasourceList, DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import {
@@ -28,6 +29,8 @@ import { POSTGRES_PLUGIN, SQLITE_PLUGIN, view } from "./datasourceViews.js";
 
 const PG = view({ id: "pg", name: "pg", secretModes: { password: "never" } });
 const LITE = view({ id: "lite", name: "lite", pluginId: "sqlite" });
+
+const SEEN_AT = 1_800_000_000_000;
 
 function list(datasources: readonly DatasourceView[]): DatasourceList {
   return { datasources, warning: null, encryption: { available: true, reason: null } };
@@ -54,6 +57,7 @@ function fakeClient(datasourceId: string, options: { openFails?: EngineError; se
           serverBrand: options.serverBrand ?? null,
           namespace: null,
           serverTimeout: null,
+          cancelReach: { method: "interrupt", reaches: "statement" },
         };
         return Promise.resolve(opened);
       }
@@ -116,7 +120,7 @@ function harness(
     clients.set(id, client);
     return Promise.resolve({ status: "connected", client });
   });
-  const remembered: [string, string][] = [];
+  const remembered: [string, ServerSeen][] = [];
   const disconnectEngine = vi.fn((_id: string) => Promise.resolve());
   const prompts: SecretRequest[] = [];
   const dependencies: DatasourcesDependencies = {
@@ -126,10 +130,11 @@ function harness(
       prompts.push(request);
       return Promise.resolve(options.prompt === undefined ? { password: "right" } : options.prompt(request));
     },
-    rememberBrand: (id, brand) => {
-      remembered.push([id, brand]);
+    rememberServer: (id, seen) => {
+      remembered.push([id, seen]);
       return Promise.resolve();
     },
+    now: () => SEEN_AT,
   };
   const datasources = createDatasourcesStore(dependencies);
   datasources.getState().setPlugins([POSTGRES_PLUGIN, SQLITE_PLUGIN]);
@@ -208,23 +213,22 @@ describe("datasource and console stores", () => {
     });
   });
 
-  it("givenNewServerBrand_whenConnected_thenRememberedAndKeptAfterDisconnect", async () => {
+  it("givenConnect_whenOpened_thenRemembersBrandAndServer", async () => {
     const { datasources, remembered } = harness({ serverBrands: { lite: "sqlite" } });
 
     await datasources.getState().connect("lite");
     await datasources.getState().disconnect("lite");
 
-    expect(remembered).toEqual([["lite", "sqlite"]]);
+    expect(remembered).toEqual([
+      [
+        "lite",
+        {
+          brand: "sqlite",
+          lastServer: { version: "lite 1.0", cancel: { method: "interrupt", reaches: "statement" }, seenAt: SEEN_AT },
+        },
+      ],
+    ]);
     expect(datasources.getState().connections.lite).toMatchObject({ status: "disconnected", serverBrand: "sqlite" });
-  });
-
-  it("givenSameStoredBrand_whenConnected_thenNotRememberedAgain", async () => {
-    const stored = view({ id: "lite", name: "lite", pluginId: "sqlite", brand: "sqlite" });
-    const { datasources, remembered } = harness({ serverBrands: { lite: "sqlite" }, views: [stored] });
-
-    await datasources.getState().connect("lite");
-
-    expect(remembered).toEqual([]);
   });
 
   it("givenEphemeral_whenConnectReportsBrand_thenNotPersisted", async () => {

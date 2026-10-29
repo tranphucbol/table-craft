@@ -83,6 +83,12 @@ export interface ServerTimeout {
   readonly counts: "statement" | "serverWork";
 }
 
+/** Mirrors `CancelReach` in plugin-api: what the app's cancel sends and how far it reaches (decision 131). */
+export interface CancelReach {
+  readonly method: string;
+  readonly reaches: "statement" | "connection" | "blockingCommands";
+}
+
 /** Mirrors `CommandReply` in plugin-api: a command's scalar answer, which goes to Output (decision 112). */
 export interface CommandReply {
   readonly value: WireValue;
@@ -136,6 +142,8 @@ export type ProbeResult =
       readonly tls?: TlsHop | null;
       /** What the server stops by itself; null when it stops nothing, absent without the `serverTimeout` capability. */
       readonly serverTimeout?: ServerTimeout | null;
+      /** What the app's cancel reaches; null when the plugin does not say (decision 131). */
+      readonly cancelReach: CancelReach | null;
     }
   | { readonly ok: false; readonly error: EngineError; readonly ssh?: SshHop };
 
