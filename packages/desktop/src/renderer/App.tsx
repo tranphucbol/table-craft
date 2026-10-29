@@ -20,6 +20,8 @@ import { DataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/DataSou
 import { ImportDataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/ImportDataSources.js";
 import { ManageShownSchemasDialog } from "@table-craft/desktop/renderer/dialogs/ManageShownSchemas.js";
 import { HostKeyPrompt } from "@table-craft/desktop/renderer/dialogs/HostKeyPrompt.js";
+import { McpActivityDialog } from "@table-craft/desktop/renderer/dialogs/McpActivity.js";
+import { McpApprovalDialog } from "@table-craft/desktop/renderer/dialogs/McpApproval.js";
 import { Modal } from "@table-craft/desktop/renderer/dialogs/Modal.js";
 import { SecretPrompt } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
 import { SettingsDialog } from "@table-craft/desktop/renderer/dialogs/Settings.js";
@@ -30,6 +32,8 @@ import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.
 import { installHostKeyPrompts } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { installUpdateState } from "@table-craft/desktop/renderer/state/update.js";
+import { installMcpState } from "@table-craft/desktop/renderer/state/mcp.js";
+import { installMcpConsoleRelay } from "@table-craft/desktop/renderer/actions/mcpConsole.js";
 import { installWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { installDatasourceSync } from "@table-craft/desktop/renderer/state/wiring.js";
 import { TooltipProvider } from "@table-craft/desktop/renderer/ui/Tooltip.js";
@@ -94,6 +98,8 @@ export function App() {
   useEffect(() => installWindowState(), []);
 
   useEffect(() => installUpdateState(), []);
+  useEffect(() => installMcpState(), []);
+  useEffect(() => installMcpConsoleRelay(), []);
 
   return (
     <TooltipProvider>
@@ -106,6 +112,8 @@ export function App() {
       <SnippetsDialog />
       <SecretPrompt />
       <HostKeyPrompt />
+      <McpApprovalDialog />
+      <McpActivityDialog />
       <Modal />
       <QuickDoc />
     </TooltipProvider>

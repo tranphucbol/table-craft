@@ -12,6 +12,7 @@ describe("app paths", () => {
 
     expect(paths).toEqual({
       engineEntry: join(REPOSITORY_DIST, "engine", "main.js"),
+      mcpEntry: join(REPOSITORY_DIST, "mcp", "main.js"),
       preload: join(REPOSITORY_DIST, "preload", "preload.cjs"),
       rendererIndex: join(REPOSITORY_DIST, "renderer", "index.html"),
       builtInPlugins: join(REPOSITORY_DIST, "resources", "plugins"),
@@ -25,6 +26,7 @@ describe("app paths", () => {
 
     expect(paths).toEqual({
       engineEntry: join(ASAR_DIST, "engine", "main.js"),
+      mcpEntry: join(ASAR_DIST, "mcp", "main.js"),
       preload: join(ASAR_DIST, "preload", "preload.cjs"),
       rendererIndex: join(ASAR_DIST, "renderer", "index.html"),
       builtInPlugins: join(RESOURCES, "plugins"),

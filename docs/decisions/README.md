@@ -118,3 +118,5 @@ started, not when it is merged.
 | 123 | [Snippets are scoped text templates](123-snippets-are-scoped-text-templates.md)                                                                                        |
 | 124 | [SQL Server plugin on tedious](124-sql-server-plugin-on-tedious.md)                                                                                                    |
 | 125 | [T-SQL batches and result sets](125-t-sql-batches-and-result-sets.md)                                                                                                  |
+| 126 | [The MCP server is a fourth process](126-mcp-server-is-a-fourth-process.md)                                                                                            |
+| 127 | [Agents get per-datasource access, and writes wait for the user](127-agents-get-per-datasource-access.md)                                                              |

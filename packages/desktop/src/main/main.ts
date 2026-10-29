@@ -8,6 +8,7 @@ import { createInterface } from "node:readline";
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -36,6 +37,15 @@ import { createCredentialReader, runCommand } from "@table-craft/desktop/main/im
 import { nodeImportFiles } from "@table-craft/desktop/main/import/nodeFiles.js";
 import { parseTableProDefaults, TABLEPRO_DEFAULTS_DOMAIN } from "@table-craft/desktop/main/import/tablepro.js";
 import { registerIpc } from "@table-craft/desktop/main/ipc.js";
+import {
+  createMcpSupervisor,
+  isMcpEngineTarget,
+  MCP_LOG_PROCESS,
+  newMcpToken,
+  type McpEngineTarget,
+  type McpProcess,
+  type McpSupervisor,
+} from "@table-craft/desktop/main/mcp.js";
 import { createSnippetsService } from "@table-craft/desktop/main/snippets.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 import {
@@ -83,6 +93,7 @@ import {
   UPDATE_SCOPE,
   type Updater,
 } from "@table-craft/desktop/main/update/updater.js";
+import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { DEFAULT_REGISTRY_URL } from "@table-craft/desktop/settings/settings.js";
 import { DENSITIES, resolveTheme, type DensityTokens, type Theme } from "@table-craft/desktop/appearance/themes.js";
 import { ENGINE_PORT_MESSAGE, type DatasourceConfig, type HostKeyOffer } from "@table-craft/desktop/engine/protocol.js";
@@ -145,6 +156,7 @@ const HISTORY_FILE = "history.sqlite";
  */
 const DEVELOPMENT_VERSION = "0.0.0";
 const MAC_PLATFORM = "darwin";
+const MCP_SERVICE_NAME = "table-craft-mcp";
 
 // Electron reads the name from the package.json beside the entry, and `dist/main` has none; without
 // this, userData and so the user plugin root would be `Electron`.
@@ -159,6 +171,7 @@ if (!primaryInstance) app.exit(0);
 
 let settingsService: SettingsService | null = null;
 let pluginStore: PluginStore | null = null;
+let mcpSupervisor: McpSupervisor | null = null;
 
 function mirrorToTerminal(record: LogRecord): void {
   if (!enabled(record.level, MIRROR_LEVEL)) return;
@@ -288,10 +301,18 @@ const cipher: Cipher = {
   decrypt: (cipherText) => safeStorage.decryptString(Buffer.from(cipherText, CIPHER_ENCODING)),
 };
 
-type BroadcastState = DatasourceList | EngineExited | SettingsChanged | UpdateState | PluginsState;
+type BroadcastState = DatasourceList | EngineExited | SettingsChanged | UpdateState | PluginsState | McpStatus;
 
 function broadcast(channel: string, payload: BroadcastState | readonly (LogRecord | TextSnippet)[]): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
+}
+
+/** The focused window, else any; false when none is open (MCP console tools, decision 127). */
+function sendToFocused(channel: string, payload: McpConsoleRequest | McpContextRequest): boolean {
+  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (window === undefined || window.isDestroyed()) return false;
+  window.webContents.send(channel, payload);
+  return true;
 }
 
 let savedDatasources: () => readonly Datasource[] = () => [];
@@ -332,7 +353,10 @@ const hostKeys = createHostKeyService({
   ask: askHostKey,
 });
 
-const hosts = createHostRegistry<WebContents>({
+/** An engine port goes to a window, or to the MCP host for an agent (decision 126). */
+type PortTarget = WebContents | McpEngineTarget;
+
+const hosts = createHostRegistry<PortTarget>({
   pluginRoots,
   dependencies: {
     fork: (serviceName, logProcess): EngineProcess => {
@@ -340,10 +364,13 @@ const hosts = createHostRegistry<WebContents>({
       captureStdio(host, logProcess);
       return host;
     },
-    connectPort(host, datasourceId, contents) {
+    connectPort(host, datasourceId, target) {
       const channel = new MessageChannelMain();
       (host as UtilityProcess).postMessage({ kind: ENGINE_PORT_MESSAGE }, [channel.port1]);
-      contents.postMessage(CHANNELS.enginePort, datasourceId, [channel.port2]);
+      if (isMcpEngineTarget(target)) {
+        if (mcpSupervisor === null) channel.port2.close();
+        else mcpSupervisor.sendPort(target, channel.port2);
+      } else target.postMessage(CHANNELS.enginePort, datasourceId, [channel.port2]);
     },
     setTimeout: (run, ms) => setTimeout(run, ms),
     clearTimeout: (timer) => clearTimeout(timer as NodeJS.Timeout),
@@ -459,6 +486,8 @@ function createWindow(settings: SettingsService): void {
     pluginStore?.startBackground();
   });
   closeGuard.guard(window);
+  window.on("closed", () => mcpSupervisor?.windowsChanged());
+  mcpSupervisor?.windowsChanged();
   void window.loadFile(paths.rendererIndex);
 }
 
@@ -700,16 +729,20 @@ void app.whenReady().then(async () => {
   pluginStore = plugins;
   await plugins.start();
   // safeStorage answers only once the app is ready.
-  const service = await createDatasourceService<WebContents>({
+  const secrets = protectedSecrets(await createSecretStore({ directory, files, cipher }));
+  const service = await createDatasourceService<PortTarget>({
     store: createDatasourceStore({ directory, files }),
-    secrets: protectedSecrets(await createSecretStore({ directory, files, cipher })),
+    secrets,
     hosts,
     plugins: () => plugins.service.plugins(),
     ephemeral,
     newId: randomUUID,
     consoles,
     history,
-    onChanged: (list) => broadcast(CHANNELS.datasourcesChanged, list),
+    onChanged(list) {
+      broadcast(CHANNELS.datasourcesChanged, list);
+      mcpSupervisor?.datasourcesChanged();
+    },
     readKeyFile: (path) => files.readText(expandHome(path)).catch(() => null),
   });
   savedDatasources = () => service.list().datasources;
@@ -747,6 +780,32 @@ void app.whenReady().then(async () => {
   if (datasourcesWarning !== null)
     mainLog.child("datasources").warn("datasources file set aside", { warning: datasourcesWarning });
   forwardAppendedRecords();
+  const mcp = createMcpSupervisor({
+    fork(): McpProcess {
+      const host = utilityProcess.fork(paths.mcpEntry, [], { serviceName: MCP_SERVICE_NAME, stdio: HOST_STDIO });
+      captureStdio(host, MCP_LOG_PROCESS);
+      return host;
+    },
+    settings: () => settings.snapshot().settings.mcp,
+    datasources: () => service.list().datasources,
+    secrets,
+    connect: (datasourceId, target) => service.connect(datasourceId, {}, target),
+    history,
+    onStatus: (status) => broadcast(CHANNELS.mcpStatus, status),
+    forward(record, process) {
+      const read = readLogRecord(record, process);
+      if (read !== null) logHub.write(read);
+    },
+    windowsOpen: () => BrowserWindow.getAllWindows().some((window) => !window.isDestroyed()),
+    writeClipboard: (text) => clipboard.writeText(text),
+    openConsole: (request) => sendToFocused(CHANNELS.mcpOpenConsole, request),
+    askContext: (requestId) => sendToFocused(CHANNELS.mcpContextRequest, { requestId }),
+    newToken: newMcpToken,
+    serverVersion: appVersion,
+    log: mainLog.child(MCP_LOG_PROCESS),
+  });
+  mcpSupervisor = mcp;
+  settingsListeners.push((changed) => void mcp.settingsChanged(changed.mcp));
   const updates = await startUpdater(directory, settings);
   updater = updates;
   nativeTheme.on("updated", () => {
@@ -831,6 +890,14 @@ void app.whenReady().then(async () => {
       cancel: () => importer.cancel(),
     },
     plugins: plugins.channels,
+    mcp: {
+      status: () => mcp.status(),
+      control: (control) => mcp.control(control),
+      copyClientConfig: (client) => mcp.copyClientConfig(client),
+      regenerateToken: () => mcp.regenerateToken(),
+      copyToken: () => mcp.copyToken(),
+      contextReply: (requestId, context) => mcp.contextReply(requestId, context),
+    },
     updates: {
       state: () => updates.state(),
       check: () => updates.check("manual"),
@@ -852,6 +919,7 @@ void app.whenReady().then(async () => {
   });
   installApplicationMenu(menuTarget, await attachments.recent());
   createWindow(settings);
+  void mcp.start();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow(settings);
   });
@@ -865,6 +933,7 @@ app.on("before-quit", () => closeGuard.beforeQuit());
 
 app.on("will-quit", (event) => {
   hosts.closeAll();
+  void mcpSupervisor?.stop();
   updateSchedule?.stop();
   pluginStore?.stop();
   const pending = updater;
