@@ -246,6 +246,11 @@ On a server with many databases, **Manage Shown Schemas…** on a data source pi
 or schemas the tree lists, as DataGrip does; the data source then shows how many of them it lists,
 such as `3 of 40`. Ones created later stay hidden until you pick them, unless **All schemas** is on.
 
+Each data source shows the logo of the database it is: MySQL, MariaDB or TiDB (whichever the server
+says it is on connect), PostgreSQL, SQLite or Redis, in the tree, the Data Sources dialog and the
+Services tool window. **View → Brand Icons**, **Toggle Brand Icons** in Find Action, or Settings ›
+Appearance › Data sources turns them off for the generic database glyph and the product's name.
+
 The tree's context menu also changes the database: **New Table…** on a schema, **Modify Table…**
 (`⌘F6`) on a table, **Rename…** (`⇧F6`), **Truncate…** and **Drop…** (`⌘⌫`). Every change shows
 the DDL it will run first, and **Open in Console** takes it to a console instead. On PostgreSQL and
@@ -722,6 +727,7 @@ back to its default without affecting the others.
 | `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable`                                  |
 | `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                              | `system`                                       |
 | `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
+| `appearance.brandIcons`                | `true`, `false`; database logos on data sources                                                 | `true`                                         |
 | `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
 | `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
 | `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 12                                     |
@@ -874,7 +880,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.5.0",
+  "apiVersion": "1.6.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -893,6 +899,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
     "routineCall"
   ],
   "highlight": "postgresql",
+  "brands": [{ "id": "postgresql", "name": "PostgreSQL" }],
   "connection": {
     "fields": [
       { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
@@ -907,6 +914,11 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   }
 }
 ```
+
+`brands` lists the database products the plugin speaks, the default first; each `id` is a
+[Simple Icons](https://simpleicons.org) slug, which picks the logo TableCraft draws, and `name` is
+what the picker and the tree call it. The New Data Source picker lists one row per brand, and a
+session's `serverBrand` says which one the server is.
 
 `connection.network` names the fields that hold the server's address (a text host, a number port and
 optionally a number of seconds to wait). A plugin that declares it gets the SSH tunnel: TableCraft
@@ -1048,3 +1060,7 @@ bun run readme:media           # re-record the GIFs in this README
 ## License
 
 [MIT](LICENSE)
+
+Database logos come from [Simple Icons](https://simpleicons.org) (CC0). The names and logos are
+trademarks of their owners, shown only to say which database a data source is; their use implies
+no endorsement.
