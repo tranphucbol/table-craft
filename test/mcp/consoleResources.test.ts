@@ -11,7 +11,7 @@ import {
   resourceUri,
 } from "@table-craft/desktop/mcp/resources.js";
 import { lineColumn } from "@table-craft/desktop/mcp/consoleTools.js";
-import { agentHarness, textOf } from "../support/mcpHarness.js";
+import { agentCaller, agentHarness, textOf } from "../support/mcpHarness.js";
 
 const SHOP: AgentDatasource = { id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access: "read" };
 const HIDDEN: AgentDatasource = { ...SHOP, id: "hidden", name: "Hidden", access: "off" };
@@ -52,11 +52,7 @@ describe("MCP console tools", () => {
     const harness = agentHarness([SHOP]);
     harness.setWindows(false);
 
-    const answer = await harness.tools.call(
-      "open_in_console",
-      { datasource: "shop", sql: "SELECT 1" },
-      { sessionId: "mcp-1", clientName: "Claude Code" },
-    );
+    const answer = await harness.tools.call("open_in_console", { datasource: "shop", sql: "SELECT 1" }, agentCaller());
 
     expect(answer.outcome).toBe("refused");
     expect(answer.result.isError).toBe(true);

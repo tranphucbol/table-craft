@@ -5,11 +5,12 @@ import type { AgentEngine, AgentEngines, SessionMode } from "@table-craft/deskto
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
 import { createTools } from "@table-craft/desktop/mcp/tools.js";
 import type { ToolContext } from "@table-craft/desktop/mcp/toolKit.js";
-import { AGENT_CALLER, textOf, waitingApproval } from "../support/mcpHarness.js";
+import { agentCaller, textOf, waitingApproval } from "../support/mcpHarness.js";
 
 const CACHE: AgentDatasource = { id: "cache", name: "Cache", pluginId: "redis", comment: null, access: "askReads" };
 const KEY = "user:1";
 const CURRENT_DATABASE = 3;
+const USER_THINKS_MS = 20_000;
 
 const DETAILS = { key: { text: KEY, hex: null }, type: "string", typeName: "string", ttlMs: null, length: 3 };
 
@@ -67,7 +68,8 @@ function keyHarness(datasource: AgentDatasource = CACHE) {
   return {
     ...fake,
     approvals,
-    call: (name: "get_key" | "scan_keys", args: unknown) => tools.call(name, args, AGENT_CALLER),
+    advance: (ms: number) => (clock += ms),
+    call: (name: "get_key" | "scan_keys", args: unknown, caller = agentCaller()) => tools.call(name, args, caller),
   };
 }
 
@@ -111,6 +113,20 @@ describe("MCP key tools", () => {
     expect(answer.outcome).toBe("ok");
     expect(textOf(answer.result)).toContain(`- ${KEY} (string, no expiry)`);
     expect(harness.approvals.pending()).toEqual([]);
+  });
+
+  it("givenGetKeyAskBeforeReads_whenAllowedLate_thenWaitIsLeftOut", async () => {
+    const harness = keyHarness();
+    const caller = agentCaller();
+
+    const running = harness.call("get_key", { datasource: "cache", key: KEY }, caller);
+    const approvalId = await waitingApproval(harness.approvals);
+    harness.advance(USER_THINKS_MS);
+    harness.approvals.answer(approvalId, "allowOnce");
+    const answer = await running;
+
+    expect(answer.outcome).toBe("ok");
+    expect(caller.waits.ms()).toBeGreaterThanOrEqual(USER_THINKS_MS);
   });
 
   it("givenReadAccess_whenGetKey_thenRunsWithoutAsking", async () => {

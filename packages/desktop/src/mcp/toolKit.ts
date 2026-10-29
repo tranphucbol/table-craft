@@ -10,6 +10,24 @@ import type { McpActiveConsole, McpCallOutcome, McpConsoleRequest } from "@table
 export interface Caller {
   readonly sessionId: string;
   readonly clientName: string;
+  readonly waits: ApprovalWait;
+}
+
+/** How long one tool call waited for the user's answer, left out of the time it reports. */
+export interface ApprovalWait {
+  /** Milliseconds this call has spent waiting for the user's answer. */
+  readonly ms: () => number;
+  readonly add: (ms: number) => void;
+}
+
+export function approvalWait(): ApprovalWait {
+  let total = 0;
+  return {
+    ms: () => total,
+    add: (ms) => {
+      total += Math.max(0, ms);
+    },
+  };
 }
 
 /** The user's windows, as the console tools reach them through main. */
@@ -109,7 +127,8 @@ export type ApprovalAsk = Omit<ApprovalRequest, "sessionId" | "clientName" | "da
 
 /**
  * Returns once the user allows the request, or an earlier "allow this kind" answer covers it; any
- * other outcome ends the call with the refusal the agent reads.
+ * other outcome ends the call with the refusal the agent reads. Either way the time spent asking
+ * adds to `caller.waits`.
  */
 export async function waitForApproval(
   context: ToolContext,
@@ -125,7 +144,13 @@ export async function waitForApproval(
     ...ask,
   };
   if (context.approvals.allowedAlready(request)) return;
-  const outcome = await context.approvals.request(request);
+  const asked = context.now();
+  let outcome;
+  try {
+    outcome = await context.approvals.request(request);
+  } finally {
+    caller.waits.add(context.now() - asked);
+  }
   if (outcome !== "allowed")
     throw new ToolFailure(APPROVAL_REFUSALS[outcome], outcome === "handedOff" ? "handedOff" : "denied");
 }

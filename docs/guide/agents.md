@@ -36,6 +36,7 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
   read `tablecraft://<data source>/<schema>/<table>` resources and two prompts.
 - **Watching.** The chip's popover lists connected clients and their last call, with Pause, Agent
   Activity (every call this run, filtered by client and outcome) and Settings. Services shows an
-  **Agents** node with each statement still running and a Cancel. A write request can also go to
+  **Agents** node with each statement still running and a Cancel. A call's time leaves out the
+  wait for your approval; hover it, or read Agent Activity, to see how long it waited. A write request can also go to
   **Open in Console** instead of running. Query History filters by **All**, **Me** or **Agents**,
   and the Database pane marks exposed data sources with **AI** while the server runs.
