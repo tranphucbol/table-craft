@@ -62,6 +62,7 @@ export async function discoverInstalled(
       capabilities: manifest?.capabilities ?? [],
       fields: manifest?.connection.fields ?? [],
       highlight: manifest?.highlight ?? null,
+      brands: manifest?.brands ?? [],
       url: manifest?.connection.url ?? null,
       network: manifest?.connection.network ?? null,
       tls: manifest?.connection.tls ?? null,

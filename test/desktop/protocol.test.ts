@@ -109,6 +109,8 @@ import {
   type ConnectionUrlSpec,
   type NetworkSpec,
   type ParsedConnectionUrl,
+  type Brand,
+  type Session,
 } from "@table-craft/plugin-api";
 import * as protocol from "@table-craft/desktop/engine/protocol.js";
 import * as bridge from "@table-craft/desktop/preload/bridge.js";
@@ -123,6 +125,13 @@ describe("engine protocol", () => {
   it("givenConnectionUrlTypes_whenComparedWithPluginApi_thenIdentical", () => {
     expectTypeOf<bridge.ConnectionUrlSpec>().toEqualTypeOf<ConnectionUrlSpec>();
     expectTypeOf<bridge.ParsedUrl>().toEqualTypeOf<ParsedConnectionUrl>();
+  });
+
+  it("givenBrandTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<bridge.Brand>().toEqualTypeOf<Readonly<Brand>>();
+    expectTypeOf<bridge.PluginInfo["brands"]>().toEqualTypeOf<readonly Readonly<Brand>[]>();
+    expectTypeOf<protocol.OpenedSession["serverBrand"]>().toEqualTypeOf<NonNullable<Session["serverBrand"]> | null>();
+    expectTypeOf<Extract<protocol.ProbeResult, { ok: true }>["serverBrand"]>().toEqualTypeOf<string | null>();
   });
 
   it("givenSshTypes_whenComparedWithCoreAndPluginApi_thenIdentical", () => {

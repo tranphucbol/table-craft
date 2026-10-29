@@ -51,6 +51,7 @@ function fakeClient(datasourceId: string, options: { openFails?: EngineError } =
           pluginName: datasourceId,
           capabilities: ["sql"],
           serverVersion: `${datasourceId} 1.0`,
+          serverBrand: null,
           namespace: null,
         };
         return Promise.resolve(opened);
@@ -190,6 +191,7 @@ describe("datasource and console stores", () => {
       status: "connected",
       error: null,
       serverVersion: "pg 1.0",
+      serverBrand: null,
     });
   });
 

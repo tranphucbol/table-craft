@@ -113,6 +113,8 @@ export interface OpenedSession {
   readonly capabilities: readonly Capability[];
   /** What the server reports about itself, for the status bar; null when it reports nothing. */
   readonly serverVersion: string | null;
+  /** The product the server is, one of the plugin's `brands` ids; null when the plugin names none. */
+  readonly serverBrand: string | null;
   /** Where the session starts; always null without `currentNamespace`. */
   readonly namespace: CurrentNamespace;
 }
