@@ -254,6 +254,15 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       expect(await productionNote.textContent()).toContain("prod is coloured red.");
       await productionNote.scrollIntoViewIfNeeded();
       await captureWindow(page, "11-access-table");
+      await dialog.getByTestId("mcp-production-note-close").click();
+      await expect.poll(() => productionNote.count()).toBe(0);
+      const showNote = dialog.getByTestId("mcp-production-note-show");
+      expect(await showNote.count()).toBe(1);
+      expect(await showNote.getAttribute("aria-label")).toBe("Why prod stays at Read only");
+      await captureWindow(page, "12-access-note-closed");
+      await showNote.click();
+      await expect.poll(() => productionNote.count()).toBe(1);
+      expect(await showNote.count()).toBe(0);
 
       await dialog.getByRole("button", { name: "OpenCode" }).click();
       expect(await dialog.getByTestId("mcp-client-config").textContent()).toContain('"type": "remote"');

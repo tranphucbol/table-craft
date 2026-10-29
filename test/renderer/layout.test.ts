@@ -46,6 +46,17 @@ describe("layout", () => {
     expect(store.getState().layout.visible).toEqual({ database: true, services: false, log: false });
   });
 
+  it("givenProductionWarningClosed_whenRelaunched_thenStillClosedUntilShown", () => {
+    const storage = memoryStorage();
+    expect(createLayoutStore(storage).getState().layout.productionNote).toBe(true);
+    createLayoutStore(storage).getState().setProductionNote(false);
+
+    const relaunched = createLayoutStore(storage);
+    expect(relaunched.getState().layout.productionNote).toBe(false);
+    relaunched.getState().setProductionNote(true);
+    expect(createLayoutStore(storage).getState().layout.productionNote).toBe(true);
+  });
+
   it("givenExtremeSize_whenResized_thenClamped", () => {
     const store = createLayoutStore(memoryStorage());
 
