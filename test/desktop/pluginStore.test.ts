@@ -358,14 +358,16 @@ describe("plugin catalog", () => {
   });
 
   it.each(PLUGIN_CATALOG.map((entry) => [entry.id, entry] as const))(
-    "givenCatalogEntry%s_whenComparedWithItsPlugin_thenNamePackageAndSchemesMatch",
+    "givenCatalogEntry%s_whenComparedWithItsPlugin_thenNamePackageSchemesAndBrandsMatch",
     async (id, entry) => {
       const manifest = JSON.parse(await readFile(join(SOURCE_PLUGINS, id, MANIFEST_FILE), "utf8")) as {
         name: string;
+        brands?: { id: string; name: string }[];
         connection?: { url?: { schemes: string[] } };
       };
 
       expect(entry.name).toBe(manifest.name);
+      expect(entry.brands).toEqual(manifest.brands ?? []);
       expect(entry.packageName).toBe(`@tablecraft-app/plugin-${id}`);
       expect(entry.schemes).toEqual(manifest.connection?.url?.schemes ?? []);
     },
