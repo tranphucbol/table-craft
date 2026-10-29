@@ -128,8 +128,8 @@ New cases:
 `givenX_whenY_thenZ`,
 `given…`.
 
-_Docs: which section of `docs/design/specification.md` or which decision record gains what. Name
-the section, not just the file._
+_Docs: which section of `docs/design/specification.md`, which `docs/guide/` page or which decision
+record gains what. Name the section, not just the file._
 
 Every phase ends with `bun run typecheck` and `bun run test` both green; a phase touching a plugin
 also runs `bun run test:db`.
@@ -141,8 +141,8 @@ also runs `bun run test:db`.
 _Filled in by whoever implements the plan (decision 016). Build the app, drive it with Playwright
 (`playwright-core` `_electron`, as `test/e2e/` does), and exercise every user-visible behaviour the
 plan adds against every database it touches. Run it in the headless box
-(`bun run test:smoke:db:headless`, decision 063) unless the behaviour is macOS-only. Save one PNG
-per behaviour to `docs/evidence/NNN/` and list them here:_
+(`bun run test:smoke:db:headless`, decision 063) unless the behaviour is macOS-only, following the
+`local-testing` skill. Save one PNG per behaviour to `docs/evidence/NNN/` and list them here:_
 
 | #   | Scenario                   | Database                    | Result                               | Evidence                     |
 | --- | -------------------------- | --------------------------- | ------------------------------------ | ---------------------------- |

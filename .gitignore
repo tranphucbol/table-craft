@@ -13,3 +13,6 @@ docs/plans/*
 !docs/plans/TEMPLATE.md
 docs/evidence/
 
+
+# Local pull request drafts of .agents/skills/create-pr.
+gdb/

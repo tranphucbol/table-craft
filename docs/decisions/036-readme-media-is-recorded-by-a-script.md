@@ -33,3 +33,5 @@ pictures.
   app itself has neither.
 - A README claim the unit test cannot check (a sentence about behaviour) is still checked only by
   review.
+- Since decision 132 the GIFs sit in the guide pages as well as the README, and the check covers
+  every user document.
