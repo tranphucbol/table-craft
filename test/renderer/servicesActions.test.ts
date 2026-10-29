@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { createActionRegistry } from "@table-craft/desktop/renderer/actions/registry.js";
+import { createActionRegistry, firstEnabledAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { SERVICES_ACTION_IDS, SERVICES_ACTIONS } from "@table-craft/desktop/renderer/actions/servicesActions.js";
 import { useServicesTree } from "@table-craft/desktop/renderer/state/servicesTree.js";
 import { IDLE_CONTEXT } from "./support.js";
 
 const KEYS = ["datasource:pg", "session:c1", "agents", "agent:Claude Code"];
+const FOLD_BUTTON = [SERVICES_ACTION_IDS.collapseAll, SERVICES_ACTION_IDS.expandAll] as const;
 
 function registry() {
   const created = createActionRegistry(() => IDLE_CONTEXT);
@@ -50,5 +51,20 @@ describe("Services Expand All and Collapse All", () => {
 
     expect(actions.isEnabled(SERVICES_ACTION_IDS.collapseAll)).toBe(false);
     expect(actions.isEnabled(SERVICES_ACTION_IDS.expandAll)).toBe(false);
+  });
+
+  it("givenFoldButton_whenTreeExpandedThenCollapsed_thenItSwitchesFromCollapseAllToExpandAll", () => {
+    const actions = registry();
+    const shown = () => firstEnabledAction(FOLD_BUTTON, (id) => actions.isEnabled(id));
+    expect(shown()).toBe(SERVICES_ACTION_IDS.collapseAll);
+
+    useServicesTree.setState({ collapsed: new Set(["agents"]) });
+    expect(shown()).toBe(SERVICES_ACTION_IDS.collapseAll);
+
+    useServicesTree.getState().collapseAll();
+    expect(shown()).toBe(SERVICES_ACTION_IDS.expandAll);
+
+    useServicesTree.setState({ expandableKeys: [] });
+    expect(shown()).toBe(SERVICES_ACTION_IDS.collapseAll);
   });
 });

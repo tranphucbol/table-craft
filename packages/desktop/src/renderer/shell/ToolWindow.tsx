@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
-import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import { invoke, useFirstEnabledAction } from "@table-craft/desktop/renderer/actions/index.js";
 import type { ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { HideIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -10,13 +10,20 @@ export interface ToolWindowProps {
   readonly title: string;
   /** The action that hides it again, run by the header's hide button. */
   readonly toggleActionId: string;
-  /** Actions drawn as icon buttons before Hide, as Services' Expand All and Collapse All. */
-  readonly actions?: readonly string[];
+  /**
+   * One icon button before Hide standing for the first of these actions that is enabled, as
+   * Services' Collapse All, which becomes Expand All once everything is folded.
+   */
+  readonly switchingActions?: readonly [string, ...string[]];
   readonly children: ReactNode;
 }
 
+function SwitchingActionButton({ actionIds }: { readonly actionIds: readonly [string, ...string[]] }) {
+  return <ActionButton actionId={useFirstEnabledAction(actionIds)} compact />;
+}
+
 /** A titled pane docked at an edge; focus inside it makes `Escape` return to the editor. */
-export function ToolWindow({ id, title, toggleActionId, actions = [], children }: ToolWindowProps) {
+export function ToolWindow({ id, title, toggleActionId, switchingActions, children }: ToolWindowProps) {
   return (
     <section
       aria-label={title}
@@ -27,13 +34,7 @@ export function ToolWindow({ id, title, toggleActionId, actions = [], children }
       <header className="flex h-row shrink-0 items-center justify-between px-gap">
         <h2 className="text-ui font-semibold">{title}</h2>
         <div className="flex items-center">
-          {actions.length === 0 ? null : (
-            <div role="toolbar" aria-label={`${title} toolbar`} className="flex items-center">
-              {actions.map((actionId) => (
-                <ActionButton key={actionId} actionId={actionId} compact />
-              ))}
-            </div>
-          )}
+          {switchingActions === undefined ? null : <SwitchingActionButton actionIds={switchingActions} />}
           <button
             type="button"
             aria-label={`Hide ${title}`}

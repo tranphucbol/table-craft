@@ -23,7 +23,7 @@ const RIGHT_STRIPE_TOP = [
   { toolWindow: "log", actionId: ACTION_IDS.toggleLog },
   { actionId: MCP_ACTION_IDS.settings },
 ] as const;
-const SERVICES_HEADER_ACTIONS = [SERVICES_ACTION_IDS.expandAll, SERVICES_ACTION_IDS.collapseAll];
+const SERVICES_FOLD_ACTIONS = [SERVICES_ACTION_IDS.collapseAll, SERVICES_ACTION_IDS.expandAll] as const;
 const MIN_TOOL_WINDOW_PERCENT = "10";
 const MIN_EDITOR_PERCENT = "20";
 /** The library's panels scroll by default; ours lay out their own scrolling regions. */
@@ -98,7 +98,7 @@ export function Shell() {
                   id="services"
                   title="Services"
                   toggleActionId={ACTION_IDS.toggleServices}
-                  actions={SERVICES_HEADER_ACTIONS}
+                  switchingActions={SERVICES_FOLD_ACTIONS}
                 >
                   <ServicesPane />
                 </ToolWindow>
