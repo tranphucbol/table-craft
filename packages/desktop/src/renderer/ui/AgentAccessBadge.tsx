@@ -5,8 +5,9 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { CAP_CENTRED } from "@table-craft/desktop/renderer/ui/KeyTypeBadge.js";
 
 /**
- * `AI` beside a datasource agents can reach while the MCP server runs (plan 117): muted for Read
- * only, amber for Ask before writes. Nothing while the server is off or the datasource is Off.
+ * `AI` beside a datasource agents can reach while the MCP server runs (plans 117, 120): muted for
+ * Read only, amber for the two levels that can turn the chip amber, Ask before reads and Ask before
+ * writes. Nothing while the server is off or the datasource is Off.
  */
 export function AgentAccessBadge({ datasource }: { readonly datasource: DatasourceView }) {
   const running = useMcp((state) => state.status.state === "running");
@@ -20,7 +21,7 @@ export function AgentAccessBadge({ datasource }: { readonly datasource: Datasour
       className={cn(
         "shrink-0 rounded-sm border px-0.5 font-mono font-semibold",
         CAP_CENTRED,
-        access === "ask" ? "border-warning text-warning" : "border-line text-ink-muted",
+        access === "read" ? "border-line text-ink-muted" : "border-warning text-warning",
       )}
     >
       AI
