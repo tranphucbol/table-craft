@@ -214,6 +214,7 @@ describe("key tab edits", () => {
           serverBrand: null,
           namespace: null,
           serverTimeout: null,
+          cancelReach: null,
         };
         return Promise.resolve(opened);
       }

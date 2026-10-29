@@ -15,11 +15,12 @@ import {
   MCP_ENGINE_ANSWER_MESSAGE,
   MCP_ENGINE_REQUEST_MESSAGE,
   MCP_HISTORY_MESSAGE,
+  MCP_SERVER_SEEN_MESSAGE,
   MCP_SHUTDOWN_MESSAGE,
   MCP_STATUS_MESSAGE,
   type MainToMcp,
 } from "@table-craft/desktop/mcp/messages.js";
-import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
+import type { DatasourceView, ServerSeen } from "@table-craft/desktop/preload/bridge.js";
 import type { McpSettings } from "@table-craft/desktop/settings/settings.js";
 import { tokenHint, type McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { fakeCipher, memoryFiles } from "../support/memoryFiles.js";
@@ -88,6 +89,7 @@ async function supervised(patch: Partial<McpSupervisorOptions> = {}) {
   const statuses: McpStatus[] = [];
   const recorded: HistoryEntry[] = [];
   const clipboard: string[] = [];
+  const remembered: [string, ServerSeen][] = [];
   let tokens = 0;
   const secrets = await createSecretStore({ directory: "/profile", files: memoryFiles(), cipher: fakeCipher() });
   const supervisor = createMcpSupervisor({
@@ -106,6 +108,10 @@ async function supervised(patch: Partial<McpSupervisorOptions> = {}) {
     secrets,
     connect: () => Promise.resolve({ status: "connected" }),
     history: { record: (entry) => void recorded.push(entry) },
+    rememberServer: (datasourceId, seen) => {
+      remembered.push([datasourceId, seen]);
+      return Promise.resolve();
+    },
     onStatus: (status) => statuses.push(status),
     forward: () => undefined,
     windowsOpen: () => true,
@@ -124,8 +130,19 @@ async function supervised(patch: Partial<McpSupervisorOptions> = {}) {
     recorded,
     clipboard,
     secrets,
+    remembered,
   };
 }
+
+const SEEN: ServerSeen = {
+  brand: "mysql",
+  lastServer: {
+    version: "8.4.3",
+    timeout: { setting: "max_execution_time", covers: "reads", counts: "statement" },
+    cancel: { method: "KILL QUERY", reaches: "statement" },
+    seenAt: 1_800_000_000_000,
+  },
+};
 
 describe("MCP supervisor", () => {
   it("givenServerOff_whenStarted_thenNoProcess", async () => {
@@ -240,6 +257,25 @@ describe("MCP supervisor", () => {
     expect(statuses.at(-1)).toEqual(relayed);
     expect(supervisor.status()).toEqual(relayed);
     expect(recorded).toEqual([{ ...entry, source: "agent" }]);
+  });
+
+  it("givenServerSeen_whenExposed_thenRemembered", async () => {
+    const { supervisor, processes, remembered } = await supervised();
+    await supervisor.start();
+
+    processes[0]?.send({ kind: MCP_SERVER_SEEN_MESSAGE, datasourceId: "shop", ...SEEN });
+
+    expect(remembered).toEqual([["shop", SEEN]]);
+  });
+
+  it("givenServerSeen_whenHidden_thenIgnored", async () => {
+    const { supervisor, processes, remembered } = await supervised();
+    await supervisor.start();
+
+    processes[0]?.send({ kind: MCP_SERVER_SEEN_MESSAGE, datasourceId: "hidden", ...SEEN });
+    processes[0]?.send({ kind: MCP_SERVER_SEEN_MESSAGE, datasourceId: "env", ...SEEN });
+
+    expect(remembered).toEqual([]);
   });
 
   it("givenEngineRequestForHiddenDatasource_whenAnswered_thenFailedWithoutConnecting", async () => {

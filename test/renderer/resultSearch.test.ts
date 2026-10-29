@@ -61,6 +61,7 @@ function storeEngine(total = TOTAL_ROWS) {
           serverBrand: null,
           namespace: null,
           serverTimeout: null,
+          cancelReach: null,
         };
         return opened;
       }

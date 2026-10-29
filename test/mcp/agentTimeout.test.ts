@@ -39,4 +39,14 @@ describe("agent statement timeout", () => {
     expect(sentOf(harness, "statement.execute")).toMatchObject([{ serverEnforced: true }]);
     expect(sentOf(harness, "statement.explain")).toMatchObject([{ serverEnforced: true }]);
   });
+
+  it("givenRunQuery_whenSessionOpens_thenServerSeenOnce", async () => {
+    const harness = agentHarness([SHOP]);
+
+    await harness.call("run_query", QUERY);
+    await harness.call("run_query", QUERY);
+
+    expect(harness.seen).toHaveLength(1);
+    expect(harness.seen[0]).toMatchObject({ datasourceId: "shop", opened: { cancelReach: null } });
+  });
 });

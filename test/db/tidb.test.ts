@@ -234,6 +234,13 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     expect(session.serverBrand).toBe("tidb");
   });
 
+  it("givenTidb4WithoutGlobalKill_whenSessionOpens_thenCancelReachesTheConnectionOnly", async () => {
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+
+    expect(session.cancelReach).toEqual({ method: "connection reset", reaches: "connection" });
+  });
+
   it("givenReadOnlySession_whenConnected_thenNoReadOnlyTransactionIsSet", async () => {
     const sent = spySql();
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: true });

@@ -14,10 +14,12 @@ import type {
   DatasourceDraft,
   DatasourceList,
   DatasourceView,
+  LastServer,
   ParsedUrl,
   PluginInfo,
   SaveDatasourceRequest,
   SecretMode,
+  ServerSeen,
   SshSettings,
 } from "@table-craft/desktop/preload/bridge.js";
 import { PRODUCTION_COLOR, type AgentAccess, type AgentPolicy } from "@table-craft/desktop/settings/mcp.js";
@@ -80,8 +82,11 @@ export interface DatasourceService<Target> {
   setAgentAccess(datasourceId: string, access: AgentAccess): Promise<void>;
   /** A datasource's schema list and row limit for agents; a null field clears it. */
   setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<void>;
-  /** Remembers the product a connection reported; an unchanged brand or the ephemeral datasource writes nothing. */
-  setBrand(datasourceId: string, brand: string): Promise<void>;
+  /**
+   * Remembers the product and limits a connection reported (decision 131). Writes nothing for the
+   * ephemeral or an unknown datasource, or when the facts are unchanged and were seen within a day.
+   */
+  rememberServer(datasourceId: string, seen: ServerSeen): Promise<void>;
 }
 
 export interface ImportedDatasource {
@@ -91,6 +96,20 @@ export interface ImportedDatasource {
 }
 
 const DRAFT_ID = "draft";
+/** How stale `lastServer.seenAt` may grow before unchanged facts are written again, so "seen" stays recent. */
+export const SEEN_REFRESH_MS = 86_400_000;
+
+function sameServer(a: LastServer, b: LastServer): boolean {
+  return (
+    a.version === b.version &&
+    a.timeout?.setting === b.timeout?.setting &&
+    a.timeout?.covers === b.timeout?.covers &&
+    a.timeout?.counts === b.timeout?.counts &&
+    (a.timeout === null) === (b.timeout === null) &&
+    a.cancel?.method === b.cancel?.method &&
+    a.cancel?.reaches === b.cancel?.reaches
+  );
+}
 
 function secretFields(plugin: PluginInfo | undefined): ConnectionField[] {
   return (plugin?.fields ?? []).filter((field) => field.secret === true);
@@ -304,6 +323,7 @@ export async function createDatasourceService<Target>(
       id,
       plugin.fields,
       plugin.network !== null,
+      previous,
     );
     checkRequired(plugin, next.config);
     checkTunnel(next.ssh);
@@ -524,11 +544,21 @@ export async function createDatasourceService<Target>(
     changed();
   }
 
-  async function setBrand(datasourceId: string, brand: string): Promise<void> {
+  async function rememberServer(datasourceId: string, seen: ServerSeen): Promise<void> {
     if (ephemeral?.id === datasourceId) return;
-    const previous = find(datasourceId);
-    if (previous.brand === brand) return;
-    const next: Datasource = { ...previous, brand };
+    const previous = datasources.find((datasource) => datasource.id === datasourceId);
+    if (previous === undefined) return;
+    const brand = seen.brand ?? previous.brand;
+    const known = previous.lastServer;
+    if (
+      brand === previous.brand &&
+      known !== undefined &&
+      sameServer(known, seen.lastServer) &&
+      seen.lastServer.seenAt - known.seenAt < SEEN_REFRESH_MS
+    ) {
+      return;
+    }
+    const next: Datasource = { ...previous, ...(brand === undefined ? {} : { brand }), lastServer: seen.lastServer };
     datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
     await store.save(datasources);
     changed();
@@ -547,6 +577,6 @@ export async function createDatasourceService<Target>(
     disconnect: (datasourceId) => hosts.stop(datasourceId),
     setAgentAccess,
     setAgentPolicy,
-    setBrand,
+    rememberServer,
   };
 }

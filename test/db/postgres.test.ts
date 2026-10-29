@@ -116,6 +116,15 @@ describe.runIf(databaseEnabled("postgres"))("postgres server", () => {
     },
   });
 
+  it("givenPostgresServer_whenSessionOpens_thenCancelBackendReachesTheStatement", async () => {
+    const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
+    try {
+      expect(session.cancelReach).toEqual({ method: "pg_cancel_backend", reaches: "statement" });
+    } finally {
+      await session.close();
+    }
+  });
+
   describe("postgres routines", () => {
     it("givenOverloads_whenTree_thenSeparateRoutines", async () => {
       const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });

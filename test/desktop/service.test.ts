@@ -9,9 +9,15 @@ import { createSecretStore } from "@table-craft/desktop/main/secrets.js";
 import {
   createDatasourceService,
   DatasourceError,
+  SEEN_REFRESH_MS,
   type EphemeralDatasource,
 } from "@table-craft/desktop/main/service.js";
-import type { DatasourceDraft, DatasourceList, SaveDatasourceRequest } from "@table-craft/desktop/preload/bridge.js";
+import type {
+  DatasourceDraft,
+  DatasourceList,
+  SaveDatasourceRequest,
+  ServerSeen,
+} from "@table-craft/desktop/preload/bridge.js";
 import { fakeHostDependencies } from "../support/fakeHosts.js";
 import { fakeCipher, memoryFiles } from "../support/memoryFiles.js";
 
@@ -30,6 +36,21 @@ const PG_DRAFT: DatasourceDraft = {
   config: { host: "127.0.0.1", port: 55432, database: "table_craft", user: "table_craft", sslMode: "disable" },
   secretModes: { password: "forever" },
 };
+
+const SEEN_AT = 1_800_000_000_000;
+const PG_TIMEOUT = { setting: "statement_timeout", covers: "all", counts: "statement" } as const;
+
+function seenAt(at: number): ServerSeen {
+  return {
+    brand: "postgresql",
+    lastServer: {
+      version: "PostgreSQL 16.4",
+      timeout: PG_TIMEOUT,
+      cancel: { method: "pg_cancel_backend", reaches: "statement" },
+      seenAt: at,
+    },
+  };
+}
 
 async function service(
   options: {
@@ -327,32 +348,18 @@ describe("datasource service", () => {
     expect(history.search("other", "")).toHaveLength(1);
   });
 
-  it("givenNewBrand_whenSetBrand_thenSavedAndBroadcast", async () => {
+  it("givenSameFactsWithinADay_whenRemembered_thenNoWrite", async () => {
     const { files, changes, service: datasources } = await service();
     const saved = await datasources.save(saving(PG_DRAFT));
-    const broadcasts = changes.length;
-
-    await datasources.setBrand(saved.id, "postgresql");
-
-    expect(JSON.parse(files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`) ?? "")).toMatchObject({
-      datasources: [{ id: saved.id, brand: "postgresql" }],
-    });
-    expect(changes).toHaveLength(broadcasts + 1);
-    expect(changes.at(-1)?.datasources[0]?.brand).toBe("postgresql");
-  });
-
-  it("givenSameBrand_whenSetBrand_thenNoWriteNoBroadcast", async () => {
-    const { files, changes, service: datasources } = await service();
-    const saved = await datasources.save(saving({ ...PG_DRAFT, brand: "postgresql" }));
-    const json = files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`);
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
     files.contents.delete(`${DIRECTORY}/${DATASOURCES_FILE}`);
     const broadcasts = changes.length;
 
-    await datasources.setBrand(saved.id, "postgresql");
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT + SEEN_REFRESH_MS - 1));
 
-    expect(json).toContain('"brand": "postgresql"');
     expect(files.contents.has(`${DIRECTORY}/${DATASOURCES_FILE}`)).toBe(false);
     expect(changes).toHaveLength(broadcasts);
+    expect(changes.at(-1)?.datasources[0]?.lastServer?.seenAt).toBe(SEEN_AT);
   });
 
   it("givenRedDatasource_whenSetAskReads_thenAllowed", async () => {
@@ -367,11 +374,43 @@ describe("datasource service", () => {
     await expect(datasources.setAgentAccess(saved.id, "ask")).rejects.toBeInstanceOf(DatasourceError);
   });
 
-  it("givenEphemeral_whenSetBrand_thenNothingWritten", async () => {
+  it("givenChangedTimeout_whenRemembered_thenOneWrite", async () => {
+    const { files, changes, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+    const broadcasts = changes.length;
+    const reads: ServerSeen = {
+      ...seenAt(SEEN_AT + 1),
+      lastServer: { ...seenAt(SEEN_AT + 1).lastServer, timeout: { ...PG_TIMEOUT, covers: "reads" } },
+    };
+
+    await datasources.rememberServer(saved.id, reads);
+
+    expect(JSON.parse(files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`) ?? "")).toMatchObject({
+      datasources: [{ id: saved.id, brand: "postgresql", lastServer: reads.lastServer }],
+    });
+    expect(changes).toHaveLength(broadcasts + 1);
+    expect(changes.at(-1)?.datasources[0]?.lastServer).toEqual(reads.lastServer);
+  });
+
+  it("givenADayLater_whenRemembered_thenSeenAtRefreshed", async () => {
+    const { changes, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+    const broadcasts = changes.length;
+
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT + SEEN_REFRESH_MS));
+
+    expect(changes).toHaveLength(broadcasts + 1);
+    expect(changes.at(-1)?.datasources[0]?.lastServer?.seenAt).toBe(SEEN_AT + SEEN_REFRESH_MS);
+  });
+
+  it("givenEphemeral_whenRemembered_thenNothing", async () => {
     const ephemeral = { id: "pg", pluginId: "postgres", config: PG_DRAFT.config };
     const { files, changes, service: datasources } = await service({ ephemeral });
 
-    await datasources.setBrand("pg", "postgresql");
+    await datasources.rememberServer("pg", seenAt(SEEN_AT));
+    await datasources.rememberServer("gone", seenAt(SEEN_AT));
 
     expect(files.contents.size).toBe(0);
     expect(changes).toHaveLength(0);

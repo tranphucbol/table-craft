@@ -265,6 +265,12 @@ export function serverLimitText(serverTimeout: ServerTimeout): string {
   return `limit: ${serverTimeout.setting}${serverTimeout.covers === "reads" ? ", SELECT only" : ""}`;
 }
 
+/** What a server's own limit stops, in words, for Data Sources and Settings › MCP Server (decision 131). */
+export const SERVER_COVERS_TEXT: Readonly<Record<ServerTimeout["covers"], string>> = {
+  reads: "SELECTs",
+  all: "every statement",
+};
+
 /**
  * What ticking "Also have the database stop it" does on this server: unknown until a test
  * (`undefined`), nothing on a server without a limit (`null`).
@@ -272,7 +278,7 @@ export function serverLimitText(serverTimeout: ServerTimeout): string {
 export function serverTimeoutText(serverTimeout: ServerTimeout | null | undefined): string {
   if (serverTimeout === undefined) return "Test the connection to see what the database stops.";
   if (serverTimeout === null) return "This server cannot stop statements by itself; the app still cancels them.";
-  const what = serverTimeout.covers === "reads" ? "SELECTs" : "every statement";
+  const what = SERVER_COVERS_TEXT[serverTimeout.covers];
   return serverTimeout.counts === "statement"
     ? `The database stops ${what} at the limit, counting while rows wait to be read.`
     : `The database stops ${what} that works past the limit.`;

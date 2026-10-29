@@ -791,6 +791,7 @@ void app.whenReady().then(async () => {
     secrets,
     connect: (datasourceId, target) => service.connect(datasourceId, {}, target),
     history,
+    rememberServer: (datasourceId, seen) => service.rememberServer(datasourceId, seen),
     onStatus: (status) => broadcast(CHANNELS.mcpStatus, status),
     forward(record, process) {
       const read = readLogRecord(record, process);

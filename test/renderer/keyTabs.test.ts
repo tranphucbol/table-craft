@@ -35,6 +35,7 @@ function keyEngine(details: KeyDetails) {
         serverBrand: null,
         namespace: null,
         serverTimeout: null,
+        cancelReach: null,
       };
       return Promise.resolve(opened);
     }

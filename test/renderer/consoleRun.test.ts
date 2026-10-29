@@ -100,6 +100,7 @@ function fakeEngine() {
           serverBrand: null,
           namespace,
           serverTimeout: null,
+          cancelReach: null,
         };
         return Promise.resolve(opened);
       }

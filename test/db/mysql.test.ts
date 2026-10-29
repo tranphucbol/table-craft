@@ -7,6 +7,15 @@ import { runMysqlFamilyContract } from "./mysqlFamily.js";
 describe.runIf(databaseEnabled("mysql"))("mysql server", () => {
   runMysqlFamilyContract(MYSQL_CONFIG, MYSQL_ROOT_CONFIG);
 
+  it("givenMysqlServer_whenSessionOpens_thenKillQueryReachesTheStatement", async () => {
+    const session = await mysql.connect(MYSQL_CONFIG, { readOnly: false });
+    try {
+      expect(session.cancelReach).toEqual({ method: "KILL QUERY", reaches: "statement" });
+    } finally {
+      await session.close();
+    }
+  });
+
   /** More rows than `SERVER_MESSAGE_LIMIT`, each truncating `'<n>x'` to an integer with a warning. */
   const MANY_WARNINGS_SQL = `WITH RECURSIVE n (i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ${String(
     SERVER_MESSAGE_LIMIT + 5,
