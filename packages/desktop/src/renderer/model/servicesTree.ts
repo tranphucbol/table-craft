@@ -86,6 +86,11 @@ function sessionOf(tab: Tab, input: ServicesInput): { datasourceId: string; sess
   return null;
 }
 
+/** A datasource's name, or its id once it is deleted. */
+export function datasourceName(datasources: readonly DatasourceView[], datasourceId: string): string {
+  return datasources.find((view) => view.id === datasourceId)?.name ?? datasourceId;
+}
+
 /** Datasources with an open console or table tab, in tab order, each with its sessions in tab order. */
 export function servicesTree(input: ServicesInput): readonly ServiceDatasource[] {
   const groups = new Map<string, ServiceSession[]>();
@@ -98,7 +103,7 @@ export function servicesTree(input: ServicesInput): readonly ServiceDatasource[]
   }
   return [...groups].map(([datasourceId, sessions]) => ({
     datasourceId,
-    name: input.datasources.find((view) => view.id === datasourceId)?.name ?? datasourceId,
+    name: datasourceName(input.datasources, datasourceId),
     sessions,
   }));
 }
