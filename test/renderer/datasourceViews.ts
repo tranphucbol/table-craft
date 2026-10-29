@@ -49,6 +49,7 @@ export const POSTGRES_PLUGIN: PluginInfo = {
   capabilities: ["sql", "cancel", "schemaTree"],
   fields: POSTGRES_FIELDS,
   highlight: "postgresql",
+  brands: [{ id: "postgresql", name: "PostgreSQL" }],
   url: {
     schemes: ["postgresql", "postgres"],
     form: "server",
@@ -75,6 +76,7 @@ export const SQLITE_PLUGIN: PluginInfo = {
   capabilities: ["sql"],
   fields: [{ key: "path", label: "File", kind: "file", required: true }],
   highlight: "sqlite",
+  brands: [{ id: "sqlite", name: "SQLite" }],
   url: { schemes: ["sqlite", "file"], form: "file", parts: { path: "path" } },
   network: null,
   tls: null,
@@ -110,6 +112,7 @@ export const REDIS_PLUGIN: PluginInfo = {
     },
   ],
   highlight: "redis",
+  brands: [{ id: "redis", name: "Redis" }],
   url: null,
   network: null,
   tls: null,

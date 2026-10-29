@@ -122,6 +122,7 @@ export const INVOKE_CHANNELS = {
   importCancel: "table-craft:import.cancel",
   answerHostKey: "table-craft:ssh.answer-host-key",
   setAgentAccess: "table-craft:datasources.set-agent-access",
+  setDatasourceBrand: "table-craft:datasources.set-brand",
   setAgentPolicy: "table-craft:datasources.set-agent-policy",
   mcpCopyToken: "table-craft:mcp.copy-token",
   mcpContextReply: "table-craft:mcp.context-reply",
@@ -196,6 +197,12 @@ export interface ParsedUrl {
  */
 export type PluginSource = "builtIn" | "development" | "managed" | "user";
 
+/** Mirrors `Brand` in plugin-api: a database product a plugin speaks, by its simple-icons slug. */
+export interface Brand {
+  readonly id: string;
+  readonly name: string;
+}
+
 /** An installed plugin as the Data Sources dialog lists it; read from its manifest only. */
 export interface PluginInfo {
   readonly id: string;
@@ -209,6 +216,8 @@ export interface PluginInfo {
   readonly fields: readonly ConnectionField[];
   /** The manifest's SQL dialect for the editor, e.g. `postgresql`; null when the manifest is unreadable. */
   readonly highlight: string | null;
+  /** The products it speaks, the default first; empty when the manifest names none or is unreadable. */
+  readonly brands: readonly Brand[];
   /** The manifest's connection URL; null when the plugin reads none. */
   readonly url: ConnectionUrlSpec | null;
   /** Mirrors `NetworkSpec` in plugin-api; null when the data source is not reached over the network, so it has no SSH tunnel. */
@@ -241,6 +250,8 @@ export interface CatalogPlugin {
   readonly packageName: string;
   /** The URL schemes it reads, so the import can offer it for a connection no plugin reads. */
   readonly schemes: readonly string[];
+  /** The products it speaks, the default first, for the picker's rows before it is installed. */
+  readonly brands: readonly Brand[];
   readonly approximateBytes: number;
   /** The version loaded from any root; null when the plugin is not installed. */
   readonly installedVersion: string | null;
@@ -321,6 +332,11 @@ export interface Datasource {
   readonly agentSchemas?: readonly string[] | undefined;
   /** Rows per agent answer here; absent, Settings › MCP Server's row limit. */
   readonly agentRowCap?: number | undefined;
+  /**
+   * The product it is, one of its plugin's `brands` ids: picked in New Data Source, then what the
+   * server last reported. Absent is the plugin's default.
+   */
+  readonly brand?: string | undefined;
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */
@@ -747,6 +763,8 @@ export interface TableCraftBridge {
   /** Settings › MCP Server's access column; refuses to raise a production-coloured datasource past Read only. */
   setAgentAccess(datasourceId: string, access: AgentAccess): Promise<InvokeResult<null>>;
   setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<InvokeResult<null>>;
+  /** Remembers the product a connection reported; nothing is written or broadcast when it is unchanged. */
+  setDatasourceBrand(datasourceId: string, brand: string): Promise<InvokeResult<null>>;
   mcpCopyToken(): Promise<InvokeResult<null>>;
   /** Answers main's `onMcpContextRequest`; null when no console is focused. */
   mcpContextReply(requestId: number, context: McpActiveConsole | null): Promise<InvokeResult<null>>;

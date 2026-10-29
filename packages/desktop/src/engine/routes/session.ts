@@ -33,6 +33,7 @@ export function sessionRoutes(connection: ConnectionContext): RoutesFor<"session
         pluginName: manifest.name,
         capabilities: plugin.capabilities,
         serverVersion: session.serverVersion,
+        serverBrand: session.serverBrand ?? null,
         namespace,
       };
     },

@@ -334,6 +334,7 @@ describe("diagnostics", () => {
     unavailableReason: null,
     capabilities: [],
     highlight: "postgresql",
+    brands: [{ id: "postgresql", name: "PostgreSQL" }],
     url: null,
     network: null,
     tls: null,

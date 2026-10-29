@@ -19,6 +19,7 @@ function entry(install: PluginInstallState = { status: "idle" }): CatalogPlugin 
     name: "PostgreSQL",
     packageName: "@tablecraft-app/plugin-postgres",
     schemes: ["postgresql", "postgres"],
+    brands: [{ id: "postgresql", name: "PostgreSQL" }],
     approximateBytes: 800_000,
     installedVersion: null,
     install,

@@ -97,6 +97,7 @@ function fakeEngine() {
           pluginName: "fake",
           capabilities: ["sql", "transactions"],
           serverVersion: "1",
+          serverBrand: null,
           namespace,
         };
         return Promise.resolve(opened);

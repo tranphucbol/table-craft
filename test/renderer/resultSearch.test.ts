@@ -58,6 +58,7 @@ function storeEngine(total = TOTAL_ROWS) {
           pluginName: "fake",
           capabilities: ["sql"],
           serverVersion: "1",
+          serverBrand: null,
           namespace: null,
         };
         return opened;

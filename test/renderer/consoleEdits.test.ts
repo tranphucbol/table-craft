@@ -41,6 +41,7 @@ function fakeEngine(options: { reject?: boolean } = {}) {
           pluginName: "fake",
           capabilities: ["sql", "transactions"],
           serverVersion: "1",
+          serverBrand: null,
           namespace: ["shop"],
         };
         return Promise.resolve(opened);
