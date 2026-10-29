@@ -63,7 +63,8 @@ import { DAILY_LOOP_STEPS, dailyLoop, stubSaveDialog } from "./workflows.js";
 const captureWindow = evidenceFor("014");
 const captureTunnel = evidenceFor("036");
 const LOOP_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
-const BUILT_IN_KINDS = ["MySQL", "SQLite"];
+/** One picker row per brand (plan 118): the MySQL plugin names MySQL, MariaDB and TiDB. */
+const BUILT_IN_KINDS = ["MariaDB", "MySQL", "SQLite", "TiDB"];
 /** Downloaded on demand (plans 057 and 058): absent from the bundle, offered in the picker. */
 const DOWNLOADABLE_KINDS = ["oracle", "postgres", "redis", "mssql"];
 /** Not the default on a light-mode host, so the relaunched window shows it was kept. */
