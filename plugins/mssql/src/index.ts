@@ -261,6 +261,8 @@ class MssqlSession implements Session {
   #cancelling: Promise<void> = Promise.resolve();
   #mode: TransactionMode = "auto";
   readonly serverVersion: string | null;
+  /** The manifest's one brand. */
+  readonly serverBrand = "microsoftsqlserver";
   readonly serverSessionId: string;
   readonly tls: TlsInfo | null;
   readonly introspector;

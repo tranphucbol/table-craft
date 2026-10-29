@@ -75,7 +75,14 @@ import {
 import { mysqlIntrospector } from "./introspect.js";
 import { mysqlObjects } from "./objects.js";
 import { mysqlRoutineCall } from "./routines.js";
-import { explainDialect, isTidb, killStatementFor, serverIdentity, tidbGlobalKill } from "./server.js";
+import {
+  explainDialect,
+  killStatementFor,
+  serverDialect,
+  serverIdentity,
+  tidbGlobalKill,
+  type ServerDialect,
+} from "./server.js";
 import { mysqlSessions, tidbInstanceOf } from "./sessions.js";
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
@@ -408,6 +415,7 @@ function query(
 
 interface Identity {
   readonly serverVersion: string | null;
+  readonly dialect: ServerDialect;
   /** What stops this connection's running statement from another connection; `null` when nothing safely does. */
   readonly kill: string | null;
   readonly serverSessionId: string;
@@ -428,8 +436,9 @@ async function prepareConnection(connection: mysql.Connection, options: ConnectO
   const rows = (await query(connection, IDENTITY_SQL)) as readonly { version?: unknown; id?: unknown }[];
   const version = rows[0]?.version;
   const serverVersion = typeof version === "string" && version !== "" ? version : null;
+  const dialect = serverDialect(serverVersion);
   const readOnly = options.readOnly === true;
-  const refusesWrites = readOnly && isTidb(serverVersion);
+  const refusesWrites = readOnly && dialect.kind === "tidb";
   if (readOnly && !refusesWrites) await query(connection, READ_ONLY_SQL);
   const reported = rows[0]?.id;
   // bigNumberStrings hands a TiDB Global Kill id over as text.
@@ -438,6 +447,7 @@ async function prepareConnection(connection: mysql.Connection, options: ConnectO
   const id = Number(serverSessionId);
   return {
     serverVersion,
+    dialect,
     kill: Number.isSafeInteger(id) ? killStatementFor(serverVersion, id) : null,
     serverSessionId,
     serverInstance: tidbGlobalKill(serverVersion) === false ? await tidbInstanceOf(connection).catch(() => null) : null,
@@ -605,6 +615,7 @@ class MysqlSession implements Session {
   readonly #transaction: TransactionState = { mode: "auto", open: false };
 
   readonly serverVersion: string | null;
+  readonly serverBrand: string;
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
@@ -619,6 +630,7 @@ class MysqlSession implements Session {
     this.#kill = identity.kill;
     this.#refusesWrites = identity.refusesWrites;
     this.serverVersion = identity.serverVersion;
+    this.serverBrand = identity.dialect.kind;
     this.tls = tlsInfoOf((connection as unknown as WithStream).stream);
     this.introspector = mysqlIntrospector(connection);
     this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));

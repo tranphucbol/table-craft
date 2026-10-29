@@ -3,10 +3,14 @@
  * dialog lists them offline. `test/desktop/pluginStore.test.ts` pins it to
  * `OPTIONAL_PLUGINS` and to each plugin's manifest; plan 054 adds Oracle, 055 SQL Server, 058 Redis.
  */
+import type { Brand } from "@table-craft/plugin-api";
+
 export interface CatalogEntry {
   readonly id: string;
   readonly name: string;
   readonly packageName: string;
+  /** The products its manifest declares, so the picker offers one row per product before the download. */
+  readonly brands: readonly Brand[];
   /** The URL schemes its manifest reads, so the import can offer it for a foreign connection. */
   readonly schemes: readonly string[];
   /** The packed `.tgz` (`bun run plugins:pack` prints it), rounded up; what the download entry shows. */
@@ -25,6 +29,7 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     id: "postgres",
     name: "PostgreSQL",
     packageName: officialPackage("postgres"),
+    brands: [{ id: "postgresql", name: "PostgreSQL" }],
     schemes: ["postgresql", "postgres"],
     approximateBytes: 190_000,
   },
@@ -32,6 +37,7 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     id: "redis",
     name: "Redis",
     packageName: officialPackage("redis"),
+    brands: [{ id: "redis", name: "Redis" }],
     schemes: ["redis", "rediss"],
     approximateBytes: 290_000,
   },
@@ -39,6 +45,7 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     id: "oracle",
     name: "Oracle",
     packageName: officialPackage("oracle"),
+    brands: [{ id: "oracle", name: "Oracle" }],
     schemes: ["oracle"],
     approximateBytes: 360_000,
   },
@@ -46,6 +53,7 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     id: "mssql",
     name: "SQL Server",
     packageName: officialPackage("mssql"),
+    brands: [{ id: "microsoftsqlserver", name: "SQL Server" }],
     schemes: ["sqlserver", "mssql"],
     approximateBytes: 760_000,
   },

@@ -149,7 +149,7 @@ describe.runIf(SMOKE_ENABLED)("plugins on demand", () => {
       await openNewDatasource(page);
 
       const installed = kinds(page).locator("button:not([data-download])");
-      await expect.poll(() => installed.allTextContents()).toEqual(["MySQL", "SQLite"]);
+      await expect.poll(() => installed.allTextContents()).toEqual(["MariaDB", "MySQL", "SQLite", "TiDB"]);
       await expect.poll(() => downloadButton(page).textContent()).toMatch(/PostgreSQL.*Download \(about .+\)/);
       await captureWindow(page, "01-picker-offers-postgres-download");
 

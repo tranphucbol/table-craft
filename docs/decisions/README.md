@@ -120,3 +120,4 @@ started, not when it is merged.
 | 125 | [T-SQL batches and result sets](125-t-sql-batches-and-result-sets.md)                                                                                                  |
 | 126 | [The MCP server is a fourth process](126-mcp-server-is-a-fourth-process.md)                                                                                            |
 | 127 | [Agents get per-datasource access, and writes wait for the user](127-agents-get-per-datasource-access.md)                                                              |
+| 128 | [Plugins name the products they speak, and datasource rows draw their logos](128-plugins-name-their-products-and-rows-draw-logos.md)                                   |

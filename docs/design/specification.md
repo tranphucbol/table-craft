@@ -81,6 +81,7 @@ registry. Offline, an install fails with a hint to use Install from File with th
 | `entry`        | relative path                | The ESM module, inside the directory                                                                                 |
 | `capabilities` | `Capability[]`               | Must equal the export's                                                                                              |
 | `highlight`    | string                       | The highlighter the console uses (decision 008)                                                                      |
+| `brands`       | `{ id, name }[]`             | Optional: the products it speaks, the first its default; `id` a Simple Icons slug, `[a-z0-9_]+` (decision 128)       |
 | `connection`   | `{ fields, url?, network? }` | The connection form, at least one field (decision 019), its URL (decision 055) and its network fields (decision 070) |
 
 No other field is accepted. Main reads manifests without importing plugin code, so the Data Sources
@@ -238,6 +239,7 @@ interface ExecuteOptions {
 
 interface Session {
   readonly serverVersion: string | null; // "17.4", "8.4.3", "3.53.4"
+  readonly serverBrand?: string; // a manifest brand id of the server reached: "mysql", "tidb" (decision 128)
   execute(sql: string, params?: readonly ParameterValue[], options?: ExecuteOptions): Promise<ExecuteResult>; // one at a time; params bind the driver's placeholders; rejects with a PluginError
   readonly privateDatabase?: boolean; // another session on the same config sees another database (SQLite :memory:)
   readonly tls?: TlsInfo | null; // { protocol, cipher } of an encrypted connection, null when unencrypted, absent when not reported (decision 072)
@@ -499,7 +501,7 @@ passphrase? }` with its secrets decrypted the same way. Before signing in to a b
 engine posts `engine.host-key { requestId, offer { host, port, algorithm, fingerprint, key } }` and
 waits for the answer (decision 071).
 A `probe` engine connects once, answers `engine.probed { result }` with
-`{ ok: true, pluginName, serverVersion, elapsedMs, ssh?, tls? }` or `{ ok: false, error, ssh? }`,
+`{ ok: true, pluginName, serverVersion, serverBrand, elapsedMs, ssh?, tls? }` or `{ ok: false, error, ssh? }`,
 where `ssh { host, user, elapsedMs }` is the SSH hop when it was reached and `tls` is the session's
 `{ protocol, cipher }` or `null` when the plugin reports it, and exits; main
 kills it after `PROBE_TIMEOUT_MS = 15_000`, a clock that stops while a host key is being asked
@@ -515,7 +517,7 @@ handles belong to the port that created them and are released when it closes.
 
 | Request                 | Params                                                                                            | Result                                                                                                                                           |
 | ----------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `session.open`          | none                                                                                              | `{ sessionId, pluginName, capabilities, serverVersion, namespace }`; `namespace` needs `currentNamespace`                                        |
+| `session.open`          | none                                                                                              | `{ sessionId, pluginName, capabilities, serverVersion, serverBrand, namespace }`; `namespace` needs `currentNamespace`                           |
 | `script.split`          | `text`                                                                                            | `ClassifiedStatement[]`: `{ from, to, sql, kind, destructive, parameters }`                                                                      |
 | `sql.format`            | `text`, `options: FormatOptions`                                                                  | the formatted text, or `formatFailed`                                                                                                            |
 | `statement.execute`     | `sessionId`, `sql`, `parameters?`, `pageRows`, `fetchAllCap`, `timeoutSeconds?`, `node?`          | `{ handle, columns, typeClasses, rowCount, complete, cursorOpen, rowsAffected, firstWindow, transactionOpen, namespace?, reconnected?, reply? }` |
@@ -2269,6 +2271,8 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
     "theme": "system",
     "density": "comfortable",
     "systemTitleBar": false,
+    "brandIcons": true,
+    "brandIconColor": "brand",
     "fonts": {
       "ui": { "family": null, "sizePx": 13 },
       "editor": { "family": null, "sizePx": 13 },
@@ -2294,6 +2298,8 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, a ported theme id, `user:<file stem>`              | `system`      |
 | `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
 | `appearance.systemTitleBar`            | boolean; read once when the window is created                                                 | `false`       |
+| `appearance.brandIcons`                | boolean; datasource rows draw their database's logo (decision 128)                            | `true`        |
+| `appearance.brandIconColor`            | `brand` (the brand's colour fitted to the theme) or `gray` (muted ink)                        | `brand`       |
 | `appearance.fonts.*`                   | `{ family: string \| null, sizePx: 8–32 }`; `null` is the built-in stack                      | 13, 13, 12    |
 | `editor.format.style`                  | `aligned`, `standard`                                                                         | `aligned`     |
 | `editor.format.keywordCase`            | `upper`, `lower`, `preserve`                                                                  | `upper`       |

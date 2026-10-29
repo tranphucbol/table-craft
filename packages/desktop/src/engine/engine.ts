@@ -89,6 +89,7 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
       ok: true,
       pluginName: manifest.name,
       serverVersion: session.serverVersion,
+      serverBrand: session.serverBrand ?? null,
       elapsedMs,
       ...(hop === null ? {} : { ssh: hop }),
       ...(session.tls === undefined ? {} : { tls: session.tls === null ? null : { ...session.tls } }),

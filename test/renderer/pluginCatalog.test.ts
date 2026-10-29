@@ -11,7 +11,7 @@ import {
 import { createDatasourcesStore } from "@table-craft/desktop/renderer/state/datasources.js";
 import { POSTGRES_PLUGIN, SQLITE_PLUGIN } from "./datasourceViews.js";
 
-const MYSQL_PLUGIN = { ...SQLITE_PLUGIN, id: "mysql", name: "MySQL" };
+const MYSQL_PLUGIN = { ...SQLITE_PLUGIN, id: "mysql", name: "MySQL", brands: [{ id: "mysql", name: "MySQL" }] };
 
 function entry(install: PluginInstallState = { status: "idle" }): CatalogPlugin {
   return {
@@ -19,6 +19,7 @@ function entry(install: PluginInstallState = { status: "idle" }): CatalogPlugin 
     name: "PostgreSQL",
     packageName: "@tablecraft-app/plugin-postgres",
     schemes: ["postgresql", "postgres"],
+    brands: [{ id: "postgresql", name: "PostgreSQL" }],
     approximateBytes: 800_000,
     installedVersion: null,
     install,
@@ -84,6 +85,7 @@ describe("plugin catalog", () => {
       connectEngine: () => Promise.reject(new Error("unused")),
       disconnectEngine: () => Promise.resolve(),
       promptSecrets: () => Promise.resolve(null),
+      rememberBrand: () => Promise.resolve(),
     });
 
     store.getState().applyPlugins({ plugins: [SQLITE_PLUGIN], catalog: [entry()] });

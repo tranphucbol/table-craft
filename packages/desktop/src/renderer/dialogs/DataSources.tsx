@@ -4,6 +4,7 @@ import type { ProbeResult, SshHop, TlsHop } from "@table-craft/desktop/engine/pr
 import {
   DATASOURCE_COLORS,
   type BridgeFailure,
+  type Brand,
   type ConnectionField,
   type DatasourceView,
   type PluginInfo,
@@ -44,7 +45,8 @@ import { folderPaths } from "@table-craft/desktop/renderer/model/datasourceTree.
 import { useDataSourcesDialog, type DialogTarget } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { ACTION_ICONS, DatabaseIcon, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { DatasourceGlyph, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
+import { ACTION_ICONS, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
@@ -72,9 +74,10 @@ export function tlsSummary(tls: TlsHop | null): string {
   return tls === null ? "SSL: not encrypted" : `SSL: ${tls.protocol} · ${tls.cipher}`;
 }
 
-/** "Succeeded · PostgreSQL 17.4 · 38 ms" (plan 004). */
-export function testSummary(result: Extract<ProbeResult, { ok: true }>): string {
-  const server = result.serverVersion === null ? result.pluginName : `${result.pluginName} ${result.serverVersion}`;
+/** "Succeeded · PostgreSQL 17.4 · 38 ms" (plan 004), naming the product that answered among `brands`. */
+export function testSummary(result: Extract<ProbeResult, { ok: true }>, brands: readonly Brand[] = []): string {
+  const product = brands.find((brand) => brand.id === result.serverBrand)?.name ?? result.pluginName;
+  const server = result.serverVersion === null ? product : `${product} ${result.serverVersion}`;
   return `Succeeded · ${server} · ${String(Math.round(result.elapsedMs))} ms`;
 }
 
@@ -575,6 +578,13 @@ function Editor({ target }: { readonly target: DialogTarget }) {
       ? answer.value
       : { ok: false, error: { code: "connectionFailed", ...answer.error } };
     setTests((previous) => ({ ...previous, [draft.key]: { kind: "done", result } }));
+    const { serverBrand } = result.ok ? result : { serverBrand: null };
+    if (serverBrand === null || serverBrand === draft.brand) return;
+    // Functional, so fields typed while the test ran are kept.
+    setState((previous) => {
+      const latest = previous.edits[draft.key] ?? draft;
+      return { ...previous, edits: { ...previous.edits, [draft.key]: { ...latest, brand: serverBrand, dirty: true } } };
+    });
   }
 
   async function remove(draft: FormDraft): Promise<void> {
@@ -658,7 +668,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                 )}
                 onClick={() => select(draft.key)}
               >
-                <DatabaseIcon aria-hidden className="size-icon shrink-0 text-accent" />
+                <DraftGlyph draft={draft} className="size-icon shrink-0" />
                 <span className={cn("truncate", draft.id === undefined && "italic")}>
                   {draft.name || "Unnamed"}
                   {draft.dirty ? " *" : ""}
@@ -676,16 +686,16 @@ function Editor({ target }: { readonly target: DialogTarget }) {
             <PluginPicker
               plugins={plugins}
               catalog={catalog}
-              onPick={(picked) => {
+              onPick={(picked, brand) => {
                 const folder = target.kind === "new" ? target.folder : "";
-                addDraft(newDraft(nextKey(), picked, names, defaultMode, folder));
+                addDraft(newDraft(nextKey(), picked, names, defaultMode, folder, brand));
               }}
             />
           ) : (
             <>
               <div className="flex shrink-0 items-center gap-cell border-b border-line px-gap py-1 text-ink-muted">
-                <DatabaseIcon aria-hidden className="size-icon text-accent" />
-                {plugin?.name ?? current.pluginId}
+                <DraftGlyph draft={current} className="size-icon" />
+                <DraftProduct draft={current} fallback={plugin?.name ?? current.pluginId} />
                 {plugin?.unavailableReason == null ? null : (
                   <span className="text-danger">{plugin.unavailableReason}</span>
                 )}
@@ -717,7 +727,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
         >
           Test Connection
         </Button>
-        <TestResult state={test} />
+        <TestResult state={test} brands={plugin?.brands} />
         <span className="flex-1" />
         <Button variant="primary" disabled={saving} onClick={() => void saveAll(true)}>
           OK
@@ -731,7 +741,24 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   );
 }
 
-function TestResult({ state }: { readonly state: TestState | undefined }) {
+/** A draft's icon: the logo of the product it is, by its id and stored brand like a tree row. */
+function DraftGlyph({ draft, className }: { readonly draft: FormDraft; readonly className: string }) {
+  const brand = useDatasourceBrand({ id: draft.id ?? draft.key, pluginId: draft.pluginId, brand: draft.brand });
+  return <DatasourceGlyph brand={brand} className={className} />;
+}
+
+function DraftProduct({ draft, fallback }: { readonly draft: FormDraft; readonly fallback: string }) {
+  const brand = useDatasourceBrand({ id: draft.id ?? draft.key, pluginId: draft.pluginId, brand: draft.brand });
+  return <span data-testid="draft-product">{brand?.name ?? fallback}</span>;
+}
+
+function TestResult({
+  state,
+  brands,
+}: {
+  readonly state: TestState | undefined;
+  readonly brands: readonly Brand[] | undefined;
+}) {
   if (state === undefined) return null;
   if (state.kind === "testing") return <span className="text-ink-muted">Testing…</span>;
   const { result } = state;
@@ -746,7 +773,7 @@ function TestResult({ state }: { readonly state: TestState | undefined }) {
       <span className="flex min-w-0 flex-col">
         {hop}
         <span data-testid="test-result" data-ok="true" className="truncate text-success">
-          {testSummary(result)}
+          {testSummary(result, brands)}
         </span>
         {result.tls === undefined ? null : (
           <span

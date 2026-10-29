@@ -373,6 +373,8 @@ class PostgresSession implements Session {
   readonly #transaction: TransactionState = { mode: "auto", open: false };
 
   readonly serverVersion: string | null;
+  /** The manifest's one brand. */
+  readonly serverBrand = "postgresql";
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;

@@ -2,7 +2,7 @@
   "id": "mysql",
   "name": "MySQL",
   "version": "0.0.0",
-  "apiVersion": "1.5.0",
+  "apiVersion": "1.6.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -21,6 +21,11 @@
     "routineCall"
   ],
   "highlight": "mysql",
+  "brands": [
+    { "id": "mysql", "name": "MySQL" },
+    { "id": "mariadb", "name": "MariaDB" },
+    { "id": "tidb", "name": "TiDB" }
+  ],
   "connection": {
     "fields": [
       {

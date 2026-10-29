@@ -80,6 +80,8 @@ export interface DatasourceService<Target> {
   setAgentAccess(datasourceId: string, access: AgentAccess): Promise<void>;
   /** A datasource's schema list and row limit for agents; a null field clears it. */
   setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<void>;
+  /** Remembers the product a connection reported; an unchanged brand or the ephemeral datasource writes nothing. */
+  setBrand(datasourceId: string, brand: string): Promise<void>;
 }
 
 export interface ImportedDatasource {
@@ -505,6 +507,16 @@ export async function createDatasourceService<Target>(
     changed();
   }
 
+  async function setBrand(datasourceId: string, brand: string): Promise<void> {
+    if (ephemeral?.id === datasourceId) return;
+    const previous = find(datasourceId);
+    if (previous.brand === brand) return;
+    const next: Datasource = { ...previous, brand };
+    datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
+    await store.save(datasources);
+    changed();
+  }
+
   return {
     list,
     plugins: () => options.plugins(),
@@ -518,5 +530,6 @@ export async function createDatasourceService<Target>(
     disconnect: (datasourceId) => hosts.stop(datasourceId),
     setAgentAccess,
     setAgentPolicy,
+    setBrand,
   };
 }

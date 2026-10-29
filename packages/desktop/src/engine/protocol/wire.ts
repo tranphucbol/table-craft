@@ -120,6 +120,8 @@ export type ProbeResult =
       readonly ok: true;
       readonly pluginName: string;
       readonly serverVersion: string | null;
+      /** The product that answered, one of the plugin's `brands` ids; null when it names none. */
+      readonly serverBrand: string | null;
       readonly elapsedMs: number;
       readonly ssh?: SshHop;
       /** The TLS the database connection negotiated; null when it is not encrypted (decision 072). */
