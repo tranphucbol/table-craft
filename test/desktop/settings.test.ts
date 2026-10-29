@@ -32,6 +32,7 @@ const CHOSEN: Settings = {
     motion: "reduced",
     systemTitleBar: true,
     brandIcons: false,
+    brandIconColor: "gray",
   },
   editor: {
     format: { style: "standard", keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0, alignAliases: false },
@@ -223,6 +224,20 @@ describe("settings document", () => {
     const appearance = { ...CHOSEN.appearance, brandIcons: "no" };
 
     expect(readSettings({ ...CHOSEN, appearance }).appearance.brandIcons).toBe(true);
+  });
+
+  it("givenBrandIconColorMissing_whenSettingsRead_thenBrand", () => {
+    const { brandIconColor: _omitted, ...appearance } = CHOSEN.appearance;
+
+    expect(DEFAULT_SETTINGS.appearance.brandIconColor).toBe("brand");
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.brandIconColor).toBe("brand");
+    expect(readSettings(CHOSEN).appearance.brandIconColor).toBe("gray");
+  });
+
+  it("givenUnknownBrandIconColor_whenSettingsRead_thenDefault", () => {
+    const appearance = { ...CHOSEN.appearance, brandIconColor: "rainbow" };
+
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.brandIconColor).toBe("brand");
   });
 
   it("givenMotionMissing_whenRead_thenSystem", () => {

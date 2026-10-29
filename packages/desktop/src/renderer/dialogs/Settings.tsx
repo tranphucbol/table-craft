@@ -41,6 +41,8 @@ import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import {
+  BRAND_ICON_COLORS,
+  type BrandIconColor,
   DEFAULT_SETTINGS,
   FONT_SIZE_RANGE,
   EXPORT_STALL_SECONDS_RANGE,
@@ -86,6 +88,11 @@ const DENSITY_LABELS: Readonly<Record<DensityId, string>> = {
   compact: "Compact",
 };
 
+const BRAND_ICON_COLOR_LABELS: Readonly<Record<BrandIconColor, string>> = {
+  brand: "Brand colours",
+  gray: "Gray",
+};
+
 const KEYWORD_CASE_LABELS: Readonly<Record<KeywordCase, string>> = {
   upper: "UPPER",
   lower: "lower",
@@ -118,6 +125,7 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
       fonts: { ...current.appearance.fonts, ui: DEFAULT_SETTINGS.appearance.fonts.ui },
       systemTitleBar: DEFAULT_SETTINGS.appearance.systemTitleBar,
       brandIcons: DEFAULT_SETTINGS.appearance.brandIcons,
+      brandIconColor: DEFAULT_SETTINGS.appearance.brandIconColor,
     },
   }),
   editor: (current) => ({
@@ -292,6 +300,7 @@ function AppearancePage() {
       <FontFields role="ui" />
       <SectionTitle>Data sources</SectionTitle>
       <BrandIconsField />
+      <BrandIconColorField />
       <SectionTitle>Window</SectionTitle>
       <TitleBarField />
     </>
@@ -315,6 +324,31 @@ function BrandIconsField() {
         />
         Show database logos on data sources
       </label>
+    </FieldRow>
+  );
+}
+
+function BrandIconColorField() {
+  const brandIcons = useSettings((state) => state.settings.appearance.brandIcons);
+  const brandIconColor = useSettings((state) => state.settings.appearance.brandIconColor);
+  return (
+    <FieldRow label="Logo colour">
+      <div role="radiogroup" aria-label="Logo colour" className="flex gap-gap">
+        {BRAND_ICON_COLORS.map((color) => (
+          <label key={color} className={cn("flex items-center gap-1", brandIcons ? undefined : "text-ink-muted")}>
+            <input
+              type="radio"
+              name="brandIconColor"
+              disabled={!brandIcons}
+              checked={brandIconColor === color}
+              onChange={() =>
+                update((current) => ({ ...current, appearance: { ...current.appearance, brandIconColor: color } }))
+              }
+            />
+            {BRAND_ICON_COLOR_LABELS[color]}
+          </label>
+        ))}
+      </div>
     </FieldRow>
   );
 }
