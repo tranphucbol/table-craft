@@ -51,6 +51,7 @@ function fakeEngine(options: { conflict?: boolean } = {}) {
           serverVersion: "7.4",
           serverBrand: null,
           namespace: ["0"],
+          serverTimeout: null,
         };
         return Promise.resolve(opened);
       }

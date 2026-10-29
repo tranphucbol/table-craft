@@ -213,6 +213,7 @@ describe("key tab edits", () => {
           serverVersion: "7.4.1",
           serverBrand: null,
           namespace: null,
+          serverTimeout: null,
         };
         return Promise.resolve(opened);
       }

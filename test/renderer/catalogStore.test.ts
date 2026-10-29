@@ -45,6 +45,7 @@ function catalogClient(describe: () => Promise<DescribedCatalog> = () => Promise
           serverVersion: "17",
           serverBrand: null,
           namespace: null,
+          serverTimeout: null,
         };
         return Promise.resolve(opened);
       }

@@ -59,6 +59,8 @@ export const FORMAT_HINT = "The text is unchanged; fix what the reason points at
 export const READ_ONLY_STATEMENT_HINT =
   "This data source is read-only, so writes are refused; clear Read-only in its properties to write.";
 
+export const SERVER_TIMEOUT_HINT =
+  "Narrow it with LIMIT or WHERE and run it again, or raise the statement timeout; rows already read stay readable.";
 export const RECONNECT_HINT = "Run it again; the console reconnects first.";
 export const UNKNOWN_OUTCOME_HINT = "Run it again to reconnect, but check first whether it took effect.";
 
@@ -80,6 +82,9 @@ export function statementFailed(cause: unknown, readOnly: boolean, sent?: string
     return new EngineFailure({ code: "cancelled", message: cause.message, hint: "Run it again when ready." });
   }
   if (isPluginError(cause) && cause.code === "sessionBusy") return sessionBusy();
+  if (isPluginError(cause) && cause.code === "timedOut") {
+    return new EngineFailure({ code: "statementTimedOut", message: cause.message, hint: SERVER_TIMEOUT_HINT }, cause);
+  }
   if (cause instanceof TunnelError) {
     return new EngineFailure({ code: cause.code, message: cause.message, hint: cause.hint }, cause);
   }
