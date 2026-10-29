@@ -12,7 +12,7 @@ function anyNode(folded: boolean): boolean {
   return expandableKeys.some((key) => collapsed.has(key) === folded);
 }
 
-/** The Services header's Expand All and Collapse All; `⌘=` and `⌘-` share their chords with the editor zoom and the Database pane (decision 027). */
+/** Collapse All and Expand All, one button in the Services header that shows whichever applies; `⌘=` and `⌘-` share their chords with the editor zoom and the Database pane (decision 027). */
 export const SERVICES_ACTIONS: readonly AnyAction[] = [
   defineAction({
     id: SERVICES_ACTION_IDS.collapseAll,

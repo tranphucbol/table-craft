@@ -1,7 +1,11 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js";
 import { currentContext } from "@table-craft/desktop/renderer/actions/context.js";
-import { createActionRegistry, type InvokeOutcome } from "@table-craft/desktop/renderer/actions/registry.js";
+import {
+  createActionRegistry,
+  firstEnabledAction,
+  type InvokeOutcome,
+} from "@table-craft/desktop/renderer/actions/registry.js";
 import { EngineRequestError } from "@table-craft/desktop/renderer/engine/client.js";
 import { rendererLog } from "@table-craft/desktop/renderer/log/log.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
@@ -66,6 +70,15 @@ export function subscribeToActions(listener: () => void): () => void {
 export function useActionEnabled(id: string): boolean {
   const tabId = useContext(ActionTabContext);
   return useSyncExternalStore(subscribeToActions, () => registry.isEnabled(id, currentContext(tabId)));
+}
+
+/** `firstEnabledAction` over `ids`, re-read like `useActionEnabled`. */
+export function useFirstEnabledAction(ids: readonly [string, ...string[]]): string {
+  const tabId = useContext(ActionTabContext);
+  return useSyncExternalStore(subscribeToActions, () => {
+    const context = currentContext(tabId);
+    return firstEnabledAction(ids, (id) => registry.isEnabled(id, context));
+  });
 }
 
 /** Whether `id` exists for the active tab at all (its `available`), re-read like `useActionEnabled`. */

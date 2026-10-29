@@ -195,3 +195,8 @@ export function createActionRegistry(
     },
   };
 }
+
+/** The first of `ids` that is enabled, or the first when none is: one button that stands for several actions. */
+export function firstEnabledAction(ids: readonly [string, ...string[]], isEnabled: (id: string) => boolean): string {
+  return ids.find(isEnabled) ?? ids[0];
+}
