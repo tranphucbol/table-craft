@@ -64,6 +64,18 @@ export interface ContractFixture {
     /** A statement that runs for `seconds`; required when the plugin declares `cancel`. */
     readonly sleep?: (seconds: number) => string;
     /**
+     * A read that runs at least `seconds` on an idle server and then ends by itself, which the
+     * server's own limit stops with an error; required when a session reports a `serverTimeout`
+     * (decision 129). Not `sleep`, which MySQL answers with 1 instead of an error when the limit
+     * cuts it.
+     */
+    readonly slowRead?: (seconds: number) => string;
+    /**
+     * Sets the session's own statement limit to `ms`, as a DBA's per-user default would; required
+     * with `slowRead`.
+     */
+    readonly sessionTimeout?: (ms: number) => string;
+    /**
      * A write that succeeds on a writable session and leaves the fixture unchanged, such as an
      * update setting a column to itself; the read-only case is skipped without one.
      */
@@ -487,6 +499,16 @@ const SLEEP_SECONDS = 30;
 const CANCEL_DELAY_MS = 500;
 /** Well under `SLEEP_SECONDS`, so a cancel that did nothing fails the test instead of passing late. */
 const CANCEL_DEADLINE_MS = 10_000;
+/** The limit the `serverTimeout` cases ask for; servers check theirs about every 100 ms. */
+const SERVER_LIMIT_MS = 1500;
+/** Far past `SERVER_LIMIT_MS`, so a limit that did nothing fails the test instead of passing late. */
+const SLOW_READ_SECONDS = 8;
+/** Long enough to show a read ran past `SERVER_LIMIT_MS` with no limit, short enough to wait for. */
+const SHORT_READ_SECONDS = 3;
+/** A limit the slow read never reaches, for the cases where something else must stop it first. */
+const UNREACHED_LIMIT_MS = 2 * SLOW_READ_SECONDS * 1000;
+/** When a stopped statement must have rejected: the limit plus the server's slack. */
+const SERVER_LIMIT_DEADLINE_MS = 5_000;
 const KEEPALIVE_DELAY_MS = 1000;
 /** How long a listing may take to show what another connection just did. */
 const LISTING_DEADLINE_MS = 10_000;
@@ -2746,6 +2768,83 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenCancelledStatement_whenNextStatementRun_thenSessionStillWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
           await runAndCancel(session);
+          await expectAlive(session);
+        });
+      });
+    });
+
+    describe.runIf(plugin.capabilities.includes("serverTimeout"))("serverTimeout", () => {
+      function slowRead(seconds: number): string {
+        const read = fixture.statements?.slowRead;
+        if (read === undefined) throw new Error("A server with a serverTimeout needs fixture.statements.slowRead.");
+        return read(seconds);
+      }
+
+      /** Runs `sql` to its last row, so a limit that strikes while rows stream counts too. */
+      async function runToEnd(session: Session, sql: string, serverTimeoutMs?: number): Promise<void> {
+        const options = serverTimeoutMs === undefined ? undefined : { serverTimeoutMs };
+        await collect((await session.execute(sql, undefined, options)).rows);
+      }
+
+      /** Runs `use` on a session whose server enforces a limit; a server without one has nothing to check. */
+      async function withLimitedSession(use: (session: Session) => Promise<void>): Promise<void> {
+        await withSession(plugin, fixture, async (session) => {
+          if (session.serverTimeout === null || session.serverTimeout === undefined) return;
+          await use(session);
+        });
+      }
+
+      it("givenSession_whenInspected_thenReportsServerTimeout", async () => {
+        await withSession(plugin, fixture, (session) => {
+          expect(session.serverTimeout).not.toBeUndefined();
+          if (session.serverTimeout !== null && session.serverTimeout !== undefined) {
+            expect(session.serverTimeout.setting).toMatch(/\S/);
+          }
+          return Promise.resolve();
+        });
+      });
+
+      it("givenServerTimeout_whenSlowReadPastLimit_thenRejectsTimedOut", async () => {
+        await withLimitedSession(async (session) => {
+          const started = Date.now();
+          const code = await rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), SERVER_LIMIT_MS));
+          expect(code).toBe("timedOut");
+          expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
+          await expectAlive(session);
+        });
+      });
+
+      it("givenServerTimeoutThenNone_whenSlowRead_thenRunsPastIt", async () => {
+        await withLimitedSession(async (session) => {
+          await runToEnd(session, selectOne, SERVER_LIMIT_MS);
+          const started = Date.now();
+          await runToEnd(session, slowRead(SHORT_READ_SECONDS));
+          expect(Date.now() - started).toBeGreaterThan(SERVER_LIMIT_MS);
+        });
+      });
+
+      it("givenOwnLowerLimit_whenHigherAsked_thenOwnStops", async () => {
+        await withLimitedSession(async (session) => {
+          const own = fixture.statements?.sessionTimeout;
+          if (own === undefined) throw new Error("A server with a serverTimeout needs fixture.statements.sessionTimeout.");
+          await runToEnd(session, own(SERVER_LIMIT_MS));
+          const started = Date.now();
+          const code = await rejectionCode(
+            runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS),
+          );
+          expect(code).toBe("timedOut");
+          expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
+        });
+      });
+
+      it("givenServerTimeout_whenCancelled_thenCancelledNotTimedOut", async () => {
+        await withLimitedSession(async (session) => {
+          const started = Date.now();
+          const running = rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS));
+          await delay(CANCEL_DELAY_MS);
+          await session.cancel?.();
+          expect(await running).toBe("cancelled");
+          expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
           await expectAlive(session);
         });
       });

@@ -36,7 +36,7 @@ interface ContractFixture {
   readonly scripts?: readonly SplitCase[];
   readonly sessions?: { readonly monitorConfig: unknown; readonly sleepQuery?: string; readonly limited?: { readonly config: unknown; readonly note: RegExp; }; readonly cancels?: boolean; readonly missingId?: string; };
   readonly sql?: ContractSql;
-  readonly statements?: { readonly sleep?: (seconds: number) => string; readonly write?: string; readonly message?: { readonly sql: string; readonly level: ServerMessage["level"]; readonly code: string | null; }; readonly syntaxError?: { readonly sql: string; readonly offset: number; }; };
+  readonly statements?: { readonly sleep?: (seconds: number) => string; readonly slowRead?: (seconds: number) => string; readonly sessionTimeout?: (ms: number) => string; readonly write?: string; readonly message?: { readonly sql: string; readonly level: ServerMessage["level"]; readonly code: string | null; }; readonly syntaxError?: { readonly sql: string; readonly offset: number; }; };
   readonly typeProbe?: { readonly expected: readonly Row[]; readonly copyTable: string; };
   readonly wrongPasswordConfig?: unknown;
 }

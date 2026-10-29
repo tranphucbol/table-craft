@@ -23,6 +23,11 @@ export const PLUGIN_ERROR_CODES = [
    * nothing (decision 115); the host offers to reload or to overwrite.
    */
   "conflict",
+  /**
+   * The server stopped the statement at the limit `ExecuteOptions.serverTimeoutMs` set (decision
+   * 129); the message names the server's setting.
+   */
+  "timedOut",
 ] as const;
 
 export type PluginErrorCode = (typeof PLUGIN_ERROR_CODES)[number];
