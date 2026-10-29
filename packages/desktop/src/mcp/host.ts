@@ -62,6 +62,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
   const now = options.now ?? Date.now;
   let datasources: readonly AgentDatasource[] = [];
   let rowCap = 0;
+  let timeoutSeconds = 0;
   let paused = false;
   let state: McpServerState = "stopped";
   let failure: string | null = null;
@@ -124,6 +125,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
     record: (entry: Parameters<Parameters<typeof createTools>[0]["record"]>[0]) =>
       options.send({ kind: MCP_HISTORY_MESSAGE, entry }),
     rowCap: () => rowCap,
+    timeoutSeconds: () => timeoutSeconds,
     now,
   };
   const tools = createTools(context);
@@ -195,6 +197,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
 
   async function boot(message: McpBoot): Promise<void> {
     rowCap = message.rowCap;
+    timeoutSeconds = message.timeoutSeconds;
     port = message.port;
     setDatasources(message.datasources);
     windows = message.windows;
@@ -246,6 +249,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
           return;
         case MCP_CONFIG_MESSAGE:
           rowCap = message.rowCap;
+          timeoutSeconds = message.timeoutSeconds;
           gate.setKnown(message.clients);
           return;
         case MCP_CONTEXT_ANSWER_MESSAGE:

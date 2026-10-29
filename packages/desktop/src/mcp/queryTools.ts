@@ -18,14 +18,13 @@ import {
   cancelOf,
   rowCapOf,
   textResult,
+  timeoutOf,
   ToolFailure,
   type Caller,
   type ToolContext,
   type ToolResult,
 } from "@table-craft/desktop/mcp/toolKit.js";
 
-/** An agent statement that runs longer is cancelled; the user's consoles have their own limit. */
-export const AGENT_TIMEOUT_SECONDS = 120;
 /** Results an agent keeps open; the oldest is released past it, so a chatty agent cannot pin rows. */
 export const MAX_OPEN_RESULTS = 16;
 const PLAN_INDENT = "  ";
@@ -228,7 +227,7 @@ export function createQueryTools(context: ToolContext): QueryTools {
                 sql: ran,
                 pageRows: RESULT_PAGE_ROWS,
                 fetchAllCap: RESULT_FETCH_ALL_CAP,
-                timeoutSeconds: AGENT_TIMEOUT_SECONDS,
+                ...timeoutOf(context, datasource.id),
               }),
             ),
         );
@@ -296,7 +295,7 @@ export function createQueryTools(context: ToolContext): QueryTools {
               sessionId,
               sql: statement.sql,
               analyze: false,
-              timeoutSeconds: AGENT_TIMEOUT_SECONDS,
+              ...timeoutOf(context, datasource.id),
             }),
           ),
       );

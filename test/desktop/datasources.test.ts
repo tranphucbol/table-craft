@@ -54,6 +54,26 @@ describe("datasource store", () => {
     expect(reloaded.datasources).toEqual([tuned]);
   });
 
+  it("givenEnforceAndAgentTimeout_whenSaved_thenReloads", async () => {
+    const { files, store: first } = store();
+    const tuned = {
+      ...LOCAL_PG,
+      statementTimeoutSeconds: 30,
+      enforceTimeoutOnServer: true as const,
+      agentAccess: "read" as const,
+      agentTimeoutSeconds: 15,
+    };
+    await first.save([tuned]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.datasources).toEqual([tuned]);
+    expect(toDatasource(tuned, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).toMatchObject({
+      enforceTimeoutOnServer: true,
+      agentTimeoutSeconds: 15,
+    });
+  });
+
   it("givenShownNamespaces_whenSavedAndLoaded_thenRoundTrip", async () => {
     const { files, store: first } = store();
     const filtered = { ...LOCAL_PG, shownNamespaces: ["table_craft", "shop"] };

@@ -24,7 +24,7 @@ import type { McpSettings } from "@table-craft/desktop/settings/settings.js";
 import { tokenHint, type McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { fakeCipher, memoryFiles } from "../support/memoryFiles.js";
 
-const ON: McpSettings = { enabled: true, port: 47_820, rowCap: 100, clients: [] };
+const ON: McpSettings = { enabled: true, port: 47_820, rowCap: 100, statementTimeoutSeconds: 120, clients: [] };
 const OFF: McpSettings = { ...ON, enabled: false };
 const SILENT = createLogger({ process: "main", scope: "test", sink: () => undefined });
 
@@ -168,7 +168,17 @@ describe("MCP supervisor", () => {
     await supervisor.settingsChanged({ ...ON, rowCap: 5 });
 
     expect(processes).toHaveLength(1);
-    expect(processes[0]?.posted.at(-1)).toEqual({ kind: MCP_CONFIG_MESSAGE, rowCap: 5, clients: [] });
+    expect(processes[0]?.posted.at(-1)).toEqual({ kind: MCP_CONFIG_MESSAGE, rowCap: 5, timeoutSeconds: 120, clients: [] });
+  });
+
+  it("givenStatementTimeoutChange_whenRunning_thenConfigSentWithoutRestart", async () => {
+    const { supervisor, processes } = await supervised();
+    await supervisor.start();
+
+    await supervisor.settingsChanged({ ...ON, statementTimeoutSeconds: 30 });
+
+    expect(processes).toHaveLength(1);
+    expect(processes[0]?.posted.at(-1)).toEqual({ kind: MCP_CONFIG_MESSAGE, rowCap: 100, timeoutSeconds: 30, clients: [] });
   });
 
   it("givenHostMessages_whenReceived_thenStatusRelayedAndHistoryTaggedAgent", async () => {
