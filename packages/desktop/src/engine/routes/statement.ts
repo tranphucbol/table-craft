@@ -5,11 +5,13 @@ import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
 export function statementRoutes(connection: ConnectionContext): RoutesFor<"statement"> {
   const { sessionFor, runStatement, explainStatement } = connection;
   return {
-    "statement.execute": ({ sessionId, sql, parameters, pageRows, fetchAllCap, timeoutSeconds, node, repeat }) =>
-      runStatement(sessionId, sql, parameters, { pageRows, fetchAllCap }, timeoutSeconds ?? 0, {
+    "statement.execute": (request) => {
+      const { sessionId, sql, parameters, pageRows, fetchAllCap, node, repeat } = request;
+      return runStatement(sessionId, sql, parameters, { pageRows, fetchAllCap }, request, {
         ...(node === undefined ? {} : { node }),
         ...(repeat === undefined ? {} : { repeat }),
-      }),
+      });
+    },
     "statement.cancel": async ({ sessionId }) => {
       const open = sessionFor(sessionId);
       if (!open.capabilities.includes("cancel") || open.session.cancel === undefined) {

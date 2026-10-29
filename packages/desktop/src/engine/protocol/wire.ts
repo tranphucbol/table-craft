@@ -73,7 +73,15 @@ export type Capability =
   | "commands"
   | "keyValue"
   | "nodes"
-  | "serverInfo";
+  | "serverInfo"
+  | "serverTimeout";
+
+/** Mirrors `ServerTimeout` in plugin-api: what the server stops by itself at a statement limit (decision 129). */
+export interface ServerTimeout {
+  readonly setting: string;
+  readonly covers: "reads" | "all";
+  readonly counts: "statement" | "serverWork";
+}
 
 /** Mirrors `CommandReply` in plugin-api: a command's scalar answer, which goes to Output (decision 112). */
 export interface CommandReply {
@@ -126,6 +134,8 @@ export type ProbeResult =
       readonly ssh?: SshHop;
       /** The TLS the database connection negotiated; null when it is not encrypted (decision 072). */
       readonly tls?: TlsHop | null;
+      /** What the server stops by itself; null when it stops nothing, absent without the `serverTimeout` capability. */
+      readonly serverTimeout?: ServerTimeout | null;
     }
   | { readonly ok: false; readonly error: EngineError; readonly ssh?: SshHop };
 
@@ -157,4 +167,9 @@ export interface ResultPaging {
  */
 export interface StatementLimit {
   readonly timeoutSeconds?: number;
+  /**
+   * Have the database itself stop the statement at `timeoutSeconds` as well, where the session's
+   * plugin can (decision 129); ignored without a timeout or a server that stops nothing.
+   */
+  readonly serverEnforced?: boolean;
 }

@@ -35,6 +35,7 @@ export function sessionRoutes(connection: ConnectionContext): RoutesFor<"session
         serverVersion: session.serverVersion,
         serverBrand: session.serverBrand ?? null,
         namespace,
+        serverTimeout: session.serverTimeout == null ? null : { ...session.serverTimeout },
       };
     },
     "session.close": async ({ sessionId }) => {
