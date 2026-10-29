@@ -1,6 +1,6 @@
 # 109: One npm package per optional plugin, released with the app
 
-Status: Accepted. Plan 057.
+Status: Accepted. Plan 057. Amended by 134.
 
 ## Decision
 

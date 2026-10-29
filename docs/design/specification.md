@@ -67,7 +67,9 @@ On start, a saved datasource whose plugin is missing and in the catalog installs
 background with no prompt, so users upgrading from a version with PostgreSQL built in keep it.
 Packaged, with `updates.checkAutomatically`, plugins installed from the registry are checked daily
 and a newer compatible version becomes current for the next engine; older versions are pruned at
-the next start. Install from File asks decision 006's confirmation and is never updated from the
+the next start. Plugins follow `updates.channel`: the beta channel also takes `X.Y.Z-beta.N`
+plugin versions, and on the stable channel an installed beta plugin stays until a stable version
+above it exists, unless it no longer fits the host's plugin API. Install from File asks decision 006's confirmation and is never updated from the
 registry. Offline, an install fails with a hint to use Install from File with the release's `.tgz`.
 
 ### Manifest
@@ -2434,12 +2436,14 @@ time, without SQL or messages). The zip writer is in-house over `node:zlib`.
 Plan 020, decisions 044 and 045. The updater lives in main (`main/update/`); the renderer draws
 the state main pushes and invokes actions.
 
-**Manifest.** `update-manifest.json` is `{ schema: 1, version, notesUrl, minimumVersion, assets }`
-with `assets` keyed `<platform>-<arch>` (`darwin-arm64`, `darwin-x64`, `win32-x64`, `linux-x64`),
+**Manifest.** `update-manifest.json` is
+`{ schema: 1, version, channel, notesUrl, minimumVersion, assets }`, where `channel` is `stable`
+or `beta` (missing reads as `stable`, decision 134), with `assets` keyed `<platform>-<arch>` (`darwin-arm64`, `darwin-x64`, `win32-x64`, `linux-x64`),
 each `{ url, size, sha256 }`. `update-manifest.json.sig` is the base64 Ed25519 signature of the
-manifest's bytes. Main fetches both from
-`https://github.com/tranphucbol/table-craft/releases/latest/download/` with `net.fetch` and
-verifies the signature against `UPDATE_PUBLIC_KEY` (`main/update/manifest.ts`) before parsing.
+manifest's bytes. Main fetches the stable pair from
+`https://github.com/tranphucbol/table-craft/releases/latest/download/` and the beta pair from
+`https://raw.githubusercontent.com/tranphucbol/table-craft/update-channels/beta/` with `net.fetch`,
+and verifies the signature against `UPDATE_PUBLIC_KEY` (`main/update/manifest.ts`) before parsing.
 A manifest is rejected for a bad signature, a schema other than 1, or a malformed field (asset URLs
 must be `https:` without credentials, `sha256` 64 hex digits). Versions compare as semver, a
 pre-release below its release. `scripts/update-manifest.ts` writes and signs the manifest in the
@@ -2470,6 +2474,14 @@ manifest of a later schema, stays `idle` and logs a warning; one that finds the 
 (`<userData>/update-state.json`) stays `idle`. A manual check reports every outcome; with nothing
 newer Help → Check for Updates… says "You're up to date". A development run never checks on its
 own and, asked, reports that it cannot replace itself.
+
+**Channel.** `updates.channel` is `auto` (the default), `stable` or `beta`; `auto` is the kind of
+the running build, `beta` for an `X.Y.Z-beta.N` version. Settings → Advanced shows the effective
+channel as **Get beta versions** and writes `stable` or `beta` when it changes. The stable channel
+fetches only the stable manifest; the beta channel fetches both and offers the higher version, and
+a beta manifest that fails beside a stable one that answers only logs a warning. A manifest whose
+`channel` the app's channel does not take is ignored, logged as for another channel. Leaving the
+beta channel never downgrades: the app waits for a stable release above its version.
 
 **Eligibility.** In order: not packaged; no asset for this platform and architecture; older than
 `minimumVersion`; on macOS translocated (`/AppTranslocation/`), on a mounted volume (`/Volumes/`)
@@ -2552,7 +2564,9 @@ format, typecheck, unit tests, the contract suite on PostgreSQL and MySQL) and `
 arm64, macOS x64, Windows x64 and Linux x64, each building its installer, running the packaged
 suite on SQLite and uploading the installer. The macOS jobs block; Windows and Linux are
 best-effort. A `v*` tag adds a draft GitHub release with the installers, `update-manifest.json` and its
-signature once the blocking jobs pass (see In-app update).
+signature once the blocking jobs pass (see In-app update); a `vX.Y.Z-beta.N` tag drafts a
+pre-release. Publishing a beta commits its manifest to `beta/` on the `update-channels` branch
+(`publish-channel.yml`, decision 134).
 
 ## Agents (MCP)
 

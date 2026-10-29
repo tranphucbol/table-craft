@@ -1,9 +1,10 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { API_VERSION } from "@table-craft/plugin-api";
 import { checkVersion, classify, parseCompatibilityFile, requiredVersion } from "../../scripts/api-report/classify.js";
-import { checkSurface, compareWithBaseline, quietGit } from "../../scripts/api-report/check.js";
+import { checkSurface, compareWithBaseline, quietGit, readBaseline } from "../../scripts/api-report/check.js";
 import { generateReports, renderReport, REPORT_ENTRIES } from "../../scripts/api-report/generate.js";
 import { parseReport, ReportFormatError } from "../../scripts/api-report/model.js";
 
@@ -165,6 +166,22 @@ describe("API surface report", () => {
 
     expect(result.problems).toEqual([]);
     expect(result.notes).toEqual(["v0.9.0 predates the surface reports; the version check is skipped."]);
+  });
+
+  it("givenBetaTagAfterStable_whenBaselineRead_thenStableTag", () => {
+    const repository = mkdtempSync(join(tmpdir(), "api-baseline-"));
+    try {
+      const git = quietGit(repository);
+      git(["init", "--quiet"]);
+      for (const tag of ["v1.0.0", "v1.1.0-beta.1"]) {
+        git(["-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "--allow-empty", "-m", tag]);
+        git(["tag", tag]);
+      }
+
+      expect(readBaseline(git)?.tag).toBe("v1.0.0");
+    } finally {
+      rmSync(repository, { recursive: true, force: true });
+    }
   });
 
   it(
