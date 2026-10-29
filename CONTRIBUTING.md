@@ -125,7 +125,42 @@ Each rule has a decision record that says why.
 - A second checkout running the database suites at the same time needs its own compose project and
   ports; [AGENTS.md](AGENTS.md#commands) lists the variables.
 
-## Before you open a pull request
+## Branches
+
+Work on a branch of your own, cut from an up-to-date `main`; nothing is pushed to `main` directly.
+Name it `<kind>/<what-it-does>`, in lower-case words joined by hyphens:
+
+| Kind       | For                                                    | Example                      |
+| ---------- | ------------------------------------------------------ | ---------------------------- |
+| `feature/` | new or changed behaviour                               | `feature/run-button-spinner` |
+| `fix/`     | a bug in something that already shipped                | `fix/117-agent-history`      |
+| `chore/`   | tooling, CI, docs or dependencies, with no behaviour   | `chore/bump-electron`        |
+| `chore/`   | the screenshots of pull requests, never merged (below) | `chore/pr-evidence`          |
+
+- Work that follows a plan may start the name with the plan's three-digit number,
+  `feature/118-datasource-brand-icons`, so the branch, the plan and its evidence line up; a fix to
+  a planned feature may take that feature's number. It is optional.
+- One branch per plan. A branch that builds on another unmerged branch says so in its pull
+  request, and which one must merge first.
+- Rebase on `main` before you open the pull request and when it falls behind; renumber a decision
+  record whose number `main` took in the meantime.
+
+## Commits
+
+A commit is one step a reviewer can read on its own: a change and its tests together, and the
+checks still pass after it.
+
+- The subject is an imperative sentence about what the app or the code now does, capitalised,
+  with no type prefix (`feat:`, `fix(ui):`) and no full stop: _Let a datasource have the database
+  enforce its console statement timeout_, _Draw datasource rows with their database logos_.
+- Keep the subject near 72 characters; name the thing, not the files.
+- Add a body, wrapped at 72, when the why or a limit is not obvious from the subject and the diff:
+  what the user sees, what a plugin must now declare, a decision number.
+- A new decision record goes in its own commit: _Record decision 128: plugins name the products
+  they speak_. So does a lockfile change alone: _Lock simple-icons_.
+- Never commit `docs/plans/`, `docs/evidence/`, `.env`, `gdb/`, `release/` or `dist/`.
+
+## Pull requests
 
 Run the four checks, and the database suites when you touched a plugin or the contract:
 
@@ -139,9 +174,21 @@ bun run test
 CI runs them, with `test:db`, as `verify` on every push, and packages and tests the app on each
 platform. `verify` and the macOS packages must pass; Windows and Linux are best-effort.
 
-- One change per commit, and its subject an imperative sentence, as `git log` shows: _Let a
-  datasource have the database enforce its console statement timeout_.
-- A change to what the app shows comes with a screenshot.
+- The title names the change in a few words, as a user would, and ends with its plan when it
+  has one: _Server-enforced statement timeouts (plan 119)_.
+- The description fills in the [template](.github/pull_request_template.md), which GitHub opens
+  with every new pull request: **Purpose & Motivation** (the problem, the solution and a plain-text
+  flow of what changed at runtime), **Key Changes** and the **Technical Decisions** behind them,
+  **Verification & Testing** (one checkbox per test case, with the commands you ran, what they
+  reported and what you did not run), and **Impact and Scope**. Each section's comment says what
+  goes in it; delete the comments.
+- An agent drafts it with the [create-pr skill](.agents/skills/create-pr/SKILL.md), from the diff,
+  into a git-ignored `gdb/` draft it shows you before it pushes or opens anything.
+- A change to what the app shows comes with screenshots, from the live test of its plan
+  (`TABLE_CRAFT_EVIDENCE_DIR`), under the test case they show. Since `docs/evidence/` never reaches
+  `main`, they live on a branch that is never merged and never deleted: the skill's
+  `scripts/upload_evidence.py` commits each to `chore/pr-evidence` and returns the image link.
+- A maintainer merges with a merge commit, so the branch's commits stay in the history as written.
 
 ## Docs that change with the code
 
