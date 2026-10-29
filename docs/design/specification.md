@@ -1885,11 +1885,12 @@ menu holds Cancel Running Statement while a console runs and Clear Executions; a
 SQL holds Copy Execution SQL and Open Execution in Console. A datasource line, in the tree or under
 an agent in the Agents subtree, draws its product's logo as the Database tool window does (plan 123).
 
-The header holds **Expand All** and **Collapse All** (plan 123) before Hide, icon only, their
-title and chord in the tooltip. Collapse All folds every node that has children, those under an
-already folded parent too, so expanding one later shows its children folded; a selected line it
-hides passes the selection to its top-level line. Expand All unfolds everything. Each is disabled
-when it would change nothing, both on an empty tree. What is folded lasts for the run only:
+The header holds one fold button before Hide (plan 123), icon only, its title and chord in the
+tooltip: **Collapse All** while anything is unfolded, **Expand All** once everything is folded.
+Collapse All folds every node that has children, those under an already folded parent too, so
+expanding one later shows its children folded; a selected line it hides passes the selection to
+its top-level line. Expand All unfolds everything. Each action is disabled when it would change
+nothing, both on an empty tree, where the button shows Collapse All, disabled. What is folded lasts for the run only:
 Services starts expanded on every launch.
 
 Open Closed Console… (on a saved datasource, from its context menu, the palette or one of its
