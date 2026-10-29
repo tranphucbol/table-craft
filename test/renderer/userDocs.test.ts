@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { API_VERSION, CAPABILITIES, MANIFEST_FILE } from "@table-craft/plugin-api";
 import { PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js";
@@ -33,9 +33,15 @@ import {
 } from "@table-craft/desktop/settings/settings.js";
 
 const ROOT = resolve(import.meta.dirname, "../..");
-const README = readFileSync(join(ROOT, "README.md"), "utf8");
-const SPECIFICATION = "docs/design/specification.md";
+const README = "README.md";
+const CONTRIBUTING = "CONTRIBUTING.md";
+const GUIDE_DIRECTORY = "docs/guide";
+const README_LINE_BUDGET = 200;
 const MEDIA_DIRECTORY = "docs/media";
+const HEADING = /^(#{1,6}) (.+)$/;
+const FENCE = "```";
+const MARKDOWN = ".md";
+const VERIFY_SCRIPTS = ["lint", "format:check", "typecheck", "test"];
 const USER_THEME_CHOICE = "user:<file stem>";
 const RANGE_DASH = "–";
 const MIN_SHORTCUT_ROWS = 25;
@@ -62,23 +68,62 @@ function slug(heading: string): string {
     .replace(/\s/g, "-");
 }
 
+function read(file: string): string {
+  return readFileSync(join(ROOT, file), "utf8");
+}
+
+function guidePages(): string[] {
+  return readdirSync(join(ROOT, GUIDE_DIRECTORY))
+    .filter((file) => file.endsWith(MARKDOWN))
+    .sort()
+    .map((file) => `${GUIDE_DIRECTORY}/${file}`);
+}
+
+/** README, CONTRIBUTING and every guide page, as paths from the repo root. */
+function userDocs(): string[] {
+  return [README, CONTRIBUTING, ...guidePages()];
+}
+
+/** A path written in `file`, as a path from the repo root, the way GitHub resolves it. */
+function fromRoot(file: string, target: string): string {
+  return relative(ROOT, resolve(ROOT, dirname(file), target));
+}
+
+interface Heading {
+  readonly line: number;
+  readonly level: number;
+  readonly title: string;
+}
+
+function headings(markdown: string): Heading[] {
+  let inFence = false;
+  return markdown.split("\n").flatMap((text, line) => {
+    if (text.startsWith(FENCE)) inFence = !inFence;
+    const match = inFence ? null : HEADING.exec(text);
+    return match === null ? [] : [{ line, level: match[1]?.length ?? 0, title: match[2] ?? "" }];
+  });
+}
+
 function headingSlugs(markdown: string): Set<string> {
-  const outsideFences = markdown.replace(/^```[\s\S]*?^```/gm, "");
-  return new Set([...outsideFences.matchAll(/^#{1,6} (.+)$/gm)].map((match) => slug(match[1] ?? "")));
+  return new Set(headings(markdown).map((heading) => slug(heading.title)));
 }
 
-function section(title: string): string {
-  const start = README.indexOf(`\n## ${title}\n`);
-  expect(start, `README has a "## ${title}" section`).toBeGreaterThanOrEqual(0);
-  const end = README.indexOf("\n## ", start + 1);
-  return README.slice(start, end === -1 ? undefined : end);
+/** The text under the heading `title` at any level, up to the next heading of the same or a higher level. */
+function section(file: string, title: string): string {
+  const markdown = read(file);
+  const all = headings(markdown);
+  const start = all.findIndex((heading) => heading.title === title);
+  expect(start, `${file} has a "${title}" heading`).toBeGreaterThanOrEqual(0);
+  const { line, level } = all[start] as Heading;
+  const end = all.slice(start + 1).find((heading) => heading.level <= level)?.line;
+  return markdown.split("\n").slice(line, end).join("\n");
 }
 
-function subsection(title: string): string {
-  const start = README.indexOf(`\n### ${title}\n`);
-  expect(start, `README has a "### ${title}" section`).toBeGreaterThanOrEqual(0);
-  const end = README.slice(start + 1).search(/\n##? /);
-  return README.slice(start, end === -1 ? undefined : start + 1 + end);
+function images(markdown: string): string[] {
+  return [
+    ...[...markdown.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((match) => match[1] ?? ""),
+    ...[...markdown.matchAll(/<img src="([^"]+)"/g)].map((match) => match[1] ?? ""),
+  ];
 }
 
 function manifestName(pluginId: string): string {
@@ -116,40 +161,67 @@ function rangeText(range: NumberRange): string {
   return `${range.min.toLocaleString("en-US")}${RANGE_DASH}${range.max.toLocaleString("en-US")}`;
 }
 
-describe("README", () => {
-  it("givenReadme_whenImagesListed_thenEveryFileExists", () => {
-    const images = [
-      ...[...README.matchAll(/!\[[^\]]*\]\(([^)]+)\)/g)].map((match) => match[1] ?? ""),
-      ...[...README.matchAll(/<img src="([^"]+)"/g)].map((match) => match[1] ?? ""),
-    ];
-
-    expect(images.length).toBeGreaterThan(0);
-    for (const image of images) expect(existsSync(join(ROOT, image)), `${image} exists`).toBe(true);
-    const gifs = readdirSync(join(ROOT, MEDIA_DIRECTORY)).map((file) => `${MEDIA_DIRECTORY}/${file}`);
-    expect([...gifs].sort(), `${MEDIA_DIRECTORY} holds only the README's GIFs`).toEqual(
-      images.filter((image) => image.startsWith(`${MEDIA_DIRECTORY}/`)).sort(),
-    );
-  });
-
-  it("givenReadme_whenInPageLinksListed_thenEveryAnchorHasAHeading", () => {
-    const ownSlugs = headingSlugs(README);
-    const specificationSlugs = headingSlugs(readFileSync(join(ROOT, SPECIFICATION), "utf8"));
-    const links = [...README.matchAll(/\]\(([^)\s]+)\)/g)].map((match) => match[1] ?? "");
-    const local = links.filter((link) => !/^[a-z]+:/.test(link) && !link.endsWith(".gif"));
-
-    expect(local.length).toBeGreaterThan(0);
-    for (const link of local) {
-      const [path = "", anchor] = link.split("#");
-      if (path !== "") expect(existsSync(join(ROOT, path)), `${link} points at a file`).toBe(true);
-      if (anchor === undefined) continue;
-      if (path === "") expect(ownSlugs, `${link} matches a README heading`).toContain(anchor);
-      else if (path === SPECIFICATION) expect(specificationSlugs, `${link} matches a heading`).toContain(anchor);
-      else expect.fail(`${link} anchors into a file the test cannot check`);
+describe("user docs", () => {
+  it("givenUserDocs_whenImagesListed_thenEveryFileExistsRelativeToItsPage", () => {
+    for (const file of userDocs()) {
+      for (const image of images(read(file))) {
+        expect(existsSync(join(ROOT, fromRoot(file, image))), `${file}: ${image} exists`).toBe(true);
+      }
     }
   });
 
+  it("givenUserDocs_whenImagesListed_thenMediaHoldsOnlyTheirGifs", () => {
+    const shown = new Set(userDocs().flatMap((file) => images(read(file)).map((image) => fromRoot(file, image))));
+    const gifs = readdirSync(join(ROOT, MEDIA_DIRECTORY)).map((file) => `${MEDIA_DIRECTORY}/${file}`);
+
+    expect([...gifs].sort(), `${MEDIA_DIRECTORY} holds only the GIFs the user docs show`).toEqual(
+      [...shown].filter((image) => image.startsWith(`${MEDIA_DIRECTORY}/`)).sort(),
+    );
+  });
+
+  it("givenUserDocs_whenLinksListed_thenEveryAnchorMatchesItsTargetsHeading", () => {
+    for (const file of userDocs()) {
+      const links = [...read(file).matchAll(/\]\(([^)\s]+)\)/g)].map((match) => match[1] ?? "");
+      const local = links.filter((link) => !/^[a-z]+:/.test(link) && !link.endsWith(".gif"));
+      for (const link of local) {
+        const [path = "", anchor] = link.split("#");
+        const target = path === "" ? file : fromRoot(file, path);
+        expect(existsSync(join(ROOT, target)), `${file}: ${link} points at a file`).toBe(true);
+        if (anchor === undefined) continue;
+        if (!target.endsWith(MARKDOWN)) expect.fail(`${file}: ${link} anchors into a file the test cannot check`);
+        expect(headingSlugs(read(target)), `${file}: ${link} matches a heading`).toContain(anchor);
+      }
+    }
+  });
+
+  it("givenGuidePages_whenReadmeIndexRead_thenEveryPageIsListedOnce", () => {
+    const listed = [...section(README, "Documentation").matchAll(/\]\(([^)#\s]+\.md)\)/g)].map(
+      (match) => match[1] ?? "",
+    );
+
+    expect([...listed].sort()).toEqual(guidePages());
+  });
+
+  it("givenGuidePage_whenRead_thenItHasExactlyOneTitle", () => {
+    for (const file of guidePages()) {
+      const titles = headings(read(file)).filter((heading) => heading.level === 1);
+      expect(
+        titles.map((heading) => heading.line),
+        `${file} opens with its one # title`,
+      ).toEqual([0]);
+    }
+  });
+
+  it("givenReadme_whenCounted_thenItStaysWithinItsLineBudget", () => {
+    const lines = read(README).trimEnd().split("\n").length;
+
+    expect(lines, `README.md is ${String(lines)} lines; move detail into a guide page`).toBeLessThanOrEqual(
+      README_LINE_BUDGET,
+    );
+  });
+
   it("givenShortcutTable_whenComparedWithRegistry_thenEveryChordMatchesOnBothPlatforms", () => {
-    const rows = tableRows(section("Keyboard shortcuts"));
+    const rows = tableRows(section("docs/guide/shortcuts.md", "Keyboard shortcuts"));
 
     expect(rows.length).toBeGreaterThanOrEqual(MIN_SHORTCUT_ROWS);
     for (const [title = "", mac = "", other = ""] of rows) {
@@ -164,7 +236,7 @@ describe("README", () => {
   });
 
   it("givenSettingsTable_whenComparedWithDefaults_thenValuesAndDefaultsMatch", () => {
-    const rows = tableRows(section("Settings"));
+    const rows = tableRows(section("docs/guide/settings.md", "Settings file"));
     const fields = rows.map(([field = ""]) => codeSpans(field)[0] ?? field);
 
     expect([...fields].sort()).toEqual(
@@ -197,7 +269,7 @@ describe("README", () => {
   });
 
   it("givenThemesTable_whenComparedWithBundledThemes_thenEveryThemeIsListedWithItsSource", () => {
-    const themes = section("Themes");
+    const themes = section("docs/guide/themes.md", "Themes");
     const rows = tableRows(themes);
 
     expect(rows.map(([, id = ""]) => codeSpans(id)[0])).toEqual([...BUNDLED_THEME_IDS]);
@@ -216,7 +288,7 @@ describe("README", () => {
   it("givenPluginsSection_whenCapabilitiesListed_thenTheyEqualCapabilities", () => {
     // The sample is a SQL plugin's manifest; `commands` excludes `sql`, and PostgreSQL has no nodes.
     const NOT_IN_SQL_SAMPLE: readonly string[] = ["commands", "keyValue", "nodes", "serverInfo"];
-    const plugins = section("Plugins");
+    const plugins = section("docs/guide/writing-plugins.md", "Capabilities");
     const listed = [...plugins.matchAll(/^- `(\w+)`:/gm)].map((match) => match[1]);
     const manifest = JSON.parse(/```json\n([\s\S]*?)```/.exec(plugins)?.[1] ?? "null") as {
       apiVersion: string;
@@ -229,7 +301,7 @@ describe("README", () => {
   });
 
   it("givenDatabasesSection_whenRead_thenItNamesTheBuiltInsAndEveryDownloadablePlugin", () => {
-    const databases = subsection("Databases in the box and on demand");
+    const databases = section("docs/guide/plugins.md", "Databases in the box and on demand");
     const [boxed = ""] = databases.split("ship inside the app");
     const builtIn = BUILT_IN_PLUGINS.map((id) => manifestName(id));
 
@@ -240,13 +312,11 @@ describe("README", () => {
     }
   });
 
-  it("givenDevelopmentSection_whenScriptsListed_thenEveryScriptExists", () => {
-    const { scripts } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")) as {
-      scripts: Record<string, string>;
-    };
-    const listed = [...section("Development").matchAll(/^bun run ([\w:-]+)/gm)].map((match) => match[1] ?? "");
+  it("givenContributing_whenScriptsListed_thenEveryScriptExistsAndTheFourChecksAreNamed", () => {
+    const { scripts } = JSON.parse(read("package.json")) as { scripts: Record<string, string> };
+    const listed = [...read(CONTRIBUTING).matchAll(/\bbun run (\w[\w:-]*)/g)].map((match) => match[1] ?? "");
 
-    expect(listed).toContain("readme:media");
+    expect(listed).toEqual(expect.arrayContaining(["readme:media", ...VERIFY_SCRIPTS]));
     for (const script of listed) expect(Object.keys(scripts), `bun run ${script}`).toContain(script);
   });
 });
