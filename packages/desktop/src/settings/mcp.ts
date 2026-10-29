@@ -91,7 +91,10 @@ export interface McpCallView {
   readonly datasourceId: string | null;
   /** Epoch milliseconds. */
   readonly at: number;
+  /** Working time: the wait for the user's approval is left out. */
   readonly durationMs: number;
+  /** How long the call waited for the user's approval; 0 when it did not ask. */
+  readonly approvalWaitMs: number;
   readonly outcome: McpCallOutcome;
 }
 

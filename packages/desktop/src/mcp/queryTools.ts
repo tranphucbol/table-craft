@@ -207,7 +207,7 @@ export function createQueryTools(context: ToolContext): QueryTools {
           datasourceId: datasource.id,
           sql: text,
           startedAt,
-          durationMs: context.now() - startedAt,
+          durationMs: Math.max(0, context.now() - startedAt - caller.waits.ms()),
           outcome,
           rowCount,
           message,

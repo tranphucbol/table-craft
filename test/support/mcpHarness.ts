@@ -7,7 +7,7 @@ import { createApprovals, type Approvals } from "@table-craft/desktop/mcp/approv
 import { createAgentEngines, type EnginePort } from "@table-craft/desktop/mcp/engines.js";
 import type { AgentDatasource, AgentHistoryEntry } from "@table-craft/desktop/mcp/messages.js";
 import { createTools, type Tools } from "@table-craft/desktop/mcp/tools.js";
-import type { ToolContext, ToolResult } from "@table-craft/desktop/mcp/toolKit.js";
+import { approvalWait, type Caller, type ToolContext, type ToolResult } from "@table-craft/desktop/mcp/toolKit.js";
 import type { McpActiveConsole, McpConsoleRequest } from "@table-craft/desktop/settings/mcp.js";
 import { SQLITE_MANIFEST } from "./manifests.js";
 import { seededSqliteFile } from "./sqliteFixture.js";
@@ -19,7 +19,10 @@ const LOADED_SQLITE: PluginLoadResult = {
   plugin: sqlite,
 };
 
-export const AGENT_CALLER = { sessionId: "mcp-1", clientName: "Claude Code" };
+/** A caller as the server makes one per `tools/call`, with its own approval wait. */
+export function agentCaller(): Caller {
+  return { sessionId: "mcp-1", clientName: "Claude Code", waits: approvalWait() };
+}
 
 /** An engine port in the same process: what a `MessagePortMain` carries, without Electron. */
 export function inProcessPort(connection: EngineConnection): EnginePort & { readonly closed: () => boolean } {
@@ -59,6 +62,8 @@ export interface AgentHarness {
   setDatasources(next: readonly AgentDatasource[]): void;
   setRowCap(rowCap: number): void;
   setTimeoutSeconds(seconds: number): void;
+  /** Moves the fake clock on, as a user taking `ms` to answer would. */
+  advance(ms: number): void;
   /** What each agent session said of its server as it opened (decision 131). */
   readonly seen: { readonly datasourceId: string; readonly opened: OpenedSession }[];
   /** Every request the tools sent to an engine, in order. */
@@ -149,8 +154,9 @@ export function agentHarness(
     setDatasources: (next) => (exposed = next),
     setRowCap: (next) => (rowCap = next),
     setTimeoutSeconds: (next) => (timeoutSeconds = next),
+    advance: (ms) => (clock += ms),
     requests,
-    call: async (name, args) => (await tools.call(name, args, AGENT_CALLER)).result,
+    call: async (name, args) => (await tools.call(name, args, agentCaller())).result,
   };
 }
 
