@@ -1,8 +1,8 @@
 /**
  * Plan 123's live test: the brand logo on an agent's datasource line in Services, and the Services
- * header's Expand All and Collapse All with their `⌘=` and `⌘-` chords. An HTTP client in this
- * process plays the agent, as in `mcp.smoke.test.ts`. Gated, because it needs a display, a fresh
- * build and the containers:
+ * header's fold button, Collapse All or Expand All, with their `⌘-` and `⌘=` chords. An HTTP
+ * client in this process plays the agent, as in `mcp.smoke.test.ts`. Gated, because it needs a
+ * display, a fresh build and the containers:
  *
  *   TABLE_CRAFT_DATABASES=mysql,tidb,mariadb,postgres,redis TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/123 \
  *     bun run test:smoke:db:headless test/e2e/servicesHeader.smoke.test.ts
@@ -154,7 +154,7 @@ function services(page: Page) {
 }
 
 function headerButton(page: Page, name: string) {
-  return services(page).getByRole("toolbar", { name: "Services toolbar" }).getByRole("button", { name, exact: true });
+  return services(page).locator("header").getByRole("button", { name, exact: true });
 }
 
 function lines(page: Page, kind: string) {
@@ -287,8 +287,8 @@ describe.runIf(DATABASES_ENABLED)("Services brand icons and Collapse All live te
 
       const collapse = headerButton(page, COLLAPSE_ALL);
       const expand = headerButton(page, EXPAND_ALL);
-      await expect.poll(() => expand.isDisabled()).toBe(true);
       await expect.poll(() => collapse.isEnabled()).toBe(true);
+      expect(await expand.count()).toBe(0);
       await collapse.hover();
       await expect
         .poll(() => page.getByRole("tooltip").first().textContent(), { timeout: LAUNCH_TIMEOUT_MS })
@@ -303,8 +303,8 @@ describe.runIf(DATABASES_ENABLED)("Services brand icons and Collapse All live te
       expect(await services(page).locator('[role="treeitem"]:not([aria-level="1"])').count()).toBe(0);
       const selected = services(page).locator('[role="treeitem"][aria-selected="true"]');
       expect(await selected.getAttribute("data-kind")).toBe("agents");
-      await expect.poll(() => collapse.isDisabled()).toBe(true);
       await expect.poll(() => expand.isEnabled()).toBe(true);
+      expect(await collapse.count()).toBe(0);
       await page.mouse.move(0, 0);
       await captureWindow(page, "05-collapsed");
 
@@ -313,12 +313,16 @@ describe.runIf(DATABASES_ENABLED)("Services brand icons and Collapse All live te
       await expect.poll(() => lines(page, "agentClient").count()).toBe(1);
       expect(await lines(page, "agentClient").getAttribute("aria-expanded")).toBe("false");
       expect(await lines(page, "agentDatasource").count()).toBe(0);
+      await expect.poll(() => collapse.isEnabled()).toBe(true);
       await captureWindow(page, "06-one-level");
 
+      await page.keyboard.press("ArrowLeft");
+      await expect.poll(() => expand.isEnabled()).toBe(true);
       await expand.click();
       await expect.poll(() => foldedCount(page)).toBe(0);
       await expect.poll(() => lines(page, "agentCall").count()).toBe(targets.length);
-      await expect.poll(() => expand.isDisabled()).toBe(true);
+      await expect.poll(() => collapse.isEnabled()).toBe(true);
+      expect(await expand.count()).toBe(0);
       await page.mouse.move(0, 0);
       await agentsOnTop(page);
       await captureWindow(page, "07-expanded");
