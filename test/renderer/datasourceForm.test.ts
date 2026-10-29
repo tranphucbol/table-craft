@@ -127,6 +127,16 @@ describe("datasource form", () => {
     });
   });
 
+  it("givenEnforce_whenSaved_thenStoredOnlyWhenTrue", () => {
+    const enforced = draftFromView({ ...SAVED, statementTimeoutSeconds: 30, enforceTimeoutOnServer: true }, POSTGRES_PLUGIN);
+    const unticked = { ...enforced, enforceTimeoutOnServer: false };
+
+    expect(enforced.enforceTimeoutOnServer).toBe(true);
+    expect(toSaveRequest(enforced, POSTGRES_PLUGIN).datasource).toMatchObject({ enforceTimeoutOnServer: true });
+    expect(toSaveRequest(unticked, POSTGRES_PLUGIN).datasource).not.toHaveProperty("enforceTimeoutOnServer");
+    expect(newDraft("new-0", POSTGRES_PLUGIN, [], "forever").enforceTimeoutOnServer).toBe(false);
+  });
+
   it("givenShownNamespaces_whenEditedAndSaved_thenKeptAndCopiedByDuplicate", () => {
     const filtered = view({ ...SAVED, shownNamespaces: ["shop", "billing"] });
 
