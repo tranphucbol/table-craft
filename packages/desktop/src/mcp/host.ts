@@ -1,3 +1,4 @@
+import { serverSeenOf } from "@table-craft/desktop/engine/protocol.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import { createApprovals } from "@table-craft/desktop/mcp/approvals.js";
 import { createActivity, createRuns } from "@table-craft/desktop/mcp/activity.js";
@@ -17,6 +18,7 @@ import {
   MCP_ENGINE_REQUEST_MESSAGE,
   MCP_HISTORY_MESSAGE,
   MCP_OPEN_CONSOLE_MESSAGE,
+  MCP_SERVER_SEEN_MESSAGE,
   MCP_SHUTDOWN_MESSAGE,
   MCP_STATUS_MESSAGE,
   type AgentDatasource,
@@ -94,6 +96,8 @@ export function createMcpHost(options: McpHostOptions): McpHost {
         requests.set(nextRequest, { port: null, resolve, reject });
         options.send({ kind: MCP_ENGINE_REQUEST_MESSAGE, requestId: nextRequest, datasourceId });
       }),
+    (datasourceId, opened) =>
+      options.send({ kind: MCP_SERVER_SEEN_MESSAGE, datasourceId, ...serverSeenOf(opened, now()) }),
   );
   const context = {
     datasources: () => datasources,

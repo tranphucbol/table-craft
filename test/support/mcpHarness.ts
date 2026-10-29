@@ -1,6 +1,7 @@
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
+import type { OpenedSession } from "@table-craft/desktop/engine/protocol.js";
 import { createRuns, type Runs } from "@table-craft/desktop/mcp/activity.js";
 import { createApprovals, type Approvals } from "@table-craft/desktop/mcp/approvals.js";
 import { createAgentEngines, type EnginePort } from "@table-craft/desktop/mcp/engines.js";
@@ -58,6 +59,8 @@ export interface AgentHarness {
   setDatasources(next: readonly AgentDatasource[]): void;
   setRowCap(rowCap: number): void;
   setTimeoutSeconds(seconds: number): void;
+  /** What each agent session said of its server as it opened (decision 131). */
+  readonly seen: { readonly datasourceId: string; readonly opened: OpenedSession }[];
   /** Every request the tools sent to an engine, in order. */
   readonly requests: { readonly type: string; readonly timeoutSeconds?: number; readonly serverEnforced?: boolean }[];
   call(name: Parameters<Tools["call"]>[0], args: unknown): Promise<ToolResult>;
@@ -74,6 +77,7 @@ export function agentHarness(
   let rowCap = 3;
   let timeoutSeconds = 120;
   const requests: AgentHarness["requests"] = [];
+  const seen: AgentHarness["seen"][number][] = [];
   let clock = 0;
   let windows = true;
   let activeConsole: McpActiveConsole | null = null;
@@ -84,28 +88,31 @@ export function agentHarness(
   );
   const approvals = createApprovals({ onChange: () => undefined, now: () => clock });
   approvals.setWindows(true);
-  const engines = createAgentEngines((datasourceId) => {
-    const engine = createEngine({
-      datasource: {
-        id: datasourceId,
-        pluginId: "sqlite",
-        config: { path },
-        readOnly: options.readOnly ?? false,
-        keepAliveSeconds: 0,
-      },
-      plugins: [LOADED_SQLITE],
-    });
-    const connection = engine.connect();
-    return Promise.resolve(
-      inProcessPort({
-        close: () => connection.close(),
-        handle: (request) => {
-          requests.push(request as AgentHarness["requests"][number]);
-          return connection.handle(request);
+  const engines = createAgentEngines(
+    (datasourceId) => {
+      const engine = createEngine({
+        datasource: {
+          id: datasourceId,
+          pluginId: "sqlite",
+          config: { path },
+          readOnly: options.readOnly ?? false,
+          keepAliveSeconds: 0,
         },
-      }),
-    );
-  });
+        plugins: [LOADED_SQLITE],
+      });
+      const connection = engine.connect();
+      return Promise.resolve(
+        inProcessPort({
+          close: () => connection.close(),
+          handle: (request) => {
+            requests.push(request as AgentHarness["requests"][number]);
+            return connection.handle(request);
+          },
+        }),
+      );
+    },
+    (datasourceId, opened) => seen.push({ datasourceId, opened }),
+  );
   const context: ToolContext = {
     datasources: () => exposed,
     engines,
@@ -133,6 +140,7 @@ export function agentHarness(
     path,
     runs,
     opened,
+    seen,
     setActiveConsole: (active) => (activeConsole = active),
     setWindows: (open) => {
       windows = open;

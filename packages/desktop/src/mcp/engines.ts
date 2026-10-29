@@ -93,7 +93,10 @@ export interface AgentEngines {
   closeAll(): void;
 }
 
-function agentEngine(port: EnginePort): AgentEngine {
+/** Called with each session agents open, so main can remember what the server said (decision 131). */
+export type ServerSeenListener = (datasourceId: string, opened: OpenedSession) => void;
+
+function agentEngine(port: EnginePort, onOpened: (opened: OpenedSession) => void): AgentEngine {
   const { call } = engineClient(port);
   const sessions = new Map<SessionMode, Promise<OpenedSession>>();
   const queues = new Map<SessionMode, Promise<unknown>>();
@@ -103,7 +106,7 @@ function agentEngine(port: EnginePort): AgentEngine {
     if (existing !== undefined) return existing;
     const opening = call("session.open", { readOnly: mode === "read" });
     sessions.set(mode, opening);
-    opening.catch(() => sessions.delete(mode));
+    opening.then(onOpened, () => sessions.delete(mode));
     return opening;
   }
 
@@ -124,7 +127,10 @@ function agentEngine(port: EnginePort): AgentEngine {
   };
 }
 
-export function createAgentEngines(connect: (datasourceId: string) => Promise<EnginePort>): AgentEngines {
+export function createAgentEngines(
+  connect: (datasourceId: string) => Promise<EnginePort>,
+  onServerSeen: ServerSeenListener = () => undefined,
+): AgentEngines {
   const engines = new Map<string, { readonly port: Promise<EnginePort>; readonly engine: Promise<AgentEngine> }>();
 
   return {
@@ -136,7 +142,7 @@ export function createAgentEngines(connect: (datasourceId: string) => Promise<En
         connected.onClose(() => {
           if (engines.get(datasourceId)?.port === port) engines.delete(datasourceId);
         });
-        return agentEngine(connected);
+        return agentEngine(connected, (opened) => onServerSeen(datasourceId, opened));
       });
       engines.set(datasourceId, { port, engine });
       engine.catch(() => engines.delete(datasourceId));
