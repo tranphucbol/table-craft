@@ -27,9 +27,11 @@ export interface Connection {
   readonly error: EngineError | null;
   /** What the server reported on the last successful connect. */
   readonly serverVersion: string | null;
+  /** The product the server said it is on the last successful connect; null before one or when the plugin names none. */
+  readonly serverBrand: string | null;
 }
 
-export const DISCONNECTED: Connection = { status: "disconnected", error: null, serverVersion: null };
+export const DISCONNECTED: Connection = { status: "disconnected", error: null, serverVersion: null, serverBrand: null };
 
 /** What the Database pane can have selected. */
 export type TreeSelection =
@@ -86,6 +88,8 @@ export interface DatasourcesDependencies {
   readonly disconnectEngine: (id: string) => Promise<void>;
   /** Asks the user for secrets kept Never; null when they cancel. */
   readonly promptSecrets: (request: SecretRequest) => Promise<Readonly<Record<string, string>> | null>;
+  /** Saves the brand a connection reported on the datasource, so it shows before the next connect. */
+  readonly rememberBrand: (id: string, brand: string) => Promise<void>;
 }
 
 export type DetachedListener = (datasourceId: string, error: EngineError | null) => void;
@@ -171,10 +175,16 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       }
     }
 
-    async function verify(client: EngineClient): Promise<string | null> {
+    async function verify(client: EngineClient): Promise<Pick<Connection, "serverVersion" | "serverBrand">> {
       const opened = await client.call("session.open", {});
       void client.call("session.close", { sessionId: opened.sessionId }).catch(() => undefined);
-      return opened.serverVersion;
+      return { serverVersion: opened.serverVersion, serverBrand: opened.serverBrand };
+    }
+
+    function remember(id: string, brand: string | null): void {
+      const view = get().datasources.find((datasource) => datasource.id === id);
+      if (brand === null || view === undefined || view.ephemeral || view.brand === brand) return;
+      void dependencies.rememberBrand(id, brand).catch(() => undefined);
     }
 
     function stop(id: string): Promise<void> {
@@ -263,8 +273,11 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
             for (const listener of eventListeners) listener(id, event);
           });
           try {
-            const serverVersion = await verify(client);
-            if (clients.get(id) === connecting) setConnection(id, { status: "connected", error: null, serverVersion });
+            const server = await verify(client);
+            if (clients.get(id) === connecting) {
+              setConnection(id, { status: "connected", error: null, ...server });
+              remember(id, server.serverBrand);
+            }
             return client;
           } catch (cause) {
             client.fail(toEngineError(cause));
@@ -276,7 +289,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
           if (clients.get(id) !== connecting) return;
           clients.delete(id);
           const error = toEngineError(cause);
-          setConnection(id, { status: "failed", error, serverVersion: null });
+          setConnection(id, { ...DISCONNECTED, status: "failed", error });
           // A wrong password typed into the prompt must not stay in a running engine.
           void stop(id);
         });
@@ -287,7 +300,8 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
         const wasLive = clients.has(id);
         detach(id, null);
         if (wasLive || get().connections[id]?.status === "connected") {
-          setConnection(id, { ...DISCONNECTED, serverVersion: get().connections[id]?.serverVersion ?? null });
+          const last = get().connections[id] ?? DISCONNECTED;
+          setConnection(id, { ...DISCONNECTED, serverVersion: last.serverVersion, serverBrand: last.serverBrand });
         }
         await stop(id);
       },
@@ -297,9 +311,9 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
         const error = exited.clean ? null : engineExitedError(exited.code);
         detach(exited.datasourceId, error);
         setConnection(exited.datasourceId, {
+          ...DISCONNECTED,
           status: error === null ? "disconnected" : "failed",
           error,
-          serverVersion: null,
         });
       },
 
@@ -342,6 +356,9 @@ export const useDatasources = createDatasourcesStore({
     await bridge().disconnectEngine(id);
   },
   promptSecrets: (request) => useSecretPrompt.getState().ask(request),
+  async rememberBrand(id, brand) {
+    await bridge().setDatasourceBrand(id, brand);
+  },
 });
 
 export function datasourceById(state: DatasourcesState, id: string | null | undefined): DatasourceView | undefined {

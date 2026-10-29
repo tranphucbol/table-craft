@@ -211,6 +211,7 @@ describe("key tab edits", () => {
           pluginName: "Redis",
           capabilities: ["commands", "keyValue"],
           serverVersion: "7.4.1",
+          serverBrand: null,
           namespace: null,
         };
         return Promise.resolve(opened);

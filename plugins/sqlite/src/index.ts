@@ -241,6 +241,8 @@ class SqliteSession implements Session {
   readonly #database: DatabaseSync;
   #mode: TransactionMode = "auto";
   readonly serverVersion: string | null;
+  /** The manifest's one brand. */
+  readonly serverBrand = "sqlite";
   readonly privateDatabase: boolean;
   readonly introspector: Introspector;
   readonly transactions: Transactions;

@@ -313,6 +313,44 @@ describe("datasource service", () => {
     expect(history.search("other", "")).toHaveLength(1);
   });
 
+  it("givenNewBrand_whenSetBrand_thenSavedAndBroadcast", async () => {
+    const { files, changes, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+    const broadcasts = changes.length;
+
+    await datasources.setBrand(saved.id, "postgresql");
+
+    expect(JSON.parse(files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`) ?? "")).toMatchObject({
+      datasources: [{ id: saved.id, brand: "postgresql" }],
+    });
+    expect(changes).toHaveLength(broadcasts + 1);
+    expect(changes.at(-1)?.datasources[0]?.brand).toBe("postgresql");
+  });
+
+  it("givenSameBrand_whenSetBrand_thenNoWriteNoBroadcast", async () => {
+    const { files, changes, service: datasources } = await service();
+    const saved = await datasources.save(saving({ ...PG_DRAFT, brand: "postgresql" }));
+    const json = files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`);
+    files.contents.delete(`${DIRECTORY}/${DATASOURCES_FILE}`);
+    const broadcasts = changes.length;
+
+    await datasources.setBrand(saved.id, "postgresql");
+
+    expect(json).toContain('"brand": "postgresql"');
+    expect(files.contents.has(`${DIRECTORY}/${DATASOURCES_FILE}`)).toBe(false);
+    expect(changes).toHaveLength(broadcasts);
+  });
+
+  it("givenEphemeral_whenSetBrand_thenNothingWritten", async () => {
+    const ephemeral = { id: "pg", pluginId: "postgres", config: PG_DRAFT.config };
+    const { files, changes, service: datasources } = await service({ ephemeral });
+
+    await datasources.setBrand("pg", "postgresql");
+
+    expect(files.contents.size).toBe(0);
+    expect(changes).toHaveLength(0);
+  });
+
   it("givenEphemeralDatasource_whenListed_thenFirstNeverSavedAndWithoutSecret", async () => {
     const ephemeral = { id: "pg", pluginId: "postgres", config: { ...PG_DRAFT.config, password: SECRET } };
     const { files, dependencies, service: datasources } = await service({ ephemeral });

@@ -11,6 +11,7 @@ export const SETTINGS_ACTION_IDS = {
   zoomIn: "editor.zoomIn",
   zoomOut: "editor.zoomOut",
   zoomReset: "editor.zoomReset",
+  toggleBrandIcons: "appearance.toggleBrandIcons",
 } as const;
 
 const ZOOM_STEP_PX = 1;
@@ -89,5 +90,15 @@ export const SETTINGS_ACTIONS: readonly AnyAction[] = [
         if (editor.sizePx === reset) return settings;
         return zoomEditorFont(settings, reset - editor.sizePx);
       }),
+  }),
+  defineAction({
+    id: SETTINGS_ACTION_IDS.toggleBrandIcons,
+    title: "Toggle Brand Icons",
+    category: "App",
+    run: () =>
+      useSettings.getState().update((settings) => ({
+        ...settings,
+        appearance: { ...settings.appearance, brandIcons: !settings.appearance.brandIcons },
+      })),
   }),
 ];

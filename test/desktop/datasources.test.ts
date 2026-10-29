@@ -74,6 +74,27 @@ describe("datasource store", () => {
     );
   });
 
+  it("givenBrand_whenDatasourcesSavedAndLoaded_thenKept", async () => {
+    const { files, store: first } = store();
+    const tidb = { ...LOCAL_PG, pluginId: "mysql", brand: "tidb" };
+    await first.save([tidb, LOCAL_PG]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.datasources).toEqual([tidb, LOCAL_PG]);
+    expect(reloaded.datasources[1]).not.toHaveProperty("brand");
+    expect(toDatasource(tidb, tidb.id, POSTGRES_MANIFEST.connection.fields).brand).toBe("tidb");
+  });
+
+  it("givenBadBrandId_whenLoaded_thenSetAside", async () => {
+    const file = JSON.stringify({ version: 1, datasources: [{ ...LOCAL_PG, brand: "Ti DB" }] });
+
+    const loaded = await store(memoryFiles({ [PATH]: file })).store.load();
+
+    expect(loaded.datasources).toEqual([]);
+    expect(loaded.warning).not.toBeNull();
+  });
+
   it("givenKeepAliveOutOfRange_whenLoaded_thenNotMisread", async () => {
     const file = JSON.stringify({ version: 1, datasources: [{ ...LOCAL_PG, keepAliveSeconds: 99_999 }] });
 

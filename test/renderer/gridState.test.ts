@@ -46,6 +46,7 @@ function pagingEngine() {
           pluginName: "fake",
           capabilities: ["sql"],
           serverVersion: "1",
+          serverBrand: null,
           namespace: null,
         };
         return Promise.resolve(opened);

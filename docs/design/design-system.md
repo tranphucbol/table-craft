@@ -340,6 +340,14 @@ Node icons are Phosphor glyphs named in `renderer/ui/icons.ts`, drawn by `panes/
 | running action (Run, Run All) | `SpinnerIcon`, spinning                                       | the button's ink                       |
 | error row                     | `WarningIcon`                                                 | `text-danger`                          |
 
+A datasource row draws its brand's logo (decision 128) from the Simple Icons paths in
+`renderer/ui/brandIcons.tsx`, at `size-icon`, in its brand's Simple Icons colour fitted to the
+theme by `appearance/brandInk.ts`: the nearest 5 % step toward `ink` that holds 3:1 on `canvas`,
+`panel`, `raised` and `selection`. State outranks brand: `text-danger` when its connect failed,
+`text-ink-muted` when its plugin is missing or not yet downloaded. With `appearance.brandIconColor`
+`gray`, every logo is `text-ink-muted`. A brand with no bundled path,
+or `appearance.brandIcons` off, draws `DatabaseIcon` in `text-accent`.
+
 A row's name keeps its width and truncates last; the detail after it (type, count, columns, hint)
 is `text-ink-muted` and gives way first. A failed namespace and its error row are `text-danger`.
 The speed search field floats at the tree's top right, `border-line` on `bg-raised`, and turns

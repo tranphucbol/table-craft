@@ -43,6 +43,7 @@ function catalogClient(describe: () => Promise<DescribedCatalog> = () => Promise
           pluginName: "PostgreSQL",
           capabilities: ["sql", "schemaTree"],
           serverVersion: "17",
+          serverBrand: null,
           namespace: null,
         };
         return Promise.resolve(opened);
@@ -68,6 +69,7 @@ function wired() {
     connectEngine: () => Promise.resolve({ status: "connected", client }),
     disconnectEngine: () => Promise.resolve(),
     promptSecrets: () => Promise.resolve(null),
+    rememberBrand: () => Promise.resolve(),
   });
   datasources.getState().setPlugins([POSTGRES_PLUGIN]);
   datasources.getState().applyList({

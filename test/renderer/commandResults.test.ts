@@ -49,6 +49,7 @@ function fakeEngine(options: { conflict?: boolean } = {}) {
           pluginName: "fake",
           capabilities: ["commands", "keyValue"],
           serverVersion: "7.4",
+          serverBrand: null,
           namespace: ["0"],
         };
         return Promise.resolve(opened);

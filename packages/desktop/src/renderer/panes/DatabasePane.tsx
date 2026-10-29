@@ -57,12 +57,14 @@ import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import {
   capabilitiesOf,
   connectionOf,
+  DISCONNECTED,
   pluginOf,
   useDatasources,
   type TreeSelection,
 } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { themeOf, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import { DatasourceGlyph, useBrandLogo, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
@@ -344,13 +346,16 @@ function DatasourceLabel({
   const missing = useDatasources(
     (state) => plugin === undefined && state.catalog.some((entry) => entry.id === datasource.pluginId),
   );
+  const brand = useDatasourceBrand(datasource);
+  const logo = useBrandLogo(brand);
   const dot = DOT_CLASS[connection.status];
   const failed = connection.status === "failed";
   return (
     <>
-      <DatabaseIcon
-        aria-hidden
-        className={cn("size-icon shrink-0", failed ? "text-danger" : missing ? "text-ink-muted" : "text-accent")}
+      <DatasourceGlyph
+        brand={brand}
+        tone={failed ? "danger" : missing ? "muted" : null}
+        className="size-icon shrink-0"
       />
       <span className={cn("contents", missing && "text-ink-muted")}>
         <Highlighted text={datasource.name} positions={positions} />
@@ -375,8 +380,10 @@ function DatasourceLabel({
       {connection.status === "disconnected" ? null : (
         <span className={cn("truncate", failed ? "text-danger" : "text-ink-muted")}>{connectionText(connection)}</span>
       )}
-      {plugin === undefined || connection.status !== "disconnected" ? null : (
-        <span className="truncate text-ink-muted">{plugin.name}</span>
+      {plugin === undefined || logo || connection.status !== "disconnected" ? null : (
+        <span data-testid="datasource-product" className="truncate text-ink-muted">
+          {brand?.name ?? plugin.name}
+        </span>
       )}
       {missing ? <MissingPlugin pluginId={datasource.pluginId} /> : null}
     </>
@@ -400,17 +407,20 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
     node.kind === "datasource" ? connectionOf(state, node.datasource.id) : null,
   );
   const shown = useShownText(node);
+  const brand = useDatasourceBrand(
+    node.kind === "datasource" ? node.datasource : { id: "", pluginId: "", brand: undefined },
+  );
   const label =
     node.kind === "folder"
       ? `${node.name}, folder`
       : node.kind === "datasource"
-        ? `${node.datasource.name}, ${connectionText(connection ?? { status: "disconnected", error: null, serverVersion: null })}${shown === null ? "" : `, ${shown} schemas shown`}`
+        ? `${node.datasource.name}, ${connectionText(connection ?? DISCONNECTED)}${shown === null ? "" : `, ${shown} schemas shown`}`
         : nodeAriaLabel(row);
   const failedNamespace = node.kind === "namespace" && node.state?.error != null;
   const title =
     node.kind === "datasource"
       ? connection?.error == null
-        ? undefined
+        ? brand?.name
         : `${connection.error.message} ${connection.error.hint}`
       : nodeTitle(node);
   const dragged = draggedObjectOf(node);
@@ -421,6 +431,7 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
           ref={(element) => register(row.key, element)}
           role="treeitem"
           aria-label={label}
+          aria-description={brand?.name}
           aria-level={depth + 1}
           aria-selected={selected}
           aria-expanded={row.expandable ? row.expanded : undefined}

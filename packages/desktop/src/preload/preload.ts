@@ -137,6 +137,7 @@ const bridge: TableCraftBridge = {
   importCancel: () => invoke(INVOKE_CHANNELS.importCancel),
   onImportProgress: (listener) => subscribe<ImportProgress>(CHANNELS.importProgress, listener),
   setAgentAccess: (datasourceId, access) => invoke(INVOKE_CHANNELS.setAgentAccess, { datasourceId, access }),
+  setDatasourceBrand: (datasourceId, brand) => invoke(INVOKE_CHANNELS.setDatasourceBrand, { datasourceId, brand }),
   mcpStatus: () => invoke(INVOKE_CHANNELS.mcpStatus),
   onMcpStatus: (listener) => subscribe<McpStatus>(CHANNELS.mcpStatus, listener),
   mcpControl: (control) => invoke(INVOKE_CHANNELS.mcpControl, control),

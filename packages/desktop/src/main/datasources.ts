@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { z } from "@table-craft/plugin-api";
+import { BRAND_ID, z } from "@table-craft/plugin-api";
 import { writeAtomically, type FileSystem } from "@table-craft/desktop/main/files.js";
 import {
   DATASOURCE_COLORS,
@@ -59,6 +59,7 @@ const datasourceSchema = z.strictObject({
   agentAccess: z.enum(AGENT_ACCESS_LEVELS).optional(),
   agentSchemas: z.array(z.string()).readonly().optional(),
   agentRowCap: z.number().int().min(MCP_ROW_CAP_RANGE.min).max(MCP_ROW_CAP_RANGE.max).optional(),
+  brand: z.string().regex(BRAND_ID).optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -159,6 +160,7 @@ export function toDatasource(
     ...(draft.agentAccess === undefined || draft.agentAccess === "off" ? {} : { agentAccess: draft.agentAccess }),
     ...(draft.agentSchemas === undefined ? {} : { agentSchemas: [...draft.agentSchemas] }),
     ...(draft.agentRowCap === undefined ? {} : { agentRowCap: draft.agentRowCap }),
+    ...(draft.brand === undefined ? {} : { brand: draft.brand }),
   };
 }
 

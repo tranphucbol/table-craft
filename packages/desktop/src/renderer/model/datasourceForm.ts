@@ -3,6 +3,7 @@ import {
   DEFAULT_SSH_PORT,
   SSH_SECRET_KEYS,
   SSH_SECRET_LABELS,
+  type Brand,
   type ConfigValue,
   type ConnectionField,
   type DatasourceColor,
@@ -48,6 +49,8 @@ export interface FormDraft {
   readonly ssh: SshDraft;
   /** Manage Shown Schemas' choice (decision 117); the form does not edit it, only keeps it. */
   readonly shownNamespaces: readonly string[] | undefined;
+  /** The product picked in New Data Source or last reported by the server; the form does not edit it. */
+  readonly brand: string | undefined;
   readonly ephemeral: boolean;
   readonly dirty: boolean;
 }
@@ -210,6 +213,7 @@ export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefin
     storedSecrets: view.storedSecrets,
     ssh: sshDraftOf(view.ssh),
     shownNamespaces: view.shownNamespaces,
+    brand: view.brand,
     ephemeral: view.ephemeral,
     dirty: false,
   };
@@ -221,6 +225,7 @@ export function newDraft(
   taken: readonly string[],
   defaultMode: SecretMode,
   folder = "",
+  brand: Brand | null = null,
 ): FormDraft {
   const values: Record<string, string | boolean> = {};
   for (const field of plainFieldsOf(plugin)) values[field.key] = inputOf(field, field.default);
@@ -233,7 +238,7 @@ export function newDraft(
   return {
     key,
     id: undefined,
-    name: uniqueName(plugin.name, taken),
+    name: uniqueName(brand?.name ?? plugin.name, taken),
     pluginId: plugin.id,
     folder,
     comment: "",
@@ -250,6 +255,7 @@ export function newDraft(
     storedSecrets: [],
     ssh: BLANK_SSH,
     shownNamespaces: undefined,
+    brand: brand?.id,
     ephemeral: false,
     dirty: true,
   };
@@ -392,6 +398,7 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
       secretModes: Object.fromEntries(Object.entries(draft.secretModes).filter(([key]) => kept(key))),
       ...(tunnel ? { ssh: sshSettingsOf(draft.ssh) } : {}),
       ...(draft.shownNamespaces === undefined ? {} : { shownNamespaces: draft.shownNamespaces }),
+      ...(draft.brand === undefined ? {} : { brand: draft.brand }),
     },
     secrets: Object.fromEntries(Object.entries(draft.secrets).filter(([key]) => kept(key))),
   };

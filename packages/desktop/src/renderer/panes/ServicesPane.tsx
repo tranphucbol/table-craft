@@ -36,7 +36,8 @@ import {
   warningsText,
 } from "@table-craft/desktop/renderer/model/serverMessages.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
-import { connectionOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { connectionOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { DatasourceGlyph, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import {
   useExecutions,
   type Execution,
@@ -84,7 +85,6 @@ import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import {
   CollapsedIcon,
   ConsoleIcon,
-  DatabaseIcon,
   ExpandedIcon,
   ExportIcon,
   ImportIcon,
@@ -237,11 +237,14 @@ function Menu({ entries }: { readonly entries: readonly MenuEntry[] }) {
 
 function DatasourceLine({ row }: { readonly row: Extract<ServiceRow, { kind: "datasource" }> }) {
   const connection = useDatasources((state) => connectionOf(state, row.node.datasourceId));
+  const view = useDatasources((state) => datasourceById(state, row.node.datasourceId));
+  const brand = useDatasourceBrand({ id: row.node.datasourceId, pluginId: view?.pluginId ?? "", brand: view?.brand });
   return (
     <>
-      <DatabaseIcon
-        aria-hidden
-        className={cn("size-icon shrink-0", connection.status === "failed" ? "text-danger" : "text-accent")}
+      <DatasourceGlyph
+        brand={brand}
+        tone={connection.status === "failed" ? "danger" : null}
+        className="size-icon shrink-0"
       />
       <span className="truncate">{row.node.name}</span>
       <span className={cn("truncate", connection.status === "failed" ? "text-danger" : "text-ink-muted")}>

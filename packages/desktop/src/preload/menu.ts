@@ -135,6 +135,7 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
         accelerator: "CmdOrCtrl+Shift+F12",
       },
       { kind: "action", label: "Show System Schemas", actionId: "explorer.toggleSystemSchemas" },
+      { kind: "action", label: "Brand Icons", actionId: "appearance.toggleBrandIcons" },
       SEPARATOR,
       { kind: "action", label: "Query History…", actionId: "history.show", accelerator: "CmdOrCtrl+Alt+E" },
       { kind: "action", label: "Open Closed Console…", actionId: "console.reopen" },

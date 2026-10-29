@@ -1,5 +1,5 @@
 import type { QueryHistory } from "@table-craft/core";
-import { z } from "@table-craft/plugin-api";
+import { BRAND_ID, z } from "@table-craft/plugin-api";
 import { ConsoleFileError, type ConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
 import { draftSchema } from "@table-craft/desktop/main/datasources.js";
 import { logWriteRequest } from "@table-craft/desktop/main/log/schema.js";
@@ -120,6 +120,7 @@ const menuPoint = z.strictObject({
 }) satisfies z.ZodType<MenuPoint>;
 const noRequest = z.undefined();
 const agentAccessRequest = z.strictObject({ datasourceId: z.string().min(1), access: z.enum(AGENT_ACCESS_LEVELS) });
+const datasourceBrandRequest = z.strictObject({ datasourceId: z.string().min(1), brand: z.string().regex(BRAND_ID) });
 const mcpControlRequest = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("answer"), approvalId: z.string().min(1), answer: z.enum(APPROVAL_ANSWERS) }),
   z.strictObject({ action: z.literal("pause"), paused: z.boolean() }),
@@ -488,6 +489,10 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   const { mcp } = options;
   handle(INVOKE_CHANNELS.setAgentAccess, agentAccessRequest, async ({ datasourceId, access }) => {
     await service.setAgentAccess(datasourceId, access);
+    return null;
+  });
+  handle(INVOKE_CHANNELS.setDatasourceBrand, datasourceBrandRequest, async ({ datasourceId, brand }) => {
+    await service.setBrand(datasourceId, brand);
     return null;
   });
   handle(INVOKE_CHANNELS.mcpStatus, noRequest, () => mcp.status());
