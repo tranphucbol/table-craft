@@ -1,5 +1,6 @@
 import {
   PluginError,
+  type CancelReach,
   type ConnectOptions,
   type ExecuteOptions,
   type ExecuteResult,
@@ -49,10 +50,13 @@ function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+const CANCEL_REACH: CancelReach = { method: "CLIENT UNBLOCK", reaches: "blockingCommands" };
+
 export class RedisSession implements Session {
   readonly serverVersion: string;
   /** The manifest's one brand. */
   readonly serverBrand = "redis";
+  readonly cancelReach: CancelReach = CANCEL_REACH;
   readonly tls = null;
   readonly delimiter: string;
   readonly keyspace: RedisKeyspace;

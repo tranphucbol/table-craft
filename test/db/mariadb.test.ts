@@ -14,10 +14,11 @@ describe.runIf(databaseEnabled("mariadb"))("mariadb server", () => {
     typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_LIKE },
   });
 
-  it("givenMariadbServer_whenSessionOpens_thenServerBrandMariadb", async () => {
+  it("givenMariadbServer_whenSessionOpens_thenServerBrandMariadbAndKillQueryReach", async () => {
     const session = await mysql.connect(MARIADB_CONFIG, { readOnly: false });
     try {
       expect(session.serverBrand).toBe("mariadb");
+      expect(session.cancelReach).toEqual({ method: "KILL QUERY", reaches: "statement" });
     } finally {
       await session.close();
     }

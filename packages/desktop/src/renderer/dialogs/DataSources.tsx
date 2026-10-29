@@ -1,6 +1,12 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo, useState } from "react";
-import type { ProbeResult, ServerTimeout, SshHop, TlsHop } from "@table-craft/desktop/engine/protocol.js";
+import {
+  probeSeenOf,
+  type ProbeResult,
+  type ServerTimeout,
+  type SshHop,
+  type TlsHop,
+} from "@table-craft/desktop/engine/protocol.js";
 import {
   DATASOURCE_COLORS,
   type BridgeFailure,
@@ -609,6 +615,10 @@ function Editor({ target }: { readonly target: DialogTarget }) {
       ? answer.value
       : { ok: false, error: { code: "connectionFailed", ...answer.error } };
     setTests((previous) => ({ ...previous, [draft.key]: { kind: "done", result } }));
+    const saved = datasources.find((datasource) => datasource.id === draft.id);
+    if (result.ok && saved !== undefined && !saved.ephemeral && saved.pluginId === draft.pluginId) {
+      void bridge().rememberServer(saved.id, probeSeenOf(result, Date.now()));
+    }
     const { serverBrand } = result.ok ? result : { serverBrand: null };
     if (serverBrand === null || serverBrand === draft.brand) return;
     // Functional, so fields typed while the test ran are kept.

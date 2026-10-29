@@ -4,6 +4,7 @@ import { openConsole } from "@table-craft/desktop/renderer/actions/consoleComman
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { useApprovalPlans } from "@table-craft/desktop/renderer/state/approvalPlans.js";
 import { copied, writeClipboard } from "@table-craft/desktop/renderer/state/clipboard.js";
+import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
@@ -43,6 +44,7 @@ export const MCP_ACTION_IDS = {
   explainRequest: "mcp.explainRequest",
   activity: "mcp.activity",
   openInConsole: "mcp.openInConsole",
+  testDatasource: "mcp.testDatasource",
 } as const;
 
 export interface AgentPolicyArgs {
@@ -341,6 +343,18 @@ export const MCP_ACTIONS: readonly AnyAction[] = [
     run: (_context, request) => {
       if (request === undefined) return showActivity();
       return openConsole(request.datasourceId, request.sql).then(() => useMcp.getState().setActivity(false));
+    },
+  }),
+  defineAction<string | undefined>({
+    id: MCP_ACTION_IDS.testDatasource,
+    title: "Test Agent Data Source Connection…",
+    category: "Database",
+    icon: "properties",
+    // The (i) beside an agent's timeout passes its data source; the palette has none to pass.
+    run: (_context, datasourceId) => {
+      if (datasourceId === undefined) return showSettings();
+      useSettingsDialog.getState().hide();
+      useDataSourcesDialog.getState().show({ kind: "edit", id: datasourceId });
     },
   }),
   defineAction({

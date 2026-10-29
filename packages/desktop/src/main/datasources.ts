@@ -9,6 +9,8 @@ import {
   type ConnectionField,
   type Datasource,
   type DatasourceDraft,
+  type LastServer,
+  type ServerSeen,
 } from "@table-craft/desktop/preload/bridge.js";
 import { AGENT_ACCESS_LEVELS } from "@table-craft/desktop/settings/mcp.js";
 import {
@@ -36,6 +38,28 @@ const sshSchema = z.strictObject({
   auth: z.enum(["password", "key", "agent"]),
   keyPath: z.string(),
 });
+
+export const lastServerSchema = z.strictObject({
+  version: z.string().nullable(),
+  timeout: z
+    .strictObject({
+      setting: z.string().min(1),
+      covers: z.enum(["reads", "all"]),
+      counts: z.enum(["statement", "serverWork"]),
+    })
+    .nullable()
+    .optional(),
+  cancel: z
+    .strictObject({ method: z.string().min(1), reaches: z.enum(["statement", "connection", "blockingCommands"]) })
+    .optional(),
+  seenAt: z.number().int().nonnegative(),
+}) satisfies z.ZodType<LastServer>;
+
+/** What a connection reported, as `rememberServer` takes it from a window or the MCP host. */
+export const serverSeenSchema = z.strictObject({
+  brand: z.string().regex(BRAND_ID).nullable(),
+  lastServer: lastServerSchema,
+}) satisfies z.ZodType<ServerSeen>;
 
 const datasourceSchema = z.strictObject({
   id: z.string().min(1),
@@ -68,6 +92,7 @@ const datasourceSchema = z.strictObject({
     .min(MCP_TIMEOUT_SECONDS_RANGE.min)
     .max(MCP_TIMEOUT_SECONDS_RANGE.max)
     .optional(),
+  lastServer: lastServerSchema.optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -125,12 +150,15 @@ export function normalizeFolder(folder: string | null): string | null {
 /**
  * Drops config keys the form does not declare and every secret value, whatever the renderer sent,
  * and the SSH tunnel unless the plugin `offersTunnel` (its manifest declares `network`, decision 070).
+ * `lastServer` comes from `previous`, never the draft: only a connection says what the server is
+ * (decision 131).
  */
 export function toDatasource(
   draft: DatasourceDraft,
   id: string,
   fields: readonly ConnectionField[],
   offersTunnel = false,
+  previous?: Pick<Datasource, "lastServer">,
 ): Datasource {
   const config: Record<string, Datasource["config"][string]> = {};
   const secretModes: Record<string, Datasource["secretModes"][string]> = {};
@@ -171,6 +199,7 @@ export function toDatasource(
     ...(draft.agentRowCap === undefined ? {} : { agentRowCap: draft.agentRowCap }),
     ...(draft.brand === undefined ? {} : { brand: draft.brand }),
     ...(draft.agentTimeoutSeconds === undefined ? {} : { agentTimeoutSeconds: draft.agentTimeoutSeconds }),
+    ...(previous?.lastServer === undefined ? {} : { lastServer: previous.lastServer }),
   };
 }
 

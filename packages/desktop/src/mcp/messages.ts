@@ -1,3 +1,4 @@
+import type { ServerSeen } from "@table-craft/desktop/engine/protocol.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import type {
   AgentAccess,
@@ -32,6 +33,8 @@ export const MCP_OPEN_CONSOLE_MESSAGE = "mcp.openConsole";
 export const MCP_CONTEXT_REQUEST_MESSAGE = "mcp.contextRequest";
 /** Main → MCP host: the window's answer, null when no console is focused or no window is open. */
 export const MCP_CONTEXT_ANSWER_MESSAGE = "mcp.contextAnswer";
+/** MCP host → main: what a server said of itself when an agent session opened (decision 131). */
+export const MCP_SERVER_SEEN_MESSAGE = "mcp.server-seen";
 export const MCP_LOG_MESSAGE = "mcp.log";
 export const MCP_SHUTDOWN_MESSAGE = "mcp.shutdown";
 
@@ -106,6 +109,7 @@ export type McpToMain =
   | { readonly kind: typeof MCP_ENGINE_REQUEST_MESSAGE; readonly requestId: number; readonly datasourceId: string }
   | { readonly kind: typeof MCP_STATUS_MESSAGE; readonly status: McpStatus }
   | { readonly kind: typeof MCP_HISTORY_MESSAGE; readonly entry: AgentHistoryEntry }
+  | ({ readonly kind: typeof MCP_SERVER_SEEN_MESSAGE; readonly datasourceId: string } & ServerSeen)
   | ({ readonly kind: typeof MCP_OPEN_CONSOLE_MESSAGE } & McpConsoleRequest)
   | { readonly kind: typeof MCP_CONTEXT_REQUEST_MESSAGE; readonly requestId: number }
   | { readonly kind: typeof MCP_LOG_MESSAGE; readonly record: LogRecord };

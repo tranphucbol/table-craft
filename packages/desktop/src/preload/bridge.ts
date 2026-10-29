@@ -4,7 +4,16 @@
  * their originals by `test/desktop/protocol.test.ts`.
  */
 import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
-import type { Capability, HostKeyOffer, ProbeResult, SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
+import type {
+  Capability,
+  HostKeyOffer,
+  LastServer,
+  ProbeResult,
+  ServerSeen,
+  SshAuthMethod,
+} from "@table-craft/desktop/engine/protocol.js";
+
+export type { LastServer, ServerSeen } from "@table-craft/desktop/engine/protocol.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import type {
   AgentAccess,
@@ -122,7 +131,7 @@ export const INVOKE_CHANNELS = {
   importCancel: "table-craft:import.cancel",
   answerHostKey: "table-craft:ssh.answer-host-key",
   setAgentAccess: "table-craft:datasources.set-agent-access",
-  setDatasourceBrand: "table-craft:datasources.set-brand",
+  rememberServer: "table-craft:datasources.remember-server",
   setAgentPolicy: "table-craft:datasources.set-agent-policy",
   mcpCopyToken: "table-craft:mcp.copy-token",
   mcpContextReply: "table-craft:mcp.context-reply",
@@ -341,6 +350,8 @@ export interface Datasource {
   readonly brand?: string | undefined;
   /** Seconds an agent's statement may run here; absent, Settings › MCP Server's statement timeout. */
   readonly agentTimeoutSeconds?: number | undefined;
+  /** What the server last said about itself and its limits (decision 131); absent until it is reached. */
+  readonly lastServer?: LastServer | undefined;
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */
@@ -767,8 +778,11 @@ export interface TableCraftBridge {
   /** Settings › MCP Server's access column; refuses to raise a production-coloured datasource past Read only. */
   setAgentAccess(datasourceId: string, access: AgentAccess): Promise<InvokeResult<null>>;
   setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<InvokeResult<null>>;
-  /** Remembers the product a connection reported; nothing is written or broadcast when it is unchanged. */
-  setDatasourceBrand(datasourceId: string, brand: string): Promise<InvokeResult<null>>;
+  /**
+   * Remembers the product and limits a connection reported (decision 131); nothing is written or
+   * broadcast when they are unchanged and were seen within a day.
+   */
+  rememberServer(datasourceId: string, seen: ServerSeen): Promise<InvokeResult<null>>;
   mcpCopyToken(): Promise<InvokeResult<null>>;
   /** Answers main's `onMcpContextRequest`; null when no console is focused. */
   mcpContextReply(requestId: number, context: McpActiveConsole | null): Promise<InvokeResult<null>>;

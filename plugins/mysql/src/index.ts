@@ -23,6 +23,7 @@ import {
   type PluginErrorCode,
   type ServerMessage,
   type ServerTimeout,
+  type CancelReach,
   type Session,
   type SessionMonitor,
   type SqlLanguage,
@@ -78,6 +79,7 @@ import { mysqlObjects } from "./objects.js";
 import { mysqlRoutineCall } from "./routines.js";
 import {
   explainDialect,
+  cancelReachOf,
   killStatementFor,
   namesServerTimeout,
   ownTimeoutMs,
@@ -639,6 +641,7 @@ class MysqlSession implements Session {
   readonly serverVersion: string | null;
   readonly serverBrand: string;
   readonly serverTimeout: ServerTimeout | null;
+  readonly cancelReach: CancelReach;
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
@@ -656,6 +659,7 @@ class MysqlSession implements Session {
     this.serverBrand = identity.dialect.kind;
     this.#dialect = identity.dialect;
     this.serverTimeout = serverTimeoutOf(this.#dialect);
+    this.cancelReach = cancelReachOf(identity.serverVersion);
     this.tls = tlsInfoOf((connection as unknown as WithStream).stream);
     this.introspector = mysqlIntrospector(connection);
     this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));

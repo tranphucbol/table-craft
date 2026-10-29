@@ -4,6 +4,7 @@ import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS, type AgentPolicyArgs } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { Button, FieldRow, INPUT_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { NumberField, SectionTitle, update } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
+import { TimeoutInfo } from "@table-craft/desktop/renderer/dialogs/TimeoutInfo.js";
 import { mcpStatusText, MCP_STATE_DOT } from "@table-craft/desktop/renderer/model/mcp.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
@@ -248,16 +249,21 @@ function AccessRow({
       </td>
       <td className={CELL_CLASS}>
         {exposed ? (
-          <CommitField
-            label={`Statement timeout for ${datasource.name}`}
-            testId="mcp-access-timeout"
-            title={TIMEOUT_HINT}
-            className="text-right font-editor tabular-nums placeholder:text-ink"
-            value={datasource.agentTimeoutSeconds === undefined ? "" : String(datasource.agentTimeoutSeconds)}
-            placeholder={String(defaults.timeoutSeconds)}
-            check={timeoutCheck}
-            onCommit={(text) => setPolicy(datasource, { timeoutSeconds: text.trim() === "" ? null : Number(text) })}
-          />
+          <span className="flex min-w-0 items-center justify-end gap-1">
+            <TimeoutInfo datasource={datasource} defaultSeconds={defaults.timeoutSeconds} />
+            <span className="w-14 min-w-0">
+              <CommitField
+                label={`Statement timeout for ${datasource.name}`}
+                testId="mcp-access-timeout"
+                title={TIMEOUT_HINT}
+                className="text-right font-editor tabular-nums placeholder:text-ink"
+                value={datasource.agentTimeoutSeconds === undefined ? "" : String(datasource.agentTimeoutSeconds)}
+                placeholder={String(defaults.timeoutSeconds)}
+                check={timeoutCheck}
+                onCommit={(text) => setPolicy(datasource, { timeoutSeconds: text.trim() === "" ? null : Number(text) })}
+              />
+            </span>
+          </span>
         ) : (
           <NotExposed className="text-right" />
         )}
@@ -335,7 +341,7 @@ function AccessTable({ defaults }: { readonly defaults: AgentDefaults }) {
                 <th scope="col" className={cn(HEADER_CLASS, "w-24 text-right")}>
                   Row cap
                 </th>
-                <th scope="col" className={cn(HEADER_CLASS, "w-24 text-right")} title={TIMEOUT_HINT}>
+                <th scope="col" className={cn(HEADER_CLASS, "w-28 text-right")} title={TIMEOUT_HINT}>
                   Timeout
                 </th>
               </tr>

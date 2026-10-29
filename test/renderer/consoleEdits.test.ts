@@ -44,6 +44,7 @@ function fakeEngine(options: { reject?: boolean } = {}) {
           serverBrand: null,
           namespace: ["shop"],
           serverTimeout: null,
+          cancelReach: null,
         };
         return Promise.resolve(opened);
       }

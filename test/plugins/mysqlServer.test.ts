@@ -1,4 +1,6 @@
 import {
+  cancelReachOf,
+  CONNECTION_RESET_METHOD,
   killStatementFor,
   MYSQL_SERVER_KINDS,
   ownTimeoutMs,
@@ -76,6 +78,27 @@ describe("mysql kill statement", () => {
   it("givenTidbBeforeGlobalKill_whenKillStatement_thenNone", () => {
     expect(killStatementFor("5.7.25-TiDB-v4.0.14", CONNECTION_ID)).toBeNull();
     expect(killStatementFor("5.7.25-TiDB-v6.0.0", CONNECTION_ID)).toBeNull();
+  });
+
+  it("givenEachDialect_whenCancelReachRead_thenMatchesKillStatement", () => {
+    const versions = [
+      "8.4.3",
+      "10.11.10-MariaDB",
+      "5.7.25-TiDB-v4.0.14",
+      "5.7.25-TiDB-v6.0.0",
+      "8.0.11-TiDB-v6.1.0",
+      "8.0.11-TiDB-v7.5.1",
+    ];
+    for (const version of versions) {
+      const kill = killStatementFor(version, CONNECTION_ID);
+      const reach = cancelReachOf(version);
+      if (kill === null) {
+        expect(reach).toEqual({ method: CONNECTION_RESET_METHOD, reaches: "connection" });
+      } else {
+        expect(reach.reaches).toBe("statement");
+        expect(kill).toBe(`${reach.method} ${String(CONNECTION_ID)}`);
+      }
+    }
   });
 });
 

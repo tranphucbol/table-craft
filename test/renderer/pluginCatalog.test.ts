@@ -85,7 +85,7 @@ describe("plugin catalog", () => {
       connectEngine: () => Promise.reject(new Error("unused")),
       disconnectEngine: () => Promise.resolve(),
       promptSecrets: () => Promise.resolve(null),
-      rememberBrand: () => Promise.resolve(),
+      rememberServer: () => Promise.resolve(),
     });
 
     store.getState().applyPlugins({ plugins: [SQLITE_PLUGIN], catalog: [entry()] });
