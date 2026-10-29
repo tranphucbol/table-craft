@@ -16,6 +16,7 @@ import {
 } from "@table-craft/desktop/main/update/manifest.js";
 import { drainSwapLog, readUpdateMemory, writeUpdateMemory } from "@table-craft/desktop/main/update/memory.js";
 import {
+  BETA_MANIFEST_URL,
   FIRST_CHECK_DELAY_MS,
   RELEASE_MANIFEST_URL,
   updateEndpoint,
@@ -34,6 +35,8 @@ import {
 } from "@table-craft/desktop/main/update/updater.js";
 import type { Logger, LogFields } from "@table-craft/desktop/log/record.js";
 import type { UpdateState } from "@table-craft/desktop/preload/bridge.js";
+import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
+import { ChannelManifestError, checkBetaManifest } from "../../packages/desktop/scripts/channel-manifest.js";
 import {
   installerKey,
   manifestBody,
@@ -43,6 +46,8 @@ import {
 
 const MANIFEST_URL = "https://updates.example/releases/latest/download/update-manifest.json";
 const SIGNATURE_URL = "https://updates.example/releases/latest/download/update-manifest.json.sig";
+const BETA_URL = "https://channels.example/beta/update-manifest.json";
+const BETA_SIGNATURE_URL = "https://channels.example/beta/update-manifest.json.sig";
 const ASSET_URL = "https://updates.example/releases/download/v0.2.0/TableCraft-0.2.0-arm64.zip";
 const NOTES_URL = "https://updates.example/releases/tag/v0.2.0";
 const PAYLOAD = Buffer.from("a TableCraft zip, as far as these tests care");
@@ -214,7 +219,8 @@ async function harness(
   let id = 0;
   const updater = createUpdater({
     currentVersion: "0.1.0",
-    manifestUrl: MANIFEST_URL,
+    manifestUrls: { stable: MANIFEST_URL, beta: BETA_URL },
+    channel: () => "stable",
     trust: TRUST,
     facts: overrides.facts ?? (await installedApp()),
     tempDirectory: temp,
@@ -283,6 +289,18 @@ describe("update manifest", () => {
     expect(UPDATE_PUBLIC_KEY).not.toMatch(/PRIVATE/);
   });
 
+  it("givenManifestWithoutChannel_whenVerified_thenStable", () => {
+    const { body, signature } = signed(manifestDocument());
+
+    expect(verifyManifest(body, signature, TRUST)).toMatchObject({ ok: true, manifest: { channel: "stable" } });
+  });
+
+  it("givenBetaChannel_whenVerified_thenBeta", () => {
+    const { body, signature } = signed(manifestDocument({ version: "0.2.0-beta.1", channel: "beta" }));
+
+    expect(verifyManifest(body, signature, TRUST)).toMatchObject({ ok: true, manifest: { channel: "beta" } });
+  });
+
   it("givenAnotherSchema_whenVerified_thenRejectedAsSchema", () => {
     const { body, signature } = signed(manifestDocument({ schema: 2 }));
 
@@ -291,6 +309,7 @@ describe("update manifest", () => {
 
   it.each([
     ["a version that is not semver", { version: "latest" }],
+    ["an unknown channel", { channel: "nightly" }],
     ["an http notes URL", { notesUrl: "http://example.com/notes" }],
     [
       "an http asset",
@@ -335,6 +354,7 @@ describe("update eligibility", () => {
   const manifest = (overrides: Partial<UpdateManifest> = {}): UpdateManifest => ({
     schema: 1,
     version: "0.2.0",
+    channel: "stable",
     notesUrl: NOTES_URL,
     minimumVersion: null,
     assets: { "darwin-arm64": { url: ASSET_URL, size: 1, sha256: "a".repeat(64) } },
@@ -540,6 +560,94 @@ describe("updater", () => {
     await Promise.all([updater.check("automatic"), updater.check("manual")]);
 
     expect(fetch.calls.filter((url) => url === MANIFEST_URL)).toHaveLength(1);
+  });
+
+  function withBeta(routes: Record<string, Route>, version: string, keys = KEYS): Record<string, Route> {
+    const { body, signature } = signed(manifestDocument({ version, channel: "beta" }), keys);
+    return {
+      ...routes,
+      [BETA_URL]: () => response(body),
+      [BETA_SIGNATURE_URL]: () => response(Buffer.from(signature)),
+    };
+  }
+
+  const onBeta = { channel: () => "beta" as const };
+
+  it("givenBetaChannel_whenTheBetaIsNewer_thenTheBetaIsOffered", async () => {
+    const { updater } = await harness(withBeta(release(), "0.3.0-beta.1"), onBeta);
+
+    expect(await updater.check("manual")).toMatchObject({ phase: "available", release: { version: "0.3.0-beta.1" } });
+  });
+
+  it("givenBetaChannel_whenTheStableReleaseIsNewer_thenTheStableReleaseIsOffered", async () => {
+    const stable = release(manifestDocument({ version: "0.3.0" }));
+    const { updater } = await harness(withBeta(stable, "0.3.0-beta.2"), onBeta);
+
+    expect(await updater.check("manual")).toMatchObject({ phase: "available", release: { version: "0.3.0" } });
+  });
+
+  it("givenStableChannel_whenChecked_thenTheBetaManifestIsNotFetched", async () => {
+    const routes = withBeta(release(), "0.3.0-beta.1");
+    const fetch = fakeFetch(routes);
+    const { updater } = await harness(routes, { fetch });
+
+    expect(await updater.check("manual")).toMatchObject({ release: { version: "0.2.0" } });
+    expect(fetch.calls).not.toContain(BETA_URL);
+  });
+
+  it("givenBetaChannel_whenNoBetaIsPublishedYet_thenTheStableReleaseIsOfferedAndAWarningLogged", async () => {
+    const routes = { ...release(), [BETA_URL]: () => response(Buffer.from("Not Found"), { status: 404 }) };
+    const { updater, logs } = await harness(routes, onBeta);
+
+    expect(await updater.check("manual")).toMatchObject({ phase: "available", release: { version: "0.2.0" } });
+    expect(logs.filter((line) => line.level === "warn")).toMatchObject([
+      { msg: "update check failed", fields: { url: BETA_URL } },
+    ]);
+  });
+
+  it("givenBetaChannel_whenTheStableManifestIsUnreachable_thenTheBetaIsStillOffered", async () => {
+    const routes = withBeta({ [ASSET_URL]: () => response(PAYLOAD) }, "0.3.0-beta.1");
+    const { updater } = await harness(routes, onBeta);
+
+    expect(await updater.check("manual")).toMatchObject({ phase: "available", release: { version: "0.3.0-beta.1" } });
+  });
+
+  it("givenBetaChannel_whenBothManifestsAreUnreachable_thenARetryableError", async () => {
+    const { updater } = await harness({}, onBeta);
+
+    expect(await updater.check("manual")).toMatchObject({ phase: "error", release: null, retryable: true });
+  });
+
+  it("givenBetaChannel_whenTheBetaSignatureIsBad_thenTheStableReleaseIsOfferedAndTheRejectionLoggedAtError", async () => {
+    const { updater, logs } = await harness(withBeta(release(), "0.3.0-beta.1", OTHER_KEYS), onBeta);
+
+    expect(await updater.check("automatic")).toMatchObject({ phase: "available", release: { version: "0.2.0" } });
+    expect(logs.filter((line) => line.level === "error")).toMatchObject([
+      { msg: "update manifest rejected", fields: { url: BETA_URL, reason: "signature" } },
+    ]);
+  });
+
+  it("givenStableChannel_whenTheStableUrlServesABeta_thenIdleAndTheMismatchLogged", async () => {
+    const { updater, logs } = await harness(release(manifestDocument({ version: "0.3.0-beta.1", channel: "beta" })));
+
+    expect(await updater.check("manual")).toEqual({ phase: "idle", current: "0.1.0" });
+    expect(logs.map((line) => line.msg)).toContain("update manifest is for another channel");
+  });
+
+  it("givenABetaInstallOnTheStableChannel_whenOnlyAnOlderStableExists_thenNoDowngrade", async () => {
+    const { updater } = await harness(release(), { currentVersion: "0.3.0-beta.1" });
+
+    expect(await updater.check("manual")).toEqual({ phase: "idle", current: "0.3.0-beta.1" });
+  });
+
+  it("givenTheChannelChanges_whenCheckedAgain_thenTheNextCheckUsesIt", async () => {
+    let channel: ReleaseChannel = "stable";
+    const { updater } = await harness(withBeta(release(), "0.3.0-beta.1"), { channel: () => channel });
+    expect(await updater.check("manual")).toMatchObject({ release: { version: "0.2.0" } });
+
+    channel = "beta";
+
+    expect(await updater.check("manual")).toMatchObject({ release: { version: "0.3.0-beta.1" } });
   });
 
   it("givenAvailableUpdate_whenDownloaded_thenStagedBesideTheBundleAndReady", async () => {
@@ -883,6 +991,7 @@ describe("update endpoint", () => {
 
     expect(updateEndpoint(env, false, readKey)).toEqual({
       manifestUrl: RELEASE_MANIFEST_URL,
+      betaManifestUrl: BETA_MANIFEST_URL,
       trust: RELEASE_TRUST,
       firstCheckMs: FIRST_CHECK_DELAY_MS,
       overridden: false,
@@ -898,8 +1007,20 @@ describe("update endpoint", () => {
 
     expect(updateEndpoint(env, true, readKey)).toEqual({
       manifestUrl: "http://127.0.0.1:1/m.json",
+      betaManifestUrl: BETA_MANIFEST_URL,
       trust: { publicKeyPem: "key from /k.pem", allowLoopbackHttp: true },
       firstCheckMs: 500,
+      overridden: true,
+    });
+  });
+
+  it("givenTestBuild_whenOnlyTheBetaManifestIsOverridden_thenLoopbackAllowedAndStableKept", () => {
+    const env = { [UPDATE_OVERRIDE_ENV.betaManifestUrl]: "http://127.0.0.1:1/beta/m.json" };
+
+    expect(updateEndpoint(env, true, readKey)).toMatchObject({
+      manifestUrl: RELEASE_MANIFEST_URL,
+      betaManifestUrl: "http://127.0.0.1:1/beta/m.json",
+      trust: { allowLoopbackHttp: true },
       overridden: true,
     });
   });
@@ -1012,6 +1133,31 @@ describe("update manifest script", () => {
     expect(installerKey(name, "0.2.0")).toBe(key);
   });
 
+  it.each([
+    ["TableCraft-0.2.0-beta.1-arm64.zip", "darwin-arm64"],
+    ["TableCraft-0.2.0-beta.1-x64.exe", "win32-x64"],
+    ["TableCraft-0.2.0-arm64.zip", null],
+  ])("givenBetaInstaller %s_whenNamed_thenKey %s", (name, key) => {
+    expect(installerKey(name, "0.2.0-beta.1")).toBe(key);
+  });
+
+  it.each([
+    ["0.2.0", "stable"],
+    ["0.2.0-beta.1", "beta"],
+  ])("givenVersion %s_whenSigned_thenManifestChannel %s", (version, channel) => {
+    const body = manifestBody({
+      version,
+      notesUrl: NOTES_URL,
+      minimumVersion: null,
+      baseUrl: `https://updates.example/releases/download/v${version}/`,
+      installers: [{ name: `TableCraft-${version}-arm64.zip`, size: 10, sha256: "a".repeat(64) }],
+    });
+
+    const verdict = verifyManifest(body, signBody(body, KEYS.privatePem), TRUST);
+
+    expect(verdict.ok && verdict.manifest.channel).toBe(channel);
+  });
+
   it("givenInstallers_whenSigned_thenTheAppVerifiesTheManifest", () => {
     const body = manifestBody({
       version: "0.2.0",
@@ -1041,5 +1187,47 @@ describe("update manifest script", () => {
 
     expect(build).toThrow(ManifestScriptError);
     expect(build).toThrow(/build the installers first/);
+  });
+});
+
+describe("beta channel manifest script", () => {
+  const TAG = "v0.3.0-beta.2";
+
+  function candidate(overrides: Record<string, unknown> = {}, published: string | null = null, keys = KEYS) {
+    const { body, signature } = signed(
+      manifestDocument({ version: "0.3.0-beta.2", channel: "beta", ...overrides }),
+      keys,
+    );
+    return {
+      tag: TAG,
+      body,
+      signature,
+      published: published === null ? null : Buffer.from(JSON.stringify({ version: published })),
+    };
+  }
+
+  it.each([
+    [null, "publish"],
+    ["0.3.0-beta.1", "publish"],
+    ["0.2.0", "publish"],
+    ["0.3.0-beta.2", "unchanged"],
+  ] as const)("givenPublished %s_whenChecked_then %s", (published, verdict) => {
+    expect(checkBetaManifest(candidate({}, published), TRUST)).toBe(verdict);
+  });
+
+  it.each([
+    ["an older beta is published", candidate({}, "0.3.0-beta.3"), /already offers 0\.3\.0-beta\.3/],
+    ["a newer stable is published", candidate({}, "0.3.0"), /already offers 0\.3\.0;/],
+    ["the version differs from the tag", candidate({ version: "0.3.0-beta.1" }), /names 0\.3\.0-beta\.1, the tag/],
+    ["the manifest is stable", candidate({ channel: "stable" }), /stable channel/],
+    ["the signature is another key's", candidate({}, null, OTHER_KEYS), /does not verify \(signature/],
+    ["the tag is stable", { ...candidate(), tag: "v0.3.0" }, /vX\.Y\.Z-beta\.N/],
+  ])("given %s_whenChecked_thenRefused", (_case, input, message) => {
+    expect(() => checkBetaManifest(input, TRUST)).toThrow(ChannelManifestError);
+    expect(() => checkBetaManifest(input, TRUST)).toThrow(message);
+  });
+
+  it("givenAnUnreadablePublishedFile_whenChecked_thenPublished", () => {
+    expect(checkBetaManifest({ ...candidate(), published: Buffer.from("<html>") }, TRUST)).toBe("publish");
   });
 });

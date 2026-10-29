@@ -48,6 +48,7 @@ back to its default without affecting the others.
 | `log.level`                            | `info`, `debug`                                                                                 | `info`                                         |
 | `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                               | 120                                            |
 | `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                  | `true`                                         |
+| `updates.channel`                      | `auto`, `stable`, `beta`; `auto` follows the build you run. Plugins follow it too               | `auto`                                         |
 | `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |
 | `mcp.clients`                          | `{ "name", "allowed" }` per MCP client you answered; [Allow or Block](agents.md)                | `[]`                                           |
 | `mcp.enabled`                          | `true`, `false`; run the [MCP server](agents.md) for AI agents                                  | `false`                                        |

@@ -12,6 +12,7 @@ import { createPluginService, type PluginService } from "@table-craft/desktop/ma
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
 import { CHECK_INTERVAL_MS } from "@table-craft/desktop/main/update/overrides.js";
 import { createUpdateSchedule, type UpdateSchedule } from "@table-craft/desktop/main/update/schedule.js";
+import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import type { PluginsState } from "@table-craft/desktop/preload/bridge.js";
 
@@ -35,6 +36,8 @@ export interface PluginStoreOptions {
   readonly packaged: boolean;
   readonly environment: NodeJS.ProcessEnv;
   readonly registryUrl: () => string;
+  /** The app's update channel; plugins follow it. */
+  readonly channel: () => ReleaseChannel;
   readonly checkAutomatically: () => boolean;
   /** The saved data sources, read when a plugin is removed or found missing. */
   readonly datasources: () => readonly { readonly pluginId: string; readonly name: string }[];
@@ -85,6 +88,7 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     managedRoot: join(options.userData, MANAGED_PLUGINS_DIRECTORY),
     userRoot: join(options.userData, USER_PLUGINS_DIRECTORY),
     registryUrl: options.registryUrl,
+    channel: options.channel,
     fetch: (url, init) => net.fetch(url, init),
     usedBy,
     onChanged: options.onChanged,

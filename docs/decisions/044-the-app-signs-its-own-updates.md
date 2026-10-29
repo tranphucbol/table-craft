@@ -1,6 +1,6 @@
 # 044: The app signs its own updates
 
-Status: Accepted
+Status: Accepted. Amended by 134.
 
 ## Decision
 

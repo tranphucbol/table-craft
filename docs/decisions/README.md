@@ -126,3 +126,4 @@ started, not when it is merged.
 | 131 | [A datasource remembers how its timeout is enforced](131-a-datasource-remembers-how-its-timeout-is-enforced.md)                                                        |
 | 132 | [User docs are a short README and a guide](132-user-docs-are-a-short-readme-and-a-guide.md)                                                                            |
 | 133 | [Testing know-how is a skill agents load when they test](133-testing-know-how-is-a-skill-agents-load-when-they-test.md)                                                |
+| 134 | [A beta channel, and plugins publish only when they change](134-beta-channel-and-plugins-publish-on-change.md)                                                         |

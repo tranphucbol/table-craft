@@ -14,11 +14,14 @@ import { LAUNCH_TIMEOUT_MS, mainToolbar, readProfileFile } from "./harness.js";
 
 /** `UPDATE_OVERRIDE_ENV` in `main/update/overrides.ts`; the e2e suites do not import main. */
 const MANIFEST_URL_ENV = "TABLE_CRAFT_UPDATE_MANIFEST_URL";
+const BETA_MANIFEST_URL_ENV = "TABLE_CRAFT_UPDATE_BETA_MANIFEST_URL";
 const PUBLIC_KEY_ENV = "TABLE_CRAFT_UPDATE_PUBLIC_KEY";
 const FIRST_CHECK_ENV = "TABLE_CRAFT_UPDATE_FIRST_CHECK_MS";
 export const FIRST_CHECK_MS = 300;
 export const MANIFEST_PATH = "/releases/latest/download/update-manifest.json";
 const SIGNATURE_PATH = `${MANIFEST_PATH}.sig`;
+export const BETA_MANIFEST_PATH = "/update-channels/beta/update-manifest.json";
+const BETA_SIGNATURE_PATH = `${BETA_MANIFEST_PATH}.sig`;
 const UPDATE_SCOPE = "update";
 const LOG_FILE = join("logs", "table-craft.log");
 const PUBLIC_KEY_FILE = "update-test-key.pem";
@@ -42,16 +45,19 @@ export interface Release {
   readonly assetName?: string;
   readonly signedBy?: KeyPair;
   readonly respond?: AssetResponder;
+  /** A beta version the beta channel's manifest offers beside `version`; without it that manifest is 404. */
+  readonly beta?: string;
 }
 
 export interface LocalServer {
   readonly server: Server;
   readonly url: string;
+  readonly betaUrl: string;
   readonly assetPath: string;
   readonly requests: string[];
 }
 
-function manifestOf(release: Release, assetUrl: string): Buffer {
+function manifestOf(release: Release, version: string, assetUrl: string): Buffer {
   const asset = {
     url: assetUrl,
     size: release.asset.byteLength,
@@ -59,7 +65,14 @@ function manifestOf(release: Release, assetUrl: string): Buffer {
   };
   const assets = Object.fromEntries(ASSET_KEYS.map((key) => [key, asset]));
   return Buffer.from(
-    JSON.stringify({ schema: 1, version: release.version, notesUrl: NOTES_URL, minimumVersion: null, assets }),
+    JSON.stringify({
+      schema: 1,
+      version,
+      ...(version.includes("-beta.") ? { channel: "beta" } : {}),
+      notesUrl: NOTES_URL,
+      minimumVersion: null,
+      assets,
+    }),
   );
 }
 
@@ -74,10 +87,14 @@ export async function serve(release: Release): Promise<LocalServer> {
   let attempts = 0;
   const server = createServer((request, response) => {
     requests.push(request.url ?? "");
-    const body = manifestOf(release, `${origin}${assetPath}`);
+    const signature = (body: Buffer): string =>
+      sign(null, body, (release.signedBy ?? KEYS).privateKey).toString("base64");
+    const body = manifestOf(release, release.version, `${origin}${assetPath}`);
+    const betaBody = release.beta === undefined ? null : manifestOf(release, release.beta, `${origin}${assetPath}`);
     if (request.url === MANIFEST_PATH) response.end(body);
-    else if (request.url === SIGNATURE_PATH)
-      response.end(sign(null, body, (release.signedBy ?? KEYS).privateKey).toString("base64"));
+    else if (request.url === SIGNATURE_PATH) response.end(signature(body));
+    else if (request.url === BETA_MANIFEST_PATH && betaBody !== null) response.end(betaBody);
+    else if (request.url === BETA_SIGNATURE_PATH && betaBody !== null) response.end(signature(betaBody));
     else if (request.url === assetPath) {
       attempts += 1;
       (release.respond ?? sendWhole)(attempts, release.asset, response);
@@ -85,14 +102,19 @@ export async function serve(release: Release): Promise<LocalServer> {
   });
   await new Promise<void>((listening) => server.listen(0, "127.0.0.1", listening));
   origin = `http://127.0.0.1:${String((server.address() as AddressInfo).port)}`;
-  return { server, url: `${origin}${MANIFEST_PATH}`, assetPath, requests };
+  return { server, url: `${origin}${MANIFEST_PATH}`, betaUrl: `${origin}${BETA_MANIFEST_PATH}`, assetPath, requests };
 }
 
 /** The launch variables that point a development or test build at `local`, trusting `KEYS`. */
 export function overrides(local: LocalServer, userDataDir: string): Record<string, string> {
   const keyFile = join(userDataDir, PUBLIC_KEY_FILE);
   writeFileSync(keyFile, KEYS.publicKey.export({ type: "spki", format: "pem" }).toString());
-  return { [MANIFEST_URL_ENV]: local.url, [PUBLIC_KEY_ENV]: keyFile, [FIRST_CHECK_ENV]: String(FIRST_CHECK_MS) };
+  return {
+    [MANIFEST_URL_ENV]: local.url,
+    [BETA_MANIFEST_URL_ENV]: local.betaUrl,
+    [PUBLIC_KEY_ENV]: keyFile,
+    [FIRST_CHECK_ENV]: String(FIRST_CHECK_MS),
+  };
 }
 
 export interface LoggedLine {
