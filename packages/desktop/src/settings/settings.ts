@@ -36,6 +36,8 @@ export interface AppearanceSettings {
   readonly motion: MotionChoice;
   /** Frame the window with the operating system's title bar; main reads it at window creation. */
   readonly systemTitleBar: boolean;
+  /** Draw each data source's database logo instead of the generic glyph (decision 128). */
+  readonly brandIcons: boolean;
 }
 
 export interface DataSettings {
@@ -210,6 +212,7 @@ export const DEFAULT_SETTINGS: Settings = {
     },
     motion: "system",
     systemTitleBar: false,
+    brandIcons: true,
   },
   editor: {
     format: { style: "aligned", keywordCase: "upper", indentWidth: 2, linesBetweenStatements: 1, alignAliases: true },
@@ -433,6 +436,7 @@ export function readSettings(input: unknown): Settings {
       motion: isMotionChoice(appearance.motion) ? appearance.motion : defaults.appearance.motion,
       systemTitleBar:
         typeof appearance.systemTitleBar === "boolean" ? appearance.systemTitleBar : defaults.appearance.systemTitleBar,
+      brandIcons: typeof appearance.brandIcons === "boolean" ? appearance.brandIcons : defaults.appearance.brandIcons,
     },
     editor: {
       format: readFormat(editor.format, defaults.editor.format),

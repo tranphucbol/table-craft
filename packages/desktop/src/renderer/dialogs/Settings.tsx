@@ -117,6 +117,7 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
       motion: DEFAULT_SETTINGS.appearance.motion,
       fonts: { ...current.appearance.fonts, ui: DEFAULT_SETTINGS.appearance.fonts.ui },
       systemTitleBar: DEFAULT_SETTINGS.appearance.systemTitleBar,
+      brandIcons: DEFAULT_SETTINGS.appearance.brandIcons,
     },
   }),
   editor: (current) => ({
@@ -289,9 +290,32 @@ function AppearancePage() {
       <MotionFields />
       <SectionTitle>Font</SectionTitle>
       <FontFields role="ui" />
+      <SectionTitle>Data sources</SectionTitle>
+      <BrandIconsField />
       <SectionTitle>Window</SectionTitle>
       <TitleBarField />
     </>
+  );
+}
+
+function BrandIconsField() {
+  const brandIcons = useSettings((state) => state.settings.appearance.brandIcons);
+  const id = useId();
+  return (
+    <FieldRow label="Icons" htmlFor={id}>
+      <label className="flex items-center gap-cell">
+        <input
+          id={id}
+          type="checkbox"
+          checked={brandIcons}
+          onChange={(event) => {
+            const checked = event.target.checked;
+            update((current) => ({ ...current, appearance: { ...current.appearance, brandIcons: checked } }));
+          }}
+        />
+        Show database logos on data sources
+      </label>
+    </FieldRow>
   );
 }
 

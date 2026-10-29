@@ -31,6 +31,7 @@ const CHOSEN: Settings = {
     },
     motion: "reduced",
     systemTitleBar: true,
+    brandIcons: false,
   },
   editor: {
     format: { style: "standard", keywordCase: "lower", indentWidth: 4, linesBetweenStatements: 0, alignAliases: false },
@@ -208,6 +209,20 @@ describe("settings document", () => {
       readSettings({ ...CHOSEN, appearance: { ...appearance, systemTitleBar: "yes" } }).appearance.systemTitleBar,
     ).toBe(false);
     expect(readSettings(CHOSEN).appearance.systemTitleBar).toBe(true);
+  });
+
+  it("givenBrandIcons_whenSettingsRead_thenDefaultTrue", () => {
+    const { brandIcons: _omitted, ...appearance } = CHOSEN.appearance;
+
+    expect(DEFAULT_SETTINGS.appearance.brandIcons).toBe(true);
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.brandIcons).toBe(true);
+    expect(readSettings(CHOSEN).appearance.brandIcons).toBe(false);
+  });
+
+  it("givenNonBooleanBrandIcons_whenSettingsRead_thenDefault", () => {
+    const appearance = { ...CHOSEN.appearance, brandIcons: "no" };
+
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.brandIcons).toBe(true);
   });
 
   it("givenMotionMissing_whenRead_thenSystem", () => {
