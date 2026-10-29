@@ -163,6 +163,7 @@ export {
   type ServerInfo,
   type ServerInfoSection,
   type ServerNode,
+  type ServerTimeout,
   type SlowCommand,
   switchableTo,
   type NewColumn,

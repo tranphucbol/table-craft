@@ -24,6 +24,7 @@ import {
   INDENT_WIDTH_RANGE,
   KEYWORD_CASES,
   LINES_BETWEEN_STATEMENTS_RANGE,
+  MCP_TIMEOUT_SECONDS_RANGE,
   NULL_TEXT_LENGTH,
   PAGE_ROWS_RANGE,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
@@ -49,6 +50,7 @@ const RANGES: Readonly<Record<string, NumberRange>> = {
   "data.blobLimitMb": BLOB_LIMIT_MB_RANGE,
   "console.statementTimeoutSeconds": STATEMENT_TIMEOUT_SECONDS_RANGE,
   "console.sessionsRefreshSeconds": SESSIONS_REFRESH_SECONDS_RANGE,
+  "mcp.statementTimeoutSeconds": MCP_TIMEOUT_SECONDS_RANGE,
 };
 
 /** GitHub's heading anchor: lower case, punctuation dropped, each space a hyphen. */

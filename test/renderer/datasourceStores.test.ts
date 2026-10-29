@@ -53,6 +53,7 @@ function fakeClient(datasourceId: string, options: { openFails?: EngineError; se
           serverVersion: `${datasourceId} 1.0`,
           serverBrand: options.serverBrand ?? null,
           namespace: null,
+          serverTimeout: null,
         };
         return Promise.resolve(opened);
       }

@@ -1,4 +1,13 @@
-import { killStatementFor, MYSQL_SERVER_KINDS, serverDialect } from "@table-craft/plugin-mysql/server";
+import {
+  killStatementFor,
+  MYSQL_SERVER_KINDS,
+  ownTimeoutMs,
+  serverDialect,
+  serverTimeoutOf,
+  serverTimeoutSql,
+  stoppedAtLimit,
+  stoppedAtLimitMessage,
+} from "@table-craft/plugin-mysql/server";
 import { describe, expect, it } from "vitest";
 import { MYSQL_MANIFEST } from "../support/manifests.js";
 
@@ -67,5 +76,73 @@ describe("mysql kill statement", () => {
   it("givenTidbBeforeGlobalKill_whenKillStatement_thenNone", () => {
     expect(killStatementFor("5.7.25-TiDB-v4.0.14", CONNECTION_ID)).toBeNull();
     expect(killStatementFor("5.7.25-TiDB-v6.0.0", CONNECTION_ID)).toBeNull();
+  });
+});
+
+const READS = { setting: "max_execution_time", covers: "reads", counts: "statement" };
+const TIDB_ALL = { setting: "max_execution_time", covers: "all", counts: "statement" };
+const MARIADB_ALL = { setting: "max_statement_time", covers: "all", counts: "statement" };
+
+function timeoutOf(serverVersion: string | null) {
+  return serverTimeoutOf(serverDialect(serverVersion));
+}
+
+describe("mysql server timeout", () => {
+  it("givenMysql847_whenDialect_thenMysqlReadsStatement", () => {
+    expect(timeoutOf("8.4.7")).toEqual(READS);
+    expect(timeoutOf("8.4.3")).toEqual(READS);
+  });
+
+  it("givenMysql577_whenDialect_thenNoServerTimeout", () => {
+    expect(timeoutOf("5.7.7-log")).toBeNull();
+    expect(timeoutOf("5.7.8")).toEqual(READS);
+  });
+
+  it("givenMariadb5555Prefix_whenDialect_thenMariadbVersionPastPrefix", () => {
+    expect(timeoutOf("10.11.6-MariaDB")).toEqual(MARIADB_ALL);
+    expect(timeoutOf("5.5.5-10.0.38-MariaDB")).toBeNull();
+  });
+
+  it("givenMariadb1000_whenDialect_thenNoServerTimeout", () => {
+    expect(timeoutOf("10.0.0-MariaDB")).toBeNull();
+    expect(timeoutOf("10.1.1-MariaDB")).toEqual(MARIADB_ALL);
+  });
+
+  it("givenTidb4_whenDialect_thenCoversAll", () => {
+    expect(timeoutOf("8.0.11-TiDB-v4.0.16")).toEqual(TIDB_ALL);
+    expect(timeoutOf("5.7.25-TiDB-v4.0.14")).toEqual(TIDB_ALL);
+  });
+
+  it("givenTidb75_whenDialect_thenCoversReads", () => {
+    expect(timeoutOf("8.0.11-TiDB-v7.5.1")).toEqual(READS);
+  });
+
+  it("givenUnreadableVersion_whenDialect_thenNoServerTimeout", () => {
+    expect(timeoutOf(null)).toBeNull();
+  });
+
+  it("givenMariadb_whenTimeoutSql_thenSecondsWithFraction", () => {
+    expect(serverTimeoutSql(serverDialect("10.11.6-MariaDB"), 1_500)).toBe("SET SESSION max_statement_time = 1.5");
+    expect(ownTimeoutMs(serverDialect("10.11.6-MariaDB"), 2.5)).toBe(2_500);
+  });
+
+  it("givenZeroMs_whenTimeoutSql_thenUnlimited", () => {
+    expect(serverTimeoutSql(serverDialect("8.4.7"), 0)).toBe("SET SESSION max_execution_time = 0");
+    expect(serverTimeoutSql(serverDialect("10.11.6-MariaDB"), 0)).toBe("SET SESSION max_statement_time = 0");
+    expect(ownTimeoutMs(serverDialect("5.7.25-TiDB-v4.0.14"), "0")).toBe(0);
+  });
+
+  it("givenTidb1317_whenRanPastLimit_thenStoppedAtLimitElseKill", () => {
+    const tidb = serverDialect("5.7.25-TiDB-v4.0.14");
+
+    expect(stoppedAtLimit(tidb, 1317, 1_600, 1_500)).toBe(true);
+    expect(stoppedAtLimit(tidb, 1317, 900, 1_500)).toBe(false);
+    expect(stoppedAtLimit(tidb, 1317, 1_600, null)).toBe(false);
+    expect(stoppedAtLimit(serverDialect("8.4.7"), 1317, 1_600, 1_500)).toBe(false);
+    expect(stoppedAtLimit(serverDialect("8.4.7"), 3024, 0, null)).toBe(true);
+    expect(stoppedAtLimit(serverDialect("10.11.6-MariaDB"), 1969, 0, null)).toBe(true);
+    expect(stoppedAtLimitMessage(tidb, 1_500)).toBe(
+      "TiDB stopped the statement at its 1.5 s limit (max_execution_time).",
+    );
   });
 });

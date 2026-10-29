@@ -71,6 +71,27 @@ export function mysqlRoutines(int = "int"): ContractOptions["routines"] {
   };
 }
 
+/** A quarter-second `SLEEP` per row: the server's limit stops it between rows with an error. */
+const SLEEPS_PER_SECOND = 4;
+
+/**
+ * A read of `seconds` that MySQL and MariaDB stop with an error at their limit. A lone
+ * `SELECT SLEEP(n)` will not do: MySQL answers one cut short by `max_execution_time` with 1.
+ */
+export function mysqlSlowRead(seconds: number): string {
+  const rows = Array.from({ length: seconds * SLEEPS_PER_SECOND }, (_, index) => `SELECT ${String(index)} AS n`);
+  return `SELECT SLEEP(${String(1 / SLEEPS_PER_SECOND)}) AS s FROM (${rows.join(" UNION ALL ")}) t`;
+}
+
+export const MYSQL_STATEMENTS: NonNullable<ContractOptions["statements"]> = {
+  write: TYPE_PROBE_WRITE,
+  sleep: (seconds) => `SELECT SLEEP(${String(seconds)})`,
+  slowRead: mysqlSlowRead,
+  sessionTimeout: (ms) => `SET SESSION max_execution_time = ${String(ms)}`,
+  message: { sql: "SELECT CAST('1x' AS SIGNED) AS n", level: "warning", code: "1292" },
+  syntaxError: { sql: "SELECT id FROM customers WHER id = 1", offset: "SELECT id FROM customers WHER ".length },
+};
+
 /**
  * The plugin contract against a server seeded from `schema/mysql.sql`, as MySQL 8.4 runs it;
  * `overrides` carries what an older or compatible server answers differently.
@@ -84,12 +105,7 @@ export function runMysqlFamilyContract(
     manifest: MYSQL_MANIFEST,
     config,
     wrongPasswordConfig: withWrongPassword(config),
-    statements: {
-      write: TYPE_PROBE_WRITE,
-      sleep: (seconds) => `SELECT SLEEP(${String(seconds)})`,
-      message: { sql: "SELECT CAST('1x' AS SIGNED) AS n", level: "warning", code: "1292" },
-      syntaxError: { sql: "SELECT id FROM customers WHER id = 1", offset: "SELECT id FROM customers WHER ".length },
-    },
+    statements: MYSQL_STATEMENTS,
     typeProbe: { expected: TYPE_PROBE_EXPECTED, copyTable: TYPE_PROBE_COPY_AS },
     scripts: [
       {

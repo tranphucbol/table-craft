@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useMemo, useState } from "react";
-import type { ProbeResult, SshHop, TlsHop } from "@table-craft/desktop/engine/protocol.js";
+import type { ProbeResult, ServerTimeout, SshHop, TlsHop } from "@table-craft/desktop/engine/protocol.js";
 import {
   DATASOURCE_COLORS,
   type BridgeFailure,
@@ -40,6 +40,7 @@ import {
   toSaveRequest,
   type FormDraft,
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
+import { serverLimitText, serverTimeoutText } from "@table-craft/desktop/renderer/model/format.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { folderPaths } from "@table-craft/desktop/renderer/model/datasourceTree.js";
 import { useDataSourcesDialog, type DialogTarget } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
@@ -54,6 +55,7 @@ const NEW_KEY_PREFIX = "new-";
 const KEEPALIVE_HINT = "Seconds idle before TCP keepalive probes start; 0 turns them off. Blank is 30.";
 const TIMEOUT_HINT =
   "A console statement running longer is cancelled; 0 waits. Blank follows Settings → Editor → Running.";
+const NO_SERVER_TIMEOUT_HINT = "This data source's plugin cannot ask the database to stop statements.";
 const URL_SEPARATOR = "://";
 const READ_ONLY_HINT = "A guard against accidents, not a security boundary: use a read-only database user for that.";
 const AGENT_ACCESS_OPTIONS = AGENT_ACCESS_LEVELS.map((value) => ({ value, label: AGENT_ACCESS_LABELS[value] }));
@@ -78,7 +80,11 @@ export function tlsSummary(tls: TlsHop | null): string {
 export function testSummary(result: Extract<ProbeResult, { ok: true }>, brands: readonly Brand[] = []): string {
   const product = brands.find((brand) => brand.id === result.serverBrand)?.name ?? result.pluginName;
   const server = result.serverVersion === null ? product : `${product} ${result.serverVersion}`;
-  return `Succeeded · ${server} · ${String(Math.round(result.elapsedMs))} ms`;
+  const limit =
+    result.serverTimeout === undefined || result.serverTimeout === null
+      ? ""
+      : ` · ${serverLimitText(result.serverTimeout)}`;
+  return `Succeeded · ${server}${limit} · ${String(Math.round(result.elapsedMs))} ms`;
 }
 
 interface EditorState {
@@ -273,9 +279,11 @@ interface FormProps {
   readonly folders: readonly string[];
   readonly onChange: (change: Partial<FormDraft>) => void;
   readonly onUrl: (url: string) => void;
+  /** What the last successful Test Connection found; undefined before one. */
+  readonly serverTimeout: ServerTimeout | null | undefined;
 }
 
-function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
+function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout }: FormProps) {
   const encryption = useDatasources((state) => state.encryption);
   const appTimeout = useSettings((state) => state.settings.console.statementTimeoutSeconds);
   const nameId = useId();
@@ -295,6 +303,7 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
   const capabilities = plugin?.capabilities ?? [];
   const keepAlive = capabilities.includes("keepAlive");
   const timeout = capabilities.includes("cancel");
+  const enforceable = capabilities.includes("serverTimeout");
   const onPasteUrl = (field: ConnectionField, text: string): boolean => {
     if (spec === null || urlFieldKey(spec) !== field.key || !looksLikeUrl(spec, text)) return false;
     onUrl(text);
@@ -408,6 +417,28 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl }: FormProps) {
                 {draft.statementTimeoutSeconds.trim() === "" ? "From Settings → Editor → Running; " : ""}0 waits
               </span>
             </FieldRow>
+          ) : null}
+          {timeout ? (
+            <FieldRow label="">
+              <label
+                className={cn("flex min-w-0 items-center gap-cell", !enforceable && "text-ink-muted")}
+                title={enforceable ? serverTimeoutText(serverTimeout) : NO_SERVER_TIMEOUT_HINT}
+              >
+                <input
+                  type="checkbox"
+                  data-testid="enforce-timeout-on-server"
+                  disabled={!enforceable}
+                  checked={enforceable && draft.enforceTimeoutOnServer}
+                  onChange={(event) => onChange({ enforceTimeoutOnServer: event.target.checked })}
+                />
+                <span>Also have the database stop it</span>
+              </label>
+            </FieldRow>
+          ) : null}
+          {timeout && enforceable ? (
+            <p data-testid="server-timeout-hint" className="col-start-2 text-ink-muted">
+              {serverTimeoutText(serverTimeout)}
+            </p>
           ) : null}
         </>
       )}
@@ -708,6 +739,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                 folders={folders}
                 onChange={(patch) => change(current.key, patch)}
                 onUrl={(url) => void pasteUrl(current, url)}
+                serverTimeout={test?.kind === "done" && test.result.ok ? test.result.serverTimeout : undefined}
               />
             </>
           )}

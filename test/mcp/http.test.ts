@@ -152,6 +152,7 @@ async function bootedHost(clients = KNOWN_CLIENTS): Promise<{
     token: TOKEN,
     serverVersion: "1.2.3",
     rowCap: 10,
+    timeoutSeconds: 120,
     windows: true,
     clients,
     datasources: [{ id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access: "read" }],
@@ -217,7 +218,7 @@ describe("MCP over HTTP", () => {
 
     const called = rpc(port, COUNT_ORDERS, sessionId);
     await expect.poll(() => statuses.at(-1)?.pendingClients.map((client) => client.name)).toEqual(["claude-code"]);
-    host?.handle({ kind: MCP_CONFIG_MESSAGE, rowCap: 10, clients: KNOWN_CLIENTS });
+    host?.handle({ kind: MCP_CONFIG_MESSAGE, rowCap: 10, timeoutSeconds: 120, clients: KNOWN_CLIENTS });
 
     expect((await called).body).toMatchObject({ id: 3, result: { structuredContent: { rows: [{ n: 3 }] } } });
     expect(statuses.at(-1)?.pendingClients).toEqual([]);

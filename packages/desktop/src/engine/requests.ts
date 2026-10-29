@@ -175,6 +175,7 @@ const timeoutSeconds = z
   .min(STATEMENT_TIMEOUT_SECONDS_RANGE.min)
   .max(STATEMENT_TIMEOUT_SECONDS_RANGE.max)
   .optional();
+const statementLimit = { timeoutSeconds, serverEnforced: z.boolean().optional() };
 const cellInput = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("text"), text: z.string() }),
   z.strictObject({ kind: z.literal("null") }),
@@ -205,7 +206,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     sql: z.string(),
     parameters: z.record(z.string(), z.string().nullable()).optional(),
     ...paging,
-    timeoutSeconds,
+    ...statementLimit,
     node: z.string().min(1).optional(),
     repeat: z.number().int().min(2).optional(),
   }),
@@ -234,7 +235,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     sessionId,
     sql: z.string(),
     analyze: z.boolean(),
-    timeoutSeconds,
+    ...statementLimit,
   }),
   z.strictObject({
     id: requestId,
@@ -385,7 +386,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
       offset: z.number().int().nonnegative().optional(),
     }),
     ...paging,
-    timeoutSeconds,
+    ...statementLimit,
   }),
   z.strictObject({
     id: requestId,
@@ -466,7 +467,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     where: z.string(),
     orderBy: z.string(),
     ...paging,
-    timeoutSeconds,
+    ...statementLimit,
   }),
   z.strictObject({ id: requestId, type: z.literal("objects.features") }),
   z.strictObject({ id: requestId, type: z.literal("objects.design"), path: namespacePath, relation }),

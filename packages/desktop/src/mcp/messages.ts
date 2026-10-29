@@ -50,10 +50,13 @@ export interface AgentDatasource {
   readonly schemas?: readonly string[];
   /** This datasource's row limit; absent, `McpConfig.rowCap`. */
   readonly rowCap?: number;
+  /** This datasource's statement timeout in seconds; absent, `McpConfig.timeoutSeconds`. */
+  readonly timeoutSeconds?: number;
 }
 
 export interface McpConfig {
   readonly rowCap: number;
+  readonly timeoutSeconds: number;
   readonly clients: readonly McpKnownClient[];
 }
 

@@ -46,7 +46,7 @@ import {
   type McpStatus,
   type McpUserControl,
 } from "@table-craft/desktop/settings/mcp.js";
-import { MCP_ROW_CAP_RANGE } from "@table-craft/desktop/settings/settings.js";
+import { MCP_ROW_CAP_RANGE, MCP_TIMEOUT_SECONDS_RANGE } from "@table-craft/desktop/settings/settings.js";
 
 /** Every record from `log.write` is the renderer's, whatever it claims (plan 017 decision 8). */
 const RENDERER_PROCESS = "renderer";
@@ -132,6 +132,7 @@ const agentPolicyRequest = z.strictObject({
   policy: z.strictObject({
     schemas: z.array(z.string().min(1)).readonly().nullable(),
     rowCap: z.number().int().min(MCP_ROW_CAP_RANGE.min).max(MCP_ROW_CAP_RANGE.max).nullable(),
+    timeoutSeconds: z.number().int().min(MCP_TIMEOUT_SECONDS_RANGE.min).max(MCP_TIMEOUT_SECONDS_RANGE.max).nullable(),
   }) satisfies z.ZodType<AgentPolicy>,
 });
 /** A console's text crosses to the MCP host only up to this; `get_active_context` cuts it further. */

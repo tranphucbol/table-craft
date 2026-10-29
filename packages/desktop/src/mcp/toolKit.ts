@@ -3,7 +3,7 @@ import type { AgentEngine, AgentEngines, SessionMode } from "@table-craft/deskto
 import type { Approvals } from "@table-craft/desktop/mcp/approvals.js";
 import type { Runs } from "@table-craft/desktop/mcp/activity.js";
 import { NOT_EXPOSED_REASON } from "@table-craft/desktop/mcp/access.js";
-import type { Capability } from "@table-craft/desktop/engine/protocol.js";
+import type { Capability, StatementLimit } from "@table-craft/desktop/engine/protocol.js";
 import type { McpActiveConsole, McpCallOutcome, McpConsoleRequest } from "@table-craft/desktop/settings/mcp.js";
 
 /** Who called a tool: the MCP session and the name its client gave at `initialize`. */
@@ -29,6 +29,8 @@ export interface ToolContext {
   readonly record: (entry: AgentHistoryEntry) => void;
   /** The server-wide row limit; a datasource's own wins (`rowCapOf`). */
   readonly rowCap: () => number;
+  /** The server-wide statement timeout in seconds; a datasource's own wins (`timeoutOf`). */
+  readonly timeoutSeconds: () => number;
   readonly now: () => number;
 }
 
@@ -115,4 +117,13 @@ export function shown(datasource: AgentDatasource, path: readonly string[]): boo
 
 export function rowCapOf(context: ToolContext, datasourceId: string): number {
   return context.datasources().find((datasource) => datasource.id === datasourceId)?.rowCap ?? context.rowCap();
+}
+
+/**
+ * The limit an agent's statement runs under, which the database enforces too where it can
+ * (decision 129): an agent cannot cancel, so its statements never run unlimited.
+ */
+export function timeoutOf(context: ToolContext, datasourceId: string): StatementLimit {
+  const own = context.datasources().find((datasource) => datasource.id === datasourceId)?.timeoutSeconds;
+  return { timeoutSeconds: own ?? context.timeoutSeconds(), serverEnforced: true };
 }

@@ -11,6 +11,7 @@
     "./bulk": "./src/bulk.ts",
     "./notices": "./src/notices.ts",
     "./sessions": "./src/sessions.ts",
+    "./timeout": "./src/timeout.ts",
     "./errorPosition": "./src/errorPosition.ts"
   },
   "dependencies": {

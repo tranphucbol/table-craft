@@ -6,7 +6,7 @@ import {
   type SystemAppearance,
   type UserThemeEntry,
 } from "@table-craft/desktop/appearance/themes.js";
-import type { FormatOptions, ResultPaging } from "@table-craft/desktop/engine/protocol.js";
+import type { FormatOptions, ResultPaging, StatementLimit } from "@table-craft/desktop/engine/protocol.js";
 import type {
   InvokeResult,
   SettingsChanged,
@@ -202,6 +202,19 @@ export function statementTimeoutOf(
   datasource: { readonly statementTimeoutSeconds?: number | undefined } | undefined,
 ): number {
   return datasource?.statementTimeoutSeconds ?? useSettings.getState().settings.console.statementTimeoutSeconds;
+}
+
+/** Whether the datasource has the database stop its console and grid statements at that limit too (decision 129). */
+export function serverEnforcedOf(
+  datasource: { readonly enforceTimeoutOnServer?: true | undefined } | undefined,
+): boolean {
+  return datasource?.enforceTimeoutOnServer === true;
+}
+
+/** The limit a request carries: nothing at 0, and the database asked only for a real limit. */
+export function statementLimit(seconds: number, serverEnforced: boolean): StatementLimit {
+  if (seconds <= 0) return {};
+  return serverEnforced ? { timeoutSeconds: seconds, serverEnforced: true } : { timeoutSeconds: seconds };
 }
 
 /** Whether a run looks for `:name`, `?` and `$1` and asks for their values (plan 019 decision 8). */

@@ -93,6 +93,9 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
       elapsedMs,
       ...(hop === null ? {} : { ssh: hop }),
       ...(session.tls === undefined ? {} : { tls: session.tls === null ? null : { ...session.tls } }),
+      ...(session.serverTimeout === undefined
+        ? {}
+        : { serverTimeout: session.serverTimeout === null ? null : { ...session.serverTimeout } }),
     };
   } catch (cause) {
     const hop = connector.hop;

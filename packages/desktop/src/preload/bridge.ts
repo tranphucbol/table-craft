@@ -312,6 +312,8 @@ export interface Datasource {
   readonly keepAliveSeconds?: number | undefined;
   /** Overrides Settings → Editor → Running's statement timeout; absent follows it, 0 is no limit. */
   readonly statementTimeoutSeconds?: number | undefined;
+  /** The console, grid and Explain also ask the database to stop at that limit (decision 129); absent, the app alone. */
+  readonly enforceTimeoutOnServer?: true | undefined;
   readonly comment: string;
   /** The non-secret connection fields, by key. */
   readonly config: Readonly<Record<string, ConfigValue>>;
@@ -337,6 +339,8 @@ export interface Datasource {
    * server last reported. Absent is the plugin's default.
    */
   readonly brand?: string | undefined;
+  /** Seconds an agent's statement may run here; absent, Settings › MCP Server's statement timeout. */
+  readonly agentTimeoutSeconds?: number | undefined;
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */

@@ -188,7 +188,9 @@ Sessions stay healthy on their own. Every connection uses TCP keepalive (30 s by
 Advanced). A console idle that long checks its session before the next Run and reconnects if the
 connection dropped, saying so in Output; a statement running when the network goes away fails
 within one keepalive interval instead of hanging. A **statement timeout** (Settings → Editor →
-Running, or per data source under Advanced) cancels a console statement that runs too long; exports
+Running, or per data source under Advanced) cancels a console statement that runs too long, and
+**Also have the database stop it** under it hands the limit to MySQL, MariaDB, TiDB or PostgreSQL
+too, so the statement stops even when TableCraft cannot reach the server; exports
 and imports are not cut by it and are never reconnected mid-way, they stop only when the database
 answers nothing for the Transfer stall timeout (Settings → Data Editor → Export and import). An
 open transaction is never replaced silently: if its connection drops, the error says its changes
@@ -531,14 +533,16 @@ change at a time: the MCP chip in the status bar turns amber, and nothing runs u
 request, read the statement and the agent's reason, and choose **Allow once**. Unanswered for a
 minute, a request is denied. A data source marked read-only stays at Read only, and one coloured
 red can be raised past Read only only on its own page in the Data Sources dialog. Answers carry at
-most `mcp.rowCap` rows; passwords never leave TableCraft, and every agent statement is kept in the
-query history, tagged with the client's name. The app must be running for agents to reach it.
+most `mcp.rowCap` rows, and a statement running past `mcp.statementTimeoutSeconds` is stopped,
+by the database too where it can, even if TableCraft cannot reach it; passwords never leave
+TableCraft, and every agent statement is kept in the query history, tagged with the client's name. The app must be running for agents to reach it.
 
 - **Clients.** The first call from a client you have not met turns the chip amber; open it and
   choose **Allow** or **Block**. Unanswered for a minute, the call is refused. Settings → MCP Server
   lists the clients you answered, to flip or forget.
 - **Per data source.** Beside the access level, **Schemas** narrows what agents list and read
-  (blank keeps the schemas the Database pane shows), and **Row cap** overrides `mcp.rowCap`.
+  (blank keeps the schemas the Database pane shows), **Row cap** overrides `mcp.rowCap`, and
+  **Timeout** overrides `mcp.statementTimeoutSeconds`.
 - **Tools.** Besides the catalog and query tools, agents can check SQL against the inspections,
   hand a statement to a new console for you to run (**open in console**, which never runs it), read
   the focused console when its data source is exposed, and scan and read Redis keys. They can also
@@ -759,6 +763,7 @@ back to its default without affecting the others.
 | `mcp.enabled`                          | `true`, `false`; run the [MCP server](#agents-mcp) for AI agents                                | `false`                                        |
 | `mcp.port`                             | 1,024–65,535; the port it listens on, on 127.0.0.1 only                                         | 47,820                                         |
 | `mcp.rowCap`                           | 1–1,000; the most rows one agent answer carries                                                 | 100                                            |
+| `mcp.statementTimeoutSeconds`          | 1–3,600; an agent's statement running longer is stopped, by the database too where it can       | 120                                            |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then
@@ -877,6 +882,8 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   primary; requires `sql` or `commands`.
 - `serverInfo`: reports the server's statistics and slow log for the Server tab; requires `sql`
   or `commands`.
+- `serverTimeout`: says what the connected server stops by itself and hands it the statement
+  timeout, so the database stops a statement even when TableCraft cannot; requires `cancel`.
 
 ```json
 {
@@ -899,7 +906,8 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
     "objects",
     "serverMessages",
     "sessions",
-    "routineCall"
+    "routineCall",
+    "serverTimeout"
   ],
   "highlight": "postgresql",
   "brands": [{ "id": "postgresql", "name": "PostgreSQL" }],

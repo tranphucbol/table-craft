@@ -57,7 +57,13 @@ import {
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
-import { currentFormats, currentPaging, statementTimeoutOf } from "@table-craft/desktop/renderer/state/settings.js";
+import {
+  currentFormats,
+  currentPaging,
+  serverEnforcedOf,
+  statementLimit,
+  statementTimeoutOf,
+} from "@table-craft/desktop/renderer/state/settings.js";
 
 /** Which table a tab shows: a relation inside a namespace path of a datasource. */
 export interface TableTarget {
@@ -209,6 +215,8 @@ export interface TablesDependencies {
   readonly exports?: ExportStarter;
   /** The statement timeout for the datasource's reads in seconds, 0 for none (decision 054). */
   readonly statementTimeout?: (datasourceId: string) => number;
+  /** Whether the datasource has the database enforce that timeout too (decision 129). */
+  readonly serverEnforced?: (datasourceId: string) => boolean;
 }
 
 const EMPTY_CLAUSES: TableClauses = { where: "", orderBy: "" };
@@ -407,7 +415,10 @@ export function createTablesStore(dependencies: TablesDependencies) {
       try {
         cursorClosed(id);
         const paging = currentPaging();
-        const timeoutSeconds = dependencies.statementTimeout?.(current.datasourceId) ?? 0;
+        const limit = statementLimit(
+          dependencies.statementTimeout?.(current.datasourceId) ?? 0,
+          dependencies.serverEnforced?.(current.datasourceId) ?? false,
+        );
         const answer = await client.call("table.query", {
           sessionId,
           path: current.path,
@@ -415,7 +426,7 @@ export function createTablesStore(dependencies: TablesDependencies) {
           where: clauses.where,
           orderBy: clauses.orderBy,
           ...paging,
-          ...(timeoutSeconds > 0 ? { timeoutSeconds } : {}),
+          ...limit,
         });
         ended({ outcome: "success", rowCount: answer.statement.rowCount, message: null, sql: answer.sql });
         const latest = get().tables[id];
@@ -795,6 +806,7 @@ export const useTables = createTablesStore({
   connect: (datasourceId) => useDatasources.getState().connect(datasourceId),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),
+  serverEnforced: (datasourceId) => serverEnforcedOf(datasourceById(useDatasources.getState(), datasourceId)),
   executions: {
     start: (tabId, start) => useExecutions.getState().start(tabId, start),
     finish: (tabId, executionId, end) => useExecutions.getState().finish(tabId, executionId, end),

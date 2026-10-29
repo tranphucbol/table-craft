@@ -48,9 +48,11 @@ import type {
   ResultEditable,
   ResultOf,
   ResultPaging,
+  StatementLimit,
   TableQuery,
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
+import { serverTimeoutOptions } from "@table-craft/desktop/engine/serverLimit.js";
 
 const NO_KEYSPACE = "This datasource's plugin does not declare the keyValue capability.";
 const REPLY_COLUMN = "value";
@@ -144,8 +146,8 @@ export function statementRunners(live: LiveContext) {
     sql: string,
     parameters: Readonly<Record<string, ParameterValue>> | undefined,
     paging: ResultPaging,
-    timeoutSeconds: number,
-    executeOptions?: Pick<ExecuteOptions, "node" | "repeat">,
+    limit: StatementLimit,
+    executeOptions: Pick<ExecuteOptions, "node" | "repeat"> = {},
   ): Promise<ExecutedStatement> {
     const open = sessionFor(sessionId);
     let bound: BoundStatement = { sql, params: [] };
@@ -160,16 +162,21 @@ export function statementRunners(live: LiveContext) {
       const { value: summary, reconnected } = await onLiveSession(
         sessionId,
         open,
-        timeoutSeconds,
+        limit.timeoutSeconds ?? 0,
         (session) =>
-          session.execute(bound.sql, bound.params, executeOptions).then(async (result) => {
-            const put = await results.put(heldOf(result), paging);
-            return {
-              ...put,
-              ...(result.reply === undefined ? {} : { reply: result.reply }),
-              ...(result.source === undefined ? {} : { source: result.source }),
-            };
-          }),
+          session
+            .execute(bound.sql, bound.params, {
+              ...executeOptions,
+              ...serverTimeoutOptions(limit, session, open.capabilities),
+            })
+            .then(async (result) => {
+              const put = await results.put(heldOf(result), paging);
+              return {
+                ...put,
+                ...(result.reply === undefined ? {} : { reply: result.reply }),
+                ...(result.source === undefined ? {} : { source: result.source }),
+              };
+            }),
         (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
         (late) => void results.release(late.handle),
       );
@@ -223,7 +230,10 @@ export function statementRunners(live: LiveContext) {
         request.timeoutSeconds ?? 0,
         (session) => {
           if (session.explain === undefined) throw new Error("The session lost its explain method.");
-          return session.explain(request.sql, { analyze: request.analyze });
+          return session.explain(request.sql, {
+            analyze: request.analyze,
+            ...serverTimeoutOptions(request, session, open.capabilities),
+          });
         },
         (cause) => explainFailed(cause, options.datasource.readOnly),
       );
@@ -243,7 +253,7 @@ export function statementRunners(live: LiveContext) {
     const open = sessionFor(request.sessionId);
     const { relation, qualified } = await relationOf(request.path, request.relation);
     const sql = tableSelect(qualified, request);
-    const statement = await runStatement(request.sessionId, sql, undefined, request, request.timeoutSeconds ?? 0);
+    const statement = await runStatement(request.sessionId, sql, undefined, request, request);
     const catalogued = statement.columns.map((column) => relation.columns.find((meta) => meta.name === column.name));
     const columns = catalogued.map(
       (meta, index) => meta ?? reportedColumn(statement.columns[index] ?? { name: "", type: null }, index),
