@@ -28,6 +28,12 @@ export interface PlanNode {
   /** Everything else the dialect reports about the step, in its order. */
   readonly properties: readonly PlanProperty[];
   readonly children: readonly PlanNode[];
+  /**
+   * What a reviewer should notice about the step, one sentence each, such as a full table scan or
+   * estimates made without statistics (decision 130). The host marks the step and lists each
+   * distinct sentence once. Absent or empty when there is nothing to say.
+   */
+  readonly warnings?: readonly string[];
 }
 
 /** What `Session.explain` answers. */

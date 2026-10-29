@@ -38,6 +38,38 @@ export function explainStatement(sql: string, analyze: boolean, format: PlanForm
   return analyze ? `EXPLAIN ANALYZE FORMAT=TREE ${sql}` : `EXPLAIN FORMAT=TREE ${sql}`;
 }
 
+/** `Table scan on orders`, MySQL's tree name for a step that reads every row of a table. */
+const TREE_TABLE_SCAN = /^Table scan on (\S+)/;
+/** The JSON `access_type` of a table read in full. */
+const FULL_ACCESS = "ALL";
+/**
+ * `index` reads a whole index; on `PRIMARY`, InnoDB's clustered index, that is every row, which is
+ * how MySQL 8.4 plans an UPDATE without a WHERE.
+ */
+const FULL_INDEX_ACCESS = "index";
+const CLUSTERED_KEY = "PRIMARY";
+/** TiDB 4 and later name a full scan; TiDB 3 called every scan `TableScan` and printed its range. */
+const TIDB_FULL_SCAN = /^TableFullScan(?:_\d+)?$/;
+const TIDB_THREE_SCAN = /^TableScan(?:_\d+)?$/;
+const TIDB_FULL_RANGE = "range:[-inf,+inf]";
+/** TiDB's `access object` (4 and later) or `operator info` (3) names the table as `table:orders`. */
+const TIDB_TABLE = /\btable:([^,\s]+)/;
+/** TiDB estimated the step without statistics for the table. */
+const PSEUDO_STATISTICS = "stats:pseudo";
+
+/** Each partition of a table names the table alone, so a plan over many partitions warns once. */
+export function fullScanWarning(table: string | null): string {
+  return `Full table scan: reads every row of ${table ?? "a table"}.`;
+}
+
+export function pseudoStatisticsWarning(table: string | null): string {
+  return `Estimates are guesses: ${table ?? "a table"} has no statistics (stats:pseudo). Running ANALYZE TABLE fixes that.`;
+}
+
+function withWarnings<T extends PlanNode>(node: T, warnings: readonly string[]): T {
+  return warnings.length === 0 ? node : { ...node, warnings };
+}
+
 const NODE_LINE = /^( *)-> (.*)$/;
 const INDENT = 4;
 /** `(cost=0.9 rows=1)`; the cost is a range `0..0` on some steps, whose end is the total. */
@@ -67,18 +99,22 @@ function treeNode(line: string): Mutable {
   const never = NEVER_EXECUTED.test(line);
   const text = line.replace(COST, "").replace(ACTUAL, "").replace(NEVER_EXECUTED, "").trim();
   const split = text.indexOf(DETAIL_SEPARATOR);
-  return {
-    operation: split < 0 ? text : text.slice(0, split),
-    target: null,
-    detail: split < 0 ? null : text.slice(split + DETAIL_SEPARATOR.length),
-    estimatedRows: number(cost?.[2]),
-    estimatedCost: number(cost?.[1]),
-    actualRows: never ? 0 : number(actual?.[3]),
-    actualTimeMs: number(actual?.[2]),
-    loops: never ? 0 : number(actual?.[4]),
-    properties: [],
-    children: [],
-  };
+  const scanned = TREE_TABLE_SCAN.exec(text)?.[1];
+  return withWarnings<Mutable>(
+    {
+      operation: split < 0 ? text : text.slice(0, split),
+      target: null,
+      detail: split < 0 ? null : text.slice(split + DETAIL_SEPARATOR.length),
+      estimatedRows: number(cost?.[2]),
+      estimatedCost: number(cost?.[1]),
+      actualRows: never ? 0 : number(actual?.[3]),
+      actualTimeMs: number(actual?.[2]),
+      loops: never ? 0 : number(actual?.[4]),
+      properties: [],
+      children: [],
+    },
+    scanned === undefined ? [] : [fullScanWarning(scanned)],
+  );
 }
 
 /** Reads `FORMAT=TREE`: one step per `->` line, nested by its indent of four spaces a level. */
@@ -143,6 +179,9 @@ function tidbNode(cells: ReadonlyMap<string, string>): { depth: number; node: Mu
   const role = step?.[2];
   const estimate = ESTIMATE_COLUMNS.map((name) => cells.get(name)).find((value) => value !== undefined);
   const executionInfo = present(cells.get("execution info"));
+  const operation = step?.[1] ?? id;
+  const target = present(cells.get("access object"));
+  const detail = present(cells.get("operator info"));
   const properties = [
     ...(role === undefined ? [] : [{ name: "role", value: role }]),
     ...[...cells].flatMap(([name, value]) =>
@@ -151,19 +190,32 @@ function tidbNode(cells: ReadonlyMap<string, string>): { depth: number; node: Mu
   ];
   return {
     depth: Math.floor([...prefix].length / TREE_LEVEL),
-    node: {
-      operation: step?.[1] ?? id,
-      target: present(cells.get("access object")),
-      detail: present(cells.get("operator info")),
-      estimatedRows: number(present(estimate) ?? undefined),
-      estimatedCost: null,
-      actualRows: number(present(cells.get("actRows")) ?? undefined),
-      actualTimeMs: executionTime(executionInfo),
-      loops: null,
-      properties,
-      children: [],
-    },
+    node: withWarnings<Mutable>(
+      {
+        operation,
+        target,
+        detail,
+        estimatedRows: number(present(estimate) ?? undefined),
+        estimatedCost: null,
+        actualRows: number(present(cells.get("actRows")) ?? undefined),
+        actualTimeMs: executionTime(executionInfo),
+        loops: null,
+        properties,
+        children: [],
+      },
+      tidbWarnings(operation, target, detail),
+    ),
   };
+}
+
+function tidbWarnings(operation: string, target: string | null, detail: string | null): string[] {
+  const table = TIDB_TABLE.exec(target ?? detail ?? "")?.[1] ?? null;
+  const full =
+    TIDB_FULL_SCAN.test(operation) || (TIDB_THREE_SCAN.test(operation) && (detail?.includes(TIDB_FULL_RANGE) ?? false));
+  return [
+    ...(full ? [fullScanWarning(table)] : []),
+    ...(detail?.includes(PSEUDO_STATISTICS) === true ? [pseudoStatisticsWarning(table)] : []),
+  ];
 }
 
 /** Reads TiDB's plan table, as `tableText` writes it: each step nested under the one its tree prefix hangs from. */
@@ -245,18 +297,22 @@ function tableNode(table: Json, extra: readonly PlanProperty[] = []): PlanNode {
   const detail = [access === null ? null : `${access} access`, key === null ? null : `using ${key}`]
     .filter((part) => part !== null)
     .join(" ");
-  return {
-    operation,
-    target: planPropertyValue(table.table_name),
-    detail: detail === "" ? null : detail,
-    estimatedRows: firstNumber(table, ESTIMATED_ROWS),
-    estimatedCost: costOf(table, "prefix_cost"),
-    actualRows: firstNumber(table, [ACTUAL_ROWS]),
-    actualTimeMs: firstNumber(table, ACTUAL_TIMES),
-    loops: firstNumber(table, [ACTUAL_LOOPS]),
-    properties: [...properties(table, TABLE_MAPPED), ...extra],
-    children: [],
-  };
+  const target = planPropertyValue(table.table_name);
+  return withWarnings<PlanNode>(
+    {
+      operation,
+      target,
+      detail: detail === "" ? null : detail,
+      estimatedRows: firstNumber(table, ESTIMATED_ROWS),
+      estimatedCost: costOf(table, "prefix_cost"),
+      actualRows: firstNumber(table, [ACTUAL_ROWS]),
+      actualTimeMs: firstNumber(table, ACTUAL_TIMES),
+      loops: firstNumber(table, [ACTUAL_LOOPS]),
+      properties: [...properties(table, TABLE_MAPPED), ...extra],
+      children: [],
+    },
+    access === FULL_ACCESS || (access === FULL_INDEX_ACCESS && key === CLUSTERED_KEY) ? [fullScanWarning(target)] : [],
+  );
 }
 
 function loopEntry(entry: unknown): PlanNode[] {

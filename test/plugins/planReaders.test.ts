@@ -1,6 +1,15 @@
 import { readFileSync } from "node:fs";
 import type { PlanNode, Row } from "@table-craft/plugin-api";
-import { explainStatement, planFormat, readJson, readTidbTable, readTree } from "@table-craft/plugin-mysql/explain";
+import {
+  explainStatement,
+  fullScanWarning,
+  planFormat,
+  pseudoStatisticsWarning,
+  readJson,
+  readTidbTable,
+  readTree,
+  tableText,
+} from "@table-craft/plugin-mysql/explain";
 import { readPlan as readShowplan } from "@table-craft/plugin-mssql/explain";
 import { explainDialect } from "@table-craft/plugin-mysql/server";
 import { readPlan } from "@table-craft/plugin-postgres/explain";
@@ -212,6 +221,93 @@ describe("plan readers", () => {
       false,
     );
     expect(plan.roots[0]).toMatchObject({ operation: "TableReader_5", estimatedRows: 3, detail: "data:TableScan_4" });
+  });
+
+  it("givenTidbThreeFullRangeScan_whenRead_thenFullScanAndGuessedEstimatesWarned", () => {
+    const plan = readTidbTable(
+      tableText(
+        ["id", "count", "task", "operator info"],
+        [
+          ["TableReader_5", "10000.00", "root", "data:TableScan_4"],
+          ["└─TableScan_4", "10000.00", "cop", "table:orders, range:[-inf,+inf], keep order:false, stats:pseudo"],
+        ],
+      ),
+      "",
+      false,
+    );
+    expect(plan.roots[0]?.warnings).toBeUndefined();
+    expect(plan.roots[0]?.children[0]?.warnings).toEqual([
+      fullScanWarning("orders"),
+      pseudoStatisticsWarning("orders"),
+    ]);
+  });
+
+  it("givenTidbThreeRangeScan_whenRead_thenNoFullScanWarning", () => {
+    const plan = readTidbTable(
+      tableText(
+        ["id", "count", "task", "operator info"],
+        [
+          ["TableReader_6", "1.00", "root", "data:TableScan_5"],
+          ["└─TableScan_5", "1.00", "cop", "table:orders, range:[1,1], keep order:false"],
+        ],
+      ),
+      "",
+      false,
+    );
+    expect(plan.roots[0]?.children[0]?.warnings).toBeUndefined();
+  });
+
+  it("givenTidbFivePartitionedFullScan_whenRead_thenEachPartitionNamesTheTable", () => {
+    const plan = readTidbTable(
+      tableText(
+        ["id", "estRows", "task", "access object", "operator info"],
+        [
+          ["PartitionUnion_8", "20000.00", "root", "", ""],
+          ["├─TableReader_10", "10000.00", "root", "", "data:TableFullScan_9"],
+          ["│ └─TableFullScan_9", "10000.00", "cop[tikv]", "table:order_events, partition:p202601", "keep order:false"],
+          ["└─TableReader_12", "10000.00", "root", "", "data:TableFullScan_11"],
+          [
+            "  └─TableFullScan_11",
+            "10000.00",
+            "cop[tikv]",
+            "table:order_events, partition:p202602",
+            "keep order:false",
+          ],
+        ],
+      ),
+      "",
+      false,
+    );
+    const scans = plan.roots[0]?.children.map((reader) => reader.children[0]?.warnings);
+    expect(scans).toEqual([[fullScanWarning("order_events")], [fullScanWarning("order_events")]]);
+  });
+
+  it("givenTidbIndexScanWithoutStatistics_whenRead_thenOnlyGuessedEstimatesWarned", () => {
+    const plan = readTidbTable(captured("tidb-explain.tsv"), "EXPLAIN …", false);
+    const scan = plan.roots[0]?.children[0]?.children[0];
+    expect(scan?.warnings).toEqual([pseudoStatisticsWarning("order_events_202601")]);
+    expect(plan.roots[0]?.warnings).toBeUndefined();
+  });
+
+  it("givenMysqlTreeTableScan_whenRead_thenFullScanWarned", () => {
+    const plan = readTree(captured("mysql-explain.txt"), "EXPLAIN FORMAT=TREE …", false);
+    const [filter, lookup] = plan.roots[0]?.children ?? [];
+    expect(filter?.children[0]?.warnings).toEqual([fullScanWarning("o")]);
+    expect(lookup?.warnings).toBeUndefined();
+  });
+
+  it("givenJsonAllAccess_whenRead_thenFullScanWarnedAndRangeNot", () => {
+    const mariadb = readJson(captured("mariadb-analyze.json"), "ANALYZE FORMAT=JSON …", true);
+    expect(mariadb.roots[0]?.children.map((table) => table.warnings)).toEqual([
+      [fullScanWarning("c")],
+      [fullScanWarning("o")],
+    ]);
+    expect(readJson(captured("mysql-update.json"), "EXPLAIN FORMAT=JSON …").roots[0]?.warnings).toBeUndefined();
+  });
+
+  it("givenJsonPrimaryIndexAccess_whenRead_thenFullScanWarned", () => {
+    const plan = readJson(captured("mysql-update-all.json"), "EXPLAIN FORMAT=JSON …");
+    expect(plan.roots[0]?.warnings).toEqual([fullScanWarning("customers")]);
   });
 
   it("givenSqliteRows_whenRead_thenTreeFromParent", () => {
