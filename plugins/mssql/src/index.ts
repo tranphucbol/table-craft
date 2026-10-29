@@ -3,6 +3,7 @@ import type { ColumnMetadata } from "tedious/lib/token/colmetadata-token-parser.
 import {
   PluginError,
   z,
+  type CancelReach,
   type Capability,
   type Column,
   type ConnectOptions,
@@ -37,6 +38,7 @@ import { connectFailure, ENCRYPT_MODES, rootCertificate, tediousEncrypt, tlsInfo
 import { bigintValue, columnOf, installExactValues, wireValue } from "./values.js";
 
 const PLUGIN_ID = "mssql";
+const CANCEL_REACH: CancelReach = { method: "TDS attention", reaches: "statement" };
 
 const CAPABILITIES: readonly Capability[] = [
   "sql",
@@ -263,6 +265,7 @@ class MssqlSession implements Session {
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "microsoftsqlserver";
+  readonly cancelReach = CANCEL_REACH;
   readonly serverSessionId: string;
   readonly tls: TlsInfo | null;
   readonly introspector;

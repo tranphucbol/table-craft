@@ -164,6 +164,7 @@ export {
   type ServerInfoSection,
   type ServerNode,
   type ServerTimeout,
+  type CancelReach,
   type SlowCommand,
   switchableTo,
   type NewColumn,

@@ -8,6 +8,7 @@ import {
   PluginError,
   toWireInteger,
   z,
+  type CancelReach,
   type Capability,
   type Column,
   type ColumnOrigin,
@@ -79,6 +80,7 @@ import {
 import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 
 const PLUGIN_ID = "postgres";
+const CANCEL_REACH: CancelReach = { method: "pg_cancel_backend", reaches: "statement" };
 const CAPABILITIES: readonly Capability[] = [
   "sql",
   "cancel",
@@ -405,6 +407,7 @@ class PostgresSession implements Session {
   /** The manifest's one brand. */
   readonly serverBrand = "postgresql";
   readonly serverTimeout: ServerTimeout = POSTGRES_SERVER_TIMEOUT;
+  readonly cancelReach: CancelReach = CANCEL_REACH;
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;

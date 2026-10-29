@@ -42,6 +42,11 @@ const CONNECTION_URL_FORMS: readonly [ "server", "file" ];
 
 const CONNECTION_URL_PARTS: readonly [ "host", "port", "database", "user", "password", "path" ];
 
+interface CancelReach {
+  readonly method: string;
+  readonly reaches: "statement" | "connection" | "blockingCommands";
+}
+
 type Capability = (typeof CAPABILITIES)[number];
 
 interface CatalogObject {
@@ -717,6 +722,7 @@ interface ServerTimeout {
 
 interface Session {
   cancel?(): Promise<void>;
+  readonly cancelReach?: CancelReach;
   close(): Promise<void>;
   currentNamespace?(): Promise<readonly string[] | null>;
   execute(sql: string, params?: readonly ParameterValue[], options?: ExecuteOptions): Promise<ExecuteResult>;

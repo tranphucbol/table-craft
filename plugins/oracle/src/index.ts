@@ -1,6 +1,7 @@
 import oracledb from "oracledb";
 import {
   PluginError,
+  type CancelReach,
   type Capability,
   type ConnectOptions,
   type DatasourcePlugin,
@@ -80,6 +81,7 @@ const BUSY_MESSAGE = "Another statement is still running in this session.";
 const READ_ONLY_REFUSED_MESSAGE =
   "This session is read-only, so the statement was not sent. Turn off Read-only on the data source to change data or schema.";
 const CANCELLED_MESSAGE = "The statement was cancelled.";
+const CANCEL_REACH: CancelReach = { method: "ALTER SYSTEM CANCEL SQL", reaches: "statement" };
 const WRITING_KINDS = new Set(["write", "ddl"]);
 /** How long `close` waits for the server to acknowledge the logoff before giving up on it. */
 const CLOSE_GRACE_MS = 3000;
@@ -164,6 +166,7 @@ class OracleSession implements Session {
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "oracle";
+  readonly cancelReach = CANCEL_REACH;
   readonly tls: TlsInfo | null;
   readonly introspector: Introspector;
   readonly transactions: Transactions;
