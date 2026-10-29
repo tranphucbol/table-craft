@@ -94,7 +94,12 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
 
   async function rediscover(): Promise<void> {
     managed = await listManaged(options.managedRoot);
-    installed = await discoverInstalled(roots(), sourceOf);
+    installed = await discoverInstalled(
+      roots(),
+      sourceOf,
+      (directory) =>
+        managed.find((plugin) => directory === plugin.directory || within(directory, plugin.directory))?.version,
+    );
   }
 
   let pending: Promise<void> = Promise.resolve();
