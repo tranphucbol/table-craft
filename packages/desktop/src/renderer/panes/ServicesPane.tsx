@@ -6,6 +6,7 @@ import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/histor
 import { hasFailedStatement, located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { SESSIONS_ACTION_IDS, showableInSessions } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import type { ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
+import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import {
   clockTime,
@@ -24,10 +25,13 @@ import {
   fileNameOf,
 } from "@table-craft/desktop/renderer/model/exportText.js";
 import {
+  datasourceName,
   expandable,
+  expandableKeys,
   movedInTree,
   serviceRows,
   servicesTree,
+  visibleAncestor,
   type ServiceRow,
 } from "@table-craft/desktop/renderer/model/servicesTree.js";
 import {
@@ -78,6 +82,7 @@ import {
   scriptStateText,
 } from "@table-craft/desktop/renderer/model/scriptText.js";
 import { isScriptAsking, useScripts, type ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
+import { useServicesTree } from "@table-craft/desktop/renderer/state/servicesTree.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -495,7 +500,7 @@ function ScriptLine({ entry }: { readonly entry: ScriptEntry }) {
   );
 }
 
-function rowLabel(row: ServiceRow): string {
+function rowLabel(row: ServiceRow, datasources: readonly DatasourceView[]): string {
   if (row.kind === "scripts") return `SQL Scripts, ${String(row.count)}`;
   if (row.kind === "keyDeletes") return `Key Deletions, ${String(row.count)}`;
   if (row.kind === "keyDelete") return keyDeleteLabel(row.node);
@@ -522,7 +527,7 @@ function rowLabel(row: ServiceRow): string {
   if (row.kind === "session") return `${row.node.title}, ${SERVICE_STATE_TEXT[row.node.state]}`;
   if (row.kind === "agents") return `Agents, ${String(row.count)}`;
   if (row.kind === "agentClient") return agentClientLabel(row.node);
-  if (row.kind === "agentDatasource") return row.node.datasourceId;
+  if (row.kind === "agentDatasource") return datasourceName(datasources, row.node.datasourceId);
   if (row.kind === "agentRun") return agentRunLabel(row.node);
   if (row.kind === "agentCall") return agentCallLabel(row.node);
   return `${row.node.label}, ${row.node.outcome}`;
@@ -549,7 +554,8 @@ export function ServicesPane() {
   const mcpStatus = useMcp((state) => state.status);
   const agents = useMemo(() => agentGroups(mcpStatus), [mcpStatus]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSED);
+  const collapsed = useServicesTree((state) => state.collapsed);
+  const setCollapsed = useServicesTree((state) => state.setCollapsed);
   const elements = useRef(new Map<string, HTMLLIElement>());
 
   const tree = useMemo(
@@ -560,6 +566,10 @@ export function ServicesPane() {
     () => serviceRows(tree, collapsed, exports, imports, scripts, keyDeletes, agents),
     [tree, collapsed, exports, imports, scripts, keyDeletes, agents],
   );
+  const allRows = useMemo(
+    () => serviceRows(tree, NO_COLLAPSED, exports, imports, scripts, keyDeletes, agents),
+    [tree, exports, imports, scripts, keyDeletes, agents],
+  );
   const running =
     mcpStatus.running.length > 0 || rows.some((row) => row.kind === "execution" && row.node.outcome === "running");
   const now = useNow(running);
@@ -569,6 +579,16 @@ export function ServicesPane() {
     setSelected(key);
     if (key !== null) elements.current.get(key)?.focus();
   }
+
+  useEffect(() => useServicesTree.getState().setExpandableKeys(expandableKeys(allRows)), [allRows]);
+
+  const shownSelected = visibleAncestor(allRows, rows, selected);
+  if (shownSelected !== selected) setSelected(shownSelected);
+
+  useEffect(() => {
+    // A line folded away took focus with it; the line selected in its place takes it.
+    if (selected !== null && document.activeElement === document.body) elements.current.get(selected)?.focus();
+  }, [selected]);
 
   function open(row: ServiceRow): void {
     if (row.kind === "session") activate(row.node.tabId);
@@ -628,7 +648,7 @@ export function ServicesPane() {
             aria-level={row.depth + 1}
             aria-selected={isSelected}
             aria-expanded={canExpand ? !collapsed.has(row.key) : undefined}
-            aria-label={rowLabel(row)}
+            aria-label={rowLabel(row, datasources)}
             tabIndex={isSelected ? 0 : -1}
             data-kind={row.kind}
             data-state={

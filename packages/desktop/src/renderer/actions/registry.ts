@@ -13,6 +13,7 @@ export type ActionCategory =
   | "Database"
   | "Editor Tabs"
   | "Tool Windows"
+  | "Services"
   | "Navigation";
 
 /** Names, not components, so the registry stays free of React; `ui/icons.ts` maps them. */
@@ -38,6 +39,7 @@ export type ActionIcon =
   | "folder"
   | "synchronize"
   | "collapseAll"
+  | "expandAll"
   | "copy"
   | "fetchNextPage"
   | "fetchAll"
