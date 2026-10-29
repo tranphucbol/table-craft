@@ -86,6 +86,11 @@ function sessionOf(tab: Tab, input: ServicesInput): { datasourceId: string; sess
   return null;
 }
 
+/** A datasource's name, or its id once it is deleted. */
+export function datasourceName(datasources: readonly DatasourceView[], datasourceId: string): string {
+  return datasources.find((view) => view.id === datasourceId)?.name ?? datasourceId;
+}
+
 /** Datasources with an open console or table tab, in tab order, each with its sessions in tab order. */
 export function servicesTree(input: ServicesInput): readonly ServiceDatasource[] {
   const groups = new Map<string, ServiceSession[]>();
@@ -98,7 +103,7 @@ export function servicesTree(input: ServicesInput): readonly ServiceDatasource[]
   }
   return [...groups].map(([datasourceId, sessions]) => ({
     datasourceId,
-    name: input.datasources.find((view) => view.id === datasourceId)?.name ?? datasourceId,
+    name: datasourceName(input.datasources, datasourceId),
     sessions,
   }));
 }
@@ -343,6 +348,27 @@ export function expandable(row: ServiceRow): boolean {
   if (row.kind === "agentClient") return row.node.datasources.length > 0;
   if (row.kind === "agentDatasource") return row.node.runs.length + row.node.calls.length > 0;
   return row.kind === "session" && row.node.executions.length > 0;
+}
+
+/** Keys of every node with children, whatever is collapsed; `allRows` is built with nothing collapsed. */
+export function expandableKeys(allRows: readonly ServiceRow[]): readonly string[] {
+  return allRows.filter(expandable).map((row) => row.key);
+}
+
+/**
+ * The line to select once `selected` is hidden: its nearest shown ancestor, the top-level line
+ * after Collapse All; `selected` itself when shown or gone from the tree.
+ */
+export function visibleAncestor(
+  allRows: readonly ServiceRow[],
+  visible: readonly ServiceRow[],
+  selected: string | null,
+): string | null {
+  const shown = new Set(visible.map((row) => row.key));
+  const byKey = new Map(allRows.map((row) => [row.key, row]));
+  let row = selected === null ? undefined : byKey.get(selected);
+  while (row !== undefined && !shown.has(row.key)) row = "parent" in row ? byKey.get(row.parent) : undefined;
+  return row?.key ?? selected;
 }
 
 export interface TreeMove {
