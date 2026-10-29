@@ -13,6 +13,8 @@ describe.runIf(databaseEnabled("postgres"))("postgres server", () => {
     statements: {
       write: TYPE_PROBE_WRITE,
       sleep: (seconds) => `SELECT pg_sleep(${String(seconds)})`,
+      slowRead: (seconds) => `SELECT pg_sleep(${String(seconds)})`,
+      sessionTimeout: (ms) => `SET statement_timeout = ${String(ms)}`,
       message: { sql: "DO $$ BEGIN RAISE NOTICE 'probe'; END $$", level: "notice", code: "00000" },
       syntaxError: { sql: "SELECT id, FROM customers", offset: "SELECT id, ".length },
     },
