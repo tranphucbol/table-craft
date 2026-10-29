@@ -80,6 +80,7 @@ export interface PlanNode {
   readonly loops: number | null;
   readonly properties: readonly PlanProperty[];
   readonly children: readonly PlanNode[];
+  readonly warnings?: readonly string[];
 }
 
 /** Mirrors `ExplainedPlan` in plugin-api. */

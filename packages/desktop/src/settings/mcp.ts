@@ -1,9 +1,13 @@
-/** What an agent may do on one datasource over MCP (plan 117); absent in `datasources.json` is `off`. */
-export const AGENT_ACCESS_LEVELS = ["off", "read", "ask"] as const;
+/**
+ * What an agent may do on one datasource over MCP (plan 117, decision 130), from least to most;
+ * absent in `datasources.json` is `off`.
+ */
+export const AGENT_ACCESS_LEVELS = ["off", "askReads", "read", "ask"] as const;
 export type AgentAccess = (typeof AGENT_ACCESS_LEVELS)[number];
 
 export const AGENT_ACCESS_LABELS: Readonly<Record<AgentAccess, string>> = {
   off: "Off",
+  askReads: "Ask before reads",
   read: "Read only",
   ask: "Ask before writes",
 };
@@ -141,8 +145,14 @@ export interface McpPendingClient {
   readonly deadline: number;
 }
 
-/** The statement kinds that can wait for approval; reads never do and transactions are refused. */
-export type ApprovalKind = "write" | "ddl" | "other";
+/**
+ * What can wait for approval: a read under Ask before reads (decision 130), and a change under Ask
+ * before writes. Transactions are refused at every level.
+ */
+export type ApprovalKind = "read" | "write" | "ddl" | "other";
+
+/** `key`: a `get_key` call, whose `sql` is the key's text rather than a statement. */
+export type ApprovalSubject = "statement" | "key";
 
 export interface McpApprovalView {
   readonly id: string;
@@ -151,6 +161,9 @@ export interface McpApprovalView {
   readonly datasourceName: string;
   readonly sql: string;
   readonly kind: ApprovalKind;
+  readonly subject: ApprovalSubject;
+  /** The key's database number, for a `key` subject; null for a statement. */
+  readonly database: number | null;
   /** Why the console would ask before running it, such as `DELETE without WHERE`. */
   readonly destructive: string | null;
   /** What the agent said it is for; null when it said nothing. */

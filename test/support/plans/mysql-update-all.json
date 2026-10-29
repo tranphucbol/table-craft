@@ -1,0 +1,17 @@
+{
+  "query_block": {
+    "select_id": 1,
+    "table": {
+      "update": true,
+      "table_name": "customers",
+      "access_type": "index",
+      "key": "PRIMARY",
+      "used_key_parts": [
+        "id"
+      ],
+      "key_length": "4",
+      "rows_examined_per_scan": 2,
+      "filtered": "100.00"
+    }
+  }
+}

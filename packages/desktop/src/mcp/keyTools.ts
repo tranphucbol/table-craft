@@ -14,6 +14,7 @@ import {
   rowCapOf,
   textResult,
   timeoutOf,
+  waitForApproval,
   type Caller,
   type ToolContext,
   type ToolResult,
@@ -91,10 +92,22 @@ export async function getKey(
   named: string,
   key: string,
   requested: number | undefined,
+  reason: string | null,
 ): Promise<ToolResult> {
   const datasource = exposedDatasource(context, named);
   const engine = await engineWith(context, datasource, ["keyValue"]);
   const database = await databaseOf(engine, requested);
+  if (datasource.access === "askReads") {
+    await waitForApproval(context, caller, datasource, {
+      sql: key,
+      kind: "read",
+      subject: "key",
+      database,
+      destructive: null,
+      reason,
+      allowable: true,
+    });
+  }
   const opened = await context.runs.track(
     {
       clientId: caller.sessionId,

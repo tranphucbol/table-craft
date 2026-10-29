@@ -355,6 +355,18 @@ describe("datasource service", () => {
     expect(changes).toHaveLength(broadcasts);
   });
 
+  it("givenRedDatasource_whenSetAskReads_thenAllowed", async () => {
+    const { files, service: datasources } = await service();
+    const saved = await datasources.save(saving({ ...PG_DRAFT, color: "red" }));
+
+    await datasources.setAgentAccess(saved.id, "askReads");
+
+    expect(JSON.parse(files.contents.get(`${DIRECTORY}/${DATASOURCES_FILE}`) ?? "")).toMatchObject({
+      datasources: [{ id: saved.id, agentAccess: "askReads" }],
+    });
+    await expect(datasources.setAgentAccess(saved.id, "ask")).rejects.toBeInstanceOf(DatasourceError);
+  });
+
   it("givenEphemeral_whenSetBrand_thenNothingWritten", async () => {
     const ephemeral = { id: "pg", pluginId: "postgres", config: PG_DRAFT.config };
     const { files, changes, service: datasources } = await service({ ephemeral });

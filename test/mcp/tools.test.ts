@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { READ_ONLY_REASON, TRANSACTION_REASON } from "@table-craft/desktop/mcp/access.js";
+import { ASK_READS_REASON, READ_ONLY_REASON, TRANSACTION_REASON } from "@table-craft/desktop/mcp/access.js";
 import { APPROVAL_REFUSALS } from "@table-craft/desktop/mcp/approvals.js";
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
 import { TOOL_DEFINITIONS } from "@table-craft/desktop/mcp/tools.js";
@@ -8,6 +8,14 @@ import { AGENT_CALLER, agentHarness, textOf, waitingApproval } from "../support/
 
 const SHOP: AgentDatasource = { id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access: "ask" };
 const READ_ONLY_SHOP: AgentDatasource = { ...SHOP, access: "read" };
+const ASK_READS_SHOP: AgentDatasource = { ...SHOP, access: "askReads" };
+const SELECT_NAMES = "SELECT name FROM customers ORDER BY id";
+
+function sessionModes(requests: readonly { readonly type: string }[]): boolean[] {
+  return requests
+    .filter((request) => request.type === "session.open")
+    .map((request) => (request as unknown as { readonly readOnly: boolean }).readOnly);
+}
 const RENAME_CUSTOMER = "UPDATE customers SET name = 'Ada King' WHERE id = 1";
 
 function customerName(path: string): string {
@@ -222,6 +230,111 @@ describe("MCP tools", () => {
 
     expect(answer.isError).toBe(true);
     expect(customerName(harness.path)).toBe("Ada Lovelace");
+  });
+
+  it("givenAskReads_whenSelectAllowedOnce_thenRunsOnReadSessionAndNextAsks", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+
+    const running = harness.call("run_query", { datasource: "shop", sql: SELECT_NAMES, reason: "Check the names" });
+    const approvalId = await waitingApproval(harness.approvals);
+    const [view] = harness.approvals.pending();
+    harness.approvals.answer(approvalId, "allowOnce");
+    const answer = await running;
+
+    expect(view).toMatchObject({
+      kind: "read",
+      subject: "statement",
+      sql: SELECT_NAMES,
+      reason: "Check the names",
+      allowable: true,
+      destructive: null,
+    });
+    expect(textOf(answer)).toContain("| Ada Lovelace |");
+    expect(sessionModes(harness.requests)).toEqual([true]);
+    const again = harness.call("run_query", { datasource: "shop", sql: SELECT_NAMES });
+    harness.approvals.answer(await waitingApproval(harness.approvals), "deny");
+    expect(textOf(await again)).toBe(APPROVAL_REFUSALS.denied);
+  });
+
+  it("givenAskReads_whenSelectDenied_thenRefusedAndRecordedCancelled", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+
+    const running = harness.tools.call("run_query", { datasource: "shop", sql: SELECT_NAMES }, AGENT_CALLER);
+    harness.approvals.answer(await waitingApproval(harness.approvals), "deny");
+    const answer = await running;
+
+    expect(answer.outcome).toBe("denied");
+    expect(textOf(answer.result)).toBe(APPROVAL_REFUSALS.denied);
+    expect(harness.requests.map((request) => request.type)).not.toContain("statement.execute");
+    expect(harness.history).toMatchObject([
+      { sql: SELECT_NAMES, outcome: "cancelled", message: APPROVAL_REFUSALS.denied },
+    ]);
+  });
+
+  it("givenAskReads_whenUpdate_thenRefusedWithoutAsking", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+
+    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: RENAME_CUSTOMER }, AGENT_CALLER);
+
+    expect(answer.outcome).toBe("refused");
+    expect(textOf(answer.result)).toBe(ASK_READS_REASON);
+    expect(harness.approvals.pending()).toEqual([]);
+    expect(customerName(harness.path)).toBe("Ada Lovelace");
+    expect(harness.history).toMatchObject([{ outcome: "cancelled", message: ASK_READS_REASON }]);
+  });
+
+  it("givenAskReads_whenListTablesDescribeExplain_thenNoApproval", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+
+    const datasources = await harness.call("list_datasources", {});
+    const tables = await harness.call("list_tables", { datasource: "shop", schema: "main" });
+    const described = await harness.call("describe_table", { datasource: "shop", schema: "main", table: "orders" });
+    const ddl = await harness.call("get_ddl", { datasource: "shop", schema: "main", table: "customers" });
+    const plan = await harness.call("explain", { datasource: "shop", sql: "SELECT * FROM orders WHERE id = 1" });
+
+    expect(datasources.structuredContent).toMatchObject({ datasources: [{ id: "shop", access: "askReads" }] });
+    expect(textOf(datasources)).toContain("Ask before reads");
+    expect(textOf(tables)).toContain("- customers (table, 3 columns)");
+    expect(textOf(described)).toContain("customer_id INTEGER NOT NULL");
+    expect(textOf(ddl)).toContain("CREATE TABLE customers");
+    expect(textOf(plan)).toContain("Raw:");
+    expect(harness.approvals.pending()).toEqual([]);
+    expect(harness.requests.map((request) => request.type)).not.toContain("statement.execute");
+  });
+
+  it("givenAskReadsReadGranted_whenFetchRows_thenNotAsked", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+    harness.setRowCap(2);
+
+    const first = harness.call("run_query", { datasource: "shop", sql: "SELECT id FROM orders ORDER BY id" });
+    harness.approvals.answer(await waitingApproval(harness.approvals), "allowOnce");
+    const handle = (await first).structuredContent?.handle as string;
+    const next = await harness.call("fetch_rows", { handle, offset: 2 });
+
+    expect(next.structuredContent?.rows).toEqual([{ id: 3 }]);
+    expect(harness.approvals.pending()).toEqual([]);
+  });
+
+  it("givenAskReadsAllowKind_whenSelectAgain_thenNotAsked", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+
+    const first = harness.call("run_query", { datasource: "shop", sql: SELECT_NAMES });
+    harness.approvals.answer(await waitingApproval(harness.approvals), "allowKind");
+    await first;
+    const second = await harness.call("run_query", { datasource: "shop", sql: "SELECT id FROM orders" });
+
+    expect(second.isError).toBeUndefined();
+    expect(harness.approvals.pending()).toEqual([]);
+  });
+
+  it("givenAskReads_whenNoWindow_thenReadDenied", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+    harness.approvals.setWindows(false);
+
+    const answer = await harness.tools.call("run_query", { datasource: "shop", sql: SELECT_NAMES }, AGENT_CALLER);
+
+    expect(answer.outcome).toBe("denied");
+    expect(textOf(answer.result)).toBe(APPROVAL_REFUSALS.noWindow);
   });
 
   it("givenSelect_whenExplainedAndFormatted_thenPlanAndUppercaseSqlComeBack", async () => {

@@ -62,7 +62,7 @@ const AGENT_ACCESS_OPTIONS = AGENT_ACCESS_LEVELS.map((value) => ({ value, label:
 const AGENT_ACCESS_NOTE = "What MCP clients may do while Settings → MCP Server is on";
 const AGENT_READ_ONLY_NOTE = "Read only while Read-only is on";
 const AGENT_ACCESS_HINT =
-  "Ask before writes shows each write in the MCP status chip for you to allow or deny. Agents never see passwords.";
+  "Ask before reads shows each query that returns rows in the MCP status chip for you to allow or deny, and refuses writes. Ask before writes does the same for each write. Agents never see passwords.";
 
 type TestState = { readonly kind: "testing" } | { readonly kind: "done"; readonly result: ProbeResult };
 
