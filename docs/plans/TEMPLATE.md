@@ -128,8 +128,8 @@ New cases:
 `givenX_whenY_thenZ`,
 `given…`.
 
-_Docs: which section of `docs/design/specification.md` or which decision record gains what. Name
-the section, not just the file._
+_Docs: which section of `docs/design/specification.md`, which `docs/guide/` page or which decision
+record gains what. Name the section, not just the file._
 
 Every phase ends with `bun run typecheck` and `bun run test` both green; a phase touching a plugin
 also runs `bun run test:db`.

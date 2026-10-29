@@ -124,3 +124,4 @@ started, not when it is merged.
 | 129 | [The database backs the statement limit where it can](129-the-database-backs-the-statement-limit-where-it-can.md)                                                      |
 | 130 | [Agents can be asked before reads](130-agents-can-be-asked-before-reads.md)                                                                                            |
 | 131 | [A datasource remembers how its timeout is enforced](131-a-datasource-remembers-how-its-timeout-is-enforced.md)                                                        |
+| 132 | [User docs are a short README and a guide](132-user-docs-are-a-short-readme-and-a-guide.md)                                                                            |

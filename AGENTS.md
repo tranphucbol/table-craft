@@ -100,7 +100,7 @@ Run from the repository root.
 - `bun run test:smoke:packaged` - build the unpacked app and run `test/e2e/packaged.smoke.test.ts`
   against it on SQLite; `test:smoke:packaged:db` adds MySQL (and PostgreSQL when selected).
   `TABLE_CRAFT_APP_EXECUTABLE` points the harness at a packaged binary instead of the dev build
-- `bun run readme:media` - record the README GIFs into `docs/media/` (decision 036): builds the app,
+- `bun run readme:media` - record the GIFs of the README and the guide into `docs/media/` (decision 036): builds the app,
   reloads the demo `shop` database in the `test:db:postgres` Postgres and the demo keys in db 3 of
   the `test:db:redis` Redis, and drives one scene per GIF. Needs Docker, ffmpeg and a display;
   `README_MEDIA=explain,grid` re-records only those. Re-record after a UI change a GIF shows
@@ -266,7 +266,9 @@ test/                      Vitest suites, `givenX_whenY_thenZ`
                            release is published
 docs/design/               specification.md, design-system.md
 docs/decisions/            one numbered file per durable decision
-docs/media/                the README's GIFs, recorded by `readme:media` and nothing else
+docs/guide/                the user guide, one page per topic, indexed from the README
+docs/media/                the GIFs of the README and the guide, recorded by `readme:media` and
+                           nothing else
 docs/plans/                one plan per feature with its Live test section; untracked
                            except TEMPLATE.md (decision 035)
 docs/evidence/NNN/         screenshots from each plan's live test; untracked (decision 035)
@@ -324,7 +326,10 @@ or a named constant over a comment.
   is filled in. Plans and evidence stay out of git; never commit them (decision 035). A plan
   worked in its own worktree starts by copying the main checkout's `.env` there, so its TiDB
   suites use the remote server; `.env` is git-ignored and never committed.
-- `README.md` is for users. `test/renderer/readme.test.ts` checks it against the code: images,
-  anchors, the shortcut table against the action registry, the settings table against the defaults,
-  the plugin capabilities, and the `bun run` scripts. Change the README with the behaviour it
-  describes, and re-record a GIF whose scene changed.
+- `README.md` and `docs/guide/` are for users, `CONTRIBUTING.md` for contributors (decision 132).
+  `test/renderer/userDocs.test.ts` checks them against the code: images and links relative to each
+  page, anchors across pages, the README's Documentation index against the guide pages and its
+  200-line budget, the shortcut table against the action registry, the settings table against the
+  defaults, the plugin capabilities, and CONTRIBUTING's `bun run` scripts. Document a behaviour in
+  the guide page it belongs to, change the README only for a Highlight, the Quick start or the
+  index, and re-record a GIF whose scene changed.
