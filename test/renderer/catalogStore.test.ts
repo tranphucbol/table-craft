@@ -69,6 +69,7 @@ function wired() {
     connectEngine: () => Promise.resolve({ status: "connected", client }),
     disconnectEngine: () => Promise.resolve(),
     promptSecrets: () => Promise.resolve(null),
+    rememberBrand: () => Promise.resolve(),
   });
   datasources.getState().setPlugins([POSTGRES_PLUGIN]);
   datasources.getState().applyList({

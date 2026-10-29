@@ -1,4 +1,5 @@
 import type {
+  Brand,
   CatalogPlugin,
   PluginInfo,
   PluginInstallState,
@@ -8,9 +9,12 @@ import { formatBytes } from "@table-craft/desktop/renderer/model/format.js";
 
 const PERCENT = 100;
 
-/** One line of the New Data Source picker: an installed plugin, or one TableCraft can download. */
+/**
+ * One line of the New Data Source picker: a product an installed plugin speaks (null when it names
+ * none), or a plugin TableCraft can download.
+ */
 export type PickerEntry =
-  | { readonly kind: "plugin"; readonly plugin: PluginInfo }
+  | { readonly kind: "plugin"; readonly plugin: PluginInfo; readonly brand: Brand | null }
   | { readonly kind: "download"; readonly entry: CatalogPlugin };
 
 export const SOURCE_LABELS: Readonly<Record<PluginSource, string>> = {
@@ -30,20 +34,25 @@ export function missingPlugin(
   return catalog.find((entry) => entry.id === pluginId);
 }
 
-/** The installed plugins and the downloadable ones not installed, by name. */
+/** Each product the installed plugins speak, and the downloadable plugins not installed, by name. */
 export function pickerEntries(
   plugins: readonly PluginInfo[],
   catalog: readonly CatalogPlugin[],
 ): readonly PickerEntry[] {
-  const installed = plugins.map((plugin): PickerEntry => ({ kind: "plugin", plugin }));
+  const installed = plugins.flatMap((plugin): PickerEntry[] =>
+    plugin.brands.length === 0
+      ? [{ kind: "plugin", plugin, brand: null }]
+      : plugin.brands.map((brand) => ({ kind: "plugin", plugin, brand })),
+  );
   const downloadable = catalog
     .filter((entry) => !plugins.some((plugin) => plugin.id === entry.id))
     .map((entry): PickerEntry => ({ kind: "download", entry }));
   return [...installed, ...downloadable].sort((a, b) => entryName(a).localeCompare(entryName(b)));
 }
 
-function entryName(entry: PickerEntry): string {
-  return entry.kind === "plugin" ? entry.plugin.name : entry.entry.name;
+export function entryName(entry: PickerEntry): string {
+  if (entry.kind === "download") return entry.entry.name;
+  return entry.brand?.name ?? entry.plugin.name;
 }
 
 /** "Download (about 781.3 KB)". */
