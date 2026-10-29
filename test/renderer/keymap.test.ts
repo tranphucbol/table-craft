@@ -284,13 +284,16 @@ describe("grid keymap", () => {
     expect(ran).toEqual(["editor.zoomIn", "editor.zoomOut", "editor.zoomReset", "explorer.collapseAll"]);
   });
 
-  it("givenGridChords_whenListed_thenAllScopedToTheGridOrItsFindBar", () => {
+  it("givenGridChords_whenListed_thenAllScopedToTheGridItsFindBarOrValuePanel", () => {
     const gridChords = ALL_ACTIONS.filter(
       (action) => action.category === "Result Grid" && action.shortcut !== undefined,
     );
     const scoped = (action: AnyAction) => {
       const regions = typeof action.shortcutRegion === "string" ? [action.shortcutRegion] : action.shortcutRegion;
-      return regions !== undefined && regions.every((region) => region === "grid" || region === "gridFind");
+      return (
+        regions !== undefined &&
+        regions.every((region) => region === "grid" || region === "gridFind" || region === "valuePanel")
+      );
     };
     expect(gridChords.every(scoped)).toBe(true);
     expect(gridChords.map((action) => [action.shortcut, action.shortcutRegion])).toEqual([
@@ -298,6 +301,7 @@ describe("grid keymap", () => {
       ["Mod+C", "grid"],
       ["Mod+A", "grid"],
       ["Shift+Enter", "grid"],
+      ["Mod+Alt+J", ["grid", "valuePanel"]],
       ["Mod+F", ["grid", "gridFind"]],
       ["Enter", "gridFind"],
       ["Shift+Enter", "gridFind"],
@@ -305,6 +309,12 @@ describe("grid keymap", () => {
       ["Mod+Alt+T", "grid"],
       ["Mod+B", "grid"],
     ]);
+  });
+
+  it("givenModAltJ_whenKeymapBuilt_thenToggleJsonViewHasItAlone", () => {
+    const holders = ALL_ACTIONS.filter((action) => action.shortcut === "Mod+Alt+J").map((action) => action.id);
+
+    expect(holders).toEqual([GRID_ACTION_IDS.toggleJsonView]);
   });
 
   it("givenFindInResult_whenFocusInEditorOrGrid_thenEditorKeepsModFAndGridOpensFind", () => {

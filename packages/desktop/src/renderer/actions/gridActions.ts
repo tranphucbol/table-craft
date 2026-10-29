@@ -15,6 +15,8 @@ import { canReloadKey, useKeyTabs } from "@table-craft/desktop/renderer/state/ke
 import { reloadTable, settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { jsonOwnerKey } from "@table-craft/desktop/renderer/model/jsonView.js";
+import { useJsonView, type ShownJsonView } from "@table-craft/desktop/renderer/state/jsonView.js";
 
 export const GRID_ACTION_IDS = {
   fetchNextPage: "grid.fetchNextPage",
@@ -25,6 +27,7 @@ export const GRID_ACTION_IDS = {
   selectAll: "grid.selectAll",
   export: "grid.export",
   toggleValuePanel: "grid.toggleValuePanel",
+  toggleJsonView: "grid.toggleJsonView",
   setExtractor: "grid.setExtractor",
   sort: "grid.sort",
   clearSort: "grid.clearSort",
@@ -142,6 +145,13 @@ export function shown(context: ActionContext): ShownResult | null {
     return { ownerId, result: context.result, host: useKeyTabs.getState(), rows: shownRowCount(context.result) };
   }
   return null;
+}
+
+/** The JSON-capable value the shown result's value panel draws, if any. */
+function shownJsonView(context: ActionContext): ShownJsonView | null {
+  const target = shown(context);
+  if (target === null) return null;
+  return useJsonView.getState().panels[jsonOwnerKey(target.ownerId, target.result.handle)] ?? null;
 }
 
 /** Whether Rerun can start: a console's Run or a table's Reload. */
@@ -382,6 +392,19 @@ export const GRID_ACTIONS: readonly AnyAction[] = [
     shortcutRegion: "grid",
     when: (context) => shown(context) !== null,
     run: () => useLayout.getState().toggleValuePanel(),
+  }),
+  defineAction({
+    id: GRID_ACTION_IDS.toggleJsonView,
+    title: "Toggle JSON View",
+    category: "Result Grid",
+    icon: "jsonView",
+    shortcut: "Mod+Alt+J",
+    shortcutRegion: ["grid", "valuePanel"],
+    when: (context) => shownJsonView(context) !== null,
+    run: (context) => {
+      const panel = shownJsonView(context);
+      if (panel !== null) useJsonView.getState().set(panel.key, !panel.on);
+    },
   }),
   defineAction<ExtractorArgs | undefined>({
     id: GRID_ACTION_IDS.setExtractor,

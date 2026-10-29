@@ -616,6 +616,7 @@ function NullTextField() {
 function DataEditorPage() {
   const data = useSettings((state) => state.settings.data);
   const groupId = useId();
+  const jsonId = useId();
   const setData = (patch: Partial<Settings["data"]>) =>
     update((current) => ({ ...current, data: { ...current.data, ...patch } }));
   return (
@@ -637,6 +638,20 @@ function DataEditorPage() {
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
         Display only: copy, export, filters and the editor keep the database&apos;s text.
+      </p>
+      <FieldRow label="JSON" htmlFor={jsonId}>
+        <label className="flex items-center gap-cell">
+          <input
+            id={jsonId}
+            type="checkbox"
+            checked={data.detectJson}
+            onChange={(event) => setData({ detectJson: event.target.checked })}
+          />
+          Detect JSON in text values
+        </label>
+      </FieldRow>
+      <p className="col-start-2 text-ink-muted">
+        The value panel shows a text value holding a JSON object or array formatted; {"{}"} switches it.
       </p>
       <SectionTitle>Paging</SectionTitle>
       <NumberField

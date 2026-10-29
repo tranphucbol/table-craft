@@ -42,6 +42,7 @@ const CHOSEN: Settings = {
   data: {
     nullText: "∅",
     groupDigits: true,
+    detectJson: false,
     pageRows: 100,
     fetchAllCap: 2_000,
     exportStallSeconds: 300,
@@ -160,6 +161,7 @@ describe("settings document", () => {
       data: {
         nullText: "",
         groupDigits: "yes",
+        detectJson: "no",
         pageRows: 200,
         fetchAllCap: 100,
         exportStallSeconds: 5,
@@ -174,12 +176,18 @@ describe("settings document", () => {
     expect(read.data).toEqual({
       nullText: "<null>",
       groupDigits: false,
+      detectJson: true,
       pageRows: 200,
       fetchAllCap: 100_000,
       exportStallSeconds: 120,
       aggregates: ["count", "max"],
       blobLimitMb: 16,
     });
+  });
+
+  it("givenNoDetectJson_whenRead_thenDetectJsonDefaultsOn", () => {
+    expect(readSettings({ version: 1 }).data.detectJson).toBe(true);
+    expect(readSettings({ version: 1, data: { detectJson: false } }).data.detectJson).toBe(false);
   });
 
   it("givenSettingsWithGruvboxDark_whenRead_thenThemeIsKept", () => {

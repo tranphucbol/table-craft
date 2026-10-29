@@ -1,13 +1,17 @@
+import { json as jsonLanguage } from "@codemirror/lang-json";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Column, WireValue } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
+import { GRID_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridActions.js";
 import { EDITOR_THEME } from "@table-craft/desktop/renderer/console/editorTheme.js";
 import { BytesView } from "@table-craft/desktop/renderer/grid/BytesView.js";
 import { NULL_TEXT, panelValue } from "@table-craft/desktop/renderer/grid/format.js";
 import { Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { isBytesWire } from "@table-craft/desktop/renderer/model/binaryCells.js";
+import { parsesAsJson, storedJson } from "@table-craft/desktop/renderer/model/jsonText.js";
 import { prettyJson } from "@table-craft/desktop/renderer/model/prettyJson.js";
 import {
   decodeValue,
@@ -19,9 +23,13 @@ import {
   type DecodedValue,
   type ValueFormat,
 } from "@table-craft/desktop/renderer/model/valueFormats.js";
+import { useJsonViewState } from "@table-craft/desktop/renderer/state/jsonView.js";
+import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 
 const FORMAT_LABEL = "Format";
 const FORMAT_OPTIONS = VALUE_FORMATS.map((format) => ({ value: format, label: FORMAT_LABELS[format] }));
+const JSON_HINT = "JSON · shown formatted, stored as is";
+const INVALID_JSON_TEXT = "Not valid JSON — saved as typed";
 
 /** How a key-value value panel reads bytes (plan 058 decision 15, decision 119); SQL panels have none. */
 export interface ValueFormatChoice {
@@ -145,6 +153,7 @@ function JsonView({ text }: { readonly text: string }) {
       state: EditorState.create({
         extensions: [
           EDITOR_THEME,
+          jsonLanguage(),
           EditorState.readOnly.of(true),
           EditorView.editable.of(false),
           EditorView.lineWrapping,
@@ -168,47 +177,101 @@ function JsonView({ text }: { readonly text: string }) {
   return <div ref={host} data-testid="value-json" className="min-h-0 flex-1 overflow-hidden" />;
 }
 
-function PanelHeader({ column, children }: { readonly column: Column | null; readonly children?: ReactNode }) {
+function PanelHeader({
+  column,
+  json,
+  children,
+}: {
+  readonly column: Column | null;
+  /** Whether the JSON view shows, when `{}` is offered. */
+  readonly json?: boolean;
+  readonly children?: ReactNode;
+}) {
   return (
     <div className="flex h-row shrink-0 items-center gap-gap border-b border-line px-cell text-ui">
       <span className="truncate text-ink">{column?.name ?? "Value"}</span>
       {column?.type == null ? null : <span className="truncate text-ink-muted">{column.type}</span>}
+      {json === undefined ? null : (
+        <span data-testid="value-json-toggle" data-on={json} className="ml-auto shrink-0">
+          <ActionButton actionId={GRID_ACTION_IDS.toggleJsonView} compact pressed={json} />
+        </span>
+      )}
       {children}
     </div>
   );
 }
 
+function JsonHint() {
+  return (
+    <p data-testid="value-json-hint" className="shrink-0 px-cell pt-cell text-ink-muted">
+      {JSON_HINT}
+    </p>
+  );
+}
+
+function RawText({ text }: { readonly text: string }) {
+  return (
+    <pre
+      data-testid="value-text"
+      className="min-h-0 flex-1 overflow-auto p-cell break-words whitespace-pre-wrap text-ink select-text"
+    >
+      {text}
+    </pre>
+  );
+}
+
 const PANEL_CLASS = "flex w-value-panel min-w-0 shrink-0 flex-col border-l border-line bg-panel font-grid text-grid";
+
+/** Where a panel keeps its `{}` choice: the result's `jsonOwnerKey`; the column names the rest. */
+function jsonTarget(owner: string | undefined, column: Column | null) {
+  return owner === undefined || column === null ? undefined : { owner, column: column.name };
+}
 
 /**
  * The focused cell's value as an editor, in the table editor (plan 008 decision 10): text as typed,
- * JSON pretty-printed. Mount it per cell; `onChange` gets each edit, and ⌘↵ (`table.applyValue`)
- * writes it to the pending changes.
+ * JSON formatted while its view is on (plan 126 decision 9). Mount it per cell; `onChange` gets
+ * each edit, and ⌘↵ (`table.applyValue`) writes it to the pending changes.
  */
 export function ValueEditor({
   column,
   text,
   json,
+  jsonOwner,
   applyHint,
   onChange,
 }: {
   readonly column: Column | null;
   readonly text: string;
+  /** The column is a declared JSON type. */
   readonly json: boolean;
+  readonly jsonOwner?: string;
   /** The Apply shortcut, shown in the header. */
   readonly applyHint: string;
   readonly onChange: (text: string) => void;
 }) {
+  // Judged on the text at mount, so an edit that breaks the JSON does not switch the view mid-typing.
+  const [initial] = useState(text);
+  const target = jsonTarget(jsonOwner, column);
+  const view = useJsonViewState(target, { text: initial, json });
+  const invalid = view.on && text !== initial && !parsesAsJson(text);
+  const toggle = target !== undefined && view.available ? view.on : undefined;
   return (
     <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
-      <PanelHeader column={column}>
-        <span className="ml-auto shrink-0 text-ink-muted">{applyHint} applies</span>
+      <PanelHeader column={column} json={toggle}>
+        <span className={cn("shrink-0 text-ink-muted", toggle === undefined && "ml-auto")}>{applyHint} applies</span>
       </PanelHeader>
+      {view.on ? <JsonHint /> : null}
+      {invalid ? (
+        <p role="alert" data-testid="value-json-invalid" className="shrink-0 px-cell text-warning">
+          {INVALID_JSON_TEXT}
+        </p>
+      ) : null}
       <EditableText
-        key={column?.name}
+        key={`${column?.name ?? ""}:${String(view.on)}`}
         label={`Value of ${column?.name ?? "the cell"}`}
-        text={json ? prettyJson(text) : text}
-        onChange={onChange}
+        text={view.on ? prettyJson(text) : text}
+        json={view.on}
+        onChange={(edited) => onChange(view.on ? storedJson(edited, initial).text : edited)}
       />
     </aside>
   );
@@ -218,10 +281,13 @@ export function ValueEditor({
 function EditableText({
   label,
   text,
+  json = false,
   onChange,
 }: {
   readonly label: string;
   readonly text: string;
+  /** Highlights the text as JSON; read at mount. */
+  readonly json?: boolean;
   readonly onChange: (text: string) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
@@ -231,6 +297,7 @@ function EditableText({
   });
   const initial = useRef(text);
   const ariaLabel = useRef(label);
+  const highlighted = useRef(json);
   useEffect(() => {
     if (host.current === null) return;
     const created = new EditorView({
@@ -239,6 +306,7 @@ function EditableText({
         doc: initial.current,
         extensions: [
           EDITOR_THEME,
+          highlighted.current ? jsonLanguage() : [],
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ "aria-label": ariaLabel.current }),
           EditorView.updateListener.of((update) => {
@@ -261,6 +329,7 @@ export function ValuePanel({
   value,
   format,
   edit,
+  jsonOwner,
 }: {
   readonly column: Column | null;
   /** `undefined` while the cell's window is loading, or with no cell focused. */
@@ -268,33 +337,36 @@ export function ValuePanel({
   readonly format?: ValueFormatChoice;
   /** Makes the formatted value editable; only with `format`. */
   readonly edit?: ValueTextEdit;
+  /** Offers `{}` and keeps its choice for this result (`jsonOwnerKey`); key-value panels have `format` instead. */
+  readonly jsonOwner?: string;
 }) {
   const shown = value === undefined ? null : panelValue(value);
   const formatted = format !== undefined;
   // A fresh array per draw would re-run the decoding effect after each decode it causes.
   const bytes = useMemo(() => (formatted ? valueBytes(value) : null), [formatted, value]);
+  const target = formatted ? undefined : jsonTarget(jsonOwner, column);
+  const text = !formatted && (shown?.kind === "json" || shown?.kind === "text") ? shown.text : null;
+  const view = useJsonViewState(target, { text, json: shown?.kind === "json" });
   return (
     <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
-      <PanelHeader column={column}>{format === undefined ? null : <FormatPicker choice={format} />}</PanelHeader>
+      <PanelHeader column={column} json={target !== undefined && view.available ? view.on : undefined}>
+        {format === undefined ? null : <FormatPicker choice={format} />}
+      </PanelHeader>
+      {view.on ? <JsonHint /> : null}
       {bytes !== null && format !== undefined ? (
         <FormattedValue bytes={bytes} format={format.format} edit={edit} />
       ) : shown === null ? (
         <p className="p-cell text-ink-muted">{column === null ? "Select a cell to see its value." : "Loading…"}</p>
       ) : shown.kind === "null" ? (
         <p className="p-cell text-grid-null italic">{NULL_TEXT}</p>
-      ) : shown.kind === "json" ? (
-        <JsonView text={shown.text} />
       ) : shown.kind === "bytes" ? (
         isBytesWire(value) ? (
           <BytesView value={value} hex={shown.hex} note={shown.note} />
         ) : null
+      ) : view.on ? (
+        <JsonView text={shown.text} />
       ) : (
-        <pre
-          data-testid="value-text"
-          className="min-h-0 flex-1 overflow-auto p-cell break-words whitespace-pre-wrap text-ink select-text"
-        >
-          {shown.text}
-        </pre>
+        <RawText text={shown.text} />
       )}
     </aside>
   );
