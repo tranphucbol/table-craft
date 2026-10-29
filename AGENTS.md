@@ -333,3 +333,6 @@ or a named constant over a comment.
   defaults, the plugin capabilities, and CONTRIBUTING's `bun run` scripts. Document a behaviour in
   the guide page it belongs to, change the README only for a Highlight, the Quick start or the
   index, and re-record a GIF whose scene changed.
+- Branch names, commit subjects and pull requests follow `CONTRIBUTING.md` (Branches, Commits,
+  Pull requests); a pull request's description fills in `.github/pull_request_template.md`, drafted
+  and opened with the project skill `.agents/skills/create-pr`.
