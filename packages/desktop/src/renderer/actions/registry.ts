@@ -13,6 +13,7 @@ export type ActionCategory =
   | "Database"
   | "Editor Tabs"
   | "Tool Windows"
+  | "Services"
   | "Navigation";
 
 /** Names, not components, so the registry stays free of React; `ui/icons.ts` maps them. */
@@ -38,6 +39,7 @@ export type ActionIcon =
   | "folder"
   | "synchronize"
   | "collapseAll"
+  | "expandAll"
   | "copy"
   | "fetchNextPage"
   | "fetchAll"
@@ -192,4 +194,9 @@ export function createActionRegistry(
       return () => listeners.delete(listener);
     },
   };
+}
+
+/** The first of `ids` that is enabled, or the first when none is: one button that stands for several actions. */
+export function firstEnabledAction(ids: readonly [string, ...string[]], isEnabled: (id: string) => boolean): string {
+  return ids.find(isEnabled) ?? ids[0];
 }

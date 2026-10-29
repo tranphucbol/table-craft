@@ -7,14 +7,11 @@ import {
   type AgentClientGroup,
   type AgentDatasourceGroup,
 } from "@table-craft/desktop/renderer/model/mcp.js";
-import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { AgentIcon, DatabaseIcon, SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { DatasourceGlyph, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
+import { AgentIcon, SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { OutcomeGlyph } from "@table-craft/desktop/renderer/ui/Outcome.js";
 import type { McpActivityView, McpRunView } from "@table-craft/desktop/settings/mcp.js";
-
-function useDatasourceName(datasourceId: string): string {
-  return useDatasources((state) => state.datasources.find((view) => view.id === datasourceId)?.name ?? datasourceId);
-}
 
 export function agentRunLabel(run: McpRunView): string {
   return `${run.tool}, ${firstLine(run.sql)}`;
@@ -74,11 +71,13 @@ export function AgentCallLine({ call }: { readonly call: McpActivityView }) {
 }
 
 export function AgentDatasourceLine({ group }: { readonly group: AgentDatasourceGroup }) {
-  const name = useDatasourceName(group.datasourceId);
+  const { datasourceId } = group;
+  const view = useDatasources((state) => datasourceById(state, datasourceId));
+  const brand = useDatasourceBrand({ id: datasourceId, pluginId: view?.pluginId ?? "", brand: view?.brand });
   return (
     <>
-      <DatabaseIcon aria-hidden className="size-icon shrink-0 text-accent" />
-      <span className="truncate">{name}</span>
+      <DatasourceGlyph brand={brand} className="size-icon shrink-0" />
+      <span className="truncate">{view?.name ?? datasourceId}</span>
     </>
   );
 }
