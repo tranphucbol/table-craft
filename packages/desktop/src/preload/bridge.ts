@@ -6,6 +6,16 @@
 import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
 import type { Capability, HostKeyOffer, ProbeResult, SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
+import type {
+  AgentAccess,
+  AgentPolicy,
+  McpActiveConsole,
+  McpClient,
+  McpConsoleRequest,
+  McpContextRequest,
+  McpStatus,
+  McpUserControl,
+} from "@table-craft/desktop/settings/mcp.js";
 import type { Settings } from "@table-craft/desktop/settings/settings.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
@@ -37,6 +47,10 @@ export const CHANNELS = {
   openRecentFile: "table-craft:sql-files.open-recent",
   /** Main to every window: a plugin was installed, removed or is downloading; the payload is a `PluginsState`. */
   pluginsChanged: "table-craft:plugins.changed",
+  /** Main to every window: the MCP server, its clients or its approvals changed; the payload is an `McpStatus`. */
+  mcpStatus: "table-craft:mcp.status-changed",
+  mcpContextRequest: "table-craft:mcp.context-request",
+  mcpOpenConsole: "table-craft:mcp.open-console",
 } as const;
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
@@ -107,6 +121,14 @@ export const INVOKE_CHANNELS = {
   importRun: "table-craft:import.run",
   importCancel: "table-craft:import.cancel",
   answerHostKey: "table-craft:ssh.answer-host-key",
+  setAgentAccess: "table-craft:datasources.set-agent-access",
+  setAgentPolicy: "table-craft:datasources.set-agent-policy",
+  mcpCopyToken: "table-craft:mcp.copy-token",
+  mcpContextReply: "table-craft:mcp.context-reply",
+  mcpStatus: "table-craft:mcp.status",
+  mcpControl: "table-craft:mcp.control",
+  mcpCopyClientConfig: "table-craft:mcp.copy-client-config",
+  mcpRegenerateToken: "table-craft:mcp.regenerate-token",
 } as const;
 
 /** The `window.postMessage` kind preload uses to hand a port on; contextBridge cannot carry one. */
@@ -293,6 +315,12 @@ export interface Datasource {
    * An allow-list, so a database created later on a shared server stays hidden until picked.
    */
   readonly shownNamespaces?: readonly string[] | undefined;
+  /** What agents may do here over MCP (decision 127); absent is `off`. */
+  readonly agentAccess?: AgentAccess | undefined;
+  /** The top-level namespaces agents see; absent, the shown ones. */
+  readonly agentSchemas?: readonly string[] | undefined;
+  /** Rows per agent answer here; absent, Settings › MCP Server's row limit. */
+  readonly agentRowCap?: number | undefined;
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */
@@ -438,7 +466,7 @@ export interface EngineExited {
 /** Mirrors core's `HISTORY_OUTCOMES` and `HISTORY_SOURCES` (decision 030). */
 export const HISTORY_OUTCOMES = ["success", "error", "cancelled"] as const;
 export type HistoryOutcome = (typeof HISTORY_OUTCOMES)[number];
-export const HISTORY_SOURCES = ["console", "table"] as const;
+export const HISTORY_SOURCES = ["console", "table", "agent"] as const;
 export type HistorySource = (typeof HISTORY_SOURCES)[number];
 
 /** Mirrors core's `HistoryEntry`: one statement run, as the renderer saw it end. */
@@ -458,6 +486,8 @@ export interface HistoryEntry {
   readonly parameters?: Readonly<Record<string, string | null>> | null;
   /** How many warnings the server left, never their text; absent or null when none. */
   readonly warnings?: number | null;
+  /** The MCP client that ran it; absent or null for the user's own runs. */
+  readonly client?: string | null;
 }
 
 /** Mirrors core's `HistoryStatement`: every run of one exact text, described by its newest. */
@@ -469,6 +499,9 @@ export interface HistoryStatement {
   readonly lastRowCount: number | null;
   readonly lastMessage: string | null;
   readonly lastParameters: Readonly<Record<string, string | null>> | null;
+  readonly lastSource: HistorySource;
+  /** The MCP client behind the newest run; null for the user's own. */
+  readonly lastClient: string | null;
   readonly runs: number;
 }
 
@@ -711,4 +744,19 @@ export interface TableCraftBridge {
   /** Stops a running import before its next connection. */
   importCancel(): Promise<InvokeResult<null>>;
   onImportProgress(listener: (progress: ImportProgress) => void): () => void;
+  /** Settings › MCP Server's access column; refuses to raise a production-coloured datasource past Read only. */
+  setAgentAccess(datasourceId: string, access: AgentAccess): Promise<InvokeResult<null>>;
+  setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<InvokeResult<null>>;
+  mcpCopyToken(): Promise<InvokeResult<null>>;
+  /** Answers main's `onMcpContextRequest`; null when no console is focused. */
+  mcpContextReply(requestId: number, context: McpActiveConsole | null): Promise<InvokeResult<null>>;
+  onMcpContextRequest(listener: (request: McpContextRequest) => void): () => void;
+  onMcpOpenConsole(listener: (request: McpConsoleRequest) => void): () => void;
+  mcpStatus(): Promise<InvokeResult<McpStatus>>;
+  onMcpStatus(listener: (status: McpStatus) => void): () => void;
+  mcpControl(control: McpUserControl): Promise<InvokeResult<null>>;
+  /** Puts the client's config, with the real token, on the clipboard; the token never reaches a window. */
+  mcpCopyClientConfig(client: McpClient): Promise<InvokeResult<null>>;
+  /** A new token; connected clients are dropped and must be configured again. */
+  mcpRegenerateToken(): Promise<InvokeResult<null>>;
 }

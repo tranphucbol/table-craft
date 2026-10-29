@@ -1,5 +1,6 @@
 import { Group, Panel, type Layout } from "react-resizable-panels";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
+import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import { DatabasePane } from "@table-craft/desktop/renderer/panes/DatabasePane.js";
 import { LogPane } from "@table-craft/desktop/renderer/panes/LogPane.js";
@@ -17,7 +18,10 @@ const LEFT_STRIPE_TOP = [
   { actionId: SNIPPET_ACTION_IDS.show },
 ] as const;
 const LEFT_STRIPE_BOTTOM = [{ toolWindow: "services", actionId: ACTION_IDS.toggleServices }] as const;
-const RIGHT_STRIPE_TOP = [{ toolWindow: "log", actionId: ACTION_IDS.toggleLog }] as const;
+const RIGHT_STRIPE_TOP = [
+  { toolWindow: "log", actionId: ACTION_IDS.toggleLog },
+  { actionId: MCP_ACTION_IDS.settings },
+] as const;
 const MIN_TOOL_WINDOW_PERCENT = "10";
 const MIN_EDITOR_PERCENT = "20";
 /** The library's panels scroll by default; ours lay out their own scrolling regions. */

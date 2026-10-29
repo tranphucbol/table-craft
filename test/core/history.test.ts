@@ -90,6 +90,8 @@ describe("query history", () => {
         lastRowCount: null,
         lastMessage: "boom",
         lastParameters: null,
+        lastSource: "console",
+        lastClient: null,
         runs: 2,
       },
       {
@@ -100,6 +102,8 @@ describe("query history", () => {
         lastRowCount: 1,
         lastMessage: null,
         lastParameters: null,
+        lastSource: "console",
+        lastClient: null,
         runs: 1,
       },
     ]);
@@ -248,5 +252,28 @@ describe("query history", () => {
 
     expect(history.recoveredFrom).toBeNull();
     expect(history.recentRuns(2).map((run) => run.warnings)).toEqual([1, null]);
+  });
+
+  it("givenVersionThreeFile_whenOpened_thenClientColumnAddedKeepingRows", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const path = join(await temporaryDirectory(), "history.sqlite");
+    const old = new DatabaseSync(path);
+    old.exec(`CREATE TABLE entries (
+      id INTEGER PRIMARY KEY, datasource_id TEXT NOT NULL, sql TEXT NOT NULL, started_at INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL, outcome TEXT NOT NULL, row_count INTEGER NULL, message TEXT NULL,
+      source TEXT NOT NULL, parameters TEXT NULL, warnings INTEGER NULL);
+    INSERT INTO entries (datasource_id, sql, started_at, duration_ms, outcome, row_count, message, source, parameters, warnings)
+      VALUES ('pg', 'SELECT 1', 1, 2, 'success', 1, NULL, 'console', NULL, NULL);
+    PRAGMA user_version = 3;`);
+    old.close();
+
+    const history = open(path);
+    history.record(entry({ sql: "SELECT 2", startedAt: 5, source: "agent", client: "Claude Code" }));
+
+    expect(history.recoveredFrom).toBeNull();
+    expect(history.search(PG, "").map((found) => [found.sql, found.lastSource, found.lastClient])).toEqual([
+      ["SELECT 2", "agent", "Claude Code"],
+      ["SELECT 1", "console", null],
+    ]);
   });
 });

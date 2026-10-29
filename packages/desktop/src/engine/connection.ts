@@ -38,6 +38,8 @@ export interface OpenSession {
   /** Replaced, under the same session id, when the engine reconnects (decision 054). */
   session: Session;
   readonly capabilities: readonly Capability[];
+  /** Asked for at `session.open`, or the datasource's flag; a reconnect keeps it. */
+  readonly readOnly: boolean;
   /** Statements in flight: `statement.execute` calls that have not answered yet. */
   running: number;
   /** Where the session started, as `currentNamespace` read it; undefined when it could not say. */
@@ -520,7 +522,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
    */
   async function reconnect(sessionId: string, open: OpenSession): Promise<Reconnection> {
     const mode = open.session.transactions?.mode;
-    const session = await connectDatasource(options, connector);
+    const session = await connectDatasource(options, connector, open.readOnly);
     const opening = await namespaceOf({ session, capabilities: open.capabilities });
     // Before manual mode, so the replayed switch does not open a transaction.
     const restored = open.moved && (await replaySwitch(session, open.switchedBy));

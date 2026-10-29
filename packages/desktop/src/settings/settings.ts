@@ -10,6 +10,7 @@ import {
   type UserThemeId,
 } from "@table-craft/desktop/appearance/themes.js";
 import { isMotionChoice, type MotionChoice } from "@table-craft/desktop/appearance/motion.js";
+import type { McpKnownClient } from "@table-craft/desktop/settings/mcp.js";
 
 export const SETTINGS_VERSION = 1;
 
@@ -130,6 +131,17 @@ export interface PluginSettings {
   readonly registryUrl: string;
 }
 
+export interface McpSettings {
+  /** Off by default: no port is opened until the user turns the server on (decision 126). */
+  readonly enabled: boolean;
+  /** Bound on 127.0.0.1 only. */
+  readonly port: number;
+  /** The most rows one `run_query` or `fetch_rows` answer carries. */
+  readonly rowCap: number;
+  /** Client names the user allowed or blocked; a name not listed waits for an answer (decision 127). */
+  readonly clients: readonly McpKnownClient[];
+}
+
 export interface Settings {
   readonly version: typeof SETTINGS_VERSION;
   readonly appearance: AppearanceSettings;
@@ -139,6 +151,7 @@ export interface Settings {
   readonly log: LogSettings;
   readonly updates: UpdateSettings;
   readonly plugins: PluginSettings;
+  readonly mcp: McpSettings;
 }
 
 export const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
@@ -178,6 +191,10 @@ export const STATEMENT_TIMEOUT_SECONDS_RANGE: NumberRange = { min: 0, max: 86_40
 export const KEEPALIVE_SECONDS_RANGE: NumberRange = { min: 0, max: 7_200 };
 export const SESSIONS_REFRESH_SECONDS_RANGE: NumberRange = { min: 1, max: 3_600 };
 export const DEFAULT_KEEPALIVE_SECONDS = 30;
+/** Above the well-known ports, so binding never needs privileges. */
+export const MCP_PORT_RANGE: NumberRange = { min: 1_024, max: 65_535 };
+/** The top matches `fetch_rows`'s own limit: more rows than this only fill an agent's context. */
+export const MCP_ROW_CAP_RANGE: NumberRange = { min: 1, max: 1_000 };
 /** Longer than any installed family's name; guards a hand-edited file, not a real font. */
 export const FONT_FAMILY_MAX_LENGTH = 128;
 
@@ -221,6 +238,12 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   plugins: {
     registryUrl: DEFAULT_REGISTRY_URL,
+  },
+  mcp: {
+    enabled: false,
+    port: 47_820,
+    rowCap: 100,
+    clients: [],
   },
 };
 
@@ -297,6 +320,25 @@ export function sessionsRefreshSecondsError(seconds: number): string | null {
   return rangeError(seconds, SESSIONS_REFRESH_SECONDS_RANGE, "The Sessions refresh interval");
 }
 
+/** The well-formed entries, the first per name. */
+function knownClients(entries: readonly unknown[]): readonly McpKnownClient[] {
+  const seen = new Set<string>();
+  return entries.flatMap((entry) => {
+    const { name, allowed } = record(entry);
+    if (typeof name !== "string" || name === "" || typeof allowed !== "boolean" || seen.has(name)) return [];
+    seen.add(name);
+    return [{ name, allowed }];
+  });
+}
+
+export function mcpPortError(port: number): string | null {
+  return rangeError(port, MCP_PORT_RANGE, "The port");
+}
+
+export function mcpRowCapError(rowCap: number): string | null {
+  return rangeError(rowCap, MCP_ROW_CAP_RANGE, "The row limit");
+}
+
 export function nullTextError(nullText: string): string | null {
   if (nullText.length < NULL_TEXT_LENGTH.min || nullText.length > NULL_TEXT_LENGTH.max) {
     return `NULL text must be ${NULL_TEXT_LENGTH.min} to ${NULL_TEXT_LENGTH.max} characters.`;
@@ -369,6 +411,7 @@ export function readSettings(input: unknown): Settings {
   const log = record(root.log);
   const updates = record(root.updates);
   const plugins = record(root.plugins);
+  const mcp = record(root.mcp);
   const defaults = DEFAULT_SETTINGS;
   const pageRows = inRange(data.pageRows, PAGE_ROWS_RANGE) ? data.pageRows : defaults.data.pageRows;
   const fetchAllCap =
@@ -439,6 +482,12 @@ export function readSettings(input: unknown): Settings {
         typeof plugins.registryUrl === "string" && registryUrlError(plugins.registryUrl) === null
           ? plugins.registryUrl
           : defaults.plugins.registryUrl,
+    },
+    mcp: {
+      enabled: typeof mcp.enabled === "boolean" ? mcp.enabled : defaults.mcp.enabled,
+      port: inRange(mcp.port, MCP_PORT_RANGE) ? mcp.port : defaults.mcp.port,
+      rowCap: inRange(mcp.rowCap, MCP_ROW_CAP_RANGE) ? mcp.rowCap : defaults.mcp.rowCap,
+      clients: Array.isArray(mcp.clients) ? knownClients(mcp.clients) : defaults.mcp.clients,
     },
   };
 }

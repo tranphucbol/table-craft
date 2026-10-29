@@ -24,6 +24,7 @@ import {
 /** The sync label says `2 min ago`, so once a minute is as often as it can change. */
 const SYNC_LABEL_TICK_MS = 60_000;
 import { activeTab, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
+import { McpStatusChip } from "@table-craft/desktop/renderer/shell/McpChip.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 
@@ -182,4 +183,5 @@ export const STATUS_ITEMS: readonly StatusItem[] = [
   { id: "exporting", side: "right", Component: ExportingIndicator },
   { id: "importing", side: "right", Component: ImportingIndicator },
   { id: "scripts", side: "right", Component: ScriptsIndicator },
+  { id: "mcp", side: "right", Component: McpStatusChip },
 ];

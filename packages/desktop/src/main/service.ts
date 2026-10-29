@@ -20,6 +20,7 @@ import type {
   SecretMode,
   SshSettings,
 } from "@table-craft/desktop/preload/bridge.js";
+import { PRODUCTION_COLOR, type AgentAccess, type AgentPolicy } from "@table-craft/desktop/settings/mcp.js";
 import { DEFAULT_KEEPALIVE_SECONDS } from "@table-craft/desktop/settings/settings.js";
 
 /** A failure the user can act on; ipc hands its message and hint to the renderer as they are. */
@@ -72,6 +73,13 @@ export interface DatasourceService<Target> {
   url(id: string): string;
   connect(datasourceId: string, typed: Readonly<Record<string, string>>, target: Target): Promise<ConnectResult>;
   disconnect(datasourceId: string): Promise<void>;
+  /**
+   * Settings › MCP Server's access column (decision 127). It never raises a production-coloured
+   * datasource to Ask before writes; its Data Sources page, through `save`, can.
+   */
+  setAgentAccess(datasourceId: string, access: AgentAccess): Promise<void>;
+  /** A datasource's schema list and row limit for agents; a null field clears it. */
+  setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<void>;
 }
 
 export interface ImportedDatasource {
@@ -464,6 +472,39 @@ export async function createDatasourceService<Target>(
     return { status: "connected" };
   }
 
+  async function setAgentAccess(datasourceId: string, access: AgentAccess): Promise<void> {
+    if (ephemeral?.id === datasourceId) {
+      throw new DatasourceError(
+        "This data source comes from TABLE_CRAFT_DATASOURCE and is not saved, so agents cannot reach it.",
+        "Duplicate it to keep a copy, and give the copy access.",
+      );
+    }
+    const previous = find(datasourceId);
+    if (access === "ask" && previous.color === PRODUCTION_COLOR && previous.agentAccess !== "ask") {
+      throw new DatasourceError(
+        `${previous.name} is marked red for production, so agents stay at Read only here.`,
+        "To let agents ask before writes, set AI agent access on its page in the Data Sources dialog.",
+      );
+    }
+    const { agentAccess: _previous, ...rest } = previous;
+    const next: Datasource = access === "off" ? rest : { ...rest, agentAccess: access };
+    datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
+    await store.save(datasources);
+    changed();
+  }
+
+  async function setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<void> {
+    const { agentSchemas: _schemas, agentRowCap: _rowCap, ...rest } = find(datasourceId);
+    const next: Datasource = {
+      ...rest,
+      ...(policy.schemas === null ? {} : { agentSchemas: [...policy.schemas] }),
+      ...(policy.rowCap === null ? {} : { agentRowCap: policy.rowCap }),
+    };
+    datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
+    await store.save(datasources);
+    changed();
+  }
+
   return {
     list,
     plugins: () => options.plugins(),
@@ -475,5 +516,7 @@ export async function createDatasourceService<Target>(
     url: urlOf,
     connect,
     disconnect: (datasourceId) => hosts.stop(datasourceId),
+    setAgentAccess,
+    setAgentPolicy,
   };
 }

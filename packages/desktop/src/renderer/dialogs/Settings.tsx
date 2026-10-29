@@ -17,14 +17,23 @@ import {
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { InspectionFields } from "@table-craft/desktop/renderer/dialogs/InspectionSettings.js";
+import { McpSettingsPage } from "@table-craft/desktop/renderer/dialogs/McpSettings.js";
 import { MotionFields } from "@table-craft/desktop/renderer/dialogs/MotionSettings.js";
 import { PluginsPage } from "@table-craft/desktop/renderer/dialogs/PluginsPage.js";
-import { FieldError, SectionTitle, update, useDraft } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
+import {
+  FieldError,
+  NumberField,
+  SectionTitle,
+  update,
+  useDraft,
+} from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { ThemePicker } from "@table-craft/desktop/renderer/dialogs/ThemePicker.js";
 import { installedFontFamilies, type FontFamilies } from "@table-craft/desktop/renderer/settings/fonts.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import {
   SETTINGS_PAGES,
+  TOOLS_GROUP_START,
+  TOOLS_GROUP_TITLE,
   useSettingsDialog,
   type SettingsPage,
 } from "@table-craft/desktop/renderer/state/settingsDialog.js";
@@ -54,7 +63,6 @@ import {
   withFont,
   type FontRole,
   type FontSetting,
-  type NumberRange,
   RUN_ALL_ON_ERROR_CHOICES,
   type RunAllOnError,
   type Settings,
@@ -69,6 +77,7 @@ const PAGE_TITLES: Readonly<Record<SettingsPage, string>> = {
   editor: "Editor",
   dataEditor: "Data Editor",
   plugins: "Plugins",
+  mcp: "MCP Server",
   advanced: "Advanced",
 };
 
@@ -96,7 +105,6 @@ const FONT_LABELS: Readonly<Record<FontRole, string>> = {
 
 /** The `<select>` value standing for the built-in stack, which no installed family can be named. */
 const BUILT_IN_FAMILY = "";
-const WHOLE_NUMBER = /^\d+$/;
 
 /** Each page's Restore Defaults puts back only what that page shows. */
 const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> = {
@@ -121,52 +129,9 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
     data: DEFAULT_SETTINGS.data,
   }),
   plugins: (current) => ({ ...current, plugins: DEFAULT_SETTINGS.plugins }),
+  mcp: (current) => ({ ...current, mcp: DEFAULT_SETTINGS.mcp }),
   advanced: (current) => ({ ...current, log: DEFAULT_SETTINGS.log }),
 };
-
-interface NumberFieldProps {
-  readonly label: string;
-  readonly value: number;
-  readonly range: NumberRange;
-  readonly check: (value: number) => string | null;
-  readonly onValid: (value: number) => void;
-}
-
-function NumberField({ label, value, range, check, onValid }: NumberFieldProps) {
-  const id = useId();
-  const errorId = useId();
-  const { text, edit } = useDraft(value, String);
-  const parsed = WHOLE_NUMBER.test(text) ? Number(text) : Number.NaN;
-  const error = Number.isNaN(parsed) ? `${label} must be a whole number.` : check(parsed);
-  return (
-    <>
-      <FieldRow label={label} htmlFor={id}>
-        <TextInput
-          id={id}
-          inputMode="numeric"
-          className="w-28"
-          aria-invalid={error !== null}
-          aria-describedby={error === null ? undefined : errorId}
-          value={text}
-          onChange={(event) => {
-            const next = event.target.value.trim();
-            const number = WHOLE_NUMBER.test(next) ? Number(next) : Number.NaN;
-            if (!Number.isNaN(number) && check(number) === null) {
-              edit(next, number);
-              onValid(number);
-            } else {
-              edit(next, value);
-            }
-          }}
-        />
-        <span className="text-ink-muted">
-          {range.min.toLocaleString("en-US")}–{range.max.toLocaleString("en-US")}
-        </span>
-      </FieldRow>
-      <FieldError id={errorId} error={error} />
-    </>
-  );
-}
 
 function useFontFamilies(): FontFamilies | null {
   const [families, setFamilies] = useState<FontFamilies | null>(null);
@@ -710,6 +675,7 @@ const PAGES: Readonly<Record<SettingsPage, () => ReactNode>> = {
   editor: EditorPage,
   dataEditor: DataEditorPage,
   plugins: PluginsPage,
+  mcp: McpSettingsPage,
   advanced: AdvancedPage,
 };
 
@@ -726,7 +692,18 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
           aria-orientation="vertical"
           className="flex w-dialog-list shrink-0 flex-col gap-1 border-r border-line p-1"
         >
-          {SETTINGS_PAGES.map((id) => (
+          {SETTINGS_PAGES.map((id) => [
+            ...(id === TOOLS_GROUP_START
+              ? [
+                  <div
+                    key={TOOLS_GROUP_TITLE}
+                    role="presentation"
+                    className="mt-1 flex h-row items-end border-t border-line px-cell font-semibold tracking-wider text-ink-muted uppercase"
+                  >
+                    {TOOLS_GROUP_TITLE}
+                  </div>,
+                ]
+              : []),
             <button
               key={id}
               type="button"
@@ -739,8 +716,8 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
               onClick={() => useSettingsDialog.getState().show(id)}
             >
               {PAGE_TITLES[id]}
-            </button>
-          ))}
+            </button>,
+          ])}
         </div>
         <div
           role="tabpanel"

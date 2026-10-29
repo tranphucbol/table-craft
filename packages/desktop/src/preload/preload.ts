@@ -17,6 +17,7 @@ import {
   type WindowState,
 } from "@table-craft/desktop/preload/bridge.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
+import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
 /** Structural, because this program has no DOM lib and preload is the one place that needs it. */
@@ -135,6 +136,17 @@ const bridge: TableCraftBridge = {
   importRun: (request) => invoke(INVOKE_CHANNELS.importRun, request),
   importCancel: () => invoke(INVOKE_CHANNELS.importCancel),
   onImportProgress: (listener) => subscribe<ImportProgress>(CHANNELS.importProgress, listener),
+  setAgentAccess: (datasourceId, access) => invoke(INVOKE_CHANNELS.setAgentAccess, { datasourceId, access }),
+  mcpStatus: () => invoke(INVOKE_CHANNELS.mcpStatus),
+  onMcpStatus: (listener) => subscribe<McpStatus>(CHANNELS.mcpStatus, listener),
+  mcpControl: (control) => invoke(INVOKE_CHANNELS.mcpControl, control),
+  mcpCopyClientConfig: (client) => invoke(INVOKE_CHANNELS.mcpCopyClientConfig, { client }),
+  mcpRegenerateToken: () => invoke(INVOKE_CHANNELS.mcpRegenerateToken),
+  setAgentPolicy: (datasourceId, policy) => invoke(INVOKE_CHANNELS.setAgentPolicy, { datasourceId, policy }),
+  mcpCopyToken: () => invoke(INVOKE_CHANNELS.mcpCopyToken),
+  mcpContextReply: (requestId, context) => invoke(INVOKE_CHANNELS.mcpContextReply, { requestId, context }),
+  onMcpContextRequest: (listener) => subscribe<McpContextRequest>(CHANNELS.mcpContextRequest, listener),
+  onMcpOpenConsole: (listener) => subscribe<McpConsoleRequest>(CHANNELS.mcpOpenConsole, listener),
 };
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);
