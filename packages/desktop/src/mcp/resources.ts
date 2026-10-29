@@ -114,7 +114,7 @@ const PROMPTS: Readonly<Record<string, PromptSpec>> = {
     description: "Answer a question about the data with one read-only query.",
     arguments: [DATASOURCE_ARGUMENT, { name: "question", description: "What to find out.", required: true }],
     text: ({ datasource = "", question = "" }) =>
-      `Using the TableCraft datasource ${datasource}, answer: ${question}\nFirst find the tables involved with list_tables and describe_table, write one SELECT in the datasource's dialect, check it with check_sql, then run it with run_query. Show the query and explain the result.`,
+      `Using the TableCraft datasource ${datasource}, answer: ${question}\nFirst find the tables involved with list_tables and describe_table, write one SELECT in the datasource's dialect, check it with check_sql, then run it with run_query, giving a reason: on an ask-before-reads datasource it waits for the user's approval. Show the query and explain the result.`,
   },
 };
 
