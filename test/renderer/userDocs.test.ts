@@ -36,7 +36,11 @@ const ROOT = resolve(import.meta.dirname, "../..");
 const README = "README.md";
 const CONTRIBUTING = "CONTRIBUTING.md";
 const RELEASING = "RELEASING.md";
-const WORKFLOWS = [".github/workflows/ci.yml", ".github/workflows/publish-plugins.yml"];
+const WORKFLOWS = [
+  ".github/workflows/ci.yml",
+  ".github/workflows/publish-plugins.yml",
+  ".github/workflows/publish-channel.yml",
+];
 const CI_WORKFLOW = ".github/workflows/ci.yml";
 const RELEASE_NOTES_CONFIG = ".github/release.yml";
 const RELEASE_NOTES_CATCH_ALL = "*";

@@ -16,3 +16,15 @@ export function channelOf(version: string): ReleaseChannel {
 export function isReleaseChannel(value: unknown): value is ReleaseChannel {
   return (RELEASE_CHANNELS as readonly unknown[]).includes(value);
 }
+
+/** `auto` follows the kind of build that runs, so a beta installed by hand keeps getting betas. */
+export const UPDATE_CHANNEL_SETTINGS = ["auto", ...RELEASE_CHANNELS] as const;
+export type UpdateChannelSetting = (typeof UPDATE_CHANNEL_SETTINGS)[number];
+
+export function isUpdateChannelSetting(value: unknown): value is UpdateChannelSetting {
+  return (UPDATE_CHANNEL_SETTINGS as readonly unknown[]).includes(value);
+}
+
+export function effectiveChannel(setting: UpdateChannelSetting, appVersion: string): ReleaseChannel {
+  return setting === "auto" ? channelOf(appVersion) : setting;
+}

@@ -22,12 +22,14 @@ import {
   MANIFEST_FILE,
   SIGNATURE_FILE,
   verifyManifest,
+  type ManifestRejection,
   type ManifestTrust,
   type UpdateAsset,
   type UpdateManifest,
 } from "@table-craft/desktop/main/update/manifest.js";
 import { SWAP_SCRIPT_FILE, swapScript } from "@table-craft/desktop/main/update/swap.js";
 import type { UpdateRelease, UpdateState } from "@table-craft/desktop/preload/bridge.js";
+import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 
 export type CheckTrigger = "automatic" | "manual";
 
@@ -53,8 +55,10 @@ export interface UpdateMemory {
 
 export interface UpdaterOptions {
   readonly currentVersion: string;
-  /** Where `update-manifest.json` is; its `.sig` is fetched from beside it. */
-  readonly manifestUrl: string;
+  /** Where each channel's `update-manifest.json` is; its `.sig` is fetched from beside it. */
+  readonly manifestUrls: Readonly<Record<ReleaseChannel, string>>;
+  /** Read on every check, so a change in Settings applies to the next one without a restart. */
+  readonly channel: () => ReleaseChannel;
   readonly trust: ManifestTrust;
   readonly facts: InstallFacts;
   /** For downloads that are not staged beside the app: the Windows installer and the macOS zip. */
@@ -147,6 +151,18 @@ function besides(path: string, id: string, suffix = ""): string {
   return join(dirname(path), `${STAGING_PREFIX}${id}${suffix}`);
 }
 
+/** One manifest URL's answer to a check. */
+type Fetched =
+  | { readonly kind: "manifest"; readonly url: string; readonly manifest: UpdateManifest }
+  | { readonly kind: "unreachable"; readonly url: string; readonly cause: unknown }
+  | { readonly kind: "rejected"; readonly url: string; readonly reason: ManifestRejection; readonly detail: string }
+  | { readonly kind: "otherChannel"; readonly url: string; readonly manifest: UpdateManifest };
+
+/** A beta-channel app takes either kind; a stable one never takes a beta, wherever it was found. */
+function channelAllows(channel: ReleaseChannel, manifest: UpdateManifest): boolean {
+  return channel === "beta" || manifest.channel === "stable";
+}
+
 /** Leftovers from a crash or a power cut mid-download: staging directories beside the installed app. */
 export async function removeLeftovers(target: InstallTarget, log: Logger): Promise<void> {
   const path =
@@ -190,41 +206,74 @@ export function createUpdater(options: UpdaterOptions): Updater {
     return new Uint8Array(await response.arrayBuffer());
   }
 
-  async function runCheck(trigger: CheckTrigger): Promise<UpdateState> {
-    const checkLog = log.child(UPDATE_SCOPE, { step: "check", trigger, current });
-    const before = state;
-    set({ phase: "checking", current });
-    checkLog.info("checking for updates", { url: loggableUrl(options.manifestUrl) });
+  async function fetchManifest(url: string, channel: ReleaseChannel): Promise<Fetched> {
     let body: Uint8Array;
     let signature: string;
     try {
-      const signatureUrl = new URL(SIGNATURE_FILE, options.manifestUrl.replace(/[^/]*$/, "")).href;
+      const signatureUrl = new URL(SIGNATURE_FILE, url.replace(/[^/]*$/, "")).href;
       [body, signature] = await Promise.all([
-        fetchBytes(options.manifestUrl),
+        fetchBytes(url),
         fetchBytes(signatureUrl).then((bytes) => new TextDecoder().decode(bytes)),
       ]);
     } catch (cause) {
-      checkLog.warn("update check failed", { err: cause });
-      if (trigger === "automatic") {
-        set(before.phase === "error" ? before : { phase: "idle", current });
-      } else {
-        set({ phase: "error", current, release: null, message: CHECK_FAILED, retryable: true });
-      }
-      return state;
+      return { kind: "unreachable", url, cause };
     }
     const verdict = verifyManifest(body, signature, options.trust);
-    if (!verdict.ok) {
-      const fields = { reason: verdict.reason, detail: verdict.detail, file: MANIFEST_FILE };
-      if (verdict.reason === "signature") checkLog.error("update manifest rejected", fields);
-      else checkLog.warn("update manifest rejected", fields);
-      // A manifest this version cannot read (a later schema) would otherwise flag every old
-      // install on each automatic check; only a bad signature is worth the user's attention.
-      if (trigger === "automatic" && verdict.reason !== "signature") set({ phase: "idle", current });
-      else set({ phase: "error", current, release: null, message: REJECTED, retryable: false });
+    if (!verdict.ok) return { kind: "rejected", url, reason: verdict.reason, detail: verdict.detail };
+    if (!channelAllows(channel, verdict.manifest)) return { kind: "otherChannel", url, manifest: verdict.manifest };
+    return { kind: "manifest", url, manifest: verdict.manifest };
+  }
+
+  /**
+   * One state for a check no manifest answered. A bad signature outranks the rest; a manifest this
+   * version cannot read (a later schema) would otherwise flag every old install on each automatic
+   * check, so only a signature is worth the user's attention then.
+   */
+  function failedCheck(answers: readonly Fetched[], trigger: CheckTrigger, before: UpdateState): void {
+    const rejections = answers.flatMap((answer) => (answer.kind === "rejected" ? [answer.reason] : []));
+    if (rejections.includes("signature")) {
+      set({ phase: "error", current, release: null, message: REJECTED, retryable: false });
+    } else if (answers.some((answer) => answer.kind === "unreachable")) {
+      if (trigger === "automatic") set(before.phase === "error" ? before : { phase: "idle", current });
+      else set({ phase: "error", current, release: null, message: CHECK_FAILED, retryable: true });
+    } else if (rejections.length > 0 && trigger === "manual") {
+      set({ phase: "error", current, release: null, message: REJECTED, retryable: false });
+    } else {
+      set({ phase: "idle", current });
+    }
+  }
+
+  async function runCheck(trigger: CheckTrigger): Promise<UpdateState> {
+    const channel = options.channel();
+    const checkLog = log.child(UPDATE_SCOPE, { step: "check", trigger, current, channel });
+    const before = state;
+    set({ phase: "checking", current });
+    const urls =
+      channel === "beta" ? [options.manifestUrls.stable, options.manifestUrls.beta] : [options.manifestUrls.stable];
+    checkLog.info("checking for updates", { urls: urls.map(loggableUrl) });
+    const answers = await Promise.all(urls.map((url) => fetchManifest(url, channel)));
+    for (const answer of answers) {
+      const url = loggableUrl(answer.url);
+      if (answer.kind === "unreachable") checkLog.warn("update check failed", { url, err: answer.cause });
+      if (answer.kind === "rejected") {
+        const fields = { url, reason: answer.reason, detail: answer.detail, file: MANIFEST_FILE };
+        if (answer.reason === "signature") checkLog.error("update manifest rejected", fields);
+        else checkLog.warn("update manifest rejected", fields);
+      }
+      if (answer.kind === "otherChannel")
+        checkLog.warn("update manifest is for another channel", { url, manifestChannel: answer.manifest.channel });
+    }
+    const offered = answers
+      .flatMap((answer) => (answer.kind === "manifest" ? [answer.manifest] : []))
+      .reduce<UpdateManifest | null>(
+        (best, next) => (best === null || compareVersions(next.version, best.version) > 0 ? next : best),
+        null,
+      );
+    if (offered === null) {
+      failedCheck(answers, trigger, before);
       return state;
     }
-    const offered = verdict.manifest;
-    const fields = { target: offered.version };
+    const fields = { target: offered.version, targetChannel: offered.channel };
     if (compareVersions(offered.version, current) <= 0) {
       checkLog.info("up to date", fields);
       manifest = null;

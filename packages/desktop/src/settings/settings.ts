@@ -10,6 +10,7 @@ import {
   type UserThemeId,
 } from "@table-craft/desktop/appearance/themes.js";
 import { isMotionChoice, type MotionChoice } from "@table-craft/desktop/appearance/motion.js";
+import { isUpdateChannelSetting, type UpdateChannelSetting } from "@table-craft/desktop/settings/channel.js";
 import type { McpKnownClient } from "@table-craft/desktop/settings/mcp.js";
 
 export const SETTINGS_VERSION = 1;
@@ -132,6 +133,8 @@ export interface LogSettings {
 export interface UpdateSettings {
   /** Look for a new version after launch and once a day; installing always waits for a click (plan 020). */
   readonly checkAutomatically: boolean;
+  /** Which releases updates and plugins come from (plan 124); resolve with `effectiveChannel`. */
+  readonly channel: UpdateChannelSetting;
 }
 
 export interface PluginSettings {
@@ -249,6 +252,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   updates: {
     checkAutomatically: true,
+    channel: "auto",
   },
   plugins: {
     registryUrl: DEFAULT_REGISTRY_URL,
@@ -499,6 +503,7 @@ export function readSettings(input: unknown): Settings {
         typeof updates.checkAutomatically === "boolean"
           ? updates.checkAutomatically
           : defaults.updates.checkAutomatically,
+      channel: isUpdateChannelSetting(updates.channel) ? updates.channel : defaults.updates.channel,
     },
     plugins: {
       registryUrl:
