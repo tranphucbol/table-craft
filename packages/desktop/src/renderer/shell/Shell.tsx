@@ -1,6 +1,7 @@
 import { Group, Panel, type Layout } from "react-resizable-panels";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
+import { SERVICES_ACTION_IDS } from "@table-craft/desktop/renderer/actions/servicesActions.js";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import { DatabasePane } from "@table-craft/desktop/renderer/panes/DatabasePane.js";
 import { LogPane } from "@table-craft/desktop/renderer/panes/LogPane.js";
@@ -22,6 +23,7 @@ const RIGHT_STRIPE_TOP = [
   { toolWindow: "log", actionId: ACTION_IDS.toggleLog },
   { actionId: MCP_ACTION_IDS.settings },
 ] as const;
+const SERVICES_HEADER_ACTIONS = [SERVICES_ACTION_IDS.expandAll, SERVICES_ACTION_IDS.collapseAll];
 const MIN_TOOL_WINDOW_PERCENT = "10";
 const MIN_EDITOR_PERCENT = "20";
 /** The library's panels scroll by default; ours lay out their own scrolling regions. */
@@ -92,7 +94,12 @@ export function Shell() {
                 minSize={MIN_TOOL_WINDOW_PERCENT}
                 style={PANEL_STYLE}
               >
-                <ToolWindow id="services" title="Services" toggleActionId={ACTION_IDS.toggleServices}>
+                <ToolWindow
+                  id="services"
+                  title="Services"
+                  toggleActionId={ACTION_IDS.toggleServices}
+                  actions={SERVICES_HEADER_ACTIONS}
+                >
                   <ServicesPane />
                 </ToolWindow>
               </Panel>
