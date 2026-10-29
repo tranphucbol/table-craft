@@ -32,7 +32,8 @@ SQL Server (2017 and later, and Azure SQL), about 760 KB, as
   from File…** in Settings → Plugins; TableCraft asks before installing any file.
 - Behind a corporate npm mirror, set its address in Settings → Plugins (`plugins.registryUrl`).
 
-TableCraft installs the newest release its plugin API accepts, refuses a download whose sha512
+TableCraft installs the newest release its plugin API accepts (a beta too, with **Get beta
+versions** checked in Settings → Advanced), refuses a download whose sha512
 does not match the registry's, and keeps each version in `managed-plugins/` in the profile folder
 ([decision 110](../decisions/110-the-app-installs-plugins-from-the-registry.md)).
 
