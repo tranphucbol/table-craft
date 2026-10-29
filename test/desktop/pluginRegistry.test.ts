@@ -148,6 +148,39 @@ describe("plugin registry", () => {
     expect(picked.version).toBe("1.10.0");
   });
 
+  it.each([
+    ["stable", "1.10.0"],
+    ["beta", "1.11.0-beta.2"],
+  ] as const)("given%sChannel_whenPicked_thenNewestOnThatChannel", (channel, version) => {
+    const picked = pickVersion(
+      packument({
+        "1.10.0": { apiVersion: "1.0.0" },
+        "1.11.0-beta.1": { apiVersion: "1.0.0" },
+        "1.11.0-beta.2": { apiVersion: "1.0.0" },
+        "1.11.0-rc.1": { apiVersion: "1.0.0" },
+        "1.12.0-beta.1": { apiVersion: "2.0.0" },
+      }),
+      "postgres",
+      PACKAGE,
+      "1.0.0",
+      channel,
+    );
+
+    expect(picked.version).toBe(version);
+  });
+
+  it("givenBetaChannelAndStableAfterBeta_whenPicked_thenStableWins", () => {
+    const picked = pickVersion(
+      packument({ "1.11.0-beta.2": { apiVersion: "1.0.0" }, "1.11.0": { apiVersion: "1.0.0" } }),
+      "postgres",
+      PACKAGE,
+      "1.0.0",
+      "beta",
+    );
+
+    expect(picked.version).toBe("1.11.0");
+  });
+
   it("givenOnlyNewerApiVersions_whenPicked_thenIncompatibleAsksForAnAppUpdate", () => {
     try {
       pickVersion(packument({ "3.0.0": { apiVersion: "2.0.0" } }), "postgres", PACKAGE, "1.0.0");

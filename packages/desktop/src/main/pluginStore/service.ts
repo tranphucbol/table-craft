@@ -20,6 +20,7 @@ import {
   type InstalledPlugins,
   type PluginReport,
 } from "@table-craft/desktop/main/plugins.js";
+import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import type { PluginInfo, PluginSource, PluginsState } from "@table-craft/desktop/preload/bridge.js";
 
@@ -34,6 +35,7 @@ export interface PluginServiceOptions {
   readonly registryUrl: () => string;
   readonly fetch: RegistryFetch;
   readonly hostVersion?: string;
+  readonly channel?: () => ReleaseChannel;
   /** Names of the saved data sources on the plugin. */
   readonly usedBy: (pluginId: string) => readonly string[];
   readonly onChanged: (state: PluginsState) => void;
@@ -92,7 +94,12 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
 
   async function rediscover(): Promise<void> {
     managed = await listManaged(options.managedRoot);
-    installed = await discoverInstalled(roots(), sourceOf);
+    installed = await discoverInstalled(
+      roots(),
+      sourceOf,
+      (directory) =>
+        managed.find((plugin) => directory === plugin.directory || within(directory, plugin.directory))?.version,
+    );
   }
 
   let pending: Promise<void> = Promise.resolve();
@@ -112,6 +119,7 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     registryUrl: options.registryUrl,
     fetch: options.fetch,
     ...(options.hostVersion === undefined ? {} : { hostVersion: options.hostVersion }),
+    ...(options.channel === undefined ? {} : { channel: options.channel }),
     check: (directory, id) => manifestProblem(directory, id, options.hostVersion),
     builtIn: () => installed.plugins.filter((plugin) => plugin.source === "builtIn").map((plugin) => plugin.id),
     usedBy: options.usedBy,

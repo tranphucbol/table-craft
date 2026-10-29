@@ -156,7 +156,17 @@ jobs:
         with:
           bun-version-file: .bun-version
       - run: bun install --frozen-lockfile
-      - run: bun run plugins:pack
+      # Plan 124: a plugin unchanged since the newest package on npm for this channel is attached
+      # as that package, so nothing republishes it. A tag must know; a branch only warns offline.
+      - name: Pack, reusing unchanged plugins
+        run: |
+          flags=(--reuse-published)
+          if [[ "$GITHUB_REF" != refs/tags/v* ]]; then flags+=(--offline-ok); fi
+          bun run plugins:pack -- "${flags[@]}"
+      - name: Check the plugins build reproducibly
+        run: |
+          bun run plugins:pack -- --out dist/plugin-packages-again
+          bun scripts/plugins/fingerprint.ts --compare dist/plugin-packages dist/plugin-packages-again
       - run: bun run plugins:check
       - run: bun run plugins:publish -- --dry-run
       - if: startsWith(github.ref, 'refs/tags/v')
@@ -194,7 +204,15 @@ jobs:
         env:
           TABLE_CRAFT_UPDATE_SIGNING_KEY: ${{ secrets.TABLE_CRAFT_UPDATE_SIGNING_KEY }}
         run: bun packages/desktop/scripts/update-manifest.ts --tag "$GITHUB_REF_NAME" --assets installers --out installers
+      # Plan 124: a vX.Y.Z-beta.N tag drafts a pre-release whose notes start at the tag before it;
+      # a stable release's notes start at the previous stable tag, betas in between included.
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" installers/* plugin-packages/*.tgz --draft --generate-notes --repo "$GITHUB_REPOSITORY"
+        run: |
+          git fetch --tags --force --quiet
+          start=$(bun packages/desktop/scripts/version.ts --notes-start "$GITHUB_REF_NAME")
+          flags=(--draft --generate-notes)
+          if [ -n "$start" ]; then flags+=(--notes-start-tag "$start"); fi
+          if [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" installers/* plugin-packages/*.tgz "${flags[@]}" --repo "$GITHUB_REPOSITORY"

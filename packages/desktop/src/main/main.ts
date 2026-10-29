@@ -94,7 +94,8 @@ import {
   type Updater,
 } from "@table-craft/desktop/main/update/updater.js";
 import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
-import { DEFAULT_REGISTRY_URL } from "@table-craft/desktop/settings/settings.js";
+import { effectiveChannel } from "@table-craft/desktop/settings/channel.js";
+import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS } from "@table-craft/desktop/settings/settings.js";
 import { DENSITIES, resolveTheme, type DensityTokens, type Theme } from "@table-craft/desktop/appearance/themes.js";
 import { ENGINE_PORT_MESSAGE, type DatasourceConfig, type HostKeyOffer } from "@table-craft/desktop/engine/protocol.js";
 import { DEFAULT_LOG_LEVEL, enabled, LOG_READ_LIMIT, type LogRecord } from "@table-craft/desktop/log/record.js";
@@ -623,6 +624,7 @@ async function startUpdater(directory: string, settings: SettingsService): Promi
   if (endpoint.overridden) {
     updateLog.warn("update endpoint overridden for testing", {
       manifestUrl: loggableUrl(endpoint.manifestUrl),
+      betaManifestUrl: loggableUrl(endpoint.betaManifestUrl),
       testBuild: UPDATE_TEST_BUILD,
     });
   }
@@ -638,7 +640,8 @@ async function startUpdater(directory: string, settings: SettingsService): Promi
   const statePath = join(directory, UPDATE_STATE_FILE);
   const created = createUpdater({
     currentVersion: appVersion,
-    manifestUrl: endpoint.manifestUrl,
+    manifestUrls: { stable: endpoint.manifestUrl, beta: endpoint.betaManifestUrl },
+    channel: () => effectiveChannel(settings.snapshot().settings.updates.channel, appVersion),
     trust: endpoint.trust,
     facts,
     tempDirectory: app.getPath("temp"),
@@ -721,6 +724,11 @@ void app.whenReady().then(async () => {
     packaged: app.isPackaged,
     environment: process.env,
     registryUrl: () => settingsService?.snapshot().settings.plugins.registryUrl ?? DEFAULT_REGISTRY_URL,
+    channel: () =>
+      effectiveChannel(
+        settingsService?.snapshot().settings.updates.channel ?? DEFAULT_SETTINGS.updates.channel,
+        appVersion,
+      ),
     checkAutomatically: () => settingsService?.snapshot().settings.updates.checkAutomatically ?? true,
     datasources: () => savedDatasources(),
     onChanged: (state) => broadcast(CHANNELS.pluginsChanged, state),

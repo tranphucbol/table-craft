@@ -5,6 +5,7 @@
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/057 bun run test:smoke:headless test/e2e/pluginsOnDemand.smoke.test.ts
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/057 bun run test:smoke:db:headless:postgres test/e2e/pluginsOnDemand.smoke.test.ts
+ *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/124 bun run test:smoke:headless test/e2e/pluginsOnDemand.smoke.test.ts
  */
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,6 +48,7 @@ import { builtRelease, managedListing, pluginLines, UNREACHABLE_REGISTRY } from 
 
 const captureWindow = evidenceFor("057");
 const writeEvidence = evidenceTextFor("057");
+const captureChannel = evidenceFor("124");
 const POSTGRES = "postgres";
 const PACKAGE = pluginPackageName(POSTGRES);
 /** Long enough to photograph the progress state, short against the launch timeout. */
@@ -117,10 +119,15 @@ describe.runIf(SMOKE_ENABLED)("plugins on demand", () => {
 
   async function launch(
     registryUrl: string,
-    options: { datasources?: readonly SavedDatasource[]; userDataDir?: string; env?: Record<string, string> } = {},
+    options: {
+      datasources?: readonly SavedDatasource[];
+      userDataDir?: string;
+      env?: Record<string, string>;
+      settings?: object;
+    } = {},
   ): Promise<RunningApp> {
     const userDataDir = options.userDataDir ?? newProfile();
-    seedSettings(userDataDir, { version: 1, plugins: { registryUrl } });
+    seedSettings(userDataDir, { version: 1, plugins: { registryUrl }, ...options.settings });
     if (options.datasources !== undefined) seedDatasources(userDataDir, options.datasources);
     running = await launchApp(null, { userDataDir, env: { ...NO_OPTIONAL_ROOT, ...options.env } });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
@@ -321,6 +328,34 @@ describe.runIf(SMOKE_ENABLED)("plugins on demand", () => {
         .filter((line) => line["id"] === POSTGRES || line["pluginId"] === POSTGRES || line.msg.includes("pruned"))
         .map((line) => JSON.stringify(line));
       writeEvidence("background-update-log.txt", `${excerpt.join("\n")}\n`);
+    },
+    SCENARIO_TIMEOUT_MS * 3,
+  );
+
+  it(
+    "givenBetaChannelAndBetaPlugin_whenBackgroundCheckRuns_thenTheBetaInstallsAndShows",
+    async () => {
+      const local = await serve("1.0.0");
+      const userDataDir = newProfile();
+      const beta = { updates: { channel: "beta" } };
+      await launch(local.url, { userDataDir, datasources: [SAVED_POSTGRES], settings: beta });
+      await loggedPlugin(userDataDir, "plugin installed");
+      await closeRunning();
+
+      local.publish(PACKAGE, [builtRelease(POSTGRES, "1.0.0"), builtRelease(POSTGRES, "1.1.0-beta.1")]);
+      const env = { TABLE_CRAFT_PLUGIN_CHECK_MS: FIRST_UPDATE_CHECK_MS };
+      await launch(local.url, { userDataDir, env, settings: beta });
+      expect(await loggedPlugin(userDataDir, "plugin updated")).toMatchObject({
+        pluginId: POSTGRES,
+        from: "1.0.0",
+        to: "1.1.0-beta.1",
+      });
+      await closeRunning();
+
+      const { page } = await launch(local.url, { userDataDir, settings: beta });
+      await openPluginsPage(page);
+      await expect.poll(() => pluginRow(page, POSTGRES).textContent()).toContain("1.1.0-beta.1");
+      await captureChannel(page, "03-beta-plugin-installed");
     },
     SCENARIO_TIMEOUT_MS * 3,
   );

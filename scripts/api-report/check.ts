@@ -20,6 +20,9 @@ import { parseReport, type SurfaceModel } from "./model.js";
 
 export const COMPATIBILITY_FILE = `${REPORT_DIRECTORY}/compatibility.json`;
 const RELEASE_TAG_PATTERN = "v*";
+// A beta never publishes plugin-api, so an addition first shipped in a beta must still raise
+// API_VERSION against the stable release before it.
+const PRERELEASE_TAG_PATTERN = "v*-*";
 const WRITE_FLAG = "--write";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -46,7 +49,15 @@ export interface CheckResult {
 export function readBaseline(git: Git): Baseline | null {
   let tag: string;
   try {
-    tag = git(["describe", "--tags", "--abbrev=0", "--match", RELEASE_TAG_PATTERN]);
+    tag = git([
+      "describe",
+      "--tags",
+      "--abbrev=0",
+      "--match",
+      RELEASE_TAG_PATTERN,
+      "--exclude",
+      PRERELEASE_TAG_PATTERN,
+    ]);
   } catch {
     return null;
   }

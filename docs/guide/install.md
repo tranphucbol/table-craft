@@ -58,6 +58,9 @@ closes the popover and leaves the button where it is.
 
 - **Help → Check for Updates…** asks right away, and says so when you are up to date.
 - Turn off **Check for updates automatically** in Settings → Advanced to check only from Help.
+- Turn on **Get beta versions** in Settings → Advanced to be offered betas (`1.16.0-beta.1`) ahead
+  of each release, and pre-release plugins with them. A beta you install by hand has it on already.
+  Turning it off never downgrades: you keep the beta until a newer release is out.
 - Every release is described by a manifest signed with the project's key. TableCraft refuses a
   manifest whose signature does not verify and a download whose SHA-256 does not match it, deletes
   what it fetched and tells you why

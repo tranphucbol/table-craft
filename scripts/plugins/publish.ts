@@ -4,7 +4,8 @@
  * failed release is safe. The dist-tag is `latest`, or `next` for a pre-release version.
  *
  * `bun scripts/plugins/publish.ts [--from <dir>] [--dry-run] [--provenance] [--dist-tag <tag>]
- * [--notes <file>]`. Only `.github/workflows/publish-plugins.yml` runs it without `--dry-run`.
+ * [--notes <file> [--release <version>]]`. Only `.github/workflows/publish-plugins.yml` runs it
+ * without `--dry-run`.
  */
 import { spawnSync } from "node:child_process";
 import { readdir, readFile, writeFile } from "node:fs/promises";
@@ -13,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { PUBLISHED_NAME } from "../../packages/plugin-api/scripts/build.js";
 import { readPackageTarball } from "../../packages/desktop/src/main/pluginStore/tarball.js";
+import { compareVersions } from "../../packages/desktop/src/main/update/manifest.js";
 import { PACKAGES_DIRECTORY } from "./pack.js";
 
 const PACKAGE_FILE = "package.json";
@@ -122,12 +124,22 @@ export function publishPackages(options: PublishOptions): PublishOutcome[] {
   return outcomes;
 }
 
-/** The section appended to the release notes. */
-export function releaseNotes(outcomes: readonly PublishOutcome[]): string {
+function outcomeNote(entry: PublishOutcome, release: string | undefined): string {
+  if (entry.status === "published") return ` (\`${entry.distTag}\`)`;
+  const older = release !== undefined && compareVersions(entry.version, release) < 0;
+  return older ? ` (unchanged, still \`${entry.version}\`)` : " (already published)";
+}
+
+/**
+ * The section appended to the release notes. Given the `release` version, a skipped package older
+ * than it reads as unchanged, attached by `pack.ts --reuse-published`; one at the release's own
+ * version was published by an earlier run of the same release.
+ */
+export function releaseNotes(outcomes: readonly PublishOutcome[], release?: string): string {
   const lines = outcomes.map(
     (entry) =>
       `- [\`${entry.name}@${entry.version}\`](https://www.npmjs.com/package/${entry.name}/v/${entry.version})` +
-      (entry.status === "skipped" ? " (already published)" : ` (\`${entry.distTag}\`)`),
+      outcomeNote(entry, release),
   );
   return ["", "### Plugins on npm", "", ...lines, ""].join("\n");
 }
@@ -140,6 +152,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       provenance: { type: "boolean" },
       "dist-tag": { type: "string" },
       notes: { type: "string" },
+      release: { type: "string" },
     },
   });
   const packages = await readTarballs(values.from === undefined ? PACKAGES_DIRECTORY : resolve(values.from));
@@ -150,5 +163,5 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     ...(values["dist-tag"] === undefined ? {} : { distTag: values["dist-tag"] }),
     log: (line) => console.log(line),
   });
-  if (values.notes !== undefined) await writeFile(values.notes, releaseNotes(outcomes));
+  if (values.notes !== undefined) await writeFile(values.notes, releaseNotes(outcomes, values.release));
 }

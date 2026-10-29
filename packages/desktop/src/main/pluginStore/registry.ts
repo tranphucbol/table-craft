@@ -6,6 +6,8 @@
 import { createHash } from "node:crypto";
 import { API_VERSION, incompatibility, isCompatible } from "@table-craft/plugin-api";
 import { OFFLINE_HINT, PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
+import { compareVersions } from "@table-craft/desktop/main/update/manifest.js";
+import { BETA_VERSION, type ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 import { registryUrlError } from "@table-craft/desktop/settings/settings.js";
 
 /** Far above any plugin bundle (PostgreSQL's is under 1 MB); stops a hostile mirror filling the disk. */
@@ -87,21 +89,27 @@ function readVersion(raw: unknown, pluginId: string): RegistryVersion | null {
   return { version, apiVersion: tableCraft.apiVersion, tarball: dist.tarball, integrity: dist.integrity };
 }
 
+function onChannel(version: string, channel: ReleaseChannel): boolean {
+  return RELEASE.test(version) || (channel === "beta" && BETA_VERSION.test(version));
+}
+
 /**
- * The newest release (no pre-release) of `pluginId` this host can load. When versions exist but
- * none fits, the error says why for the newest, in `incompatibility()`'s terms.
+ * The newest version of `pluginId` on `channel` this host can load: releases only on stable, betas
+ * too on beta; other pre-releases never. When versions exist but none fits, the error says why for
+ * the newest, in `incompatibility()`'s terms.
  */
 export function pickVersion(
   packument: unknown,
   pluginId: string,
   packageName: string,
   hostVersion: string = API_VERSION,
+  channel: ReleaseChannel = "stable",
 ): RegistryVersion {
   const versions = (packument as { versions?: unknown } | null)?.versions;
   const candidates = Object.values(typeof versions === "object" && versions !== null ? versions : {})
     .map((raw) => readVersion(raw, pluginId))
-    .filter((entry): entry is RegistryVersion => entry !== null && releaseParts(entry.version) !== null)
-    .sort((left, right) => (newer(releaseParts(left.version) ?? [], releaseParts(right.version) ?? []) ? -1 : 1));
+    .filter((entry): entry is RegistryVersion => entry !== null && onChannel(entry.version, channel))
+    .sort((left, right) => compareVersions(right.version, left.version));
   const fitting = candidates.find((candidate) => isCompatible(candidate.apiVersion, hostVersion));
   if (fitting !== undefined) return fitting;
   const [newest] = candidates;
