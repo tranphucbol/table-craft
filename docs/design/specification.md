@@ -840,6 +840,8 @@ run either.
 | `services.clearExecutions`               | Clear Executions                      |          |                        |
 | `services.copySql`                       | Copy Execution SQL                    |          |                        |
 | `services.openInConsole`                 | Open Execution in Console             |          |                        |
+| `services.expandAll`                     | Expand All                            | `⌘=` ⁷   | `Ctrl+=` ⁷             |
+| `services.collapseAll`                   | Collapse All                          | `⌘-` ⁷   | `Ctrl+-` ⁷             |
 | `settings.show`                          | Settings…                             | `⌘,`     | `Ctrl+,`               |
 | `editor.zoomIn`                          | Increase Editor Font Size             | `⌘=` ³   | `Ctrl+=` ³             |
 | `editor.zoomOut`                         | Decrease Editor Font Size             | `⌘-` ³   | `Ctrl+-` ³             |
@@ -858,6 +860,8 @@ itself. Main Menu is available on Windows and Linux with the custom title bar on
 ⁵ With focus in a result grid or its find bar (regions `grid`, `gridFind`); in the SQL editor ⌘F
 stays CodeMirror's search.
 ⁶ Only with focus in the find bar (region `gridFind`), so `⇧↩` in the grid is still Value Panel.
+⁷ Only with focus in the Services tool window (region `services`), so `⌘=` and `⌘-` still zoom the
+SQL editor and `⌘-` is still the Database tool window's Collapse All.
 
 Shortcuts are declared as platform-neutral chords (`Mod+Shift+A`, `Shift Shift`) and dispatched by
 one capture-phase `keydown` listener on the window. A chord whose action is disabled reaches the
@@ -1878,7 +1882,15 @@ runs, its label (a console statement's first line, `Load rows`, `Count rows`, `S
 statements`), rows (updated when Fetch All reads the rest), duration and start time. Everything starts expanded; `No open sessions.` when
 there is nothing. Enter or a click on a session or execution activates its tab. A session's context
 menu holds Cancel Running Statement while a console runs and Clear Executions; an execution with
-SQL holds Copy Execution SQL and Open Execution in Console.
+SQL holds Copy Execution SQL and Open Execution in Console. A datasource line, in the tree or under
+an agent in the Agents subtree, draws its product's logo as the Database tool window does (plan 123).
+
+The header holds **Expand All** and **Collapse All** (plan 123) before Hide, icon only, their
+title and chord in the tooltip. Collapse All folds every node that has children, those under an
+already folded parent too, so expanding one later shows its children folded; a selected line it
+hides passes the selection to its top-level line. Expand All unfolds everything. Each is disabled
+when it would change nothing, both on an empty tree. What is folded lasts for the run only:
+Services starts expanded on every launch.
 
 Open Closed Console… (on a saved datasource, from its context menu, the palette or one of its
 consoles) lists the datasource's console files that no tab has open, by name, with the selected
