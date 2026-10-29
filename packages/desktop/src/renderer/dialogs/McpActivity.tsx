@@ -10,17 +10,17 @@ import {
   CALL_OUTCOME_LABELS,
   CALL_OUTCOME_TONES,
   activityClients,
+  activityConsoleRequest,
   filteredActivity,
   type ActivityFilter,
 } from "@table-craft/desktop/renderer/model/mcp.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import type { McpActivityView, McpCallOutcome, McpConsoleRequest } from "@table-craft/desktop/settings/mcp.js";
+import type { McpActivityView, McpCallOutcome } from "@table-craft/desktop/settings/mcp.js";
 
 const ANY = "";
 const OUTCOMES = Object.keys(CALL_OUTCOME_LABELS) as McpCallOutcome[];
-const SQL_TOOLS: ReadonlySet<string> = new Set(["run_query", "explain", "check_sql", "open_in_console"]);
 
 const TONE_TEXT: Readonly<Record<(typeof CALL_OUTCOME_TONES)[McpCallOutcome], string>> = {
   success: "text-success",
@@ -32,17 +32,11 @@ const TONE_TEXT: Readonly<Record<(typeof CALL_OUTCOME_TONES)[McpCallOutcome], st
 const COLUMNS = ["Time", "Client", "Tool", "Data source", "Statement or target", "Rows", "Duration", "Outcome"];
 const CELL = "px-cell py-0.5 text-left align-top whitespace-nowrap";
 
-/** The console the double-click opens, when the call carried a statement for a datasource. */
-function consoleRequest(entry: McpActivityView): McpConsoleRequest | null {
-  if (entry.datasourceId === null || entry.target === null || !SQL_TOOLS.has(entry.tool)) return null;
-  return { datasourceId: entry.datasourceId, sql: entry.target };
-}
-
 function ActivityRow({ entry, now }: { readonly entry: McpActivityView; readonly now: number }) {
   const datasource = useDatasources((state) =>
     entry.datasourceId === null ? null : (datasourceById(state, entry.datasourceId)?.name ?? entry.datasourceId),
   );
-  const request = consoleRequest(entry);
+  const request = activityConsoleRequest(entry);
   return (
     <tr
       data-testid="mcp-activity-row"

@@ -51,6 +51,9 @@ import {
   KeyDeletesLine,
 } from "@table-craft/desktop/renderer/panes/keyDeleteLines.js";
 import {
+  agentCallLabel,
+  AgentCallLine,
+  agentClientLabel,
   AgentClientLine,
   AgentDatasourceLine,
   agentRunLabel,
@@ -58,7 +61,7 @@ import {
   AgentsLine,
 } from "@table-craft/desktop/renderer/panes/agentLines.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
-import { agentGroups } from "@table-craft/desktop/renderer/model/mcp.js";
+import { activityConsoleRequest, agentGroups } from "@table-craft/desktop/renderer/model/mcp.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { resumeLabel, useImports, type ImportEntry } from "@table-craft/desktop/renderer/state/imports.js";
 import {
@@ -198,6 +201,10 @@ function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): rea
   }
   if (row.kind === "agentRun") {
     return row.node.cancellable ? [{ actionId: MCP_ACTION_IDS.cancel, args: row.node.id }] : [];
+  }
+  if (row.kind === "agentCall") {
+    const request = activityConsoleRequest(row.node);
+    return request === null ? [] : [{ actionId: MCP_ACTION_IDS.openInConsole, args: request }];
   }
   if (row.kind === "execution" && row.node.sql !== null) {
     const args = { tabId: row.tabId, executionId: row.node.id };
@@ -511,9 +518,10 @@ function rowLabel(row: ServiceRow): string {
   }
   if (row.kind === "session") return `${row.node.title}, ${SERVICE_STATE_TEXT[row.node.state]}`;
   if (row.kind === "agents") return `Agents, ${String(row.count)}`;
-  if (row.kind === "agentClient") return row.node.clientName;
+  if (row.kind === "agentClient") return agentClientLabel(row.node);
   if (row.kind === "agentDatasource") return row.node.datasourceId;
   if (row.kind === "agentRun") return agentRunLabel(row.node);
+  if (row.kind === "agentCall") return agentCallLabel(row.node);
   return `${row.node.label}, ${row.node.outcome}`;
 }
 
@@ -629,7 +637,9 @@ export function ServicesPane() {
                     ? row.node.task.state
                     : row.kind === "keyDelete"
                       ? row.node.state
-                      : undefined
+                      : row.kind === "agentCall"
+                        ? row.node.outcome
+                        : undefined
             }
             style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(row.depth * INDENT_PX)}px)` }}
             className={cn(
@@ -640,6 +650,10 @@ export function ServicesPane() {
             onMouseDown={() => select(row.key)}
             onContextMenu={() => select(row.key)}
             onClick={() => open(row)}
+            onDoubleClick={() => {
+              const request = row.kind === "agentCall" ? activityConsoleRequest(row.node) : null;
+              if (request !== null) invoke(MCP_ACTION_IDS.openInConsole, request);
+            }}
           >
             {canExpand ? (
               <button
@@ -685,6 +699,8 @@ export function ServicesPane() {
               <AgentDatasourceLine group={row.node} />
             ) : row.kind === "agentRun" ? (
               <AgentRunLine run={row.node} now={now} />
+            ) : row.kind === "agentCall" ? (
+              <AgentCallLine call={row.node} />
             ) : (
               <ExecutionLine execution={row.node} now={now} />
             )}
