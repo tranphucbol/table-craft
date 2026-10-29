@@ -52,6 +52,8 @@ export interface DataSettings {
   readonly nullText: string;
   /** Group the integer digits of a number column with `,`; display only. */
   readonly groupDigits: boolean;
+  /** Open text values holding a JSON object or array formatted in the value panel (plan 126). */
+  readonly detectJson: boolean;
   /** Rows a statement reads before it stops, and Fetch Next Page adds. */
   readonly pageRows: number;
   /** Rows Fetch All reads at most. */
@@ -241,6 +243,7 @@ export const DEFAULT_SETTINGS: Settings = {
   data: {
     nullText: "<null>",
     groupDigits: false,
+    detectJson: true,
     pageRows: 500,
     fetchAllCap: 100_000,
     exportStallSeconds: 120,
@@ -483,6 +486,7 @@ export function readSettings(input: unknown): Settings {
           ? data.nullText
           : defaults.data.nullText,
       groupDigits: typeof data.groupDigits === "boolean" ? data.groupDigits : defaults.data.groupDigits,
+      detectJson: typeof data.detectJson === "boolean" ? data.detectJson : defaults.data.detectJson,
       pageRows,
       fetchAllCap,
       exportStallSeconds: inRange(data.exportStallSeconds, EXPORT_STALL_SECONDS_RANGE)
