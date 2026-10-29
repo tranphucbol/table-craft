@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { agentGroups } from "@table-craft/desktop/renderer/model/mcp.js";
-import { AGENTS_ROW_KEY, movedInTree, serviceRows } from "@table-craft/desktop/renderer/model/servicesTree.js";
+import {
+  AGENTS_ROW_KEY,
+  datasourceName,
+  movedInTree,
+  serviceRows,
+} from "@table-craft/desktop/renderer/model/servicesTree.js";
 import {
   stoppedStatus,
   type McpActivityView,
   type McpRunView,
   type McpStatus,
 } from "@table-craft/desktop/settings/mcp.js";
+import { view } from "./datasourceViews.js";
 
 const RUN: McpRunView = {
   id: "run-1",
@@ -82,5 +88,15 @@ describe("Services tree Agents node", () => {
 
     expect(movedInTree(rows, "agentRun:run-1", new Set(), "ArrowLeft")?.selected).toBe("agent:Claude Code:shop");
     expect(movedInTree(rows, AGENTS_ROW_KEY, new Set([AGENTS_ROW_KEY]), "ArrowLeft")?.selected).toBe(AGENTS_ROW_KEY);
+  });
+
+  it("givenAgentDatasource_whenLabelled_thenUsesDatasourceName", () => {
+    const [group] = agentGroups(STATUS)[0]?.datasources ?? [];
+
+    expect(datasourceName([view({ id: "shop", name: "Shop TiDB" })], group?.datasourceId ?? "")).toBe("Shop TiDB");
+  });
+
+  it("givenDeletedDatasource_whenLabelled_thenFallsBackToId", () => {
+    expect(datasourceName([view({ id: "other", name: "Other" })], "shop")).toBe("shop");
   });
 });
