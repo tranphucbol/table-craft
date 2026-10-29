@@ -76,6 +76,7 @@ import {
   WarningIcon,
 } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
+import { AgentAccessBadge } from "@table-craft/desktop/renderer/ui/AgentAccessBadge.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 
 const PLAIN_TEXT_TYPE = "text/plain";
@@ -360,6 +361,7 @@ function DatasourceLabel({
       {datasource.readOnly ? (
         <ReadOnlyIcon aria-label="read-only" className="size-icon shrink-0 text-ink-muted" />
       ) : null}
+      <AgentAccessBadge datasource={datasource} />
       {shown === null ? null : (
         <span
           data-testid="shown-namespaces"

@@ -298,6 +298,43 @@ describe("engine", () => {
     });
   });
 
+  it("givenReadOnlyOpen_whenWritingOnWritableDatasource_thenServerRefuses", async () => {
+    const connection = connected();
+    const opened = resultOf<{ sessionId: string }>(
+      await connection.handle({ id: 1, type: "session.open", readOnly: true }),
+    );
+
+    const response = await connection.handle({
+      id: 2,
+      type: "statement.execute",
+      ...PAGING,
+      sessionId: opened.sessionId,
+      sql: "CREATE TABLE agent_probe (n INTEGER)",
+    });
+
+    expect(response).toMatchObject({ type: "engine.error", error: { code: "statementFailed" } });
+  });
+
+  it("givenReadOnlyFalse_whenDatasourceReadOnly_thenSessionStaysReadOnly", async () => {
+    const connection = createEngine({
+      datasource: { ...DATASOURCE, readOnly: true, keepAliveSeconds: 0 },
+      plugins: [LOADED_SQLITE],
+    }).connect();
+    const opened = resultOf<{ sessionId: string }>(
+      await connection.handle({ id: 1, type: "session.open", readOnly: false }),
+    );
+
+    const response = await connection.handle({
+      id: 2,
+      type: "statement.execute",
+      ...PAGING,
+      sessionId: opened.sessionId,
+      sql: "CREATE TABLE agent_probe (n INTEGER)",
+    });
+
+    expect(response).toMatchObject({ type: "engine.error", error: { code: "statementFailed" } });
+  });
+
   it("givenUnreachableDatabase_whenSessionOpened_thenConnectionFailedError", async () => {
     const connection = createEngine({
       datasource: { ...DATASOURCE, config: { path: "/nonexistent-table-craft-directory/db.sqlite" } },

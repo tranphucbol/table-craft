@@ -40,9 +40,12 @@ export function ListPicker<T>({
   onChoose,
   buttons,
   onClose,
+  filters,
 }: {
   readonly title: string;
   readonly searchLabel: string;
+  /** Drawn beside the search field, such as a segmented filter. */
+  readonly filters?: ReactNode;
   /** Absent, the picker has no search field and the list takes the keyboard. */
   readonly query?: string;
   readonly onQuery?: (query: string) => void;
@@ -84,18 +87,22 @@ export function ListPicker<T>({
     <div className="flex flex-col gap-gap p-gap">
       <Dialog.Title className="font-semibold">{title}</Dialog.Title>
       {onQuery === undefined ? null : (
-        <TextInput
-          autoFocus
-          role="combobox"
-          aria-label={searchLabel}
-          aria-expanded
-          aria-controls={listId}
-          aria-activedescendant={selected === null ? undefined : optionId(index)}
-          placeholder="Search"
-          value={query ?? ""}
-          onKeyDown={onKeyDown}
-          onChange={(event) => onQuery(event.target.value)}
-        />
+        <div className="flex items-center gap-gap">
+          <TextInput
+            autoFocus
+            role="combobox"
+            aria-label={searchLabel}
+            aria-expanded
+            aria-controls={listId}
+            aria-activedescendant={selected === null ? undefined : optionId(index)}
+            placeholder="Search"
+            className="flex-1"
+            value={query ?? ""}
+            onKeyDown={onKeyDown}
+            onChange={(event) => onQuery(event.target.value)}
+          />
+          {filters}
+        </div>
       )}
       <ul
         ref={list}

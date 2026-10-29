@@ -3,6 +3,8 @@ import { join } from "node:path";
 /** Every file main hands to Electron or the engine, resolved once for where the app runs (decision 033). */
 export interface AppPaths {
   readonly engineEntry: string;
+  /** The MCP host, started only while Settings › MCP Server is on (decision 126). */
+  readonly mcpEntry: string;
   readonly preload: string;
   readonly rendererIndex: string;
   readonly builtInPlugins: string;
@@ -24,6 +26,7 @@ export interface AppPathsInput {
 }
 
 const ENGINE_ENTRY = "engine/main.js";
+const MCP_ENTRY = "mcp/main.js";
 const PRELOAD = "preload/preload.cjs";
 const RENDERER_INDEX = "renderer/index.html";
 /** Where `vite.plugins.config.ts` builds the built-in plugins. */
@@ -40,6 +43,7 @@ export function appPaths(input: AppPathsInput): AppPaths {
   const dist = (relative: string) => join(input.distDirectory, relative);
   return {
     engineEntry: dist(ENGINE_ENTRY),
+    mcpEntry: dist(MCP_ENTRY),
     preload: dist(PRELOAD),
     rendererIndex: dist(RENDERER_INDEX),
     builtInPlugins: input.isPackaged ? join(input.resourcesPath, PACKAGED_PLUGINS) : dist(DEVELOPMENT_PLUGINS),

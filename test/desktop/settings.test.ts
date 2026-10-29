@@ -49,6 +49,7 @@ const CHOSEN: Settings = {
   log: { level: "debug" },
   updates: { checkAutomatically: false },
   plugins: { registryUrl: "http://127.0.0.1:4873" },
+  mcp: { enabled: true, port: 48_000, rowCap: 250, clients: [{ name: "Claude Code", allowed: true }] },
 };
 
 function store(files = memoryFiles()) {
@@ -241,6 +242,18 @@ describe("settings document", () => {
     expect(settingsSchema.safeParse(CHOSEN).success).toBe(true);
     expect(settingsSchema.safeParse({ ...CHOSEN, data: { ...CHOSEN.data, fetchAllCap: 50 } }).success).toBe(false);
     expect(settingsSchema.safeParse({ ...CHOSEN, extra: true }).success).toBe(false);
+  });
+
+  it("givenMcpPortBelowRange_whenRead_thenDefaultPortAndOtherMcpFieldsKept", () => {
+    const read = readSettings({ ...CHOSEN, mcp: { ...CHOSEN.mcp, port: 80 } });
+
+    expect(read.mcp).toEqual({ ...CHOSEN.mcp, port: DEFAULT_SETTINGS.mcp.port });
+  });
+
+  it("givenNoMcpSection_whenRead_thenServerOff", () => {
+    const { mcp: _mcp, ...older } = CHOSEN;
+
+    expect(readSettings(older).mcp).toEqual({ enabled: false, port: 47_820, rowCap: 100, clients: [] });
   });
 });
 

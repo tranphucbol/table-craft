@@ -6,14 +6,16 @@ import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
 export function sessionRoutes(connection: ConnectionContext): RoutesFor<"session"> {
   const { options, now, connector, nextSessionId, sessions, releaseHandlesOf, sessionFor, namespaceOf } = connection;
   return {
-    "session.open": async () => {
-      const session = await connectDatasource(options, connector);
+    "session.open": async (params) => {
+      const readOnly = options.datasource.readOnly || params.readOnly === true;
+      const session = await connectDatasource(options, connector, readOnly);
       const { manifest, plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
       const sessionId = nextSessionId();
       const opening = await namespaceOf({ session, capabilities: plugin.capabilities });
       const open: OpenSession = {
         session,
         capabilities: plugin.capabilities,
+        readOnly,
         running: 0,
         opening,
         moved: false,

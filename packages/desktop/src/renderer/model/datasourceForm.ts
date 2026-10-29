@@ -14,6 +14,7 @@ import {
   type SecretMode,
   type SshSettings,
 } from "@table-craft/desktop/preload/bridge.js";
+import type { AgentAccess } from "@table-craft/desktop/settings/mcp.js";
 import { keepAliveSecondsError, statementTimeoutSecondsError } from "@table-craft/desktop/settings/settings.js";
 
 /** One datasource as the Data Sources dialog edits it: every input as typed, nothing saved yet. */
@@ -27,6 +28,8 @@ export interface FormDraft {
   readonly comment: string;
   readonly color: DatasourceColor | null;
   readonly readOnly: boolean;
+  /** What MCP clients may do here (decision 127); only this form lets a red datasource ask. */
+  readonly agentAccess: AgentAccess;
   /** Seconds as typed; blank is the default of 30 (decision 054). */
   readonly keepAliveSeconds: string;
   /** Seconds as typed; blank follows Settings → Editor → Running. */
@@ -196,6 +199,7 @@ export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefin
     comment: view.comment,
     color: view.color,
     readOnly: view.readOnly,
+    agentAccess: view.agentAccess ?? "off",
     keepAliveSeconds: secondsInput(view.keepAliveSeconds),
     statementTimeoutSeconds: secondsInput(view.statementTimeoutSeconds),
     url: "",
@@ -235,6 +239,7 @@ export function newDraft(
     comment: "",
     color: null,
     readOnly: false,
+    agentAccess: "off",
     keepAliveSeconds: "",
     statementTimeoutSeconds: "",
     url: "",
@@ -379,6 +384,7 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
       folder: folder === "" ? null : folder,
       color: draft.color,
       readOnly: draft.readOnly,
+      ...(draft.agentAccess === "off" ? {} : { agentAccess: draft.agentAccess }),
       ...secondsField("keepAliveSeconds", draft.keepAliveSeconds),
       ...secondsField("statementTimeoutSeconds", draft.statementTimeoutSeconds),
       comment: draft.comment,

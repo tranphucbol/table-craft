@@ -8,7 +8,7 @@ export const HISTORY_SEARCH_LIMIT = 200;
 
 export const HISTORY_OUTCOMES = ["success", "error", "cancelled"] as const;
 export type HistoryOutcome = (typeof HISTORY_OUTCOMES)[number];
-export const HISTORY_SOURCES = ["console", "table"] as const;
+export const HISTORY_SOURCES = ["console", "table", "agent"] as const;
 export type HistorySource = (typeof HISTORY_SOURCES)[number];
 
 /** One statement run, as the renderer saw it end (decision 030). */
@@ -31,6 +31,8 @@ export interface HistoryEntry {
    * left none or had not said yet.
    */
   readonly warnings?: number | null;
+  /** The MCP client that ran it, as it named itself; absent or null for the user's own runs. */
+  readonly client?: string | null;
 }
 
 export type HistoryParameters = Readonly<Record<string, string | null>>;
@@ -45,6 +47,10 @@ export interface HistoryStatement {
   readonly lastMessage: string | null;
   /** The values the newest run was bound with; null when it had none. */
   readonly lastParameters: HistoryParameters | null;
+  /** Where the newest run came from; `agent` marks an MCP client's run (decision 127). */
+  readonly lastSource: HistorySource;
+  /** The MCP client behind the newest run; null for the user's own. */
+  readonly lastClient: string | null;
   readonly runs: number;
 }
 
@@ -76,7 +82,7 @@ export interface QueryHistoryOptions {
   readonly now?: () => number;
 }
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MEMORY_PATH = ":memory:";
 const CORRUPT_SUFFIX = ".corrupt-";
 /** SQLite keeps these beside a WAL database; they move with it so they never pair with a fresh file. */
@@ -93,19 +99,24 @@ const COLUMNS = [
   "source",
   "parameters",
   "warnings",
+  "client",
 ] as const;
 const PARAMETERS_COLUMN = "parameters";
-const WARNINGS_MIGRATION = `ALTER TABLE entries ADD COLUMN warnings INTEGER NULL; PRAGMA user_version = 3;`;
+const WARNINGS_COLUMN = "warnings";
+const CLIENT_MIGRATION = `ALTER TABLE entries ADD COLUMN client TEXT NULL; PRAGMA user_version = 4;`;
+const WARNINGS_MIGRATION = `ALTER TABLE entries ADD COLUMN warnings INTEGER NULL; ${CLIENT_MIGRATION}`;
 /**
- * Version 1 lacked `parameters` and `warnings`, version 2 `warnings`; each is added in place,
- * keeping every row. Each entry is the columns the version had and the script that brings it up.
+ * Version 1 lacked `parameters`, `warnings` and `client`, version 2 the last two, version 3
+ * `client`; each is added in place, keeping every row. Each entry is the columns the version had
+ * and the script that brings it up.
  */
 const MIGRATIONS: Readonly<Record<number, { readonly columns: readonly string[]; readonly script: string }>> = {
   1: {
     columns: COLUMNS.slice(0, COLUMNS.indexOf(PARAMETERS_COLUMN)),
     script: `ALTER TABLE entries ADD COLUMN parameters TEXT NULL; ${WARNINGS_MIGRATION}`,
   },
-  2: { columns: COLUMNS.slice(0, -1), script: WARNINGS_MIGRATION },
+  2: { columns: COLUMNS.slice(0, COLUMNS.indexOf(WARNINGS_COLUMN)), script: WARNINGS_MIGRATION },
+  3: { columns: COLUMNS.slice(0, -1), script: CLIENT_MIGRATION },
 };
 
 const CREATE_SCHEMA = `
@@ -120,14 +131,15 @@ CREATE TABLE entries (
   message TEXT NULL,
   source TEXT NOT NULL,
   parameters TEXT NULL,
-  warnings INTEGER NULL
+  warnings INTEGER NULL,
+  client TEXT NULL
 );
 CREATE INDEX entries_datasource_started ON entries (datasource_id, started_at);
 PRAGMA user_version = ${String(SCHEMA_VERSION)};
 `;
 
-const INSERT = `INSERT INTO entries (datasource_id, sql, started_at, duration_ms, outcome, row_count, message, source, parameters, warnings)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+const INSERT = `INSERT INTO entries (datasource_id, sql, started_at, duration_ms, outcome, row_count, message, source, parameters, warnings, client)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 const COUNT = "SELECT count(*) AS n FROM entries WHERE datasource_id = ?";
 const PRUNE = `DELETE FROM entries WHERE id IN (
   SELECT id FROM entries WHERE datasource_id = ? ORDER BY started_at, id LIMIT ?
@@ -135,13 +147,13 @@ const PRUNE = `DELETE FROM entries WHERE id IN (
 const CLEAR = "DELETE FROM entries WHERE datasource_id = ?";
 // `instr` rather than LIKE, so `%` and `_` in the query match themselves.
 const SEARCH = `WITH matching AS (
-  SELECT id, sql, started_at, duration_ms, outcome, row_count, message, parameters,
+  SELECT id, sql, started_at, duration_ms, outcome, row_count, message, parameters, source, client,
     row_number() OVER (PARTITION BY sql ORDER BY started_at DESC, id DESC) AS recency,
     count(*) OVER (PARTITION BY sql) AS runs
   FROM entries
   WHERE datasource_id = ? AND instr(lower(sql), lower(?)) > 0
 )
-SELECT sql, started_at, duration_ms, outcome, row_count, message, parameters, runs
+SELECT sql, started_at, duration_ms, outcome, row_count, message, parameters, source, client, runs
 FROM matching WHERE recency = 1
 ORDER BY started_at DESC, id DESC
 LIMIT ?`;
@@ -167,6 +179,8 @@ interface SearchRow {
   readonly row_count: number | null;
   readonly message: string | null;
   readonly parameters: string | null;
+  readonly source: HistorySource;
+  readonly client: string | null;
   readonly runs: number;
 }
 
@@ -262,6 +276,7 @@ export function openQueryHistory(path: string, options: QueryHistoryOptions = {}
           entry.source,
           entry.parameters == null ? null : JSON.stringify(entry.parameters),
           entry.warnings ?? null,
+          entry.client ?? null,
         );
         const { n } = count.get(entry.datasourceId) as { n: number };
         if (n > limit) prune.run(entry.datasourceId, n - limit);
@@ -281,6 +296,8 @@ export function openQueryHistory(path: string, options: QueryHistoryOptions = {}
         lastRowCount: row.row_count,
         lastMessage: row.message,
         lastParameters: parametersOf(row.parameters),
+        lastSource: row.source,
+        lastClient: row.client,
         runs: row.runs,
       }));
     },

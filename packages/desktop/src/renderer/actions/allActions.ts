@@ -19,6 +19,7 @@ import { KEY_EDIT_ACTIONS } from "@table-craft/desktop/renderer/actions/keyEditA
 import { NAVIGATION_ACTIONS } from "@table-craft/desktop/renderer/actions/navigationActions.js";
 import { PLUGIN_ACTIONS } from "@table-craft/desktop/renderer/actions/pluginActions.js";
 import type { AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
+import { MCP_ACTIONS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { LOG_ACTIONS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { ROUTINE_ACTIONS } from "@table-craft/desktop/renderer/actions/routineActions.js";
 import { SESSIONS_ACTIONS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
@@ -57,5 +58,6 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...LOG_ACTIONS,
   ...UPDATE_ACTIONS,
   ...PLUGIN_ACTIONS,
+  ...MCP_ACTIONS,
   ...WINDOW_ACTIONS,
 ];

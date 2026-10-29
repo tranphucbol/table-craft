@@ -509,6 +509,39 @@ says which grant to ask for.
 
 See [Sessions](docs/design/specification.md#sessions).
 
+### Agents (MCP)
+
+TableCraft can serve your data sources to AI agents such as Claude Code, OpenCode and Cursor over
+the [Model Context Protocol](https://modelcontextprotocol.io). It is off until you turn it on in
+**Settings → MCP Server**, which listens on `http://127.0.0.1:47820/mcp` on this machine only and
+asks every client for a bearer token. **Copy** beside a client puts its configuration, token
+included, on the clipboard; the window never shows the token.
+
+Each data source starts **Off** for agents. **Read only** lets an agent list schemas and tables,
+describe a table, read its DDL, run `SELECT`s, explain and format SQL; its statements run in a
+read-only session, and anything else is refused. **Ask before writes** also lets it propose one
+change at a time: the MCP chip in the status bar turns amber, and nothing runs until you open the
+request, read the statement and the agent's reason, and choose **Allow once**. Unanswered for a
+minute, a request is denied. A data source marked read-only stays at Read only, and one coloured
+red can be raised past Read only only on its own page in the Data Sources dialog. Answers carry at
+most `mcp.rowCap` rows; passwords never leave TableCraft, and every agent statement is kept in the
+query history, tagged with the client's name. The app must be running for agents to reach it.
+
+- **Clients.** The first call from a client you have not met turns the chip amber; open it and
+  choose **Allow** or **Block**. Unanswered for a minute, the call is refused. Settings → MCP Server
+  lists the clients you answered, to flip or forget.
+- **Per data source.** Beside the access level, **Schemas** narrows what agents list and read
+  (blank keeps the schemas the Database pane shows), and **Row limit** overrides `mcp.rowCap`.
+- **Tools.** Besides the catalog and query tools, agents can check SQL against the inspections,
+  hand a statement to a new console for you to run (**open in console**, which never runs it), read
+  the focused console when its data source is exposed, and scan and read Redis keys. They can also
+  read `tablecraft://<data source>/<schema>/<table>` resources and two prompts.
+- **Watching.** The chip's popover lists connected clients and their last call, with Pause, Agent
+  Activity (every call this run, filtered by client and outcome) and Settings. Services shows an
+  **Agents** node with each statement still running and a Cancel. A write request can also go to
+  **Open in Console** instead of running. Query History filters by **All**, **Me** or **Agents**,
+  and the Database pane marks exposed data sources with **AI** while the server runs.
+
 ### Redis
 
 The Redis plugin connects to Redis 5.0 or later, **Standalone** or **Cluster** (pick the Mode in the
@@ -713,6 +746,10 @@ back to its default without affecting the others.
 | `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                               | 120                                            |
 | `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                  | `true`                                         |
 | `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |
+| `mcp.clients`                          | `{ "name", "allowed" }` per MCP client you answered; [Allow or Block](#agents-mcp)              | `[]`                                           |
+| `mcp.enabled`                          | `true`, `false`; run the [MCP server](#agents-mcp) for AI agents                                | `false`                                        |
+| `mcp.port`                             | 1,024–65,535; the port it listens on, on 127.0.0.1 only                                         | 47,820                                         |
+| `mcp.rowCap`                           | 1–1,000; the most rows one agent answer carries                                                 | 100                                            |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](#themes), as its base and overrides any of its colour tokens; it then
@@ -950,21 +987,21 @@ Everything is stored in one profile folder:
 - Windows: `%APPDATA%\table-craft`
 - Linux: `~/.config/table-craft`
 
-| Path                   | Holds                                                                     |
-| :--------------------- | :------------------------------------------------------------------------ |
-| `datasources.json`     | Data sources and folders, without passwords                               |
-| `secrets.json`         | Passwords saved _Forever_, encrypted with the operating system's keychain |
-| `ssh_known_hosts.json` | The SSH host keys you chose to trust                                      |
-| `consoles/`            | One folder per data source with its console files                         |
-| `history.sqlite`       | Query history                                                             |
-| `settings.json`        | [Settings](#settings)                                                     |
-| `snippets.json`        | Your [Snippets](#snippets), including their plain-text bodies             |
-| `logs/`                | The app log, `table-craft.log` and up to four older files of 5 MB each    |
-| `update-state.json`    | The version you chose to skip                                             |
-| `update-swap.log`      | The last macOS update's swap, logged and removed at the next launch       |
-| `themes/`              | Your themes                                                               |
-| `plugins/`             | Your plugins                                                              |
-| `managed-plugins/`     | Plugins TableCraft downloaded, one folder per version                     |
+| Path                   | Holds                                                                    |
+| :--------------------- | :----------------------------------------------------------------------- |
+| `datasources.json`     | Data sources and folders, without passwords                              |
+| `secrets.json`         | Passwords saved _Forever_ and the MCP token, encrypted with the keychain |
+| `ssh_known_hosts.json` | The SSH host keys you chose to trust                                     |
+| `consoles/`            | One folder per data source with its console files                        |
+| `history.sqlite`       | Query history                                                            |
+| `settings.json`        | [Settings](#settings)                                                    |
+| `snippets.json`        | Your [Snippets](#snippets), including their plain-text bodies            |
+| `logs/`                | The app log, `table-craft.log` and up to four older files of 5 MB each   |
+| `update-state.json`    | The version you chose to skip                                            |
+| `update-swap.log`      | The last macOS update's swap, logged and removed at the next launch      |
+| `themes/`              | Your themes                                                              |
+| `plugins/`             | Your plugins                                                             |
+| `managed-plugins/`     | Plugins TableCraft downloaded, one folder per version                    |
 
 Passwords are never written to `datasources.json` or to the log, and there is no plaintext fallback:
 where the keychain cannot encrypt, _Forever_ is disabled. Apart from the databases you connect to,

@@ -13,7 +13,8 @@ query history; EXPLAIN; configurable themes, fonts and density.
 ## Processes
 
 Main, one engine per connected datasource, and a sandboxed renderer that talks to each engine over
-its own MessagePort (decision 002).
+its own MessagePort (decision 002). While Settings › MCP Server is on, a fourth process, the MCP
+host, serves AI agents and reaches engines over ports of its own (decision 126, [Agents (MCP)](#agents-mcp)).
 
 ## Plugin contract
 
@@ -1829,12 +1830,13 @@ the name and the result type in their tooltip.
 Plan 011, decision 030. Main keeps the query history in `<userData>/history.sqlite`, opened with
 `node:sqlite` by core's `history/` (`openQueryHistory`): one table `entries` (`id`,
 `datasource_id`, `sql`, `started_at`, `duration_ms`, `outcome` success, error or cancelled,
-`row_count`, `message`, `source` console or table, `parameters` the bound values as JSON or
+`row_count`, `message`, `source` console, table or agent (an MCP client's run, decision 127), `parameters` the bound values as JSON or
 `NULL`), `user_version` 2, WAL. A version 1 file gains the `parameters` column in place, its rows
 kept (plan 019). A file that does not open as either schema is renamed `history.sqlite.corrupt-<ms>` and a fresh one is created. Each
 datasource keeps its newest `HISTORY_LIMIT = 10_000` entries; recording prunes the oldest. Search
 answers distinct statement texts, newest first, at most `HISTORY_SEARCH_LIMIT = 200`, each with its
-last start, duration, outcome, row count, message and parameters and how many times it ran; the query matches
+last start, duration, outcome, row count, message, parameters and source and how many times it ran
+(the dialog tags a statement an agent ran last **Agent**); the query matches
 anywhere in the text, case-insensitively and literally (`%` and `_` are plain characters).
 Deleting a datasource clears its history, and its confirmation says so.
 
@@ -2305,6 +2307,10 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `data.groupDigits`                     | boolean                                                                                       | `false`       |
 | `data.pageRows`                        | 10–10,000                                                                                     | 500           |
 | `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                          | 100,000       |
+| `mcp.clients`                          | `{ name, allowed }` per client answered ([Agents (MCP)](#agents-mcp))                         | `[]`          |
+| `mcp.enabled`                          | boolean; serve AI agents ([Agents (MCP)](#agents-mcp))                                        | `false`       |
+| `mcp.port`                             | 1,024–65,535, on 127.0.0.1                                                                    | 47,820        |
+| `mcp.rowCap`                           | 1–1,000 rows an agent's query returns at once                                                 | 100           |
 
 Each field is read on its own: a missing or out-of-range one takes its default and the rest stand.
 A file that is not JSON, not an object or from a newer version is renamed to
@@ -2514,6 +2520,102 @@ arm64, macOS x64, Windows x64 and Linux x64, each building its installer, runnin
 suite on SQLite and uploading the installer. The macOS jobs block; Windows and Linux are
 best-effort. A `v*` tag adds a draft GitHub release with the installers, `update-manifest.json` and its
 signature once the blocking jobs pass (see In-app update).
+
+## Agents (MCP)
+
+Plan 117, decisions 126 and 127. TableCraft is an MCP server for AI agents. It is off by default;
+`settings.mcp` holds `enabled` (false), `port` (47820, range 1024–65535) and `rowCap` (100, range
+1–1000).
+
+**Process and transport.** Main's supervisor (`main/mcp.ts`) forks `dist/mcp/main.js` while the
+server is on, sending it a boot message with the port, the token, the exposed datasources (id,
+name, plugin, comment, effective access, shown namespaces; never config or secrets) and whether a
+window is open. The host (`mcp/host.ts`) listens on `127.0.0.1:<port>/mcp` (`mcp/http.ts`) and
+answers JSON-RPC (`mcp/server.ts`): `initialize`, `ping`, `tools/list`, `tools/call`,
+notifications with 202. Requests need the bearer token, a loopback `Host` and, when present, a
+loopback `Origin`; `GET` answers 405, `DELETE` ends the session, bodies over 1 MiB answer 413. To
+reach a datasource the host asks main for an engine port (`mcp.engineRequest`); main connects the
+datasource through the host registry with an MCP target, transfers the port and answers
+`connected` or `failed` with the reason (a datasource whose password is not stored answers so).
+The token lives in the secret store under `table-craft.mcp`; regenerating it, or changing the
+port or `enabled`, restarts the host. `rowCap` changes reach the running host without a restart.
+
+**Tools** (`mcp/tools.ts`, arguments validated with zod, published as JSON Schema):
+
+| Tool               | Needs              | Does                                                                    |
+| ------------------ | ------------------ | ----------------------------------------------------------------------- |
+| `list_datasources` |                    | The exposed datasources with their access                               |
+| `list_schemas`     | `schemaTree`       | `catalog.namespaces`, limited to the shown namespaces (decision 117)    |
+| `list_tables`      | `schemaTree`       | `catalog.describe` of one schema: tables and views with column counts   |
+| `describe_table`   | `schemaTree`       | Columns, keys, foreign keys and indexes                                 |
+| `get_ddl`          | `schemaTree`,`ddl` | `catalog.definition`                                                    |
+| `run_query`        | `sql`              | One statement; reads capped at `rowCap`, writes after approval          |
+| `fetch_rows`       |                    | `result.window` (and `result.fetchMore`) of a kept result, `rowCap` max |
+| `close_result`     |                    | `result.release`                                                        |
+| `explain`          | `explain`          | `statement.explain` without analyze, on the read-only session           |
+| `format_sql`       | `sql`              | `sql.format`, standard style, upper-case keywords                       |
+
+A tool a datasource's plugin cannot serve is refused with the missing capability named. Errors
+come back as tool results with `isError`, so the agent reads them.
+
+**Access** (`mcp/access.ts`). Each datasource's `agentAccess` is `off`, `read` or `ask`; read-only
+datasources cap at `read`, and the MCP Server settings cannot raise a red datasource to `ask`
+(only its Data Sources page can). `run_query` splits the text with `script.split` and refuses
+more than one statement. `read` runs on the agent's read-only session (`session.open` with
+`readOnly: true`); `write`, `ddl` and `other` are refused under `read`, and under `ask` wait for
+approval, then run on the agent's writable session; `transaction` is refused. Statements time out
+after 120 seconds. Rows come back as a fixed-width text table and as `structuredContent` (cells
+cut at 1000 characters); when more rows exist the result is kept under a handle (`r1`, …, at most
+16, the oldest released) for `fetch_rows`.
+
+**Approvals** (`mcp/approvals.ts`). A waiting write turns the status bar chip amber
+(`MCP · 1 waiting`); clicking it opens **<client> wants to change data** with the datasource, the
+statement kind, the agent's reason and the SQL, Deny focused, Allow Once, and, unless the statement
+is DDL or destructive, a checkbox allowing that kind on that datasource for the rest of the MCP
+session. Unanswered for 60 seconds the write is denied; with no window open, or while agents are
+paused, it is denied at once.
+
+**Open in Console.** The approval dialog can also hand the statement to a new console instead:
+the agent hears `handedOff`, and nothing runs.
+
+**Clients** (`mcp/clients.ts`). `settings.mcp.clients` lists `{ name, allowed }`. A tool call or
+resource read from a name not in it waits: the chip turns amber (`MCP · <name> asks`) and the
+popover offers Allow and Block, which write the list. Unanswered for 60 seconds, or with no window,
+the call is refused. The name is what the client says it is; the token is the authentication.
+
+**Per-datasource policy.** `agentSchemas` (top-level namespace names; absent, the shown
+namespaces) narrows `list_schemas`, `list_tables`, `describe_table`, `get_ddl` and resources, never
+SQL (decision 008). `agentRowCap` (1–1,000) overrides `rowCap`. Both are set over
+`datasources.setAgentPolicy`.
+
+**More tools.** `check_sql` (`inspection.inspect`, problems with line and column), `scan_keys` and
+`get_key` (`keyValue`: `keyspace.scan` up to 20 batches, `keyspace.open` on the read session),
+`open_in_console` (main sends the text to the focused window, which opens a console; never runs
+it), `get_active_context` (the focused console's text, selection and schema, only when its
+datasource is exposed; the window answers within 5 seconds). On a `commands` datasource `run_query`
+takes one command. **Resources** `tablecraft://<datasource>[/<schema>[/<table>]]` (list, two
+templates, read; an unexposed one answers -32002) and **prompts** `explore_datasource` and
+`write_query`.
+
+**Status.** `McpStatus` carries the clients, pending approvals, pending clients, running calls
+(`run-N`, cancellable with `statement.cancel` on the agent's session), the last 200 calls (tool,
+client, datasource, target cut at 500 characters, rows, duration, outcome `ok`, `capped`, `error`,
+`denied`, `refused` or `handedOff`) and a token hint (`tc_••••` and the last four characters).
+History entries carry `client` (history schema 4).
+
+**UI.** Settings › **MCP Server**, under a **Tools** heading in the page list with Plugins: an on
+switch and state, the endpoint with Copy, port, the token hint with Copy and Regenerate…, row
+limit, a per-client config snippet (Claude Code, OpenCode, Cursor) with the token as
+`${TABLECRAFT_TOKEN}` and **Copy with Token**, the known clients (Allow switch, Forget), and the
+access table of saved datasources (Access, Schemas, Row limit) with a filter. The Data Sources
+dialog has **AI agent access** per datasource. The status bar chip is grey `MCP` while off, green
+with the number of clients, amber while a write or a client waits or agents are paused, red when
+the server failed; its popover lists clients asking to connect, connected clients with how long and
+their last call, Disconnect, Turn On, Pause or Resume, Agent Activity and Settings. **Agent
+Activity** lists the calls with client and outcome filters; double-click opens a statement in a
+console. Services shows **Agents › client › datasource › running call** with Cancel. Query
+History filters All, Me and Agents and names the client. The Database pane shows an **AI** badge on
+exposed datasources while the server runs. No MCP action has a default chord.
 
 ## Storage
 

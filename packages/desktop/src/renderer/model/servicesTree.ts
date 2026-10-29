@@ -1,5 +1,6 @@
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { serviceState, type ServiceState } from "@table-craft/desktop/renderer/model/format.js";
+import type { AgentClientGroup, AgentDatasourceGroup } from "@table-craft/desktop/renderer/model/mcp.js";
 import type { ConsoleSession } from "@table-craft/desktop/renderer/state/consoles.js";
 import type { Execution } from "@table-craft/desktop/renderer/state/executions.js";
 import type { ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
@@ -8,6 +9,7 @@ import type { KeyDeleteTask } from "@table-craft/desktop/renderer/state/keyDelet
 import type { ScriptEntry } from "@table-craft/desktop/renderer/state/scripts.js";
 import type { TableSession, TableStatus } from "@table-craft/desktop/renderer/state/tables.js";
 import type { Tab } from "@table-craft/desktop/renderer/state/tabs.js";
+import type { McpRunView } from "@table-craft/desktop/settings/mcp.js";
 
 /** An open console or table tab: one session on its datasource (plan 011 decision 12). */
 export interface ServiceSession {
@@ -150,6 +152,28 @@ export type ServiceRow =
       readonly depth: 1;
       readonly parent: string;
       readonly node: KeyDeleteTask;
+    }
+  | { readonly kind: "agents"; readonly key: string; readonly depth: 0; readonly count: number }
+  | {
+      readonly kind: "agentClient";
+      readonly key: string;
+      readonly depth: 1;
+      readonly parent: string;
+      readonly node: AgentClientGroup;
+    }
+  | {
+      readonly kind: "agentDatasource";
+      readonly key: string;
+      readonly depth: 2;
+      readonly parent: string;
+      readonly node: AgentDatasourceGroup;
+    }
+  | {
+      readonly kind: "agentRun";
+      readonly key: string;
+      readonly depth: 3;
+      readonly parent: string;
+      readonly node: McpRunView;
     };
 
 /** The Exports node's key: one node under the datasources, every background export below it (decision 040). */
@@ -163,6 +187,9 @@ export const SCRIPTS_ROW_KEY = "scripts";
 
 /** The Key Deletions node's key, after SQL Scripts (plan 058 decision 17). */
 export const KEY_DELETES_ROW_KEY = "keyDeletes";
+
+/** The Agents node's key, last: each MCP client, the datasources it is using, its running calls (plan 117). */
+export const AGENTS_ROW_KEY = "agents";
 
 export function datasourceRowKey(datasourceId: string): string {
   return `datasource:${datasourceId}`;
@@ -184,6 +211,7 @@ export function serviceRows(
   imports: readonly ImportEntry[] = [],
   scripts: readonly ScriptEntry[] = [],
   keyDeletes: readonly KeyDeleteTask[] = [],
+  agents: readonly AgentClientGroup[] = [],
 ): readonly ServiceRow[] {
   const rows: ServiceRow[] = [];
   for (const datasource of tree) {
@@ -262,15 +290,42 @@ export function serviceRows(
       }
     }
   }
+  if (agents.length > 0) agentRows(rows, agents, collapsed);
   return rows;
+}
+
+function agentRows(rows: ServiceRow[], agents: readonly AgentClientGroup[], collapsed: ReadonlySet<string>): void {
+  rows.push({ kind: "agents", key: AGENTS_ROW_KEY, depth: 0, count: agents.length });
+  if (collapsed.has(AGENTS_ROW_KEY)) return;
+  for (const client of agents) {
+    const clientKey = `agent:${client.clientId}`;
+    rows.push({ kind: "agentClient", key: clientKey, depth: 1, parent: AGENTS_ROW_KEY, node: client });
+    if (collapsed.has(clientKey)) continue;
+    for (const datasource of client.datasources) {
+      const datasourceKey = `${clientKey}:${datasource.datasourceId}`;
+      rows.push({ kind: "agentDatasource", key: datasourceKey, depth: 2, parent: clientKey, node: datasource });
+      if (collapsed.has(datasourceKey)) continue;
+      for (const run of datasource.runs) {
+        rows.push({ kind: "agentRun", key: `agentRun:${run.id}`, depth: 3, parent: datasourceKey, node: run });
+      }
+    }
+  }
 }
 
 /** Whether a line has children to show or hide. */
 export function expandable(row: ServiceRow): boolean {
   if (row.kind === "datasource") return row.node.sessions.length > 0;
-  if (row.kind === "exports" || row.kind === "imports" || row.kind === "scripts" || row.kind === "keyDeletes") {
+  if (
+    row.kind === "exports" ||
+    row.kind === "imports" ||
+    row.kind === "scripts" ||
+    row.kind === "keyDeletes" ||
+    row.kind === "agents"
+  ) {
     return row.count > 0;
   }
+  if (row.kind === "agentClient") return row.node.datasources.length > 0;
+  if (row.kind === "agentDatasource") return row.node.runs.length > 0;
   return row.kind === "session" && row.node.executions.length > 0;
 }
 
@@ -318,7 +373,8 @@ export function movedInTree(
         row.kind === "exports" ||
         row.kind === "imports" ||
         row.kind === "scripts" ||
-        row.kind === "keyDeletes"
+        row.kind === "keyDeletes" ||
+        row.kind === "agents"
         ? { selected, collapsed }
         : { selected: row.parent, collapsed };
     }

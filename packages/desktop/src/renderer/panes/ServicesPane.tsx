@@ -50,6 +50,16 @@ import {
   keyDeleteLabel,
   KeyDeletesLine,
 } from "@table-craft/desktop/renderer/panes/keyDeleteLines.js";
+import {
+  AgentClientLine,
+  AgentDatasourceLine,
+  agentRunLabel,
+  AgentRunLine,
+  AgentsLine,
+} from "@table-craft/desktop/renderer/panes/agentLines.js";
+import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
+import { agentGroups } from "@table-craft/desktop/renderer/model/mcp.js";
+import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { resumeLabel, useImports, type ImportEntry } from "@table-craft/desktop/renderer/state/imports.js";
 import {
   IMPORT_STATE_TEXT,
@@ -185,6 +195,9 @@ function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): rea
   if (row.kind === "keyDelete") {
     const args = { taskId: row.node.taskId };
     return keyDeleteActionsOf(row.node).map((actionId) => ({ actionId, args }));
+  }
+  if (row.kind === "agentRun") {
+    return row.node.cancellable ? [{ actionId: MCP_ACTION_IDS.cancel, args: row.node.id }] : [];
   }
   if (row.kind === "execution" && row.node.sql !== null) {
     const args = { tabId: row.tabId, executionId: row.node.id };
@@ -497,6 +510,10 @@ function rowLabel(row: ServiceRow): string {
     return `${fileNameOf(task.path)}, ${EXPORT_STATE_TEXT[task.state]}, ${exportProgressText(task)}`;
   }
   if (row.kind === "session") return `${row.node.title}, ${SERVICE_STATE_TEXT[row.node.state]}`;
+  if (row.kind === "agents") return `Agents, ${String(row.count)}`;
+  if (row.kind === "agentClient") return row.node.clientName;
+  if (row.kind === "agentDatasource") return row.node.datasourceId;
+  if (row.kind === "agentRun") return agentRunLabel(row.node);
   return `${row.node.label}, ${row.node.outcome}`;
 }
 
@@ -518,6 +535,8 @@ export function ServicesPane() {
   const imports = useImports((state) => state.entries);
   const scripts = useScripts((state) => state.entries);
   const keyDeletes = useKeyDeletes((state) => state.tasks);
+  const mcpStatus = useMcp((state) => state.status);
+  const agents = useMemo(() => agentGroups(mcpStatus), [mcpStatus]);
   const [selected, setSelected] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(NO_COLLAPSED);
   const elements = useRef(new Map<string, HTMLLIElement>());
@@ -527,10 +546,11 @@ export function ServicesPane() {
     [tabs, consoles, tables, executions, datasources],
   );
   const rows = useMemo(
-    () => serviceRows(tree, collapsed, exports, imports, scripts, keyDeletes),
-    [tree, collapsed, exports, imports, scripts, keyDeletes],
+    () => serviceRows(tree, collapsed, exports, imports, scripts, keyDeletes, agents),
+    [tree, collapsed, exports, imports, scripts, keyDeletes, agents],
   );
-  const running = rows.some((row) => row.kind === "execution" && row.node.outcome === "running");
+  const running =
+    mcpStatus.running.length > 0 || rows.some((row) => row.kind === "execution" && row.node.outcome === "running");
   const now = useNow(running);
   const selectedIndex = rows.findIndex((row) => row.key === selected);
 
@@ -657,6 +677,14 @@ export function ServicesPane() {
               <KeyDeletesLine count={row.count} />
             ) : row.kind === "keyDelete" ? (
               <KeyDeleteLine task={row.node} />
+            ) : row.kind === "agents" ? (
+              <AgentsLine count={row.count} />
+            ) : row.kind === "agentClient" ? (
+              <AgentClientLine client={row.node} />
+            ) : row.kind === "agentDatasource" ? (
+              <AgentDatasourceLine group={row.node} />
+            ) : row.kind === "agentRun" ? (
+              <AgentRunLine run={row.node} now={now} />
             ) : (
               <ExecutionLine execution={row.node} now={now} />
             )}
