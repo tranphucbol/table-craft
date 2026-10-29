@@ -2695,7 +2695,10 @@ with the number of clients, amber while a statement, a key or a client waits or 
 the server failed; its popover lists clients asking to connect, connected clients with how long and
 their last call, Disconnect, Turn On, Pause or Resume, Agent Activity and Settings. **Agent
 Activity** lists the calls with client and outcome filters; double-click opens a statement in a
-console. Services shows **Agents › client › datasource › running call** with Cancel. Query
+console. Services shows **Agents › client › datasource › running call** with Cancel. An agent
+call's time, in Services, Agent Activity, the chip and Query History, leaves out the wait for the
+user's approval; the duration's tooltip says how long it waited, and Agent Activity adds a muted
+`+5.0 s approval`. Query
 History filters All, Me and Agents and names the client. The Database pane shows an **AI** badge on
 exposed datasources while the server runs, muted for Read only and amber for Ask before reads and
 Ask before writes, which can both turn the chip amber. No MCP action has a default chord.
