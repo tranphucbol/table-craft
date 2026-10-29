@@ -45,6 +45,24 @@ const LONG_DATABASE = tidbScratchDatabase(
 const LISTED_WITHIN_MS = 10_000;
 const LISTING_POLL_MS = 200;
 
+/** Plan 119: TiDB 4 stops every statement past `max_execution_time` and answers 1317, as a kill does. */
+const SERVER_LIMIT_MS = 1_500;
+const SLOW_READ_SECONDS = 8;
+const SERVER_LIMIT_DEADLINE_MS = 5_000;
+const DIGITS = "SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9";
+const DIGIT_TABLES = 7;
+
+/**
+ * A read that works about `seconds` on the shared TiDB 4 and ends by itself: a count over ten
+ * million rows per second. `SLEEP` there returns early instead of failing, and `BENCHMARK` ignores
+ * both the limit and `KILL TIDB`.
+ */
+function tidbSlowRead(seconds: number): string {
+  const digits = Array.from({ length: DIGIT_TABLES }, (_, index) => `(${DIGITS}) t${String(index)}`);
+  const repeats = Array.from({ length: seconds }, (_, index) => `SELECT ${String(index)} AS n`).join(" UNION ALL ");
+  return `SELECT COUNT(*) FROM ${digits.join(", ")}, (${repeats}) r`;
+}
+
 /**
  * Polls for `session`'s own row, by id and server: the TiDB may be shared, and an id alone can name
  * someone else's connection on another of its servers.
@@ -441,5 +459,52 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     await expect(refused).rejects.toMatchObject({ code: "statementFailed" });
     await expect(refused).rejects.toThrow(/nothing was killed/);
     expect(sent.filter((sql) => /\bKILL\b/i.test(sql))).toEqual([]);
+  });
+
+  async function drained(session: Session, sql: string, serverTimeoutMs?: number): Promise<unknown[]> {
+    const rows: unknown[] = [];
+    const result = await session.execute(sql, [], serverTimeoutMs === undefined ? {} : { serverTimeoutMs });
+    for await (const row of result.rows) rows.push(row);
+    return rows;
+  }
+
+  it("givenTidb4_whenLimited_thenTimedOutBySessionVariableOnly", async () => {
+    const sent = spySql();
+    const session = await connected();
+    const started = Date.now();
+
+    const stopped = drained(session, tidbSlowRead(SLOW_READ_SECONDS), SERVER_LIMIT_MS);
+
+    await expect(stopped).rejects.toMatchObject({ code: "timedOut" });
+    await expect(stopped).rejects.toThrow(/TiDB stopped the statement at its 1\.5 s limit \(max_execution_time\)/);
+    expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
+    expect(session.serverTimeout).toEqual({ setting: "max_execution_time", covers: "all", counts: "statement" });
+    expect(sent).toContain(`SET SESSION max_execution_time = ${String(SERVER_LIMIT_MS)}`);
+    expect(sent.filter((sql) => /\bGLOBAL\b/i.test(sql))).toEqual([]);
+    expect(await drained(session, "SELECT @@SESSION.max_execution_time ")).toEqual([["0"]]);
+  });
+
+  it("givenTidb4Limited_whenDoSleep_thenStopsAtLimitToo", async () => {
+    const session = await connected();
+    const started = Date.now();
+
+    await drained(session, `DO SLEEP(${String(SLOW_READ_SECONDS)})`, SERVER_LIMIT_MS);
+
+    expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
+  });
+
+  it("givenServerEnforced_whenEngineCannotKill_thenServerStops", async () => {
+    const monitor = (await connected()).sessions;
+    const sleeper = await connected();
+    const dropped = { serverSessionId: sleeper.serverSessionId, serverInstance: sleeper.serverInstance } as Session;
+    const sleeping = drained(sleeper, SLEEP_SQL, SERVER_LIMIT_MS).catch(() => undefined);
+    cleanup.push(() => sleeping);
+    await listedUntil(monitor, sleeper, (listed) => listed?.state === "active");
+
+    await sleeper.cancel?.();
+    const started = Date.now();
+    await listedUntil(monitor, dropped, (listed) => listed === undefined);
+
+    expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
   });
 });
