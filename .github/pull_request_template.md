@@ -1,3 +1,5 @@
+<!-- Plain, everyday English in short sentences; 300 words at most for the whole description. -->
+
 # 1. Purpose & Motivation
 
 ## Description
