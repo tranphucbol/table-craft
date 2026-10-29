@@ -11,8 +11,8 @@ documented in the guide page it belongs to.
 
 `CONTRIBUTING.md` at the repository root is the contributor's on-ramp: setting up, which tests a
 change needs, the rules review checks and why, and how to report a bug. It links to `AGENTS.md` for
-every command, environment variable and port rather than copying them, and `AGENTS.md` stays the
-full reference.
+every command and to the `local-testing` skill (decision 133) for every test server, environment
+variable and port rather than copying them.
 
 One test, `test/renderer/userDocs.test.ts`, checks the README, CONTRIBUTING and every guide page:
 images and links resolve relative to the page that has them, as GitHub resolves them, anchors are
