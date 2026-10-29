@@ -11,6 +11,7 @@ import {
   switchableTo,
   z,
   type BoundStatement,
+  type CancelReach,
   type ColumnDesign,
   type CompletionCatalog,
   type DdlScript,
@@ -499,6 +500,7 @@ const SLEEP_SECONDS = 30;
 const CANCEL_DELAY_MS = 500;
 /** Well under `SLEEP_SECONDS`, so a cancel that did nothing fails the test instead of passing late. */
 const CANCEL_DEADLINE_MS = 10_000;
+const CANCEL_REACHES: readonly CancelReach["reaches"][] = ["statement", "connection", "blockingCommands"];
 /** The limit the `serverTimeout` cases ask for; servers check theirs about every 100 ms. */
 const SERVER_LIMIT_MS = 1500;
 /** Far past `SERVER_LIMIT_MS`, so a limit that did nothing fails the test instead of passing late. */
@@ -2769,6 +2771,25 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         await withSession(plugin, fixture, async (session) => {
           await runAndCancel(session);
           await expectAlive(session);
+        });
+      });
+
+      it("givenCancelReach_whenSessionOpens_thenMethodNamedAndReachKnown", async () => {
+        await withSession(plugin, fixture, (session) => {
+          const reach = session.cancelReach;
+          if (reach === undefined) return Promise.resolve();
+          expect(reach.method).toMatch(/\S/);
+          expect(CANCEL_REACHES).toContain(reach.reaches);
+          return Promise.resolve();
+        });
+      });
+    });
+
+    describe.runIf(!plugin.capabilities.includes("cancel"))("no cancel", () => {
+      it("givenNoCancel_whenSessionOpens_thenNoCancelReach", async () => {
+        await withSession(plugin, fixture, (session) => {
+          expect(session.cancelReach).toBeUndefined();
+          return Promise.resolve();
         });
       });
     });

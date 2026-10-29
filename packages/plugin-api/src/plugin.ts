@@ -196,6 +196,18 @@ export interface ServerTimeout {
   readonly counts: "statement" | "serverWork";
 }
 
+/** How `cancel` stops a running statement on this server (decision 131). */
+export interface CancelReach {
+  /** What the plugin sends, for people: `KILL QUERY`, `pg_cancel_backend`, `CLIENT UNBLOCK`. */
+  readonly method: string;
+  /**
+   * `statement`: the server stops the work. `connection`: the plugin drops its connection and the
+   * server may keep running the statement. `blockingCommands`: only commands waiting on the server
+   * (Redis `BLPOP`) are stopped; the rest run to their end.
+   */
+  readonly reaches: "statement" | "connection" | "blockingCommands";
+}
+
 /** `ExecuteOptions.node`: the plugin routes the command by its keys (decision 114). */
 export const NODE_AUTO = "auto";
 /** `ExecuteOptions.node`: the command runs once on every primary (decision 114). */
@@ -370,6 +382,8 @@ export interface Session {
    * version has no such setting.
    */
   readonly serverTimeout?: ServerTimeout | null;
+  /** Optional, only with `cancel`: how this session's cancel reaches the server, read once at connect. */
+  readonly cancelReach?: CancelReach;
 }
 
 /** What a TLS handshake agreed, as Node's socket names it: `TLSv1.3`, `TLS_AES_256_GCM_SHA384`. */

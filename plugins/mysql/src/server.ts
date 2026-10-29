@@ -1,4 +1,4 @@
-import type { ServerTimeout } from "@table-craft/plugin-api";
+import type { CancelReach, ServerTimeout } from "@table-craft/plugin-api";
 import type { ServerIdentity } from "@table-craft/plugin-api/sql";
 import { MYSQL_FLAVOUR, TIDB_FLAVOUR } from "./functions/ranges.js";
 
@@ -109,6 +109,20 @@ export function killStatementFor(serverVersion: string | null, connectionId: num
   const globalKill = tidbGlobalKill(serverVersion);
   if (globalKill === null) return `KILL QUERY ${String(connectionId)}`;
   return globalKill ? `KILL TIDB QUERY ${String(connectionId)}` : null;
+}
+
+/** How `cancel` names what it sends where `killStatementFor` has no statement: it drops the connection. */
+export const CONNECTION_RESET_METHOD = "connection reset";
+const KILL_QUERY_METHOD = "KILL QUERY";
+const KILL_TIDB_QUERY_METHOD = "KILL TIDB QUERY";
+
+/** How this server's cancel reaches it (decision 131), read from Global Kill as `killStatementFor` is. */
+export function cancelReachOf(serverVersion: string | null): CancelReach {
+  const globalKill = tidbGlobalKill(serverVersion);
+  if (globalKill === null) return { method: KILL_QUERY_METHOD, reaches: "statement" };
+  return globalKill
+    ? { method: KILL_TIDB_QUERY_METHOD, reaches: "statement" }
+    : { method: CONNECTION_RESET_METHOD, reaches: "connection" };
 }
 
 /** The first releases with a session statement limit: MySQL's `max_execution_time`, MariaDB's `max_statement_time`. */
