@@ -513,7 +513,7 @@ See [Sessions](docs/design/specification.md#sessions).
 
 TableCraft can serve your data sources to AI agents such as Claude Code, OpenCode and Cursor over
 the [Model Context Protocol](https://modelcontextprotocol.io). It is off until you turn it on in
-**Settings → MCP Server**, which listens on `http://127.0.0.1:47820/mcp` on this machine only and
+**Settings → MCP Server** (or the robot button on the right edge of the window), which listens on `http://127.0.0.1:47820/mcp` on this machine only and
 asks every client for a bearer token. **Copy** beside a client puts its configuration, token
 included, on the clipboard; the window never shows the token.
 

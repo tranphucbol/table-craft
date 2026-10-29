@@ -210,6 +210,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   settings: GearSix,
   menu: List,
   log: Scroll,
+  agent: Robot,
   diagnostics: FileZip,
   update: ArrowCircleUp,
   download: DownloadSimple,

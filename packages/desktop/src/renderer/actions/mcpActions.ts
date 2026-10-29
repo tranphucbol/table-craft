@@ -332,7 +332,7 @@ export const MCP_ACTIONS: readonly AnyAction[] = [
     id: MCP_ACTION_IDS.settings,
     title: "MCP Server Settings…",
     category: "App",
-    icon: "settings",
+    icon: "agent",
     run: showSettings,
   }),
   defineAction<boolean | undefined>({

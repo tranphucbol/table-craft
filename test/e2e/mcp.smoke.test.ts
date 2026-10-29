@@ -207,7 +207,10 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
     "givenMcpOn_whenSettingsPageOpened_thenRunningWithEndpointSnippetAndAccessPerDatasource",
     async () => {
       const { page, port } = await launchServing([shop(), reports(), production(), hidden()]);
-      await findAction(page, "MCP Server Settings");
+      await page
+        .getByRole("navigation", { name: "Right tool window stripe" })
+        .getByRole("button", { name: "MCP Server Settings…" })
+        .click();
       const dialog = settingsDialog(page);
       await dialog.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
 
