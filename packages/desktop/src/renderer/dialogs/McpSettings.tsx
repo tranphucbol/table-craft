@@ -5,13 +5,14 @@ import { MCP_ACTION_IDS, type AgentPolicyArgs } from "@table-craft/desktop/rende
 import { Button, FieldRow, INPUT_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { NumberField, SectionTitle, update } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { mcpStatusText, MCP_STATE_DOT } from "@table-craft/desktop/renderer/model/mcp.js";
-import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Switch } from "@table-craft/desktop/renderer/ui/Switch.js";
 import { useCopyConfirmation, COPIED_LABEL } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
+import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 import {
   AGENT_ACCESS_LABELS,
@@ -37,9 +38,16 @@ import {
 const PRODUCTION_NOTE = "Marked red for production: raise it past Read only on its page in the Data Sources dialog.";
 const READ_ONLY_NOTE = "Read-only data source: agents can only read.";
 const SCHEMA_SEPARATOR = ",";
-const SHOWN_SCHEMAS = "Shown schemas";
-const CELL_CLASS = "py-1 pr-cell align-middle";
-const HEADER_CLASS = "pb-1 pr-cell text-left font-normal text-ink-muted";
+const ALL_SHOWN = "All shown";
+const ALL_SHOWN_HINT = "Blank keeps the schemas the Database pane shows.";
+const SCHEMAS_HINT = "Schemas narrow what agents list and read, not what a statement may name.";
+const ROW_CAP_HINT = "Blank keeps the row limit above.";
+const NOT_EXPOSED = "—";
+const NAMES = new Intl.ListFormat("en", { type: "conjunction" });
+const CELL_CLASS = "h-row px-cell py-1 align-middle";
+const HEADER_CLASS = "border-b border-line px-cell pb-1 text-left font-normal text-ink-muted";
+const INLINE_INPUT_CLASS =
+  "h-row w-full min-w-0 rounded border border-transparent bg-transparent px-1 hover:border-line focus:border-accent focus:outline-none";
 
 /** Why a level is not offered here, or null when it is. */
 function lockedReason(datasource: DatasourceView, access: AgentAccess): string | null {
@@ -61,19 +69,23 @@ function setPolicy(datasource: DatasourceView, patch: Partial<AgentPolicyArgs["p
   invoke(MCP_ACTION_IDS.setPolicy, { datasourceId: datasource.id, policy } satisfies AgentPolicyArgs);
 }
 
-/** A text field that saves on Enter or when it loses focus, and shows what was saved otherwise. */
+/** Reads as plain text until hovered or focused; saves on Enter or blur, Escape reverts. */
 function CommitField({
   label,
   value,
   placeholder,
+  title,
   testId,
+  className,
   check,
   onCommit,
 }: {
   readonly label: string;
   readonly value: string;
   readonly placeholder: string;
+  readonly title: string;
   readonly testId: string;
+  readonly className?: string;
   readonly check?: (text: string) => string | null;
   readonly onCommit: (text: string) => void;
 }) {
@@ -89,9 +101,9 @@ function CommitField({
     <input
       aria-label={label}
       aria-invalid={error === null ? undefined : true}
-      title={error ?? undefined}
+      title={error ?? title}
       data-testid={testId}
-      className={cn(INPUT_CLASS, "w-full", error !== null && "border-danger")}
+      className={cn(INLINE_INPUT_CLASS, className, error !== null && "border-danger")}
       value={shown}
       placeholder={placeholder}
       onChange={(event) => setDraft(event.target.value)}
@@ -112,27 +124,26 @@ function rowCapCheck(text: string): string | null {
   return mcpRowCapError(Number(text));
 }
 
+function NotExposed({ className }: { readonly className?: string }) {
+  return <span className={cn("block px-1 text-ink-muted", className)}>{NOT_EXPOSED}</span>;
+}
+
 function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView; readonly rowCap: number }) {
-  const pluginName = useDatasources(
-    (state) => pluginOf(state.plugins, datasource.pluginId)?.name ?? datasource.pluginId,
-  );
   const access = datasource.agentAccess ?? "off";
-  const note = lockedReason(datasource, "ask");
-  const shown = datasource.shownNamespaces ?? [];
+  const exposed = access !== "off";
   return (
-    <tr data-testid="mcp-access-row">
+    <tr data-testid="mcp-access-row" className="even:bg-raised">
       <td className={CELL_CLASS}>
-        <span className="flex min-w-0 items-center gap-cell" title={note ?? undefined}>
+        <span className="flex min-w-0 items-center gap-cell" title={lockedReason(datasource, "ask") ?? undefined}>
           <span
             aria-hidden
             className={cn(
-              "size-2.5 shrink-0 rounded-sm",
+              "size-2.5 shrink-0 rounded-full",
               datasource.color === null ? "border border-ink-muted" : TINT_SWATCH[datasource.color],
             )}
           />
           <span className="min-w-0 truncate">
-            {datasource.name}
-            <span className="text-ink-muted"> · {pluginName}</span>
+            {datasource.name} <span className="text-ink-muted">{datasource.pluginId}</span>
           </span>
         </span>
       </td>
@@ -140,7 +151,7 @@ function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView
         <select
           aria-label={`AI agent access for ${datasource.name}`}
           data-testid="mcp-access"
-          className={INPUT_CLASS}
+          className={cn(INPUT_CLASS, "w-full")}
           value={access}
           onChange={(event) =>
             invoke(MCP_ACTION_IDS.setAccess, { datasourceId: datasource.id, access: event.target.value as AgentAccess })
@@ -154,29 +165,63 @@ function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView
         </select>
       </td>
       <td className={CELL_CLASS}>
-        <CommitField
-          label={`Schemas agents see in ${datasource.name}`}
-          testId="mcp-access-schemas"
-          value={(datasource.agentSchemas ?? []).join(`${SCHEMA_SEPARATOR} `)}
-          placeholder={shown.length === 0 ? "All schemas" : `${SHOWN_SCHEMAS}: ${shown.join(`${SCHEMA_SEPARATOR} `)}`}
-          onCommit={(text) => setPolicy(datasource, { schemas: schemaList(text) })}
-        />
+        {exposed ? (
+          <CommitField
+            label={`Schemas agents see in ${datasource.name}`}
+            testId="mcp-access-schemas"
+            title={ALL_SHOWN_HINT}
+            className="placeholder:text-ink-muted"
+            value={(datasource.agentSchemas ?? []).join(`${SCHEMA_SEPARATOR} `)}
+            placeholder={ALL_SHOWN}
+            onCommit={(text) => setPolicy(datasource, { schemas: schemaList(text) })}
+          />
+        ) : (
+          <NotExposed />
+        )}
       </td>
-      <td className={cn(CELL_CLASS, "w-24 pr-0")}>
-        <CommitField
-          label={`Row limit for ${datasource.name}`}
-          testId="mcp-access-row-cap"
-          value={
-            datasource.agentRowCap === undefined || datasource.agentRowCap === null
-              ? ""
-              : String(datasource.agentRowCap)
-          }
-          placeholder={String(rowCap)}
-          check={rowCapCheck}
-          onCommit={(text) => setPolicy(datasource, { rowCap: text.trim() === "" ? null : Number(text) })}
-        />
+      <td className={CELL_CLASS}>
+        {exposed ? (
+          <CommitField
+            label={`Row cap for ${datasource.name}`}
+            testId="mcp-access-row-cap"
+            title={ROW_CAP_HINT}
+            className="text-right font-editor tabular-nums placeholder:text-ink"
+            value={
+              datasource.agentRowCap === undefined || datasource.agentRowCap === null
+                ? ""
+                : String(datasource.agentRowCap)
+            }
+            placeholder={String(rowCap)}
+            check={rowCapCheck}
+            onCommit={(text) => setPolicy(datasource, { rowCap: text.trim() === "" ? null : Number(text) })}
+          />
+        ) : (
+          <NotExposed className="text-right" />
+        )}
       </td>
     </tr>
+  );
+}
+
+/** Names the red datasources still held at Read only, so the disabled Ask option is explained once. */
+function ProductionNote({ datasources }: { readonly datasources: readonly DatasourceView[] }) {
+  const capped = datasources.filter(
+    (datasource) => datasource.color === PRODUCTION_COLOR && datasource.agentAccess !== "ask",
+  );
+  if (capped.length === 0) return null;
+  return (
+    <p
+      role="note"
+      data-testid="mcp-production-note"
+      className="flex items-start gap-cell rounded border border-warning p-cell"
+    >
+      <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0 text-warning" />
+      <span>
+        {NAMES.format(capped.map((datasource) => datasource.name))} {capped.length === 1 ? "is" : "are"} coloured red.
+        Red data sources cannot go above <strong>Read only</strong> unless you allow it on its page in the Data Sources
+        dialog.
+      </span>
+    </p>
   );
 }
 
@@ -184,44 +229,52 @@ function AccessTable({ rowCap }: { readonly rowCap: number }) {
   const all = useDatasources((state) => state.datasources);
   const [filter, setFilter] = useState("");
   const needle = filter.trim().toLowerCase();
-  const datasources = all.filter(
-    (datasource) => !datasource.ephemeral && (needle === "" || datasource.name.toLowerCase().includes(needle)),
-  );
-  if (all.every((datasource) => datasource.ephemeral))
-    return <p className="col-span-2 text-ink-muted">No saved data sources yet.</p>;
+  const saved = all.filter((datasource) => !datasource.ephemeral);
+  const datasources = saved.filter((datasource) => needle === "" || datasource.name.toLowerCase().includes(needle));
   return (
     <div className="col-span-2 flex flex-col gap-cell">
-      <TextInput
-        aria-label="Filter data sources"
-        data-testid="mcp-access-filter"
-        placeholder="Filter data sources"
-        value={filter}
-        onChange={(event) => setFilter(event.target.value)}
-      />
-      <table className="w-full table-fixed" aria-label="Data source access">
-        <thead>
-          <tr>
-            <th scope="col" className={HEADER_CLASS}>
-              Data source
-            </th>
-            <th scope="col" className={cn(HEADER_CLASS, "w-36")}>
-              Access
-            </th>
-            <th scope="col" className={HEADER_CLASS}>
-              Schemas
-            </th>
-            <th scope="col" className={cn(HEADER_CLASS, "w-24 pr-0")}>
-              Row limit
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {datasources.map((datasource) => (
-            <AccessRow key={datasource.id} datasource={datasource} rowCap={rowCap} />
-          ))}
-        </tbody>
-      </table>
-      {datasources.length === 0 ? <p className="text-ink-muted">No data source matches the filter.</p> : null}
+      <p className="text-ink-muted">
+        Agents see only what you expose here. New data sources start <strong className="text-ink">Off</strong>.
+      </p>
+      {saved.length === 0 ? (
+        <p className="text-ink-muted">No saved data sources yet.</p>
+      ) : (
+        <>
+          <TextInput
+            aria-label="Filter data sources"
+            data-testid="mcp-access-filter"
+            className="w-48"
+            placeholder="Filter…"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          />
+          <table className="w-full table-fixed border-collapse" aria-label="Data source access">
+            <thead>
+              <tr>
+                <th scope="col" className={HEADER_CLASS}>
+                  Data source
+                </th>
+                <th scope="col" className={cn(HEADER_CLASS, "w-40")}>
+                  Access
+                </th>
+                <th scope="col" className={cn(HEADER_CLASS, "w-32")} title={SCHEMAS_HINT}>
+                  Schemas
+                </th>
+                <th scope="col" className={cn(HEADER_CLASS, "w-24 text-right")}>
+                  Row cap
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {datasources.map((datasource) => (
+                <AccessRow key={datasource.id} datasource={datasource} rowCap={rowCap} />
+              ))}
+            </tbody>
+          </table>
+          {datasources.length === 0 ? <p className="text-ink-muted">No data source matches the filter.</p> : null}
+          <ProductionNote datasources={saved} />
+        </>
+      )}
     </div>
   );
 }
@@ -384,10 +437,6 @@ export function McpSettingsPage() {
       <KnownClients clients={mcp.clients} />
       <SectionTitle>Data source access</SectionTitle>
       <AccessTable rowCap={mcp.rowCap} />
-      <p className="col-span-2 text-ink-muted">
-        New data sources start Off. Ask before writes waits for you to allow each change; the status bar chip turns
-        amber until you answer. Schemas narrow what agents list and read, not what a statement may name.
-      </p>
     </>
   );
 }
