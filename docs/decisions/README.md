@@ -125,3 +125,4 @@ started, not when it is merged.
 | 130 | [Agents can be asked before reads](130-agents-can-be-asked-before-reads.md)                                                                                            |
 | 131 | [A datasource remembers how its timeout is enforced](131-a-datasource-remembers-how-its-timeout-is-enforced.md)                                                        |
 | 132 | [User docs are a short README and a guide](132-user-docs-are-a-short-readme-and-a-guide.md)                                                                            |
+| 133 | [Testing know-how is a skill agents load when they test](133-testing-know-how-is-a-skill-agents-load-when-they-test.md)                                                |
