@@ -180,7 +180,12 @@ CI runs them, with `test:db`, as `verify` on every push, and packages and tests 
 platform. `verify` and the macOS packages must pass; Windows and Linux are best-effort.
 
 - The title names the change in a few words, as a user would, and ends with its plan when it
-  has one: _Server-enforced statement timeouts (plan 119)_.
+  has one: _Server-enforced statement timeouts (plan 119)_. It becomes a line of the release
+  notes as written.
+- It carries one label, which picks its heading in the release notes (`.github/release.yml`):
+  `enhancement` for something a user can now do, `plugins` for a change confined to one datasource
+  plugin, `bug` for a fix, `documentation` for the README, the guide or these files, and `internal`
+  for tests, CI, tooling and refactors a user cannot see, which the notes leave out.
 - The description fills in the [template](.github/pull_request_template.md), which GitHub opens
   with every new pull request: **Purpose & Motivation** (the problem, the solution and a plain-text
   flow of what changed at runtime), **Key Changes** and the **Technical Decisions** behind them,

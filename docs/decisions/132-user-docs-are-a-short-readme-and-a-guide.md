@@ -21,7 +21,11 @@ guide page:
 images and links resolve relative to the page that has them, as GitHub resolves them, anchors are
 checked against the target page's headings, the Documentation index lists every guide page once,
 and the tables are checked in the page that holds them. RELEASING's job table must list the jobs
-of `ci.yml` in order, and it must name every environment and secret the workflows use.
+of `ci.yml` in order, and it must name every environment and secret the workflows use. Its label
+table must match `.github/release.yml`, which groups the generated release notes by pull request
+label, and CONTRIBUTING and the create-pr skill must name every one of those labels. The notes
+themselves are written on the release, never committed: a maintainer adds a short Highlights part
+above the generated list.
 
 Old links to README sections get no redirect anchors.
 

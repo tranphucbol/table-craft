@@ -1,0 +1,17 @@
+# How `gh release create --generate-notes` groups the merged pull requests: each goes under the
+# first category whose label it carries. RELEASING.md and CONTRIBUTING.md (Pull requests) describe
+# the labels; test/renderer/userDocs.test.ts keeps them in step.
+changelog:
+  exclude:
+    labels: [internal]
+  categories:
+    - title: New features
+      labels: [enhancement]
+    - title: Database plugins
+      labels: [plugins]
+    - title: Fixes
+      labels: [bug]
+    - title: Documentation
+      labels: [documentation]
+    - title: Other changes
+      labels: ["*"]

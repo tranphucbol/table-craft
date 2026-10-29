@@ -38,6 +38,9 @@ const CONTRIBUTING = "CONTRIBUTING.md";
 const RELEASING = "RELEASING.md";
 const WORKFLOWS = [".github/workflows/ci.yml", ".github/workflows/publish-plugins.yml"];
 const CI_WORKFLOW = ".github/workflows/ci.yml";
+const RELEASE_NOTES_CONFIG = ".github/release.yml";
+const RELEASE_NOTES_CATCH_ALL = "*";
+const CREATE_PR_SKILL = ".agents/skills/create-pr/SKILL.md";
 const GUIDE_DIRECTORY = "docs/guide";
 const README_LINE_BUDGET = 200;
 const MEDIA_DIRECTORY = "docs/media";
@@ -148,6 +151,28 @@ function workflowValues(pattern: RegExp): string[] {
   return [
     ...new Set(WORKFLOWS.flatMap((file) => [...read(file).matchAll(pattern)].map((match) => match[1] ?? ""))),
   ].sort();
+}
+
+interface NotesCategory {
+  readonly label: string;
+  readonly heading: string;
+}
+
+function flowList(text: string): string[] {
+  return text.split(",").map((item) => item.trim().replace(/^"|"$/g, ""));
+}
+
+/** Each release-notes label with the heading it lands under; excluded labels are "left out", the catch-all "none". */
+function releaseNotesCategories(): NotesCategory[] {
+  const config = read(RELEASE_NOTES_CONFIG);
+  const excluded = flowList(/exclude:\n\s+labels: \[(.+)\]/.exec(config)?.[1] ?? "");
+  const categories = [...config.matchAll(/- title: (.+)\n\s+labels: \[(.+)\]/g)].flatMap((match) =>
+    flowList(match[2] ?? "").map((label) => ({
+      label: label === RELEASE_NOTES_CATCH_ALL ? "none" : label,
+      heading: match[1] ?? "",
+    })),
+  );
+  return [...categories, ...excluded.map((label) => ({ label, heading: "left out" }))];
 }
 
 function manifestName(pluginId: string): string {
@@ -363,5 +388,28 @@ describe("user docs", () => {
 
     expect(environments).toEqual(["plugins", "release"]);
     for (const name of [...environments, ...secrets]) expect(releasing).toContain(`\`${name}\``);
+  });
+
+  it("givenReleaseNotesTable_whenComparedWithReleaseConfig_thenEveryLabelLandsUnderItsHeading", () => {
+    const described = tableRows(section(RELEASING, "Write the release notes")).map((row): NotesCategory => ({
+      label: codeSpans(row[0] ?? "")[0] ?? row[0] ?? "",
+      heading: row[1] ?? "",
+    }));
+
+    const byLabel = (a: NotesCategory, b: NotesCategory) => a.label.localeCompare(b.label);
+    expect(described.sort(byLabel)).toEqual(releaseNotesCategories().sort(byLabel));
+  });
+
+  it("givenReleaseNotesLabels_whenContributingAndCreatePrRead_thenEachNamesEveryLabel", () => {
+    const labels = releaseNotesCategories()
+      .map((category) => category.label)
+      .filter((label) => label !== "none");
+    const pullRequests = section(CONTRIBUTING, "Pull requests");
+    const skill = read(CREATE_PR_SKILL);
+
+    for (const label of labels) {
+      expect(pullRequests, `CONTRIBUTING names ${label}`).toContain(`\`${label}\``);
+      expect(skill, `create-pr names ${label}`).toContain(`\`${label}\``);
+    }
   });
 });
