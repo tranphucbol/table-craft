@@ -18,6 +18,11 @@ export function formatDuration(ms: number): string {
   return `${(ms / MS_PER_SECOND).toFixed(1)} s`;
 }
 
+/** What an agent call's time leaves out: `Waited 23.9 s for approval, not counted`, or null when it did not wait. */
+export function approvalWaitText(ms: number): string | null {
+  return ms > 0 ? `Waited ${formatDuration(ms)} for approval, not counted` : null;
+}
+
 function rows(count: number): string {
   return `${count} ${count === 1 ? "row" : "rows"}`;
 }
