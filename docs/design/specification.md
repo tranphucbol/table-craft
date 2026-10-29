@@ -1314,6 +1314,7 @@ interface PlanNode {
   readonly loops: number | null; // analysed only
   readonly properties: readonly { name: string; value: string }[]; // every other key, in order
   readonly children: readonly PlanNode[];
+  readonly warnings?: readonly string[]; // decision 130, e.g. "Full table scan: reads every row of orders."
 }
 
 interface ExplainedPlan {
@@ -2572,23 +2573,50 @@ port or `enabled`, restarts the host. `rowCap` changes reach the running host wi
 A tool a datasource's plugin cannot serve is refused with the missing capability named. Errors
 come back as tool results with `isError`, so the agent reads them.
 
-**Access** (`mcp/access.ts`). Each datasource's `agentAccess` is `off`, `read` or `ask`; read-only
-datasources cap at `read`, and the MCP Server settings cannot raise a red datasource to `ask`
-(only its Data Sources page can). `run_query` splits the text with `script.split` and refuses
-more than one statement. `read` runs on the agent's read-only session (`session.open` with
-`readOnly: true`); `write`, `ddl` and `other` are refused under `read`, and under `ask` wait for
-approval, then run on the agent's writable session; `transaction` is refused. Statements time out
+**Access** (`mcp/access.ts`). Each datasource's `agentAccess` is `off`, `askReads`, `read` or
+`ask` (decisions 127, 130); read-only datasources cap `ask` at `read` and keep `askReads`, and the
+MCP Server settings cannot raise a red datasource to `ask` (only its Data Sources page can), though
+they can set it to `askReads`. `run_query` splits the text with `script.split` and refuses more
+than one statement. `read` runs on the agent's read-only session (`session.open` with
+`readOnly: true`), at once under `read` and `ask`, and after approval under `askReads`; `write`,
+`ddl` and `other` are refused under `askReads` and `read`, and under `ask` wait for approval, then
+run on the agent's writable session; `transaction` is refused. Under `askReads`, `get_key` waits
+too; the catalog tools, `scan_keys`, resources, `explain`, `format_sql`, `check_sql`,
+`open_in_console`, `get_active_context` and `fetch_rows` on an approved handle never do. Statements time out
 after `mcp.statementTimeoutSeconds` (default 120) or the datasource's `agentTimeoutSeconds`, and
 always ask the server to stop them there too (decision 129). Rows come back as a fixed-width text table and as `structuredContent` (cells
 cut at 1000 characters); when more rows exist the result is kept under a handle (`r1`, …, at most
 16, the oldest released) for `fetch_rows`.
 
-**Approvals** (`mcp/approvals.ts`). A waiting write turns the status bar chip amber
-(`MCP · 1 waiting`); clicking it opens **<client> wants to change data** with the datasource, the
-statement kind, the agent's reason and the SQL, Deny focused, Allow Once, and, unless the statement
-is DDL or destructive, a checkbox allowing that kind on that datasource for the rest of the MCP
-session. Unanswered for 60 seconds the write is denied; with no window open, or while agents are
-paused, it is denied at once.
+**Approvals** (`mcp/approvals.ts`). A waiting statement turns the status bar chip amber
+(`MCP · 1 waiting`); clicking it opens **<client> wants to change data** (or **wants to read
+data** for a read) with the datasource, the statement kind, the agent's reason and the SQL, Deny
+focused, Allow Once, and, unless the statement is DDL or destructive, a checkbox allowing that kind
+on that datasource for the rest of the MCP session (**Allow reads on …** for a read, which covers
+`get_key` too). A read's kind badge uses the accent tone. A `get_key` approval has the subject
+`key`: its badge reads `KEY`, and a **Key** row with the key and its database number replaces the
+SQL. Unanswered for 60 seconds the request is denied; with no window open, or while agents are
+paused, it is denied at once. A denied read is recorded as cancelled, like a denied write.
+
+**Plan** (decision 130). When the datasource's plugin declares `explain`, a statement request (not
+a key) offers a **SQL / Plan** toggle above the statement. Plan runs the action Explain Agent
+Request (`mcp.explainRequest`), which `renderer/state/approvalPlans.ts` answers: `sql.explainable`
+with `analyze: false`, then `statement.explain` with `analyze: false` on a `session.open` of its
+own, timed out after 10 seconds with `serverEnforced`, and closed after. That session is read-only
+for a read; for a write it takes the datasource's own mode, because MySQL refuses even a plain
+`EXPLAIN UPDATE` inside a READ ONLY transaction, and `explainable` has already refused a second
+statement, a nested EXPLAIN and analysing, so only the plain EXPLAIN reaches the server. It
+never analyses, never touches the agent's sessions, answers nothing and records nothing; the
+countdown keeps running, and a plan arriving after the answer is dropped. The plan shows every
+step expanded with Rows (est.) and, when any step has one, Cost (est.); a step with `warnings` is
+amber, and each distinct warning is listed once under the tree, so partitions of one table warn
+once. A timeout reads "The plan took longer than 10 s, so it was abandoned; the request is still
+waiting." The dialog keeps its own 10-second limit too, since the engine times nothing out where
+it cannot cancel (TiDB before 6.1, decision 088), and closes the session once the statement ends.
+The MySQL plugin warns about a full table scan (`Table scan on` in the
+tree, `access_type` `ALL`, or `index` on `PRIMARY`, in JSON, TiDB's `TableFullScan`, TiDB 3's `TableScan` over
+`range:[-inf,+inf]`) and about TiDB's `stats:pseudo` estimates. The `explain` tool lists the same
+warnings under the tree.
 
 **Open in Console.** The approval dialog can also hand the statement to a new console instead:
 the agent hears `handedOff`, and nothing runs.
@@ -2625,13 +2653,14 @@ limit, a per-client config snippet (Claude Code, OpenCode, Cursor) with the toke
 `${TABLECRAFT_TOKEN}` and **Copy with Token**, the known clients (Allow switch, Forget), and the
 access table of saved datasources (Access, Schemas, Row cap) with a filter. The Data Sources
 dialog has **AI agent access** per datasource. The status bar chip is grey `MCP` while off, green
-with the number of clients, amber while a write or a client waits or agents are paused, red when
+with the number of clients, amber while a statement, a key or a client waits or agents are paused, red when
 the server failed; its popover lists clients asking to connect, connected clients with how long and
 their last call, Disconnect, Turn On, Pause or Resume, Agent Activity and Settings. **Agent
 Activity** lists the calls with client and outcome filters; double-click opens a statement in a
 console. Services shows **Agents › client › datasource › running call** with Cancel. Query
 History filters All, Me and Agents and names the client. The Database pane shows an **AI** badge on
-exposed datasources while the server runs. No MCP action has a default chord.
+exposed datasources while the server runs, muted for Read only and amber for Ask before reads and
+Ask before writes, which can both turn the chip amber. No MCP action has a default chord.
 
 ## Storage
 

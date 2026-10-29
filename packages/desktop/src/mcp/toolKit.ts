@@ -1,6 +1,6 @@
 import type { AgentDatasource, AgentHistoryEntry } from "@table-craft/desktop/mcp/messages.js";
 import type { AgentEngine, AgentEngines, SessionMode } from "@table-craft/desktop/mcp/engines.js";
-import type { Approvals } from "@table-craft/desktop/mcp/approvals.js";
+import { APPROVAL_REFUSALS, type ApprovalRequest, type Approvals } from "@table-craft/desktop/mcp/approvals.js";
 import type { Runs } from "@table-craft/desktop/mcp/activity.js";
 import { NOT_EXPOSED_REASON } from "@table-craft/desktop/mcp/access.js";
 import type { Capability, StatementLimit } from "@table-craft/desktop/engine/protocol.js";
@@ -102,6 +102,32 @@ export async function engineWith(
     );
   }
   return engine;
+}
+
+/** What a tool asks the user about; the caller and datasource fill in the rest. */
+export type ApprovalAsk = Omit<ApprovalRequest, "sessionId" | "clientName" | "datasourceId" | "datasourceName">;
+
+/**
+ * Returns once the user allows the request, or an earlier "allow this kind" answer covers it; any
+ * other outcome ends the call with the refusal the agent reads.
+ */
+export async function waitForApproval(
+  context: ToolContext,
+  caller: Caller,
+  datasource: AgentDatasource,
+  ask: ApprovalAsk,
+): Promise<void> {
+  const request: ApprovalRequest = {
+    sessionId: caller.sessionId,
+    clientName: caller.clientName,
+    datasourceId: datasource.id,
+    datasourceName: datasource.name,
+    ...ask,
+  };
+  if (context.approvals.allowedAlready(request)) return;
+  const outcome = await context.approvals.request(request);
+  if (outcome !== "allowed")
+    throw new ToolFailure(APPROVAL_REFUSALS[outcome], outcome === "handedOff" ? "handedOff" : "denied");
 }
 
 /** How the Services tree stops a run in `mode`, or null when the plugin cannot cancel. */

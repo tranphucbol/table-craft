@@ -14,7 +14,7 @@ export const MCP_STATE_DOT: Readonly<Record<McpServerState, string>> = {
   failed: "bg-danger",
 };
 
-/** `waiting` is the amber a write approval or a new client turns the chip (decision 127); paused shares it. */
+/** `waiting` is the amber an approval or a new client turns the chip (decisions 127, 130); paused shares it. */
 export type McpChipTone = "off" | "running" | "waiting" | "failed";
 
 export interface McpChipView {
@@ -49,10 +49,12 @@ export function mcpChip(status: McpStatus): McpChipView {
   }
   if (waiting > 0) {
     const what = waiting === 1 ? "An agent wants" : `${String(waiting)} agent requests want`;
+    const reads = status.approvals.filter((approval) => approval.kind === "read").length;
+    const wants = reads === waiting ? "to read data" : reads === 0 ? "to change data" : "to read or change data";
     return {
       tone: "waiting",
       label: `MCP · ${String(waiting)} waiting`,
-      tooltip: `${what} to change data. Click to answer.`,
+      tooltip: `${what} ${wants}. Click to answer.`,
     };
   }
   const asking = status.pendingClients.length;

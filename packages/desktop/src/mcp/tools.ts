@@ -31,6 +31,11 @@ const schema = z.string().min(1).describe("The schema as list_schemas names it, 
 const table = z.string().min(1).describe("The table or view name.");
 const sql = z.string().min(1).max(SQL_CHARS);
 const database = z.number().int().min(0).optional().describe("The database number; the connection's own when absent.");
+const reason = z
+  .string()
+  .max(REASON_CHARS)
+  .optional()
+  .describe("Why you need it; the user reads this when the call waits for approval.");
 
 const TOOL_ARGUMENTS = {
   list_datasources: z.strictObject({}),
@@ -41,11 +46,7 @@ const TOOL_ARGUMENTS = {
   run_query: z.strictObject({
     datasource,
     sql: sql.describe("Exactly one statement, or one command, in the datasource's language."),
-    reason: z
-      .string()
-      .max(REASON_CHARS)
-      .optional()
-      .describe("Why you want to run it; the user reads this when a write waits for approval."),
+    reason,
   }),
   fetch_rows: z.strictObject({
     handle: z.string().min(1).describe("The handle run_query returned."),
@@ -64,7 +65,7 @@ const TOOL_ARGUMENTS = {
     cursor: z.string().min(1).optional().describe("The cursor a previous scan_keys returned, to continue."),
     limit: z.number().int().min(1).max(MAX_SCAN_LIMIT).optional(),
   }),
-  get_key: z.strictObject({ datasource, key: z.string().min(1), database }),
+  get_key: z.strictObject({ datasource, key: z.string().min(1), database, reason }),
   open_in_console: z.strictObject({
     datasource,
     sql: sql.describe("The text to put in a new console; the user decides whether to run it."),
@@ -84,7 +85,7 @@ const TOOL_SPECS: Readonly<Record<ToolName, ToolSpec>> = {
   list_datasources: {
     title: "List datasources",
     description:
-      "The TableCraft datasources the user exposed to agents, with their access: read only, or ask before writes.",
+      "The TableCraft datasources the user exposed to agents, with their access: ask before reads, read only, or ask before writes.",
     readOnly: true,
   },
   list_schemas: { title: "List schemas", description: "The databases or schemas of a datasource.", readOnly: true },
@@ -102,7 +103,7 @@ const TOOL_SPECS: Readonly<Record<ToolName, ToolSpec>> = {
   run_query: {
     title: "Run query",
     description:
-      "Runs one SQL statement, or one command on a datasource such as Redis. Reads run on a read-only session and return at most the user's row cap, with a handle for fetch_rows when there are more. A statement that changes data or schema waits until the user approves it in TableCraft, and is refused on a read-only datasource. Transaction statements are refused; each approved statement commits on its own.",
+      "Runs one SQL statement, or one command on a datasource such as Redis. Reads run on a read-only session and return at most the user's row cap, with a handle for fetch_rows when there are more. A statement that changes data or schema waits until the user approves it in TableCraft, and is refused on a read-only datasource. On an ask-before-reads datasource every read waits until the user approves it, and changes are refused. The user sees reason while deciding. Transaction statements are refused; each approved statement commits on its own.",
     readOnly: false,
   },
   fetch_rows: { title: "Fetch rows", description: "More rows of a result run_query kept open.", readOnly: true },
@@ -128,7 +129,7 @@ const TOOL_SPECS: Readonly<Record<ToolName, ToolSpec>> = {
   get_key: {
     title: "Get key",
     description:
-      "The type, expiry and value of one key; the elements of a hash, list, set or sorted set, up to the row cap.",
+      "The type, expiry and value of one key; the elements of a hash, list, set or sorted set, up to the row cap. On an ask-before-reads datasource it waits until the user approves it; the user sees reason while deciding.",
     readOnly: true,
   },
   open_in_console: {
@@ -258,7 +259,7 @@ export function createTools(context: ToolContext): Tools {
       }
       case "get_key": {
         const parsed = TOOL_ARGUMENTS.get_key.parse(args);
-        return getKey(context, caller, parsed.datasource, parsed.key, parsed.database);
+        return getKey(context, caller, parsed.datasource, parsed.key, parsed.database, parsed.reason ?? null);
       }
       case "open_in_console": {
         const parsed = TOOL_ARGUMENTS.open_in_console.parse(args);

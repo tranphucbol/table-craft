@@ -9,6 +9,7 @@ import {
   type Session,
   type SessionMonitor,
 } from "@table-craft/plugin-api";
+import { fullScanWarning } from "@table-craft/plugin-mysql/explain";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type {
   DatasourceConfig,
@@ -281,6 +282,33 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
 
     expect(rows).toEqual([[3, "new"]]);
     expect(sent.filter((sql) => /\b(INSERT|UPDATE|DROP)\b/i.test(sql))).toEqual([]);
+  });
+
+  it("givenReadOnlySession_whenUpdateExplained_thenFullScanWarnedAndAnalyseRefused", async () => {
+    const writer = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => writer.close());
+    await withOrderEvents(writer);
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: true });
+    cleanup.push(() => session.close());
+    const sql = `UPDATE ${EVENTS_TABLE} SET state = 'gone'`;
+
+    const plan = await session.explain?.(sql, { analyze: false });
+    const analysed = session.explain?.(sql, { analyze: true });
+
+    const warnings: string[] = [];
+    const walk = (nodes: readonly PlanNode[]) => {
+      for (const node of nodes) {
+        warnings.push(...(node.warnings ?? []));
+        walk(node.children);
+      }
+    };
+    walk(plan?.roots ?? []);
+    expect(warnings).toContain(fullScanWarning(EVENTS_TABLE));
+    await expect(analysed).rejects.toMatchObject({ code: "explainUnsupported" });
+    const result = await writer.execute(`SELECT COUNT(*) FROM ${EVENTS_TABLE} WHERE state = 'gone'`);
+    const rows = [];
+    for await (const row of result.rows) rows.push(row);
+    expect(rows).toEqual([[0]]);
   });
 
   it("givenTidbSyntaxError_whenExecuted_thenPositionFoundOnItsLine", async () => {

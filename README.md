@@ -531,7 +531,12 @@ describe a table, read its DDL, run `SELECT`s, explain and format SQL; its state
 read-only session, and anything else is refused. **Ask before writes** also lets it propose one
 change at a time: the MCP chip in the status bar turns amber, and nothing runs until you open the
 request, read the statement and the agent's reason, and choose **Allow once**. Unanswered for a
-minute, a request is denied. A data source marked read-only stays at Read only, and one coloured
+minute, a request is denied. **Ask before reads** sits between Off and Read only: agents still
+browse schemas, tables, columns and key names, but every query that returns rows, and every key
+value, waits for you the same way, and writes are refused. While a statement waits, **Plan** in
+the request shows how the database would run it, without running it, and marks steps such as a
+full table scan or, on TiDB, estimates made without statistics; the request keeps waiting until
+you answer. A data source marked read-only stays at Read only, and one coloured
 red can be raised past Read only only on its own page in the Data Sources dialog. Answers carry at
 most `mcp.rowCap` rows, and a statement running past `mcp.statementTimeoutSeconds` is stopped,
 by the database too where it can, even if TableCraft cannot reach it; passwords never leave
@@ -890,7 +895,7 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.6.0",
+  "apiVersion": "1.7.0",
   "entry": "index.js",
   "capabilities": [
     "sql",

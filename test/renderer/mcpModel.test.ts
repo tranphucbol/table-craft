@@ -30,6 +30,8 @@ const APPROVAL: McpApprovalView = {
   datasourceName: "Shop",
   sql: "UPDATE orders SET total = 0",
   kind: "write",
+  subject: "statement",
+  database: null,
   destructive: "no WHERE",
   reason: null,
   deadline: 0,
@@ -61,6 +63,16 @@ describe("MCP status chip", () => {
     });
   });
 
+  it("givenReadsWaiting_whenChipped_thenTheTooltipSaysRead", () => {
+    const read = { ...APPROVAL, id: "a2", kind: "read" as const };
+
+    expect(mcpChip({ ...RUNNING, approvals: [read] }).tooltip).toBe("An agent wants to read data. Click to answer.");
+    expect(mcpChip({ ...RUNNING, approvals: [read, APPROVAL] })).toMatchObject({
+      label: "MCP · 2 waiting",
+      tooltip: "2 agent requests want to read or change data. Click to answer.",
+    });
+  });
+
   it("givenPausedOrFailed_whenChipped_thenAmberOrRed", () => {
     expect(mcpChip({ ...RUNNING, paused: true })?.tone).toBe("waiting");
     expect(mcpStatusText({ ...RUNNING, paused: true })).toBe("Paused · no clients connected");
@@ -83,6 +95,11 @@ describe("MCP shared settings", () => {
     expect(effectiveAccess({ agentAccess: "ask", readOnly: true })).toBe("read");
     expect(effectiveAccess({ agentAccess: "ask", readOnly: false })).toBe("ask");
     expect(effectiveAccess({ readOnly: false })).toBe("off");
+  });
+
+  it("givenReadOnlyDatasource_whenAskReads_thenStaysAskReads", () => {
+    expect(effectiveAccess({ agentAccess: "askReads", readOnly: true })).toBe("askReads");
+    expect(effectiveAccess({ agentAccess: "askReads", readOnly: false })).toBe("askReads");
   });
 
   it("givenEachClient_whenConfigShown_thenPlaceholderUnlessTokenGiven", () => {

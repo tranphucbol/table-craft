@@ -1,6 +1,11 @@
-import type { ApprovalAnswer, ApprovalKind, McpApprovalView } from "@table-craft/desktop/settings/mcp.js";
+import type {
+  ApprovalAnswer,
+  ApprovalKind,
+  ApprovalSubject,
+  McpApprovalView,
+} from "@table-craft/desktop/settings/mcp.js";
 
-/** How long a write waits for the user before it is denied. */
+/** How long a request waits for the user before it is denied. */
 export const APPROVAL_TIMEOUT_MS = 60_000;
 
 export type ApprovalOutcome = "allowed" | "denied" | "handedOff" | "timedOut" | "noWindow" | "paused";
@@ -22,6 +27,8 @@ export interface ApprovalRequest {
   readonly datasourceName: string;
   readonly sql: string;
   readonly kind: ApprovalKind;
+  readonly subject: ApprovalSubject;
+  readonly database: number | null;
   readonly destructive: string | null;
   readonly reason: string | null;
   readonly allowable: boolean;
@@ -97,6 +104,8 @@ export function createApprovals(options: ApprovalsOptions): Approvals {
           datasourceName: request.datasourceName,
           sql: request.sql,
           kind: request.kind,
+          subject: request.subject,
+          database: request.database,
           destructive: request.destructive,
           reason: request.reason,
           deadline: now() + timeoutMs,
