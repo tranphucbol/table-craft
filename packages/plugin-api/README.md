@@ -33,6 +33,9 @@ Test it with the contract suite in a Vitest file: `runPluginContract(plugin, fix
 with `fixture.config` to a database seeded with the suite's `type_probe` table, and checks every
 capability the manifest declares. `ContractFixture` documents each field.
 
+[Writing plugins](https://github.com/tranphucbol/table-craft/blob/main/docs/guide/writing-plugins.md)
+describes every capability and manifest field.
+
 ## Compatibility
 
 This package follows semver, and its version is the plugin API version:
