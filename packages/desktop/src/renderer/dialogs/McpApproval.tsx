@@ -3,7 +3,10 @@ import { useId, useState } from "react";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS, type ApprovalAnswerArgs } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { Button, CONTENT_CLASS, FieldRow, OVERLAY_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { McpApprovalPlan } from "@table-craft/desktop/renderer/dialogs/McpApprovalPlan.js";
 import { countdown } from "@table-craft/desktop/renderer/model/mcp.js";
+import { useApprovalPlans } from "@table-craft/desktop/renderer/state/approvalPlans.js";
+import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { CAP_CENTRED } from "@table-craft/desktop/renderer/ui/KeyTypeBadge.js";
@@ -27,6 +30,15 @@ function keywordOf(approval: McpApprovalView): string | null {
   return LEADING_KEYWORD.exec(approval.sql)?.[1]?.toUpperCase() ?? null;
 }
 
+type StatementView = "sql" | "plan";
+
+const STATEMENT_VIEWS: readonly { readonly view: StatementView; readonly label: string }[] = [
+  { view: "sql", label: "SQL" },
+  { view: "plan", label: "Plan" },
+];
+
+const STATEMENT_BOX = "max-h-48 overflow-auto rounded border border-line bg-canvas";
+
 function badgeTone(approval: McpApprovalView): string {
   if (approval.kind === "ddl" || approval.destructive !== null) return "border-danger text-danger";
   return approval.kind === "read" ? "border-accent text-accent" : "border-warning text-warning";
@@ -36,6 +48,13 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
   const now = useClock();
   const allowKindId = useId();
   const [allowKind, setAllowKind] = useState(false);
+  const [view, setView] = useState<StatementView>("sql");
+  const plan = useApprovalPlans((state) => state.plans[approval.id]);
+  const explainable = useDatasources((state) => {
+    if (approval.subject === "key") return false;
+    const datasource = state.datasources.find((candidate) => candidate.id === approval.datasourceId);
+    return datasource !== undefined && capabilitiesOf(state.plugins, datasource.pluginId).includes("explain");
+  });
   const leading = keywordOf(approval);
   const keyword = leading ?? KIND_LABELS[approval.kind];
   const reads = approval.kind === "read";
@@ -84,10 +103,37 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
           </span>
         </FieldRow>
       </div>
-      {approval.subject === "key" ? null : (
+      {explainable ? (
+        <div
+          role="group"
+          aria-label="Statement view"
+          data-testid="mcp-approval-view"
+          className="flex self-start overflow-hidden rounded border border-line"
+        >
+          {STATEMENT_VIEWS.map(({ view: shown, label }) => (
+            <button
+              key={shown}
+              type="button"
+              aria-pressed={view === shown}
+              className="px-gap text-ink aria-pressed:bg-selection"
+              onClick={() => {
+                setView(shown);
+                if (shown === "plan") void invoke(MCP_ACTION_IDS.explainRequest, approval.id);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {approval.subject === "key" ? null : view === "plan" && explainable ? (
+        <div className={cn(STATEMENT_BOX, "max-h-64")}>
+          <McpApprovalPlan plan={plan} />
+        </div>
+      ) : (
         <pre
           data-testid="mcp-approval-sql"
-          className="max-h-48 overflow-auto rounded border border-line bg-canvas p-cell font-mono whitespace-pre-wrap select-text"
+          className={cn(STATEMENT_BOX, "p-cell font-mono whitespace-pre-wrap select-text")}
         >
           {approval.sql}
         </pre>
