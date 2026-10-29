@@ -27,6 +27,19 @@ its kind badge uses the accent tone rather than warning.
 `askReads` is not capped: a read-only datasource keeps it, and a red datasource may be set to it
 from the MCP Server settings, since it is stricter than Read only.
 
+A waiting statement, read or write, can be planned from the dialog before the user answers: a
+**SQL | Plan** toggle, shown when the plugin declares `explain`. The plan is plain `EXPLAIN`, never
+`ANALYZE`, on a session of its own that closes after: read-only for a read, the datasource's own
+mode for a write, because MySQL refuses even `EXPLAIN UPDATE` in a read-only transaction. The
+dialog gives up after 10 s on its own clock, since where the plugin cannot stop a statement (TiDB
+before 6.1, decision 088) the engine sets no limit. Planning is not answering: nothing is
+recorded, and the request keeps waiting.
+
+`PlanNode` gains an optional `warnings` (plugin-api 1.7.0): sentences a reviewer should notice
+about a step. The MySQL plugin warns on a full table scan (MySQL tree and JSON plans, TiDB 3 to 5)
+and on TiDB estimates made without statistics (`stats:pseudo`). The dialog marks warned steps amber
+and lists each distinct warning once; the MCP `explain` tool lists them for the agent.
+
 ## Rationale
 
 Some datasources hold rows the user wants an agent to see only when the user says so: customer
@@ -41,6 +54,12 @@ on each lookup would teach the user to click Allow without reading, which defeat
 An approved read keeps the read-only session so the server still refuses what the classifier
 misses (decision 127). Reads have no destructive case, so the session-wide grant is always offered.
 
+A prompt is only as good as what the user can judge from it. An `UPDATE` without a `WHERE` reads
+the same as one with an indexed `WHERE` until the plan shows a full scan. Detection lives in the
+plugin, which knows its server's plan shapes (decision 008); the host only shows the sentences.
+Analysing would run the statement, so the plan never does, and a plan of its own session cannot
+hold the agent's session or its locks.
+
 ## Consequences
 
 - Column names, DDL and Redis key names are visible to agents under Ask before reads. Off is the
@@ -51,3 +70,7 @@ misses (decision 127). Reads have no destructive case, so the session-wide grant
 - Each agent read on such a datasource costs the user a click, unless they allow reads for the
   session.
 - `get_key` still has no query history row; Agent Activity records it, denied or not.
+- Planning a write opens a writable session for the plan. It runs only a single plain `EXPLAIN`
+  that `explainable` has checked.
+- A plugin that sets no `warnings` still shows its plan, with nothing marked. The console's plan
+  view does not mark warnings yet.
