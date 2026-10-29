@@ -146,6 +146,8 @@ export interface McpSettings {
   readonly port: number;
   /** The most rows one `run_query` or `fetch_rows` answer carries. */
   readonly rowCap: number;
+  /** How long an agent's statement may run; the database stops it there too where it can (decision 129). */
+  readonly statementTimeoutSeconds: number;
   /** Client names the user allowed or blocked; a name not listed waits for an answer (decision 127). */
   readonly clients: readonly McpKnownClient[];
 }
@@ -203,6 +205,8 @@ export const DEFAULT_KEEPALIVE_SECONDS = 30;
 export const MCP_PORT_RANGE: NumberRange = { min: 1_024, max: 65_535 };
 /** The top matches `fetch_rows`'s own limit: more rows than this only fill an agent's context. */
 export const MCP_ROW_CAP_RANGE: NumberRange = { min: 1, max: 1_000 };
+/** An agent waits on every call, so its statements always have a limit; the top is an hour. */
+export const MCP_TIMEOUT_SECONDS_RANGE: NumberRange = { min: 1, max: 3_600 };
 /** Longer than any installed family's name; guards a hand-edited file, not a real font. */
 export const FONT_FAMILY_MAX_LENGTH = 128;
 
@@ -253,6 +257,7 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: false,
     port: 47_820,
     rowCap: 100,
+    statementTimeoutSeconds: 120,
     clients: [],
   },
 };
@@ -347,6 +352,10 @@ export function mcpPortError(port: number): string | null {
 
 export function mcpRowCapError(rowCap: number): string | null {
   return rangeError(rowCap, MCP_ROW_CAP_RANGE, "The row limit");
+}
+
+export function mcpTimeoutError(seconds: number): string | null {
+  return rangeError(seconds, MCP_TIMEOUT_SECONDS_RANGE, "The statement timeout");
 }
 
 export function nullTextError(nullText: string): string | null {
@@ -501,6 +510,9 @@ export function readSettings(input: unknown): Settings {
       enabled: typeof mcp.enabled === "boolean" ? mcp.enabled : defaults.mcp.enabled,
       port: inRange(mcp.port, MCP_PORT_RANGE) ? mcp.port : defaults.mcp.port,
       rowCap: inRange(mcp.rowCap, MCP_ROW_CAP_RANGE) ? mcp.rowCap : defaults.mcp.rowCap,
+      statementTimeoutSeconds: inRange(mcp.statementTimeoutSeconds, MCP_TIMEOUT_SECONDS_RANGE)
+        ? mcp.statementTimeoutSeconds
+        : defaults.mcp.statementTimeoutSeconds,
       clients: Array.isArray(mcp.clients) ? knownClients(mcp.clients) : defaults.mcp.clients,
     },
   };

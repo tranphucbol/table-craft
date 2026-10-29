@@ -57,6 +57,9 @@ export interface AgentHarness {
   setWindows(open: boolean): void;
   setDatasources(next: readonly AgentDatasource[]): void;
   setRowCap(rowCap: number): void;
+  setTimeoutSeconds(seconds: number): void;
+  /** Every request the tools sent to an engine, in order. */
+  readonly requests: { readonly type: string; readonly timeoutSeconds?: number; readonly serverEnforced?: boolean }[];
   call(name: Parameters<Tools["call"]>[0], args: unknown): Promise<ToolResult>;
 }
 
@@ -69,6 +72,8 @@ export function agentHarness(
   const history: AgentHistoryEntry[] = [];
   let exposed = datasources;
   let rowCap = 3;
+  let timeoutSeconds = 120;
+  const requests: AgentHarness["requests"] = [];
   let clock = 0;
   let windows = true;
   let activeConsole: McpActiveConsole | null = null;
@@ -90,7 +95,16 @@ export function agentHarness(
       },
       plugins: [LOADED_SQLITE],
     });
-    return Promise.resolve(inProcessPort(engine.connect()));
+    const connection = engine.connect();
+    return Promise.resolve(
+      inProcessPort({
+        close: () => connection.close(),
+        handle: (request) => {
+          requests.push(request as AgentHarness["requests"][number]);
+          return connection.handle(request);
+        },
+      }),
+    );
   });
   const context: ToolContext = {
     datasources: () => exposed,
@@ -98,6 +112,7 @@ export function agentHarness(
     approvals,
     record: (entry) => history.push(entry),
     rowCap: () => rowCap,
+    timeoutSeconds: () => timeoutSeconds,
     now: () => (clock += 1),
     runs,
     consoles: {
@@ -125,6 +140,8 @@ export function agentHarness(
     },
     setDatasources: (next) => (exposed = next),
     setRowCap: (next) => (rowCap = next),
+    setTimeoutSeconds: (next) => (timeoutSeconds = next),
+    requests,
     call: async (name, args) => (await tools.call(name, args, AGENT_CALLER)).result,
   };
 }

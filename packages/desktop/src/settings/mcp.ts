@@ -20,6 +20,8 @@ export interface AgentPolicy {
   readonly schemas: readonly string[] | null;
   /** Rows per answer; null: Settings › MCP Server's row limit. */
   readonly rowCap: number | null;
+  /** Seconds a statement may run; null: Settings › MCP Server's statement timeout. */
+  readonly timeoutSeconds: number | null;
 }
 
 /** The server binds the loopback address only; another machine never reaches it. */

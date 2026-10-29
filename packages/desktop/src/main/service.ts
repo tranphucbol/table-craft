@@ -496,11 +496,12 @@ export async function createDatasourceService<Target>(
   }
 
   async function setAgentPolicy(datasourceId: string, policy: AgentPolicy): Promise<void> {
-    const { agentSchemas: _schemas, agentRowCap: _rowCap, ...rest } = find(datasourceId);
+    const { agentSchemas: _schemas, agentRowCap: _rowCap, agentTimeoutSeconds: _timeout, ...rest } = find(datasourceId);
     const next: Datasource = {
       ...rest,
       ...(policy.schemas === null ? {} : { agentSchemas: [...policy.schemas] }),
       ...(policy.rowCap === null ? {} : { agentRowCap: policy.rowCap }),
+      ...(policy.timeoutSeconds === null ? {} : { agentTimeoutSeconds: policy.timeoutSeconds }),
     };
     datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
     await store.save(datasources);

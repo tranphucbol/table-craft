@@ -6,7 +6,6 @@ import {
   type KeyType,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { AgentEngine } from "@table-craft/desktop/mcp/engines.js";
-import { AGENT_TIMEOUT_SECONDS } from "@table-craft/desktop/mcp/queryTools.js";
 import { jsonCell, jsonRows, textTable } from "@table-craft/desktop/mcp/render.js";
 import {
   cancelOf,
@@ -14,6 +13,7 @@ import {
   exposedDatasource,
   rowCapOf,
   textResult,
+  timeoutOf,
   type Caller,
   type ToolContext,
   type ToolResult,
@@ -113,7 +113,7 @@ export async function getKey(
           range: {},
           pageRows: RESULT_PAGE_ROWS,
           fetchAllCap: RESULT_FETCH_ALL_CAP,
-          timeoutSeconds: AGENT_TIMEOUT_SECONDS,
+          ...timeoutOf(context, datasource.id),
         }),
       ),
   );

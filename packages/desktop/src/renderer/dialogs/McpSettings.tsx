@@ -31,8 +31,10 @@ import {
 import {
   MCP_PORT_RANGE,
   MCP_ROW_CAP_RANGE,
+  MCP_TIMEOUT_SECONDS_RANGE,
   mcpPortError,
   mcpRowCapError,
+  mcpTimeoutError,
   type Settings,
 } from "@table-craft/desktop/settings/settings.js";
 
@@ -43,6 +45,7 @@ const ALL_SHOWN = "All shown";
 const ALL_SHOWN_HINT = "Blank keeps the schemas the Database pane shows.";
 const SCHEMAS_HINT = "Schemas narrow what agents list and read, not what a statement may name.";
 const ROW_CAP_HINT = "Blank keeps the row limit above.";
+const TIMEOUT_HINT = "Seconds; blank keeps the statement timeout above.";
 const NOT_EXPOSED = "—";
 const NAMES = new Intl.ListFormat("en", { type: "conjunction" });
 const CELL_CLASS = "h-row px-cell py-1 align-middle";
@@ -66,7 +69,12 @@ function schemaList(text: string): readonly string[] | null {
 }
 
 function setPolicy(datasource: DatasourceView, patch: Partial<AgentPolicyArgs["policy"]>): void {
-  const policy = { schemas: datasource.agentSchemas ?? null, rowCap: datasource.agentRowCap ?? null, ...patch };
+  const policy = {
+    schemas: datasource.agentSchemas ?? null,
+    rowCap: datasource.agentRowCap ?? null,
+    timeoutSeconds: datasource.agentTimeoutSeconds ?? null,
+    ...patch,
+  };
   invoke(MCP_ACTION_IDS.setPolicy, { datasourceId: datasource.id, policy } satisfies AgentPolicyArgs);
 }
 
@@ -125,6 +133,16 @@ function rowCapCheck(text: string): string | null {
   return mcpRowCapError(Number(text));
 }
 
+function timeoutCheck(text: string): string | null {
+  if (text.trim() === "") return null;
+  return mcpTimeoutError(Number(text));
+}
+
+interface AgentDefaults {
+  readonly rowCap: number;
+  readonly timeoutSeconds: number;
+}
+
 /** A red datasource that agents may not ask to write through yet: the warning names it. */
 function heldAtReadOnly(datasource: DatasourceView): boolean {
   return datasource.color === PRODUCTION_COLOR && datasource.agentAccess !== "ask";
@@ -138,7 +156,7 @@ function NotExposed({ className }: { readonly className?: string }) {
   return <span className={cn("block px-1 text-ink-muted", className)}>{NOT_EXPOSED}</span>;
 }
 
-function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView; readonly rowCap: number }) {
+function AccessRow({ datasource, defaults }: { readonly datasource: DatasourceView; readonly defaults: AgentDefaults }) {
   const access = datasource.agentAccess ?? "off";
   const exposed = access !== "off";
   const noteHidden = useLayout((state) => !state.layout.productionNote);
@@ -214,9 +232,25 @@ function AccessRow({ datasource, rowCap }: { readonly datasource: DatasourceView
                 ? ""
                 : String(datasource.agentRowCap)
             }
-            placeholder={String(rowCap)}
+            placeholder={String(defaults.rowCap)}
             check={rowCapCheck}
             onCommit={(text) => setPolicy(datasource, { rowCap: text.trim() === "" ? null : Number(text) })}
+          />
+        ) : (
+          <NotExposed className="text-right" />
+        )}
+      </td>
+      <td className={CELL_CLASS}>
+        {exposed ? (
+          <CommitField
+            label={`Statement timeout for ${datasource.name}`}
+            testId="mcp-access-timeout"
+            title={TIMEOUT_HINT}
+            className="text-right font-editor tabular-nums placeholder:text-ink"
+            value={datasource.agentTimeoutSeconds === undefined ? "" : String(datasource.agentTimeoutSeconds)}
+            placeholder={String(defaults.timeoutSeconds)}
+            check={timeoutCheck}
+            onCommit={(text) => setPolicy(datasource, { timeoutSeconds: text.trim() === "" ? null : Number(text) })}
           />
         ) : (
           <NotExposed className="text-right" />
@@ -257,7 +291,7 @@ function ProductionNote({ datasources }: { readonly datasources: readonly Dataso
   );
 }
 
-function AccessTable({ rowCap }: { readonly rowCap: number }) {
+function AccessTable({ defaults }: { readonly defaults: AgentDefaults }) {
   const all = useDatasources((state) => state.datasources);
   const [filter, setFilter] = useState("");
   const needle = filter.trim().toLowerCase();
@@ -295,11 +329,14 @@ function AccessTable({ rowCap }: { readonly rowCap: number }) {
                 <th scope="col" className={cn(HEADER_CLASS, "w-24 text-right")}>
                   Row cap
                 </th>
+                <th scope="col" className={cn(HEADER_CLASS, "w-24 text-right")} title={TIMEOUT_HINT}>
+                  Timeout
+                </th>
               </tr>
             </thead>
             <tbody>
               {datasources.map((datasource) => (
-                <AccessRow key={datasource.id} datasource={datasource} rowCap={rowCap} />
+                <AccessRow key={datasource.id} datasource={datasource} defaults={defaults} />
               ))}
             </tbody>
           </table>
@@ -463,12 +500,22 @@ export function McpSettingsPage() {
       <p className="col-start-2 text-ink-muted">
         The most rows one answer shows an agent; it asks for the next ones when it needs them.
       </p>
+      <NumberField
+        label="Statement timeout"
+        value={mcp.statementTimeoutSeconds}
+        range={MCP_TIMEOUT_SECONDS_RANGE}
+        check={mcpTimeoutError}
+        onValid={(statementTimeoutSeconds) => setMcp({ statementTimeoutSeconds })}
+      />
+      <p className="col-start-2 text-ink-muted">
+        Seconds an agent's statement may run. The database stops it there too where it can, even if the app cannot.
+      </p>
       <SectionTitle>Connect a client</SectionTitle>
       <ClientSnippet port={mcp.port} />
       <SectionTitle>Clients</SectionTitle>
       <KnownClients clients={mcp.clients} />
       <SectionTitle>Data source access</SectionTitle>
-      <AccessTable rowCap={mcp.rowCap} />
+      <AccessTable defaults={{ rowCap: mcp.rowCap, timeoutSeconds: mcp.statementTimeoutSeconds }} />
     </>
   );
 }

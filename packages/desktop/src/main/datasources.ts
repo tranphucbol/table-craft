@@ -14,6 +14,7 @@ import { AGENT_ACCESS_LEVELS } from "@table-craft/desktop/settings/mcp.js";
 import {
   KEEPALIVE_SECONDS_RANGE,
   MCP_ROW_CAP_RANGE,
+  MCP_TIMEOUT_SECONDS_RANGE,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
 } from "@table-craft/desktop/settings/settings.js";
 
@@ -50,6 +51,7 @@ const datasourceSchema = z.strictObject({
     .min(STATEMENT_TIMEOUT_SECONDS_RANGE.min)
     .max(STATEMENT_TIMEOUT_SECONDS_RANGE.max)
     .optional(),
+  enforceTimeoutOnServer: z.literal(true).optional(),
   comment: z.string(),
   config: z.record(z.string(), configValue),
   secretModes: z.record(z.string(), z.enum(SECRET_MODES)),
@@ -60,6 +62,12 @@ const datasourceSchema = z.strictObject({
   agentSchemas: z.array(z.string()).readonly().optional(),
   agentRowCap: z.number().int().min(MCP_ROW_CAP_RANGE.min).max(MCP_ROW_CAP_RANGE.max).optional(),
   brand: z.string().regex(BRAND_ID).optional(),
+  agentTimeoutSeconds: z
+    .number()
+    .int()
+    .min(MCP_TIMEOUT_SECONDS_RANGE.min)
+    .max(MCP_TIMEOUT_SECONDS_RANGE.max)
+    .optional(),
 }) satisfies z.ZodType<Datasource>;
 
 /** What the dialog sends; main assigns the id of a new one. */
@@ -151,6 +159,7 @@ export function toDatasource(
     readOnly: draft.readOnly,
     ...(draft.keepAliveSeconds === undefined ? {} : { keepAliveSeconds: draft.keepAliveSeconds }),
     ...(draft.statementTimeoutSeconds === undefined ? {} : { statementTimeoutSeconds: draft.statementTimeoutSeconds }),
+    ...(draft.enforceTimeoutOnServer === true ? { enforceTimeoutOnServer: true } : {}),
     comment: draft.comment,
     config,
     secretModes,
@@ -161,6 +170,7 @@ export function toDatasource(
     ...(draft.agentSchemas === undefined ? {} : { agentSchemas: [...draft.agentSchemas] }),
     ...(draft.agentRowCap === undefined ? {} : { agentRowCap: draft.agentRowCap }),
     ...(draft.brand === undefined ? {} : { brand: draft.brand }),
+    ...(draft.agentTimeoutSeconds === undefined ? {} : { agentTimeoutSeconds: draft.agentTimeoutSeconds }),
   };
 }
 
