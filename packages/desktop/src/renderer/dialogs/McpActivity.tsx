@@ -4,7 +4,12 @@ import { useClock } from "@table-craft/desktop/renderer/ui/useClock.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { Button, CONTENT_CLASS, OVERLAY_CLASS, Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
-import { firstLine, formatDuration, historyTime } from "@table-craft/desktop/renderer/model/format.js";
+import {
+  approvalWaitText,
+  firstLine,
+  formatDuration,
+  historyTime,
+} from "@table-craft/desktop/renderer/model/format.js";
 import {
   ALL_ACTIVITY,
   CALL_OUTCOME_LABELS,
@@ -55,7 +60,16 @@ function ActivityRow({ entry, now }: { readonly entry: McpActivityView; readonly
         {entry.target === null ? "—" : firstLine(entry.target)}
       </td>
       <td className={cn(CELL, "text-right tabular-nums")}>{entry.rowCount === null ? "—" : String(entry.rowCount)}</td>
-      <td className={cn(CELL, "text-right tabular-nums")}>{formatDuration(entry.durationMs)}</td>
+      <td
+        data-testid="mcp-activity-duration"
+        className={cn(CELL, "text-right tabular-nums")}
+        title={approvalWaitText(entry.approvalWaitMs) ?? undefined}
+      >
+        {formatDuration(entry.durationMs)}
+        {entry.approvalWaitMs > 0 ? (
+          <span className="text-ink-muted"> +{formatDuration(entry.approvalWaitMs)} approval</span>
+        ) : null}
+      </td>
       <td className={cn(CELL, TONE_TEXT[CALL_OUTCOME_TONES[entry.outcome]])}>
         {CALL_OUTCOME_LABELS[entry.outcome]}
         {entry.message === null || entry.outcome === "ok" ? null : (
