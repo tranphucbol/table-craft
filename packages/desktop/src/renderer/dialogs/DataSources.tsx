@@ -668,7 +668,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                 )}
                 onClick={() => select(draft.key)}
               >
-                <DraftGlyph draft={draft} className="size-icon shrink-0 text-accent" />
+                <DraftGlyph draft={draft} className="size-icon shrink-0" />
                 <span className={cn("truncate", draft.id === undefined && "italic")}>
                   {draft.name || "Unnamed"}
                   {draft.dirty ? " *" : ""}
@@ -694,7 +694,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
           ) : (
             <>
               <div className="flex shrink-0 items-center gap-cell border-b border-line px-gap py-1 text-ink-muted">
-                <DraftGlyph draft={current} className="size-icon text-accent" />
+                <DraftGlyph draft={current} className="size-icon" />
                 <DraftProduct draft={current} fallback={plugin?.name ?? current.pluginId} />
                 {plugin?.unavailableReason == null ? null : (
                   <span className="text-danger">{plugin.unavailableReason}</span>

@@ -131,6 +131,11 @@ function glyphOf(page: Page, name: string): Promise<string | null> {
   return treeNode(page, name).locator("[data-glyph]").first().getAttribute("data-glyph");
 }
 
+/** The logo's inline colour, its brand's fitted to the theme; the generic glyph has none. */
+function colorOf(page: Page, name: string): Promise<string | null> {
+  return treeNode(page, name).locator("[data-glyph]").first().getAttribute("style");
+}
+
 function productOf(page: Page, name: string) {
   return treeNode(page, name).getByTestId("datasource-product");
 }
@@ -210,6 +215,8 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
       const page = await launch(seeded(rows));
 
       await expectLogos(page, rows);
+      const colors = await Promise.all(rows.map((row) => colorOf(page, row.saved.name)));
+      expect(new Set(colors).size).toBe(rows.length);
       await captureWindow(page, "01-logos-on");
     },
     SCENARIO_TIMEOUT_MS,

@@ -29,7 +29,7 @@ function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; rea
       className={ROW_CLASS}
       onClick={onDownload}
     >
-      <DatasourceGlyph brand={entry.brands[0] ?? null} className="size-icon shrink-0 text-ink-muted" />
+      <DatasourceGlyph brand={entry.brands[0] ?? null} tone="muted" className="size-icon shrink-0" />
       <span className="shrink-0">{entry.name}</span>
       {progress === null ? (
         <span className="flex items-center gap-1 text-ink-muted">
@@ -93,7 +93,7 @@ export function PluginPicker({
                 className={ROW_CLASS}
                 onClick={() => onPick(item.plugin, item.brand)}
               >
-                <DatasourceGlyph brand={item.brand} className="size-icon shrink-0 text-accent" />
+                <DatasourceGlyph brand={item.brand} className="size-icon shrink-0" />
                 <span className="shrink-0">{entryName(item)}</span>
                 {item.plugin.unavailableReason === null ? null : (
                   <span className="text-ink-muted">{item.plugin.unavailableReason}</span>

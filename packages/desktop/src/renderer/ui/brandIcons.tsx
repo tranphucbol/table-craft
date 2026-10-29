@@ -1,18 +1,26 @@
 import { siMariadb, siMongodb, siMysql, siPostgresql, siRedis, siSqlite, siTidb } from "simple-icons";
+import { brandInk } from "@table-craft/desktop/appearance/brandInk.js";
 import type { Brand, DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { datasourceBrand } from "@table-craft/desktop/renderer/model/brand.js";
 import { connectionOf, pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import { themeOf, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { DatabaseIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
 /** Every simple-icons path is drawn on this square. */
 const SIMPLE_ICONS_VIEW_BOX = "0 0 24 24";
+
+export interface BrandGlyph {
+  readonly path: string;
+  /** The brand's colour as simple-icons gives it, `rrggbb` without the `#`. */
+  readonly hex: string;
+}
 
 /**
  * The logos the app bundles, by simple-icons slug (decision 128). Named imports only, so the
  * bundler keeps these and drops the rest; a brand missing here draws the generic glyph.
  */
-const BRAND_GLYPHS: Readonly<Record<string, { readonly path: string }>> = {
+export const BRAND_GLYPHS: Readonly<Record<string, BrandGlyph>> = {
   [siMysql.slug]: siMysql,
   [siMariadb.slug]: siMariadb,
   [siTidb.slug]: siTidb,
@@ -22,25 +30,34 @@ const BRAND_GLYPHS: Readonly<Record<string, { readonly path: string }>> = {
   [siMongodb.slug]: siMongodb,
 };
 
-function brandGlyph(brand: Brand | null): { readonly path: string } | undefined {
+function brandGlyph(brand: Brand | null): BrandGlyph | undefined {
   return brand === null ? undefined : BRAND_GLYPHS[brand.id];
 }
 
 /** What `data-glyph` holds on a datasource icon drawn without a logo, for tests to tell them apart. */
 export const GENERIC_GLYPH = "generic";
 
-/** A logo in one colour, `currentColor`, so it takes the classes the generic glyph would. */
+/** A logo in one colour, `currentColor`, which its caller sets by class or style. */
 export function BrandIcon({
   path,
   glyph,
   className,
+  color,
 }: {
   readonly path: string;
   readonly glyph?: string | undefined;
   readonly className?: string | undefined;
+  readonly color?: string | undefined;
 }) {
   return (
-    <svg aria-hidden data-glyph={glyph} viewBox={SIMPLE_ICONS_VIEW_BOX} fill="currentColor" className={className}>
+    <svg
+      aria-hidden
+      data-glyph={glyph}
+      viewBox={SIMPLE_ICONS_VIEW_BOX}
+      fill="currentColor"
+      className={className}
+      style={color === undefined ? undefined : { color }}
+    >
       <path d={path} />
     </svg>
   );
@@ -68,18 +85,52 @@ export function useBrandLogo(brand: Brand | null): boolean {
   return on && brandGlyph(brand) !== undefined;
 }
 
-/** A datasource's icon: its product's logo when brand icons are on and one is bundled, else the generic glyph. */
+/** The brand's own colour, fitted to the current theme's surfaces (`brandInk`). */
+function useBrandInk(hex: string): string {
+  return useSettings((state) => brandInk(`#${hex}`, themeOf(state).theme.colors));
+}
+
+/** A datasource icon's state colour, which outranks the brand's: a failed connect, a missing plugin. */
+export type GlyphTone = "danger" | "muted";
+
+const TONE_CLASS: Readonly<Record<GlyphTone, string>> = { danger: "text-danger", muted: "text-ink-muted" };
+
+function BrandLogo({
+  brand,
+  glyph,
+  className,
+}: {
+  readonly brand: Brand;
+  readonly glyph: BrandGlyph;
+  readonly className?: string | undefined;
+}) {
+  const color = useBrandInk(glyph.hex);
+  return <BrandIcon path={glyph.path} glyph={brand.id} className={className} color={color} />;
+}
+
+/**
+ * A datasource's icon: its product's logo in the brand's colour when brand icons are on and one is
+ * bundled, else the generic glyph in the accent. A `tone` paints either in its state colour.
+ */
 export function DatasourceGlyph({
   brand,
+  tone,
   className,
 }: {
   readonly brand: Brand | null;
+  readonly tone?: GlyphTone | null | undefined;
   readonly className?: string | undefined;
 }) {
   const on = useBrandIcons();
   const glyph = on ? brandGlyph(brand) : undefined;
+  const toneClass = tone == null ? undefined : TONE_CLASS[tone];
   if (glyph === undefined || brand === null) {
-    return <DatabaseIcon aria-hidden data-glyph={GENERIC_GLYPH} className={className} />;
+    return (
+      <DatabaseIcon aria-hidden data-glyph={GENERIC_GLYPH} className={cn(className, toneClass ?? "text-accent")} />
+    );
   }
-  return <BrandIcon path={glyph.path} glyph={brand.id} className={className} />;
+  if (toneClass !== undefined) {
+    return <BrandIcon path={glyph.path} glyph={brand.id} className={cn(className, toneClass)} />;
+  }
+  return <BrandLogo brand={brand} glyph={glyph} className={className} />;
 }
