@@ -4,9 +4,11 @@
  * repository's LICENSE and a `package.json` with no dependencies or scripts. Also stages and packs
  * the publishable `@tablecraft-app/plugin-api` (decision 107). Built-in plugins are never packed.
  *
- * `bun scripts/plugins/pack.ts [--out <dir>] [--version <x.y.z>] [--no-build]` writes the `.tgz`
- * files to `dist/plugin-packages/` by default; `scripts/plugins/check.ts` load-checks them and
- * `scripts/plugins/publish.ts` publishes them.
+ * `bun scripts/plugins/pack.ts [--out <dir>] [--version <x.y.z>] [--no-build] [--reuse-published
+ * [--offline-ok]]` writes the `.tgz` files to `dist/plugin-packages/` by default;
+ * `scripts/plugins/check.ts` load-checks them and `scripts/plugins/publish.ts` publishes them.
+ * `--reuse-published` puts the package already on npm (`npm_config_registry`) in place of a plugin
+ * that did not change since, so publishing skips it (plan 124).
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -15,9 +17,15 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { MANIFEST_FILE } from "@table-craft/plugin-api";
 import { officialPackage } from "../../packages/desktop/src/main/pluginStore/catalog.js";
+import { PluginInstallError } from "../../packages/desktop/src/main/pluginStore/errors.js";
+import type { RegistryFetch } from "../../packages/desktop/src/main/pluginStore/registry.js";
+import { readPackageTarball } from "../../packages/desktop/src/main/pluginStore/tarball.js";
+import { channelOf, type ReleaseChannel } from "../../packages/desktop/src/settings/channel.js";
 import { appVersion, systemGit } from "../../packages/desktop/scripts/version.js";
 import { stagePackage } from "../../packages/plugin-api/scripts/build.js";
 import { OPTIONAL_OUT_DIR, OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
+import { baselineFor, DEFAULT_REGISTRY, type Baseline } from "./baseline.js";
+import { tarballFingerprint } from "./fingerprint.js";
 
 const ROOT = resolve(import.meta.dirname, "..", "..");
 const DESKTOP = join(ROOT, "packages", "desktop");
@@ -27,6 +35,8 @@ const README_FILE = "README.md";
 const PACKAGE_FILE = "package.json";
 const ENTRY_FILE = "index.js";
 const STAGE_DIRECTORY = "stage";
+const TARBALL = ".tgz";
+const REGISTRY_ENV = "npm_config_registry";
 const JSON_INDENT = 2;
 /** The keyword that marks a TableCraft plugin on npm (decision 109). */
 export const PLUGIN_KEYWORD = "table-craft-plugin";
@@ -53,6 +63,8 @@ export interface PackedPackage {
   readonly files: readonly string[];
   readonly bytes: number;
   readonly integrity: string;
+  /** True when this is the package already on npm, put in place of an identical new one. */
+  readonly reused: boolean;
 }
 
 interface BuiltManifest {
@@ -78,7 +90,7 @@ function repositoryUrl(): string {
 
 /**
  * The manifest's `version` for package `version`: the manifest takes `major.minor.patch` only, so a
- * branch build's `0.0.0-dev.<sha>` stamps `0.0.0`. Release tags carry no pre-release part.
+ * branch build's `0.0.0-dev.<sha>` stamps `0.0.0` and a beta's `1.16.0-beta.1` stamps `1.16.0`.
  */
 export function manifestVersion(version: string): string {
   return version.replace(/-.*$/, "");
@@ -166,6 +178,7 @@ export function npmPack(
     files: report.files.map((file) => file.path).sort(),
     bytes: report.size,
     integrity: report.integrity,
+    reused: false,
   };
 }
 
@@ -178,6 +191,14 @@ function buildOptionalPlugins(ids: readonly string[]): void {
   }
 }
 
+export interface ReuseOptions {
+  readonly registry: string;
+  readonly fetch: RegistryFetch;
+  /** On a branch build an unreachable registry only warns and packs fresh; a tag build must know. */
+  readonly offlineOk?: boolean;
+  readonly warn?: (line: string) => void;
+}
+
 export interface PackOptions {
   readonly version: string;
   readonly out?: string;
@@ -185,20 +206,68 @@ export interface PackOptions {
   readonly built?: string;
   readonly ids?: readonly string[];
   readonly npm?: NpmPack;
+  /** Attach the published package instead of a new one when nothing but the version differs. */
+  readonly reuse?: ReuseOptions;
 }
 
-/** Packs plugin-api and every optional plugin into `out`, emptied first. */
-export function packAll(options: PackOptions): PackedPackage[] {
+/** The file name `npm pack` gives `name@version`. */
+export function tarballFileName(name: string, version: string): string {
+  return `${name.replace(/^@/, "").replace("/", "-")}-${version}${TARBALL}`;
+}
+
+async function publishedBaseline(name: string, channel: ReleaseChannel, reuse: ReuseOptions): Promise<Baseline | null> {
+  try {
+    return await baselineFor(name, channel, reuse.fetch, reuse.registry);
+  } catch (cause) {
+    if (!(reuse.offlineOk === true && cause instanceof PluginInstallError && cause.failure === "offline")) throw cause;
+    reuse.warn?.(`${name}: the registry could not be reached (${cause.message}); packed fresh.`);
+    return null;
+  }
+}
+
+/** `fresh`, or the published `baseline` written in its place when the two hold the same plugin. */
+function reuseUnchanged(fresh: PackedPackage, out: string, baseline: Baseline | null): PackedPackage {
+  if (baseline === null) return fresh;
+  if (tarballFingerprint(baseline.bytes) !== tarballFingerprint(readFileSync(fresh.file))) return fresh;
+  rmSync(fresh.file);
+  const file = join(out, tarballFileName(fresh.name, baseline.version));
+  writeFileSync(file, baseline.bytes);
+  return {
+    ...fresh,
+    version: baseline.version,
+    file,
+    files: readPackageTarball(baseline.bytes)
+      .map((entry) => entry.path)
+      .sort(),
+    bytes: baseline.bytes.length,
+    integrity: baseline.integrity,
+    reused: true,
+  };
+}
+
+/**
+ * Packs every optional plugin, and plugin-api unless `version` is a beta (plan 124: betas never
+ * publish the contract), into `out`, emptied first.
+ */
+export async function packAll(options: PackOptions): Promise<PackedPackage[]> {
   const out = options.out ?? PACKAGES_DIRECTORY;
   const ids = options.ids ?? OPTIONAL_PLUGINS;
+  const channel = channelOf(options.version);
   const stage = join(out, STAGE_DIRECTORY);
   rmSync(out, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
   if (options.build ?? true) buildOptionalPlugins(ids);
-  const packed = [npmPack(stagePackage(), out, null, options.npm)];
+  const packed = channel === "beta" ? [] : [npmPack(stagePackage(), out, null, options.npm)];
   for (const id of ids) {
+    const fresh = npmPack(
+      stagePlugin(id, options.version, options.built ?? OPTIONAL_OUT_DIR, stage),
+      out,
+      id,
+      options.npm,
+    );
+    const reuse = options.reuse;
     packed.push(
-      npmPack(stagePlugin(id, options.version, options.built ?? OPTIONAL_OUT_DIR, stage), out, id, options.npm),
+      reuse === undefined ? fresh : reuseUnchanged(fresh, out, await publishedBaseline(fresh.name, channel, reuse)),
     );
   }
   rmSync(stage, { recursive: true, force: true });
@@ -210,7 +279,7 @@ export function describePacked(packed: readonly PackedPackage[]): string {
   return packed
     .map((entry) =>
       [
-        `${entry.name}@${entry.version}  ${entry.file.slice(entry.file.lastIndexOf("/") + 1)}  ${entry.bytes} bytes`,
+        `${entry.name}@${entry.version}  ${entry.reused ? "reused" : "new"}  ${entry.file.slice(entry.file.lastIndexOf("/") + 1)}  ${entry.bytes} bytes`,
         `  ${entry.integrity}`,
         ...entry.files.map((file) => `  ${file}`),
       ].join("\n"),
@@ -220,12 +289,28 @@ export function describePacked(packed: readonly PackedPackage[]): string {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({
-    options: { out: { type: "string" }, version: { type: "string" }, "no-build": { type: "boolean" } },
+    options: {
+      out: { type: "string" },
+      version: { type: "string" },
+      "no-build": { type: "boolean" },
+      "reuse-published": { type: "boolean" },
+      "offline-ok": { type: "boolean" },
+    },
   });
-  const packed = packAll({
+  const packed = await packAll({
     version: values.version ?? appVersion(systemGit),
     out: values.out === undefined ? undefined : resolve(values.out),
     build: values["no-build"] !== true,
+    ...(values["reuse-published"] === true
+      ? {
+          reuse: {
+            registry: process.env[REGISTRY_ENV] ?? DEFAULT_REGISTRY,
+            fetch: globalThis.fetch,
+            offlineOk: values["offline-ok"] === true,
+            warn: (line: string) => console.warn(line),
+          },
+        }
+      : {}),
   });
   console.log(describePacked(packed));
 }
