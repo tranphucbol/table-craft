@@ -161,7 +161,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
       const result = await testConnection(page);
 
       expect(result.ok).toBe(true);
-      expect(result.text).toMatch(/^Succeeded · PostgreSQL \d+(\.\d+)* · \d+ ms$/);
+      expect(result.text).toMatch(/^Succeeded · PostgreSQL \d+(\.\d+)* · limit: statement_timeout · \d+ ms$/);
       await captureWindow(page, "test-connection-ok");
     },
     SCENARIO_TIMEOUT_MS,
