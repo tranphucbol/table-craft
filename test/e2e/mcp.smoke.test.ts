@@ -226,7 +226,7 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
         "Data source",
         "Access",
         "Schemas",
-        "Row limit",
+        "Row cap",
       ]);
       const snippet = (await dialog.getByTestId("mcp-client-config").textContent()) ?? "";
       expect(snippet).toContain("claude mcp add --transport http tablecraft");
@@ -241,12 +241,19 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       expect(await productionAccess.locator('option[value="ask"]').isDisabled()).toBe(true);
       await captureWindow(page, "01-settings-page");
 
-      await dialog.getByLabel("Row limit for shop").fill("25");
-      await dialog.getByLabel("Row limit for shop").press("Enter");
-      await expect.poll(() => dialog.getByLabel("Row limit for shop").inputValue()).toBe("25");
+      await dialog.getByLabel("Row cap for shop").fill("25");
+      await dialog.getByLabel("Row cap for shop").press("Enter");
+      await expect.poll(() => dialog.getByLabel("Row cap for shop").inputValue()).toBe("25");
       await dialog.getByTestId("mcp-access-filter").fill("rep");
       await expect.poll(() => rows.count()).toBe(1);
       await dialog.getByTestId("mcp-access-filter").fill("");
+      const hiddenRow = rows.filter({ hasText: "hidden" });
+      expect(await hiddenRow.getByTestId("mcp-access-schemas").count()).toBe(0);
+      expect(await hiddenRow.textContent()).toContain("—");
+      const productionNote = dialog.getByTestId("mcp-production-note");
+      expect(await productionNote.textContent()).toContain("prod is coloured red.");
+      await productionNote.scrollIntoViewIfNeeded();
+      await captureWindow(page, "11-access-table");
 
       await dialog.getByRole("button", { name: "OpenCode" }).click();
       expect(await dialog.getByTestId("mcp-client-config").textContent()).toContain('"type": "remote"');

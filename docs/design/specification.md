@@ -2607,7 +2607,7 @@ History entries carry `client` (history schema 4).
 switch and state, the endpoint with Copy, port, the token hint with Copy and Regenerate…, row
 limit, a per-client config snippet (Claude Code, OpenCode, Cursor) with the token as
 `${TABLECRAFT_TOKEN}` and **Copy with Token**, the known clients (Allow switch, Forget), and the
-access table of saved datasources (Access, Schemas, Row limit) with a filter. The Data Sources
+access table of saved datasources (Access, Schemas, Row cap) with a filter. The Data Sources
 dialog has **AI agent access** per datasource. The status bar chip is grey `MCP` while off, green
 with the number of clients, amber while a write or a client waits or agents are paused, red when
 the server failed; its popover lists clients asking to connect, connected clients with how long and

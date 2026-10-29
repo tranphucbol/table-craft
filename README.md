@@ -531,7 +531,7 @@ query history, tagged with the client's name. The app must be running for agents
   choose **Allow** or **Block**. Unanswered for a minute, the call is refused. Settings → MCP Server
   lists the clients you answered, to flip or forget.
 - **Per data source.** Beside the access level, **Schemas** narrows what agents list and read
-  (blank keeps the schemas the Database pane shows), and **Row limit** overrides `mcp.rowCap`.
+  (blank keeps the schemas the Database pane shows), and **Row cap** overrides `mcp.rowCap`.
 - **Tools.** Besides the catalog and query tools, agents can check SQL against the inspections,
   hand a statement to a new console for you to run (**open in console**, which never runs it), read
   the focused console when its data source is exposed, and scan and read Redis keys. They can also
