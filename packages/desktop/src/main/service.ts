@@ -275,6 +275,17 @@ export async function createDatasourceService<Target>(
     return encrypted ? [...own, passphrase] : own;
   }
 
+  /** Set in Settings › MCP Server, not in the form, so a form save keeps them. */
+  function agentPolicyOf(datasource: Datasource | undefined): Partial<Datasource> {
+    if (datasource === undefined) return {};
+    const { agentSchemas, agentRowCap, agentTimeoutSeconds } = datasource;
+    return {
+      ...(agentSchemas === undefined ? {} : { agentSchemas }),
+      ...(agentRowCap === undefined ? {} : { agentRowCap }),
+      ...(agentTimeoutSeconds === undefined ? {} : { agentTimeoutSeconds }),
+    };
+  }
+
   async function save(request: SaveDatasourceRequest): Promise<DatasourceView> {
     const draft = request.datasource;
     if (ephemeral !== null && draft.id === ephemeral.id) {
@@ -288,7 +299,12 @@ export async function createDatasourceService<Target>(
     const id = previous?.id ?? options.newId();
     const modes = modesFor(plugin, draft.ssh, draft.config, draft.secretModes);
     const origin = draft.origin ?? previous?.origin;
-    const next = toDatasource({ ...draft, secretModes: modes, origin }, id, plugin.fields, plugin.network !== null);
+    const next = toDatasource(
+      { ...agentPolicyOf(previous), ...draft, secretModes: modes, origin },
+      id,
+      plugin.fields,
+      plugin.network !== null,
+    );
     checkRequired(plugin, next.config);
     checkTunnel(next.ssh);
     if (Object.values(modes).includes("forever") && !secrets.encryption().available) {

@@ -17,6 +17,7 @@ import {
   type SelectionAggregates,
   type ServerMessage,
   type SortKey,
+  type StatementLimit,
   type TransactionMode,
   type TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -106,6 +107,8 @@ import {
   currentPaging,
   detectsParameters,
   runAllOnError,
+  serverEnforcedOf,
+  statementLimit,
   statementTimeoutOf,
 } from "@table-craft/desktop/renderer/state/settings.js";
 
@@ -533,6 +536,8 @@ export interface ConsolesDependencies {
   readonly exports?: ExportStarter;
   /** The statement timeout for the datasource's consoles in seconds, 0 for none (decision 054). */
   readonly statementTimeout?: (datasourceId: string) => number;
+  /** Whether the datasource has the database enforce that timeout too (decision 129). */
+  readonly serverEnforced?: (datasourceId: string) => boolean;
   /** Asks whether to submit or discard pending result edits before `verb`; null cancels (plan 026). */
   readonly askPendingEdits?: (request: PendingEditsRequest) => Promise<PendingEditsAnswer | null>;
   /** Asks which datasource a detached file console runs on (plan 041 decision 2); null runs nothing. */
@@ -632,6 +637,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
   const executions = dependencies.executions ?? NO_EXECUTION_REPORTER;
   const exports = dependencies.exports ?? NO_EXPORTS;
   const statementTimeout = dependencies.statementTimeout ?? (() => 0);
+  const serverEnforced = dependencies.serverEnforced ?? (() => false);
   const askPendingEdits = dependencies.askPendingEdits ?? (() => Promise.resolve<PendingEditsAnswer>("discard"));
   const onError = dependencies.onError ?? ((): OnErrorChoice => "stop");
   /** The answer each console's run waits for, by console id. */
@@ -698,11 +704,11 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       if (reconnected !== undefined) log(id, { sql: "", message: reconnectedText(reconnected), tone: "info" });
     }
 
-    /** The `timeoutSeconds` a console statement sends; nothing when the console has no limit. */
-    function limitOf(id: string): { timeoutSeconds?: number } {
+    /** The limit a console statement sends; nothing when the console has no limit. */
+    function limitOf(id: string): StatementLimit {
       const datasourceId = get().consoles[id]?.datasourceId;
-      const seconds = datasourceId === undefined ? 0 : statementTimeout(datasourceId);
-      return seconds > 0 ? { timeoutSeconds: seconds } : {};
+      if (datasourceId === undefined) return {};
+      return statementLimit(statementTimeout(datasourceId), serverEnforced(datasourceId));
     }
 
     /** The Run on choice, sent only when it is not the plugin's own routing. */
@@ -2163,6 +2169,7 @@ export const useConsoles = createConsolesStore({
   chooseDatasource: () => chooseDatasourceInDialog(),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),
+  serverEnforced: (datasourceId) => serverEnforcedOf(datasourceById(useDatasources.getState(), datasourceId)),
   now: () => performance.now(),
   confirmDestructive: askDestructive,
   confirmAnalyse: askAnalyse,

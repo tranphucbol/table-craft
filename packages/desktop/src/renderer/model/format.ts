@@ -3,6 +3,7 @@ import {
   type CurrentNamespace,
   type EngineError,
   type Reconnection,
+  type ServerTimeout,
   type StatementKind,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
@@ -257,4 +258,22 @@ export function historyTime(at: number, now: number): string {
 /** `12 rows`, `1 row`: a history entry's or execution's count. */
 export function rowsText(count: number): string {
   return rows(count);
+}
+
+/** "limit: max_execution_time, SELECT only": the setting Test Connection found (decision 129). */
+export function serverLimitText(serverTimeout: ServerTimeout): string {
+  return `limit: ${serverTimeout.setting}${serverTimeout.covers === "reads" ? ", SELECT only" : ""}`;
+}
+
+/**
+ * What ticking "Also have the database stop it" does on this server: unknown until a test
+ * (`undefined`), nothing on a server without a limit (`null`).
+ */
+export function serverTimeoutText(serverTimeout: ServerTimeout | null | undefined): string {
+  if (serverTimeout === undefined) return "Test the connection to see what the database stops.";
+  if (serverTimeout === null) return "This server cannot stop statements by itself; the app still cancels them.";
+  const what = serverTimeout.covers === "reads" ? "SELECTs" : "every statement";
+  return serverTimeout.counts === "statement"
+    ? `The database stops ${what} at the limit, counting while rows wait to be read.`
+    : `The database stops ${what} that works past the limit.`;
 }

@@ -194,6 +194,7 @@ function harness(
     record?: (entry: HistoryEntry) => void;
     values?: Readonly<Record<string, string | null>> | null;
     statementTimeout?: number;
+    serverEnforced?: boolean;
     onError?: OnErrorChoice;
   } = {},
 ) {
@@ -218,6 +219,7 @@ function harness(
     executions: executions.getState(),
     record: options.record ?? ((entry) => recorded.push(entry)),
     statementTimeout: () => options.statementTimeout ?? 0,
+    serverEnforced: () => options.serverEnforced ?? false,
     onError: () => options.onError ?? "stop",
   });
   const session = () => {
@@ -487,6 +489,27 @@ describe("console connection health", () => {
     await store.getState().run("c1", "all");
 
     expect(call).toHaveBeenCalledWith("statement.execute", expect.objectContaining({ timeoutSeconds: 30 }));
+  });
+
+  it("givenEnforceOnServer_whenRun_thenServerEnforcedSent", async () => {
+    const { store, call } = await opened("SELECT 1;", { statementTimeout: 30, serverEnforced: true });
+
+    await store.getState().run("c1", "all");
+
+    expect(call).toHaveBeenCalledWith(
+      "statement.execute",
+      expect.objectContaining({ timeoutSeconds: 30, serverEnforced: true }),
+    );
+  });
+
+  it("givenZeroTimeout_whenEnforce_thenNothingSent", async () => {
+    const { store, call } = await opened("SELECT 1;", { statementTimeout: 0, serverEnforced: true });
+
+    await store.getState().run("c1", "all");
+
+    const params = call.mock.calls.find(([type]) => type === "statement.execute")?.[1];
+    expect(params).not.toHaveProperty("timeoutSeconds");
+    expect(params).not.toHaveProperty("serverEnforced");
   });
 
   it("givenNoStatementTimeout_whenRun_thenNoneSent", async () => {
