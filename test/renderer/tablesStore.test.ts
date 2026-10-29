@@ -45,6 +45,7 @@ function tableEngine(options: EngineOptions = {}) {
           serverBrand: null,
           namespace: null,
           serverTimeout: null,
+          cancelReach: null,
         };
         return Promise.resolve(opened);
       }

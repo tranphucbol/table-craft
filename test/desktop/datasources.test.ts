@@ -120,6 +120,37 @@ describe("datasource store", () => {
     expect(toDatasource(tidb, tidb.id, POSTGRES_MANIFEST.connection.fields).brand).toBe("tidb");
   });
 
+  it("givenLastServer_whenSavedAndLoaded_thenKept", async () => {
+    const { files, store: first } = store();
+    const seen = {
+      ...LOCAL_PG,
+      lastServer: {
+        version: "PostgreSQL 16.4",
+        timeout: { setting: "statement_timeout", covers: "all", counts: "statement" },
+        cancel: { method: "pg_cancel_backend", reaches: "statement" },
+        seenAt: NOW,
+      },
+    } as const satisfies Datasource;
+    const sqlite = { ...LOCAL_PG, id: "lite", lastServer: { version: "3.46.0", seenAt: NOW } };
+    await first.save([seen, sqlite, LOCAL_PG]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.datasources).toEqual([seen, sqlite, LOCAL_PG]);
+    expect(reloaded.datasources[2]).not.toHaveProperty("lastServer");
+  });
+
+  it("givenFormSave_whenLastServerStored_thenKept", () => {
+    const lastServer = { version: "8.4.3", timeout: null, seenAt: NOW };
+    const fromForm = { ...LOCAL_PG, lastServer: { version: "forged", seenAt: 0 } };
+
+    expect(toDatasource(fromForm, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields, false, { lastServer })).toEqual({
+      ...LOCAL_PG,
+      lastServer,
+    });
+    expect(toDatasource(fromForm, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).not.toHaveProperty("lastServer");
+  });
+
   it("givenBadBrandId_whenLoaded_thenSetAside", async () => {
     const file = JSON.stringify({ version: 1, datasources: [{ ...LOCAL_PG, brand: "Ti DB" }] });
 

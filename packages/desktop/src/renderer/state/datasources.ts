@@ -1,5 +1,12 @@
 import { create } from "zustand";
-import type { Capability, EngineError, EngineEvent } from "@table-craft/desktop/engine/protocol.js";
+import {
+  serverSeenOf,
+  type Capability,
+  type EngineError,
+  type EngineEvent,
+  type OpenedSession,
+  type ServerSeen,
+} from "@table-craft/desktop/engine/protocol.js";
 import {
   SSH_SECRET_LABELS,
   type ConnectionField,
@@ -88,8 +95,12 @@ export interface DatasourcesDependencies {
   readonly disconnectEngine: (id: string) => Promise<void>;
   /** Asks the user for secrets kept Never; null when they cancel. */
   readonly promptSecrets: (request: SecretRequest) => Promise<Readonly<Record<string, string>> | null>;
-  /** Saves the brand a connection reported on the datasource, so it shows before the next connect. */
-  readonly rememberBrand: (id: string, brand: string) => Promise<void>;
+  /**
+   * Saves what a connection reported on the datasource (decision 131): its brand shows before the
+   * next connect, and Settings › MCP Server explains its timeout without connecting.
+   */
+  readonly rememberServer: (id: string, seen: ServerSeen) => Promise<void>;
+  readonly now?: () => number;
 }
 
 export type DetachedListener = (datasourceId: string, error: EngineError | null) => void;
@@ -175,16 +186,17 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       }
     }
 
-    async function verify(client: EngineClient): Promise<Pick<Connection, "serverVersion" | "serverBrand">> {
+    async function verify(client: EngineClient): Promise<OpenedSession> {
       const opened = await client.call("session.open", {});
       void client.call("session.close", { sessionId: opened.sessionId }).catch(() => undefined);
-      return { serverVersion: opened.serverVersion, serverBrand: opened.serverBrand };
+      return opened;
     }
 
-    function remember(id: string, brand: string | null): void {
+    function remember(id: string, opened: OpenedSession): void {
       const view = get().datasources.find((datasource) => datasource.id === id);
-      if (brand === null || view === undefined || view.ephemeral || view.brand === brand) return;
-      void dependencies.rememberBrand(id, brand).catch(() => undefined);
+      if (view === undefined || view.ephemeral) return;
+      const seen = serverSeenOf(opened, (dependencies.now ?? Date.now)());
+      void dependencies.rememberServer(id, seen).catch(() => undefined);
     }
 
     function stop(id: string): Promise<void> {
@@ -273,10 +285,11 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
             for (const listener of eventListeners) listener(id, event);
           });
           try {
-            const server = await verify(client);
+            const opened = await verify(client);
             if (clients.get(id) === connecting) {
-              setConnection(id, { status: "connected", error: null, ...server });
-              remember(id, server.serverBrand);
+              const { serverVersion, serverBrand } = opened;
+              setConnection(id, { status: "connected", error: null, serverVersion, serverBrand });
+              remember(id, opened);
             }
             return client;
           } catch (cause) {
@@ -356,8 +369,8 @@ export const useDatasources = createDatasourcesStore({
     await bridge().disconnectEngine(id);
   },
   promptSecrets: (request) => useSecretPrompt.getState().ask(request),
-  async rememberBrand(id, brand) {
-    await bridge().setDatasourceBrand(id, brand);
+  async rememberServer(id, seen) {
+    await bridge().rememberServer(id, seen);
   },
 });
 

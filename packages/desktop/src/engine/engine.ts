@@ -96,6 +96,7 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
       ...(session.serverTimeout === undefined
         ? {}
         : { serverTimeout: session.serverTimeout === null ? null : { ...session.serverTimeout } }),
+      cancelReach: session.cancelReach === undefined ? null : { ...session.cancelReach },
     };
   } catch (cause) {
     const hop = connector.hop;

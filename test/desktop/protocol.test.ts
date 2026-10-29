@@ -110,6 +110,8 @@ import {
   type NetworkSpec,
   type ParsedConnectionUrl,
   type Brand,
+  type CancelReach,
+  type ServerTimeout,
   type Session,
 } from "@table-craft/plugin-api";
 import * as protocol from "@table-craft/desktop/engine/protocol.js";
@@ -132,6 +134,16 @@ describe("engine protocol", () => {
     expectTypeOf<bridge.PluginInfo["brands"]>().toEqualTypeOf<readonly Readonly<Brand>[]>();
     expectTypeOf<protocol.OpenedSession["serverBrand"]>().toEqualTypeOf<NonNullable<Session["serverBrand"]> | null>();
     expectTypeOf<Extract<protocol.ProbeResult, { ok: true }>["serverBrand"]>().toEqualTypeOf<string | null>();
+  });
+
+  it("givenTimeoutTypes_whenComparedWithPluginApi_thenIdentical", () => {
+    expectTypeOf<protocol.ServerTimeout>().toEqualTypeOf<Readonly<ServerTimeout>>();
+    expectTypeOf<protocol.CancelReach>().toEqualTypeOf<Readonly<CancelReach>>();
+    expectTypeOf<protocol.OpenedSession["cancelReach"]>().toEqualTypeOf<Readonly<CancelReach> | null>();
+    expectTypeOf<
+      Extract<protocol.ProbeResult, { ok: true }>["cancelReach"]
+    >().toEqualTypeOf<Readonly<CancelReach> | null>();
+    expectTypeOf<bridge.LastServer["cancel"]>().toEqualTypeOf<Readonly<CancelReach> | undefined>();
   });
 
   it("givenSshTypes_whenComparedWithCoreAndPluginApi_thenIdentical", () => {
