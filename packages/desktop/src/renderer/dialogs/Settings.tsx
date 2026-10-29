@@ -698,7 +698,7 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
                   <div
                     key={TOOLS_GROUP_TITLE}
                     role="presentation"
-                    className="flex h-row items-end px-cell font-semibold text-ink-muted"
+                    className="mt-1 flex h-row items-end border-t border-line px-cell font-semibold tracking-wider text-ink-muted uppercase"
                   >
                     {TOOLS_GROUP_TITLE}
                   </div>,
