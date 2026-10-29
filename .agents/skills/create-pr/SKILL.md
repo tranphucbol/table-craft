@@ -35,8 +35,8 @@ Six steps, executed sequentially:
 3. **Draft summary** -- Analyze git diff, generate summary in `gdb/{branch_name}.md`
 4. **Attach evidence** (optional) -- Commit test evidence images to an evidence branch and embed
    them in the draft
-5. **Review draft** -- Display to user, allow edits, confirm final version
-6. **Create or update PR** -- Ask before pushing, safely handle an existing open PR, return URL
+5. **Check draft** -- Check length and content yourself; no approval prompt
+6. **Create or update PR** -- Push without asking, safely handle an existing open PR, return URL
 
 ### Step 1: Detect Context
 
@@ -151,50 +151,14 @@ and more detail is necessary to explain the change accurately.
 Use documentation as supporting context only. The git diff and implementation remain the source
 of truth when documentation is stale or conflicts with the code.
 
-**b) Confirm Verification Test Cases:**
+**b) Pick Verification Test Cases:**
 
-Use the issue context (if any) and the git diff to recommend concrete test cases for the changed
-behavior. Do not include results or evidence in the recommendations; evidence supplied by the
-user is handled separately in Step 4.
-
-Print the recommendations in chat immediately before invoking the Question tool:
-
-```markdown
-**Recommended Verification Test Cases**
-
-- [ ] [Recommended test case or N/A]
-```
-
-Then ask:
-
-```yaml
-header: "Verification Tests"
-question: "How would you like to use the recommended Verification & Testing cases?"
-options:
-  - label: "Use recommendations"
-    description: "Include all recommended test cases"
-  - label: "Customize Tests"
-    description: "Select, remove, modify, or add test cases"
-  - label: "No Test Cases"
-    description: "Keep the Verification & Testing section without checklist items"
-```
-
-If the user selects "Customize Tests", build one option per recommendation -- a unique, concise
-label of no more than five words, the complete test case in the description -- then ask:
-
-```yaml
-header: "Select Test Cases"
-question: "Select the recommended test cases to keep. Use Type your own answer to add or modify test cases."
-options:
-  - label: "{concise test case label}"
-    description: "{complete recommended test case}"
-multiple: true
-```
-
-Wait for the response before continuing. Store only the selected recommendations and custom
-answers as `verification_test_cases`, rendered as unchecked checklist items. If the user selects
-"No Test Cases", or the final approved list is empty, keep the **Verification & Testing** heading
-and its fixed italic guidance sentence but omit all checklist rows.
+Use the issue context (if any), the git diff and any test cases the user or the plan already
+named (a plan's Live test table, for one) to pick concrete test cases for the changed behavior.
+Do not ask the user to confirm them; store them as `verification_test_cases`, rendered as
+unchecked checklist items. Do not include results or evidence in them; evidence is handled
+separately in Step 4. When none apply, keep the **Verification & Testing** heading and its fixed
+italic guidance sentence but omit all checklist rows.
 
 **c) Generate the summary:**
 
@@ -208,8 +172,9 @@ Key rules:
 - Use issue context to inform "Purpose & Motivation"
 - When `{issue_number}` is set, add the closing keyword line described in
   `references/summary-template.md` so merging the PR closes the issue
-- Include only the user-approved `verification_test_cases` as unchecked items in "Verification &
-  Testing"; omit checklist rows when none were approved
+- Include the `verification_test_cases` from Step 3b as unchecked items in "Verification &
+  Testing" (this overrides the template comment about user-approved cases); omit checklist rows
+  when there are none
 - Use git diff as the source of truth for "Key Changes", supplemented by the targeted
   documentation context collected during diff analysis
 - Do not invent test evidence or add an evidence placeholder; Step 4 adds user-supplied
@@ -247,11 +212,11 @@ options:
 ```
 
 The custom response may repeat the same test-case order and may contain multiple descriptions,
-image paths, or both. Interpret `#N` as the 1-based order of the approved test case in
+image paths, or both. Interpret `#N` as the 1-based order of the test case in
 `verification_test_cases`. Treat existing local file paths as images and all other content after
 `#N` as user-supplied descriptions. Preserve quoted paths that contain spaces.
 
-Reject entries whose `#N` does not identify an approved test case and ask the user to correct them
+Reject entries whose `#N` does not identify a test case and ask the user to correct them
 before continuing. If a test case has image paths but no description, ask only for the missing
 description:
 
@@ -294,7 +259,7 @@ the template guidance that supporting evidence is added directly in GitHub only 
 supplied through this workflow. Use this structure:
 
 ```markdown
-- [ ] {User-approved test case}
+- [ ] {Test case}
 
   {User-supplied description explaining what the images demonstrate}
 
@@ -306,24 +271,12 @@ Include only successfully uploaded images. Preserve test cases without evidence 
 unchecked checklist items. If the user selects "No Evidence" or provides no evidence entries,
 leave the draft unchanged.
 
-### Step 5: Review Draft
+### Step 5: Check Draft
 
-Display the full content of `gdb/{branch_name}.md` to the user, with the title, `{pr_label}`
-and the word count above it. Evidence descriptions from Step 4 count too; if they push the draft
-past 300 words, say so and let the user choose what to shorten.
-
-```
-header: "Review summary"
-question: "Review the draft summary above. How would you like to proceed?"
-options:
-  - label: "Looks good, continue"
-    description: "Use this summary as-is to create or update the PR"
-  - label: "I want to edit it"
-    description: "I'll make changes, then confirm"
-```
-
-If the user wants edits, apply their requested changes to the draft file and display again until
-confirmed.
+Check the draft yourself; do not ask the user to approve it. Evidence descriptions from Step 4
+count toward the 300 words; when they push the draft past it, shorten it before continuing.
+Report the title, `{pr_label}` and the word count with the result in Step 6e, where the user can
+ask for changes afterwards.
 
 ### Step 6: Create or Update PR
 
@@ -333,27 +286,14 @@ confirmed.
 git ls-remote --heads origin {current_branch}
 ```
 
-If the branch is not on remote, ask before pushing:
-
-```
-header: "Push branch"
-question: "Branch '{current_branch}' is not on remote. Push it now?"
-options:
-  - label: "Yes, push"
-    description: "Run git push -u origin {current_branch}"
-  - label: "No, abort"
-    description: "Cancel PR creation or update"
-```
-
-If confirmed:
+If the branch is not on remote, or is behind the local branch, push it without asking:
 
 ```bash
 git push -u origin {current_branch}
 ```
 
-Push explicitly here rather than letting `gh pr create` push on the user's behalf: `gh pr create`
-will interactively prompt to push or fork an unpushed branch, which routes the decision through
-`gh`'s own prompt instead of this skill's confirmation gate.
+Push explicitly here rather than letting `gh pr create` push: `gh pr create` interactively
+prompts to push or fork an unpushed branch, which would stall the workflow on `gh`'s own prompt.
 
 **b) Detect an existing open PR for this branch:**
 
@@ -386,7 +326,7 @@ gh pr create \
 
 ```yaml
 header: "Existing PR"
-question: "Update PR #{number} with the approved description from `gdb/{branch_name}.md`?"
+question: "Update PR #{number} with the drafted description from `gdb/{branch_name}.md`?"
 options:
   - label: "Yes, update (Recommended)"
     description: "Replace the stale PR description while keeping title `{existing_title}` and base `{baseRefName}`"
