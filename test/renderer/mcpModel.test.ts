@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_CALLS_PER_DATASOURCE,
+  CALL_EXECUTION_OUTCOMES,
   activityClients,
+  activityConsoleRequest,
   agentGroups,
   connectedFor,
   countdown,
@@ -162,15 +165,51 @@ describe("MCP round 2 model", () => {
 
     expect(agentGroups(status)).toEqual([
       {
-        clientId: "s1",
         clientName: "Claude Code",
+        connected: true,
         datasources: [
-          { datasourceId: "shop", runs: [status.running[0], status.running[2]] },
-          { datasourceId: "crm", runs: [status.running[1]] },
+          { datasourceId: "shop", runs: [status.running[0], status.running[2]], calls: [] },
+          { datasourceId: "crm", runs: [status.running[1]], calls: [] },
         ],
       },
-      { clientId: "s2", clientName: "Cursor", datasources: [] },
+      { clientName: "Cursor", connected: true, datasources: [] },
     ]);
+  });
+
+  it("givenFinishedCalls_whenGrouped_thenKeptUnderClientEvenAfterItLeaves", () => {
+    const status: McpStatus = {
+      ...RUNNING,
+      clients: [],
+      activity: [
+        call(3, "opencode", "ok"),
+        { ...call(2, "opencode", "ok"), tool: "list_datasources", datasourceId: null },
+        call(1, "opencode", "denied"),
+      ],
+    };
+
+    expect(agentGroups(status)).toEqual([
+      {
+        clientName: "opencode",
+        connected: false,
+        datasources: [{ datasourceId: "shop", runs: [], calls: [status.activity[0], status.activity[2]] }],
+      },
+    ]);
+  });
+
+  it("givenManyCalls_whenGrouped_thenOnlyTheNewestKept", () => {
+    const activity = Array.from({ length: AGENT_CALLS_PER_DATASOURCE + 5 }, (_, index) =>
+      call(AGENT_CALLS_PER_DATASOURCE + 5 - index, "opencode", "ok"),
+    );
+
+    const [group] = agentGroups({ ...RUNNING, activity });
+
+    expect(group?.datasources[0]?.calls).toEqual(activity.slice(0, AGENT_CALLS_PER_DATASOURCE));
+  });
+
+  it("givenStatementCall_whenConsoleRequested_thenOnlySqlToolsOpenOne", () => {
+    expect(activityConsoleRequest(call(1, "opencode", "ok"))).toEqual({ datasourceId: "shop", sql: "SELECT 1" });
+    expect(activityConsoleRequest({ ...call(1, "opencode", "ok"), tool: "describe_table" })).toBeNull();
+    expect(CALL_EXECUTION_OUTCOMES.refused).toBe("cancelled");
   });
 
   it("givenToken_whenHinted_thenOnlyTheLastFourShow", () => {

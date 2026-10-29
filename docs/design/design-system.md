@@ -134,6 +134,9 @@ the built-in stack, so a font that is gone falls back; `null` is the built-in st
 `⌘=` / `⌘-` / `⌘0` in the console change the saved editor size by 1 px and reset it to 13. The
 console's line height is fixed.
 
+`text-label` is 85% of the UI size, for capitalised group labels such as the Settings page list's
+**TOOLS**; it follows the UI size and has no setting of its own.
+
 Density is Comfortable (default) or Compact, DataGrip's Compact Mode. Only the first three tokens
 and the title bar height differ; every panel and dialog keeps its size. The grid and the Database pane virtualise with the
 live row height.

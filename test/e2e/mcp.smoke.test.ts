@@ -127,6 +127,16 @@ class AgentClient {
     return { text: body.result.content.map((part) => part.text).join("\n"), isError: body.result.isError === true };
   }
 
+  /** Ends the MCP session the way a client does when it quits. */
+  async close(): Promise<void> {
+    if (this.sessionId === null) return;
+    await fetch(`http://127.0.0.1:${String(this.port)}/mcp`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${this.token}`, [SESSION_HEADER]: this.sessionId },
+    });
+    this.sessionId = null;
+  }
+
   private async post(message: Record<string, unknown>, request = true): Promise<Response> {
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.token}`,
@@ -484,6 +494,15 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
 
       expect((await slow).isError).toBe(false);
       await expect.poll(() => call.count()).toBe(0);
+      const finished = services.locator('[role="treeitem"][data-kind="agentCall"]');
+      await expect.poll(() => finished.getAttribute("data-state")).toBe("ok");
+      expect(await finished.textContent()).toContain("WITH RECURSIVE");
+      await agent.close();
+      await expect
+        .poll(() => services.locator('[role="treeitem"][data-kind="agentClient"]').textContent())
+        .toContain("disconnected");
+      expect(await finished.count()).toBe(1);
+      await captureWindow(page, "13-services-agent-history");
     },
     SCENARIO_TIMEOUT_MS,
   );
