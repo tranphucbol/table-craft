@@ -66,6 +66,7 @@ export type ActionIcon =
   | "settings"
   | "menu"
   | "log"
+  | "agent"
   | "diagnostics"
   | "update"
   | "download"

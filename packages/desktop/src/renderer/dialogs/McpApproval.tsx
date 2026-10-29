@@ -6,6 +6,7 @@ import { Button, CONTENT_CLASS, FieldRow, OVERLAY_CLASS } from "@table-craft/des
 import { countdown } from "@table-craft/desktop/renderer/model/mcp.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { CAP_CENTRED } from "@table-craft/desktop/renderer/ui/KeyTypeBadge.js";
 import { useClock } from "@table-craft/desktop/renderer/ui/useClock.js";
 import type { ApprovalKind, McpApprovalView } from "@table-craft/desktop/settings/mcp.js";
 
@@ -26,7 +27,8 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
   const now = useClock();
   const allowKindId = useId();
   const [allowKind, setAllowKind] = useState(false);
-  const keyword = keywordOf(approval.sql) ?? KIND_LABELS[approval.kind];
+  const leading = keywordOf(approval.sql);
+  const keyword = leading ?? KIND_LABELS[approval.kind];
   const answer = (args: ApprovalAnswerArgs["answer"]) =>
     invoke(MCP_ACTION_IDS.answer, { approvalId: approval.id, answer: args } satisfies ApprovalAnswerArgs);
   return (
@@ -45,6 +47,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
           <span
             className={cn(
               "rounded-sm border px-1 font-mono font-semibold",
+              leading !== null && CAP_CENTRED,
               approval.kind === "ddl" || approval.destructive !== null
                 ? "border-danger text-danger"
                 : "border-warning text-warning",
