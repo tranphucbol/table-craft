@@ -254,6 +254,18 @@ as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink
 - **Editor**: Editor font and a muted line naming the zoom chords.
 - **Data Editor**: Grid font, NULL text, Group digits, page size and Fetch All limit, with a muted
   note that formats are display only and paging applies to the next statement.
+- **MCP Server** › Data source access (plan 121, decision 131): an exposed row's Timeout cell
+  starts with an (i) (`InfoIcon`): `text-ink-muted` when every statement stops on the server at the
+  limit, `text-warning` on a gap, and `text-ink-muted` in a `rounded-full` dashed `outline-ink-muted`
+  ring when the server was never seen. The tone never speaks alone: its `title` is the summary.
+  It opens a `ui/Popover` (`max-w-popover`, `p-cell`, `gap-cell`): the `DatasourceGlyph`, the name
+  in semibold and the server in `text-ink-muted`; the limit in `font-editor` `tabular-nums` and
+  its source muted; a coverage table whose cells are an icon and a word, never a colour alone:
+  `CoveredIcon` "Stops" in `text-success`, `WarningIcon` "Drops connection" or "Blocking only" in
+  `text-warning`, `NotCoveredIcon` "Not covered" and `NotSeenIcon` "Not seen" in `text-ink-muted`;
+  a column neither row stops has a `text-warning` header and a screen-reader "(gap)". The
+  sentences follow in `text-ui`, then a `border-line` footer with when the server was seen, muted,
+  and Test Connection….
 
 A font is a `<select>`: Built-in, then installed families from `queryLocalFonts()` in a Monospace
 and a Proportional group (monospace first for the editor and grid), and a free-text field when the

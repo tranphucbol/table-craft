@@ -547,7 +547,9 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
   lists the clients you answered, to flip or forget.
 - **Per data source.** Beside the access level, **Schemas** narrows what agents list and read
   (blank keeps the schemas the Database pane shows), **Row cap** overrides `mcp.rowCap`, and
-  **Timeout** overrides `mcp.statementTimeoutSeconds`.
+  **Timeout** overrides `mcp.statementTimeoutSeconds`. The (i) before it says what really stops a
+  statement there, from the server the data source last connected to: amber when some statements
+  keep running past the limit, ringed when TableCraft has not seen the server yet.
 - **Tools.** Besides the catalog and query tools, agents can check SQL against the inspections,
   hand a statement to a new console for you to run (**open in console**, which never runs it), read
   the focused console when its data source is exposed, and scan and read Redis keys. They can also
