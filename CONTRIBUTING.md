@@ -191,7 +191,8 @@ platform. `verify` and the macOS packages must pass; Windows and Linux are best-
   flow of what changed at runtime), **Key Changes** and the **Technical Decisions** behind them,
   **Verification & Testing** (one checkbox per test case, with the commands you ran, what they
   reported and what you did not run), and **Impact and Scope**. Each section's comment says what
-  goes in it; delete the comments.
+  goes in it; delete the comments. Write it in plain, everyday English with short sentences, and
+  keep it to 300 words at most.
 - An agent drafts it with the [create-pr skill](.agents/skills/create-pr/SKILL.md), from the diff,
   into a git-ignored `gdb/` draft it shows you before it pushes or opens anything.
 - A change to what the app shows comes with screenshots, from the live test of its plan

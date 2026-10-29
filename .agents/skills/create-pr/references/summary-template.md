@@ -1,8 +1,7 @@
 # PR Summary Template
 
-Generate the pull request summary following this exact structure. The producer loads the
-horcrux `mr-description` profile before drafting; its voice rules are host-agnostic despite
-the name (written for GitLab, apply unchanged to GitHub).
+Generate the pull request summary following this exact structure, in the style and within the
+length below.
 
 ## Template
 
@@ -24,8 +23,16 @@ Closes #{issue_number}
 
 ## Style
 
-Voice and style come from the horcrux `mr-description` profile loaded by the producer. This template
-owns structure and required content.
+Write in plain, everyday English that a reviewer new to the code can read once and understand.
+
+- Short sentences, one idea each. Active voice: "The console now stops the query", not "The query
+  is stopped".
+- Common words over jargon. Name a file, function or setting in backticks only when the reviewer
+  needs it to find the change.
+- Say what changed and why. Leave out how you worked, what you tried first, and anything the diff
+  already shows line by line.
+- No hype, no filler ("This PR aims to..."), no emoji, no exclamation marks.
+- Bullets for lists of changes; a short paragraph for the problem and the reason.
 
 ## Analysis Guidelines
 
@@ -60,7 +67,10 @@ owns structure and required content.
 
 ## Output Constraints
 
-- Target 100-500 words, excluding headings, diagrams, commands, checklists, links, and evidence artifacts. Keep the length proportional to the PR's complexity. Exceed 500 words only when necessary to preserve material risks, testing details, or deployment dependencies
+- At most 300 words in the whole draft, headings and checklist included, as `wc -w` counts the
+  draft file. A small change needs far fewer. When a draft runs over, cut repetition and detail
+  the diff already shows; never cut a risk, a test you did not run, or a step someone must take
+  before or after merging
 - Key Changes section covers sufficient context but does NOT list every file — only significant changes grouped by intent
 - Impact and Scope includes only scopes with material impact. Omit unaffected scopes entirely instead of stating that they have no changes or impact
 - Problem statement is clear and specific

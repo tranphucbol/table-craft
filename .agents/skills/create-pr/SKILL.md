@@ -199,11 +199,9 @@ and its fixed italic guidance sentence but omit all checklist rows.
 **c) Generate the summary:**
 
 Read `references/summary-template.md` for the rules, and the template it names,
-`.github/pull_request_template.md` at the repository root, for structure. For voice and style, load
-the horcrux skill's `mr-description` profile if the horcrux skill is available -- its prose rules
-are format-agnostic despite the name, written once for GitLab and applied unchanged here. If
-horcrux is unavailable, write plain, direct, professional prose: no hype, no filler, no emoji, no
-exclamation marks.
+`.github/pull_request_template.md` at the repository root, for structure. Its Style section sets
+the voice: plain, everyday English in short sentences, readable by someone new to the code. Its
+Output Constraints cap the draft at 300 words.
 
 Key rules:
 
@@ -229,6 +227,9 @@ Write the generated summary to `gdb/{branch_name}.md`, `/` replaced by `_` in th
 Example: branch `feature/123-add-auth` -> file `gdb/feature_123-add-auth.md`
 
 This is a local draft only -- do not commit it.
+
+Check the length with `wc -w "gdb/{branch_name}.md"`. Over 300 words, shorten the draft and check
+again before Step 4; report the final count with the draft in Step 5.
 
 ### Step 4: Attach Test Evidence (Optional)
 
@@ -307,8 +308,9 @@ leave the draft unchanged.
 
 ### Step 5: Review Draft
 
-Display the full content of `gdb/{branch_name}.md` to the user, with the title and `{pr_label}`
-above it.
+Display the full content of `gdb/{branch_name}.md` to the user, with the title, `{pr_label}`
+and the word count above it. Evidence descriptions from Step 4 count too; if they push the draft
+past 300 words, say so and let the user choose what to shorten.
 
 ```
 header: "Review summary"
