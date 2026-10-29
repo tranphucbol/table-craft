@@ -83,6 +83,11 @@ export default defineConfig({
         find: /^@table-craft\/plugin-postgres\/notices$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/notices.ts"),
       },
+      // How statement_timeout reads, which its unit test drives without a server (plan 119).
+      {
+        find: /^@table-craft\/plugin-postgres\/timeout$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/timeout.ts"),
+      },
       // The session-list readers, which the row tests feed captured server rows (plan 045).
       {
         find: /^@table-craft\/plugin-(postgres|mysql)\/sessions$/,
