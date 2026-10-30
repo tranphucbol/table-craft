@@ -21,8 +21,11 @@ Only `beta` is accepted; `rc`, `alpha` and the like build as `0.0.0-dev.<sha>`.
 a missing channel means stable, so `MANIFEST_SCHEMA` stays 1. The stable manifest stays at
 `releases/latest/download/`, which skips pre-releases. Publishing a beta runs
 `.github/workflows/publish-channel.yml`, which commits the beta's manifest and signature to `beta/`
-on the orphan branch `update-channels`; the app reads it from `raw.githubusercontent.com`. The
-workflow refuses a manifest whose version is below the one already there.
+on the orphan branch `chore/update-channels`; the app reads it from `raw.githubusercontent.com`. The
+workflow refuses a manifest whose version is below the one already there. The `chore/` prefix is
+there because the repository's branch-naming ruleset refuses to create any other branch, so a bare
+`update-channels` could never be pushed; the app's URL names it `refs/heads/chore/update-channels`
+so the slash cannot be read as part of the file path.
 
 **The setting.** `updates.channel` is `"auto"`, `"stable"` or `"beta"`, default `"auto"`: the kind
 of build that is running, so a beta installed by hand follows beta. Settings → Advanced shows it as
@@ -73,7 +76,7 @@ npm.
 - Fingerprints rely on reproducible builds. The `plugins` job packs twice and compares the
   fingerprints; if a build stops being reproducible, every plugin looks changed again, which is
   wasteful but not wrong.
-- Retracting a beta means reverting `beta/` on `update-channels` to the previous beta and
+- Retracting a beta means reverting `beta/` on `chore/update-channels` to the previous beta and
   publishing a fix as the next beta; apps that already installed it keep it until a higher version.
-- Before the first beta, `update-channels` does not exist; beta-channel apps log a warning and keep
+- Before the first beta, `chore/update-channels` does not exist; beta-channel apps log a warning and keep
   following stable until it does.

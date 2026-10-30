@@ -267,13 +267,13 @@ to a beta build someone installed by hand. Everyone else stays on the last stabl
 5. Publish it with `gh release edit v1.16.0-beta.1 --draft=false`. Two workflows run:
    - `publish-plugins.yml` publishes the changed plugins under the npm dist-tag `next`, so
      `latest` stays on the stable release.
-   - `publish-channel.yml` commits the signed manifest to `beta/` on the `update-channels` branch,
+   - `publish-channel.yml` commits the signed manifest to `beta/` on the `chore/update-channels` branch,
      where beta-channel apps look. It refuses a beta lower than the one already there.
 6. Check it:
 
    ```sh
    gh run list --workflow publish-channel.yml --limit 1
-   curl -sL https://raw.githubusercontent.com/tranphucbol/table-craft/update-channels/beta/update-manifest.json
+   curl -sL https://raw.githubusercontent.com/tranphucbol/table-craft/refs/heads/chore/update-channels/beta/update-manifest.json
    ```
 
    The manifest's `version` is the beta and its `channel` is `beta`.
@@ -294,10 +294,10 @@ Never delete a published beta or its tag. To stop offering a broken beta before 
 put the previous beta's manifest back on the channel branch:
 
 ```sh
-git fetch origin update-channels
-git switch update-channels
+git fetch origin chore/update-channels
+git switch chore/update-channels
 git revert --no-edit HEAD
-git push origin update-channels
+git push origin chore/update-channels
 ```
 
 Apps that already installed the broken beta keep it until a higher version: ship the fix as the
@@ -336,7 +336,7 @@ reproducible and every release would republish it; fix the build in a pull reque
 | The release job fails writing the checksums               | Two attachments share a name, or one has a character `sha256sum` cannot read back. Delete the tag as above, fix the build that produced it on `main`, and tag again         |
 | `publish-plugins` failed partway                          | Rerun it (`gh run rerun <run id>`): versions already on npm are skipped                                                                                                     |
 | The `plugins` job says the registry is unreachable        | Rerun the job once npm answers. On a tag it never falls back to republishing every plugin                                                                                   |
-| `publish-channel` refused the manifest                    | A higher beta is already on `update-channels`. Publish betas in order; the refused one reaches nobody, which is what you want                                               |
+| `publish-channel` refused the manifest                    | A higher beta is already on `chore/update-channels`. Publish betas in order; the refused one reaches nobody, which is what you want                                         |
 | A published beta is broken                                | [Retract it](#retracting-a-beta) and ship the fix as the next beta                                                                                                          |
 | A published release is broken                             | Fix it on `main` and release the next patch. Never delete or retag a published release, and never unpublish from npm                                                        |
 | The signing key is lost or leaked                         | Follow decision 044: a release that changes the public key, which every user installs by hand once. Say so under **Before you update**                                      |
@@ -354,5 +354,5 @@ A fork, or a new maintainer, needs this before its first release:
 - The GitHub environment `plugins`, with a deployment rule for `v*` tags, optional reviewers, and
   the secret `NPM_TOKEN`: a granular npm token that can publish only `@tablecraft-app/*`.
 - Membership of the `@tablecraft-app` scope on npm.
-- A branch protection rule for `update-channels` that lets only GitHub Actions and maintainers push.
+- A branch protection rule for `chore/update-channels` that lets only GitHub Actions and maintainers push.
   The first published beta creates the branch.
