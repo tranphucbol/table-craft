@@ -66,7 +66,7 @@ const LOOP_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
 /** One picker row per brand (plan 118): the MySQL plugin names MySQL, MariaDB and TiDB. */
 const BUILT_IN_KINDS = ["MariaDB", "MySQL", "SQLite", "TiDB"];
 /** Downloaded on demand (plans 057 and 058): absent from the bundle, offered in the picker. */
-const DOWNLOADABLE_KINDS = ["oracle", "postgres", "redis", "mssql", "etcd"];
+const DOWNLOADABLE_KINDS = ["etcd", "oracle", "postgres", "redis", "mssql"];
 /** Not the default on a light-mode host, so the relaunched window shows it was kept. */
 const CHOSEN_THEME = "Dark";
 const CHOSEN_THEME_ID = "dark";
