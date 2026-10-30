@@ -11,7 +11,6 @@ import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useC
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
 import { KeyTab } from "@table-craft/desktop/renderer/keys/KeyTab.js";
 import { ServerTab } from "@table-craft/desktop/renderer/server/ServerTab.js";
-import { sessionsTabLabel, tabLabel } from "@table-craft/desktop/renderer/model/format.js";
 import { deferTabDrag } from "@table-craft/desktop/renderer/model/tabDrag.js";
 import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { SessionsView } from "@table-craft/desktop/renderer/sessions/SessionsView.js";
@@ -25,7 +24,6 @@ import {
   unpinnedTabIds,
   useTabs,
   type Tab,
-  type TabKind,
   type EditorGroupId,
 } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
@@ -33,17 +31,9 @@ import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { TableEditor } from "@table-craft/desktop/renderer/table/TableEditor.js";
-import {
-  ACTION_ICONS,
-  CloseIcon,
-  ConsoleIcon,
-  DdlIcon,
-  KeyTabIcon,
-  ServerTabIcon,
-  ReadOnlyIcon,
-  SessionsIcon,
-  TableIcon,
-} from "@table-craft/desktop/renderer/ui/icons.js";
+import { ACTION_ICONS, CloseIcon, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { TabIcon, labelOfTab } from "@table-craft/desktop/renderer/shell/TabIcon.js";
+import { TabStripCorner } from "@table-craft/desktop/renderer/shell/TabStripCorner.js";
 import { TINT_TAB } from "@table-craft/desktop/renderer/ui/tint.js";
 import { AUTOFOCUS_ATTRIBUTE, focusActivatedEditor } from "@table-craft/desktop/renderer/shell/focus.js";
 
@@ -119,20 +109,6 @@ function TabMenuItem({
   );
 }
 
-const TAB_ICONS = {
-  console: ConsoleIcon,
-  table: TableIcon,
-  ddl: DdlIcon,
-  sessions: SessionsIcon,
-  key: KeyTabIcon,
-  server: ServerTabIcon,
-} as const satisfies Record<TabKind, unknown>;
-
-function TabIcon({ kind }: { readonly kind: TabKind }) {
-  const Icon = TAB_ICONS[kind];
-  return <Icon aria-hidden data-tab-kind={kind} className="size-icon" />;
-}
-
 /** With the bar hidden, a mouse wheel's vertical turn is the only way it can reach the far tabs. */
 function scrollTabsSideways(event: WheelEvent<HTMLDivElement>) {
   if (event.deltaX !== 0 || event.deltaY === 0) return;
@@ -157,10 +133,7 @@ function TabButton({
   }, [active]);
   const args: TabArgs = { tabId: tab.id };
   const datasource = useConsoleDatasource(tab.id);
-  const label = (tab.kind === "sessions" || tab.kind === "server" ? sessionsTabLabel : tabLabel)(
-    tab.title,
-    datasource?.name,
-  );
+  const label = labelOfTab(tab, datasource?.name);
   const tint = datasource?.color == null ? null : TINT_TAB[datasource.color];
   const path = useConsoles((state) => fileSourceOf(state.consoles[tab.id])?.path);
   const dirty = useConsoles((state) => {
@@ -328,15 +301,20 @@ function EditorGroup({
       className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden"
     >
       {tabs.length === 0 ? null : (
-        <div
-          role="tablist"
-          aria-label="Editor tabs"
-          className="flex shrink-0 overflow-x-auto border-b border-line bg-panel scrollbar-none"
-          onWheel={scrollTabsSideways}
-        >
-          {tabs.map((tab) => (
-            <TabButton key={tab.id} tab={tab} active={tab.id === activeId} onDrag={onDrag} />
-          ))}
+        <div className="flex shrink-0 bg-panel">
+          <div
+            role="tablist"
+            aria-label="Editor tabs"
+            className="flex min-w-0 flex-1 overflow-x-auto border-b border-line scrollbar-none"
+            onWheel={scrollTabsSideways}
+          >
+            {tabs.map((tab) => (
+              <TabButton key={tab.id} tab={tab} active={tab.id === activeId} onDrag={onDrag} />
+            ))}
+          </div>
+          <ActionTabContext value={active?.id}>
+            <TabStripCorner groupId={groupId} />
+          </ActionTabContext>
         </div>
       )}
       <ActionTabContext value={active?.id}>
