@@ -1,5 +1,5 @@
 # Decision 134: GitHub's releases/latest skips pre-releases, so publishing a beta commits its signed
-# update manifest to beta/ on the orphan branch update-channels, where beta-channel apps read it.
+# update manifest to beta/ on the orphan branch chore/update-channels, where beta-channel apps read it.
 # The app trusts the Ed25519 signature, not the branch; channel-manifest.ts refuses an older beta, so
 # republishing an old pre-release cannot move anyone back. Protect the branch so only this workflow
 # pushes to it.
@@ -22,12 +22,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      # Pushes to update-channels.
+      # Pushes to chore/update-channels.
       contents: write
     env:
       TAG: ${{ github.event.release.tag_name }}
       GH_TOKEN: ${{ github.token }}
-      CHANNEL_BRANCH: update-channels
+      CHANNEL_BRANCH: chore/update-channels
     steps:
       - uses: actions/checkout@v7
         with:

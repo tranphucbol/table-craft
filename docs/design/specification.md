@@ -2455,7 +2455,7 @@ or `beta` (missing reads as `stable`, decision 134), with `assets` keyed `<platf
 each `{ url, size, sha256 }`. `update-manifest.json.sig` is the base64 Ed25519 signature of the
 manifest's bytes. Main fetches the stable pair from
 `https://github.com/tranphucbol/table-craft/releases/latest/download/` and the beta pair from
-`https://raw.githubusercontent.com/tranphucbol/table-craft/update-channels/beta/` with `net.fetch`,
+`https://raw.githubusercontent.com/tranphucbol/table-craft/refs/heads/chore/update-channels/beta/` with `net.fetch`,
 and verifies the signature against `UPDATE_PUBLIC_KEY` (`main/update/manifest.ts`) before parsing.
 A manifest is rejected for a bad signature, a schema other than 1, or a malformed field (asset URLs
 must be `https:` without credentials, `sha256` 64 hex digits). Versions compare as semver, a
@@ -2578,7 +2578,7 @@ arm64, macOS x64, Windows x64 and Linux x64, each building its installer, runnin
 suite on SQLite and uploading the installer. The macOS jobs block; Windows and Linux are
 best-effort. A `v*` tag adds a draft GitHub release with the installers, `update-manifest.json` and its
 signature once the blocking jobs pass (see In-app update); a `vX.Y.Z-beta.N` tag drafts a
-pre-release. Publishing a beta commits its manifest to `beta/` on the `update-channels` branch
+pre-release. Publishing a beta commits its manifest to `beta/` on the `chore/update-channels` branch
 (`publish-channel.yml`, decision 134).
 
 ## Agents (MCP)

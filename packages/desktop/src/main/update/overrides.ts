@@ -11,7 +11,7 @@ export const RELEASE_MANIFEST_URL = `https://github.com/tranphucbol/table-craft/
  * GitHub's `releases/latest` skips pre-releases, so the publish-channel workflow commits each beta's
  * signed manifest to this branch instead (decision 134); the signature, not the host, is trusted.
  */
-export const BETA_MANIFEST_URL = `https://raw.githubusercontent.com/tranphucbol/table-craft/update-channels/beta/${MANIFEST_FILE}`;
+export const BETA_MANIFEST_URL = `https://raw.githubusercontent.com/tranphucbol/table-craft/refs/heads/chore/update-channels/beta/${MANIFEST_FILE}`;
 /** Where Help → Check for Updates sends a user whose install cannot update itself and no notes are known. */
 export const RELEASES_PAGE_URL = "https://github.com/tranphucbol/table-craft/releases/latest";
 

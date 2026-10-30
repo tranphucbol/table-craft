@@ -1,5 +1,5 @@
 /**
- * Guards what the publish-channel workflow commits to `beta/` on the `update-channels` branch
+ * Guards what the publish-channel workflow commits to `beta/` on the `chore/update-channels` branch
  * (decision 134): the release's signed manifest must verify, name the tag's version and the beta
  * channel, and be no older than the beta already published, so republishing an old pre-release
  * cannot move beta apps back to it.
