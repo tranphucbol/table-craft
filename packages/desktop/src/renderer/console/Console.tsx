@@ -24,7 +24,9 @@ import { MIN_CONSOLE_PANE_PERCENT, useLayout } from "@table-craft/desktop/render
 import { groupOf, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
-import { ReadOnlyIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { DatabaseIcon, ReadOnlyIcon, SchemaIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { ToolbarDivider } from "@table-craft/desktop/renderer/ui/ToolbarDivider.js";
+import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
 import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
@@ -42,9 +44,10 @@ function persistConsoleEditor(layout: Layout, meta: { readonly isUserInteraction
   if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeConsoleEditor(size);
 }
 
+/** Running says nothing: Run's spinner and the title bar's elapsed time already do (plan 127 decision 4). */
 const STATUS_TEXT = {
   connecting: "Connecting…",
-  running: "Running…",
+  running: "",
   confirming: "Waiting for confirmation…",
   ready: "",
   failed: "",
@@ -143,29 +146,43 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   const error = session.question === null ? session.error : null;
   const capabilities = plugin?.capabilities ?? [];
   const color = datasource?.color ?? null;
+  const statusText = session.question === null ? STATUS_TEXT[status] : ASKING_TEXT;
 
   return (
     <div data-testid="console" data-color={color ?? undefined} className="flex min-h-0 flex-1 flex-col">
       <div
         role="toolbar"
         aria-label="Console toolbar"
-        className="flex shrink-0 items-center gap-gap overflow-x-auto border-b border-line bg-panel p-gap"
+        className="flex shrink-0 items-center gap-gap overflow-x-auto border-b border-line bg-panel px-gap py-1"
       >
-        <ActionButton actionId={ACTION_IDS.run} primary />
-        <ActionButton actionId={ACTION_IDS.runAll} />
-        {capabilities.includes("explain") ? <ActionButton actionId={EXPLAIN_ACTION_IDS.explain} compact /> : null}
-        {capabilities.includes("explainAnalyze") ? (
-          <ActionButton actionId={EXPLAIN_ACTION_IDS.explainAnalyze} compact tone="warning" />
+        <div className="flex shrink-0 items-center gap-1">
+          <ActionButton actionId={ACTION_IDS.run} compact tone="success" />
+          <ActionButton actionId={ACTION_IDS.runAll} compact />
+          {capabilities.includes("explain") ? <ActionButton actionId={EXPLAIN_ACTION_IDS.explain} compact /> : null}
+          {capabilities.includes("explainAnalyze") ? (
+            <ActionButton actionId={EXPLAIN_ACTION_IDS.explainAnalyze} compact tone="warning" />
+          ) : null}
+          {capabilities.includes("cancel") ? (
+            <ActionButton
+              actionId={ACTION_IDS.cancel}
+              compact
+              tone="danger"
+              hint={capabilities.includes("commands") ? COMMAND_CANCEL_HINT : undefined}
+            />
+          ) : null}
+        </div>
+        <ToolbarDivider />
+        <div className="flex shrink-0 items-center gap-1">
+          <ActionButton actionId={HISTORY_ACTION_IDS.show} compact />
+          {capabilities.includes("sql") ? <ActionButton actionId={ACTION_IDS.reformat} compact /> : null}
+        </div>
+        {capabilities.includes("transactions") ? (
+          <>
+            <ToolbarDivider />
+            <TxControls session={session} />
+          </>
         ) : null}
-        {capabilities.includes("cancel") ? (
-          <ActionButton
-            actionId={ACTION_IDS.cancel}
-            hint={capabilities.includes("commands") ? COMMAND_CANCEL_HINT : undefined}
-          />
-        ) : null}
-        {capabilities.includes("transactions") ? <TxControls session={session} /> : null}
-        {capabilities.includes("nodes") ? <RunOnPicker session={session} /> : null}
-        <span className="shrink-0 text-ink-muted">{session.question === null ? STATUS_TEXT[status] : ASKING_TEXT}</span>
+        {statusText === "" ? null : <span className="shrink-0 text-ink-muted">{statusText}</span>}
         {error === null ? null : (
           // The room the datasource label leaves, but never none; Output holds the whole error.
           <span
@@ -194,35 +211,41 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
             Go to Error
           </button>
         )}
-        {datasource === undefined && session.datasourceId === DETACHED ? (
-          <span data-testid="console-datasource" className="ml-auto shrink-0 text-ink-muted">
-            No data source; Run asks for one.
-          </span>
-        ) : null}
-        {datasource === undefined ? null : (
-          // The datasource and plugin names give up their width first, the namespace last: it is what
-          // changes under the console, and a long error beside it once squeezed it out of sight
-          // (plan 022). A namespace longer than the whole toolbar's room still ends in an ellipsis.
-          <span
-            data-testid="console-datasource"
-            className="ml-auto flex min-w-0 items-center overflow-hidden whitespace-pre text-ink-muted"
-          >
-            {datasource.readOnly ? <ReadOnlyIcon aria-hidden className="mr-1 size-icon shrink-0" /> : null}
-            <span className="min-w-0 shrink-first truncate">
-              {datasource.readOnly ? "read-only · " : ""}
-              {datasource.name}
+        <div className="ml-auto flex min-w-0 items-center gap-gap">
+          {capabilities.includes("nodes") ? <RunOnPicker session={session} /> : null}
+          {datasource === undefined && session.datasourceId === DETACHED ? (
+            <span data-testid="console-datasource" className="shrink-0 text-ink-muted">
+              No data source; Run asks for one.
             </span>
-            {capabilities.includes("currentNamespace") ? (
-              <span className="flex min-w-0 items-center">
-                {" · "}
-                <NamespaceSwitcher consoleId={consoleId} session={session} />
+          ) : null}
+          {datasource === undefined ? null : (
+            // The datasource name gives up its width first, the namespace last: it is what changes
+            // under the console, and a long error beside it once squeezed it out of sight (plan 022).
+            // A namespace longer than the whole toolbar's room still ends in an ellipsis.
+            <span
+              data-testid="console-datasource"
+              className="flex min-w-0 items-center gap-1 overflow-hidden whitespace-pre text-ink-muted"
+            >
+              {capabilities.includes("currentNamespace") ? (
+                <span className="flex min-w-0 items-center">
+                  <SchemaIcon aria-hidden className="size-icon shrink-0" />
+                  <NamespaceSwitcher consoleId={consoleId} session={session} />
+                </span>
+              ) : null}
+              <span
+                title={datasource.readOnly ? `${datasource.name} (read-only)` : datasource.name}
+                className="flex min-w-0 shrink-first items-center gap-1 px-1"
+              >
+                {datasource.readOnly ? (
+                  <ReadOnlyIcon aria-label="read-only" className="size-icon shrink-0" />
+                ) : (
+                  <DatabaseIcon aria-hidden className="size-icon shrink-0" />
+                )}
+                <span className="min-w-0 truncate">{datasource.name}</span>
               </span>
-            ) : null}
-            {plugin === undefined ? null : (
-              <span className="min-w-0 shrink-first overflow-hidden text-ellipsis">{` · ${plugin.name}`}</span>
-            )}
-          </span>
-        )}
+            </span>
+          )}
+        </div>
       </div>
       {session.diskChanged === null ? null : <DiskChangedBanner change={session.diskChanged} />}
       <Group

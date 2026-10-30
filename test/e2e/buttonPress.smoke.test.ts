@@ -1,7 +1,8 @@
 /**
- * Plan 114's live test: filled buttons (Run, Settings Close, a danger confirm) shade on hover and
- * darken and shrink on the first frame of a press; bordered text buttons tint and shrink; Reduced
- * motion keeps the shade but not the shrink; a disabled Run shows nothing. SQLite in memory:
+ * Plan 114's live test: filled buttons (Settings Close, a danger confirm) shade on hover and
+ * darken and shrink on the first frame of a press; bordered text buttons and the Run icon (plan
+ * 127) tint and shrink; Reduced motion keeps the shade but not the shrink; a disabled Run shows
+ * nothing. SQLite in memory:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/114 bun run test:smoke:headless test/e2e/buttonPress.smoke.test.ts
  *
@@ -188,16 +189,24 @@ describe.runIf(SMOKE_ENABLED)("tactile button press live test", () => {
     return held;
   }
 
+  /** The Settings dialog's Close, the filled button every theme shows without running anything. */
+  async function settingsClose(page: Page): Promise<Locator> {
+    await pressChord(page, ",");
+    const settings = page.getByRole("dialog", { name: "Settings" });
+    await settings.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+    return settings.getByRole("button", { name: "Close", exact: true });
+  }
+
   it(
-    "givenRunButton_whenMouseDown_thenFullShadeOnTheFirstFrame",
+    "givenFilledButton_whenMouseDown_thenFullShadeOnTheFirstFrame",
     async () => {
       const page = await launch();
-      const run = runButton(page);
-      const { x, y } = await centre(run);
+      const close = await settingsClose(page);
+      const { x, y } = await centre(close);
       await page.mouse.move(x, y);
 
       await page.mouse.down();
-      const first = await pressStyle(run);
+      const first = await pressStyle(close);
       await page.mouse.move(0, 0);
       await page.mouse.up();
 
@@ -208,59 +217,57 @@ describe.runIf(SMOKE_ENABLED)("tactile button press live test", () => {
   );
 
   it(
-    "givenRunButton_whenHovered_thenHoverShade",
+    "givenFilledButton_whenHovered_thenHoverShade",
     async () => {
       const page = await launch();
-      const run = runButton(page);
-      const { x, y } = await centre(run);
+      const close = await settingsClose(page);
+      const { x, y } = await centre(close);
 
       await page.mouse.move(x, y);
 
       await expect
-        .poll(async () => shadeAlpha((await pressStyle(run)).shadow))
+        .poll(async () => shadeAlpha((await pressStyle(close)).shadow))
         .toBeCloseTo(accentShades("dark").hover, 2);
-      expect((await pressStyle(run)).scale).toBe("none");
+      expect((await pressStyle(close)).scale).toBe("none");
     },
     SCENARIO_TIMEOUT_MS,
   );
 
   for (const [theme, evidence] of [
-    ["dark", "01-run-dark"],
-    ["light", "02-run-light"],
-    ["highContrast", "03-run-hc"],
+    ["dark", "01-filled-dark"],
+    ["light", "02-filled-light"],
+    ["highContrast", "03-filled-hc"],
   ] as const) {
     it(
-      `givenRunButton_whenHeld_thenDarkerAndShrunkUntilReleased (${theme})`,
+      `givenFilledButton_whenHeld_thenDarkerAndShrunkUntilReleased (${theme})`,
       async () => {
         const page = await launch({ theme });
-        const run = runButton(page);
+        const close = await settingsClose(page);
 
-        const held = await pressThrough(page, run, evidence);
+        const held = await pressThrough(page, close, evidence);
         await page.waitForTimeout(RELEASE_SETTLE_MS);
-        const released = await pressStyle(run);
+        const released = await pressStyle(close);
 
         expect(shadeAlpha(held.shadow)).toBeCloseTo(accentShades(theme).press, 2);
         expect(held.scale).toBe(TEXT_PRESS_SCALE);
         expect(released).toEqual({ shadow: "none", scale: "none" });
+        expect(await page.getByRole("dialog", { name: "Settings" }).isVisible()).toBe(true);
       },
       SCENARIO_TIMEOUT_MS,
     );
   }
 
   it(
-    "givenSettingsClose_whenHeld_thenDarkerAndShrunk",
+    "givenRunIcon_whenHeld_thenInkTintAndShrunk",
     async () => {
       const page = await launch();
-      await pressChord(page, ",");
-      const settings = page.getByRole("dialog", { name: "Settings" });
-      await settings.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      const close = settings.getByRole("button", { name: "Close", exact: true });
+      const run = runButton(page);
 
-      const held = await pressThrough(page, close, "04-settings-close");
+      const held = await pressThrough(page, run, "04-run-icon");
 
-      expect(shadeAlpha(held.shadow)).toBeCloseTo(accentShades("dark").press, 2);
-      expect(held.scale).toBe(TEXT_PRESS_SCALE);
-      expect(await settings.isVisible()).toBe(true);
+      expect(held.shadow).toContain("inset");
+      expect(shadeAlpha(held.shadow)).toBe(0);
+      expect(NO_SCALE).not.toContain(held.scale);
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -310,12 +317,12 @@ describe.runIf(SMOKE_ENABLED)("tactile button press live test", () => {
   );
 
   it(
-    "givenReducedMotion_whenRunHeld_thenShadedButNotShrunk",
+    "givenReducedMotion_whenFilledHeld_thenShadedButNotShrunk",
     async () => {
       const page = await launch({ motion: "reduced" });
-      const run = runButton(page);
+      const close = await settingsClose(page);
 
-      const held = await pressThrough(page, run, "06-reduced");
+      const held = await pressThrough(page, close, "06-reduced");
 
       expect(shadeAlpha(held.shadow)).toBeCloseTo(accentShades("dark").press, 2);
       expect(NO_SCALE).toContain(held.scale);
