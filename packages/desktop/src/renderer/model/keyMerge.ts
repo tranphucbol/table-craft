@@ -1,7 +1,7 @@
 const JSON_INDENT = 2;
 const MISSING = Symbol("missing");
 const JSON_TOKENS = /"(?:\\.|[^"\\])*"|(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
-type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+type Json = YamlValue;
 type Node = Json | typeof MISSING;
 
 export interface MergeConflict {
@@ -14,7 +14,7 @@ export interface KeyMerge {
   readonly text: string;
   readonly conflicts: readonly MergeConflict[];
   readonly automatic: number;
-  readonly format: "json" | "text";
+  readonly format: "json" | "yaml" | "text";
 }
 
 export type MergeChoices = Readonly<Record<string, "theirs" | "yours">>;
@@ -38,15 +38,17 @@ function same(a: Node, b: Node): boolean {
       keys.every((key) => Object.hasOwn(b, key) && same(a[key] ?? null, b[key] ?? null))
     );
   }
-  return JSON.stringify(a) === JSON.stringify(b);
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length && a.every((value, index) => same(value, b[index] ?? null));
+  return a === b;
 }
 
 function object(value: Node): value is { [key: string]: Json } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function describe(value: Node): string {
-  return value === MISSING ? "(removed)" : JSON.stringify(value);
+function describe(value: Node, format: "json" | "yaml"): string {
+  return value === MISSING ? "(removed)" : format === "yaml" ? normalizedKeyYaml(value).trim() : JSON.stringify(value);
 }
 
 /** Objects merge by JSON pointer, arrays atomically. Missing members are distinct from null. */
@@ -62,6 +64,7 @@ export function mergeKeyText(base: string | null, theirs: string, yours: string,
   }
   const conflicts: MergeConflict[] = [];
   let automatic = 0;
+  let format: "json" | "yaml" = "json";
   function merge(a: Node, b: Node, c: Node, path: string): Node {
     if (same(b, c)) return b;
     if (same(a, b)) {
@@ -83,19 +86,37 @@ export function mergeKeyText(base: string | null, theirs: string, yours: string,
       return result;
     }
     const choice = choices[path];
-    if (choice === undefined) conflicts.push({ path, theirs: describe(b), yours: describe(c) });
+    if (choice === undefined) conflicts.push({ path, theirs: describe(b, format), yours: describe(c, format) });
     return choice === "theirs" ? b : c;
   }
   try {
-    const a = parseKeyJson(base);
-    const b = parseKeyJson(theirs);
-    const c = parseKeyJson(yours);
+    let a: Json;
+    let b: Json;
+    let c: Json;
+    try {
+      a = parseKeyJson(base);
+      b = parseKeyJson(theirs);
+      c = parseKeyJson(yours);
+    } catch {
+      a = parseKeyYaml(base);
+      b = parseKeyYaml(theirs);
+      c = parseKeyYaml(yours);
+      format = "yaml";
+    }
     const result = merge(a, b, c, "");
+    const value = result === MISSING ? null : result;
     return {
-      text: JSON.stringify(result === MISSING ? null : result, null, JSON_INDENT),
+      text:
+        format === "yaml"
+          ? same(result, c)
+            ? yours
+            : same(result, b)
+              ? theirs
+              : normalizedKeyYaml(value)
+          : JSON.stringify(value, null, JSON_INDENT),
       conflicts,
       automatic,
-      format: "json",
+      format,
     };
   } catch {
     if (theirs === yours) return { text: yours, conflicts: [], automatic: 0, format: "text" };
@@ -133,3 +154,4 @@ export function mergeKeyText(base: string | null, theirs: string, yours: string,
     return { text: lines.join("\n"), conflicts, automatic, format: "text" };
   }
 }
+import { normalizedKeyYaml, parseKeyYaml, type YamlValue } from "@table-craft/desktop/renderer/model/valueFormats.js";

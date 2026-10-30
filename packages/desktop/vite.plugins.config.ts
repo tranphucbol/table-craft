@@ -4,7 +4,8 @@
  * loader as a user plugin (decision 005) and never imports it.
  */
 import { copyFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
 import {
   ALIASES,
@@ -35,6 +36,62 @@ const PLUGIN_SOURCE_ENTRY = "src/index.ts";
 /** Mirrors `MANIFEST_FILE` in plugin-api; a Vite config loads in plain Node and cannot import TypeScript source. */
 const MANIFEST_FILE = "table-craft-plugin.json";
 
+/**
+ * The module of each plugin's driver that reads `.proto` files beside its own code at load: etcd3
+ * parses `../proto/rpc.proto` when imported (plan 110). A bundle has no such files beside it and a
+ * plugin package ships `index.js` alone (decision 109), so the build inlines them.
+ */
+const PROTO_LOADING_MODULES: Partial<Record<BuiltPlugin, RegExp>> = {
+  etcd: /[\\/]etcd3[\\/]lib[\\/]connection-pool\.js$/,
+};
+/** `(0, loader.loadSync)(\`${__dirname}/<file>.proto\`, options` as TypeScript compiles etcd3's call. */
+const PROTO_LOAD_CALL = /\(0, (\w+)\.loadSync\)\(`\$\{__dirname\}\/([^`]+\.proto)`,(?=\s*\{[^}]*keepCase: true)/;
+
+interface ProtobufRoot {
+  loadSync(file: string, options: { keepCase: boolean }): ProtobufRoot;
+  toJSON(): unknown;
+}
+
+/**
+ * `code` of module `id` with its `loadSync` of a `.proto` file beside it replaced by `fromJSON` of
+ * that file and its imports, parsed now by the protobufjs the driver's proto-loader uses, so the
+ * definitions it builds at load are the same and no file is read. Throws when the call is not
+ * there, so a driver update fails the build instead of shipping a plugin that cannot load.
+ */
+export function inlineProtoLoad(code: string, id: string): string {
+  const match = PROTO_LOAD_CALL.exec(code);
+  if (match === null) {
+    throw new Error(
+      `${id} no longer loads a .proto file with loadSync(\`\${__dirname}/…\`, { keepCase: true }); update PROTO_LOAD_CALL in vite.plugins.config.ts.`,
+    );
+  }
+  const [call, loader = "", file = ""] = match;
+  const protoLoader = createRequire(id).resolve("@grpc/proto-loader");
+  const { Root } = createRequire(protoLoader)("protobufjs") as { Root: new () => ProtobufRoot };
+  const root = new Root().loadSync(resolve(dirname(id), file), { keepCase: true });
+  return code.replace(call, () => `(0, ${loader}.fromJSON)(${JSON.stringify(root.toJSON())},`);
+}
+
+function inlineProtos(id: BuiltPlugin): Plugin[] {
+  const loading = PROTO_LOADING_MODULES[id];
+  if (loading === undefined) return [];
+  let inlined = false;
+  return [
+    {
+      name: "table-craft:inline-protos",
+      transform(code, moduleId) {
+        if (!loading.test(moduleId)) return null;
+        inlined = true;
+        return { code: inlineProtoLoad(code, moduleId), map: null };
+      },
+      buildEnd() {
+        if (!inlined)
+          this.error(`The ${id} build never met the module that loads its .proto files (${String(loading)}).`);
+      },
+    },
+  ];
+}
+
 function copyManifest(id: BuiltPlugin, outDir: string): Plugin {
   return {
     name: "table-craft:copy-plugin-manifest",
@@ -64,7 +121,7 @@ export default defineConfig(({ mode }) => {
   }
   const outDir = resolve(isBuiltInPlugin(mode) ? BUILT_IN_OUT_DIR : OPTIONAL_OUT_DIR, mode);
   return {
-    plugins: [copyManifest(mode, outDir)],
+    plugins: [...inlineProtos(mode), copyManifest(mode, outDir)],
     resolve: { alias: ALIASES, mainFields: NODE_MAIN_FIELDS, conditions: NODE_CONDITIONS },
     build: {
       target: BUILD_TARGET,

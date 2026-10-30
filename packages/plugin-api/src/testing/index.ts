@@ -763,6 +763,20 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
     });
 
+    it("givenAdvancedCapabilities_whenConnected_thenExposesOnlyDeclaredServices", async () => {
+      await withSession(plugin, fixture, (session) => {
+        expect(session.watch !== undefined).toBe(plugin.capabilities.includes("watch"));
+        expect(session.leases !== undefined).toBe(plugin.capabilities.includes("leases"));
+        expect(session.access !== undefined).toBe(plugin.capabilities.includes("access"));
+        expect(session.coordination !== undefined).toBe(plugin.capabilities.includes("coordination"));
+        expect(session.keyTransfer !== undefined).toBe(plugin.capabilities.includes("bulkTransfer"));
+        expect(session.cluster !== undefined).toBe(
+          plugin.capabilities.includes("members") || plugin.capabilities.includes("maintenance"),
+        );
+        return Promise.resolve();
+      });
+    });
+
     it("givenSession_whenInspected_thenHasTransactionsExactlyWhenDeclared", async () => {
       await withSession(plugin, fixture, (session) => {
         expect(session.transactions !== undefined).toBe(plugin.capabilities.includes("transactions"));

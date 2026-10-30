@@ -10,55 +10,102 @@ import {
   type SlowCommand,
 } from "@table-craft/plugin-api";
 import type { Etcd3 } from "etcd3";
-import type { AdminHost } from "./admin.js";
+import { runAdmin, type AdminHost } from "./admin.js";
+import { hexId } from "./args.js";
+import { suggestConsoleValues, type ConsoleValueSuggestion } from "./consoleCompletion.js";
+import { consoleLeaseId } from "./consoleNumbers.js";
 import { errorText, isPermissionDenied } from "./client.js";
-import type { EtcdConfig } from "./config.js";
+import { namespaceBytes, type EtcdConfig } from "./config.js";
 import { openConnection, type Connection } from "./connect.js";
-import { runCommand } from "./console.js";
+import { runCommand, type ConsoleKvGateway } from "./console.js";
+import { EtcdAccess } from "./access.js";
+import { EtcdCluster } from "./cluster.js";
+import { EtcdCoordination } from "./coordination.js";
+import { EtcdLeases } from "./leases.js";
+import { NamespaceMapper, namespaceCall } from "./namespace.js";
+import { RuntimeState, type RuntimeHost } from "./runtime.js";
+import { EtcdTransfer } from "./transfer.js";
+import { EtcdWatcher } from "./watch.js";
+import type { ConsoleIntent } from "./consoleIntent.js";
+import { commandOf, type ParameterDoc } from "./docs.js";
+import { tokenize } from "./tokens.js";
+import { replyResult } from "./results.js";
 import { EtcdKeyspace } from "./keyspace.js";
 import { utf8OrNull } from "./results.js";
 import { NO_END, prefixEnd } from "./scan.js";
-import { connectedMember, nodes, serverInfo } from "./server.js";
+import { nodes, serverInfo } from "./server.js";
 
 const BUSY_MESSAGE = "Another command is still running in this session.";
 const KEY_COMPLETION_LIMIT = 50;
 const NOT_PERMITTED =
   "The datasource's user has no permission for this; ask an etcd admin to grant its role access, or use another user.";
 
-/** What fails the way a lost connection does, so the host may reconnect and run the command again. */
-const CONNECTION_LOST = /UNAVAILABLE|No connection established|ECONNREFUSED|ECONNRESET|socket hang up/i;
+const MS_PER_SECOND = 1000;
 
-/**
- * A console and key-tree session on one etcd endpoint (decisions 2 and 11 of plan 110). gRPC
- * calls do not block each other, but the console runs one command at a time and the key tree's
- * calls queue, as the contract asks. It offers no cancel: no command it runs waits on the server,
- * so there is nothing to interrupt, and the contract's cancel suite needs one that sleeps.
- */
+/** Scoped KV and global administrative services, with independently closeable stream resources. */
 export class EtcdSession implements Session {
   readonly serverVersion: string | null;
   readonly tls = null;
   readonly keyspace: EtcdKeyspace;
+  readonly watch: EtcdWatcher;
+  readonly leases: EtcdLeases;
+  readonly cluster: EtcdCluster;
+  readonly access: EtcdAccess;
+  readonly coordination: EtcdCoordination;
+  readonly keyTransfer: EtcdTransfer;
+  readonly #state = new RuntimeState();
+  readonly #consoleKv: ConsoleKvGateway;
   readonly #connection: Connection;
   readonly #readOnly: boolean;
   readonly #host: AdminHost;
   #running = false;
   #queue: Promise<unknown> = Promise.resolve();
-  #member: Promise<string | null> | undefined;
+  #refreshTimer: ReturnType<typeof setTimeout> | undefined;
+  #closed = false;
 
   private constructor(connection: Connection, config: EtcdConfig, options: ConnectOptions) {
     this.#connection = connection;
     this.#readOnly = options.readOnly;
     this.serverVersion = connection.version;
-    const call = <T>(work: (etcd: Etcd3) => Promise<T>): Promise<T> =>
+    const globalCall = <T>(work: (etcd: Etcd3) => Promise<T>): Promise<T> =>
       this.#failures(() => connection.client.call(work));
-    this.#host = { call, address: connection.address };
+    const namespace = new NamespaceMapper(namespaceBytes(config));
+    const call = namespaceCall(globalCall, namespace, config.readMode === "serializable");
+    this.#host = { call, address: connection.address, namespace };
+    const runtime: RuntimeHost = {
+      call,
+      globalCall,
+      namespace,
+      state: this.#state,
+      readOnly: options.readOnly,
+      clusterId: connection.clusterId,
+    };
+    this.watch = new EtcdWatcher(runtime);
+    this.leases = new EtcdLeases(runtime);
+    this.cluster = new EtcdCluster(runtime, connection);
+    const passwordIdentity = (config.authMode === "auto" || config.authMode === "password") && config.user !== "";
+    this.access = new EtcdAccess(
+      runtime,
+      passwordIdentity ? config.user : null,
+      passwordIdentity && config.password !== "",
+    );
+    this.coordination = new EtcdCoordination(runtime, config.lockPrefix, config.electionPrefix);
+    this.keyTransfer = new EtcdTransfer(runtime);
+    this.#consoleKv = {
+      range: (request) => call((etcd) => etcd.kv.range(request)),
+      put: (request) => call((etcd) => etcd.kv.put(request)),
+      deleteRange: (request) => call((etcd) => etcd.kv.deleteRange(request)),
+      txn: (request) => call((etcd) => etcd.kv.txn(request)),
+    };
     this.keyspace = new EtcdKeyspace({
       call,
+      runtime,
       delimiter: config.keyDelimiter,
       scanBatch: config.scanBatch,
       readOnly: options.readOnly,
       queued: (work) => this.#queued(work),
     });
+    if (config.autoSyncInterval > 0) this.#scheduleRefresh(config, options);
   }
 
   static async open(config: EtcdConfig, options: ConnectOptions): Promise<EtcdSession> {
@@ -70,7 +117,12 @@ export class EtcdSession implements Session {
     if (this.#running) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     this.#running = true;
     try {
-      const host = { ...this.#host, readOnly: this.#readOnly };
+      const host = {
+        ...this.#host,
+        readOnly: this.#readOnly,
+        consoleKv: this.#consoleKv,
+        dispatchConsole: (intent: ConsoleIntent) => this.#dispatchConsole(intent, sql.trim()),
+      };
       return await runCommand(host, sql.trim(), { fullBytes: options?.fullBytes === true });
     } finally {
       this.#running = false;
@@ -86,6 +138,25 @@ export class EtcdSession implements Session {
     }
   }
 
+  async #dispatchConsole(intent: ConsoleIntent, text: string): Promise<ExecuteResult> {
+    if (intent.requiresUi)
+      throw new PluginError(
+        "statementFailed",
+        `${intent.command} requires its managed tool window and confirmation. Open the corresponding Watch, Cluster, Leases or Access tool.`,
+      );
+    const tokens = tokenize(text);
+    const found = commandOf(tokens.map((token) => token.text));
+    if (found === null) throw new PluginError("statementFailed", "Unknown administrative command.");
+    if (intent.action === "keepAlive") {
+      const lease = await this.leases.keepAliveOnce(consoleLeaseId(intent.arguments.positional[0]?.text ?? ""));
+      return replyResult(
+        lease.remainingTtlSeconds,
+        `Lease renewal confirmed, remaining TTL ${lease.remainingTtlSeconds ?? "unknown"}s. Stopping renewal does not revoke the lease.`,
+      );
+    }
+    return runAdmin(this.#host, found.doc, tokens.slice(found.length));
+  }
+
   nodes(): Promise<readonly ServerNode[]> {
     this.#checkOpen();
     return nodes(this.#host);
@@ -93,8 +164,61 @@ export class EtcdSession implements Session {
 
   async serverInfo(node: string | null): Promise<ServerInfo> {
     this.#checkOpen();
-    this.#member ??= connectedMember(this.#host).catch(() => null);
-    return serverInfo(this.#host, node, await this.#member);
+    const endpoints = this.#connection.client.endpoints;
+    let endpointId = endpoints[0]!.id;
+    if (node !== null) {
+      let found = false;
+      let denied = 0;
+      for (const endpoint of endpoints) {
+        try {
+          const status = await this.cluster.status(endpoint.id);
+          if (hexId(status.memberId) === node) {
+            endpointId = endpoint.id;
+            found = true;
+            break;
+          }
+        } catch (cause) {
+          if (!isPermissionDenied(cause)) throw cause;
+          denied += 1;
+        }
+      }
+      // A user refused member status cannot tell members apart; with one endpoint on a one-member
+      // cluster there is nothing to tell apart, so its info is read and notes the refused sections.
+      if (!found && endpoints.length === 1 && denied === 1) {
+        const members = await nodes(this.#host);
+        found = members.length === 1 && members[0]!.id === node;
+      }
+      if (!found)
+        throw new PluginError(
+          "statementFailed",
+          "This member has no reachable configured endpoint with readable status. Configure its endpoint; advertised URLs are never dialled.",
+        );
+    }
+    const pinned = this.#connection.client.pinned(endpointId);
+    const info = await serverInfo(
+      { ...this.#host, call: (work) => this.#failures(() => pinned.call(work)) },
+      node,
+      node,
+    );
+    return {
+      ...info,
+      sections: [
+        ...info.sections,
+        {
+          title: "Connection",
+          entries: [
+            { name: "endpoint", value: endpointId },
+            {
+              name: "read_mode",
+              value:
+                this.#connection.config.readMode === "serializable" ? "serializable (may be stale)" : "linearizable",
+            },
+            { name: "namespace_base64", value: this.#host.namespace!.prefix.toString("base64") },
+            { name: "namespace_scope", value: "KV only; leases, auth and cluster administration are global" },
+          ],
+        },
+      ],
+    };
   }
 
   /** etcd keeps no slow log a client can read; slow requests go to the server's own log. */
@@ -119,14 +243,54 @@ export class EtcdSession implements Session {
     });
   }
 
-  close(): Promise<void> {
+  /** Lease, user, role, member, endpoint and revision values; never through an unscoped KV client. */
+  suggestConsoleValues(
+    kind: NonNullable<ParameterDoc["completion"]>,
+    prefix: string,
+  ): Promise<readonly ConsoleValueSuggestion[]> {
+    this.#checkOpen();
+    return suggestConsoleValues(this, kind, prefix, async () => {
+      const result = await this.#host.call((etcd) =>
+        etcd.kv.range({ key: NO_END, range_end: NO_END, count_only: true }),
+      );
+      return result.header.revision;
+    });
+  }
+
+  async close(): Promise<void> {
+    if (this.#closed) return;
+    this.#closed = true;
+    clearTimeout(this.#refreshTimer);
     this.keyspace.close();
+    await this.#state.close();
     this.#connection.client.close();
-    return Promise.resolve();
   }
 
   #checkOpen(): void {
-    if (this.#connection.client.closed) throw new PluginError("connectionLost", "The connection to etcd is closed.");
+    if (this.#closed || this.#connection.client.closed)
+      throw new PluginError("connectionLost", "The connection to etcd is closed.");
+  }
+
+  #scheduleRefresh(config: EtcdConfig, options: ConnectOptions): void {
+    this.#refreshTimer = setTimeout(() => {
+      void this.#refresh(config, options);
+    }, config.autoSyncInterval * MS_PER_SECOND);
+    this.#refreshTimer.unref();
+  }
+
+  async #refresh(config: EtcdConfig, options: ConnectOptions): Promise<void> {
+    if (this.#closed) return;
+    let probe: Connection | undefined;
+    try {
+      probe = await openConnection(config, options);
+      if (probe.clusterId !== this.#connection.clusterId) await this.close();
+    } catch {
+      // Do not replay work or admit a newly advertised endpoint after a refresh failure.
+      await this.close();
+    } finally {
+      probe?.client.close();
+      if (!this.#closed) this.#scheduleRefresh(config, options);
+    }
   }
 
   #queued<T>(work: () => Promise<T>): Promise<T> {
@@ -144,7 +308,6 @@ export class EtcdSession implements Session {
     } catch (cause) {
       if (cause instanceof PluginError) throw cause;
       const message = errorText(cause);
-      if (CONNECTION_LOST.test(message)) throw new PluginError("connectionLost", message, { cause });
       if (isPermissionDenied(cause))
         throw new PluginError("statementFailed", `${message}. ${NOT_PERMITTED}`, { cause });
       throw new PluginError("statementFailed", message, { cause });

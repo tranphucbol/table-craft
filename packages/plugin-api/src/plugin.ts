@@ -11,6 +11,18 @@ import type {
 import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { InspectionRequest, Problem } from "./inspection.js";
 import type { KeySource, Keyspace } from "./keyspace.js";
+import type {
+  AccessManager,
+  ClusterManager,
+  CommandAdmission,
+  CommandTransactionBuilder,
+  ConnectionEndpoint,
+  ConnectionTransport,
+  CoordinationViewer,
+  KeyTransfer,
+  KeyWatcher,
+  LeaseManager,
+} from "./keyAdvanced.js";
 import type { ObjectEditor } from "./objects.js";
 import type { SessionMonitor } from "./sessions.js";
 import type { TypeClass, WireValue } from "./values.js";
@@ -39,6 +51,14 @@ export const CAPABILITIES = [
   "nodes",
   "serverInfo",
   "serverTimeout",
+  "revisions",
+  "watch",
+  "leases",
+  "access",
+  "members",
+  "maintenance",
+  "coordination",
+  "bulkTransfer",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -284,6 +304,12 @@ export interface InsertTarget {
 export type InsertRow = readonly ParameterValue[];
 
 export interface Session {
+  readonly watch?: KeyWatcher;
+  readonly leases?: LeaseManager;
+  readonly cluster?: ClusterManager;
+  readonly access?: AccessManager;
+  readonly coordination?: CoordinationViewer;
+  readonly keyTransfer?: KeyTransfer;
   /**
    * Rejects with a `PluginError`: `cancelled` when `cancel` interrupted it, `connectionLost` when
    * the connection was gone before the statement was sent, `sessionBusy` when an earlier statement
@@ -393,6 +419,8 @@ export interface TlsInfo {
 }
 
 export interface ConnectOptions {
+  /** Authoritative network targets; configured and discovered addresses must not bypass these. */
+  readonly transports?: readonly ConnectionTransport[];
   /**
    * Ask the database to refuse writes for the whole session (decision 011). A guard against
    * accidents, not a security boundary: a statement can switch it back off.
@@ -680,6 +708,7 @@ export interface Transactions {
  * per line, as the server's own client reads them.
  */
 export interface CommandLanguage {
+  readonly transactionBuilder?: CommandTransactionBuilder;
   /** Every command in `text`, in order; comments and blank lines belong to none. */
   split(text: string): readonly StatementSpan[];
   classify(command: string): StatementClass;
@@ -693,10 +722,18 @@ export interface CommandLanguage {
   signatureAt?(request: CompletionRequest, session: Session | null): Promise<SignatureHelp | null>;
   /** Problems in `request.text` found without running it, such as a costly command, with quick fixes. */
   inspect?(request: InspectionRequest): Promise<readonly Problem[]>;
+  /**
+   * Whether `command`, one span `split` returned, may run as an ordinary statement (plan 110). The
+   * host asks before it records or shows the text; without this method every command executes.
+   * Must not throw or log the text; the host rejects a command when it does.
+   */
+  admit?(command: string): CommandAdmission;
 }
 
 /** The default export of a plugin's entry module (decision 005). */
 export interface DatasourcePlugin {
+  /** Pure enumeration before transport setup; never returns secrets. */
+  connectionEndpoints?(config: unknown): readonly ConnectionEndpoint[];
   readonly id: string;
   readonly capabilities: readonly Capability[];
   /** Present exactly when the plugin declares `sql`. */

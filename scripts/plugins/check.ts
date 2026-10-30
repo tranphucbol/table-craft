@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { loadPlugins } from "@table-craft/core";
+import { loadPlugins } from "../../packages/core/src/plugins/loader.js";
 import { API_VERSION, MANIFEST_FILE } from "@table-craft/plugin-api";
 import { officialPackage } from "../../packages/desktop/src/main/pluginStore/catalog.js";
 import { PUBLISHED_NAME } from "../../packages/plugin-api/scripts/build.js";

@@ -29,6 +29,7 @@ import {
   PAGE_ROWS_RANGE,
   STATEMENT_TIMEOUT_SECONDS_RANGE,
   SESSIONS_REFRESH_SECONDS_RANGE,
+  WATCH_RETENTION_RANGE,
   type NumberRange,
 } from "@table-craft/desktop/settings/settings.js";
 
@@ -63,6 +64,7 @@ const RANGES: Readonly<Record<string, NumberRange>> = {
   "data.pageRows": PAGE_ROWS_RANGE,
   "data.fetchAllCap": FETCH_ALL_CAP_RANGE,
   "data.exportStallSeconds": EXPORT_STALL_SECONDS_RANGE,
+  "data.watchRetention": WATCH_RETENTION_RANGE,
   "data.blobLimitMb": BLOB_LIMIT_MB_RANGE,
   "console.statementTimeoutSeconds": STATEMENT_TIMEOUT_SECONDS_RANGE,
   "console.sessionsRefreshSeconds": SESSIONS_REFRESH_SECONDS_RANGE,
@@ -340,7 +342,20 @@ describe("user docs", () => {
 
   it("givenPluginsSection_whenCapabilitiesListed_thenTheyEqualCapabilities", () => {
     // The sample is a SQL plugin's manifest; `commands` excludes `sql`, and PostgreSQL has no nodes.
-    const NOT_IN_SQL_SAMPLE: readonly string[] = ["commands", "keyValue", "nodes", "serverInfo"];
+    const NOT_IN_SQL_SAMPLE: readonly string[] = [
+      "commands",
+      "keyValue",
+      "nodes",
+      "serverInfo",
+      "revisions",
+      "watch",
+      "leases",
+      "access",
+      "members",
+      "maintenance",
+      "coordination",
+      "bulkTransfer",
+    ];
     const plugins = section("docs/guide/writing-plugins.md", "Capabilities");
     const listed = [...plugins.matchAll(/^- `(\w+)`:/gm)].map((match) => match[1]);
     const manifest = JSON.parse(/```json\n([\s\S]*?)```/.exec(plugins)?.[1] ?? "null") as {

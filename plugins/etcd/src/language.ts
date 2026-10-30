@@ -1,8 +1,22 @@
 import type { InspectionRequest, Problem, QuickFix, StatementClass, StatementSpan } from "@table-craft/plugin-api";
 import { isFlag } from "./args.js";
 import { commandOf } from "./docs.js";
+import {
+  CONSOLE_CREDENTIAL_INSPECTION,
+  CONSOLE_INTENT_INSPECTION,
+  consoleHistoryPolicy,
+  detectConsoleIntent,
+} from "./consoleIntent.js";
 import { END, TXN } from "./txn.js";
 import { isCommentOrBlank, tokenize, type Token } from "./tokens.js";
+export { transactionBuilder } from "./transactionBuilder.js";
+export {
+  admitConsoleCommand,
+  CONSOLE_CREDENTIAL_INSPECTION,
+  CONSOLE_INTENT_INSPECTION,
+  consoleHistoryPolicy,
+  detectConsoleIntent,
+} from "./consoleIntent.js";
 
 /** The inspection id of a costly-command mark, which the user can turn off. */
 export const COSTLY_INSPECTION = "EtcdCostlyCommand";
@@ -48,9 +62,13 @@ export function split(text: string): StatementSpan[] {
     const from = line.from + (line.text.length - line.text.trimStart().length);
     let last = line;
     if (isTxnHead(line.text)) {
-      while (index + 1 < lines.length && last.text.trim().toLowerCase() !== END) {
+      let depth = 1;
+      while (index + 1 < lines.length && depth > 0) {
         index += 1;
         last = lines[index] ?? last;
+        const item = last.text.trim().replace(BRANCH_HEADINGS, "");
+        if (isTxnHead(item)) depth += 1;
+        if (item.toLowerCase() === END) depth -= 1;
       }
       while (isCommentOrBlank(last.text) && last !== line) last = lines[--index] ?? line;
     }
@@ -95,6 +113,20 @@ function destructiveOf(name: string, tokens: readonly Token[]): { reason: string
       return { reason: `compaction discards every revision before ${key?.text ?? "the one given"}`, byName: false };
     case "lease revoke":
       return { reason: "lease revoke deletes every key attached to the lease", byName: false };
+    case "defrag":
+    case "alarm disarm":
+    case "auth disable":
+    case "auth enable":
+    case "member remove":
+    case "member promote":
+    case "user delete":
+    case "user revoke-role":
+    case "role delete":
+    case "role revoke-permission":
+      return {
+        reason: `${name} changes global cluster state or access; confirm in the matching manager`,
+        byName: true,
+      };
     default:
       return null;
   }
@@ -149,10 +181,37 @@ export function classify(command: string): StatementClass {
 
 /** A mark on every costly command of the text, with the bounded command as its fix. */
 export function inspect(request: InspectionRequest): Promise<readonly Problem[]> {
-  if (request.disabled?.includes(COSTLY_INSPECTION) === true) return Promise.resolve([]);
   const problems: Problem[] = [];
   for (const span of split(request.text)) {
+    if (consoleHistoryPolicy(span.sql) === "omit") {
+      problems.push({
+        from: span.from,
+        to: span.to,
+        severity: "warning",
+        inspection: CONSOLE_CREDENTIAL_INSPECTION,
+        message: "Open the secure credential dialog. Do not record this command in history.",
+        fixes: [],
+      });
+      continue;
+    }
     if (isTxnHead(span.sql.split(LINE_BREAK)[0] ?? "")) continue;
+    try {
+      const intent = detectConsoleIntent(span.sql);
+      if (intent?.requiresUi === true)
+        problems.push({
+          from: span.from,
+          to: span.to,
+          severity: "warning",
+          inspection: `${CONSOLE_INTENT_INSPECTION}.${intent.action}`,
+          message: intent.global
+            ? "Open the matching manager to confirm this global operation."
+            : "Open the managed Watch tool window; this command does not run as a unary query.",
+          fixes: [],
+        });
+    } catch {
+      // Incomplete editor text is not an executable intent.
+    }
+    if (request.disabled?.includes(COSTLY_INSPECTION) === true) continue;
     const tokens = tokenize(span.sql);
     const costly = costlyOf(span.sql, nameOf(tokens), tokens);
     if (costly === null) continue;

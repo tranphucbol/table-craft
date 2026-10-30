@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { EngineError, KeyName } from "@table-craft/desktop/engine/protocol.js";
+import type { EngineError, KeyDeletePreview, KeyName } from "@table-craft/desktop/engine/protocol.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -21,6 +21,9 @@ export interface KeyDeleteTask {
   readonly total: number;
   readonly deleted: number;
   readonly error: EngineError | null;
+  readonly atomic?: boolean;
+  readonly exactTotal?: string | null;
+  readonly exactDeleted?: string;
 }
 
 export interface KeyDeletesState {
@@ -32,6 +35,12 @@ export interface KeyDeletesState {
     prefix: string,
     keys: readonly KeyName[],
   ) => Promise<KeyDeleteTask>;
+  readonly startPrepared: (
+    datasourceId: string,
+    database: number,
+    prefix: KeyName,
+    preview: KeyDeletePreview,
+  ) => Promise<KeyDeleteTask>;
   readonly cancel: (taskId: string) => void;
   readonly dismiss: (taskId: string) => void;
 }
@@ -40,9 +49,13 @@ export interface KeyDeletesDependencies {
   readonly connect: (datasourceId: string) => Promise<EngineClient>;
   /** Told after each batch, so the key tree drops what is gone. */
   readonly removed?: (datasourceId: string, database: number, keys: readonly KeyName[]) => void;
+  /** Told after a prepared delete commits, so the tree relists only what held the range. */
+  readonly refreshed?: (datasourceId: string, database: number, range: KeyName) => Promise<void>;
 }
 
 export function keyDeleteText(task: KeyDeleteTask): string {
+  if (task.atomic === true)
+    return `${task.exactDeleted ?? "0"} of ${task.exactTotal ?? "unknown"}${task.state === "running" ? " · atomic delete in progress; cannot cancel" : ""}`;
   return `${task.deleted.toLocaleString("en-US")} of ${task.total.toLocaleString("en-US")}`;
 }
 
@@ -56,6 +69,35 @@ export function createKeyDeletesStore(dependencies: KeyDeletesDependencies) {
 
     return {
       tasks: [],
+
+      async startPrepared(datasourceId, database, prefix, preview) {
+        const taskId = `key-delete-${String(started++)}`;
+        const task: KeyDeleteTask = {
+          taskId,
+          datasourceId,
+          database,
+          prefix: prefix.text,
+          state: "running",
+          total: 0,
+          deleted: 0,
+          error: null,
+          atomic: true,
+          exactTotal: preview.counts.keys,
+          exactDeleted: "0",
+        };
+        set((state) => ({ tasks: [...state.tasks, task] }));
+        try {
+          const client = await dependencies.connect(datasourceId);
+          const result = await client.call("keyspace.deletePrepared", { token: preview.token });
+          patch(taskId, { state: "completed", exactDeleted: result.deleted });
+        } catch (cause) {
+          patch(taskId, { state: "failed", error: toError(cause) });
+          return taskOf(taskId) ?? task;
+        }
+        // The delete committed; a failed relist shows on the folder's own row, not as a failed delete.
+        await dependencies.refreshed?.(datasourceId, database, prefix).catch(() => undefined);
+        return taskOf(taskId) ?? task;
+      },
 
       async start(datasourceId, database, prefix, keys) {
         const taskId = `key-delete-${String(started++)}`;
@@ -92,7 +134,7 @@ export function createKeyDeletesStore(dependencies: KeyDeletesDependencies) {
       },
 
       cancel(taskId) {
-        if (taskOf(taskId)?.state === "running") cancelled.add(taskId);
+        if (taskOf(taskId)?.state === "running" && taskOf(taskId)?.atomic !== true) cancelled.add(taskId);
       },
 
       dismiss(taskId) {
@@ -108,4 +150,5 @@ export type KeyDeletesStore = ReturnType<typeof createKeyDeletesStore>;
 export const useKeyDeletes = createKeyDeletesStore({
   connect: (datasourceId) => useDatasources.getState().connect(datasourceId),
   removed: (datasourceId, database, keys) => useKeys.getState().forget(datasourceId, database, keys),
+  refreshed: (datasourceId, database, range) => useKeys.getState().refreshRange(datasourceId, database, range),
 });

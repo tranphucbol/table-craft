@@ -1,6 +1,7 @@
 import { PluginError } from "@table-craft/plugin-api";
 import type { ICompare, ITxnRequest } from "etcd3";
 import { hexId } from "./args.js";
+import { consoleInt64, consoleLeaseId } from "./consoleNumbers.js";
 import { kvOpOf, opText, requestOf, type KvOp } from "./ops.js";
 import { isCommentOrBlank, quoteBytes, readQuoted, tokenize } from "./tokens.js";
 
@@ -33,24 +34,27 @@ const SERVER_RESULTS: Readonly<Record<CompareOperator, ICompare["result"]>> = {
   "<": "Less",
 };
 const COMPARE_HEAD = new RegExp(`^(${COMPARE_TARGETS.join("|")})\\(`, "i");
-const DECIMAL = /^\d+$/;
-const HEX_ID = /^(?:0x)?[0-9a-f]+$/i;
-const HEX_PREFIX = "0x";
 const INDENT = "  ";
 
 /** One compare; `value` holds bytes for `value(…)`, else etcd's int64 as a decimal string. */
 export interface TxnCompare {
   readonly target: CompareTarget;
   readonly key: Buffer;
+  readonly rangeEnd?: Buffer;
   readonly operator: CompareOperator;
   readonly value: Buffer | string;
 }
 
 export interface Txn {
   readonly compares: readonly TxnCompare[];
-  readonly success: readonly KvOp[];
-  readonly failure: readonly KvOp[];
+  readonly success: readonly TxnOp[];
+  readonly failure: readonly TxnOp[];
 }
+
+export type TxnOp = KvOp | { readonly kind: "txn"; readonly transaction: Txn };
+export const TXN_MAX_DEPTH = 8;
+export const TXN_OPERATION_LIMIT = 128;
+export const TXN_MAX_BYTES = 1_048_576;
 
 function failure(message: string): PluginError {
   return new PluginError("statementFailed", `txn: ${message}`);
@@ -76,7 +80,19 @@ export function parseCompare(line: string): TxnCompare {
     key = Buffer.from(line.slice(index, close), "utf8");
     index = close;
   }
+  while (index < line.length && /\s/.test(line[index] ?? "")) index += 1;
+  let rangeEnd: Buffer | undefined;
+  if (line[index] === ",") {
+    index += 1;
+    while (/\s/.test(line[index] ?? "") && index < line.length) index += 1;
+    const end = readQuoted(line, index);
+    if ((line[index] !== '"' && line[index] !== "'") || !end.closed) throw failure("range end must be quoted.");
+    rangeEnd = Buffer.from(end.bytes);
+    index = end.end;
+    while (index < line.length && /\s/.test(line[index] ?? "")) index += 1;
+  }
   if (line[index] !== ")") throw failure(`${line} has no closing ) after the key.`);
+  const range = rangeEnd === undefined ? {} : { rangeEnd };
   const rest = line.slice(index + 1).trimStart();
   const operator = OPERATORS.find((candidate) => rest.startsWith(candidate));
   if (operator === undefined) throw failure(`${line} needs one of =, !=, > and < after the key.`);
@@ -85,59 +101,79 @@ export function parseCompare(line: string): TxnCompare {
   if (operand === undefined || operands.length > 1 || !operand.closed) {
     throw failure(`${line} needs one value after ${operator}.`);
   }
-  if (target === "value") return { target, key, operator, value: operand.bytes };
+  if (target === "value") return { target, key, ...range, operator, value: operand.bytes };
   if (target === "lease") {
-    if (!HEX_ID.test(operand.text)) throw failure(`a lease compares with a hex id or 0, not ${operand.text}.`);
-    const hex = operand.text.toLowerCase().startsWith(HEX_PREFIX) ? operand.text : `${HEX_PREFIX}${operand.text}`;
-    return { target, key, operator, value: BigInt(hex).toString() };
+    return { target, key, ...range, operator, value: consoleLeaseId(operand.text) };
   }
-  if (!DECIMAL.test(operand.text)) throw failure(`${target} compares with a whole number, not ${operand.text}.`);
-  return { target, key, operator, value: BigInt(operand.text).toString() };
-}
-
-/** The lines of a block between `txn` and `end`, each with what it holds. */
-function bodyLines(text: string): string[] {
-  const lines = text.split(/\r?\n/);
-  const first = lines.findIndex((line) => !isCommentOrBlank(line));
-  const head = tokenize(lines[first] ?? "");
-  if (head.length !== 1 || head[0]?.text.toLowerCase() !== TXN) {
-    throw failure("a block starts with txn alone on its line.");
-  }
-  const body: string[] = [];
-  for (const line of lines.slice(first + 1)) {
-    const trimmed = line.trim();
-    if (trimmed.toLowerCase() === END) return body;
-    if (!isCommentOrBlank(trimmed)) body.push(trimmed);
-  }
-  throw failure("the block has no end line. Close it with end.");
+  return { target, key, ...range, operator, value: consoleInt64(operand.text) };
 }
 
 /** A whole `txn … end` block as the compares and the two lists of ops. */
 export function parseTxn(text: string): Txn {
-  const items: Record<Section, string[]> = { compares: [], success: [], failure: [] };
-  let section: Section | null = null;
-  for (const line of bodyLines(text)) {
-    const heading = Object.keys(SECTIONS).find((word) => line.toLowerCase().startsWith(word)) as
-      keyof typeof SECTIONS | undefined;
-    let item = line;
-    if (heading !== undefined) {
-      section = SECTIONS[heading];
-      item = line.slice(heading.length).trim();
-      if (item === "") continue;
+  if (Buffer.byteLength(text) > TXN_MAX_BYTES) throw failure("transaction exceeds the configured byte limit.");
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => !isCommentOrBlank(line));
+  let at = 0;
+  let operations = 0;
+  function block(depth: number): Txn {
+    if (depth > TXN_MAX_DEPTH) throw failure(`maximum depth is ${String(TXN_MAX_DEPTH)}.`);
+    if (lines[at++]?.toLowerCase() !== TXN) throw failure("a block starts with txn alone on its line.");
+    const compares: TxnCompare[] = [];
+    const success: TxnOp[] = [];
+    const failureOps: TxnOp[] = [];
+    let section: Section | null = null;
+    const seen = new Set<Section>();
+    while (at < lines.length) {
+      let line = lines[at++] ?? "";
+      if (line.toLowerCase() === END) return { compares, success, failure: failureOps };
+      const heading = Object.keys(SECTIONS).find((word) => line.toLowerCase().startsWith(word)) as
+        keyof typeof SECTIONS | undefined;
+      if (heading !== undefined) {
+        section = SECTIONS[heading];
+        if (seen.has(section)) throw failure("duplicate section heading.");
+        seen.add(section);
+        line = line.slice(heading.length).trim();
+        if (line === "") continue;
+      }
+      if (section === null)
+        throw failure(`${line} comes before if:, then: or else:. Start each list with its heading.`);
+      operations += 1;
+      if (operations > TXN_OPERATION_LIMIT)
+        throw failure(`configured operation limit is ${String(TXN_OPERATION_LIMIT)}.`);
+      if (section === "compares") compares.push(parseCompare(line));
+      else {
+        let op: TxnOp;
+        if (line.toLowerCase() === TXN) {
+          at -= 1;
+          lines[at] = TXN;
+          op = { kind: "txn", transaction: block(depth + 1) };
+        } else {
+          const tokens = tokenize(line);
+          if (tokens.some((token) => !token.closed)) throw failure("unclosed quote.");
+          const parsed = kvOpOf(tokens);
+          op =
+            parsed.kind === "put" ? { ...parsed, lease: BigInt.asIntN(64, BigInt(parsed.lease)).toString() } : parsed;
+        }
+        (section === "success" ? success : failureOps).push(op);
+      }
     }
-    if (section === null) throw failure(`${line} comes before if:, then: or else:. Start each list with its heading.`);
-    items[section].push(item);
+    throw failure("the block has no end line. Close it with end.");
   }
-  return {
-    compares: items.compares.map(parseCompare),
-    success: items.success.map((line) => kvOpOf(tokenize(line))),
-    failure: items.failure.map((line) => kvOpOf(tokenize(line))),
-  };
+  const txn = block(1);
+  if (at !== lines.length) throw failure("unexpected text after end.");
+  return txn;
 }
 
 /** The compare as etcd's `Compare` takes it. */
 export function compareOf(compare: TxnCompare): ICompare {
-  const base = { key: compare.key, target: SERVER_TARGETS[compare.target], result: SERVER_RESULTS[compare.operator] };
+  const base = {
+    key: compare.key,
+    ...(compare.rangeEnd === undefined ? {} : { range_end: compare.rangeEnd }),
+    target: SERVER_TARGETS[compare.target],
+    result: SERVER_RESULTS[compare.operator],
+  };
   switch (compare.target) {
     case "value":
       return { ...base, value: compare.value as Buffer };
@@ -156,14 +192,20 @@ export function compareOf(compare: TxnCompare): ICompare {
 export function txnRequestOf(txn: Txn): ITxnRequest {
   return {
     compare: txn.compares.map(compareOf),
-    success: txn.success.map(requestOf),
-    failure: txn.failure.map(requestOf),
+    success: txn.success.map(txnOpRequest),
+    failure: txn.failure.map(txnOpRequest),
   };
 }
 
 /** Whether running the block may write, in either branch. */
 export function txnWrites(txn: Txn): boolean {
-  return [...txn.success, ...txn.failure].some((op) => op.kind !== "get");
+  return [...txn.success, ...txn.failure].some((op) =>
+    op.kind === "txn" ? txnWrites(op.transaction) : op.kind !== "get",
+  );
+}
+
+function txnOpRequest(op: TxnOp) {
+  return op.kind === "txn" ? { request_txn: txnRequestOf(op.transaction) } : requestOf(op);
 }
 
 function compareText(compare: TxnCompare): string {
@@ -171,11 +213,17 @@ function compareText(compare: TxnCompare): string {
     compare.target === "value"
       ? quoteBytes(compare.value as Buffer)
       : compare.target === "lease"
-        ? hexId(compare.value as string)
+        ? hexId(BigInt.asUintN(64, BigInt(compare.value as string)).toString())
         : (compare.value as string);
   const key = quoteBytes(compare.key);
   // Bare, a key holding `)` would end the compare early.
-  return `${compare.target}(${key.startsWith('"') ? key : `"${key}"`}) ${compare.operator} ${operand}`;
+  const end = compare.rangeEnd === undefined ? "" : `,${forceQuoted(compare.rangeEnd)}`;
+  return `${compare.target}(${key.startsWith('"') ? key : `"${key}"`}${end}) ${compare.operator} ${operand}`;
+}
+
+function forceQuoted(bytes: Buffer): string {
+  const text = quoteBytes(bytes);
+  return text.startsWith('"') ? text : `"${text}"`;
 }
 
 function sectionText(heading: string, lines: readonly string[]): string[] {
@@ -188,8 +236,14 @@ export function txnText(txn: Txn): string {
   return [
     TXN,
     ...sectionText("if:", txn.compares.map(compareText)),
-    ...sectionText("then:", txn.success.map(opText)),
-    ...sectionText("else:", txn.failure.map(opText)),
+    ...sectionText(
+      "then:",
+      txn.success.map((op) => (op.kind === "txn" ? txnText(op.transaction) : opText(op))),
+    ),
+    ...sectionText(
+      "else:",
+      txn.failure.map((op) => (op.kind === "txn" ? txnText(op.transaction) : opText(op))),
+    ),
     END,
   ].join("\n");
 }

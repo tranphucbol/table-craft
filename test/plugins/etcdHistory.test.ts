@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import type { Call } from "@table-craft/plugin-etcd/admin";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { KeyHistoryRequest } from "@table-craft/plugin-api";
 import { HistoryState, keyHistory } from "@table-craft/plugin-etcd/history";
 import { EtcdKeyspace } from "@table-craft/plugin-etcd/keyspace";
@@ -180,16 +180,21 @@ describe("etcd bounded history", () => {
   });
 
   it("givenDelayedAcquisitionPastDeadline_whenStreamArrives_thenCancelWithoutWatchWrite", async () => {
-    let acquire!: () => void;
-    const acquisition = new Promise<void>((resolve) => {
-      acquire = resolve;
-    });
-    const f = fixture("8", [], acquisition);
-    const pending = f.history({ ...request, timeoutMs: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    acquire();
-    expect(await pending).toMatchObject({ events: [], complete: false, stopReason: "deadline" });
-    expect(f.streams[0]).toMatchObject({ canceled: true, start: undefined });
+    vi.useFakeTimers();
+    try {
+      let acquire!: () => void;
+      const acquisition = new Promise<void>((resolve) => {
+        acquire = resolve;
+      });
+      const f = fixture("8", [], acquisition);
+      const pending = f.history({ ...request, timeoutMs: 1 });
+      await vi.advanceTimersByTimeAsync(10);
+      acquire();
+      expect(await pending).toMatchObject({ events: [], complete: false, stopReason: "deadline" });
+      expect(f.streams[0]).toMatchObject({ canceled: true, start: undefined });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("givenCompactionBeforeTerminal_whenRetrying_thenDiscloseGapAndResumeAfterCompaction", async () => {

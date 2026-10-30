@@ -6,6 +6,7 @@ import type { GrpcTls } from "./tls.js";
 /** etcd serves its version over plain HTTP on the client port, to anyone, auth on or off. */
 const VERSION_PATH = "/version";
 const OK = 200;
+const MAX_VERSION_BYTES = 64 * 1024;
 
 /**
  * The server's version from `GET /version` on the endpoint gRPC uses (decision 10 of plan 110),
@@ -25,7 +26,15 @@ export function httpVersion(address: string, tls: GrpcTls | null, timeoutMs: num
       }
       let body = "";
       response.setEncoding("utf8");
-      response.on("data", (chunk: string) => (body += chunk));
+      response.on("error", () => resolve(null));
+      response.on("aborted", () => resolve(null));
+      response.on("data", (chunk: string) => {
+        body += chunk;
+        if (Buffer.byteLength(body) > MAX_VERSION_BYTES) {
+          response.destroy();
+          resolve(null);
+        }
+      });
       response.on("end", () => {
         try {
           const parsed = JSON.parse(body) as { etcdserver?: unknown };
@@ -50,7 +59,10 @@ export function httpVersion(address: string, tls: GrpcTls | null, timeoutMs: num
             },
             done,
           );
-    request.on("timeout", () => request.destroy());
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(null);
+    });
     request.on("error", () => resolve(null));
     request.end();
   });

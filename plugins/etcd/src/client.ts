@@ -7,6 +7,20 @@ const BYTES_PER_MB = 1024 * 1024;
 const MIN_KEEPALIVE_MS = 5000;
 /** What etcd answers when the token a call carries is gone: expired, or the auth store moved on (etcd3 #198). */
 const STALE_AUTH = /invalid auth token|revision of auth store is old|revision in header is old/i;
+const AMBIGUOUS_TRANSPORT =
+  /UNAVAILABLE|DEADLINE_EXCEEDED|deadline exceeded|No connection established|ECONNREFUSED|ECONNRESET|socket hang up|RST_STREAM/i;
+
+/** The RPC may have reached the server; never reconnect-and-replay a mutation on this error. */
+export class EtcdAmbiguousError extends PluginError {
+  readonly outcome = "unknown";
+
+  constructor() {
+    super(
+      "statementFailed",
+      "etcd did not confirm the request before the connection failed or timed out. It may have completed; inspect the current state before trying again.",
+    );
+  }
+}
 
 export interface ClientSettings {
   /** `host:port`, as dialled. */
@@ -16,7 +30,17 @@ export interface ClientSettings {
   readonly password: string;
   readonly maxMessageMb: number;
   readonly connectTimeoutMs: number;
+  readonly requestTimeoutMs?: number;
+  readonly maxRequestBytes?: number;
+  readonly connecting?: boolean;
   readonly keepAliveMs?: number;
+  readonly endpoints?: readonly ClientEndpoint[];
+}
+
+export interface ClientEndpoint {
+  readonly id: string;
+  readonly address: string;
+  readonly tls: GrpcTls | null;
 }
 
 type Policy = NonNullable<NonNullable<IOptions["faultHandling"]>["global"]>;
@@ -42,27 +66,27 @@ interface PoolInternals {
 }
 
 /**
- * Puts gRPC credentials that check the server as the TLS mode says on the client's one host.
+ * Puts gRPC credentials that check the server as the TLS mode says on every configured host.
  * etcd3 builds its credentials from CA, key and chain alone, so it can neither skip verification
  * (`require`) nor skip the name check (`verify-ca`); its pool is reached into before the first
  * call, and the factory taken from etcd3's own credentials so both come from the same gRPC copy.
  */
 function useTls(etcd: Etcd3, tls: GrpcTls): void {
   const pool = (etcd as unknown as { pool?: PoolInternals }).pool;
-  const host = pool?.hosts?.[0];
+  const hosts = pool?.hosts;
   const authenticator = pool?.authenticator;
-  if (host === undefined || authenticator === undefined || pool?.hosts?.length !== 1) {
+  if (hosts === undefined || hosts.length === 0 || authenticator === undefined) {
     throw new PluginError(
       "connectionFailed",
       "This build of the etcd3 driver keeps its connections differently; TLS cannot be set up. Report it with the plugin's version.",
     );
   }
-  const factory = host.channelCredentials.constructor as unknown as SslFactory;
+  const factory = hosts[0]!.channelCredentials.constructor as unknown as SslFactory;
   const credentials = factory.createSsl(tls.rootCertificate, tls.privateKey, tls.certChain, {
     rejectUnauthorized: tls.rejectUnauthorized,
     checkServerIdentity: tls.checkServerIdentity,
   }) as object;
-  host.channelCredentials = credentials;
+  for (const host of hosts) host.channelCredentials = credentials;
   authenticator.credentials = credentials;
 }
 
@@ -75,6 +99,9 @@ function createEtcd(settings: ClientSettings): Etcd3 {
       : { "grpc.keepalive_time_ms": Math.max(settings.keepAliveMs, MIN_KEEPALIVE_MS) };
   const etcd = new Etcd3({
     hosts: [`${scheme}://${settings.address}`],
+    dialTimeout: settings.connectTimeoutMs,
+    defaultCallOptions: (context) =>
+      context.isStream ? {} : { deadline: Date.now() + (settings.requestTimeoutMs ?? settings.connectTimeoutMs) },
     ...(settings.user === "" && settings.password === ""
       ? {}
       : {
@@ -86,7 +113,10 @@ function createEtcd(settings: ClientSettings): Etcd3 {
         }),
     grpcOptions: {
       "grpc.max_receive_message_length": settings.maxMessageMb * BYTES_PER_MB,
-      "grpc.max_send_message_length": settings.maxMessageMb * BYTES_PER_MB,
+      "grpc.max_send_message_length": Math.min(
+        settings.maxMessageMb * BYTES_PER_MB,
+        settings.maxRequestBytes ?? Infinity,
+      ),
       ...keepAlive,
       ...(serverName === null
         ? {}
@@ -120,11 +150,21 @@ export class EtcdClient {
   readonly #inFlight = new Map<Etcd3, number>();
   readonly #retired = new Set<Etcd3>();
   #closed = false;
+  readonly #pinned = new Map<string, EtcdClient>();
+  readonly endpoints: readonly ClientEndpoint[];
 
   constructor(settings: ClientSettings, create: (settings: ClientSettings) => Etcd3 = createEtcd) {
     this.#settings = settings;
     this.#create = create;
     this.#etcd = create(settings);
+    this.endpoints = settings.endpoints ?? [];
+    for (const endpoint of this.endpoints) {
+      const { endpoints: _endpoints, ...single } = settings;
+      this.#pinned.set(
+        endpoint.id,
+        new EtcdClient({ ...single, address: endpoint.address, tls: endpoint.tls }, create),
+      );
+    }
   }
 
   get closed(): boolean {
@@ -133,6 +173,10 @@ export class EtcdClient {
 
   async call<T>(work: (etcd: Etcd3) => Promise<T>): Promise<T> {
     if (this.#closed) throw new PluginError("connectionLost", "The connection to etcd is closed.");
+    if (this.endpoints.length > 0) {
+      const endpoint = this.endpoints[Math.floor(Math.random() * this.endpoints.length)]!;
+      return this.pinned(endpoint.id).call(work);
+    }
     const first = this.#etcd;
     try {
       return await this.#on(first, work);
@@ -152,12 +196,29 @@ export class EtcdClient {
     this.#etcd.close();
     for (const retired of this.#retired) retired.close();
     this.#retired.clear();
+    for (const client of this.#pinned.values()) client.close();
+  }
+
+  /** A member-specific client; unknown or unadmitted endpoints can never be dialled. */
+  pinned(endpointId: string): EtcdClient {
+    if (this.#closed) throw new PluginError("connectionLost", "The connection to etcd is closed.");
+    const client = this.#pinned.get(endpointId);
+    if (client === undefined) throw new PluginError("statementFailed", "Choose a reachable configured etcd endpoint.");
+    return client;
   }
 
   async #on<T>(etcd: Etcd3, work: (etcd: Etcd3) => Promise<T>): Promise<T> {
     this.#inFlight.set(etcd, (this.#inFlight.get(etcd) ?? 0) + 1);
     try {
       return await work(etcd);
+    } catch (cause) {
+      if (
+        !this.#settings.connecting &&
+        !STALE_AUTH.test(errorText(cause)) &&
+        AMBIGUOUS_TRANSPORT.test(errorText(cause))
+      )
+        throw new EtcdAmbiguousError();
+      throw cause;
     } finally {
       const left = (this.#inFlight.get(etcd) ?? 1) - 1;
       if (left > 0) this.#inFlight.set(etcd, left);

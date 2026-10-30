@@ -15,6 +15,7 @@ import { KeyHeader } from "@table-craft/desktop/renderer/keys/KeyHeader.js";
 import { KeyHistoryView } from "@table-craft/desktop/renderer/keys/KeyHistoryView.js";
 import { KeyMergeView } from "@table-craft/desktop/renderer/keys/KeyMergeView.js";
 import { StringValueEditor } from "@table-craft/desktop/renderer/keys/StringValueEditor.js";
+import { keyValueCount } from "@table-craft/desktop/renderer/keys/keyValueFacts.js";
 import { visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { bufferRowAt, pendingText } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
@@ -197,9 +198,22 @@ function ConflictBanner({
 function Footer({ tab }: { readonly tab: KeyTabState }) {
   const rows = tab.result?.rowCount;
   const pending = pendingText(pendingKeyCount(tab));
+  const merge = tab.merge;
+  const count = tab.result === null ? keyValueCount(tab) : null;
+  const saved = tab.notice?.startsWith("Saved as v") === true || tab.notice === "Changes saved";
   return (
     <div className="flex h-row shrink-0 items-center gap-gap border-t border-line bg-panel px-gap text-ink-muted">
-      {pending === null ? (
+      {tab.revisionGuardAvailable === true && tab.status === "submitting" ? (
+        <span role="status">Saving…</span>
+      ) : merge != null ? (
+        <span className="text-danger" role="status">
+          {merge.binary
+            ? "● Not saved · binary merge is read-only"
+            : merge.manual && !merge.acknowledged
+              ? "● Not saved · review Result and mark it resolved"
+              : `● Not saved · ${String(merge.acknowledged ? 0 : merge.merged.conflicts.length)} conflicts left · ${String(merge.merged.automatic)} changes merged automatically`}
+        </span>
+      ) : saved ? null : pending === null ? (
         tab.revisionGuardAvailable === true ? (
           <span>No unsaved changes</span>
         ) : null
@@ -214,8 +228,22 @@ function Footer({ tab }: { readonly tab: KeyTabState }) {
           {tab.result?.complete === false ? "+" : ""} {rows === 1 ? "row" : "rows"}
         </span>
       )}
-      {tab.notice === null ? null : <span data-testid="key-notice">{tab.notice}</span>}
-      <span className="truncate">{STATUS_TEXT[tab.status]}</span>
+      {tab.notice === null ? null : (
+        <span role="status" data-testid="key-notice" className="truncate" title={tab.notice}>
+          {tab.notice}
+        </span>
+      )}
+      <span className="truncate">
+        {tab.revisionGuardAvailable === true && tab.status === "submitting" ? "" : STATUS_TEXT[tab.status]}
+      </span>
+      {count === null ? null : (
+        <span
+          className="ml-auto shrink-0 tabular-nums"
+          title={tab.stringProblem != null ? "Last valid value; the current input is invalid." : undefined}
+        >
+          {count}
+        </span>
+      )}
     </div>
   );
 }
@@ -278,7 +306,8 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
       <ActionButton actionId={KEY_ACTION_IDS.details} compact pressed={detailsOpen} />
     </span>
   ) : null;
-  const details = withDetails && detailsOpen && tab.details !== null ? <KeyDetailsPanel details={tab.details} /> : null;
+  const details =
+    withDetails && detailsOpen && tab.details !== null ? <KeyDetailsPanel details={tab.details} tab={tab} /> : null;
   return (
     <div
       data-testid="key-tab"
@@ -313,7 +342,9 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
           className="flex h-row shrink-0 items-center gap-1 border-b border-line bg-panel px-gap text-ink-muted"
         >
           <ReadOnlyIcon aria-hidden className="size-icon" />
-          <span className="truncate">Read-only: {tab.readOnly}</span>
+          <span className="truncate" title={tab.readOnly}>
+            Read-only: {tab.readOnly}
+          </span>
         </div>
       )}
       {tab.merge?.visible === true ? (

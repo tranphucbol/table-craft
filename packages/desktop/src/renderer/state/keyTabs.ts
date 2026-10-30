@@ -7,6 +7,7 @@ import type {
   KeyName,
   KeyHistoryEvent,
   KeyApplyOptions,
+  KeyLeaseAssignment,
   KeyReadRange,
   KeyType,
   Row,
@@ -22,6 +23,8 @@ import {
   type KeyHistoryState,
 } from "@table-craft/desktop/renderer/model/keyHistory.js";
 import { mergeKeyText } from "@table-craft/desktop/renderer/model/keyMerge.js";
+import { readOnlyReason, savedNoticeText, sameStringBytes } from "./keyTabSave.js";
+import { isKubernetesKeyValue } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
   beginKeyMerge,
   canSaveKeyMerge,
@@ -92,6 +95,8 @@ export interface KeyRangeDraft {
 export const EMPTY_RANGE: KeyRangeDraft = { match: "", from: "", to: "" };
 
 export interface KeyTab extends KeyTarget {
+  readonly leaseAssignmentAvailable?: boolean;
+  readonly leaseDraft?: KeyLeaseAssignment | null;
   readonly merge?: KeyMergeSession | null;
   readonly history?: KeyHistoryState;
   readonly historyAvailable?: boolean;
@@ -134,10 +139,12 @@ export interface KeyTab extends KeyTarget {
 }
 
 export interface KeyTabsState {
+  readonly setLease: (id: string, lease: KeyLeaseAssignment) => void;
   readonly editMerge: (id: string, text: string) => void;
   readonly chooseMerge: (id: string, path: string, side: "theirs" | "yours") => void;
   readonly acknowledgeMerge: (id: string) => void;
   readonly nextMergeConflict: (id: string) => void;
+  readonly previousMergeConflict: (id: string) => void;
   readonly cancelMerge: (id: string) => void;
   readonly discardMerge: (id: string) => void;
   readonly saveMerge: (id: string) => Promise<boolean>;
@@ -219,7 +226,7 @@ export interface KeyTabsDependencies {
 const LOAD_LABEL = "Read key";
 const SUBMIT_LABEL = "Submit key changes";
 const RECREATE_UNLOADED = "Recreate writes back the rows read last; fetch them all first.";
-const SUBMITTED_NOTICE = "Changes saved atomically";
+export const KEY_SAVED_NOTICE_MS = 4_000;
 const HISTORY_COUNT = 20;
 const HISTORY_BYTES = 1_048_576;
 const HISTORY_TIMEOUT_MS = 5_000;
@@ -289,6 +296,7 @@ function newTab(target: KeyTarget): KeyTab {
 }
 
 const NO_EDITS = {
+  leaseDraft: null,
   merge: null,
   buffer: EMPTY_BUFFER,
   editing: null,
@@ -337,7 +345,11 @@ export function pendingKeyChanges(tab: KeyTab): KeyChanges {
     return recreateChanges(tab.lostType, columns, rows, tab.value);
   }
   const type = tab.details?.type ?? null;
-  if (type === "string") return tab.stringValue === null ? { changes: [] } : stringChanges(tab.stringValue, tab.value);
+  if (type === "string") {
+    if (tab.stringValue === null) return { changes: [] };
+    if (tab.leaseDraft != null && sameStringBytes(tab.value, tab.stringValue)) return { changes: [] };
+    return stringChanges(tab.stringValue, tab.value);
+  }
   if (type === null || tab.result === null) return { changes: [] };
   const result = tab.result;
   return keyChangesOf(type, columns, tab.buffer, (row) => rowAt(result.windows, row));
@@ -345,6 +357,7 @@ export function pendingKeyChanges(tab: KeyTab): KeyChanges {
 
 /** Rows touched, or one for a changed string or a pending Recreate. */
 export function pendingKeyCount(tab: KeyTab): number {
+  if (tab.leaseDraft != null && tab.leaseDraft.kind !== "preserve") return Math.max(1, pendingCount(tab.buffer));
   if (tab.merge != null) return 1;
   if (tab.stringProblem != null) return 1;
   if (tab.recreating) return 1;
@@ -356,6 +369,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
   const clients = new Map<string, EngineClient>();
   const historyRequests = new Map<string, symbol>();
   const lifetimes = new Map<string, symbol>();
+  const noticeTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const clock = dependencies.clock ?? (() => Date.now());
   const executions = dependencies.executions ?? NO_EXECUTION_REPORTER;
   let resultIds = 0;
@@ -377,6 +391,31 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       set({ tabs: { ...get().tabs, [id]: { ...current, ...change } } });
     }
 
+    function stepMergeConflict(id: string, step: number): void {
+      const merge = get().tabs[id]?.merge;
+      const count = merge?.merged.conflicts.length ?? 0;
+      if (merge != null && count > 0)
+        patch(id, { merge: { ...merge, conflictIndex: (merge.conflictIndex + step + count) % count } });
+    }
+
+    function clearNoticeTimer(id: string): void {
+      clearTimeout(noticeTimers.get(id));
+      noticeTimers.delete(id);
+    }
+
+    function savedNotice(id: string, before: KeyTab): void {
+      clearNoticeTimer(id);
+      const notice = savedNoticeText(before);
+      patch(id, { notice });
+      noticeTimers.set(
+        id,
+        setTimeout(() => {
+          noticeTimers.delete(id);
+          if (get().tabs[id]?.notice === notice) patch(id, { notice: null });
+        }, KEY_SAVED_NOTICE_MS),
+      );
+    }
+
     function applyOptions(tab: KeyTab, guard = true): KeyApplyOptions {
       const revision = tab.merge != null ? tab.merge.snapshot.revision : tab.details?.revision;
       const revisionAware = tab.revisionGuardAvailable === true || tab.merge != null;
@@ -384,6 +423,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
         type: typeOf(tab),
         guard: revisionAware ? true : guard,
         ...(revisionAware ? { revisionGuard: { modRevision: revision?.modRevision ?? "0" } } : {}),
+        ...(tab.leaseAssignmentAvailable === true && tab.leaseDraft != null ? { lease: tab.leaseDraft } : {}),
       };
     }
 
@@ -455,9 +495,11 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       const lifetime = lifetimes.get(id);
       const live = () => lifetimes.get(id) === lifetime && get().tabs[id]?.sessionId === current.sessionId;
       historyRequests.delete(id);
+      clearNoticeTimer(id);
       patch(id, {
         status: "loading",
         error: null,
+        notice: null,
         draft,
         history: { ...EMPTY_KEY_HISTORY, mode: current.history?.mode ?? "value" },
       });
@@ -498,6 +540,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
             details: answer.details,
             historyAvailable: features?.history === true,
             revisionGuardAvailable: features?.revisionGuard === true,
+            leaseAssignmentAvailable: features?.leaseAssignment === true,
             readAt: clock(),
             lostType,
             ...NO_EDITS,
@@ -526,9 +569,10 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           details: answer.details,
           historyAvailable: features?.history === true,
           revisionGuardAvailable: features?.revisionGuard === true,
+          leaseAssignmentAvailable: features?.leaseAssignment === true,
           readAt: clock(),
           value: answer.value,
-          readOnly: answer.readOnly,
+          readOnly: readOnlyReason(features?.revisionGuard === true, answer.value, answer.readOnly),
           result,
           applied: draft,
           draft,
@@ -562,13 +606,22 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
     return {
       tabs: {},
 
+      setLease(id, lease) {
+        const tab = editableTab(id);
+        if (tab === null || tab.leaseAssignmentAvailable !== true || tab.revisionGuardAvailable !== true) return;
+        if (lease.kind === "attach" && !/^-?[1-9]\d{0,19}$/.test(lease.leaseId)) return;
+        patch(id, { leaseDraft: lease.kind === "preserve" ? null : lease, notice: null });
+      },
+
       async open(id, target, options = {}) {
+        clearNoticeTimer(id);
         lifetimes.set(id, Symbol());
         set({ tabs: { ...get().tabs, [id]: newTab(target) } });
         if (options.connect ?? true) await read(id, EMPTY_RANGE);
       },
 
       close(id) {
+        clearNoticeTimer(id);
         lifetimes.delete(id);
         historyRequests.delete(id);
         const closing = get().tabs[id];
@@ -729,7 +782,8 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
 
       revertAll(id) {
         const tab = get().tabs[id];
-        if (tab !== undefined) patch(id, { ...NO_EDITS, editorGeneration: (tab.editorGeneration ?? 0) + 1 });
+        if (tab !== undefined)
+          patch(id, { ...NO_EDITS, notice: null, editorGeneration: (tab.editorGeneration ?? 0) + 1 });
       },
 
       setStringValue(id, value) {
@@ -737,7 +791,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       },
 
       setStringProblem(id, problem) {
-        if (editableTab(id) !== null) patch(id, { stringProblem: problem });
+        if (editableTab(id) !== null) patch(id, { stringProblem: problem, notice: null });
       },
 
       editMerge(id, text) {
@@ -766,9 +820,11 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
       },
 
       nextMergeConflict(id) {
-        const merge = get().tabs[id]?.merge;
-        if (merge != null && merge.merged.conflicts.length > 0)
-          patch(id, { merge: { ...merge, conflictIndex: (merge.conflictIndex + 1) % merge.merged.conflicts.length } });
+        stepMergeConflict(id, 1);
+      },
+
+      previousMergeConflict(id) {
+        stepMergeConflict(id, -1);
       },
 
       cancelMerge(id) {
@@ -882,13 +938,14 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
         if (
           event?.kind !== "PUT" ||
           event.value === null ||
-          event.value.hex !== null ||
+          isKubernetesKeyValue(event.value) ||
           tab.history === undefined ||
           event.modRevision === tab.details.revision?.modRevision
         )
           return false;
         patch(id, {
           stringValue: event.value,
+          leaseDraft: null,
           editorGeneration: (tab.editorGeneration ?? 0) + 1,
           ...(keyMissing(tab) ? { recreating: true, lostType: "string" } : {}),
           history: { ...tab.history, mode: "value" },
@@ -942,10 +999,12 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           patch(id, { queryError: problemError(pending.problem) });
           return false;
         }
-        if (pending.changes.length === 0) return false;
+        if (pending.changes.length === 0 && (current.leaseDraft == null || current.leaseDraft.kind === "preserve"))
+          return false;
         const lifetime = lifetimes.get(id);
         const live = () => lifetimes.get(id) === lifetime && get().tabs[id]?.sessionId === current.sessionId;
-        patch(id, { status: "submitting", error: null, queryError: null, conflict: null });
+        clearNoticeTimer(id);
+        patch(id, { status: "submitting", error: null, queryError: null, conflict: null, notice: null });
         const begun = clock();
         const executionId = executions.start(id, { label: SUBMIT_LABEL, sql: current.key.text, startedAt: begun });
         const finish = (outcome: "success" | "error", message: string | null) =>
@@ -961,7 +1020,7 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
           if (!live()) return false;
           patch(id, { status: settled(id), ...NO_EDITS, lostType: null });
           await read(id, current.applied);
-          if (live()) patch(id, { notice: SUBMITTED_NOTICE });
+          if (live()) savedNotice(id, current);
           return true;
         } catch (cause) {
           const error = toError(cause);
@@ -973,6 +1032,29 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
                 (current.recreating && current.lostType === "string" ? bytesOfValue(current.value) : null))
               : { text: current.merge.text, hex: null };
           const snapshot = error.keyConflict;
+          if (
+            error.code === "conflict" &&
+            snapshot !== undefined &&
+            pending.changes.length === 0 &&
+            snapshot.database === current.database &&
+            snapshot.key.text === current.key.text &&
+            snapshot.key.hex === current.key.hex &&
+            snapshot.value !== null &&
+            current.details !== null
+          ) {
+            patch(id, {
+              value:
+                snapshot.value.hex === null
+                  ? snapshot.value.text
+                  : { kind: "bytes", preview: snapshot.value.hex, length: snapshot.value.hex.length / 2 },
+              details: { ...current.details, ...(snapshot.revision === null ? {} : { revision: snapshot.revision }) },
+              editorGeneration: (current.editorGeneration ?? 0) + 1,
+              stringValue: null,
+              conflict: error,
+              notice: "The key changed. Review its current value and preview the pending lease change again.",
+            });
+            return false;
+          }
           if (
             error.code === "conflict" &&
             snapshot !== undefined &&

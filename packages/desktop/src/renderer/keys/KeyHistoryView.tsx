@@ -2,7 +2,14 @@ import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { KeyDiffView } from "@table-craft/desktop/renderer/keys/KeyDiffView.js";
 import { bytesOfValue } from "@table-craft/desktop/renderer/model/keyChanges.js";
-import { EMPTY_KEY_HISTORY, historyEventId, revisionAge } from "@table-craft/desktop/renderer/model/keyHistory.js";
+import {
+  EMPTY_KEY_HISTORY,
+  historyEventId,
+  revisionAge,
+  previousHistoryVersion,
+  historyLineDelta,
+} from "@table-craft/desktop/renderer/model/keyHistory.js";
+import { formatBytes } from "@table-craft/desktop/renderer/model/format.js";
 import { pendingKeyCount, type KeyTab } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -17,6 +24,7 @@ const STOP_LABELS = {
 const HEX_DIGITS_PER_BYTE = 2;
 
 export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
+  const [target, setTarget] = useState("current");
   const history = tab.history ?? EMPTY_KEY_HISTORY;
   const selected = history.events.find((event) => historyEventId(event) === history.selected);
   const page = history.page;
@@ -26,9 +34,28 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
     tab.value.kind === "bytes" &&
     tab.value.preview.length !== tab.value.length * HEX_DIGITS_PER_BYTE;
   const current = tab.details?.type === null || partial ? null : bytesOfValue(tab.value);
+  const previous = selected === undefined ? null : previousHistoryVersion(history.events, selected);
+  const unsaved = tab.stringValue !== null && tab.stringProblem == null;
+  const activeTarget =
+    (target === "previous" && previous === null) || (target === "unsaved" && !unsaved) ? "current" : target;
+  const compared =
+    activeTarget === "previous" ? (previous?.value ?? null) : activeTarget === "unsaved" ? tab.stringValue : current;
+  const deltas = useMemo(
+    () =>
+      new Map(
+        history.events.map((event) => [
+          historyEventId(event),
+          historyLineDelta(event, previousHistoryVersion(history.events, event)),
+        ]),
+      ),
+    [history.events],
+  );
   return (
-    <div data-testid="key-history" className="flex min-h-0 min-w-0 flex-1">
-      <aside aria-label="Key versions" className="flex w-dialog-list shrink-0 flex-col border-r border-line bg-panel">
+    <div data-testid="key-history" className="@container/history flex min-h-0 min-w-0 flex-1">
+      <aside
+        aria-label="Key versions"
+        className="flex w-dialog-list max-w-1/3 shrink-0 flex-col border-r border-line bg-panel"
+      >
         <div className="min-h-0 flex-1 overflow-auto">
           {history.events.map((event) => (
             <button
@@ -44,13 +71,25 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
             >
               <span className="flex items-baseline gap-gap">
                 <strong>{event.kind === "DELETE" ? "Deleted" : `v${event.version}`}</strong>
-                <span className="text-ink-muted">{event.kind}</span>
+                {event.kind === "DELETE" ? (
+                  <span className="text-ink-muted">Key removed</span>
+                ) : event.modRevision === tab.details?.revision?.modRevision ? null : event.version === "1" ? (
+                  <span className="text-ink-muted">Created</span>
+                ) : deltas.get(historyEventId(event)) == null ? null : (
+                  <span className="text-ink-muted tabular-nums">
+                    <span className="text-success">+{deltas.get(historyEventId(event))?.added}</span>{" "}
+                    <span className="text-danger">−{deltas.get(historyEventId(event))?.removed}</span> lines
+                  </span>
+                )}
                 {event.modRevision === tab.details?.revision?.modRevision ? (
                   <span className="ml-auto text-accent">Current</span>
                 ) : null}
               </span>
-              <span className="text-ink-muted tabular-nums">
+              <span className="text-ink-muted tabular-nums" title={`Revision ${event.modRevision}`}>
                 {revisionAge(page?.snapshotRevision ?? event.modRevision, event.modRevision)}
+                {event.value === null
+                  ? ""
+                  : ` · ${formatBytes(event.value.hex === null ? new TextEncoder().encode(event.value.text).length : event.value.hex.length / HEX_DIGITS_PER_BYTE)}`}
               </span>
             </button>
           ))}
@@ -95,9 +134,21 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
         <p className="p-gap text-ink-muted">Choose a version to compare.</p>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center gap-gap border-b border-line bg-panel px-gap py-1">
+          <div className="flex shrink-0 flex-wrap items-center gap-gap border-b border-line bg-panel px-gap py-1">
             <span className="mr-auto text-ink-muted">
-              Comparing {selected.kind === "DELETE" ? "deletion" : `v${selected.version}`} with Current (last read)
+              Comparing {selected.kind === "DELETE" ? "deletion" : `v${selected.version}`} with{" "}
+              <select
+                aria-label="Compare version with"
+                className="rounded bg-canvas text-ink"
+                value={activeTarget}
+                onChange={(event) => setTarget(event.target.value)}
+              >
+                <option value="current">Current (last read)</option>
+                <option value="previous" disabled={previous === null}>
+                  Previous version
+                </option>
+                {unsaved ? <option value="unsaved">My unsaved edits</option> : null}
+              </select>
             </span>
             <ActionButton
               actionId={KEY_ACTION_IDS.restoreHistory}
@@ -106,25 +157,27 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
                   ? "Save or revert your unsaved edits before restoring a version."
                   : selected.kind === "DELETE"
                     ? "A deletion has no value to restore."
-                    : selected.value?.hex != null
-                      ? "Binary history is read-only; restore is not available here."
-                      : "Choose an older version in a writable, connected key tab."
+                    : "Choose an older version in a writable, connected key tab. Kubernetes protobuf values cannot be restored here."
               }
             />
           </div>
-          {partial ? (
+          {partial && activeTarget === "current" ? (
             <p role="status" className="p-gap text-ink-muted">
               The current value was only partly read. Reload the complete value before comparing it.
             </p>
           ) : (
             <KeyDiffView
               before={selected.value}
-              after={current}
-              leftTitle={`${selected.kind === "DELETE" ? "Deleted" : `v${selected.version}`} · rev ${selected.modRevision}`}
+              after={compared}
+              leftTitle={`${selected.kind === "DELETE" ? "Deleted" : `v${selected.version}`} · ${revisionAge(page?.snapshotRevision ?? selected.modRevision, selected.modRevision)}`}
               rightTitle={
-                tab.details?.type === null
-                  ? "Current · key absent"
-                  : `Current · v${tab.details?.revision?.version ?? "?"}`
+                activeTarget === "previous"
+                  ? `Previous version · v${previous?.version ?? "?"}`
+                  : activeTarget === "unsaved"
+                    ? "My unsaved edits"
+                    : tab.details?.type === null
+                      ? "Current · key absent"
+                      : `Current · v${tab.details?.revision?.version ?? "?"}`
               }
             />
           )}
@@ -133,3 +186,4 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
     </div>
   );
 }
+import { useMemo, useState } from "react";

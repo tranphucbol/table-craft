@@ -26,6 +26,16 @@ import { HistoryState, keyHistory, revisionOf } from "./history.js";
 import { bytesCell, leaseCell } from "./results.js";
 import { decodeCursor, encodeCursor, globMatches, literalPrefix, NO_END, prefixEnd } from "./scan.js";
 import { applyPlan, planText, type ApplyPlan } from "./writes.js";
+import { EtcdKeyRanges } from "./keyRanges.js";
+import type { RuntimeHost } from "./runtime.js";
+import type {
+  KeyChildrenRequest,
+  KeyChildrenPage,
+  KeyRange,
+  KeyRangeCount,
+  KeyDeletePreview,
+  KeyDeleteResult,
+} from "@table-craft/plugin-api";
 
 const DATABASE = 0;
 const MS_PER_SECOND = 1000;
@@ -41,6 +51,7 @@ const MAX_CONFLICT_BYTES = 1024 * 1024;
 /** What the keyspace needs from its session. */
 export interface KeyspaceHost {
   readonly call: Call;
+  readonly runtime?: RuntimeHost;
   readonly delimiter: string;
   readonly scanBatch: number;
   /** A read-only datasource's keyspace refuses every change. */
@@ -55,14 +66,37 @@ function requireDatabase(database: number): void {
 
 /** The etcd keyspace (decisions 3–7 of plan 110): one database whose every key holds one string value. */
 export class EtcdKeyspace implements Keyspace {
-  readonly features = { revisionGuard: true };
+  readonly features = { revisionGuard: true, leaseAssignment: true };
   readonly delimiter: string;
   readonly #host: KeyspaceHost;
   readonly #history = new HistoryState();
+  readonly #ranges: EtcdKeyRanges | undefined;
 
   constructor(host: KeyspaceHost) {
     this.#host = host;
     this.delimiter = host.delimiter;
+    this.#ranges = host.runtime === undefined ? undefined : new EtcdKeyRanges(host.runtime, host.delimiter);
+  }
+
+  children(request: KeyChildrenRequest): Promise<KeyChildrenPage> {
+    return this.#queued(() => this.#rangeService().children(request));
+  }
+
+  countRange(database: number, range: KeyRange): Promise<KeyRangeCount> {
+    return this.#queued(() => this.#rangeService().countRange(database, range));
+  }
+
+  prepareDelete(database: number, range: KeyRange): Promise<KeyDeletePreview> {
+    return this.#queued(() => this.#rangeService().prepareDelete(database, range));
+  }
+
+  deletePrepared(token: string): Promise<KeyDeleteResult> {
+    return this.#queued(() => this.#rangeService().deletePrepared(token));
+  }
+
+  #rangeService(): EtcdKeyRanges {
+    if (this.#ranges === undefined) throw new PluginError("statementFailed", "Reconnect to use guarded key ranges.");
+    return this.#ranges;
   }
 
   databases(): Promise<readonly KeyDatabase[]> {

@@ -60,14 +60,18 @@ export function KeyDiffView({
       aria-label="Value comparison"
       className="@container flex min-h-0 min-w-0 flex-1 flex-col bg-canvas text-ink"
     >
-      <div className="grid shrink-0 grid-cols-2 border-b border-line bg-panel text-ink-muted">
-        <h3 className="truncate px-gap py-1">{leftTitle}</h3>
-        <h3 className="truncate border-l border-line px-gap py-1">{rightTitle}</h3>
+      <div className="grid shrink-0 grid-cols-2 border-b border-line bg-panel text-ink-muted @max-4xl:grid-cols-1">
+        <h3 className="truncate px-gap py-1" title={leftTitle}>
+          {leftTitle}
+        </h3>
+        <h3 className="truncate border-l border-line px-gap py-1 @max-4xl:border-l-0" title={rightTitle}>
+          {rightTitle}
+        </h3>
       </div>
       <div className="min-h-0 flex-1 overflow-auto py-1">
         {groups.map((lines, index) =>
           lines[0]?.left?.kind === "same" && lines.length >= FOLD_LINES ? (
-            <details key={index} className="text-ink-muted">
+            <details key={`${leftTitle}:${rightTitle}:${String(index)}`} className="text-ink-muted">
               <summary className="cursor-pointer bg-panel px-gap py-1 hover:bg-raised">
                 ⋯ {lines.length} unchanged lines
               </summary>

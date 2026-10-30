@@ -50,12 +50,10 @@ const PAGE: KeyHistoryPage = {
 
 function editorProps(tab: KeyTab) {
   const rendered: unknown = StringValueEditor({ tab, tabId: "key", format: "text", editable: true });
-  const element = rendered as {
-    readonly props: {
-      readonly children: { readonly props: { readonly value: WireValue | undefined; readonly edit: ValueTextEdit } };
-    };
-  };
-  return element.props.children.props;
+  type Panel = { readonly props: { readonly value: WireValue | undefined; readonly edit: ValueTextEdit } };
+  const element = rendered as { readonly props: { readonly children: Panel | readonly [Panel, ...unknown[]] } };
+  const children = element.props.children;
+  return Array.isArray(children) ? (children as readonly [Panel])[0].props : (children as Panel).props;
 }
 
 afterEach(() => vi.restoreAllMocks());

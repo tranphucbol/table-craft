@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import {
   probeSeenOf,
   type ProbeResult,
@@ -31,6 +31,7 @@ import {
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { PluginPicker } from "@table-craft/desktop/renderer/dialogs/PluginPicker.js";
+import { EndpointConnection, EndpointTls } from "@table-craft/desktop/renderer/dialogs/EndpointConnection.js";
 import { SECRET_MODE_LABEL, SecretField } from "@table-craft/desktop/renderer/dialogs/SecretField.js";
 import { SshSection } from "@table-craft/desktop/renderer/dialogs/SshSection.js";
 import {
@@ -48,6 +49,12 @@ import {
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
 import { serverLimitText, serverTimeoutText } from "@table-craft/desktop/renderer/model/format.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import {
+  connectionFieldHelp,
+  connectionFieldVisible,
+  endpointTestDrafts,
+  offersEndpointConnection,
+} from "@table-craft/desktop/renderer/model/datasourceConnection.js";
 import { folderPaths } from "@table-craft/desktop/renderer/model/datasourceTree.js";
 import { useDataSourcesDialog, type DialogTarget } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -70,7 +77,9 @@ const AGENT_READ_ONLY_NOTE = "Read only while Read-only is on";
 const AGENT_ACCESS_HINT =
   "Ask before reads shows each query that returns rows in the MCP status chip for you to allow or deny, and refuses writes. Ask before writes does the same for each write. Agents never see passwords.";
 
-type TestState = { readonly kind: "testing" } | { readonly kind: "done"; readonly result: ProbeResult };
+type TestState =
+  | { readonly kind: "testing" }
+  | { readonly kind: "done"; readonly result: ProbeResult; readonly endpoints: readonly ProbeResult[] };
 
 /** "SSH: connected to bastion as deploy · 12 ms", the first hop Test Connection reports (decision 070). */
 export function sshHopSummary(hop: SshHop): string {
@@ -137,6 +146,7 @@ interface FieldProps {
   readonly onChange: (change: Partial<FormDraft>) => void;
   /** Takes text pasted into the field when it is a connection URL; false leaves the paste alone. */
   readonly onPasteUrl: (field: ConnectionField, text: string) => boolean;
+  readonly plugin?: PluginInfo;
 }
 
 function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
@@ -198,14 +208,24 @@ function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
 function Fields(props: Omit<FieldProps, "field"> & { readonly fields: readonly ConnectionField[] }) {
   const { fields, ...rest } = props;
   return fields
-    .filter((field) => fieldVisible(field, rest.draft))
+    .filter((field) => fieldVisible(field, rest.draft) && connectionFieldVisible(field, rest.draft, rest.plugin))
     .map((field) =>
       field.secret === true ? (
         <SecretField key={field.key} field={field} {...rest} />
       ) : (
-        <PlainField key={field.key} field={field} {...rest} />
+        <ConnectionPlainField key={field.key} field={field} {...rest} />
       ),
     );
+}
+
+function ConnectionPlainField(props: FieldProps) {
+  const help = offersEndpointConnection(props.plugin) ? connectionFieldHelp(props.field.key) : null;
+  return (
+    <>
+      <PlainField {...props} />
+      {help === null ? null : <p className="col-start-2 text-ink-muted">{help}</p>}
+    </>
+  );
 }
 
 /** Whether pasted text is one of the plugin's URLs rather than a host name or a plain path. */
@@ -269,7 +289,10 @@ function SslRows(
   return (
     <>
       <SubsectionTitle>SSL</SubsectionTitle>
-      <Fields {...rest} />
+      {offersEndpointConnection(plugin) && plugin !== undefined ? (
+        <EndpointTls draft={props.draft} plugin={plugin} onChange={props.onChange} />
+      ) : null}
+      <Fields {...rest} {...(plugin === undefined ? {} : { plugin })} />
       {note === null ? null : (
         <p data-testid="ca-file-note" className="col-start-2 text-ink-muted">
           {note}
@@ -285,11 +308,12 @@ interface FormProps {
   readonly folders: readonly string[];
   readonly onChange: (change: Partial<FormDraft>) => void;
   readonly onUrl: (url: string) => void;
+  readonly endpointTests?: readonly ProbeResult[];
   /** What the last successful Test Connection found; undefined before one. */
   readonly serverTimeout: ServerTimeout | null | undefined;
 }
 
-function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout }: FormProps) {
+function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, endpointTests }: FormProps) {
   const encryption = useDatasources((state) => state.encryption);
   const appTimeout = useSettings((state) => state.settings.console.statementTimeoutSeconds);
   const nameId = useId();
@@ -301,9 +325,26 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout }: F
   const timeoutId = useId();
   const fields = plugin?.fields ?? [];
   const tlsFields = tlsFieldsOf(plugin);
-  const ownFields = fields.filter((field) => !tlsFields.includes(field));
-  const general = ownFields.filter((field) => field.group !== "advanced");
-  const advanced = ownFields.filter((field) => field.group === "advanced");
+  const endpointConnection = offersEndpointConnection(plugin);
+  const connectionGeneral = ["authMode", "user", "password", "namespace", "namespaceEncoding"];
+  const ownFields = fields.filter(
+    (field) =>
+      !tlsFields.includes(field) &&
+      (!endpointConnection ||
+        (field.key !== "endpoints" &&
+          field.key !== plugin?.network?.host &&
+          field.key !== plugin?.network?.port &&
+          field.key !== "serverName")),
+  );
+  const general = endpointConnection
+    ? connectionGeneral.flatMap((key) => ownFields.find((field) => field.key === key) ?? [])
+    : ownFields.filter((field) => field.group !== "advanced");
+  const advanced = endpointConnection
+    ? ownFields.filter((field) => !general.includes(field))
+    : ownFields.filter((field) => field.group === "advanced");
+  const sslFields = endpointConnection
+    ? [...tlsFields, ...fields.filter((field) => field.key === "serverName")]
+    : tlsFields;
   const tunnel = offersSshTunnel(plugin);
   const spec = plugin?.url ?? null;
   const capabilities = plugin?.capabilities ?? [];
@@ -315,7 +356,7 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout }: F
     onUrl(text);
     return true;
   };
-  const fieldProps = { draft, encryption, onChange, onPasteUrl };
+  const fieldProps = { draft, encryption, onChange, onPasteUrl, ...(plugin === undefined ? {} : { plugin }) };
   return (
     <fieldset
       disabled={draft.ephemeral}
@@ -379,7 +420,27 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout }: F
           <UrlNoteLine draft={draft} fields={fields} />
         </>
       )}
+      {endpointConnection && plugin !== undefined ? (
+        <EndpointConnection
+          draft={draft}
+          plugin={plugin}
+          onChange={onChange}
+          {...(endpointTests === undefined ? {} : { endpointTests })}
+        />
+      ) : null}
       <Fields fields={general} {...fieldProps} />
+      {endpointConnection && draft.values.authMode === "clientCN" ? (
+        <p className="col-start-2 text-ink-muted">
+          Authentication uses the client certificate's CN, not a username or password. CN is not available here;
+          TableCraft has not read the certificate identity. Configure the client certificate and key under SSL.
+        </p>
+      ) : null}
+      {endpointConnection && draft.values.authMode === "auto" ? (
+        <p className="col-start-2 text-ink-muted">
+          Automatic keeps the existing credential behavior. Choose an explicit mode to require password or
+          client-certificate authentication.
+        </p>
+      ) : null}
       {draft.ephemeral || encryption.available ? null : (
         <p className="col-span-2 text-ink-muted">Forever is unavailable: {encryption.reason}</p>
       )}
@@ -387,7 +448,7 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout }: F
         <>
           <SectionTitle>SSH/SSL</SectionTitle>
           {tunnel ? <SshSection draft={draft} encryption={encryption} onChange={onChange} /> : null}
-          {tlsFields.length > 0 ? <SslRows fields={tlsFields} plugin={plugin} {...fieldProps} /> : null}
+          {tlsFields.length > 0 ? <SslRows fields={sslFields} plugin={plugin} {...fieldProps} /> : null}
         </>
       ) : null}
       {advanced.length === 0 && !keepAlive && !timeout ? null : (
@@ -517,6 +578,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   const hide = useDataSourcesDialog((state) => state.hide);
   const [state, setState] = useState<EditorState>(() => initialState(target, datasources, plugins, defaultMode));
   const [tests, setTests] = useState<Readonly<Record<string, TestState>>>({});
+  const testGenerations = useRef(new Map<string, number>());
   const [failure, setFailure] = useState<BridgeFailure | null>(null);
   const [saving, setSaving] = useState(false);
   const folders = useMemo(() => folderPaths(datasources, emptyFolders), [datasources, emptyFolders]);
@@ -536,16 +598,29 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   const plugin = current === undefined ? undefined : pluginOf(plugins, current.pluginId);
   const test = current === undefined ? undefined : tests[current.key];
 
+  function invalidateTest(key: string): number {
+    const generation = (testGenerations.current.get(key) ?? 0) + 1;
+    testGenerations.current.set(key, generation);
+    setTests((previous) => {
+      const { [key]: _stale, ...rest } = previous;
+      return rest;
+    });
+    return generation;
+  }
+
   function change(key: string, patch: Partial<FormDraft>): void {
     const draft = draftOf(key);
     if (draft === undefined) return;
+    invalidateTest(key);
     setState((previous) => ({ ...previous, edits: { ...previous.edits, [key]: { ...draft, ...patch, dirty: true } } }));
     setFailure(null);
   }
 
   async function pasteUrl(draft: FormDraft, url: string): Promise<void> {
+    const generation = invalidateTest(draft.key);
     const draftPlugin = pluginOf(plugins, draft.pluginId);
     const answer = await bridge().parseDatasourceUrl(draft.pluginId, url);
+    if (testGenerations.current.get(draft.key) !== generation) return;
     const next = answer.ok
       ? applyParsedUrl(draft, draftPlugin, answer.value, url)
       : { ...draft, url: url.trim(), urlNote: { kind: "failed" as const, ...answer.error } };
@@ -609,12 +684,28 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   }
 
   async function runTest(draft: FormDraft): Promise<void> {
+    const draftPlugin = pluginOf(plugins, draft.pluginId);
+    const problem = draftProblems(draft, draftPlugin)[0];
+    if (problem !== undefined) {
+      setFailure({ message: problem, hint: "Fix the connection fields, then test again." });
+      return;
+    }
+    const generation = invalidateTest(draft.key);
     setTests((previous) => ({ ...previous, [draft.key]: { kind: "testing" } }));
-    const answer = await bridge().testDatasource(toSaveRequest(draft, pluginOf(plugins, draft.pluginId)));
-    const result: ProbeResult = answer.ok
-      ? answer.value
-      : { ok: false, error: { code: "connectionFailed", ...answer.error } };
-    setTests((previous) => ({ ...previous, [draft.key]: { kind: "done", result } }));
+    const probe = async (candidate: FormDraft): Promise<ProbeResult> => {
+      const answer = await bridge().testDatasource(toSaveRequest(candidate, draftPlugin));
+      return answer.ok ? answer.value : { ok: false, error: { code: "connectionFailed", ...answer.error } };
+    };
+    const result = await probe(draft);
+    const endpoints: ProbeResult[] = [];
+    if (offersEndpointConnection(draftPlugin) && draftPlugin !== undefined) {
+      for (const target of endpointTestDrafts(draft, draftPlugin)) {
+        if (testGenerations.current.get(draft.key) !== generation) return;
+        endpoints.push(await probe(target.draft));
+      }
+    }
+    if (testGenerations.current.get(draft.key) !== generation) return;
+    setTests((previous) => ({ ...previous, [draft.key]: { kind: "done", result, endpoints } }));
     const saved = datasources.find((datasource) => datasource.id === draft.id);
     if (result.ok && saved !== undefined && !saved.ephemeral && saved.pluginId === draft.pluginId) {
       void bridge().rememberServer(saved.id, probeSeenOf(result, Date.now()));
@@ -750,6 +841,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                 onChange={(patch) => change(current.key, patch)}
                 onUrl={(url) => void pasteUrl(current, url)}
                 serverTimeout={test?.kind === "done" && test.result.ok ? test.result.serverTimeout : undefined}
+                {...(test?.kind === "done" ? { endpointTests: test.endpoints } : {})}
               />
             </>
           )}

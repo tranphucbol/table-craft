@@ -7,9 +7,11 @@ import {
   type KeyDatabaseArgs,
 } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
+import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { keyTreeRowOf } from "@table-craft/desktop/renderer/model/explorerTree.js";
+import { keyDeleteConfirmation } from "@table-craft/desktop/renderer/model/keyDeletePreview.js";
 import { EXPIRY_HINT, parseExpiry } from "@table-craft/desktop/renderer/model/keyExpiry.js";
-import { keyIdentity } from "@table-craft/desktop/renderer/model/keyTree.js";
+import { appendKeys, keyIdentity, ROOT_KEY } from "@table-craft/desktop/renderer/model/keyTree.js";
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useKeyDeletes } from "@table-craft/desktop/renderer/state/keyDeletes.js";
@@ -26,6 +28,8 @@ export const KEY_EDIT_ACTION_IDS = {
   deleteFolder: "key.deleteFolder",
   cancelDelete: "key.cancelDelete",
   dismissDelete: "key.dismissDelete",
+  loadChildren: "key.loadChildren",
+  refreshFolder: "key.refreshFolder",
 } as const;
 
 /** How many names Delete Keys Under Folder lists before it asks. */
@@ -58,13 +62,21 @@ export function targetKey(context: ActionContext): OpenKeyArgs | null {
 }
 
 /** The folder the tree's selection is, with its prefix. */
-function selectedFolder(context: ActionContext): (KeyDatabaseArgs & { readonly prefix: string }) | null {
+function selectedFolder(
+  context: ActionContext,
+): (KeyDatabaseArgs & { readonly prefix: string; readonly key: KeyName }) | null {
   const { selection } = context;
   if (selection?.kind !== "catalog") return null;
   const row = keyTreeRowOf(selection.key);
   const prefix = row?.rest[0];
   if (row?.kind !== "keyFolder" || typeof prefix !== "string") return null;
-  return { datasourceId: selection.id, database: row.database, prefix };
+  const hex = row.rest[1];
+  return {
+    datasourceId: selection.id,
+    database: row.database,
+    prefix,
+    key: { text: prefix, hex: typeof hex === "string" ? hex : null },
+  };
 }
 
 async function failed(title: string, cause: unknown): Promise<void> {
@@ -223,8 +235,34 @@ export async function renameKey(context: ActionContext, target: OpenKeyArgs): Pr
   }
 }
 
-/** Delete… on a key (decision 17): UNLINK after a confirmation; its open tabs show it gone. */
+async function guardedDeletes(client: EngineClient): Promise<boolean> {
+  const features = await client.call("keyspace.features", {});
+  if (!features.prepareDelete && (features.revisionGuard === true || features.children)) {
+    throw new Error(
+      "Guarded deletion is unavailable on this connection. Reconnect before deleting; an unguarded full scan will not be used.",
+    );
+  }
+  return features.prepareDelete;
+}
+
+/** Delete… on a key: guarded when supported, otherwise UNLINK after confirmation. */
 export async function deleteKey(target: OpenKeyArgs): Promise<void> {
+  try {
+    const client = await useDatasources.getState().connect(target.datasourceId);
+    if (await guardedDeletes(client)) {
+      const range = { kind: "key", key: target.key } as const;
+      const preview = await client.call("keyspace.prepareDelete", { database: target.database, range });
+      const answer = await useModal.getState().ask(keyDeleteConfirmation(preview, range));
+      if (answer === null) return;
+      await client.call("keyspace.deletePrepared", { token: preview.token });
+      await useKeys.getState().refreshRange(target.datasourceId, target.database, target.key);
+      for (const id of openTabsOf(target)) void useKeyTabs.getState().reload(id);
+      return;
+    }
+  } catch (cause) {
+    await failed("Delete Key", cause);
+    return;
+  }
   const answer = await useModal.getState().ask({
     kind: "confirm",
     title: "Delete Key",
@@ -249,12 +287,23 @@ async function deleteFolder(context: ActionContext): Promise<void> {
   const { datasourceId, database, prefix } = folder;
   try {
     const client = await useDatasources.getState().connect(datasourceId);
+    if (await guardedDeletes(client)) {
+      const range = { kind: "prefix", prefix: folder.key } as const;
+      const preview = await client.call("keyspace.prepareDelete", { database, range });
+      const answer = await useModal.getState().ask(keyDeleteConfirmation(preview, range));
+      if (answer === null) return;
+      await useKeyDeletes.getState().startPrepared(datasourceId, database, folder.key, preview);
+      for (const [id, tab] of Object.entries(useKeyTabs.getState().tabs)) {
+        if (tab.datasourceId === datasourceId && tab.database === database) void useKeyTabs.getState().reload(id);
+      }
+      return;
+    }
     const match = `${prefix.replace(GLOB_SPECIAL, "\\$&")}*`;
-    const keys: KeyName[] = [];
+    let keys: readonly KeyName[] = [];
     let cursor: string | null = null;
     do {
       const scan: KeyScan = await client.call("keyspace.scan", { database, cursor, match, keyType: null });
-      keys.push(...scan.keys);
+      keys = appendKeys(keys, scan.keys);
       cursor = scan.cursor;
     } while (cursor !== null);
     if (keys.length === 0) {
@@ -282,8 +331,59 @@ interface TaskArgs {
   readonly taskId: string;
 }
 
+export interface KeyChildrenArgs extends KeyDatabaseArgs {
+  readonly parent: KeyName;
+  readonly restart?: boolean;
+}
+
+function childrenDatasource(context: ActionContext): boolean {
+  const id = context.datasource?.view.id;
+  return id !== undefined && useKeys.getState().keyspaces[id]?.features?.children === true;
+}
+
+function childrenTarget(context: ActionContext): KeyChildrenArgs | null {
+  const id = context.datasource?.view.id;
+  if (id === undefined) return null;
+  const database = contextDatabase(context, id);
+  const row = context.selection?.kind === "catalog" ? keyTreeRowOf(context.selection.key) : null;
+  const identity = row?.kind === "keyLoadMore" ? row.rest[0] : undefined;
+  const folder =
+    typeof identity === "string"
+      ? useKeys.getState().keyspaces[id]?.byDatabase[database]?.folders?.[identity]
+      : undefined;
+  return { datasourceId: id, database, parent: folder?.parent ?? ROOT_KEY, restart: folder?.error != null };
+}
+
 /** The key editing commands without a chord (plan 058 decision 17); Rename and Delete reuse the explorer's. */
 export const KEY_EDIT_ACTIONS: readonly AnyAction[] = [
+  defineAction<KeyChildrenArgs | undefined>({
+    id: KEY_EDIT_ACTION_IDS.loadChildren,
+    title: "Load More Children",
+    category: "Database",
+    available: childrenDatasource,
+    when: childrenDatasource,
+    run: async (context, args) => {
+      const target = args ?? childrenTarget(context);
+      if (target !== null)
+        await useKeys.getState().loadChildren(target.datasourceId, target.database, target.parent, target.restart);
+    },
+  }),
+  defineAction({
+    id: KEY_EDIT_ACTION_IDS.refreshFolder,
+    title: "Refresh Folder",
+    category: "Database",
+    icon: "synchronize",
+    available: childrenDatasource,
+    when: browsesKeys,
+    run: async (context) => {
+      const id = context.datasource?.view.id;
+      if (id === undefined) return;
+      const folder = selectedFolder(context);
+      await useKeys
+        .getState()
+        .loadChildren(id, folder?.database ?? contextDatabase(context, id), folder?.key ?? ROOT_KEY, true);
+    },
+  }),
   defineAction({
     id: KEY_EDIT_ACTION_IDS.newKey,
     title: "New Key…",
@@ -325,7 +425,7 @@ export const KEY_EDIT_ACTIONS: readonly AnyAction[] = [
     id: KEY_EDIT_ACTION_IDS.cancelDelete,
     title: "Cancel Key Deletion",
     category: "Database",
-    when: () => useKeyDeletes.getState().tasks.some((task) => task.state === "running"),
+    when: () => useKeyDeletes.getState().tasks.some((task) => task.state === "running" && task.atomic !== true),
     run: (_context, args) => {
       if (args !== undefined) useKeyDeletes.getState().cancel(args.taskId);
     },

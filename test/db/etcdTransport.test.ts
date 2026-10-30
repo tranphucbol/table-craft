@@ -97,7 +97,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd TLS, mTLS and SSH transport", ()
 
   it("givenSshAndVerifyFull_whenForwardedToLoopback_thenPreservesConfiguredHostname", async () => {
     const offers: HostKeyOffer[] = [];
-    let forwardedServerName: string | undefined;
+    let forwarded: readonly { readonly host: string; readonly serverName: string }[] | undefined;
     const tunnel = createConnector({
       plugins: [
         {
@@ -105,8 +105,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd TLS, mTLS and SSH transport", ()
           plugin: {
             ...etcd,
             connect: (config, options) => {
-              forwardedServerName = options.serverName;
-              expect(config).toMatchObject({ host: "127.0.0.1" });
+              forwarded = options.transports;
               return etcd.connect(config, options);
             },
           },
@@ -131,7 +130,9 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd TLS, mTLS and SSH transport", ()
       const session = await tunnel.connect({ readOnly: true });
       try {
         await assertProbe(session);
-        expect(forwardedServerName).toBe(ETCD_TLS_BEHIND_BASTION.host);
+        expect(forwarded).toEqual([
+          expect.objectContaining({ host: "127.0.0.1", serverName: ETCD_TLS_BEHIND_BASTION.host }),
+        ]);
         expect(offers).toHaveLength(1);
       } finally {
         await session.close();

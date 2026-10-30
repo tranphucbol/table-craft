@@ -118,22 +118,27 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
     "givenSeededEtcd_whenConnected_thenKeysGroupIntoSlashFolders",
     async () => {
       const page = await launch(ETCD);
-      await scanned(page, /^db0/);
+      await scanned(page, /^Keys/);
 
-      // A folder row's text is its prefix then its key count, as `/44`.
-      await expand(page, treeRow(page, "keyFolder", /^\/[\d,]+$/));
+      // The tree lists the server's children: a folder row's text is its segment then its exact key count.
       await expect
         .poll(() => attributes(treeRows(page, "keyFolder"), "aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
-        .toEqual(expect.arrayContaining(["/app/ 5", `/bulk/ ${String(BULK_KEYS)}`, "/registry/ 4"]));
-      await expand(page, treeRow(page, "keyFolder", /^\/app\/[\d,]+$/));
-      await expand(page, treeRow(page, "keyFolder", /^\/app\/config\/[\d,]+$/));
+        .toEqual(
+          expect.arrayContaining([
+            "app/, folder, 5 keys",
+            `bulk/, folder, ${String(BULK_KEYS)} keys`,
+            "registry/, folder, 4 keys",
+          ]),
+        );
+      await expand(page, treeRow(page, "keyFolder", /^app\/[\d,]+$/));
+      await expand(page, treeRow(page, "keyFolder", /^config\/[\d,]*$/));
       await expect
         .poll(() => attributes(treeRows(page, "keyEntry"), "aria-label"))
-        .toEqual(expect.arrayContaining([expect.stringMatching(/ db\.json, no TTL$/)]));
-      await expand(page, treeRow(page, "keyFolder", /^\/app\/session\/[\d,]+$/));
-      await expect
-        .poll(() => treeRow(page, "keyEntry", "token").first().getAttribute("aria-label"))
-        .toMatch(/ token, \d+ d$/);
+        .toEqual(expect.arrayContaining([expect.stringMatching(/^db\.json, key, version \d+$/)]));
+      await expand(page, treeRow(page, "keyFolder", /^session\/[\d,]*$/));
+      const token = treeRow(page, "keyEntry", /^token/).first();
+      await expect.poll(() => token.getAttribute("aria-label")).toMatch(/^token, key, version \d+, lease \d+$/);
+      await expect.poll(() => token.textContent()).toMatch(/\d+ d$/);
       await captureWindow(page, "01-tree");
     },
     SCENARIO_TIMEOUT_MS,
@@ -174,13 +179,13 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
       await keyButton(page, "Preview Pending Changes").click();
       const preview = dialog(page);
       await expect.poll(() => preview.textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toContain("txn");
-      expect(await preview.textContent()).toContain(EDIT_KEY);
+      await expect.poll(() => preview.textContent()).toContain(EDIT_KEY);
       await captureWindow(page, "03-preview");
       await preview.getByRole("button", { name: "Submit", exact: true }).click();
 
       await expect
         .poll(() => keyTab(page).getByTestId("key-notice").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
-        .toBe("Changes saved atomically");
+        .toBe("Saved as v2");
       await expect.poll(() => valueEditor(page).textContent()).toBe("after");
       expect(await valueOn(ETCD_CONFIG, EDIT_KEY)).toBe("after");
       await expect.poll(() => keyTab(page).getByTestId("key-facts").textContent()).toMatch(/^v2 · /);
@@ -240,23 +245,45 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
   );
 
   it.skipIf(WITHOUT_ETCD)(
-    "givenServerTab_whenOpenedWithAndWithoutAuth_thenServerCardsOrNotesNeverAnError",
+    "givenServerInfo_whenOpenedWithAndWithoutAuth_thenClusterMembersOrNotesNeverAnError",
     async () => {
+      // A datasource with `members` opens its Server Info as the cluster's Members view.
       const page = await launch(ETCD35);
       await showFromDatasourceMenu(page, ETCD35.id, /^Server Info/);
-      const server = page.getByTestId("server-tab");
-      const cards = server.getByTestId("server-card");
-      await cards.first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      expect(await attributes(cards, "aria-label")).toEqual(expect.arrayContaining(["Server", "Storage"]));
+      const cluster = page.getByRole("region", { name: "Cluster", exact: true });
+      await expect
+        .poll(() => cluster.locator("tbody tr").first().textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .toMatch(/^Reachableetcd-3-5\d+Leaderprimary/);
+      expect(await cluster.getByRole("alert").count()).toBe(0);
+      await cluster.getByRole("button", { name: "Server Details", exact: true }).click();
+      const cards = page.getByTestId("server-cards");
+      await expect.poll(() => cards.isVisible(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(true);
+      expect(await cards.getByRole("region", { name: "Server", exact: true }).textContent()).toMatch(/3\.5\.\d+/);
+      expect(await cards.getByRole("region", { name: "Storage", exact: true }).count()).toBe(1);
+      await cards.getByRole("region", { name: "Connection", exact: true }).locator("summary").click();
+      const connection = await cards.getByRole("region", { name: "Connection", exact: true }).textContent();
+      expect(connection).toContain("read_mode");
+      expect(connection).toContain("namespace");
+      expect(connection).toContain("endpoint");
+      const treeScroll = page.getByTestId("database-tree-scroll");
+      expect(await treeScroll.evaluate((element: { scrollLeft: number }) => element.scrollLeft)).toBe(0);
+      const treeBox = await treeScroll.boundingBox();
+      const filterBox = await page.getByLabel("Key filter mode", { exact: true }).boundingBox();
+      if (treeBox === null || filterBox === null) throw new Error("Database key filter must remain visible.");
+      expect(filterBox.x).toBeGreaterThanOrEqual(treeBox.x);
+      expect(filterBox.x + filterBox.width).toBeLessThanOrEqual(treeBox.x + treeBox.width);
       await captureWindow(page, "08-server");
       await closeApp(running?.app);
 
       // Plan 110 decision 9: a maintenance call `table_craft` may not make leaves a note, not a failure.
       const authed = await launch(ETCD);
       await showFromDatasourceMenu(authed, ETCD.id, /^Server Info/);
-      const authedCards = authed.getByTestId("server-tab").getByTestId("server-card");
-      await authedCards.first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      expect(await authed.getByTestId("server-error").count()).toBe(0);
+      const authedCluster = authed.getByRole("region", { name: "Cluster", exact: true });
+      await expect
+        .poll(() => authedCluster.textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .toContain("Status unavailable. Check the configured endpoint and permissions.");
+      expect(await authedCluster.locator("tbody tr").first().textContent()).toMatch(/^Unknown healthetcd\d+/);
+      expect(await authedCluster.getByRole("alert").count()).toBe(0);
       await captureWindow(authed, "08-server-auth");
     },
     SCENARIO_TIMEOUT_MS,
@@ -266,7 +293,7 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
     "givenEtcd35WithoutAuth_whenConnected_thenVersionTreeAndMemberList",
     async () => {
       const page = await launch(ETCD35);
-      await scanned(page, /^db0/);
+      await scanned(page, /^Keys/);
       await expect
         .poll(() => datasourceStatus(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS })
         .toMatch(/3\.5\.\d+/);

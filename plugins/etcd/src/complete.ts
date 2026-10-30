@@ -18,11 +18,15 @@ const FLAG_BOOST = -1;
 const COMMENT = "#";
 const BRANCH_HEADINGS = ["if:", "then:", "else:"];
 const HEADING = /^\s*(?:if:|then:|else:)/i;
-const TXN_OPS = new Set(["get", "put", "del"]);
+const TXN_OPS = new Set(["get", "put", "del", "txn"]);
 
 /** What a session offers completion: keys starting with a prefix. */
 export interface KeySuggester {
   suggestKeys(prefix: string): Promise<readonly string[]>;
+  suggestConsoleValues?(
+    kind: NonNullable<ParameterDoc["completion"]>,
+    prefix: string,
+  ): Promise<readonly { readonly label: string; readonly apply: string; readonly detail?: string }[]>;
 }
 
 function suggesterOf(session: Session | null): KeySuggester | null {
@@ -81,6 +85,11 @@ function commandItem(label: string, doc: CommandDoc | null, detail: string): Com
   };
 }
 
+function quotedCompareKey(name: string): string {
+  const argument = quoteArgument(name);
+  return argument.startsWith('"') ? argument : `"${argument}"`;
+}
+
 function firstWords(inTxn: boolean): CompletionItem[] {
   if (inTxn) {
     return [
@@ -137,10 +146,47 @@ function flagItems(doc: CommandDoc, used: readonly Token[]): CompletionItem[] {
 async function completeLine(request: CompletionRequest, suggester: KeySuggester | null): Promise<CompletionResult> {
   const line = lineAt(request);
   if (line.text.trimStart().startsWith(COMMENT)) return empty(request.offset);
-  if (line.current !== null && !line.current.closed) return empty(line.start + line.current.from);
   const from = line.start + (line.current?.from ?? line.text.length);
+  if (line.inTxn && /^\s*(?:value|mod|create|version|lease)\(/i.test(line.text)) {
+    const key = /^\s*(?:value|mod|create|version|lease)\(["']?([^"')]*$)/i.exec(line.text);
+    if (key !== null && suggester !== null) {
+      const prefix = key[1] ?? "";
+      const keys = await suggester.suggestKeys(prefix).catch(() => []);
+      const opening = line.text.indexOf("(") + 1;
+      return {
+        from: line.start + opening,
+        to: request.offset,
+        items: keys.map((name) => ({
+          ...commandItem(name, null, "key"),
+          kind: "table",
+          apply: quotedCompareKey(name),
+        })),
+        validFor: null,
+      };
+    }
+    return {
+      from,
+      to: request.offset,
+      items: ["=", "!=", "<", ">"].map((op) => commandItem(op, null, "compare operator")),
+      validFor: null,
+    };
+  }
   if (line.before.length === 0)
-    return { from, to: request.offset, items: firstWords(line.inTxn), validFor: COMMAND_WORD };
+    return {
+      from,
+      to: request.offset,
+      items: [
+        ...firstWords(line.inTxn),
+        ...(line.inTxn
+          ? ["value", "version", "create", "mod", "lease"].map((target) => ({
+              ...commandItem(target, null, "compare target"),
+              apply: `${target}("`,
+              caret: null,
+            }))
+          : []),
+      ],
+      validFor: COMMAND_WORD,
+    };
   const name = line.before[0]?.text.toLowerCase() ?? "";
   if (line.before.length === 1 && isContainer(name)) {
     const items = COMMANDS.filter((doc) => doc.name.startsWith(`${name} `)).map((doc) =>
@@ -153,6 +199,31 @@ async function completeLine(request: CompletionRequest, suggester: KeySuggester 
   const { doc } = found;
   const args = line.before.slice(found.length);
   const current = line.current;
+  const last = args.at(-1);
+  const valueFlag = current?.text.startsWith("--lease=")
+    ? "lease"
+    : current?.text.startsWith("--rev=")
+      ? "revision"
+      : last?.text === "--lease"
+        ? "lease"
+        : last?.text === "--rev"
+          ? "revision"
+          : null;
+  const valueKind = valueFlag ?? parameterAt(doc, args).expected?.completion;
+  if (valueKind !== undefined && valueKind !== null && suggester?.suggestConsoleValues !== undefined) {
+    const equals = current?.text.indexOf("=") ?? -1;
+    const prefix = equals >= 0 ? (current?.text.slice(equals + 1) ?? "") : (current?.text ?? "");
+    const values = await suggester.suggestConsoleValues(valueKind, prefix).catch(() => []);
+    return {
+      from: equals >= 0 ? from + equals + 1 : from,
+      to: request.offset,
+      items: values.map((value) => ({
+        ...commandItem(value.label, null, value.detail ?? valueKind),
+        apply: quoteArgument(value.apply),
+      })),
+      validFor: null,
+    };
+  }
   if (current !== null && isFlag(current)) {
     const equals = current.text.indexOf("=");
     const flag = doc.flags.find((candidate) => `--${candidate.name}` === current.text.slice(0, equals));

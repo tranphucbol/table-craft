@@ -9,6 +9,7 @@ import type { ITxnRequest } from "etcd3";
 import { bytesOf } from "./keyBytes.js";
 import type { PutOp, RangeOp } from "./ops.js";
 import { txnRequestOf, txnText, type Txn, type TxnCompare } from "./txn.js";
+import { leaseId } from "./runtime.js";
 
 const MS_PER_SECOND = 1000;
 const NO_LEASE = "0";
@@ -69,26 +70,47 @@ export function applyPlan(
   options: KeyApplyOptions,
   lease: string | null,
 ): ApplyPlan {
-  const change = valueChange(changes);
+  if (options.ttlMs !== undefined && (!Number.isFinite(options.ttlMs) || options.ttlMs <= 0)) {
+    throw new PluginError("statementFailed", "Use a positive finite TTL for a new lease.");
+  }
+  if (options.ttlMs !== undefined && options.lease !== undefined && options.lease.kind !== "preserve") {
+    throw new PluginError("statementFailed", "Choose either a new TTL or an existing lease assignment, not both.");
+  }
+  if (options.lease?.kind === "attach") leaseId(options.lease.leaseId);
+  const leaseOnly = changes.length === 0 && options.lease !== undefined && options.lease.kind !== "preserve";
+  const change = leaseOnly ? null : valueChange(changes);
   const name = bytesOf(key);
-  const value = bytesOf(change.value);
+  const value = change === null ? Buffer.alloc(0) : bytesOf(change.value);
   const withLease = options.ttlMs !== undefined;
   const newLease = lease ?? NEW_LEASE_PLACEHOLDER;
-  const put = (existing: boolean) =>
-    withLease ? putOp(name, value, newLease, false) : putOp(name, value, NO_LEASE, existing);
+  const put = (existing: boolean): PutOp => {
+    const assignment = options.lease;
+    const op = withLease
+      ? putOp(name, value, newLease, false)
+      : assignment?.kind === "attach"
+        ? putOp(name, value, assignment.leaseId, false)
+        : assignment?.kind === "detach"
+          ? putOp(name, value, NO_LEASE, false)
+          : putOp(name, value, NO_LEASE, existing);
+    return leaseOnly ? { ...op, ignoreValue: true } : op;
+  };
   let txn: Txn;
-  if (options.guard || options.revisionGuard !== undefined) {
+  if (options.guard || options.revisionGuard !== undefined || leaseOnly) {
     if (options.revisionGuard !== undefined && !/^(0|[1-9]\d*)$/.test(options.revisionGuard.modRevision)) {
       throw new PluginError("statementFailed", "Invalid etcd revision guard. Reload the key before saving.");
     }
     const compare: TxnCompare =
       options.revisionGuard !== undefined
         ? { target: "mod", key: name, operator: "=", value: options.revisionGuard.modRevision }
-        : change.original === null
-          ? { target: "create", key: name, operator: "=", value: NO_LEASE }
-          : { target: "value", key: name, operator: "=", value: bytesOf(change.original) };
+        : leaseOnly
+          ? { target: "create", key: name, operator: ">", value: NO_LEASE }
+          : change?.original === null
+            ? { target: "create", key: name, operator: "=", value: NO_LEASE }
+            : { target: "value", key: name, operator: "=", value: bytesOf(change!.original) };
     const existing =
-      options.revisionGuard === undefined ? change.original !== null : options.revisionGuard.modRevision !== "0";
+      options.revisionGuard === undefined
+        ? leaseOnly || change?.original !== null
+        : options.revisionGuard.modRevision !== "0";
     txn = { compares: [compare], success: [put(existing)], failure: [rangeOp(name)] };
   } else {
     const exists: TxnCompare = { target: "create", key: name, operator: ">", value: NO_LEASE };
@@ -100,14 +122,23 @@ export function applyPlan(
   return {
     txn,
     request,
-    original: change.original,
-    guarded: options.guard || options.revisionGuard !== undefined,
+    original: change?.original ?? null,
+    guarded: options.guard || options.revisionGuard !== undefined || leaseOnly,
     leaseSeconds,
   };
 }
 
 /** The plan as the console commands that do the same: `lease grant` first when it grants one. */
 export function planText(plan: ApplyPlan): string[] {
-  const text = txnText(plan.txn);
+  const previewOp = (op: Txn["success"][number]) =>
+    op.kind === "put" && op.lease === NEW_LEASE_PLACEHOLDER ? { ...op, lease: "1" } : op;
+  const text =
+    plan.leaseSeconds === null
+      ? txnText(plan.txn)
+      : txnText({
+          ...plan.txn,
+          success: plan.txn.success.map(previewOp),
+          failure: plan.txn.failure.map(previewOp),
+        }).replaceAll("--lease=1", `--lease=${NEW_LEASE_PLACEHOLDER}`);
   return plan.leaseSeconds === null ? [text] : [`lease grant ${String(plan.leaseSeconds)}`, text];
 }

@@ -1,4 +1,8 @@
 import { APP_ACTIONS } from "@table-craft/desktop/renderer/actions/appActions.js";
+import { ADMIN_ACTIONS } from "@table-craft/desktop/renderer/keyAdmin/actions.js";
+import { WATCH_ACTIONS } from "@table-craft/desktop/renderer/watch/actions.js";
+import { CONSOLE_INTENT_ACTIONS } from "@table-craft/desktop/renderer/keyAdmin/consoleIntents.js";
+import { COMMAND_TXN_ACTIONS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { DDL_ACTIONS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
 import { ERROR_ACTIONS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { HISTORY_ACTIONS } from "@table-craft/desktop/renderer/actions/historyActions.js";
@@ -16,6 +20,7 @@ import { NODE_ACTIONS } from "@table-craft/desktop/renderer/actions/nodeActions.
 import { SERVER_ACTIONS } from "@table-craft/desktop/renderer/actions/serverActions.js";
 import { KEY_ACTIONS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { KEY_EDIT_ACTIONS } from "@table-craft/desktop/renderer/actions/keyEditActions.js";
+import { KEY_LEASE_EDITOR_ACTIONS } from "@table-craft/desktop/renderer/actions/keyLeaseEditorActions.js";
 import { NAVIGATION_ACTIONS } from "@table-craft/desktop/renderer/actions/navigationActions.js";
 import { PLUGIN_ACTIONS } from "@table-craft/desktop/renderer/actions/pluginActions.js";
 import type { AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
@@ -33,6 +38,10 @@ import { UPDATE_ACTIONS } from "@table-craft/desktop/renderer/actions/updateActi
 /** Every action the app registers; the keymap and menu tests check this list. */
 export const ALL_ACTIONS: readonly AnyAction[] = [
   ...APP_ACTIONS,
+  ...ADMIN_ACTIONS,
+  ...WATCH_ACTIONS,
+  ...CONSOLE_INTENT_ACTIONS,
+  ...COMMAND_TXN_ACTIONS,
   ...ERROR_ACTIONS,
   ...FILE_ACTIONS,
   ...GRID_ACTIONS,
@@ -55,6 +64,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...SERVER_ACTIONS,
   ...KEY_ACTIONS,
   ...KEY_EDIT_ACTIONS,
+  ...KEY_LEASE_EDITOR_ACTIONS,
   ...SETTINGS_ACTIONS,
   ...SNIPPET_ACTIONS,
   ...LOG_ACTIONS,

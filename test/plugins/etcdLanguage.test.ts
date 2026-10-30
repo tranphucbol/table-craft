@@ -87,7 +87,7 @@ describe("etcd classify", () => {
 
 describe("etcd commands", () => {
   it("givenRefusedCommand_whenAsked_thenReasonNamesIt", () => {
-    expect(refusalOf(["watch", "a"])).toContain("live feed");
+    expect(refusalOf(["watch", "a"])).toBeNull();
     expect(refusalOf(["member", "add", "x"])).toBe("member add is not in the console yet; use etcdctl for it.");
     expect(refusalOf(["get", "a"])).toBeNull();
   });
@@ -161,7 +161,14 @@ describe("etcd completion", () => {
 
   it("givenContainer_whenCompleted_thenSubcommands", async () => {
     const result = await complete(at("lease "), null);
-    expect(result.items.map((item) => item.label)).toEqual(["grant", "revoke", "timetolive", "list"]);
+    expect(result.items.map((item) => item.label)).toEqual([
+      "grant",
+      "revoke",
+      "timetolive",
+      "list",
+      "ttl",
+      "keep-alive",
+    ]);
   });
 
   it("givenFlagPrefix_whenCompleted_thenUnusedFlags", async () => {
@@ -186,7 +193,21 @@ describe("etcd completion", () => {
 
   it("givenInsideTxn_whenCompleted_thenOpsAndHeadings", async () => {
     const result = await complete(at('txn\nif: mod("a") > 1\nthen: '), null);
-    expect(result.items.map((item) => item.label)).toEqual(["get", "put", "del", "if:", "then:", "else:", "end"]);
+    expect(result.items.map((item) => item.label)).toEqual([
+      "get",
+      "put",
+      "del",
+      "txn",
+      "if:",
+      "then:",
+      "else:",
+      "end",
+      "value",
+      "version",
+      "create",
+      "mod",
+      "lease",
+    ]);
   });
 
   it("givenCaretInPut_whenSignature_thenArgumentIndex", async () => {

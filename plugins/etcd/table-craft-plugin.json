@@ -2,16 +2,98 @@
   "id": "etcd",
   "name": "etcd",
   "version": "0.0.0",
-  "apiVersion": "1.4.0",
+  "apiVersion": "1.8.0",
   "entry": "index.js",
-  "capabilities": ["commands", "keepAlive", "keyValue", "nodes", "serverInfo"],
+  "capabilities": [
+    "commands",
+    "keepAlive",
+    "keyValue",
+    "nodes",
+    "serverInfo",
+    "revisions",
+    "watch",
+    "leases",
+    "access",
+    "members",
+    "maintenance",
+    "coordination",
+    "bulkTransfer"
+  ],
   "highlight": "etcd",
+  "brands": [{ "id": "etcd", "name": "etcd" }],
   "connection": {
     "fields": [
       { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
       { "key": "port", "label": "Port", "kind": "number", "default": 2379, "required": true },
       { "key": "user", "label": "Username", "kind": "text" },
       { "key": "password", "label": "Password", "kind": "password", "secret": true },
+      { "key": "endpoints", "label": "Endpoints (host:port, comma-separated)", "kind": "text", "group": "advanced" },
+      { "key": "namespace", "label": "Namespace prefix", "kind": "text", "group": "advanced" },
+      {
+        "key": "namespaceEncoding",
+        "label": "Namespace encoding",
+        "kind": "select",
+        "default": "utf8",
+        "group": "advanced",
+        "options": [
+          { "value": "utf8", "label": "UTF-8" },
+          { "value": "base64", "label": "Base64 (exact bytes)" }
+        ]
+      },
+      {
+        "key": "authMode",
+        "label": "Authentication",
+        "kind": "select",
+        "default": "auto",
+        "group": "advanced",
+        "options": [
+          { "value": "auto", "label": "Automatic" },
+          { "value": "none", "label": "None" },
+          { "value": "password", "label": "Username and password" },
+          { "value": "clientCN", "label": "Client certificate CN" }
+        ]
+      },
+      { "key": "serverName", "label": "TLS server name (SNI)", "kind": "text", "group": "advanced" },
+      { "key": "requestTimeout", "label": "Request timeout (s)", "kind": "number", "default": 10, "group": "advanced" },
+      {
+        "key": "maxRequestBytes",
+        "label": "Max request bytes",
+        "kind": "number",
+        "default": 1572864,
+        "group": "advanced"
+      },
+      {
+        "key": "readMode",
+        "label": "Default read consistency",
+        "kind": "select",
+        "default": "linearizable",
+        "group": "advanced",
+        "options": [
+          { "value": "linearizable", "label": "Linearizable" },
+          { "value": "serializable", "label": "Serializable (may be stale)" }
+        ]
+      },
+      {
+        "key": "lockPrefix",
+        "label": "Lock inspection prefix",
+        "kind": "text",
+        "default": "/locks/",
+        "group": "advanced"
+      },
+      {
+        "key": "electionPrefix",
+        "label": "Election inspection prefix",
+        "kind": "text",
+        "default": "/elections/",
+        "group": "advanced"
+      },
+      {
+        "key": "autoSyncInterval",
+        "label": "Configured endpoint health refresh (s; 0 disables)",
+        "kind": "number",
+        "default": 0,
+        "group": "advanced"
+      },
       {
         "key": "tlsMode",
         "label": "TLS mode",

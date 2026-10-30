@@ -39,13 +39,21 @@ The manifest declares what the plugin can do, and the UI offers only what it dec
   or `commands`.
 - `serverTimeout`: says what the connected server stops by itself and hands it the statement
   timeout, so the database stops a statement even when TableCraft cannot; requires `cancel`.
+- `revisions`: reads a key at an earlier revision for history, diff and restore.
+- `watch`: follows changes to a key or range from now or a past revision, with explicit gaps.
+- `leases`: lists leases with keys and TTL, grants, renews and revokes them.
+- `access`: lists and changes users, roles and permissions, and manages authentication where safe.
+- `members`: lists configured endpoints and cluster members, and promotes or removes a member.
+- `maintenance`: reports status and alarms, compacts, defragments, snapshots and checks consistency.
+- `coordination`: shows holders and queues under configured lock and election prefixes.
+- `bulkTransfer`: exports a range and imports chunk-atomically, resuming only confirmed boundaries.
 
 ```json
 {
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "1.7.0",
+  "apiVersion": "1.8.0",
   "entry": "index.js",
   "capabilities": [
     "sql",

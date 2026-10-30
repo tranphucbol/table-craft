@@ -1,4 +1,5 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
+import { AdvancedServiceRows } from "@table-craft/desktop/renderer/keyAdmin/ServiceRows.js";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
@@ -616,127 +617,137 @@ export function ServicesPane() {
     select(moved.selected);
   }
 
-  if (rows.length === 0) return <p className="p-gap text-ink-muted">No open sessions.</p>;
+  if (rows.length === 0)
+    return (
+      <>
+        <AdvancedServiceRows />
+        <p className="p-gap text-ink-muted">No open console sessions.</p>
+      </>
+    );
   return (
-    <ul
-      role="tree"
-      aria-label="Services"
-      tabIndex={selectedIndex === -1 ? 0 : -1}
-      className="py-1 outline-none"
-      onKeyDown={onKeyDown}
-      onFocus={(event) => {
-        if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined) select(rows[0].key);
-      }}
-    >
-      {rows.map((row, index) => {
-        const isSelected = index === selectedIndex;
-        const active = row.kind === "session" && row.node.tabId === activeId;
-        const canExpand = expandable(row);
-        const cancellable =
-          row.kind === "session" && row.node.kind === "console" && consoles[row.node.tabId]?.status === "running";
-        // Reads the console and plugin stores; this pane re-renders on both through `consoles` and `datasources`.
-        const inSessions = row.kind === "execution" && showableInSessions(row.tabId);
-        const entries = menuOf(row, cancellable, inSessions);
-        const line = (
-          <li
-            key={row.key}
-            ref={(element) => {
-              if (element === null) elements.current.delete(row.key);
-              else elements.current.set(row.key, element);
-            }}
-            role="treeitem"
-            aria-level={row.depth + 1}
-            aria-selected={isSelected}
-            aria-expanded={canExpand ? !collapsed.has(row.key) : undefined}
-            aria-label={rowLabel(row, datasources)}
-            tabIndex={isSelected ? 0 : -1}
-            data-kind={row.kind}
-            data-state={
-              row.kind === "session"
-                ? row.node.state
-                : row.kind === "execution"
-                  ? row.node.outcome
-                  : row.kind === "export" || row.kind === "import" || row.kind === "script"
-                    ? row.node.task.state
-                    : row.kind === "keyDelete"
-                      ? row.node.state
-                      : row.kind === "agentCall"
-                        ? row.node.outcome
-                        : undefined
-            }
-            style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(row.depth * INDENT_PX)}px)` }}
-            className={cn(
-              "flex h-row cursor-default items-center gap-cell pr-gap outline-none hover:bg-raised",
-              isSelected && "bg-selection hover:bg-selection",
-              !isSelected && active && "bg-raised",
-            )}
-            onMouseDown={() => select(row.key)}
-            onContextMenu={() => select(row.key)}
-            onClick={() => open(row)}
-            onDoubleClick={() => {
-              const request = row.kind === "agentCall" ? activityConsoleRequest(row.node) : null;
-              if (request !== null) invoke(MCP_ACTION_IDS.openInConsole, request);
-            }}
-          >
-            {canExpand ? (
-              <button
-                type="button"
-                tabIndex={-1}
-                aria-hidden
-                className="flex size-icon shrink-0 items-center justify-center text-ink-muted"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  toggle(row);
-                }}
-              >
-                {collapsed.has(row.key) ? <CollapsedIcon /> : <ExpandedIcon />}
-              </button>
-            ) : (
-              <span aria-hidden className="size-icon shrink-0" />
-            )}
-            {row.kind === "datasource" ? (
-              <DatasourceLine row={row} />
-            ) : row.kind === "session" ? (
-              <SessionLine row={row} />
-            ) : row.kind === "exports" ? (
-              <ExportsLine count={row.count} />
-            ) : row.kind === "export" ? (
-              <ExportLine entry={row.node} />
-            ) : row.kind === "imports" ? (
-              <ImportsLine count={row.count} />
-            ) : row.kind === "import" ? (
-              <ImportLine entry={row.node} />
-            ) : row.kind === "scripts" ? (
-              <ScriptsLine count={row.count} />
-            ) : row.kind === "script" ? (
-              <ScriptLine entry={row.node} />
-            ) : row.kind === "keyDeletes" ? (
-              <KeyDeletesLine count={row.count} />
-            ) : row.kind === "keyDelete" ? (
-              <KeyDeleteLine task={row.node} />
-            ) : row.kind === "agents" ? (
-              <AgentsLine count={row.count} />
-            ) : row.kind === "agentClient" ? (
-              <AgentClientLine client={row.node} />
-            ) : row.kind === "agentDatasource" ? (
-              <AgentDatasourceLine group={row.node} />
-            ) : row.kind === "agentRun" ? (
-              <AgentRunLine run={row.node} now={now} />
-            ) : row.kind === "agentCall" ? (
-              <AgentCallLine call={row.node} />
-            ) : (
-              <ExecutionLine execution={row.node} now={now} />
-            )}
-          </li>
-        );
-        if (entries.length === 0) return line;
-        return (
-          <ContextMenu.Root key={row.key}>
-            <ContextMenu.Trigger asChild>{line}</ContextMenu.Trigger>
-            <Menu entries={entries} />
-          </ContextMenu.Root>
-        );
-      })}
-    </ul>
+    <>
+      <AdvancedServiceRows />
+      <ul
+        role="tree"
+        aria-label="Services"
+        tabIndex={selectedIndex === -1 ? 0 : -1}
+        className="py-1 outline-none"
+        onKeyDown={onKeyDown}
+        onFocus={(event) => {
+          if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined)
+            select(rows[0].key);
+        }}
+      >
+        {rows.map((row, index) => {
+          const isSelected = index === selectedIndex;
+          const active = row.kind === "session" && row.node.tabId === activeId;
+          const canExpand = expandable(row);
+          const cancellable =
+            row.kind === "session" && row.node.kind === "console" && consoles[row.node.tabId]?.status === "running";
+          // Reads the console and plugin stores; this pane re-renders on both through `consoles` and `datasources`.
+          const inSessions = row.kind === "execution" && showableInSessions(row.tabId);
+          const entries = menuOf(row, cancellable, inSessions);
+          const line = (
+            <li
+              key={row.key}
+              ref={(element) => {
+                if (element === null) elements.current.delete(row.key);
+                else elements.current.set(row.key, element);
+              }}
+              role="treeitem"
+              aria-level={row.depth + 1}
+              aria-selected={isSelected}
+              aria-expanded={canExpand ? !collapsed.has(row.key) : undefined}
+              aria-label={rowLabel(row, datasources)}
+              tabIndex={isSelected ? 0 : -1}
+              data-kind={row.kind}
+              data-state={
+                row.kind === "session"
+                  ? row.node.state
+                  : row.kind === "execution"
+                    ? row.node.outcome
+                    : row.kind === "export" || row.kind === "import" || row.kind === "script"
+                      ? row.node.task.state
+                      : row.kind === "keyDelete"
+                        ? row.node.state
+                        : row.kind === "agentCall"
+                          ? row.node.outcome
+                          : undefined
+              }
+              style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(row.depth * INDENT_PX)}px)` }}
+              className={cn(
+                "flex h-row cursor-default items-center gap-cell pr-gap outline-none hover:bg-raised",
+                isSelected && "bg-selection hover:bg-selection",
+                !isSelected && active && "bg-raised",
+              )}
+              onMouseDown={() => select(row.key)}
+              onContextMenu={() => select(row.key)}
+              onClick={() => open(row)}
+              onDoubleClick={() => {
+                const request = row.kind === "agentCall" ? activityConsoleRequest(row.node) : null;
+                if (request !== null) invoke(MCP_ACTION_IDS.openInConsole, request);
+              }}
+            >
+              {canExpand ? (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-hidden
+                  className="flex size-icon shrink-0 items-center justify-center text-ink-muted"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    toggle(row);
+                  }}
+                >
+                  {collapsed.has(row.key) ? <CollapsedIcon /> : <ExpandedIcon />}
+                </button>
+              ) : (
+                <span aria-hidden className="size-icon shrink-0" />
+              )}
+              {row.kind === "datasource" ? (
+                <DatasourceLine row={row} />
+              ) : row.kind === "session" ? (
+                <SessionLine row={row} />
+              ) : row.kind === "exports" ? (
+                <ExportsLine count={row.count} />
+              ) : row.kind === "export" ? (
+                <ExportLine entry={row.node} />
+              ) : row.kind === "imports" ? (
+                <ImportsLine count={row.count} />
+              ) : row.kind === "import" ? (
+                <ImportLine entry={row.node} />
+              ) : row.kind === "scripts" ? (
+                <ScriptsLine count={row.count} />
+              ) : row.kind === "script" ? (
+                <ScriptLine entry={row.node} />
+              ) : row.kind === "keyDeletes" ? (
+                <KeyDeletesLine count={row.count} />
+              ) : row.kind === "keyDelete" ? (
+                <KeyDeleteLine task={row.node} />
+              ) : row.kind === "agents" ? (
+                <AgentsLine count={row.count} />
+              ) : row.kind === "agentClient" ? (
+                <AgentClientLine client={row.node} />
+              ) : row.kind === "agentDatasource" ? (
+                <AgentDatasourceLine group={row.node} />
+              ) : row.kind === "agentRun" ? (
+                <AgentRunLine run={row.node} now={now} />
+              ) : row.kind === "agentCall" ? (
+                <AgentCallLine call={row.node} />
+              ) : (
+                <ExecutionLine execution={row.node} now={now} />
+              )}
+            </li>
+          );
+          if (entries.length === 0) return line;
+          return (
+            <ContextMenu.Root key={row.key}>
+              <ContextMenu.Trigger asChild>{line}</ContextMenu.Trigger>
+              <Menu entries={entries} />
+            </ContextMenu.Root>
+          );
+        })}
+      </ul>
+    </>
   );
 }

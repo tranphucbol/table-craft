@@ -216,4 +216,44 @@ describe("tunneledSession", () => {
     expect(session.serverVersion).toBe("17");
     expect(session.transactions?.open).toBe(false);
   });
+
+  it("givenDriverSaysConnectionLostAfterSend_whenTunnelDrops_thenNeverDefinitelyUnsent", async () => {
+    const source = opener();
+    const lease = await createTunnelPool(source.open).acquire();
+    const session = tunneledSession(
+      fakeSession(async () => {
+        await Promise.resolve();
+        source.tunnels[0]?.drop("reset after send");
+        throw new PluginError("connectionLost", "socket closed");
+      }),
+      lease,
+      "bastion",
+    );
+    const error = await rejection(session.execute("put /key value"));
+    expect(error).toBeInstanceOf(TunnelError);
+    expect((error as TunnelError).code).toBe("sshTunnelLost");
+  });
+
+  it("givenNestedWatchResource_whenSessionCloses_thenResourceClosesBeforeTunnelRelease", async () => {
+    const source = opener();
+    const lease = await createTunnelPool(source.open).acquire();
+    const closed: boolean[] = [];
+    const inner = fakeSession(() => Promise.resolve(undefined));
+    const handle = {
+      next: () => Promise.resolve({ events: [], state: "live" as const, completedRevision: null, gap: null }),
+      close: async () => {
+        await Promise.resolve();
+        closed.push(source.tunnels[0]!.closed);
+      },
+    };
+    const session = tunneledSession({ ...inner, watch: { open: () => Promise.resolve(handle) } }, lease, "bastion");
+    const watch = await session.watch!.open({ database: 0, range: { kind: "all" }, from: { kind: "now" } });
+    expect(watch).not.toBe(handle);
+    await session.close();
+    expect(closed).toEqual([false]);
+    expect(source.tunnels[0]?.closed).toBe(true);
+    await expect(watch.next({ count: 1, maxBytes: 100, timeoutMs: 1 })).rejects.toMatchObject({
+      code: "connectionLost",
+    });
+  });
 });

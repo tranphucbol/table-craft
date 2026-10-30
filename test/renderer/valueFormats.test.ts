@@ -6,12 +6,78 @@ import {
   encodeValue,
   formatPattern,
   hexOf,
+  hexRows,
+  isKubernetesEnvelope,
+  parseKeyYaml,
+  MAX_YAML_BYTES,
   valueBytes,
 } from "@table-craft/desktop/renderer/model/valueFormats.js";
 
 const encoder = new TextEncoder();
 
 describe("value formats", () => {
+  it("givenYamlWithComments_whenPresentedOrValidated_thenSourceIsPreserved", async () => {
+    const source = "# Routing limits\nlimits:\n  daily: 5000 # Keep this note\n  ratio: 1.0\n";
+    expect(detectFormat(encoder.encode(source))).toBe("yaml");
+    expect(await decodeValue(encoder.encode(source), "yaml")).toEqual({
+      format: "yaml",
+      text: source,
+      inner: null,
+      error: null,
+    });
+    const encoded = encodeValue(source, "yaml");
+    expect(encoded.ok && new TextDecoder().decode(encoded.bytes)).toBe(source);
+    expect(detectFormat(encoder.encode("just ordinary text"))).toBe("text");
+  });
+
+  it("givenLargeYamlIntegers_whenParsed_thenNoPrecisionIsLost", () => {
+    expect(parseKeyYaml("revision: 9007199254740993\n")).toEqual({ revision: 9007199254740993n });
+  });
+
+  it.each([
+    "value: [unterminated",
+    "value: 1\nvalue: 2\n",
+    "value: &ref [1, 2]\nother: *ref\n",
+    "value: !custom something\n",
+    "value: !!js/function function(){}\n",
+    "value: !!str hello\n",
+    "<<: {value: 1}\n",
+    "value: .inf\n",
+    "? [complex, key]\n: value\n",
+    "value: " + "[".repeat(70) + "0" + "]".repeat(70),
+    "value: " + "a".repeat(MAX_YAML_BYTES),
+  ])("givenUnsupportedYaml_whenValidated_thenRefused_%#", (source) => {
+    expect(encodeValue(source, "yaml").ok).toBe(false);
+  });
+
+  it("givenBinaryRows_whenViewed_thenOffsetsSixteenBytesAndPrintableAscii", () => {
+    const bytes = new Uint8Array([0x00, 0x1f, 0x20, 0x41, 0x7e, 0x7f, 0xff, ...Array<number>(10).fill(0x42)]);
+    const rows = hexRows(bytes);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toEqual({
+      offset: "00000000",
+      hex: "00 1f 20 41 7e 7f ff 42 42 42 42 42 42 42 42 42",
+      ascii: ".. A~..BBBBBBBBB",
+    });
+    expect(rows[1]).toEqual({ offset: "00000010", hex: "42", ascii: "B" });
+    expect(hexRows(new Uint8Array())).toEqual([]);
+  });
+
+  it("givenKubernetesMagic_whenDetected_thenRawHexNotFabricatedYaml", async () => {
+    const bytes = encoder.encode("k8s\u0000protobuf");
+    expect(isKubernetesEnvelope(bytes)).toBe(true);
+    expect(isKubernetesEnvelope(encoder.encode("k8s"))).toBe(false);
+    expect(isKubernetesEnvelope(encoder.encode("k8sx"))).toBe(false);
+    expect(detectFormat(bytes)).toBe("hex");
+    expect(await decodeValue(bytes, "auto")).toMatchObject({ format: "hex", text: hexOf(bytes) });
+  });
+
+  it("givenLargeBinary_whenBase64_thenNoArgumentStackOverflowAndRoundTrips", async () => {
+    const bytes = new Uint8Array(1_048_576).fill(0xff);
+    const decoded = await decodeValue(bytes, "base64");
+    const encoded = encodeValue(decoded.text, "base64");
+    expect(encoded.ok && encoded.bytes).toEqual(bytes);
+  });
   it("givenGzipJson_whenAuto_thenGzipJson", async () => {
     const bytes = new Uint8Array(gzipSync(encoder.encode('{"theme":"dark"}')));
     expect(detectFormat(bytes)).toBe("gzip");

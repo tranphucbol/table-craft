@@ -4,7 +4,7 @@ import { create } from "zustand";
  * A SQL console, a table open in the data editor (plan 008), a relation's DDL (plan 010), a key or
  * a server's figures (plan 058).
  */
-export type TabKind = "console" | "table" | "ddl" | "sessions" | "key" | "server";
+export type TabKind = "console" | "table" | "ddl" | "sessions" | "key" | "server" | "keyAdmin";
 
 export const EDITOR_GROUPS = ["left", "right"] as const;
 export type EditorGroupId = (typeof EDITOR_GROUPS)[number];

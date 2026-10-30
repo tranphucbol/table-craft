@@ -23,7 +23,7 @@
     {
       "key": "CAPABILITIES",
       "kind": "addition",
-      "reason": "Gains commands, keyValue, nodes, serverInfo and serverTimeout at the end; a plugin declares capabilities, so a plugin built for 1.1 never names the new ones and the host only reads them when declared (decisions 112-114, 129)."
+      "reason": "Adds the opt-in revisions, watch, leases, access, members, maintenance, coordination and bulkTransfer capabilities after the existing set, including serverTimeout. Existing plugins never declare them; the host only calls the matching optional services when declared (decisions 129, 136)."
     },
     {
       "key": "PLUGIN_ERROR_CODES",
