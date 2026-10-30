@@ -40,6 +40,8 @@ import {
   waitUntilReady,
   type RunningApp,
   type SavedDatasource,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 import { AgentClient, freePort } from "./mcpAgent.js";
 
@@ -92,8 +94,8 @@ async function openAccess(page: Page): Promise<Locator> {
 /** Sets the row to Read only, the way every scenario starts (plan 121's live test). */
 async function exposeReadOnly(settings: Locator, name: string): Promise<void> {
   const access = settings.getByLabel(`AI agent access for ${name}`, { exact: true });
-  await access.selectOption("read");
-  await expect.poll(() => access.inputValue()).toBe("read");
+  await chooseOption(access, "read");
+  await expect.poll(() => optionValue(access)).toBe("read");
 }
 
 /** Hovers the (i), checks its one-line summary, then clicks it open. */

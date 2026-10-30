@@ -27,6 +27,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("024");
@@ -207,7 +208,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
       await dialog.getByTestId("design-tab-foreignKeys").click();
       await dialog.getByRole("button", { name: "Add Foreign Key", exact: true }).click();
       await dialog.getByLabel("Columns of foreign key 1", { exact: true }).fill("customer_id");
-      await dialog.getByLabel("Table foreign key 1 references", { exact: true }).selectOption({ label: "customers" });
+      await chooseOption(dialog.getByLabel("Table foreign key 1 references", { exact: true }), { label: "customers" });
       const ddl = await previewed(dialog, /REFERENCES .*customers/);
       expect(ddl).toMatch(new RegExp(`CREATE TABLE .*${TABLE}`));
       expect(ddl).toMatch(/PRIMARY KEY/);
@@ -396,7 +397,7 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
       await create.getByTestId("design-tab-foreignKeys").click();
       await create.getByRole("button", { name: "Add Foreign Key", exact: true }).click();
       await create.getByLabel("Columns of foreign key 1", { exact: true }).fill("customer_id");
-      await create.getByLabel("Table foreign key 1 references", { exact: true }).selectOption({ label: "customers" });
+      await chooseOption(create.getByLabel("Table foreign key 1 references", { exact: true }), { label: "customers" });
       await previewed(create, /REFERENCES .*customers/);
       await expect(create.getByTestId("object-notes").textContent()).resolves.toMatch(/commits each DDL statement/);
       await captureWindow(page, "mysql-new-table-designer");

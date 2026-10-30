@@ -39,6 +39,9 @@ import {
   waitUntilReady,
   type RunningApp,
   type SavedDatasource,
+  chooseOption,
+  optionDisabled,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("117");
@@ -267,10 +270,10 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
 
       const rows = dialog.getByTestId("mcp-access-row");
       expect(await rows.count()).toBe(4);
-      expect(await dialog.getByLabel("AI agent access for shop").inputValue()).toBe("ask");
-      expect(await dialog.getByLabel("AI agent access for hidden").inputValue()).toBe("off");
+      expect(await optionValue(dialog.getByLabel("AI agent access for shop"))).toBe("ask");
+      expect(await optionValue(dialog.getByLabel("AI agent access for hidden"))).toBe("off");
       const productionAccess = dialog.getByLabel("AI agent access for prod");
-      expect(await productionAccess.locator('option[value="ask"]').isDisabled()).toBe(true);
+      expect(await optionDisabled(productionAccess, "ask")).toBe(true);
       await captureWindow(page, "01-settings-page");
 
       await dialog.getByLabel("Row cap for shop").fill("25");
@@ -315,15 +318,15 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       const dialog = dataSourcesDialog(page);
       await dialog.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       const access = dialog.getByTestId("datasource-agent-access");
-      expect(await access.inputValue()).toBe("read");
-      await access.selectOption("ask");
+      expect(await optionValue(access)).toBe("read");
+      await chooseOption(access, "ask");
       await captureWindow(page, "07-datasource-agent-access");
       await dialog.getByRole("button", { name: "OK", exact: true }).click();
       await dialog.waitFor({ state: "detached" });
 
       await findAction(page, "MCP Server Settings");
       const settings = settingsDialog(page);
-      await expect.poll(() => settings.getByLabel("AI agent access for prod").inputValue()).toBe("ask");
+      await expect.poll(() => optionValue(settings.getByLabel("AI agent access for prod"))).toBe("ask");
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -450,9 +453,9 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
           rows.map((row) => row.getAttribute("data-outcome")),
         ),
       ).toEqual(["handedOff", "denied", "ok"]);
-      await activity.getByTestId("mcp-activity-outcome").selectOption("denied");
+      await chooseOption(activity.getByTestId("mcp-activity-outcome"), "denied");
       await expect.poll(() => calls.count()).toBe(1);
-      await activity.getByTestId("mcp-activity-outcome").selectOption("");
+      await chooseOption(activity.getByTestId("mcp-activity-outcome"), "");
       await captureWindow(page, "09-agent-activity");
     },
     SCENARIO_TIMEOUT_MS,
@@ -539,8 +542,8 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       const dialog = dataSourcesDialog(page);
       await dialog.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       const access = dialog.getByTestId("datasource-agent-access");
-      expect(await access.inputValue()).toBe("askReads");
-      expect(await access.locator('option[value="askReads"]').textContent()).toBe("Ask before reads");
+      expect(await optionValue(access)).toBe("askReads");
+      expect(await access.textContent()).toBe("Ask before reads");
       await captureAskReads(page, "01-level");
     },
     SCENARIO_TIMEOUT_MS,
@@ -554,12 +557,12 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       const dialog = settingsDialog(page);
       await dialog.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       const access = dialog.getByLabel("AI agent access for prod");
-      expect(await access.locator('option[value="askReads"]').isDisabled()).toBe(false);
-      expect(await access.locator('option[value="ask"]').isDisabled()).toBe(true);
+      expect(await optionDisabled(access, "askReads")).toBe(false);
+      expect(await optionDisabled(access, "ask")).toBe(true);
 
-      await access.selectOption("askReads");
-      await expect.poll(() => access.inputValue()).toBe("askReads");
-      expect(await access.locator('option[value="ask"]').isDisabled()).toBe(true);
+      await chooseOption(access, "askReads");
+      await expect.poll(() => optionValue(access)).toBe("askReads");
+      expect(await optionDisabled(access, "ask")).toBe(true);
       await dialog.getByTestId("mcp-production-note").scrollIntoViewIfNeeded();
       await captureAskReads(page, "09-production");
       await page.keyboard.press("Escape");

@@ -2,8 +2,9 @@ import { useId } from "react";
 import type { SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
 import { DEFAULT_SSH_PORT } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
-import { Button, Check, FieldRow, INPUT_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { Button, Check, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { SecretField } from "@table-craft/desktop/renderer/dialogs/SecretField.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { sshSecretField, type FormDraft, type SshDraft } from "@table-craft/desktop/renderer/model/datasourceForm.js";
 
 const AUTH_LABEL: Readonly<Record<SshAuthMethod, string>> = {
@@ -66,18 +67,17 @@ export function SshSection({ draft, encryption, onChange }: SshSectionProps) {
           />
         </FieldRow>
         <FieldRow label="Authentication" htmlFor={authId}>
-          <select
+          <Dropdown
             id={authId}
-            className={INPUT_CLASS}
+            label="Authentication"
+            variant="field"
             value={ssh.auth}
-            onChange={(event) => set({ auth: event.target.value as SshAuthMethod })}
-          >
-            {AUTH_METHODS.map((method) => (
-              <option key={method} value={method}>
-                {AUTH_LABEL[method]}
-              </option>
-            ))}
-          </select>
+            options={AUTH_METHODS.map((method) => ({ value: method, label: AUTH_LABEL[method] }))}
+            onChange={(value) => {
+              const auth = AUTH_METHODS.find((method) => method === value);
+              if (auth !== undefined) set({ auth });
+            }}
+          />
         </FieldRow>
         {ssh.auth === "key" ? (
           <FieldRow label={KEY_FILE_TITLE} htmlFor={keyId}>

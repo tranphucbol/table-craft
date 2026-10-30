@@ -5,10 +5,17 @@ import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions
 import { bytesLabel } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 import { permissionRange, rangeLabel } from "@table-craft/desktop/renderer/keyAdmin/AccessView.js";
 import { BUTTON, INPUT } from "@table-craft/desktop/renderer/keyAdmin/controls.js";
+import { Dropdown, type DropdownOption } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { WATCH_ACTION_IDS } from "./actions.js";
 import { exportRunning, useWatch, type WatchEntry } from "./store.js";
 
 const CELL = "h-row border-b border-line px-gap text-left whitespace-nowrap";
+const WATCH_KIND_OPTIONS: readonly DropdownOption[] = [
+  { value: "prefix", label: "Prefix" },
+  { value: "key", label: "Key" },
+  { value: "range", label: "Range" },
+  { value: "all", label: "All keys" },
+];
 
 function WatchButton({
   id,
@@ -63,12 +70,13 @@ function WatchForm() {
     >
       <label className="flex flex-col gap-cell">
         Watch
-        <select className={INPUT} value={kind} onChange={(event) => setKind(event.target.value as KeyRange["kind"])}>
-          <option value="prefix">Prefix</option>
-          <option value="key">Key</option>
-          <option value="range">Range</option>
-          <option value="all">All keys</option>
-        </select>
+        <Dropdown
+          variant="field"
+          label="Watch"
+          value={kind}
+          options={WATCH_KIND_OPTIONS}
+          onChange={(value) => setKind(value as KeyRange["kind"])}
+        />
       </label>
       {kind === "all" ? null : (
         <label className="flex min-w-0 flex-col gap-cell">

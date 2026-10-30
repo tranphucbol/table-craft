@@ -33,6 +33,8 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("026");
@@ -135,8 +137,8 @@ async function editCell(page: Page, row: number, column: number, text: string): 
 async function chooseTransactionMode(page: Page, mode: "auto" | "manual"): Promise<void> {
   const select = page.getByLabel("Transaction mode", { exact: true });
   await expect.poll(() => select.isEnabled()).toBe(true);
-  await select.selectOption(mode);
-  await expect.poll(() => select.inputValue()).toBe(mode);
+  await chooseOption(select, mode);
+  await expect.poll(() => optionValue(select)).toBe(mode);
 }
 
 describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {

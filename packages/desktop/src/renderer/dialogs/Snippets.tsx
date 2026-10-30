@@ -21,6 +21,7 @@ import {
   useSnippetsDialog,
 } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 import { snippetPreview } from "@table-craft/desktop/renderer/console/snippetCompletion.js";
 
@@ -85,22 +86,19 @@ function SnippetForm({
           </label>
           <label className="flex min-w-0 flex-col gap-1 text-ink-muted" htmlFor="snippet-scope">
             Applies to
-            <select
+            <Dropdown
               id="snippet-scope"
-              className={cn(INPUT_CLASS, "bg-raised")}
+              label="Applies to"
+              variant="field"
+              className="bg-raised"
               value={snippetScopeValue(draft.scope)}
-              aria-invalid={problems.scope !== undefined}
-              onChange={(event) => {
-                const selected = scopes.find((option) => option.value === event.target.value);
+              invalid={problems.scope !== undefined}
+              options={scopes}
+              onChange={(value) => {
+                const selected = scopes.find((option) => option.value === value);
                 if (selected !== undefined) change({ scope: selected.scope });
               }}
-            >
-              {scopes.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
         </div>
       </div>

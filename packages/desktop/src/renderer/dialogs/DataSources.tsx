@@ -25,7 +25,6 @@ import {
   Button,
   CONTENT_CLASS,
   FieldRow,
-  INPUT_CLASS,
   OVERLAY_CLASS,
   Select,
   TextInput,
@@ -59,6 +58,7 @@ import { folderPaths } from "@table-craft/desktop/renderer/model/datasourceTree.
 import { useDataSourcesDialog, type DialogTarget } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { DatasourceGlyph, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { ACTION_ICONS, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
@@ -164,14 +164,14 @@ function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
   if (field.kind === "select") {
     return (
       <FieldRow label={field.label} htmlFor={id}>
-        <select id={id} className={INPUT_CLASS} value={text} onChange={(event) => set(event.target.value)}>
-          {field.required === true ? null : <option value="">—</option>}
-          {(field.options ?? []).map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <Dropdown
+          id={id}
+          label={field.label}
+          variant="field"
+          value={text}
+          options={[...(field.required === true ? [] : [{ value: "", label: "—" }]), ...(field.options ?? [])]}
+          onChange={set}
+        />
       </FieldRow>
     );
   }

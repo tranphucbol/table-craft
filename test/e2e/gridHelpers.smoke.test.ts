@@ -38,10 +38,12 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("043");
 const pickerEvidence = evidenceFor("111");
+const dropdownEvidence = evidenceFor("129");
 const COMPLETION_WAIT_MS = 1_000;
 const PICKER_APPEARANCES = [
   ["DarkComfortable", "dark", "comfortable"],
@@ -559,10 +561,12 @@ describe.runIf(DATABASES_ENABLED)("grid helpers live test", () => {
 
       await cellIn(editor(page), 1, FLAG).click();
       await page.keyboard.press("Enter");
-      const select = editor(page).locator("[data-editing] select");
+      const select = editor(page).locator('[data-editing] [role="combobox"]');
       await select.waitFor();
+      await page.getByRole("listbox").waitFor();
       await captureWindow(page, "boolean-editor");
-      await select.selectOption("true");
+      await dropdownEvidence(page, "05-boolean-editor");
+      await chooseOption(select, "true");
 
       await expect.poll(() => cellIn(editor(page), 1, FLAG).textContent()).toBe("true");
       expect(await pending(page).textContent()).toBe("1 pending change");

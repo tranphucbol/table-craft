@@ -26,6 +26,7 @@ import type { ResultSearch, ResultTab } from "@table-craft/desktop/renderer/stat
 import type { ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import { currentFormats } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import type { PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import {
@@ -186,30 +187,33 @@ export function CellEditorInput({
   if (typeClass === "boolean") {
     const chosen = booleanOfText(text);
     return (
-      <div role="gridcell" data-row={row} data-col={position} data-editing className="relative h-full min-w-0">
-        <select
-          aria-label={`Edit ${name}`}
-          autoFocus
-          className={EDITOR_CLASS}
-          value={chosen === null ? (text === "" ? "" : text) : String(chosen)}
-          onChange={(event) => {
-            edits.change(event.target.value);
+      <div
+        role="gridcell"
+        data-row={row}
+        data-col={position}
+        data-editing
+        className="relative h-full min-w-0"
+        onKeyDown={(event) => event.stopPropagation()}
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => event.stopPropagation()}
+        onDoubleClick={(event) => event.stopPropagation()}
+      >
+        <Dropdown
+          label={`Edit ${name}`}
+          variant="cell"
+          defaultOpen
+          value={chosen === null ? text : String(chosen)}
+          options={
+            chosen === null && text !== "" ? [{ value: text, label: text }, ...BOOLEAN_CHOICES] : BOOLEAN_CHOICES
+          }
+          onChange={(value) => {
+            edits.change(value);
             close(true);
           }}
-          onMouseDown={(event) => event.stopPropagation()}
-          onDoubleClick={(event) => event.stopPropagation()}
-          onKeyDown={onKeyDown}
-          onBlur={() => {
-            if (!closing.current) edits.commit();
+          onOpenChange={(open) => {
+            if (!open && !closing.current) close(false);
           }}
-        >
-          {chosen === null && text !== "" ? <option value={text}>{text}</option> : null}
-          {BOOLEAN_CHOICES.map((choice) => (
-            <option key={choice.value} value={choice.value}>
-              {choice.label}
-            </option>
-          ))}
-        </select>
+        />
       </div>
     );
   }

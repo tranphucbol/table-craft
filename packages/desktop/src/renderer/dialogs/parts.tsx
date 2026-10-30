@@ -1,12 +1,13 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
+import { FIELD_CLASS } from "@table-craft/desktop/renderer/ui/fieldClasses.js";
 import { DIALOG_MOTION, OVERLAY_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { FILLED_DANGER_PRESS, FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
 export const OVERLAY_CLASS = `fixed inset-0 z-40 bg-canvas/60 ${OVERLAY_MOTION}`;
 export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl outline-none ${DIALOG_MOTION}`;
-export const INPUT_CLASS =
-  "h-row min-w-0 rounded border border-line bg-canvas px-cell text-ink outline-none focus:border-accent disabled:opacity-60 aria-invalid:border-danger";
+export const INPUT_CLASS = FIELD_CLASS;
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "dangerOutline";
 
@@ -52,34 +53,32 @@ export function FieldRow({ label, htmlFor, children }: { label: string; htmlFor?
   );
 }
 
-/** A labelled native select over `options`. */
+/** A labelled dropdown over `options`, drawn in-app (decision 140). */
 export function Select({
   label,
   value,
   options,
   onChange,
   testId,
+  className,
 }: {
   readonly label: string;
   readonly value: string;
   readonly options: readonly { readonly label: string; readonly value: string }[];
   readonly onChange: (value: string) => void;
   readonly testId?: string;
+  readonly className?: string;
 }) {
   return (
-    <select
-      aria-label={label}
-      data-testid={testId}
-      className={INPUT_CLASS}
+    <Dropdown
+      variant="field"
+      label={label}
+      testId={testId}
+      className={className}
       value={value}
-      onChange={(event) => onChange(event.target.value)}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+      options={options}
+      onChange={onChange}
+    />
   );
 }
 
