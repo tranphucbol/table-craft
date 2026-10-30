@@ -1,4 +1,6 @@
 import { openConsole } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
+import { openAdmin } from "@table-craft/desktop/renderer/keyAdmin/actions.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import {
   selectedSlowCommand,
@@ -10,6 +12,7 @@ import { useTabs, type TabsStore } from "@table-craft/desktop/renderer/state/tab
 
 export const SERVER_ACTION_IDS = {
   show: "server.show",
+  details: "server.details",
   refresh: "server.refresh",
   openSlowCommand: "server.openSlowCommand",
 } as const;
@@ -40,16 +43,36 @@ export async function openServerIn(
 }
 
 export const SERVER_ACTIONS: readonly AnyAction[] = [
+  defineAction<{ readonly datasourceId: string } | undefined>({
+    id: SERVER_ACTION_IDS.details,
+    title: "Server Details",
+    category: "Database",
+    icon: "server",
+    tabKind: "keyAdmin",
+    available: (context) => context.capabilities.includes("serverInfo"),
+    run: async (context, args) => {
+      const datasourceId =
+        args?.datasourceId ??
+        (context.activeTab === null ? undefined : useKeyAdmin.getState().tabs[context.activeTab.id]?.datasourceId);
+      if (datasourceId !== undefined) await openServerIn({ tabs: useTabs, server: useServer }, datasourceId);
+    },
+  }),
   defineAction({
     id: SERVER_ACTION_IDS.show,
     title: "Server Info",
     category: "Database",
     icon: "server",
-    available: (context) => context.datasource === null || context.datasource.capabilities.includes("serverInfo"),
+    available: (context) =>
+      context.datasource === null ||
+      context.datasource.capabilities.some((cap) => cap === "serverInfo" || cap === "members" || cap === "maintenance"),
     when: (context) => context.datasource !== null,
     run: async (context) => {
-      if (context.datasource !== null)
-        await openServerIn({ tabs: useTabs, server: useServer }, context.datasource.view.id);
+      if (context.datasource !== null) {
+        if (context.datasource.capabilities.includes("members")) await openAdmin(context.datasource.view.id, "members");
+        else if (context.datasource.capabilities.includes("maintenance"))
+          await openAdmin(context.datasource.view.id, "maintenance");
+        else await openServerIn({ tabs: useTabs, server: useServer }, context.datasource.view.id);
+      }
     },
   }),
   defineAction({

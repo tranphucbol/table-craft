@@ -1,5 +1,14 @@
 import type { ExecuteResult } from "./plugin.js";
 import type { WireValue } from "./values.js";
+import type {
+  KeyChildrenPage,
+  KeyChildrenRequest,
+  KeyDeletePreview,
+  KeyDeleteResult,
+  KeyLeaseAssignment,
+  KeyRange,
+  KeyRangeCount,
+} from "./keyAdvanced.js";
 
 /** The key types the key tree tells apart (decision 113); a module type such as RedisJSON is `other`. */
 export const KEY_TYPES = ["string", "hash", "list", "set", "zset", "stream", "json", "other"] as const;
@@ -15,6 +24,75 @@ export type KeyType = (typeof KEY_TYPES)[number];
 export interface KeyBytes {
   readonly text: string;
   readonly hex: string | null;
+}
+
+/** Revision identifiers stay decimal strings, never lossy JavaScript numbers. */
+export interface KeyRevision {
+  readonly createRevision: string;
+  readonly modRevision: string;
+  readonly version: string;
+  readonly lease: string;
+}
+
+/** A complete current read after a refused write, never the historical value being restored. */
+export interface KeyConflictSnapshot {
+  readonly database: number;
+  readonly key: KeyBytes;
+  /** Null only when absent; empty bytes remain a present value. Never a truncated preview. */
+  readonly value: KeyBytes | null;
+  readonly revision: KeyRevision | null;
+  readonly snapshotRevision: string;
+}
+
+/** Optional operations a keyspace implements; absent fields mean unsupported. */
+export interface KeyspaceFeatures {
+  readonly leaseAssignment?: boolean;
+  /** `apply` atomically enforces `revisionGuard`, even when `guard` is false. */
+  readonly revisionGuard?: boolean;
+}
+
+/** A bounded exact-key history window; null cursor starts a new pinned snapshot. */
+export interface KeyHistoryRequest {
+  readonly database: number;
+  readonly key: KeyBytes;
+  readonly cursor: string | null;
+  /** Maximum events, 1–100. A cursor binds the exact binary key, database and snapshot. */
+  readonly count: number;
+  /** Maximum total decoded key/value bytes in this page, 1–1,048,576; never truncate an event. */
+  readonly maxBytes: number;
+  /** Work budget, 1–5,000 ms; stop with a continuation instead of opening a live watch. */
+  readonly timeoutMs: number;
+}
+
+/** An event in chronological revision order; deletion is null, an empty PUT is empty bytes. */
+export interface KeyHistoryEvent extends KeyRevision {
+  readonly kind: "PUT" | "DELETE";
+  readonly key: KeyBytes;
+  readonly value: KeyBytes | null;
+}
+
+/** An inclusive revision interval whose events cannot be recovered. */
+export interface KeyHistoryGap {
+  readonly fromRevision: string;
+  readonly toRevision: string;
+  readonly reason: "compacted";
+}
+
+export type KeyHistoryStopReason = "snapshotEnd" | "pageLimit" | "byteLimit" | "deadline" | "compacted";
+
+/** Bounded history pinned at R, with the key's current modification M (null if absent at R). */
+export interface KeyHistoryPage {
+  readonly events: readonly KeyHistoryEvent[];
+  readonly snapshotRevision: string;
+  readonly terminalRevision: string | null;
+  /** Null when no further events can be retrieved; non-null for a resumable budget stop. */
+  readonly cursor: string | null;
+  /** True only when the entire history through R is known, without gaps. */
+  readonly complete: boolean;
+  /** Inclusive compaction boundary, not a fabricated creation or deletion event. */
+  readonly unavailableThrough: string | null;
+  readonly gaps: readonly KeyHistoryGap[];
+  readonly stopReason: KeyHistoryStopReason;
 }
 
 /** A key's name: bytes, since a key may be any binary string. */
@@ -77,11 +155,21 @@ export interface KeyInfo {
 
 /** What the key tab's header shows; each field null when the server or its ACL would not say. */
 export interface KeyDetails extends KeyInfo {
+  /** CURRENT read baseline for pending edits; never copy a historical event's revision on Restore. */
+  readonly revision?: KeyRevision;
   /** Fields, elements, members, entries or bytes, by type. */
   readonly length: number | null;
   readonly memoryBytes: number | null;
   readonly encoding: string | null;
   readonly idleSeconds: number | null;
+  /** Extra per-key facts a store reports, such as etcd's revisions and lease, the host lists as-is. */
+  readonly attributes?: readonly KeyAttribute[];
+}
+
+/** One extra fact about a key, by the store's own name for it. */
+export interface KeyAttribute {
+  readonly name: string;
+  readonly value: string;
 }
 
 /** Which part of a key `Keyspace.read` returns (decision 113). */
@@ -139,6 +227,10 @@ export type KeyChange =
   | { readonly kind: "deleteEntry"; readonly id: string };
 
 export interface KeyApplyOptions {
+  /** Absent preserves the current lease; detach never revokes it. */
+  readonly lease?: KeyLeaseAssignment;
+  /** Compare the CURRENT read's mod revision atomically, including "0" for an absent key. */
+  readonly revisionGuard?: { readonly modRevision: string };
   /** The key's type as read, or the type of the key the changes create. */
   readonly type: KeyType;
   /** Check every change's `original` first and refuse with `conflict` when one differs. */
@@ -160,6 +252,13 @@ export type KeyExpiry = { readonly inMs: number } | { readonly at: string } | nu
  * session exactly when the plugin declares `keyValue`. Calls queue on the session they hang off.
  */
 export interface Keyspace {
+  children?(request: KeyChildrenRequest): Promise<KeyChildrenPage>;
+  countRange?(database: number, range: KeyRange): Promise<KeyRangeCount>;
+  prepareDelete?(database: number, range: KeyRange): Promise<KeyDeletePreview>;
+  deletePrepared?(token: string): Promise<KeyDeleteResult>;
+  readonly features?: KeyspaceFeatures;
+  /** Finite history only, not a live watch. Events are chronological within and across pages. */
+  history?(request: KeyHistoryRequest): Promise<KeyHistoryPage>;
   /** What separates the levels of a key name, such as `:`, for the tree's folders. */
   readonly delimiter: string;
   databases(): Promise<readonly KeyDatabase[]>;

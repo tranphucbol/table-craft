@@ -1,4 +1,6 @@
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { settleAdminRenewals } from "@table-craft/desktop/renderer/keyAdmin/actions.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 import { closedConsoleOf, duplicateSeed } from "@table-craft/desktop/renderer/model/consoleTabs.js";
 import type { ParameterValues } from "@table-craft/desktop/renderer/model/parameters.js";
 import {
@@ -20,6 +22,7 @@ import {
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { createFileConsoles } from "@table-craft/desktop/renderer/state/fileConsoles.js";
+import { assertConsoleTextPersistable } from "@table-craft/desktop/renderer/state/consolePersistence.js";
 import { useLayout, type OpenConsole } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { bridgeSqlFiles } from "@table-craft/desktop/renderer/state/sqlFiles.js";
@@ -45,6 +48,7 @@ function newTab(name: string): Tab {
 /** The window's file consoles (plan 041). */
 export const fileConsoles = createFileConsoles({
   files: bridgeSqlFiles(),
+  validateText: assertConsoleTextPersistable,
   consoles: useConsoles,
   tabs: useTabs,
   ask: (request) => useModal.getState().ask(request),
@@ -347,6 +351,7 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
   if (!(await settlePendingEdits(ids, "close"))) return;
   if (!(await settleConsoleEdits(ids, "close"))) return;
   if (!(await settleTransactions(ids, "close"))) return;
+  if (!(await settleAdminRenewals(ids, "close these tabs"))) return;
   const closing = useConsoles.getState().consoles;
   for (const tab of close()) {
     const session = closing[tab.id];
@@ -357,6 +362,7 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
     else if (tab.kind === "sessions") useSessions.getState().close(tab.id);
     else if (tab.kind === "key") useKeyTabs.getState().close(tab.id);
     else if (tab.kind === "server") useServer.getState().close(tab.id);
+    else if (tab.kind === "keyAdmin") useKeyAdmin.getState().close(tab.id);
     else useDdl.getState().close(tab.id);
   }
 }
@@ -419,6 +425,10 @@ export async function renameConsole(id: string): Promise<void> {
 }
 
 export async function disconnectDatasource(datasourceId: string): Promise<void> {
+  const adminIds = Object.entries(useKeyAdmin.getState().tabs)
+    .filter(([, tab]) => tab.datasourceId === datasourceId)
+    .map(([id]) => id);
+  if (!(await settleAdminRenewals(adminIds, "disconnect"))) return;
   if (!(await settlePendingEdits(tablesOf(useTables.getState().tables, datasourceId), "disconnect"))) return;
   if (!(await settleConsoleEdits(consolesOf(useConsoles.getState().consoles, datasourceId), "disconnect"))) return;
   if (!(await settleTransactions(consolesOf(useConsoles.getState().consoles, datasourceId), "disconnect"))) return;
@@ -433,7 +443,8 @@ export function answerCloseRequests(): () => void {
         (await fileConsoles.settleDirty(Object.keys(useConsoles.getState().consoles), "quit")) &&
         (await settlePendingEdits(pendingTables(useTables.getState().tables), "quit")) &&
         (await settleConsoleEdits(Object.keys(useConsoles.getState().consoles), "quit")) &&
-        (await settleTransactions(openTransactions(useConsoles.getState().consoles), "quit"));
+        (await settleTransactions(openTransactions(useConsoles.getState().consoles), "quit")) &&
+        (await settleAdminRenewals(Object.keys(useKeyAdmin.getState().tabs), "quit"));
       if (proceed) await autosave.flush();
       await bridge().answerClose(proceed);
     })();

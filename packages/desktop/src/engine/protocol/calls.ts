@@ -43,8 +43,11 @@ import type {
   KeyApplied,
   KeyApplyOptions,
   KeyChange,
+  KeyConflictSnapshot,
   KeyDatabases,
   KeyExpiry,
+  KeyHistoryRequest,
+  KeyHistoryPage,
   KeyInfo,
   KeyName,
   KeyReadRange,
@@ -72,9 +75,10 @@ import type {
   ScriptTask,
 } from "./transfer.js";
 import type { ResultPaging, StatementLimit } from "./wire.js";
+import type { KeyAdvancedCalls } from "./keyAdvancedCalls.js";
 
 /** The engine's calls: what each request carries and what its response answers with. */
-export interface EngineCalls {
+export interface EngineCalls extends KeyAdvancedCalls {
   /** `readOnly` asks for a read-only session on a writable datasource; it never lifts the datasource's own flag. */
   "session.open": { params: { readOnly?: boolean }; result: OpenedSession };
   /** Closes the session and releases every result it produced. */
@@ -323,6 +327,8 @@ export interface EngineCalls {
   };
   /** The datasource's databases with their key counts (decision 113). Needs `keyValue`. */
   "keyspace.databases": { params: Record<never, never>; result: KeyDatabases };
+  /** One bounded window of an exact key's finite history, when the optional method exists. */
+  "keyspace.history": { params: KeyHistoryRequest; result: KeyHistoryPage };
   /** One batch of a pass over `database`'s keys; `cursor` null starts the pass. Needs `keyValue`. */
   "keyspace.scan": {
     params: {
@@ -567,6 +573,7 @@ export type EngineErrorCode =
   | "internal";
 
 export interface EngineError {
+  readonly keyConflict?: KeyConflictSnapshot;
   readonly code: EngineErrorCode;
   readonly message: string;
   /** What the user can do next. */

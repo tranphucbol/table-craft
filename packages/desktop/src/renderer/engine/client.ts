@@ -8,6 +8,7 @@ import {
   type EngineEvent,
   type EngineMethod,
   type EngineResponse,
+  type KeyConflictSnapshot,
   type ResultOf,
 } from "@table-craft/desktop/engine/protocol.js";
 import { ENGINE_PORT_WINDOW_MESSAGE, type EnginePortWindowMessage } from "@table-craft/desktop/preload/bridge.js";
@@ -23,6 +24,7 @@ export class EngineRequestError extends Error {
   readonly requestId: number | null;
   /** Where in the sent SQL the database said the statement went wrong (decision 082). */
   readonly position: number | undefined;
+  readonly keyConflict: KeyConflictSnapshot | undefined;
 
   constructor(error: EngineError, requestId: number | null = null) {
     super(error.message);
@@ -30,6 +32,7 @@ export class EngineRequestError extends Error {
     this.hint = error.hint;
     this.requestId = requestId;
     this.position = error.position;
+    this.keyConflict = error.keyConflict;
   }
 }
 

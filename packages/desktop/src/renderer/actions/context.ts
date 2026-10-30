@@ -1,4 +1,7 @@
 import type { Capability } from "@table-craft/desktop/engine/protocol.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
+import { useWatch } from "@table-craft/desktop/renderer/watch/store.js";
+import { useAdminSecret } from "@table-craft/desktop/renderer/keyAdmin/SecretPrompt.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import {
@@ -36,7 +39,7 @@ import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.
 
 /** The regions focus can be in; each is a `data-region` attribute on its container. */
 export type FocusRegion =
-  "editor" | "tableEditor" | "grid" | "gridFind" | "valuePanel" | "database" | "services" | "log" | "other";
+  "editor" | "tableEditor" | "grid" | "gridFind" | "valuePanel" | "database" | "services" | "log" | "watch" | "other";
 
 const REGIONS: readonly FocusRegion[] = [
   "editor",
@@ -47,6 +50,7 @@ const REGIONS: readonly FocusRegion[] = [
   "database",
   "services",
   "log",
+  "watch",
 ];
 
 export const REGION_ATTRIBUTE = "data-region";
@@ -130,7 +134,8 @@ export function modalOpen(): boolean {
     useSnippetsDialog.getState().open ||
     useSecretPrompt.getState().pending !== null ||
     useHostKeyPrompt.getState().queue.length > 0 ||
-    useModal.getState().pending !== null
+    useModal.getState().pending !== null ||
+    useAdminSecret.getState().pending !== null
   );
 }
 
@@ -151,11 +156,17 @@ export function currentContext(tabId?: string): ActionContext {
     ddl?.datasourceId ??
     sessions?.datasourceId ??
     keyTab?.datasourceId ??
-    serverTab?.datasourceId;
+    serverTab?.datasourceId ??
+    (active === null ? undefined : useKeyAdmin.getState().tabs[active.id]?.datasourceId);
   const focus = focusedRegion();
   const selected = selectedDatasourceId(datasources.selection);
   const inTree = tabId === undefined && (focus === "database" || (focus === "other" && lastRegion === "database"));
-  const targetId = inTree ? selected : (tabDatasourceId ?? selected);
+  const watchState = useWatch.getState();
+  const watchSource =
+    focus === "watch" && watchState.activeId !== null
+      ? watchState.entries[watchState.activeId]?.datasourceId
+      : undefined;
+  const targetId = inTree ? selected : (watchSource ?? tabDatasourceId ?? selected);
   const target = datasourceById(datasources, targetId);
   return {
     tabs: strip.tabs,

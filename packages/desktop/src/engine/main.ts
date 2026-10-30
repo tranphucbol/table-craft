@@ -7,6 +7,7 @@ import {
   type EngineConnection,
 } from "@table-craft/desktop/engine/engine.js";
 import { createLifetime } from "@table-craft/desktop/engine/lifetime.js";
+import { filesForPort } from "@table-craft/desktop/engine/portAuthority.js";
 import {
   ENGINE_BOOT_MESSAGE,
   ENGINE_HOST_KEY_ANSWER_MESSAGE,
@@ -23,6 +24,8 @@ import {
   type EngineProbed,
 } from "@table-craft/desktop/engine/protocol.js";
 import { createLogger } from "@table-craft/desktop/log/record.js";
+import { EnginePrivateOperations } from "@table-craft/desktop/engine/privateOperations.js";
+import type { EngineOperationFiles } from "@table-craft/desktop/engine/keyOperations/files.js";
 
 interface UtilityProcess {
   readonly parentPort: ParentPort;
@@ -31,6 +34,11 @@ interface UtilityProcess {
 process.setSourceMapsEnabled(true);
 
 const parentPort = (process as unknown as UtilityProcess).parentPort;
+const ownerPorts = new Map<string, MessagePortMain>();
+const privateOperations = new EnginePrivateOperations(
+  (message) => parentPort.postMessage(message),
+  (ownerId) => ownerPorts.get(ownerId)?.close(),
+);
 /** Main sets each record's process from the host it came from, so the engine never names itself. */
 const log = createLogger({
   process: "engine",
@@ -53,7 +61,7 @@ let booted: Promise<EngineConnectionFactory> | null = null;
 let engine: Engine | null = null;
 const connections = new Set<Promise<EngineConnection>>();
 
-type EngineConnectionFactory = (emit: (event: EngineEvent) => void) => EngineConnection;
+type EngineConnectionFactory = (emit: (event: EngineEvent) => void, files?: EngineOperationFiles) => EngineConnection;
 
 async function plugins(message: EngineBoot): Promise<PluginLoadResult[]> {
   const loaded = await loadPlugins(message.pluginRoots);
@@ -71,6 +79,7 @@ async function plugins(message: EngineBoot): Promise<PluginLoadResult[]> {
 }
 
 async function exitAfterClosing(): Promise<never> {
+  await privateOperations.close();
   const open = [...connections];
   connections.clear();
   await Promise.allSettled(open.map(async (connection) => (await connection).close()));
@@ -115,7 +124,7 @@ const verifyHostKey: HostKeyVerifier = (offer) => {
 async function serve(message: EngineBoot): Promise<EngineConnectionFactory> {
   const served = createEngine({ datasource: message.datasource, plugins: await plugins(message), log, verifyHostKey });
   engine = served;
-  return (emit) => served.connect(emit);
+  return (emit, files) => served.connect(emit, files);
 }
 
 async function probe(message: EngineBoot): Promise<never> {
@@ -129,17 +138,34 @@ async function probe(message: EngineBoot): Promise<never> {
   process.exit(0);
 }
 
-function attach(port: MessagePortMain, ready: Promise<EngineConnectionFactory>): void {
-  const connection = ready.then((connect) => connect((event) => port.postMessage(event)));
+function attach(
+  port: MessagePortMain,
+  ready: Promise<EngineConnectionFactory>,
+  ownerId: string,
+  privateFiles: boolean,
+): void {
+  if (ownerPorts.has(ownerId)) {
+    port.close();
+    return;
+  }
+  ownerPorts.set(ownerId, port);
+  const connection = ready.then((connect) =>
+    connect(
+      (event) => port.postMessage(event),
+      filesForPort(ownerId, privateFiles, (id) => privateOperations.files(id)),
+    ),
+  );
+  privateOperations.bind(ownerId, connection);
   connections.add(connection);
   lifetime.attached();
   port.on("message", (event) => {
     void connection.then((open) => open.handle(event.data)).then((response) => port.postMessage(response));
   });
   port.on("close", () => {
+    ownerPorts.delete(ownerId);
     if (!connections.delete(connection)) return;
     void connection
-      .then((open) => open.close())
+      .then(() => privateOperations.closeOwner(ownerId))
       .finally(() => {
         lifetime.detached();
       });
@@ -148,6 +174,15 @@ function attach(port: MessagePortMain, ready: Promise<EngineConnectionFactory>):
 }
 
 parentPort.on("message", (event) => {
+  const privateKind = (event.data as { kind?: unknown } | null)?.kind;
+  if (
+    privateKind === "table-craft:private-request" ||
+    privateKind === "table-craft:private-response" ||
+    privateKind === "table-craft:private-owner-closed"
+  ) {
+    void privateOperations.receive(event.data).catch(() => undefined);
+    return;
+  }
   const data = event.data as { kind?: unknown } | null;
   if (data?.kind === ENGINE_BOOT_MESSAGE && booted === null) {
     const message = data as EngineBoot;
@@ -168,6 +203,12 @@ parentPort.on("message", (event) => {
     void exitAfterClosing();
     return;
   }
-  if (data?.kind !== ENGINE_PORT_MESSAGE || booted === null) return;
-  for (const port of event.ports) attach(port, booted);
+  if ((data?.kind !== ENGINE_PORT_MESSAGE && data?.kind !== "table-craft:engine-port") || booted === null) return;
+  const ownerId = (data as { ownerId?: unknown }).ownerId;
+  if (typeof ownerId !== "string" || ownerId.length === 0 || ownerId.length > 256 || event.ports.length !== 1) {
+    for (const port of event.ports) port.close();
+    return;
+  }
+  const privateFiles = (data as { privateFiles?: unknown }).privateFiles === true;
+  for (const port of event.ports) attach(port, booted, ownerId, privateFiles);
 });

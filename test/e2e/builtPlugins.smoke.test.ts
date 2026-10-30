@@ -19,11 +19,13 @@ const ROOT_OF: Readonly<Record<string, string>> = {
   redis: OPTIONAL_PLUGINS_ROOT,
   oracle: OPTIONAL_PLUGINS_ROOT,
   mssql: OPTIONAL_PLUGINS_ROOT,
+  etcd: OPTIONAL_PLUGINS_ROOT,
 };
 const PLUGIN_ENTRY_FILE = "index.js";
 /** Port 1 (tcpmux) is reserved and closed on any machine running these tests. */
 const UNREACHABLE = { host: "127.0.0.1", port: 1, database: "none", user: "none" };
 const UNREACHABLE_REDIS = { host: "127.0.0.1", port: 1 };
+const UNREACHABLE_ETCD = { host: "127.0.0.1", port: 1, connectTimeout: 2 };
 const IN_MEMORY = { path: ":memory:" };
 
 /**
@@ -73,7 +75,7 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
 
     expect(results.filter((result) => result.status === "unavailable")).toEqual([]);
     expect(results.map((result) => result.manifest?.id)).toEqual(
-      expect.arrayContaining(["postgres", "redis", "oracle", "mssql"]),
+      expect.arrayContaining(["postgres", "redis", "oracle", "mssql", "etcd"]),
     );
   });
 
@@ -86,6 +88,10 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
 
   it("givenBuiltRedisBundle in a plain ES module_whenConnectingToClosedPort_thenRejectsWithConnectionFailed", () => {
     expect(probe("redis", UNREACHABLE_REDIS)).toMatchObject({ code: "connectionFailed" });
+  });
+
+  it("givenBuiltEtcdBundle in a plain ES module_whenConnectingToClosedPort_thenRejectsWithConnectionFailed", () => {
+    expect(probe("etcd", UNREACHABLE_ETCD)).toMatchObject({ code: "connectionFailed" });
   });
 
   it("givenBuiltSqliteBundle in a plain ES module_whenOpeningInMemory_thenSelectsALiteral", () => {

@@ -2,6 +2,10 @@ import type { InvokeResult } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { DEFAULT_CONSOLE_NAME } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
+import {
+  assertConsoleTextPersistable,
+  ConsolePersistenceFailure,
+} from "@table-craft/desktop/renderer/state/consolePersistence.js";
 
 /** How long typing must pause before a console is written (decision 16). */
 export const AUTOSAVE_DELAY_MS = 500;
@@ -52,6 +56,7 @@ export function bridgeConsoleFiles(): ConsoleFileAccess {
     list: (datasourceId) => unwrap(bridge().listConsoles(datasourceId)),
     read: (datasourceId, name) => unwrap(bridge().readConsole(datasourceId, name)),
     write: async (datasourceId, name, text) => {
+      await assertConsoleTextPersistable(datasourceId, text);
       await unwrap(bridge().writeConsole(datasourceId, name, text));
     },
     remove: async (datasourceId, name) => {
@@ -154,7 +159,10 @@ export const autosave = createAutosave({
     clear: (timer) => globalThis.clearTimeout(timer as number),
   },
   onError: (cause) => {
-    const hint = cause instanceof ConsoleFileFailure ? cause.hint : "Check that the profile directory is writable.";
+    const hint =
+      cause instanceof ConsoleFileFailure || cause instanceof ConsolePersistenceFailure
+        ? cause.hint
+        : "Check that the profile directory is writable.";
     void useModal.getState().ask({
       kind: "notice",
       title: "Could not save the console",

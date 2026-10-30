@@ -103,6 +103,7 @@ describe("plugin service", () => {
       expect.objectContaining({ id: "redis", installedVersion: null, install: { status: "idle" } }),
       expect.objectContaining({ id: "oracle", installedVersion: null, install: { status: "idle" } }),
       expect.objectContaining({ id: "mssql", installedVersion: null, install: { status: "idle" } }),
+      expect.objectContaining({ id: "etcd", installedVersion: null, install: { status: "idle" } }),
     ]);
   });
 

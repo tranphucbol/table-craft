@@ -1,4 +1,5 @@
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -15,10 +16,17 @@ export function useConsoleDatasource(tabId: string): DatasourceView | undefined 
   const sessionsDatasource = useSessions((state) => state.tabs[tabId]?.datasourceId);
   const keyDatasource = useKeyTabs((state) => state.tabs[tabId]?.datasourceId);
   const serverDatasource = useServer((state) => state.tabs[tabId]?.datasourceId);
+  const adminDatasource = useKeyAdmin((state) => state.tabs[tabId]?.datasourceId);
   return useDatasources((state) =>
     datasourceById(
       state,
-      consoleDatasource ?? tableDatasource ?? ddlDatasource ?? sessionsDatasource ?? keyDatasource ?? serverDatasource,
+      consoleDatasource ??
+        tableDatasource ??
+        ddlDatasource ??
+        sessionsDatasource ??
+        keyDatasource ??
+        serverDatasource ??
+        adminDatasource,
     ),
   );
 }

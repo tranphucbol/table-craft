@@ -68,6 +68,8 @@ function fakeEngine(options: { conflict?: boolean } = {}) {
         };
         return Promise.resolve(sql === "" ? [] : [statement]);
       }
+      case "commands.admit":
+        return Promise.resolve((params.commands as readonly string[]).map(() => ({ admit: "execute", safeLabel: "" })));
       case "statement.execute": {
         const command = String(params.sql);
         ran.push(command);
@@ -181,7 +183,7 @@ describe("command results", () => {
       },
     ]);
     expect(commands).toEqual(["HGETALL user:42", "HGETALL user:42"]);
-    expect(session().output.map((entry) => entry.message)).toContain("Submitted 3 commands as one MULTI");
+    expect(session().output.map((entry) => entry.message)).toContain("Submitted 3 commands atomically");
   });
 
   it("givenChangedHashSinceRead_whenSubmitFromConsole_thenConflict", async () => {

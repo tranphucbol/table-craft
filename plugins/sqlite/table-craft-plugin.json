@@ -2,7 +2,7 @@
   "id": "sqlite",
   "name": "SQLite",
   "version": "0.0.0",
-  "apiVersion": "1.7.0",
+  "apiVersion": "1.8.0",
   "entry": "index.js",
   "capabilities": ["sql", "schemaTree", "transactions", "ddl", "explain", "bulkInsert", "objects"],
   "highlight": "sqlite",

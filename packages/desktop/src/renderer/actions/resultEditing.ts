@@ -96,7 +96,7 @@ function commandsText(commands: number): string {
 }
 
 function keySubmitsAs(commands: number): string {
-  return `Submit runs ${commandsText(commands)} as one MULTI; it cannot be undone.`;
+  return `Submit runs ${commandsText(commands)} atomically; it cannot be undone.`;
 }
 
 function consoleSurface(id: string): EditSurface | null {

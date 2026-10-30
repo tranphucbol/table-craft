@@ -49,6 +49,9 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): () => vo
 }
 
 const bridge: TableCraftBridge = {
+  chooseOperationFile: (datasourceId, operation) =>
+    invoke(INVOKE_CHANNELS.chooseOperationFile, { datasourceId, operation }),
+  applyAccessSecret: (request) => invoke(INVOKE_CHANNELS.applyAccessSecret, request),
   listDatasources: () => invoke(INVOKE_CHANNELS.listDatasources),
   saveDatasource: (request) => invoke(INVOKE_CHANNELS.saveDatasource, request),
   deleteDatasource: (id) => invoke(INVOKE_CHANNELS.deleteDatasource, { id }),

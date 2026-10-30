@@ -35,6 +35,8 @@ import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import { scrubEditorState } from "@table-craft/desktop/renderer/console/editorPrivacy.js";
+import { etcdLanguage } from "@table-craft/desktop/renderer/console/highlighters/etcd.js";
 import { redisLanguage } from "@table-craft/desktop/renderer/console/highlighters/redis.js";
 import { connectedSignature } from "@table-craft/desktop/renderer/console/signatureHint.js";
 import { snippetSource } from "@table-craft/desktop/renderer/console/snippetCompletion.js";
@@ -69,6 +71,7 @@ import { useSnippets } from "@table-craft/desktop/renderer/state/snippets.js";
 import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { withInspection } from "@table-craft/desktop/settings/settings.js";
+import { useCommandTxn } from "./transaction/store.js";
 
 /** The manifest's `highlight` names one of these; anything else gets standard SQL (plan 006 decision 1). */
 const DIALECTS: Readonly<Record<string, SQLDialect>> = {
@@ -88,7 +91,12 @@ const CodeIcon = ACTION_ICONS.generate;
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
 
 const NO_MARKS: readonly ErrorMark[] = [];
-const savedEditors = new Map<string, EditorState>();
+const savedEditors = new Map<string, { readonly state: EditorState; readonly privacyReset: number }>();
+useConsoles.subscribe((state, before) => {
+  for (const id of savedEditors.keys()) {
+    if (state.consoles[id]?.privacyReset !== before.consoles[id]?.privacyReset) savedEditors.delete(id);
+  }
+});
 
 function restoredEditor(config: EditorStateConfig, saved: EditorState | undefined): EditorState {
   return saved === undefined
@@ -117,7 +125,10 @@ const flashField = StateField.define<DecorationSet>({
 });
 
 /** Command languages the manifest's `highlight` may name instead of a SQL dialect (decision 112). */
-const COMMAND_HIGHLIGHTERS: Readonly<Record<string, Extension>> = { redis: redisLanguage };
+const COMMAND_HIGHLIGHTERS: Readonly<Record<string, Extension>> = {
+  redis: redisLanguage,
+  etcd: etcdLanguage,
+};
 
 export function dialectOf(highlight: string | null | undefined): SQLDialect {
   return DIALECTS[highlight ?? ""] ?? StandardSQL;
@@ -191,6 +202,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const languageRef = useRef(new Compartment());
+  const undoRef = useRef(new Compartment());
   const datasource = useConsoleDatasource(consoleId);
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource?.pluginId ?? ""));
   const text = useConsoles((state) => state.consoles[consoleId]?.sql ?? "");
@@ -207,6 +219,11 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const dialectRef = useRef(keywordDialectOf(plugin));
   const selection = useConsoles((state) => state.consoles[consoleId]?.selection);
   const hasSelection = selection !== undefined && selection.from !== selection.to;
+  const txnPending = useCommandTxn((state) => state.drafts[consoleId]?.pending ?? null);
+
+  useEffect(() => {
+    useCommandTxn.getState().observe(consoleId, text);
+  }, [consoleId, text]);
 
   useEffect(() => {
     void useSnippets.getState().load();
@@ -219,7 +236,9 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     for (const id of savedEditors.keys()) {
       if (store.consoles[id] === undefined) savedEditors.delete(id);
     }
-    const saved = savedEditors.get(consoleId);
+    const cached = savedEditors.get(consoleId);
+    const privacyReset = store.consoles[consoleId]?.privacyReset ?? 0;
+    const saved = cached?.privacyReset === privacyReset ? cached.state : undefined;
     savedEditors.delete(consoleId);
     const datasourceId = () => useConsoles.getState().consoles[consoleId]?.datasourceId;
     const view = new EditorView({
@@ -234,7 +253,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
           extensions: [
             lineNumbers(),
             highlightActiveLineGutter(),
-            history(),
+            undoRef.current.of(history()),
             drawSelection(),
             dropCursor(),
             EditorState.allowMultipleSelections.of(true),
@@ -287,6 +306,17 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
               if (update.docChanged || update.selectionSet) {
                 const { from, to } = update.state.selection.main;
                 consoles.setSelection(consoleId, { from, to });
+                const txn = useCommandTxn.getState();
+                const draft = txn.drafts[consoleId];
+                if (
+                  !update.docChanged &&
+                  draft?.open === true &&
+                  draft.source !== null &&
+                  draft.pending === null &&
+                  draft.inserting === null &&
+                  (from < draft.source.from || from > draft.source.to)
+                )
+                  void txn.read(consoleId);
               }
             }),
             EditorView.domEventHandlers({
@@ -307,16 +337,44 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     });
     viewRef.current = view;
     const untrack = trackEditor(consoleId, view);
+    const stopPrivacy = useConsoles.subscribe((state, before) => {
+      if (state.consoles[consoleId]?.privacyReset === before.consoles[consoleId]?.privacyReset) return;
+      savedEditors.delete(consoleId);
+      view.setState(scrubEditorState(view.state, undoRef.current));
+    });
     if (useTabs.getState().activeId === consoleId) view.focus();
     return () => {
       untrack();
-      if (useConsoles.getState().consoles[consoleId] !== undefined) savedEditors.set(consoleId, view.state);
+      stopPrivacy();
+      const current = useConsoles.getState().consoles[consoleId];
+      if (current !== undefined) savedEditors.set(consoleId, { state: view.state, privacyReset: current.privacyReset });
       view.destroy();
       viewRef.current = null;
     };
     // The dialect is reconfigured below; remounting on it would drop the undo history.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consoleId]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null || txnPending === null) return;
+    const accepted = view.state.doc.toString() === txnPending.text;
+    if (accepted)
+      view.dispatch(
+        replacementAt(view.state, {
+          from: txnPending.from,
+          to: txnPending.to,
+          before: txnPending.text.slice(txnPending.from, txnPending.to),
+          text: txnPending.replacement,
+          selection: {
+            from: txnPending.from + txnPending.replacement.length,
+            to: txnPending.from + txnPending.replacement.length,
+          },
+          seq: txnPending.sequence,
+        }) ?? {},
+      );
+    useCommandTxn.getState().applied(consoleId, txnPending.sequence, accepted);
+  }, [consoleId, txnPending]);
 
   useEffect(() => {
     dialectRef.current = keywordDialectOf(plugin);
@@ -329,8 +387,9 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     const view = viewRef.current;
     if (view === null) return;
     const current = view.state.doc.toString();
-    if (current !== text) view.dispatch({ changes: { from: 0, to: current.length, insert: text } });
-  }, [text]);
+    const latest = useConsoles.getState().consoles[consoleId]?.sql ?? "";
+    if (current !== latest) view.dispatch({ changes: { from: 0, to: current.length, insert: latest } });
+  }, [consoleId, text]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -355,7 +414,9 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   useEffect(() => {
     const view = viewRef.current;
     if (view === null || insertion === null) return;
+    const from = view.state.selection.main.from;
     view.dispatch(insertionAt(view.state, insertion.text));
+    useCommandTxn.getState().inserted(consoleId, insertion.text, from, from + insertion.text.length);
     view.focus();
     useConsoles.getState().inserted(consoleId, insertion.seq);
   }, [consoleId, insertion]);

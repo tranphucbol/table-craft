@@ -71,6 +71,18 @@ import {
 } from "@table-craft/desktop/renderer/model/resultEdits.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import {
+  ADMISSION_FAILED,
+  ADMISSION_REJECTED,
+  admissionsOf,
+  MANAGED_ALONE,
+  MANAGED_OPENED,
+  MANAGER_UNAVAILABLE,
+  PRIVATE_FAILED,
+  PRIVATE_STATEMENT_LABEL,
+  routeConsoleIntent,
+  type ConsoleIntentRoute,
+} from "@table-craft/desktop/renderer/state/consoleAdmission.js";
+import {
   createConsoleEdits,
   keyProblemError,
   pendingEditsOf,
@@ -249,6 +261,7 @@ export interface ConsoleSession {
   readonly status: ConsoleStatus;
   readonly error: EngineError | null;
   readonly sql: string;
+  readonly privacyReset: number;
   /** The editor's main selection; empty is a caret. */
   readonly selection: TextSpan;
   readonly results: readonly ConsoleTab[];
@@ -335,6 +348,7 @@ export interface ConsolesState extends ConsoleEdits {
   /** Marks the datasource's consoles disconnected; `error` says why when it was not asked for. */
   readonly detach: (datasourceId: string, error: EngineError | null) => void;
   readonly setSql: (id: string, sql: string) => void;
+  readonly scrub: (id: string) => void;
   /** Attaches a detached file console to `datasourceId`; its session opens on the next Run. */
   readonly attach: (id: string, datasourceId: string) => void;
   /** Detaches a file console from its removed datasource, dropping its results; its text stays. */
@@ -544,6 +558,11 @@ export interface ConsolesDependencies {
   readonly chooseDatasource?: () => Promise<string | null>;
   /** What a run of several statements does when one fails (decision 083); defaults to stopping. */
   readonly onError?: () => OnErrorChoice;
+  /**
+   * Opens the manager a command admitted as `managed` belongs to (plan 110); false when none
+   * opened, which the console reports. Defaults to the installed action router.
+   */
+  readonly routeIntent?: (route: ConsoleIntentRoute) => boolean;
 }
 
 export interface PendingEditsRequest {
@@ -564,6 +583,7 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
     status: connect ? "connecting" : "disconnected",
     error: null,
     sql,
+    privacyReset: 0,
     selection: { from: 0, to: 0 },
     results: [],
     activeResult: OUTPUT_TAB,
@@ -624,6 +644,39 @@ function boundAt(bound: Bound | null, index: number): ParameterValues | undefine
 /** Finishes one execution in Services and history; `executionId` names its Services row. */
 type Ended = ((end: ExecutionEnd) => void) & { readonly executionId: number };
 
+const ADMITTED: unique symbol = Symbol("admitted");
+
+/**
+ * Statements the engine admitted (plan 110), frozen as they were asked about, so text edited after
+ * the question is never what runs. Only `admit` makes one; `execute` takes nothing else.
+ */
+interface AdmittedRun {
+  readonly [ADMITTED]: true;
+  readonly statements: readonly ClassifiedStatement[];
+  /** Per statement, what the console shows and Services lists in place of its text; null shows the text. */
+  readonly labels: readonly (string | null)[];
+}
+
+/**
+ * What the run's dialogs may show: a private statement's label in place of its text, even its
+ * first line, and no placeholders to ask for. Indexes stay aligned with `run.statements`.
+ */
+function dialogStatements(run: AdmittedRun): readonly ClassifiedStatement[] {
+  return run.statements.map((statement, index) => {
+    const label = run.labels[index] ?? null;
+    return label === null ? statement : { ...statement, sql: label, parameters: [] };
+  });
+}
+
+type Admission =
+  | { readonly kind: "run"; readonly run: AdmittedRun }
+  | { readonly kind: "managed"; readonly route: ConsoleIntentRoute; readonly safeLabel: string }
+  | { readonly kind: "refused"; readonly error: EngineError };
+
+function privateError(error: EngineError): EngineError {
+  return { code: error.code, ...PRIVATE_FAILED };
+}
+
 export function createConsolesStore(dependencies: ConsolesDependencies) {
   /** The client each console's session lives on; not state, because nothing renders from it. */
   const clients = new Map<string, EngineClient>();
@@ -640,6 +693,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
   const serverEnforced = dependencies.serverEnforced ?? (() => false);
   const askPendingEdits = dependencies.askPendingEdits ?? (() => Promise.resolve<PendingEditsAnswer>("discard"));
   const onError = dependencies.onError ?? ((): OnErrorChoice => "stop");
+  const routeIntent = dependencies.routeIntent ?? routeConsoleIntent;
+  /** Consoles whose plugin speaks commands, whose text the engine admits before it runs (plan 110). */
+  const admitting = new Set<string>();
   /** The answer each console's run waits for, by console id. */
   const answers = new Map<string, (answer: ErrorAnswer) => void>();
   /** The execution each result tab came from, by result id, so fetching more updates its row count. */
@@ -723,6 +779,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       sql: string,
       label: string = firstLine(sql),
       parameters: ParameterValues | null = null,
+      recorded = true,
     ): Ended {
       const startedAt = clock();
       const datasourceId = get().consoles[id]?.datasourceId;
@@ -730,7 +787,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       const ended = (end: ExecutionEnd): void => {
         const durationMs = Math.max(0, Math.round(end.durationMs));
         executions.finish(id, executionId, { ...end, durationMs });
-        if (datasourceId === undefined) return;
+        if (datasourceId === undefined || !recorded) return;
         const { outcome, rowCount, message } = end;
         const warnings = warningCount(end.messages);
         dependencies.record?.({
@@ -780,7 +837,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         destructive: null,
         parameters: [],
       };
-      const outcome = await execute(id, client, sessionId, [statement], null, false);
+      const admission = await admit(id, client, [statement]);
+      if (admission.kind !== "run") return refuse(id, admission.kind === "refused" ? admission.error : MANAGED_ALONE);
+      const outcome = await execute(id, client, sessionId, admission.run, null, false);
       if (outcome !== "succeeded") return outcome;
       if (switching.transactional && inTransaction) {
         log(id, { sql: "", message: SWITCH_IN_TRANSACTION, tone: "info" });
@@ -815,6 +874,8 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           return false;
         }
         clients.set(id, client);
+        if (opened.capabilities.includes("commands")) admitting.add(id);
+        else admitting.delete(id);
         patch(id, {
           sessionId: opened.sessionId,
           status: "ready",
@@ -1007,18 +1068,105 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       statements: readonly ClassifiedStatement[],
       index: number,
       failedBefore: number,
+      shown: string,
     ): Promise<ErrorAnswer> {
       const last = index === statements.length - 1;
       if (!CONTINUABLE.has(error.code)) return "stop";
       if (last) return failedBefore > 0 ? "skip" : "stop";
       if (policy !== "ask") return policy === "continue" ? "skip" : "stop";
-      const statement = statements[index];
       return askAboutError(id, {
         number: index + 1,
         total: statements.length,
-        sql: firstLine(statement?.sql ?? ""),
+        sql: shown,
         error,
       });
+    }
+
+    /**
+     * Asks the engine whether `statements` may run, before anything records or shows them (plan
+     * 110). A console whose plugin does not speak commands runs them as before. Any refusal, a
+     * malformed answer or a failed question refuses the whole run; a managed command runs alone.
+     */
+    async function admit(
+      id: string,
+      client: EngineClient,
+      statements: readonly ClassifiedStatement[],
+    ): Promise<Admission> {
+      const frozen = Object.freeze(statements.map((statement) => Object.freeze({ ...statement })));
+      if (!admitting.has(id)) {
+        return { kind: "run", run: { [ADMITTED]: true, statements: frozen, labels: frozen.map(() => null) } };
+      }
+      const answers = await admissionsOf(
+        client,
+        frozen.map((statement) => statement.sql),
+      );
+      if (answers === null || answers.length !== frozen.length) return { kind: "refused", error: ADMISSION_FAILED };
+      if (answers.some((answer) => answer.admit === "reject")) {
+        get().scrub(id);
+        return { kind: "refused", error: ADMISSION_REJECTED };
+      }
+      const managed = answers.find((answer) => answer.admit === "managed");
+      if (managed?.admit === "managed") {
+        const datasourceId = get().consoles[id]?.datasourceId;
+        if (frozen.length !== 1) return { kind: "refused", error: MANAGED_ALONE };
+        if (datasourceId === undefined || datasourceId === DETACHED)
+          return { kind: "refused", error: ADMISSION_FAILED };
+        return {
+          kind: "managed",
+          route: { datasourceId, intent: managed.intent, arguments: managed.arguments },
+          safeLabel: managed.safeLabel,
+        };
+      }
+      const labels = answers.map((answer) =>
+        answer.admit !== "omitHistory" ? null : answer.safeLabel === "" ? PRIVATE_STATEMENT_LABEL : answer.safeLabel,
+      );
+      return { kind: "run", run: { [ADMITTED]: true, statements: frozen, labels } };
+    }
+
+    /** A refused run: Output says why in fixed words, never the text, and nothing runs. */
+    function refuse(id: string, error: EngineError): RunOutcome {
+      log(id, { sql: "", message: error.message, hint: error.hint, tone: "error" });
+      patch(id, { error, activeResult: OUTPUT_TAB });
+      return "failed";
+    }
+
+    /** Opens a managed command's manager in place of running it; nothing reaches history or Services. */
+    function openManaged(id: string, admission: Extract<Admission, { kind: "managed" }>): RunOutcome {
+      if (!routeIntent(admission.route)) return refuse(id, MANAGER_UNAVAILABLE);
+      log(id, { sql: admission.safeLabel, message: MANAGED_OPENED, tone: "info" });
+      patch(id, { activeResult: OUTPUT_TAB });
+      return "succeeded";
+    }
+
+    /** Runs what `admission` allows: the statements, the manager, or nothing with the reason. */
+    async function admitted(
+      id: string,
+      admission: Admission,
+      body: (run: AdmittedRun) => Promise<RunOutcome>,
+    ): Promise<RunOutcome> {
+      if (admission.kind === "refused") return refuse(id, admission.error);
+      if (admission.kind === "managed") return openManaged(id, admission);
+      return body(admission.run);
+    }
+
+    /**
+     * Why a tab's statement may not run again or be explained, or null when it may. It reruns as
+     * the exact text `sql`, so that is what is admitted; only an ordinary statement qualifies.
+     */
+    async function rerunRefusal(
+      id: string,
+      client: EngineClient,
+      sql: string,
+      statement: ClassifiedStatement | undefined,
+    ): Promise<EngineError | null> {
+      const asked: ClassifiedStatement =
+        statement === undefined
+          ? { from: 0, to: sql.length, sql, kind: "other", destructive: null, parameters: [] }
+          : { ...statement, sql };
+      const admission = await admit(id, client, [asked]);
+      if (admission.kind === "refused") return admission.error;
+      if (admission.kind === "managed" || admission.run.labels[0] !== null) return ADMISSION_REJECTED;
+      return null;
     }
 
     /**
@@ -1029,10 +1177,11 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       id: string,
       client: EngineClient,
       sessionId: string,
-      statements: readonly ClassifiedStatement[],
+      run: AdmittedRun,
       bound: Bound | null,
       fromEditor = true,
     ): Promise<RunOutcome> {
+      const { statements, labels } = run;
       let policy: OnErrorChoice = statements.length > 1 ? onError() : "stop";
       let failed = 0;
       let warnedTransaction = false;
@@ -1040,10 +1189,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       for (let index = 0; index < statements.length;) {
         const statement = statements[index];
         if (statement === undefined) break;
-        const sql = firstLine(statement.sql);
+        const label = labels[index] ?? null;
+        const sql = label ?? firstLine(statement.sql);
         const parameters = boundAt(bound, index);
         if (fromEditor) patch(id, { flash: { from: statement.from, to: statement.to, seq: ++flashes } });
-        const ended = started(id, statement.sql, sql, parameters ?? null);
+        const ended =
+          label === null ? started(id, statement.sql, sql, parameters ?? null) : started(id, label, label, null, false);
         const startedAt = dependencies.now();
         try {
           cursorsClosed(id);
@@ -1065,19 +1216,25 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             outcome: "success",
             rowCount: rowsOf(executed),
             message: null,
-            ...messagesOf(executed),
+            ...(label === null ? messagesOf(executed) : {}),
           });
           log(id, {
             sql,
             message: executedText(executed, elapsed, statement.kind),
             tone: "success",
-            ...outputLinks(executed, statement.sql, paging),
+            ...(label === null ? outputLinks(executed, statement.sql, paging) : {}),
           });
-          logMessages(id, executed.messages);
+          if (label === null) logMessages(id, executed.messages);
           const current = get().consoles[id];
           if (current === undefined) return "cancelled";
           const datasourceId = current.datasourceId;
-          if (opensTab(executed)) {
+          if (label !== null) {
+            // A private command's rows would carry its text into a tab and Show as Result.
+            if (executed.columns.length > 0) {
+              void client.call("result.release", { handle: executed.handle }).catch(() => undefined);
+            }
+            patch(id, { transactionOpen, ...moved });
+          } else if (opensTab(executed)) {
             const tab = resultTabOf(
               executed,
               { id: `${id}/result-${++resultIds}`, title: nextResultTitle(current.results) },
@@ -1101,14 +1258,15 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           }
           index++;
         } catch (cause) {
-          const error = toError(cause);
+          const thrown = toError(cause);
+          const error = label === null ? thrown : privateError(thrown);
           ended(failureEnd(error, dependencies.now() - startedAt));
           const cancelled = error.code === "cancelled";
           if (cancelled) log(id, { sql, message: cancelledText(error), tone: "warning" });
           else logError(id, sql, error);
-          if (fromEditor) markFailure(id, statement, error);
+          if (fromEditor && label === null) markFailure(id, statement, error);
           patch(id, { error });
-          const answer = await decide(id, policy, error, statements, index, failed);
+          const answer = await decide(id, policy, error, statements, index, failed, sql);
           if (get().consoles[id] === undefined) return "cancelled";
           if (answer === "retry") {
             if (fromEditor) clearMarks(id, [statement]);
@@ -1419,6 +1577,8 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       analyze: boolean,
       replacing: PlanTab | null,
     ): Promise<RunOutcome> {
+      const refusal = await rerunRefusal(id, client, statement.sql, statement);
+      if (refusal !== null) return refuse(id, refusal);
       const sql = firstLine(statement.sql);
       const verdict = await client.call("sql.explainable", { sql: statement.sql, analyze });
       if (!verdict.ok) return notRun(id, sql, verdict.reason);
@@ -1533,6 +1693,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         stopAsking(id);
         for (const result of closing.results) forget(result.id);
         pendingDdl.delete(id);
+        admitting.delete(id);
         const client = clients.get(id);
         clients.delete(id);
         if (closing.sessionId === null || client === undefined) return;
@@ -1592,6 +1753,20 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
 
       setSql(id, sql) {
         patch(id, { sql });
+      },
+
+      scrub(id) {
+        const current = get().consoles[id];
+        if (current === undefined) return;
+        patch(id, {
+          sql: "",
+          privacyReset: current.privacyReset + 1,
+          selection: { from: 0, to: 0 },
+          insertion: null,
+          replacement: null,
+          errorMarks: [],
+          parameterValues: {},
+        });
       },
 
       setSelection(id, selection) {
@@ -1735,19 +1910,21 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             patch(id, { activeResult: OUTPUT_TAB });
             outcome = "succeeded";
           } else {
-            const destructive = statements.filter((statement) => statement.destructive !== null);
-            const declined =
-              destructive.length > 0 &&
-              !(await confirmed(id, () => confirmDestructive(destructive, current.datasourceId)));
-            const bound = declined ? false : await bindValues(id, statements, preset);
-            if (bound === false) {
-              log(id, { sql: "", message: DECLINED, tone: "warning" });
-              patch(id, { activeResult: OUTPUT_TAB });
-              outcome = "cancelled";
-            } else {
+            outcome = await admitted(id, await admit(id, client, statements), async (run) => {
+              const visible = dialogStatements(run);
+              const destructive = visible.filter((statement) => statement.destructive !== null);
+              const declined =
+                destructive.length > 0 &&
+                !(await confirmed(id, () => confirmDestructive(destructive, current.datasourceId)));
+              const bound = declined ? false : await bindValues(id, visible, preset);
+              if (bound === false) {
+                log(id, { sql: "", message: DECLINED, tone: "warning" });
+                patch(id, { activeResult: OUTPUT_TAB });
+                return "cancelled";
+              }
               replaceUnpinned(id);
-              outcome = await execute(id, client, sessionId, statements, bound);
-            }
+              return execute(id, client, sessionId, run, bound);
+            });
           }
         } catch (cause) {
           const error = toError(cause);
@@ -1888,13 +2065,18 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         let statementStartedAt = dependencies.now();
         try {
           const [statement] = await client.call("script.split", { text: tab.sql });
+          const refusal = await rerunRefusal(id, client, tab.sql, statement);
           const declined =
+            refusal === null &&
             statement !== undefined &&
             statement.destructive !== null &&
             !(await confirmed(id, () => confirmDestructive([statement], current.datasourceId)));
-          const bound = declined ? false : await bindValues(id, statement === undefined ? [] : [statement]);
+          const bound =
+            refusal !== null || declined ? false : await bindValues(id, statement === undefined ? [] : [statement]);
           const parameters = bound === false ? undefined : boundAt(bound, 0);
-          if (bound === false) {
+          if (refusal !== null) {
+            outcome = refuse(id, refusal);
+          } else if (bound === false) {
             log(id, { sql: "", message: DECLINED, tone: "warning" });
             outcome = "cancelled";
           } else {

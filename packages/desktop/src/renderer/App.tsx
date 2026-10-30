@@ -14,6 +14,7 @@ import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js
 import { installKeymap } from "@table-craft/desktop/renderer/actions/keymap.js";
 import { rememberOpenTables, restoreTables } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { adminHost } from "@table-craft/desktop/renderer/keyAdmin/host.js";
 import { QuickDoc } from "@table-craft/desktop/renderer/catalog/QuickDoc.js";
 import { editorReservedChords } from "@table-craft/desktop/renderer/console/editorKeys.js";
 import { DataSourcesDialog } from "@table-craft/desktop/renderer/dialogs/DataSources.js";
@@ -28,7 +29,12 @@ import { SettingsDialog } from "@table-craft/desktop/renderer/dialogs/Settings.j
 import { SnippetsDialog } from "@table-craft/desktop/renderer/dialogs/Snippets.js";
 import { Palette } from "@table-craft/desktop/renderer/palette/Palette.js";
 import { Shell } from "@table-craft/desktop/renderer/shell/Shell.js";
+import {
+  CREDENTIAL_UNCONFIRMED,
+  installConsoleIntentRouter,
+} from "@table-craft/desktop/renderer/state/consoleAdmission.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { installHostKeyPrompts } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { installUpdateState } from "@table-craft/desktop/renderer/state/update.js";
@@ -84,6 +90,22 @@ export function App() {
   useEffect(() => trackFocus(document), []);
 
   useEffect(() => bridge().onInvokeAction((actionId) => invoke(actionId)), []);
+
+  useEffect(
+    () =>
+      installConsoleIntentRouter({
+        invoke,
+        applySecret: (datasourceId, user, change) => adminHost().applySecret(datasourceId, user, change),
+        secretFailed: () =>
+          void useModal.getState().ask({
+            kind: "notice",
+            title: CREDENTIAL_UNCONFIRMED.title,
+            message: CREDENTIAL_UNCONFIRMED.message,
+            hint: CREDENTIAL_UNCONFIRMED.hint,
+          }),
+      }),
+    [],
+  );
 
   useEffect(() => installDatasourceSync(onFirstList), []);
 

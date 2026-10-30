@@ -1,5 +1,10 @@
 import { createContext, useContext, useSyncExternalStore } from "react";
 import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
+import { useWatch } from "@table-craft/desktop/renderer/watch/store.js";
+import { useAdminSecret } from "@table-craft/desktop/renderer/keyAdmin/SecretPrompt.js";
+import { useCommandTxn } from "@table-craft/desktop/renderer/console/transaction/store.js";
+import { useKeyTabs } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { currentContext } from "@table-craft/desktop/renderer/actions/context.js";
 import {
   createActionRegistry,
@@ -42,6 +47,11 @@ export function invoke(id: string, args?: unknown): InvokeOutcome {
 }
 
 const STORES = [
+  useKeyAdmin,
+  useWatch,
+  useAdminSecret,
+  useCommandTxn,
+  useKeyTabs,
   useTabs,
   useConsoles,
   useDatasources,

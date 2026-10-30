@@ -1,6 +1,6 @@
 import type { KeyBytes } from "@table-craft/plugin-api";
 
-const UTF8 = new TextDecoder("utf-8");
+const UTF8 = new TextDecoder("utf-8", { ignoreBOM: true });
 const HEX_RADIX = 16;
 const HEX_WIDTH = 2;
 const ASCII_LAST = 0x7f;

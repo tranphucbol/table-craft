@@ -4,10 +4,12 @@ import {
   isPluginError,
   isTlsSettingsError,
   offsetOfPosition,
+  z,
   type SqlLanguage,
 } from "@table-craft/plugin-api";
 import {
   STATEMENT_CANCELLED_MESSAGE,
+  KEY_HISTORY_MAX_BYTES,
   type EngineError,
   type Explainability,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -102,6 +104,44 @@ export function statementFailed(cause: unknown, readOnly: boolean, sent?: string
 
 export const CONFLICT_HINT = "Reload to see the other change, or overwrite it with yours.";
 
+const decimalRevision = z.string().regex(/^(?:0|[1-9][0-9]*)$/);
+const MAX_BYTE_DISPLAY_EXPANSION = 4;
+const conflictBytes = z
+  .strictObject({
+    text: z.string().max(KEY_HISTORY_MAX_BYTES * MAX_BYTE_DISPLAY_EXPANSION),
+    hex: z
+      .string()
+      .max(KEY_HISTORY_MAX_BYTES * 2)
+      .regex(/^(?:[0-9a-f]{2})*$/)
+      .nullable(),
+  })
+  .refine((value) => {
+    if (value.hex !== null) return value.hex.length / 2 <= KEY_HISTORY_MAX_BYTES;
+    const bytes = Buffer.from(value.text, "utf8");
+    return bytes.length <= KEY_HISTORY_MAX_BYTES && bytes.toString("utf8") === value.text;
+  });
+const conflictSnapshot = z
+  .strictObject({
+    database: z.number().int().nonnegative(),
+    key: conflictBytes,
+    value: conflictBytes.nullable(),
+    revision: z
+      .strictObject({
+        createRevision: decimalRevision,
+        modRevision: decimalRevision,
+        version: decimalRevision,
+        lease: decimalRevision,
+      })
+      .nullable(),
+    snapshotRevision: decimalRevision,
+  })
+  .refine((snapshot) => (snapshot.value === null) === (snapshot.revision === null))
+  .refine((snapshot) => {
+    const size = (value: z.infer<typeof conflictBytes>) =>
+      value.hex === null ? Buffer.byteLength(value.text, "utf8") : value.hex.length / 2;
+    return size(snapshot.key) + (snapshot.value === null ? 0 : size(snapshot.value)) <= KEY_HISTORY_MAX_BYTES;
+  });
+
 /**
  * A plugin's refusal of a request on the helper session, keyspace or server figures: a typed
  * failure, while a non-plugin error stays the bug it is.
@@ -109,7 +149,17 @@ export const CONFLICT_HINT = "Reload to see the other change, or overwrite it wi
 export function helperRequestFailed(cause: unknown): unknown {
   if (!isPluginError(cause)) return cause;
   if (cause.code === "conflict") {
-    return new EngineFailure({ code: "conflict", message: cause.message, hint: CONFLICT_HINT }, cause);
+    const current: unknown = (cause as { current?: unknown }).current;
+    const parsed = conflictSnapshot.safeParse(current);
+    return new EngineFailure(
+      {
+        code: "conflict",
+        message: cause.message,
+        hint: CONFLICT_HINT,
+        ...(parsed.success ? { keyConflict: parsed.data } : {}),
+      },
+      cause,
+    );
   }
   return statementFailed(cause, false);
 }

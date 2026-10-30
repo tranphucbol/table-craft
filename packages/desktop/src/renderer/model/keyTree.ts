@@ -5,6 +5,10 @@ import type {
   KeyName,
   KeyType,
   ServerNode,
+  KeyAdvancedCalls,
+  KeyChildrenPage,
+  KeyRange,
+  KeyRevision,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { ErrorNode, ExplorerNode, LoadingNode } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { nodeLabel } from "@table-craft/desktop/renderer/model/runOn.js";
@@ -16,6 +20,41 @@ export const KEYS_PER_PASS = 10_000;
 export interface KeyFilter {
   readonly match: string;
   readonly type: KeyType | null;
+  readonly mode?: "prefix" | "range" | "loadedName";
+  readonly end?: string;
+  readonly leasedOnly?: boolean;
+}
+
+export const CHILDREN_PER_PAGE = 500;
+export const CHILDREN_TIMEOUT_MS = 5000;
+export const ROOT_KEY: KeyName = { text: "", hex: null };
+
+export interface FolderKeys {
+  readonly parent: KeyName;
+  readonly children: KeyChildrenPage["children"];
+  readonly revision: string | null;
+  readonly cursor: string | null;
+  readonly loading: boolean;
+  readonly error: EngineError | null;
+  readonly started: boolean;
+}
+
+export const UNLISTED_FOLDER: FolderKeys = {
+  parent: ROOT_KEY,
+  children: [],
+  revision: null,
+  cursor: null,
+  loading: false,
+  error: null,
+  started: false,
+};
+
+export function keyFilterRange(filter: KeyFilter): KeyRange {
+  if (filter.mode === "range")
+    return { kind: "range", from: { text: filter.match, hex: null }, to: { text: filter.end ?? "", hex: null } };
+  if (filter.mode === "loadedName" || filter.match === "" || (filter.mode === undefined && filter.match === "*"))
+    return { kind: "all" };
+  return { kind: "prefix", prefix: { text: filter.match, hex: null } };
 }
 
 export const NO_KEY_FILTER: KeyFilter = { match: "*", type: null };
@@ -33,6 +72,8 @@ export interface DatabaseKeys {
   readonly filter: KeyFilter;
   /** Type and expiry of the keys described so far, by `keyIdentity`. */
   readonly info: Readonly<Record<string, KeyInfo>>;
+  readonly folders?: Readonly<Record<string, FolderKeys>>;
+  readonly counts?: Readonly<Record<string, string | null>>;
 }
 
 export const UNSCANNED_KEYS: DatabaseKeys = {
@@ -47,6 +88,8 @@ export const UNSCANNED_KEYS: DatabaseKeys = {
 
 /** What the renderer holds of one key-value datasource's keyspace; it dies with the engine. */
 export interface DatasourceKeyspace {
+  readonly leaseTtls?: Readonly<Record<string, { readonly seconds: string | null; readonly readAt: number }>>;
+  readonly features?: KeyAdvancedCalls["keyspace.features"]["result"];
   readonly delimiter: string;
   /** `null` until listed. */
   readonly databases: readonly KeyDatabase[] | null;
@@ -82,6 +125,7 @@ export interface KeyDatabaseNode extends KeyNodeBase {
 export interface KeyFilterNode extends KeyNodeBase {
   readonly kind: "keyFilter";
   readonly filter: KeyFilter;
+  readonly serverChildren?: boolean;
 }
 
 export interface KeyFolderNode extends KeyNodeBase {
@@ -90,12 +134,17 @@ export interface KeyFolderNode extends KeyNodeBase {
   readonly prefix: string;
   /** Keys loaded under it, never a guess. */
   readonly count: number;
+  readonly exactCount?: string | null;
+  readonly key?: KeyName;
+  readonly accessError?: EngineError;
 }
 
 export interface KeyEntryNode extends KeyNodeBase {
   readonly kind: "keyEntry";
   readonly key: KeyName;
   readonly info: KeyInfo | null;
+  readonly revision?: KeyRevision;
+  readonly serverChildren?: boolean;
 }
 
 export interface KeyLoadMoreNode extends KeyNodeBase {
@@ -103,6 +152,8 @@ export interface KeyLoadMoreNode extends KeyNodeBase {
   readonly loaded: number;
   /** The database's key count, the scan's estimate of its end. */
   readonly estimate: number;
+  readonly parent?: KeyName;
+  readonly restart?: boolean;
 }
 
 export interface ClusterNodesNode {
@@ -125,6 +176,13 @@ export type KeyTreeNode =
 /** A key's identity: its bytes, whichever way they travel. */
 export function keyIdentity(key: KeyName): string {
   return key.hex === null ? `t${key.text}` : `x${key.hex}`;
+}
+
+export function keyStartsWith(key: KeyName, prefix: KeyName): boolean {
+  const bytes = (value: KeyName) =>
+    value.hex ??
+    Array.from(new TextEncoder().encode(value.text), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return bytes(key).startsWith(bytes(prefix));
 }
 
 /** `keys` followed by those of `more` it does not hold yet; SCAN may return a key twice. */
@@ -268,9 +326,27 @@ function databaseRows(
   const base: KeyNodeBase = { datasourceId, path: [], database: summary.index };
   const keys = keyspace.byDatabase[summary.index] ?? UNSCANNED_KEYS;
   const node: KeyDatabaseNode = { ...base, kind: "keyDatabase", summary, keys };
-  if (!sink.push(node, depth, keyDatabaseKey(sink, summary.index), databaseLabel(summary.index), true)) return;
-  const filter: KeyFilterNode = { ...base, kind: "keyFilter", filter: keys.filter };
+  if (
+    !sink.push(
+      node,
+      depth,
+      keyDatabaseKey(sink, summary.index),
+      keyspace.features?.children === true ? "Keys" : databaseLabel(summary.index),
+      true,
+    )
+  )
+    return;
+  const filter: KeyFilterNode = {
+    ...base,
+    kind: "keyFilter",
+    filter: keys.filter,
+    serverChildren: keyspace.features?.children === true,
+  };
   sink.push(filter, depth + 1, sink.keyOf("keyFilter", summary.index), "", false);
+  if (keyspace.features?.children === true) {
+    childrenRows(sink, base, ROOT_KEY, keys, depth + 1, keyspace.delimiter);
+    return;
+  }
   if (keys.error !== null) {
     const error: ErrorNode = { kind: "error", datasourceId, error: keys.error };
     sink.push(error, depth + 1, sink.keyOf("keyError", summary.index), keys.error.message, false);
@@ -287,6 +363,124 @@ function databaseRows(
       estimate: summary.keys,
     };
     sink.push(more, depth + 1, sink.keyOf("keyLoadMore", summary.index), loadMoreText(more), false);
+  }
+}
+
+/** `name` relative to `parent`, without the delimiter a top-level etcd key starts with. */
+function childLabel(name: KeyName, parent: KeyName, delimiter: string): string {
+  const rest = name.text.slice(parent.text.length);
+  const label = delimiter !== "" && rest.startsWith(delimiter) ? rest.slice(delimiter.length) : rest;
+  return label === "" ? name.text : label;
+}
+
+/**
+ * The page's children with every key that names a folder (`/config` or `/config/` beside the
+ * folder `/config/`) moved just above that folder: the server orders by bytes, which can put a
+ * same-bytes key after its folder, and the two must stay separate rows, never merged.
+ */
+export function orderedChildren(children: FolderKeys["children"], delimiter: string): FolderKeys["children"] {
+  const twinsOf = (folder: KeyName): ReadonlySet<string> => {
+    const twins = new Set([keyIdentity(folder)]);
+    if (folder.hex === null && delimiter !== "" && folder.text.endsWith(delimiter)) {
+      twins.add(keyIdentity({ text: folder.text.slice(0, -delimiter.length), hex: null }));
+    }
+    return twins;
+  };
+  const moved = new Set<string>();
+  const ordered: FolderKeys["children"][number][] = [];
+  for (const child of children) {
+    if (child.kind === "key") {
+      if (!moved.has(keyIdentity(child.key))) ordered.push(child);
+      continue;
+    }
+    const twins = twinsOf(child.key);
+    for (const twin of children) {
+      const identity = keyIdentity(twin.key);
+      if (twin.kind === "key" && twins.has(identity) && !moved.has(identity) && !ordered.includes(twin)) {
+        moved.add(identity);
+        ordered.push(twin);
+      }
+    }
+    ordered.push(child);
+  }
+  return ordered;
+}
+
+function childrenRows(
+  sink: KeyRowSink,
+  base: KeyNodeBase,
+  parent: KeyName,
+  keys: DatabaseKeys,
+  depth: number,
+  delimiter: string,
+): void {
+  const folder = keys.folders?.[keyIdentity(parent)] ?? UNLISTED_FOLDER;
+  for (const child of orderedChildren(folder.children, delimiter)) {
+    const identity = keyIdentity(child.key);
+    if (child.kind === "key") {
+      if (keys.filter.mode === "loadedName" && !child.key.text.includes(keys.filter.match)) continue;
+      if (keys.filter.leasedOnly === true && (child.revision === undefined || child.revision.lease === "0")) continue;
+      const node: KeyEntryNode = {
+        ...base,
+        kind: "keyEntry",
+        key: child.key,
+        info: keys.info[identity] ?? null,
+        serverChildren: true,
+        ...(child.revision === undefined ? {} : { revision: child.revision }),
+      };
+      sink.push(
+        node,
+        depth,
+        sink.keyOf("keyEntry", base.database, identity),
+        childLabel(child.key, parent, delimiter),
+        false,
+      );
+    } else {
+      const error = keys.folders?.[identity]?.error;
+      const accessError =
+        error != null && /permission denied|access denied|not authorized/i.test(error.message) ? error : undefined;
+      const node: KeyFolderNode = {
+        ...base,
+        kind: "keyFolder",
+        prefix: child.key.text,
+        count: 0,
+        exactCount: keys.counts?.[identity] ?? null,
+        key: child.key,
+        ...(accessError === undefined ? {} : { accessError }),
+      };
+      const rowKey =
+        child.key.hex === null
+          ? sink.keyOf("keyFolder", base.database, child.key.text)
+          : sink.keyOf("keyFolder", base.database, child.key.text, child.key.hex);
+      if (
+        sink.push(node, depth, rowKey, childLabel(child.key, parent, delimiter), accessError === undefined) &&
+        accessError === undefined
+      )
+        childrenRows(sink, base, child.key, keys, depth + 1, delimiter);
+    }
+  }
+  if (folder.loading || !folder.started) {
+    sink.push(
+      { kind: "loading", datasourceId: base.datasourceId },
+      depth,
+      sink.keyOf("keyChildrenLoading", base.database, keyIdentity(parent)),
+      "",
+      false,
+    );
+  } else if (folder.error !== null || folder.cursor !== null) {
+    const more: KeyLoadMoreNode = {
+      ...base,
+      kind: "keyLoadMore",
+      parent,
+      loaded: folder.children.length,
+      estimate: 0,
+      restart: folder.error !== null,
+    };
+    const label =
+      folder.error === null
+        ? `Listed ${folder.children.length.toLocaleString("en-US")} children · Load more`
+        : `${folder.error.message} · Restart listing`;
+    sink.push(more, depth, sink.keyOf("keyLoadMore", base.database, keyIdentity(parent)), label, false);
   }
 }
 
@@ -354,7 +548,7 @@ export function undescribedKeys(
 ): readonly { readonly datasourceId: string; readonly database: number; readonly keys: readonly KeyName[] }[] {
   const groups = new Map<string, { datasourceId: string; database: number; keys: KeyName[] }>();
   for (const row of rows) {
-    if (row?.node.kind !== "keyEntry" || row.node.info !== null) continue;
+    if (row?.node.kind !== "keyEntry" || row.node.info !== null || row.node.serverChildren === true) continue;
     const { datasourceId, database, key } = row.node;
     const group = `${datasourceId}\u0000${String(database)}`;
     const found = groups.get(group) ?? { datasourceId, database, keys: [] };

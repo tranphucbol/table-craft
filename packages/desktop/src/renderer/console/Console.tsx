@@ -1,4 +1,8 @@
 import { Group, Panel, type Layout } from "react-resizable-panels";
+import { useEffect } from "react";
+import { useCommandTxn } from "./transaction/store.js";
+import { TransactionBuilder } from "./transaction/TransactionBuilder.js";
+import { COMMAND_TXN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { EXPLAIN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/explainActions.js";
@@ -140,6 +144,15 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
   );
   const editorPanelId = split ? `${EDITOR_PANEL}-${consoleId}` : EDITOR_PANEL;
   const resultsPanelId = split ? `${RESULTS_PANEL}-${consoleId}` : RESULTS_PANEL;
+  const txnSupported = useCommandTxn((state) =>
+    session === undefined ? false : state.supported[session.datasourceId] === true,
+  );
+  const txnOpen = useCommandTxn((state) => state.drafts[consoleId]?.open === true);
+  const txnDatasourceId = session?.datasourceId;
+  const commandCapable = plugin?.capabilities.includes("commands") === true;
+  useEffect(() => {
+    if (txnDatasourceId !== undefined && commandCapable) void useCommandTxn.getState().probe(txnDatasourceId);
+  }, [txnDatasourceId, commandCapable]);
   if (session === undefined) return null;
   const { status } = session;
   // While the run asks about a failure, the banner shows it; the toolbar has no room for both.
@@ -182,6 +195,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
             <TxControls session={session} />
           </>
         ) : null}
+        {txnSupported ? <ActionButton actionId={COMMAND_TXN_ACTION_IDS.toggle} pressed={txnOpen} /> : null}
         {statusText === "" ? null : <span className="shrink-0 text-ink-muted">{statusText}</span>}
         {error === null ? null : (
           // The room the datasource label leaves, but never none; Output holds the whole error.
@@ -261,6 +275,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           className="flex flex-col"
           style={PANEL_STYLE}
         >
+          <TransactionBuilder consoleId={consoleId} />
           <div className={cn("min-h-0 flex-1 overflow-hidden", color !== null && `border-2 ${TINT_BORDER[color]}`)}>
             <Editor consoleId={consoleId} />
           </div>

@@ -6,8 +6,22 @@ import { keyIdentity, type KeyFilter } from "@table-craft/desktop/renderer/model
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { formatPattern, VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
-import { canReloadKey, useKeyTabs, type KeyTab, type KeyTarget } from "@table-craft/desktop/renderer/state/keyTabs.js";
+import {
+  formatPattern,
+  isKubernetesKeyValue,
+  VALUE_FORMATS,
+  type ValueFormat,
+} from "@table-craft/desktop/renderer/model/valueFormats.js";
+import {
+  canReloadKey,
+  pendingKeyCount,
+  useKeyTabs,
+  type KeyTab,
+  type KeyTarget,
+} from "@table-craft/desktop/renderer/state/keyTabs.js";
+import { useKeyDetails } from "@table-craft/desktop/renderer/state/keyDetails.js";
+import { historyEventId } from "@table-craft/desktop/renderer/model/keyHistory.js";
+import { canSaveKeyMerge } from "@table-craft/desktop/renderer/model/keyMergeSession.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
@@ -21,6 +35,18 @@ export const KEY_ACTION_IDS = {
   loadMore: "key.loadMore",
   filter: "key.filter",
   reload: "key.reload",
+  details: "key.details",
+  history: "key.history",
+  loadHistory: "key.loadHistory",
+  selectHistory: "key.selectHistory",
+  restoreHistory: "key.restoreHistory",
+  saveMerge: "key.saveMerge",
+  cancelMerge: "key.cancelMerge",
+  discardMerge: "key.discardMerge",
+  chooseMerge: "key.chooseMerge",
+  acknowledgeMerge: "key.acknowledgeMerge",
+  nextMergeConflict: "key.nextMergeConflict",
+  previousMergeConflict: "key.previousMergeConflict",
   valueFormat: "key.valueFormat",
   toggleEmptyDatabases: "explorer.toggleEmptyDatabases",
   openFromResult: "key.openFromResult",
@@ -103,6 +129,11 @@ export function openKey(_context: ActionContext, target: OpenKeyArgs): void {
   const tab: Tab = { id: `${KEY_TAB_PREFIX}${String(keyTabsOpened++)}`, kind: "key", title: target.key.text };
   useTabs.getState().open(tab);
   void useKeyTabs.getState().open(tab.id, target);
+}
+
+/** The key carries facts beyond the common ones, which the Details panel lists. */
+export function hasAttributes(tab: KeyTab | null): boolean {
+  return (tab?.details?.attributes?.length ?? 0) > 0 || tab?.details?.revision !== undefined;
 }
 
 /** The pattern the active key tab's value format is remembered under. */
@@ -237,6 +268,166 @@ async function filterKeys(context: ActionContext, args: KeyFilterArgs | undefine
 
 /** The key tree's commands (decision 113); editing ones come with the key tab. */
 export const KEY_ACTIONS: readonly AnyAction[] = [
+  defineAction({
+    id: KEY_ACTION_IDS.saveMerge,
+    title: "Save Merged",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) =>
+      context.keyTab?.merge?.visible === true &&
+      canSaveKeyMerge(context.keyTab.merge) &&
+      context.keyTab.status === "ready" &&
+      context.datasource?.view.readOnly !== true &&
+      context.keyTab.readOnly === null,
+    run: async (context) => {
+      if (context.activeTab !== null) await useKeyTabs.getState().saveMerge(context.activeTab.id);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.cancelMerge,
+    title: "Cancel",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) => context.keyTab?.merge?.visible === true && context.keyTab.status === "ready",
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().cancelMerge(context.activeTab.id);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.discardMerge,
+    title: "Discard mine, use theirs",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) => context.keyTab?.merge?.visible === true && context.keyTab.status === "ready",
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().discardMerge(context.activeTab.id);
+    },
+  }),
+  defineAction<{ readonly path: string; readonly side: "theirs" | "yours" }>({
+    id: KEY_ACTION_IDS.chooseMerge,
+    title: "Resolve Key Conflict",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) =>
+      context.keyTab?.merge?.visible === true &&
+      !context.keyTab.merge.manual &&
+      !context.keyTab.merge.binary &&
+      context.keyTab.status === "ready" &&
+      context.datasource?.view.readOnly !== true &&
+      context.keyTab.readOnly === null,
+    run: (context, args) => {
+      if (context.activeTab !== null) useKeyTabs.getState().chooseMerge(context.activeTab.id, args.path, args.side);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.acknowledgeMerge,
+    title: "Mark Result Resolved",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) =>
+      context.keyTab?.merge?.visible === true &&
+      context.keyTab.merge.manual &&
+      !context.keyTab.merge.binary &&
+      !context.keyTab.merge.acknowledged &&
+      context.keyTab.status === "ready" &&
+      context.datasource?.view.readOnly !== true &&
+      context.keyTab.readOnly === null,
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().acknowledgeMerge(context.activeTab.id);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.nextMergeConflict,
+    title: "Next Key Conflict",
+    category: "Key Editor",
+    tabKind: "key",
+    shortcut: "F7",
+    when: (context) => context.keyTab?.merge?.visible === true && context.keyTab.merge.merged.conflicts.length > 0,
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().nextMergeConflict(context.activeTab.id);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.previousMergeConflict,
+    title: "Previous Key Conflict",
+    category: "Key Editor",
+    tabKind: "key",
+    shortcut: "Shift+F7",
+    when: (context) => context.keyTab?.merge?.visible === true && context.keyTab.merge.merged.conflicts.length > 0,
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().previousMergeConflict(context.activeTab.id);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.history,
+    title: "Key History",
+    category: "Key Editor",
+    icon: "history",
+    shortcut: "Mod+Shift+H",
+    tabKind: "key",
+    when: (context) => context.keyTab?.historyAvailable === true && context.keyTab.merge?.visible !== true,
+    run: (context) => {
+      if (context.activeTab !== null)
+        useKeyTabs
+          .getState()
+          .historyMode(context.activeTab.id, context.keyTab?.history?.mode === "history" ? "value" : "history");
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.loadHistory,
+    title: "Load Older Versions",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) =>
+      context.keyTab?.historyAvailable === true &&
+      context.keyTab.status === "ready" &&
+      context.keyTab.history?.loading !== true &&
+      (context.keyTab.history?.page == null || context.keyTab.history.page.cursor !== null),
+    run: async (context) => {
+      if (context.activeTab !== null) await useKeyTabs.getState().loadHistory(context.activeTab.id);
+    },
+  }),
+  defineAction<{ readonly eventId: string }>({
+    id: KEY_ACTION_IDS.selectHistory,
+    title: "Select Key Version",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) => context.keyTab?.historyAvailable === true,
+    run: (context, args) => {
+      if (context.activeTab !== null) useKeyTabs.getState().selectHistory(context.activeTab.id, args.eventId);
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.restoreHistory,
+    title: "Restore Selected Version",
+    category: "Key Editor",
+    tabKind: "key",
+    when: (context) => {
+      const tab = context.keyTab;
+      if (
+        tab === null ||
+        !tab.historyAvailable ||
+        !tab.revisionGuardAvailable ||
+        context.datasource?.view.readOnly === true ||
+        tab.status !== "ready" ||
+        tab.readOnly !== null ||
+        pendingKeyCount(tab) > 0 ||
+        tab.details === null ||
+        (tab.details.type !== "string" && tab.details.type !== null)
+      )
+        return false;
+      const selected = tab.history?.events.find((event) => historyEventId(event) === tab.history?.selected);
+      return (
+        selected?.kind === "PUT" &&
+        selected.value !== null &&
+        !isKubernetesKeyValue(selected.value) &&
+        selected.modRevision !== tab.details.revision?.modRevision
+      );
+    },
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().restoreHistory(context.activeTab.id);
+    },
+  }),
   defineAction<KeyDatabaseArgs | undefined>({
     id: KEY_ACTION_IDS.loadMore,
     title: "Load More Keys",
@@ -284,7 +475,31 @@ export const KEY_ACTIONS: readonly AnyAction[] = [
     when: (context) => context.keyTab !== null && canReloadKey(context.keyTab.status),
     run: async (context) => {
       if (context.activeTab !== null && context.keyTab !== null) {
+        if (context.keyTab.historyAvailable === true && pendingKeyCount(context.keyTab) > 0) {
+          const confirmed = await useModal.getState().ask({
+            kind: "confirm",
+            title: "Reload Key",
+            message: "Reload discards your unsaved value and any merge result.",
+            items: [{ label: context.keyTab.key.text, detail: "Unsaved changes will be discarded." }],
+            confirm: "Discard and Reload",
+          });
+          if (confirmed === null || useKeyTabs.getState().tabs[context.activeTab.id] !== context.keyTab) return;
+        }
         await useKeyTabs.getState().reload(context.activeTab.id);
+      }
+    },
+  }),
+  defineAction({
+    id: KEY_ACTION_IDS.details,
+    title: "Key Details",
+    category: "Key Editor",
+    icon: "details",
+    shortcut: "Mod+I",
+    tabKind: "key",
+    when: (context) => hasAttributes(context.keyTab),
+    run: (context) => {
+      if (context.activeTab !== null && hasAttributes(context.keyTab)) {
+        useKeyDetails.getState().toggle(context.activeTab.id);
       }
     },
   }),
