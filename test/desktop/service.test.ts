@@ -5,7 +5,7 @@ import { createConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
 import { createDatasourceStore, DATASOURCES_FILE } from "@table-craft/desktop/main/datasources.js";
 import { createHostRegistry } from "@table-craft/desktop/main/hosts.js";
 import { listPlugins } from "@table-craft/desktop/main/plugins.js";
-import { createSecretStore } from "@table-craft/desktop/main/secrets.js";
+import { createSecretStore, SECRETS_FILE } from "@table-craft/desktop/main/secrets.js";
 import {
   createDatasourceService,
   DatasourceError,
@@ -87,6 +87,12 @@ function saving(datasource: DatasourceDraft, password?: string): SaveDatasourceR
     datasource,
     secrets: password === undefined ? {} : { password: { action: "set", value: password } },
   };
+}
+
+/** Lets a stop finish without an engine to answer it: the shutdown grace runs out and it is killed. */
+async function disconnected(dependencies: ReturnType<typeof fakeHostDependencies>, stopping: Promise<void>) {
+  dependencies.elapse();
+  await stopping;
 }
 
 function bootedConfig(dependencies: ReturnType<typeof fakeHostDependencies>, index = 0): unknown {
@@ -192,6 +198,72 @@ describe("datasource service", () => {
     cipher.lost = true;
 
     expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+  });
+
+  it.each(["forever", "untilRestart"] as const)(
+    "givenUnsaved%sSecret_whenTypedAndConnectionWorks_thenKeptAndNotAskedAgain",
+    async (mode) => {
+      const { dependencies, service: datasources } = await service();
+      const saved = await datasources.save(saving({ ...PG_DRAFT, secretModes: { password: mode } }));
+      expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+
+      await datasources.connect(saved.id, { password: SECRET }, WINDOW);
+      expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
+      await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+      await disconnected(dependencies, datasources.disconnect(saved.id));
+
+      expect(datasources.list().datasources[0]?.storedSecrets).toEqual(["password"]);
+      expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
+      expect(bootedConfig(dependencies, 1)).toMatchObject({ config: { password: SECRET } });
+    },
+  );
+
+  it("givenForeverSecret_whenEmptyPasswordTypedAndConnectionWorks_thenEmptyKept", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+
+    await datasources.connect(saved.id, { password: "" }, WINDOW);
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+    await disconnected(dependencies, datasources.disconnect(saved.id));
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
+    expect(bootedConfig(dependencies, 1)).toMatchObject({ config: { password: "" } });
+  });
+
+  it("givenForeverSecret_whenTypedAndConnectionFails_thenNotKept", async () => {
+    const { files, dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+
+    await datasources.connect(saved.id, { password: SECRET }, WINDOW);
+    await disconnected(dependencies, datasources.disconnect(saved.id));
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+
+    expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
+    expect(files.contents.has(`${DIRECTORY}/${SECRETS_FILE}`)).toBe(false);
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+  });
+
+  it("givenNeverSecret_whenTypedAndConnectionWorks_thenNotKept", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving({ ...PG_DRAFT, secretModes: { password: "never" } }));
+
+    await datasources.connect(saved.id, { password: SECRET }, WINDOW);
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+    await disconnected(dependencies, datasources.disconnect(saved.id));
+
+    expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+  });
+
+  it("givenKeychainUnavailable_whenForeverSecretTypedAndConnectionWorks_thenConnectedWithoutKeeping", async () => {
+    const { cipher, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+    cipher.available = false;
+
+    expect(await datasources.connect(saved.id, { password: SECRET }, WINDOW)).toEqual({ status: "connected" });
+    await expect(datasources.rememberServer(saved.id, seenAt(SEEN_AT))).resolves.toBeUndefined();
+
+    expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
   });
 
   it("givenReadOnlyDatasource_whenConnected_thenEngineBootsReadOnly", async () => {
