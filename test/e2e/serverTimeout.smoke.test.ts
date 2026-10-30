@@ -224,8 +224,9 @@ describe.runIf(DATABASES_ENABLED)("server-enforced statement timeout live test",
         expect(tested.ok).toBe(true);
         expect(tested.text).toContain(dialect.testResult);
         const hint = dialog.getByTestId("server-timeout-hint");
-        await expect.poll(() => hint.textContent()).toBe(dialect.hint);
         await hint.scrollIntoViewIfNeeded();
+        await hint.hover();
+        await expect.poll(() => page.getByRole("tooltip").textContent()).toBe(dialect.hint);
         await captureWindow(page, `01-${dialect.id}-advanced-opt-in`);
         await dialog.getByRole("button", { name: "OK", exact: true }).click();
         await dialog.waitFor({ state: "detached" });

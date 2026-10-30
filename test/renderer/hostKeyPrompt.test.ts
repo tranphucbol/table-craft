@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { HostKeyPrompt } from "@table-craft/desktop/preload/bridge.js";
 import { sshServerName } from "@table-craft/desktop/renderer/dialogs/HostKeyPrompt.js";
-import { inSentence } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
+import { inSentence, promptDescription } from "@table-craft/desktop/renderer/dialogs/SecretPrompt.js";
+import type { SecretRequest } from "@table-craft/desktop/renderer/state/datasources.js";
 import { createHostKeyPromptStore } from "@table-craft/desktop/renderer/state/hostKeyPrompt.js";
 
 function prompt(requestId: number, host: string): HostKeyPrompt {
@@ -39,5 +40,21 @@ describe("host key prompt", () => {
     expect(inSentence("SSH password")).toBe("SSH password");
     expect(inSentence("Key passphrase")).toBe("key passphrase");
     expect(inSentence("Password")).toBe("password");
+  });
+
+  it("givenFieldsInEachMode_whenDescribed_thenEachSaysHowItIsKept", () => {
+    const request = {
+      datasource: { name: "pg", secretModes: { password: "forever", "ssh.password": "untilRestart" } },
+      fields: [
+        { key: "password", label: "Password", kind: "password", secret: true },
+        { key: "ssh.password", label: "SSH password", kind: "password", secret: true },
+        { key: "ssh.passphrase", label: "Key passphrase", kind: "password", secret: true },
+      ],
+    } as unknown as SecretRequest;
+
+    expect(promptDescription(request)).toBe(
+      "TableCraft saves the password in the system keychain. TableCraft keeps the SSH password until it quits. " +
+        "pg does not keep its key passphrase. It is used for this connection only.",
+    );
   });
 });
