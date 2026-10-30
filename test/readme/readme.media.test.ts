@@ -9,7 +9,8 @@
  *
  * Each scene sets up off camera (connect, open a console, fill text a reader need not watch typed),
  * then records only what the GIF is about, paced by `pace.ts` for a reader. This file holds the
- * plan 016 scenes, `features.media.test.ts` the plan 061 ones, `scenes.ts` what they share.
+ * plan 016 scenes, `features.media.test.ts` the plan 061 ones, `recent.media.test.ts` the plan 128
+ * ones (etcd in a disposable container of its own), `scenes.ts` what they share.
  */
 import { join } from "node:path";
 import { expect } from "vitest";
@@ -185,18 +186,25 @@ mediaSuite("README media", () => {
       await pause(page);
       await clickVisibly(page, resultTab(page, "Output"));
       await pause(page, 1200);
-      await clickVisibly(page, sqlEditor(page));
-      await page.keyboard.press("ControlOrMeta+End");
-      const mode = consoleToolbar(page).getByRole("combobox", { name: "Transaction mode" });
-      await pointAt(page, mode);
+      // A CSS locator, since an open dropdown hides its trigger from role locators.
+      const mode = page.locator('[aria-label="Transaction mode"]:visible');
+      await clickVisibly(page, mode);
+      await pause(page);
       await chooseOption(mode, "manual");
       await pause(page);
+      // The in-app dropdown hands focus back to its trigger, where typing would reopen it.
+      await clickVisibly(page, sqlEditor(page));
+      await page.keyboard.press("ControlOrMeta+End");
       await typeSlowly(page, "\nUPDATE products SET stock = 0 WHERE id = 1;");
       await pressVisibly(page, "Mod+Enter");
       await consoleToolbar(page).getByRole("status").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      await pause(page, 1200);
-      await clickVisibly(page, consoleToolbar(page).getByRole("button", { name: "Rollback", exact: true }));
+      const capsule = page.getByTestId("activity-capsule");
+      await expect.poll(() => capsule.getAttribute("data-kind")).toBe("transaction");
+      await pointAt(page, capsule);
+      await pause(page, READ_PAUSE_MS);
+      await clickVisibly(page, capsule.getByRole("button", { name: "Rollback", exact: true }));
       await expect.poll(() => consoleToolbar(page).getByRole("status").count()).toBe(0);
+      await expect.poll(() => capsule.count()).toBe(0);
     },
   });
 
@@ -426,16 +434,6 @@ mediaSuite("README media", () => {
       await pressVisibly(page, "Mod+,");
       const dialog = page.getByRole("dialog", { name: "Settings" });
       await dialog.waitFor();
-      await pause(page);
-      const theme = async (name: string) => {
-        await clickVisibly(page, dialog.getByTestId("theme-picker-trigger"));
-        await clickVisibly(page, page.getByTestId("theme-picker").getByRole("option", { name, exact: true }));
-      };
-      await theme("Light");
-      await pause(page, 1200);
-      await theme("Gruvbox Dark");
-      await pause(page, 1200);
-      await theme("Dark");
       await pause(page);
       await clickVisibly(page, dialog.getByRole("radio", { name: "Compact", exact: true }));
       await pause(page, 1200);

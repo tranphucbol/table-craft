@@ -455,12 +455,12 @@ mediaSuite("README feature media", () => {
       await pause(page);
       await clickVisibly(page, keyTab(page).getByRole("button", { name: "Preview Pending Changes", exact: true }));
       const preview = page.getByRole("dialog");
-      await expect.poll(() => preview.textContent()).toContain("as one MULTI");
+      await expect.poll(() => preview.textContent()).toContain("atomically");
       await pause(page, READ_PAUSE_MS);
       await clickVisibly(page, preview.getByRole("button", { name: "Submit", exact: true }));
       await expect
         .poll(() => keyTab(page).getByTestId("key-notice").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
-        .toContain("Submitted as one MULTI");
+        .toContain("saved atomically");
     },
   });
 
@@ -498,7 +498,7 @@ mediaSuite("README feature media", () => {
       await pause(page);
       await pressVisibly(page, "Mod+Shift+P");
       const preview = page.getByRole("dialog");
-      await expect.poll(() => preview.textContent()).toContain("as one MULTI");
+      await expect.poll(() => preview.textContent()).toContain("atomically");
       await pause(page, READ_PAUSE_MS);
       await clickVisibly(page, preview.getByRole("button", { name: "Submit", exact: true }));
       await preview.waitFor({ state: "detached" });

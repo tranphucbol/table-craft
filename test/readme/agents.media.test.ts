@@ -30,7 +30,7 @@ const FINISHED_POLL_MS = 1_000;
 /** Between the terminal and the app's window, which the GIF shows apart anyway. */
 const WINDOW_GAP = 4;
 /** The write in the Services tree, where the app logs every call an agent made. */
-const WRITE_SHOWN = /^UPDATE products/;
+const WRITE_SHOWN = /^UPDATE (public\.)?products/;
 
 const TRANSCRIPT_ID = "readme-agent";
 const TRANSCRIPT_LINES_ID = "readme-agent-lines";
