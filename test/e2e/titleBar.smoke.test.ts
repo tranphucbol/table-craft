@@ -54,6 +54,7 @@ import {
 
 const PLAN = "015";
 const captureWindow = evidenceFor(PLAN);
+const captureActivity = evidenceFor("127");
 const EVIDENCE_DIR = process.env["TABLE_CRAFT_EVIDENCE_DIR"];
 const MAC = process.platform === "darwin";
 
@@ -98,6 +99,8 @@ const CENTRE_TOLERANCE_PX = 1.5;
 const LIGHT_PANEL = "rgb(247, 248, 250)";
 const DARK_PANEL = "rgb(43, 45, 48)";
 const SLEEP_SQL = "SELECT pg_sleep(30)";
+/** `formatDuration`'s seconds, which the capsule ticks once a second. */
+const ELAPSED = /^\d+\.\d s$/;
 const CANCEL_DEADLINE_MS = 10_000;
 const TOTAL_SQL = "SELECT total FROM orders WHERE id = 1";
 const UPDATE_SQL = "UPDATE orders SET total = total + 1 WHERE id = 1";
@@ -170,6 +173,11 @@ function settingsDialog(page: Page) {
 
 function transactionBadge(page: Page) {
   return page.getByText("transaction open", { exact: true });
+}
+
+/** The title bar's capsule: what the active console is doing (plan 127). */
+function activityCapsule(page: Page) {
+  return mainToolbar(page).getByTestId("activity-capsule");
 }
 
 async function chooseTransactionMode(page: Page, mode: "auto" | "manual"): Promise<void> {
@@ -433,7 +441,10 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
 
       await startStatement(page, SLEEP_SQL);
       await expect.poll(() => cancel.isEnabled()).toBe(true);
+      expect(await activityCapsule(page).getAttribute("data-kind")).toBe("running");
+      await expect.poll(() => activityCapsule(page).textContent()).toMatch(ELAPSED);
       await captureWindow(page, "cancel");
+      await captureActivity(page, "capsule-running");
       const clickedAt = Date.now();
       await cancel.click();
 
@@ -441,7 +452,8 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
       expect(Date.now() - clickedAt).toBeLessThan(CANCEL_DEADLINE_MS);
       expect(await consoleAlert(page).textContent()).toContain("The statement was cancelled.");
       await waitUntilReady(page);
-      expect(await cancel.isEnabled()).toBe(false);
+      await expect.poll(() => cancel.count()).toBe(0);
+      expect(await activityCapsule(page).count()).toBe(0);
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -459,14 +471,17 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
       await waitUntilReady(page);
       const rollback = mainToolbarButton(page, "Rollback");
       expect(await mainToolbarButton(page, "Commit").isEnabled()).toBe(true);
+      expect(await activityCapsule(page).getAttribute("data-kind")).toBe("transaction");
+      expect(await activityCapsule(page).textContent()).toBe("Tx open");
       await captureWindow(page, "rollback");
+      await captureActivity(page, "capsule-transaction");
       await rollback.click();
 
       await expect.poll(() => transactionBadge(page).count()).toBe(0);
+      expect(await activityCapsule(page).count()).toBe(0);
+      expect(await rollback.count()).toBe(0);
       await runStatement(page, TOTAL_SQL);
       expect((await gridText(page)).cells).toEqual(before);
-      await rollback.click();
-      await expect.poll(() => transactionBadge(page).count()).toBe(0);
     },
     SCENARIO_TIMEOUT_MS,
   );
