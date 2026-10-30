@@ -6,7 +6,8 @@ The result grid, the table data editor, and importing a file into a table.
 
 The grid shows the first page (500 rows by default) and keeps the cursor open: **Fetch Next Page**
 and **Fetch All** read more. Clicking a header sorts ascending, descending, then not at all; `⌥`-click
-adds a second key. `⇧↩`, or double-clicking a cell, opens the value panel for long text and JSON. **Copy** on one
+adds a second key. `⇧↩`, or double-clicking a cell, opens the value panel for long text and JSON; drag its left
+edge to widen it, and it keeps that width. **Copy** on one
 cell copies its bare value; on more it uses the chosen extractor: CSV, TSV, JSON, SQL Inserts or
 Markdown. **Export Data…**, on a result or on a
 table in the Database pane, writes any of those or Excel (XLSX) in the background: it streams

@@ -30,6 +30,8 @@ export interface Layout {
   readonly extractor: ExtractorKind;
   /** Whether result grids show the value panel beside their rows (plan 007 decision 15). */
   readonly valuePanel: boolean;
+  /** The value panel's width once dragged; `null` draws the density's default (plan 129 decision 4). */
+  readonly valuePanelWidthPx: number | null;
   /** The value panel's format per key pattern, such as `session:*` → gzip (plan 058 decision 15). */
   readonly valueFormats: Readonly<Record<string, ValueFormat>>;
   /** Percent of a console's height its SQL editor takes, the rest going to its results (plan 060). */
@@ -70,6 +72,8 @@ const MAX_EDITOR_GROUP_PERCENT = 100 - MIN_EDITOR_GROUP_PERCENT;
 /** The least of a console's height its editor, and its results, keep while the boundary is dragged. */
 export const MIN_CONSOLE_PANE_PERCENT = 10;
 const MAX_CONSOLE_EDITOR_PERCENT = 100 - MIN_CONSOLE_PANE_PERCENT;
+export const MIN_VALUE_PANEL_PX = 200;
+const MAX_VALUE_PANEL_PX = 2000;
 
 export const DEFAULT_LAYOUT: Layout = {
   visible: { database: true, services: true, log: false, watch: false },
@@ -81,6 +85,7 @@ export const DEFAULT_LAYOUT: Layout = {
   openTables: [],
   extractor: "csv",
   valuePanel: false,
+  valuePanelWidthPx: null,
   valueFormats: {},
   consoleEditor: DEFAULT_CONSOLE_EDITOR_PERCENT,
   editorGroupWidth: DEFAULT_EDITOR_GROUP_WIDTH,
@@ -163,6 +168,13 @@ function valueFormatsOf(value: unknown): Readonly<Record<string, ValueFormat>> {
   );
 }
 
+const clampedValuePanelPx = (widthPx: number) =>
+  Math.round(Math.min(MAX_VALUE_PANEL_PX, Math.max(MIN_VALUE_PANEL_PX, widthPx)));
+
+function valuePanelWidthOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? clampedValuePanelPx(value) : null;
+}
+
 function openConsolesOf(value: unknown): readonly OpenConsole[] {
   return Array.isArray(value) ? value.filter(isOpenConsole) : [];
 }
@@ -188,6 +200,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     openTables,
     extractor,
     valuePanel,
+    valuePanelWidthPx,
     valueFormats,
     consoleEditor,
     editorGroupWidth,
@@ -206,6 +219,7 @@ export function loadLayout(storage: Pick<Storage, "getItem">): Layout {
     openTables: Array.isArray(openTables) ? openTables.filter(isOpenTable) : [],
     extractor: isExtractor(extractor) ? extractor : DEFAULT_LAYOUT.extractor,
     valuePanel: valuePanel === true,
+    valuePanelWidthPx: valuePanelWidthOf(valuePanelWidthPx),
     valueFormats: valueFormatsOf(valueFormats),
     consoleEditor: isConsoleEditorSize(consoleEditor) ? consoleEditor : DEFAULT_CONSOLE_EDITOR_PERCENT,
     editorGroupWidth: isGroupSize(editorGroupWidth) ? editorGroupWidth : DEFAULT_EDITOR_GROUP_WIDTH,
@@ -249,6 +263,12 @@ export function consoleEditorResized(layout: Layout, percent: number): Layout {
   return layout.consoleEditor === size ? layout : { ...layout, consoleEditor: size };
 }
 
+export function valuePanelResized(layout: Layout, widthPx: number): Layout {
+  if (!Number.isFinite(widthPx)) return layout;
+  const valuePanelWidthPx = clampedValuePanelPx(widthPx);
+  return layout.valuePanelWidthPx === valuePanelWidthPx ? layout : { ...layout, valuePanelWidthPx };
+}
+
 export interface LayoutState {
   readonly layout: Layout;
   readonly toggle: (id: ToolWindowId) => void;
@@ -263,6 +283,7 @@ export interface LayoutState {
   readonly toggleValuePanel: () => void;
   readonly setProductionNote: (shown: boolean) => void;
   readonly resizeConsoleEditor: (percent: number) => void;
+  readonly resizeValuePanel: (widthPx: number) => void;
   readonly resizeEditorGroups: (percent: number) => void;
   /** Remembers `format` for keys like `pattern`; Auto forgets it. */
   readonly setValueFormat: (pattern: string, format: ValueFormat) => void;
@@ -300,6 +321,7 @@ export function createLayoutStore(storage: LayoutStorage) {
         if (productionNote !== get().layout.productionNote) update({ ...get().layout, productionNote });
       },
       resizeConsoleEditor: (percent) => update(consoleEditorResized(get().layout, percent)),
+      resizeValuePanel: (widthPx) => update(valuePanelResized(get().layout, widthPx)),
       resizeEditorGroups: (percent) => {
         const editorGroupWidth = Math.min(MAX_EDITOR_GROUP_PERCENT, Math.max(MIN_EDITOR_GROUP_PERCENT, percent));
         if (Number.isFinite(editorGroupWidth) && editorGroupWidth !== get().layout.editorGroupWidth)
