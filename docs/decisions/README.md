@@ -132,3 +132,4 @@ started, not when it is merged.
 | 137 | [Advanced key-value services are optional capabilities in API 1.8.0](137-advanced-key-value-services-are-optional-capabilities.md)                                     |
 | 138 | [Sensitive operations use private host channels, and consoles admit commands before history](138-sensitive-operations-use-private-host-channels.md)                    |
 | 139 | [etcd endpoints are the configured set; sent mutations are never replayed](139-etcd-endpoints-are-the-configured-set.md)                                               |
+| 140 | [Every dropdown is drawn in-app](140-in-app-dropdowns.md)                                                                                                              |
