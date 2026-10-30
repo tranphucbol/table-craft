@@ -31,6 +31,8 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("021");
@@ -172,7 +174,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
       await importInto(page, "customers");
       await chooseFile(page, path);
       const dialog = importDialog(page);
-      await expect.poll(() => dialog.getByLabel("Field for email").inputValue()).toBe("2");
+      await expect.poll(() => optionValue(dialog.getByLabel("Field for email"))).toBe("2");
       await expect(dialog.getByTestId("import-preview").textContent()).resolves.toContain("Hopper, Grace Jr.");
       await captureWindow(page, "import-dialog");
       await submit(page);
@@ -205,7 +207,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
       const dialog = importDialog(page);
       await dialog.waitFor();
       await dialog.getByTestId("import-file").fill(path);
-      await dialog.getByTestId("import-delimiter").selectOption(";");
+      await chooseOption(dialog.getByTestId("import-delimiter"), ";");
       await dialog.getByTestId("import-preview").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await expect.poll(() => dialog.getByTestId("import-table").inputValue()).toBe("cities");
       await expect

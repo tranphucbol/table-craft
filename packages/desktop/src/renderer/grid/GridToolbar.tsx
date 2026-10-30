@@ -11,7 +11,10 @@ import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { resultStateText } from "@table-craft/desktop/renderer/model/format.js";
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+
+const EXTRACTOR_OPTIONS = EXTRACTOR_KINDS.map((kind) => ({ value: kind, label: EXTRACTOR_LABELS[kind] }));
 
 const FETCHING_TEXT: Readonly<Record<NonNullable<ResultTab["fetching"]>, string>> = {
   page: "Fetching…",
@@ -73,20 +76,15 @@ export function GridToolbar({
         compact
         pressed={result.search.open && result.search.rowsOnly}
       />
-      <select
-        aria-label="Extractor"
-        className="h-row rounded border border-line bg-panel px-1 text-ui text-ink"
+      <Dropdown
+        label="Extractor"
+        variant="inline"
         value={extractor}
-        onChange={(event) => {
-          if (isExtractor(event.target.value)) invoke(GRID_ACTION_IDS.setExtractor, { extractor: event.target.value });
+        options={EXTRACTOR_OPTIONS}
+        onChange={(chosen) => {
+          if (isExtractor(chosen)) invoke(GRID_ACTION_IDS.setExtractor, { extractor: chosen });
         }}
-      >
-        {EXTRACTOR_KINDS.map((kind) => (
-          <option key={kind} value={kind}>
-            {EXTRACTOR_LABELS[kind]}
-          </option>
-        ))}
-      </select>
+      />
       <ActionButton actionId={GRID_ACTION_IDS.copy} compact reason={copyBlockedReason(result)} />
       <ActionButton actionId={GRID_ACTION_IDS.export} compact />
       <ActionButton actionId={GRID_HELPER_ACTION_IDS.transpose} compact pressed={result.layout.transposed === true} />

@@ -50,6 +50,8 @@ import {
   type RunningApp,
   type SavedDatasource,
   chooseTheme,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 
 const PLAN = "015";
@@ -183,8 +185,8 @@ function activityCapsule(page: Page) {
 async function chooseTransactionMode(page: Page, mode: "auto" | "manual"): Promise<void> {
   const select = page.getByLabel("Transaction mode", { exact: true });
   await expect.poll(() => select.isEnabled()).toBe(true);
-  await select.selectOption(mode);
-  await expect.poll(() => select.inputValue()).toBe(mode);
+  await chooseOption(select, mode);
+  await expect.poll(() => optionValue(select)).toBe(mode);
 }
 
 async function openAppearance(page: Page): Promise<void> {

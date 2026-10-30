@@ -47,6 +47,8 @@ import {
   type RunningApp,
   waitUntilReady,
   waitUntilSpinning,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("006");
@@ -185,8 +187,8 @@ async function query(page: Page, sql: string) {
 async function chooseTransactionMode(page: Page, mode: "auto" | "manual"): Promise<void> {
   const select = page.getByLabel("Transaction mode", { exact: true });
   await expect.poll(() => select.isEnabled()).toBe(true);
-  await select.selectOption(mode);
-  await expect.poll(() => select.inputValue()).toBe(mode);
+  await chooseOption(select, mode);
+  await expect.poll(() => optionValue(select)).toBe(mode);
 }
 
 /** Extends the selection by `characters`, one Shift+→ each, as a user would. */

@@ -8,8 +8,8 @@ import { GRID_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridActio
 import { EDITOR_THEME } from "@table-craft/desktop/renderer/console/editorTheme.js";
 import { BytesView } from "@table-craft/desktop/renderer/grid/BytesView.js";
 import { NULL_TEXT, panelValue } from "@table-craft/desktop/renderer/grid/format.js";
-import { Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { isBytesWire } from "@table-craft/desktop/renderer/model/binaryCells.js";
 import { parsesAsJson, storedJson } from "@table-craft/desktop/renderer/model/jsonText.js";
 import { prettyJson } from "@table-craft/desktop/renderer/model/prettyJson.js";
@@ -40,9 +40,10 @@ export interface ValueFormatChoice {
 function FormatPicker({ choice }: { readonly choice: ValueFormatChoice }) {
   return (
     <span className="ml-auto shrink-0">
-      <Select
+      <Dropdown
         label={FORMAT_LABEL}
         testId="value-format"
+        variant="inline"
         value={choice.format}
         options={FORMAT_OPTIONS}
         onChange={(format) => {
@@ -220,7 +221,7 @@ function RawText({ text }: { readonly text: string }) {
   );
 }
 
-const PANEL_CLASS = "flex w-value-panel min-w-0 shrink-0 flex-col border-l border-line bg-panel font-grid text-grid";
+const PANEL_CLASS = "flex h-full w-full min-w-0 flex-col bg-panel font-grid text-grid";
 
 /** Where a panel keeps its `{}` choice: the result's `jsonOwnerKey`; the column names the rest. */
 function jsonTarget(owner: string | undefined, column: Column | null) {

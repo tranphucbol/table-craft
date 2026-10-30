@@ -3,6 +3,7 @@ import type { ClusterStatus } from "@table-craft/desktop/engine/protocol.js";
 import { memberLag, removalBlocked, type AdminData, type AdminView } from "./store.js";
 import { CELL, CommandButton, Fact, INPUT } from "./controls.js";
 import { TaskRows } from "./TaskRows.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 
 export function endpointOrder(data: AdminData): readonly string[] {
   return [...data.endpoints]
@@ -273,13 +274,13 @@ export function ClusterView({
             </p>
             <label className="flex flex-col gap-cell pb-gap">
               Configured endpoint
-              <select className={INPUT} value={selected} onChange={(event) => setEndpoint(event.target.value)}>
-                {data.endpoints.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+              <Dropdown
+                variant="field"
+                label="Configured endpoint"
+                value={selected}
+                options={data.endpoints.map((item) => ({ value: item.id, label: item.label }))}
+                onChange={setEndpoint}
+              />
             </label>
             <CommandButton
               source={source}

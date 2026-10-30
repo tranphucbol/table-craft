@@ -38,6 +38,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  optionValue,
 } from "./harness.js";
 import { dialog, keyCell, keyTab, onRedis, outputLog, runCommand } from "./redisLive.js";
 
@@ -180,7 +181,7 @@ describe.runIf(DATABASES_ENABLED)("redis console results live test", () => {
       const page = await launch(REDIS);
       await query(page, `GET ${JSON_KEY}`, ["value"]);
       await showValue(page, 0, 0);
-      expect(await page.getByTestId("value-format").inputValue()).toBe("auto");
+      expect(await optionValue(page.getByTestId("value-format"))).toBe("auto");
       await expect.poll(() => page.getByTestId("value-formatted").getAttribute("data-format")).toBe("json");
       await expect.poll(() => page.getByTestId("value-formatted").textContent()).toContain('"theme": "dark"');
       await captureWindow(page, "01-get-json");

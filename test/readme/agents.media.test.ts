@@ -9,7 +9,7 @@
 import type { ElectronApplication, Page } from "playwright-core";
 import { beforeAll, expect } from "vitest";
 import { freePort } from "../e2e/mcpAgent.js";
-import { findAction, LAUNCH_TIMEOUT_MS, toolWindow } from "../e2e/harness.js";
+import { chooseOption, findAction, LAUNCH_TIMEOUT_MS, optionValue, toolWindow } from "../e2e/harness.js";
 import { callLine, EVENT_LOG, opencodeModel, OpencodeFolder, requireOpencode, resultLine } from "./opencode.js";
 import { clickVisibly, pause, pointAt } from "./pace.js";
 import { connect, datasourceRow, mediaSuite, PASSWORD, READ_PAUSE_MS, scene, SHOP } from "./scenes.js";
@@ -159,8 +159,8 @@ mediaSuite("README agent media", () => {
       const access = dialog.getByLabel(`AI agent access for ${SHOP}`, { exact: true });
       await access.scrollIntoViewIfNeeded();
       await pointAt(page, access);
-      await access.selectOption("ask");
-      await expect.poll(() => access.inputValue()).toBe("ask");
+      await chooseOption(access, "ask");
+      await expect.poll(() => optionValue(access)).toBe("ask");
       await pause(page, READ_PAUSE_MS);
       await page.keyboard.press("Escape");
       await dialog.waitFor({ state: "detached" });

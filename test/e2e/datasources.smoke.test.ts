@@ -42,6 +42,7 @@ import {
   type DatasourceForm,
   type RunningApp,
   type SavedDatasource,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("004");
@@ -155,7 +156,7 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
       const { page } = await launch();
       await fillNewDatasource(page, POSTGRES_FORM);
       const dialog = dataSourcesDialog(page);
-      expect(await dialog.getByLabel("Save password").inputValue()).toBe("forever");
+      expect(await optionValue(dialog.getByLabel("Save password"))).toBe("forever");
       await captureWindow(page, "new-datasource-form");
 
       const result = await testConnection(page);

@@ -1,5 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { Group, Panel, type PanelImperativeHandle } from "react-resizable-panels";
 import { RESULT_WINDOW_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import {
@@ -45,15 +46,26 @@ import {
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { FilterChips, FindBar } from "@table-craft/desktop/renderer/grid/FindBar.js";
-import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
-import { useCellFormats, useRowHeightPx } from "@table-craft/desktop/renderer/state/settings.js";
+import { MIN_VALUE_PANEL_PX, useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import {
+  useCellFormats,
+  useDefaultValuePanelPx,
+  useRowHeightPx,
+} from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 
 export type { GridCellEditor, GridEdits, GridHost } from "@table-craft/desktop/renderer/grid/GridCells.js";
 
 const OVERSCAN_ROWS = 20;
 const MIN_GUTTER_DIGITS = 2;
 const STALE_TEXT = "Results from a closed connection; rerun to refresh";
+/** The rows keep this much while the value panel's edge is dragged (plan 129 decision 5). */
+const MIN_ROWS_PX = 240;
+const MAX_VALUE_PANEL_SIZE = "70%";
+/** The library's panels scroll by default; the rows and the value panel scroll themselves. */
+const PANEL_STYLE = { overflow: "hidden" } as const;
+const NOT_ID_CHAR = /[^\w-]/g;
 
 export interface ResultGridProps {
   /** The console or table tab the result belongs to. */
@@ -82,6 +94,11 @@ export function ResultGrid({
   panel,
 }: ResultGridProps) {
   const valuePanel = useLayout((state) => state.layout.valuePanel);
+  const defaultValuePanelPx = useDefaultValuePanelPx();
+  const valuePanelPx = useLayout((state) => state.layout.valuePanelWidthPx) ?? defaultValuePanelPx;
+  const valuePanelRef = useRef<PanelImperativeHandle>(null);
+  /** Panel ids are DOM ids; React's own carry characters a selector would have to escape. */
+  const panelIds = `result-grid-${useId().replace(NOT_ID_CHAR, "")}-`;
   const visible = useMemo(() => visibleColumns(result.layout), [result.layout]);
   const focus = result.selection?.focus ?? null;
   const focusColumn = focus === null ? undefined : visible[focus.column];
@@ -128,29 +145,53 @@ export function ResultGrid({
         </div>
       ) : null}
       <FocusedBytes.Provider value={readBytes}>
-        <div ref={area} className="flex min-h-0 flex-1">
-          {transposed ? (
-            <TransposedRows
-              key={result.handle}
-              ownerId={ownerId}
-              result={result}
-              visible={visible}
-              host={host}
-              edits={edits}
-            />
-          ) : (
-            <Rows key={result.handle} ownerId={ownerId} result={result} visible={visible} host={host} edits={edits} />
-          )}
-          {!valuePanel ? null : panel !== undefined ? (
-            panel(focus === null || focusColumn === undefined ? null : { row: focus.row, column: focusColumn })
-          ) : (
-            <ValuePanel
-              column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
-              value={focusValue}
-              jsonOwner={jsonOwnerKey(ownerId, result.handle)}
-            />
-          )}
-        </div>
+        <Group
+          elementRef={area}
+          orientation="horizontal"
+          className="min-h-0 flex-1"
+          onLayoutChanged={(_layout, meta) => {
+            const size = valuePanelRef.current?.getSize();
+            if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeValuePanel(size.inPixels);
+          }}
+        >
+          <Panel id={`${panelIds}rows`} minSize={MIN_ROWS_PX} className="flex" style={PANEL_STYLE}>
+            {transposed ? (
+              <TransposedRows
+                key={result.handle}
+                ownerId={ownerId}
+                result={result}
+                visible={visible}
+                host={host}
+                edits={edits}
+              />
+            ) : (
+              <Rows key={result.handle} ownerId={ownerId} result={result} visible={visible} host={host} edits={edits} />
+            )}
+          </Panel>
+          {valuePanel ? <Handle axis="vertical" label="Value panel" /> : null}
+          {valuePanel ? (
+            <Panel
+              id={`${panelIds}value`}
+              panelRef={valuePanelRef}
+              defaultSize={valuePanelPx}
+              minSize={MIN_VALUE_PANEL_PX}
+              maxSize={MAX_VALUE_PANEL_SIZE}
+              groupResizeBehavior="preserve-pixel-size"
+              className="flex"
+              style={PANEL_STYLE}
+            >
+              {panel !== undefined ? (
+                panel(focus === null || focusColumn === undefined ? null : { row: focus.row, column: focusColumn })
+              ) : (
+                <ValuePanel
+                  column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
+                  value={focusValue}
+                  jsonOwner={jsonOwnerKey(ownerId, result.handle)}
+                />
+              )}
+            </Panel>
+          ) : null}
+        </Group>
       </FocusedBytes.Provider>
       <AggregateLine ownerId={ownerId} result={result} host={host} />
     </div>

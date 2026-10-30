@@ -42,6 +42,7 @@ import {
   toolWindow,
   waitUntilReady,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 import { AgentClient, freePort } from "./mcpAgent.js";
 
@@ -218,7 +219,7 @@ describe.runIf(DATABASES_ENABLED)("server-enforced statement timeout live test",
         const enforce = dialog.getByTestId("enforce-timeout-on-server");
         expect(await enforce.isEnabled()).toBe(true);
         await enforce.check();
-        await dialog.getByTestId("datasource-agent-access").selectOption("read");
+        await chooseOption(dialog.getByTestId("datasource-agent-access"), "read");
         const tested = await testConnection(page);
         expect(tested.ok).toBe(true);
         expect(tested.text).toContain(dialect.testResult);

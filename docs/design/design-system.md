@@ -232,6 +232,27 @@ The level is the **Motion** setting (`appearance.motion`): System (default) foll
 `prefers-reduced-motion`, which Chromium reads from macOS Reduce Motion and its Windows and GNOME
 equivalents; Full, Reduced and Off override it. It applies live.
 
+## Dropdowns
+
+Decision 140. Every choice list is `ui/Dropdown.tsx` (Radix Select), never a native `<select>`,
+whose OS menu ignores the theme and the density; ESLint refuses `<select>` in the renderer. The
+list opens under its trigger as a `SURFACE_MOTION` popover: `bg-raised`, a `border-line` frame,
+`rounded`, `shadow-lg`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
+highlighted one and `CurrentIcon` in `text-accent` before the chosen one, group headings in
+`text-ink-muted`. The keyboard is a native select's: arrows, type-ahead, Enter, Escape.
+
+| Variant  | Where                                | Look                                               |
+| -------- | ------------------------------------ | -------------------------------------------------- |
+| `field`  | A form or dialog                     | `INPUT_CLASS` (`ui/fieldClasses.ts`), `rounded`    |
+| `inline` | A toolbar or header line             | No fill, square, `border-line` only on hover       |
+| `cell`   | A grid cell being edited (a boolean) | Fills the cell, `border-accent` frame, `font-grid` |
+
+The flush rule: a control that fills the height of the strip it sits in (an `h-row` toolbar, a
+header line, a chip in a bar, a tag inside a trigger) is square, with no radius, so its edges meet
+the strip's lines. A control standing free in a form or a dialog keeps `rounded`. The extractor,
+Transaction mode, the value panel's format picker, the plan view's Tree / Raw group, the result
+search field and its filter chips, and the Theme trigger's scheme tag follow it.
+
 ## Settings dialog
 
 Plan 013. `⌘,` (Settings… in the macOS app menu, File elsewhere) opens a modal the size of Data
@@ -267,7 +288,7 @@ as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink
   sentences follow in `text-ui`, then a `border-line` footer with when the server was seen, muted,
   and Test Connection….
 
-A font is a `<select>`: Built-in, then installed families from `queryLocalFonts()` in a Monospace
+A font is a `Dropdown`: Built-in, then installed families from `queryLocalFonts()` in a Monospace
 and a Proportional group (monospace first for the editor and grid), and a free-text field when the
 list is unavailable. A size is a number field with its range muted beside it. A refused value
 keeps its text, gains `border-danger` and an inline `text-danger` message, and is not saved. The
@@ -463,7 +484,7 @@ and accent colours; it adds three tokens and leans on two older ones.
 | ------------------------------ | ---------------------------- | ---------------------- | ------------------ | --------------- | -------------------------------------------- |
 | `colors.gridSelection`         | `--tc-grid-selection`        | `bg-grid-selection`    | `#214283`          | `#c9dafc`       | Selected cells; stronger than `bg-selection` |
 | `colors.gridNull`              | `--tc-grid-null`             | `text-grid-null`       | `#868a91`          | `#6f737a`       | NULL, italic, in cells and the value panel   |
-| `density.valuePanelWidthPx`    | `--tc-value-panel-width`     | `w-value-panel`        | 360 px             | 360 px          | The value panel beside the rows              |
+| `density.valuePanelWidthPx`    | `--tc-value-panel-width`     | `w-value-panel`        | 360 px             | 360 px          | The value panel's width until it is dragged  |
 | `colors.gridStripe`            | `--tc-grid-stripe`           | `bg-grid-stripe`       | `#26282b`          | `#f5f6f8`       | Every second row                             |
 | `density.gridColumnMaxWidthPx` | `--tc-grid-column-max-width` | `--spacing-column-max` | 320 px             | 320 px          | The cap on a column's automatic width        |
 
@@ -482,9 +503,12 @@ the database's text (decision 032).
 
 The toolbar is `h-row` on `bg-panel`: icon-only buttons (`ArrowDown` Fetch Next Page,
 `ArrowLineDown` Fetch All, `ArrowClockwise` Rerun, `Stop` Cancel Fetch), the state label in
-`text-ink-muted`, a spinner while fetching, then on the right the extractor `<select>`,
-`CopySimple` Copy, `Export` Export Data… and `SidebarSimple` Value Panel, `bg-selection` while
-open. A disabled button explains itself in its tooltip. The closed-connection banner is an `h-row`
+`text-ink-muted`, a spinner while fetching, then on the right the extractor (an `inline`
+`Dropdown`), `CopySimple` Copy, `Export` Export Data… and `SidebarSimple` Value Panel,
+`bg-selection` while open. A disabled button explains itself in its tooltip. The value panel sits
+behind the vertical `Handle` labelled Value panel: dragging it sets the panel's width, at least
+200 px and at most 70 % of the area, the rows keeping 240 px, and the width outlives a relaunch;
+until the first drag the panel is the density's 360 px. The closed-connection banner is an `h-row`
 strip in `bg-panel`, `text-ink-muted` italics, above the rows.
 
 ## Table data editor
@@ -612,12 +636,14 @@ aligned in `text-ink-muted tabular-nums`. The session's context menu is the tab 
 Plan 012. A plan tab (`console/PlanView.tsx`) fills the result area. An analysed plan starts with
 a banner: `bg-analysed-banner`, a `border-line` rule under it, a filled `WarningIcon` in
 `text-warning`, then the text in `text-ink`. Under it an `h-row` toolbar on `bg-panel`: a segmented
-Tree / Raw group in a `border-line` frame (the shown view `bg-selection`), icon-only
+Tree / Raw group that fills the strip from its left edge, the strip's own lines above and below and
+a `border-line` divider after it (the flush rule; the shown view `bg-selection`), icon-only
 `ArrowClockwise` Explain Again and `CopySimple` Copy Raw Plan, then the summary (`Planning Time: 1.0 ms ·
 Execution Time: 0.1 ms`) in `text-ink-muted`, truncated.
 
 The tree is a `<table role="treegrid">` on `bg-canvas` in `font-grid text-grid`, rows `h-row`, a
-sticky `bg-panel` header in `text-ink-muted`. The Operation column takes the room left over and
+sticky `bg-panel` header in `text-ink-muted`, painted over the rows and their bars as they scroll
+under it (`z-10`, each `<th>` on `bg-panel`). The Operation column takes the room left over and
 truncates, with the whole text as the tooltip; it indents 16 px per level with the Database pane's
 `CaretDown`/`CaretRight` and shows the target in `text-ink-muted`. The number columns are as narrow
 as their content, right-aligned, empty for a value the database did not give. The Cost cell, or

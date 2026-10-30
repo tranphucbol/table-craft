@@ -1,6 +1,7 @@
 import { useId } from "react";
 import { SECRET_MODES, type ConnectionField, type SecretMode } from "@table-craft/desktop/preload/bridge.js";
-import { Button, FieldRow, INPUT_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { Button, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { secretPlaceholder, type FormDraft } from "@table-craft/desktop/renderer/model/datasourceForm.js";
 
 export const SECRET_MODE_LABEL: Readonly<Record<SecretMode, string>> = {
@@ -40,21 +41,21 @@ export function SecretField({ field, draft, encryption, onChange }: SecretFieldP
           })
         }
       />
-      <select
-        aria-label={`Save ${field.label.toLowerCase()}`}
-        className={INPUT_CLASS}
+      <Dropdown
+        label={`Save ${field.label.toLowerCase()}`}
+        variant="field"
         value={mode}
         title={encryption.available ? undefined : (encryption.reason ?? undefined)}
-        onChange={(event) =>
-          onChange({ secretModes: { ...draft.secretModes, [field.key]: event.target.value as SecretMode } })
-        }
-      >
-        {SECRET_MODES.map((option) => (
-          <option key={option} value={option} disabled={option === "forever" && !encryption.available}>
-            {SECRET_MODE_LABEL[option]}
-          </option>
-        ))}
-      </select>
+        options={SECRET_MODES.map((option) => ({
+          value: option,
+          label: SECRET_MODE_LABEL[option],
+          disabled: option === "forever" && !encryption.available,
+        }))}
+        onChange={(value) => {
+          const chosen = SECRET_MODES.find((option) => option === value);
+          if (chosen !== undefined) onChange({ secretModes: { ...draft.secretModes, [field.key]: chosen } });
+        }}
+      />
       {stored || change.action === "clear" ? (
         <Button
           disabled={change.action === "clear"}
