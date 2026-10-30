@@ -20,6 +20,8 @@ import {
   managedIntentRoute,
 } from "@table-craft/desktop/renderer/keyAdmin/consoleIntents.js";
 import { WATCH_ACTION_IDS } from "@table-craft/desktop/renderer/watch/actions.js";
+import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
+import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { REDIS_PLUGIN, view } from "./datasourceViews.js";
 
 const summary: KeyWatchSummary = {
@@ -76,6 +78,15 @@ describe("managed console intents", () => {
 });
 
 describe("key admin shell integration", () => {
+  it("givenWatchAndServices_whenResolvingRailActions_thenKeepDistinctNamesAndGlyphs", () => {
+    const watch = ALL_ACTIONS.find((action) => action.id === WATCH_ACTION_IDS.toggle)!;
+    const services = ALL_ACTIONS.find((action) => action.id === ACTION_IDS.toggleServices)!;
+    expect(watch).toMatchObject({ title: "Watch", icon: "watch" });
+    expect(services).toMatchObject({ title: "Services", icon: "services" });
+    expect(ACTION_ICONS[watch.icon!]).not.toBe(ACTION_ICONS[services.icon!]);
+    expect(ALL_ACTIONS.find((action) => action.id === WATCH_ACTION_IDS.start)?.icon).toBe("watch");
+  });
+
   it("givenLeaseEditorAndTxnActions_whenRegistering_thenEveryIdIsInTheRegistry", () => {
     const ids = new Set(ALL_ACTIONS.map((action) => action.id));
     for (const id of [...Object.values(KEY_LEASE_EDITOR_IDS), ...Object.values(COMMAND_TXN_ACTION_IDS)])
