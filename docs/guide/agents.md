@@ -6,6 +6,8 @@ the [Model Context Protocol](https://modelcontextprotocol.io). It is off until y
 asks every client for a bearer token. **Copy** beside a client puts its configuration, token
 included, on the clipboard; the window never shows the token.
 
+![Turning on the MCP server and copying OpenCode's configuration](../media/agents-setup.gif)
+
 Each data source starts **Off** for agents. **Read only** lets an agent list schemas and tables,
 describe a table, read its DDL, run `SELECT`s, explain and format SQL; its statements run in a
 read-only session, and anything else is refused. **Ask before writes** also lets it propose one
@@ -21,6 +23,10 @@ red can be raised past Read only only on its own page in the Data Sources dialog
 most `mcp.rowCap` rows, and a statement running past `mcp.statementTimeoutSeconds` is stopped,
 by the database too where it can, even if TableCraft cannot reach it; passwords never leave
 TableCraft, and every agent statement is kept in the query history, tagged with the client's name. The app must be running for agents to reach it.
+
+![OpenCode reads freely and asks before it writes](../media/agents-approval.gif)
+
+![The same request from OpenCode in a terminal beside TableCraft](../media/agents-warp.gif)
 
 - **Clients.** The first call from a client you have not met turns the chip amber; open it and
   choose **Allow** or **Block**. Unanswered for a minute, the call is refused. Settings → MCP Server
