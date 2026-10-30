@@ -6,6 +6,7 @@
  *
  * With `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/003` it also saves the SQLite live-test PNGs.
  */
+import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   activeEditorTab,
@@ -26,6 +27,16 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("003");
+const captureCorner = evidenceFor("127");
+
+/** A button in the tab strip's right corner (plan 127). */
+function cornerButton(page: Page, name: string) {
+  return page.getByTestId("tab-strip-corner").getByRole("button", { name, exact: true });
+}
+
+function cornerMenu(page: Page, name: string) {
+  return page.getByRole("menu", { name, exact: true });
+}
 
 /** How far the Database tool window's edge is dragged, in CSS pixels. */
 const RESIZE_DRAG_PX = 120;
@@ -98,6 +109,71 @@ describe.runIf(SMOKE_ENABLED)("shell smoke", () => {
 
       await expect.poll(() => editorTabs(page).count()).toBe(2);
       expect(await activeEditorTab(page).textContent()).toBe("console_1 [scratch]");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenConsole_whenCornerPlusClicked_thenNewConsoleOnSameDatasource",
+    async () => {
+      running = await launchApp();
+      const { page } = running;
+      await waitUntilReady(page);
+
+      await cornerButton(page, "New Console").click();
+
+      await expect.poll(() => editorTabs(page).count()).toBe(2);
+      expect(await activeEditorTab(page).textContent()).toBe("console_1 [scratch]");
+      await captureCorner(page, "corner");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenThreeTabs_whenOpenTabsPicked_thenThatTabActivates",
+    async () => {
+      running = await launchApp();
+      const { page } = running;
+      await waitUntilReady(page);
+      await cornerButton(page, "New Console").click();
+      await cornerButton(page, "New Console").click();
+      await expect.poll(() => editorTabs(page).count()).toBe(3);
+
+      await cornerButton(page, "Open Tabs").click();
+      const rows = cornerMenu(page, "Open Tabs").getByRole("menuitemradio");
+      expect(await rows.allTextContents()).toEqual(["console [scratch]", "console_1 [scratch]", "console_2 [scratch]"]);
+      expect(await rows.nth(2).getAttribute("aria-checked")).toBe("true");
+      await captureCorner(page, "open-tabs");
+      await rows.first().click();
+
+      await expect.poll(() => activeEditorTab(page).textContent()).toBe("console [scratch]");
+      expect(await cornerMenu(page, "Open Tabs").count()).toBe(0);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenTwoTabs_whenTabActionsCloseOthers_thenOneTabLeft",
+    async () => {
+      running = await launchApp();
+      const { page } = running;
+      await waitUntilReady(page);
+      await cornerButton(page, "New Console").click();
+      await expect.poll(() => editorTabs(page).count()).toBe(2);
+
+      await cornerButton(page, "Tab Actions").click();
+      const items = cornerMenu(page, "Tab Actions").getByRole("menuitem");
+      expect(await items.allTextContents()).toEqual([
+        "Close Other Tabs",
+        "Close All Tabs",
+        "Reopen Closed Tab",
+        "Split Right",
+        "Unsplit",
+      ]);
+      await captureCorner(page, "tab-actions");
+      await items.filter({ hasText: "Close Other Tabs" }).click();
+
+      await expect.poll(() => editorTabs(page).allTextContents()).toEqual(["console_1 [scratch]"]);
     },
     SCENARIO_TIMEOUT_MS,
   );

@@ -80,7 +80,10 @@ export type ActionIcon =
   | "quickFix"
   | "transpose"
   | "saveFile"
-  | "loadFile";
+  | "loadFile"
+  | "reformat"
+  | "more"
+  | "tabs";
 
 export interface Action<A = void> {
   readonly id: string;
