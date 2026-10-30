@@ -235,3 +235,6 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   more: DotsThreeVertical,
   tabs: CaretDown,
 };
+
+/** Glyphs drawn solid even in compact buttons: the outline triangle and square read sharp at icon size (plan 127). */
+export const SOLID_ACTION_ICONS: ReadonlySet<ActionIcon> = new Set(["run", "runAll", "cancel"]);
