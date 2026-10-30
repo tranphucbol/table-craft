@@ -8,6 +8,11 @@ import {
   MAX_CONNECTION_ENDPOINTS,
 } from "@table-craft/desktop/renderer/model/datasourceConnection.js";
 import type { FormDraft } from "@table-craft/desktop/renderer/model/datasourceForm.js";
+import { InfoHint } from "@table-craft/desktop/renderer/ui/InfoHint.js";
+
+const ENDPOINTS_HINT =
+  "Type host:port or paste a full http:// or https:// URL; a comma-separated list fills several rows. Every endpoint uses the TLS setting under SSL, so all URLs must share one scheme. Test Connection checks that the endpoints belong to one cluster and tries each one. TableCraft connects only to the endpoints listed here.";
+const TLS_HINT = "Encrypts the connection to every endpoint above.";
 
 interface Props {
   readonly draft: FormDraft;
@@ -78,22 +83,19 @@ export function EndpointConnection({ draft, plugin, onChange, endpointTests }: P
           <EndpointProbe result={endpointTests?.[index]} number={index + 1} />
         </FieldRow>
       ))}
-      <div className="col-start-2">
+      <div className="col-start-2 flex items-center gap-cell">
         <Button disabled={rows.length >= MAX_CONNECTION_ENDPOINTS} onClick={() => update([...rows, ""])}>
           + Add endpoint
         </Button>
+        <InfoHint label="About endpoints">{ENDPOINTS_HINT}</InfoHint>
       </div>
-      <p className="col-start-2 text-ink-muted">
-        Paste host:port or a full HTTP(S) URL. All endpoints share the TLS mode below; changing a URL scheme changes it
-        for the whole list. Mixed URL schemes are refused. Test Connection checks the pool's cluster identity and each
-        endpoint through the same SSH/TLS settings. Only configured targets are dialed.
-      </p>
     </>
   );
 }
 
 /** TLS switch retains verification choices rather than downgrading to unverified encryption. */
 export function EndpointTls({ draft, plugin, onChange }: Props) {
+  const tlsId = useId();
   const skipId = useId();
   const mode = plugin.tls?.mode;
   if (mode === undefined) return null;
@@ -101,18 +103,16 @@ export function EndpointTls({ draft, plugin, onChange }: Props) {
     typeof draft.values[mode] === "string" && draft.values[mode] !== "disable" && draft.values[mode] !== "";
   return (
     <>
-      <FieldRow label="Use TLS">
-        <label className="flex items-center gap-cell">
-          <input
-            aria-label="Use TLS"
-            type="checkbox"
-            checked={enabled}
-            onChange={(event) =>
-              onChange({ values: { ...draft.values, [mode]: event.target.checked ? "verify-full" : "disable" } })
-            }
-          />
-          Encrypt every configured endpoint
-        </label>
+      <FieldRow label="Use TLS" htmlFor={tlsId} hint={TLS_HINT}>
+        <input
+          id={tlsId}
+          aria-label="Use TLS"
+          type="checkbox"
+          checked={enabled}
+          onChange={(event) =>
+            onChange({ values: { ...draft.values, [mode]: event.target.checked ? "verify-full" : "disable" } })
+          }
+        />
       </FieldRow>
       {enabled ? (
         <FieldRow label="Skip certificate verification" htmlFor={skipId}>
@@ -132,7 +132,7 @@ export function EndpointTls({ draft, plugin, onChange }: Props) {
       {draft.values[mode] === "require" || draft.values[mode] === "verify-ca" ? (
         <p role="alert" className="col-start-2 text-danger">
           {draft.values[mode] === "require"
-            ? "Certificate verification is skipped. Only for test clusters."
+            ? "Certificate verification is off, so the server's identity is not checked."
             : "Certificate hostname verification is skipped. Use Verify full to verify endpoint identity."}
         </p>
       ) : null}

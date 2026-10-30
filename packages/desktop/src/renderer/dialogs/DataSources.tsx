@@ -65,17 +65,22 @@ import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const NEW_KEY_PREFIX = "new-";
-const KEEPALIVE_HINT = "Seconds idle before TCP keepalive probes start; 0 turns them off. Blank is 30.";
+const KEEPALIVE_HINT =
+  "Seconds the connection may sit idle before TCP keepalive checks start. 0 turns them off. Blank is 30.";
 const TIMEOUT_HINT =
-  "A console statement running longer is cancelled; 0 waits. Blank follows Settings → Editor → Running.";
+  "A console statement that runs longer is cancelled. 0 waits forever. Blank follows Settings → Editor → Running.";
 const NO_SERVER_TIMEOUT_HINT = "This data source's plugin cannot ask the database to stop statements.";
 const URL_SEPARATOR = "://";
 const READ_ONLY_HINT = "A guard against accidents, not a security boundary: use a read-only database user for that.";
 const AGENT_ACCESS_OPTIONS = AGENT_ACCESS_LEVELS.map((value) => ({ value, label: AGENT_ACCESS_LABELS[value] }));
-const AGENT_ACCESS_NOTE = "What MCP clients may do while Settings → MCP Server is on";
 const AGENT_READ_ONLY_NOTE = "Read only while Read-only is on";
 const AGENT_ACCESS_HINT =
-  "Ask before reads shows each query that returns rows in the MCP status chip for you to allow or deny, and refuses writes. Ask before writes does the same for each write. Agents never see passwords.";
+  "What MCP clients may do here while Settings → MCP Server is on. Ask before reads shows each query that returns rows in the MCP status chip for you to allow or deny, and refuses writes. Ask before writes does the same for each write. Agents never see passwords.";
+const CLIENT_CN_NOTE = "Signs in with the client certificate set under SSL.";
+const CLIENT_CN_HINT =
+  "etcd takes the user name from the certificate's CN, so no user name or password is needed. TableCraft does not read the certificate, so it cannot show the CN here.";
+const AUTO_AUTH_HINT =
+  "Signs in with the user name and password when you fill them in. Pick a mode to require a password or a client certificate.";
 
 type TestState =
   | { readonly kind: "testing" }
@@ -149,13 +154,13 @@ interface FieldProps {
   readonly plugin?: PluginInfo;
 }
 
-function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
+function PlainField({ field, draft, onChange, onPasteUrl, hint }: FieldProps & { readonly hint?: string | null }) {
   const id = useId();
   const value = draft.values[field.key];
   const set = (next: string | boolean) => onChange({ values: { ...draft.values, [field.key]: next } });
   if (field.kind === "checkbox") {
     return (
-      <FieldRow label={field.label} htmlFor={id}>
+      <FieldRow label={field.label} htmlFor={id} hint={hint}>
         <input id={id} type="checkbox" checked={value === true} onChange={(event) => set(event.target.checked)} />
       </FieldRow>
     );
@@ -163,7 +168,7 @@ function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
   const text = typeof value === "string" ? value : "";
   if (field.kind === "select") {
     return (
-      <FieldRow label={field.label} htmlFor={id}>
+      <FieldRow label={field.label} htmlFor={id} hint={hint}>
         <Dropdown
           id={id}
           label={field.label}
@@ -176,7 +181,7 @@ function PlainField({ field, draft, onChange, onPasteUrl }: FieldProps) {
     );
   }
   return (
-    <FieldRow label={field.label} htmlFor={id}>
+    <FieldRow label={field.label} htmlFor={id} hint={hint}>
       <TextInput
         id={id}
         className={field.kind === "number" ? "w-24" : "flex-1"}
@@ -219,11 +224,13 @@ function Fields(props: Omit<FieldProps, "field"> & { readonly fields: readonly C
 }
 
 function ConnectionPlainField(props: FieldProps) {
-  const help = offersEndpointConnection(props.plugin) ? connectionFieldHelp(props.field.key) : null;
+  if (!offersEndpointConnection(props.plugin)) return <PlainField {...props} />;
+  if (props.field.key !== "authMode") return <PlainField {...props} hint={connectionFieldHelp(props.field.key)} />;
+  const mode = props.draft.values.authMode;
   return (
     <>
-      <PlainField {...props} />
-      {help === null ? null : <p className="col-start-2 text-ink-muted">{help}</p>}
+      <PlainField {...props} hint={mode === "auto" ? AUTO_AUTH_HINT : mode === "clientCN" ? CLIENT_CN_HINT : null} />
+      {mode === "clientCN" ? <p className="col-start-2 text-ink-muted">{CLIENT_CN_NOTE}</p> : null}
     </>
   );
 }
@@ -357,214 +364,197 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
     return true;
   };
   const fieldProps = { draft, encryption, onChange, onPasteUrl, ...(plugin === undefined ? {} : { plugin }) };
+  // Chromium scrolls a fieldset through an anonymous inner box that misses wheel events over the grid
+  // gaps, so a plain div scrolls and the fieldset only lays out and disables.
   return (
-    <fieldset
-      disabled={draft.ephemeral}
-      className="grid min-h-0 grid-cols-[8rem_1fr] content-start items-center gap-x-gap gap-y-1 overflow-y-auto p-gap"
-    >
-      {draft.ephemeral ? (
-        <p className="col-span-2 mb-gap text-ink-muted">
-          From TABLE_CRAFT_DATASOURCE: not saved, and not editable here. Duplicate it to keep a copy.
-        </p>
-      ) : null}
-      <FieldRow label="Name" htmlFor={nameId}>
-        <TextInput
-          id={nameId}
-          className="flex-1"
-          value={draft.name}
-          onChange={(event) => onChange({ name: event.target.value })}
-        />
-      </FieldRow>
-      <FieldRow label="Folder" htmlFor={folderId}>
-        <TextInput
-          id={folderId}
-          className="flex-1"
-          list={foldersId}
-          placeholder="Docker/Main"
-          value={draft.folder}
-          onChange={(event) => onChange({ folder: event.target.value })}
-        />
-        <datalist id={foldersId}>
-          {folders.map((folder) => (
-            <option key={folder} value={folder} />
-          ))}
-        </datalist>
-      </FieldRow>
-      <FieldRow label="Comment" htmlFor={commentId}>
-        <TextInput
-          id={commentId}
-          className="flex-1"
-          value={draft.comment}
-          onChange={(event) => onChange({ comment: event.target.value })}
-        />
-      </FieldRow>
-      <SectionTitle>General</SectionTitle>
-      {spec === null ? null : (
-        <>
-          <FieldRow label="URL" htmlFor={urlId}>
-            <TextInput
-              id={urlId}
-              className="flex-1"
-              placeholder={`Paste a ${spec.schemes[0] ?? ""}${spec.form === "server" ? URL_SEPARATOR : ":"} URL to fill the fields`}
-              value={draft.url}
-              onChange={(event) => onChange({ url: event.target.value, urlNote: null })}
-              onPaste={(event) => {
-                event.preventDefault();
-                onUrl(event.clipboardData.getData("text"));
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && draft.url.trim() !== "") onUrl(draft.url);
-              }}
-            />
-          </FieldRow>
-          <UrlNoteLine draft={draft} fields={fields} />
-        </>
-      )}
-      {endpointConnection && plugin !== undefined ? (
-        <EndpointConnection
-          draft={draft}
-          plugin={plugin}
-          onChange={onChange}
-          {...(endpointTests === undefined ? {} : { endpointTests })}
-        />
-      ) : null}
-      <Fields fields={general} {...fieldProps} />
-      {endpointConnection && draft.values.authMode === "clientCN" ? (
-        <p className="col-start-2 text-ink-muted">
-          Authentication uses the client certificate's CN, not a username or password. CN is not available here;
-          TableCraft has not read the certificate identity. Configure the client certificate and key under SSL.
-        </p>
-      ) : null}
-      {endpointConnection && draft.values.authMode === "auto" ? (
-        <p className="col-start-2 text-ink-muted">
-          Automatic keeps the existing credential behavior. Choose an explicit mode to require password or
-          client-certificate authentication.
-        </p>
-      ) : null}
-      {draft.ephemeral || encryption.available ? null : (
-        <p className="col-span-2 text-ink-muted">Forever is unavailable: {encryption.reason}</p>
-      )}
-      {tunnel || tlsFields.length > 0 ? (
-        <>
-          <SectionTitle>SSH/SSL</SectionTitle>
-          {tunnel ? <SshSection draft={draft} encryption={encryption} onChange={onChange} /> : null}
-          {tlsFields.length > 0 ? <SslRows fields={sslFields} plugin={plugin} {...fieldProps} /> : null}
-        </>
-      ) : null}
-      {advanced.length === 0 && !keepAlive && !timeout ? null : (
-        <>
-          <SectionTitle>Advanced</SectionTitle>
-          <Fields fields={advanced} {...fieldProps} />
-          {keepAlive ? (
-            <FieldRow label="Keepalive (s)" htmlFor={keepAliveId}>
-              <TextInput
-                id={keepAliveId}
-                className="w-24"
-                inputMode="numeric"
-                placeholder="30"
-                title={KEEPALIVE_HINT}
-                value={draft.keepAliveSeconds}
-                onChange={(event) => onChange({ keepAliveSeconds: event.target.value })}
-              />
-              <span className="truncate text-ink-muted">0 turns it off</span>
-            </FieldRow>
-          ) : null}
-          {timeout ? (
-            <FieldRow label="Statement timeout (s)" htmlFor={timeoutId}>
-              <TextInput
-                id={timeoutId}
-                className="w-24"
-                inputMode="numeric"
-                placeholder={String(appTimeout)}
-                title={TIMEOUT_HINT}
-                value={draft.statementTimeoutSeconds}
-                onChange={(event) => onChange({ statementTimeoutSeconds: event.target.value })}
-              />
-              <span className="truncate text-ink-muted">
-                {draft.statementTimeoutSeconds.trim() === "" ? "From Settings → Editor → Running; " : ""}0 waits
-              </span>
-            </FieldRow>
-          ) : null}
-          {timeout ? (
-            <FieldRow label="">
-              <label
-                className={cn("flex min-w-0 items-center gap-cell", !enforceable && "text-ink-muted")}
-                title={enforceable ? serverTimeoutText(serverTimeout) : NO_SERVER_TIMEOUT_HINT}
-              >
-                <input
-                  type="checkbox"
-                  data-testid="enforce-timeout-on-server"
-                  disabled={!enforceable}
-                  checked={enforceable && draft.enforceTimeoutOnServer}
-                  onChange={(event) => onChange({ enforceTimeoutOnServer: event.target.checked })}
-                />
-                <span>Also have the database stop it</span>
-              </label>
-            </FieldRow>
-          ) : null}
-          {timeout && enforceable ? (
-            <p data-testid="server-timeout-hint" className="col-start-2 text-ink-muted">
-              {serverTimeoutText(serverTimeout)}
-            </p>
-          ) : null}
-        </>
-      )}
-      <SectionTitle>Options</SectionTitle>
-      <FieldRow label="Read-only">
-        <label className="flex items-center gap-cell" title={READ_ONLY_HINT}>
-          <input
-            type="checkbox"
-            checked={draft.readOnly}
-            onChange={(event) => onChange({ readOnly: event.target.checked })}
+    <div data-testid="datasource-form" className="min-h-0 flex-1 overflow-y-auto p-gap">
+      <fieldset
+        disabled={draft.ephemeral}
+        className="grid min-w-0 grid-cols-[8rem_1fr] content-start items-center gap-x-gap gap-y-1"
+      >
+        {draft.ephemeral ? (
+          <p className="col-span-2 mb-gap text-ink-muted">
+            From TABLE_CRAFT_DATASOURCE: not saved, and not editable here. Duplicate it to keep a copy.
+          </p>
+        ) : null}
+        <FieldRow label="Name" htmlFor={nameId}>
+          <TextInput
+            id={nameId}
+            className="flex-1"
+            value={draft.name}
+            onChange={(event) => onChange({ name: event.target.value })}
           />
-          <ReadOnlyIcon aria-hidden className="size-icon text-ink-muted" />
-          <span className="text-ink-muted">Refuse writes in this data source's sessions</span>
-        </label>
-      </FieldRow>
-      <FieldRow label="AI agent access">
-        <Select
-          label="AI agent access"
-          testId="datasource-agent-access"
-          value={draft.agentAccess}
-          options={AGENT_ACCESS_OPTIONS}
-          onChange={(value) => {
-            const agentAccess = AGENT_ACCESS_LEVELS.find((level) => level === value);
-            if (agentAccess !== undefined) onChange({ agentAccess });
-          }}
-        />
-        <span className="truncate text-ink-muted" title={AGENT_ACCESS_HINT}>
-          {draft.readOnly && draft.agentAccess === "ask" ? AGENT_READ_ONLY_NOTE : AGENT_ACCESS_NOTE}
-        </span>
-      </FieldRow>
-      <FieldRow label="Colour">
-        <div role="radiogroup" aria-label="Colour" className="flex items-center gap-1">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={draft.color === null}
-            aria-label="No colour"
-            className={cn(
-              "size-row rounded border border-line text-ink-muted",
-              draft.color === null && "outline-2 outline-accent",
-            )}
-            onClick={() => onChange({ color: null })}
-          >
-            –
-          </button>
-          {DATASOURCE_COLORS.map((color) => (
+        </FieldRow>
+        <FieldRow label="Folder" htmlFor={folderId}>
+          <TextInput
+            id={folderId}
+            className="flex-1"
+            list={foldersId}
+            placeholder="Docker/Main"
+            value={draft.folder}
+            onChange={(event) => onChange({ folder: event.target.value })}
+          />
+          <datalist id={foldersId}>
+            {folders.map((folder) => (
+              <option key={folder} value={folder} />
+            ))}
+          </datalist>
+        </FieldRow>
+        <FieldRow label="Comment" htmlFor={commentId}>
+          <TextInput
+            id={commentId}
+            className="flex-1"
+            value={draft.comment}
+            onChange={(event) => onChange({ comment: event.target.value })}
+          />
+        </FieldRow>
+        <SectionTitle>General</SectionTitle>
+        {spec === null ? null : (
+          <>
+            <FieldRow label="URL" htmlFor={urlId}>
+              <TextInput
+                id={urlId}
+                className="flex-1"
+                placeholder={`Paste a ${spec.schemes[0] ?? ""}${spec.form === "server" ? URL_SEPARATOR : ":"} URL to fill the fields`}
+                value={draft.url}
+                onChange={(event) => onChange({ url: event.target.value, urlNote: null })}
+                onPaste={(event) => {
+                  event.preventDefault();
+                  onUrl(event.clipboardData.getData("text"));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && draft.url.trim() !== "") onUrl(draft.url);
+                }}
+              />
+            </FieldRow>
+            <UrlNoteLine draft={draft} fields={fields} />
+          </>
+        )}
+        {endpointConnection && plugin !== undefined ? (
+          <EndpointConnection
+            draft={draft}
+            plugin={plugin}
+            onChange={onChange}
+            {...(endpointTests === undefined ? {} : { endpointTests })}
+          />
+        ) : null}
+        <Fields fields={general} {...fieldProps} />
+        {draft.ephemeral || encryption.available ? null : (
+          <p className="col-span-2 text-ink-muted">Forever is unavailable: {encryption.reason}</p>
+        )}
+        {tunnel || tlsFields.length > 0 ? (
+          <>
+            <SectionTitle>SSH/SSL</SectionTitle>
+            {tunnel ? <SshSection draft={draft} encryption={encryption} onChange={onChange} /> : null}
+            {tlsFields.length > 0 ? <SslRows fields={sslFields} plugin={plugin} {...fieldProps} /> : null}
+          </>
+        ) : null}
+        {advanced.length === 0 && !keepAlive && !timeout ? null : (
+          <>
+            <SectionTitle>Advanced</SectionTitle>
+            <Fields fields={advanced} {...fieldProps} />
+            {keepAlive ? (
+              <FieldRow label="Keepalive (s)" htmlFor={keepAliveId} hint={KEEPALIVE_HINT}>
+                <TextInput
+                  id={keepAliveId}
+                  className="w-24"
+                  inputMode="numeric"
+                  placeholder="30"
+                  value={draft.keepAliveSeconds}
+                  onChange={(event) => onChange({ keepAliveSeconds: event.target.value })}
+                />
+              </FieldRow>
+            ) : null}
+            {timeout ? (
+              <FieldRow label="Statement timeout (s)" htmlFor={timeoutId} hint={TIMEOUT_HINT}>
+                <TextInput
+                  id={timeoutId}
+                  className="w-24"
+                  inputMode="numeric"
+                  placeholder={String(appTimeout)}
+                  value={draft.statementTimeoutSeconds}
+                  onChange={(event) => onChange({ statementTimeoutSeconds: event.target.value })}
+                />
+              </FieldRow>
+            ) : null}
+            {timeout ? (
+              <FieldRow
+                label=""
+                hint={enforceable ? serverTimeoutText(serverTimeout) : NO_SERVER_TIMEOUT_HINT}
+                hintLabel="About having the database stop it"
+                hintTestId="server-timeout-hint"
+              >
+                <label className={cn("flex min-w-0 items-center gap-cell", !enforceable && "text-ink-muted")}>
+                  <input
+                    type="checkbox"
+                    data-testid="enforce-timeout-on-server"
+                    disabled={!enforceable}
+                    checked={enforceable && draft.enforceTimeoutOnServer}
+                    onChange={(event) => onChange({ enforceTimeoutOnServer: event.target.checked })}
+                  />
+                  <span>Also have the database stop it</span>
+                </label>
+              </FieldRow>
+            ) : null}
+          </>
+        )}
+        <SectionTitle>Options</SectionTitle>
+        <FieldRow label="Read-only" hint={READ_ONLY_HINT}>
+          <label className="flex items-center gap-cell">
+            <input
+              type="checkbox"
+              checked={draft.readOnly}
+              onChange={(event) => onChange({ readOnly: event.target.checked })}
+            />
+            <ReadOnlyIcon aria-hidden className="size-icon text-ink-muted" />
+            <span className="text-ink-muted">Refuse writes in this data source's sessions</span>
+          </label>
+        </FieldRow>
+        <FieldRow label="AI agent access" hint={AGENT_ACCESS_HINT}>
+          <Select
+            label="AI agent access"
+            testId="datasource-agent-access"
+            value={draft.agentAccess}
+            options={AGENT_ACCESS_OPTIONS}
+            onChange={(value) => {
+              const agentAccess = AGENT_ACCESS_LEVELS.find((level) => level === value);
+              if (agentAccess !== undefined) onChange({ agentAccess });
+            }}
+          />
+          {draft.readOnly && draft.agentAccess === "ask" ? (
+            <span className="truncate text-ink-muted">{AGENT_READ_ONLY_NOTE}</span>
+          ) : null}
+        </FieldRow>
+        <FieldRow label="Colour">
+          <div role="radiogroup" aria-label="Colour" className="flex items-center gap-1">
             <button
-              key={color}
               type="button"
               role="radio"
-              aria-checked={draft.color === color}
-              aria-label={color}
-              className={cn("size-row rounded", TINT_SWATCH[color], draft.color === color && "outline-2 outline-ink")}
-              onClick={() => onChange({ color })}
-            />
-          ))}
-        </div>
-      </FieldRow>
-    </fieldset>
+              aria-checked={draft.color === null}
+              aria-label="No colour"
+              className={cn(
+                "size-row rounded border border-line text-ink-muted",
+                draft.color === null && "outline-2 outline-accent",
+              )}
+              onClick={() => onChange({ color: null })}
+            >
+              –
+            </button>
+            {DATASOURCE_COLORS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                role="radio"
+                aria-checked={draft.color === color}
+                aria-label={color}
+                className={cn("size-row rounded", TINT_SWATCH[color], draft.color === color && "outline-2 outline-ink")}
+                onClick={() => onChange({ color })}
+              />
+            ))}
+          </div>
+        </FieldRow>
+      </fieldset>
+    </div>
   );
 }
 
