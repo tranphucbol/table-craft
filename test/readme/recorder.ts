@@ -12,9 +12,9 @@ import type { CDPSession, ElectronApplication, Page } from "playwright-core";
 
 export const GIF_WIDTH_PX = 1100;
 export const GIF_FPS = 12;
-/** Decision 22 of plan 016: one GIF at most 2 MB, all of them together at most 18 MB. */
+/** Decision 22 of plan 016: one GIF at most 2 MB; plan 128 raised the total from 18 MB to 24 MB. */
 export const GIF_MAX_BYTES = 2 * 1024 * 1024;
-export const GIFS_MAX_BYTES = 18 * 1024 * 1024;
+export const GIFS_MAX_BYTES = 24 * 1024 * 1024;
 
 export const MEDIA_DIRECTORY = resolve(import.meta.dirname, "../../docs/media");
 const FRAMES_PREFIX = "table-craft-readme-frames-";

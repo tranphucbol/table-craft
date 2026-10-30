@@ -7,6 +7,11 @@ surface they sit on (High contrast meets AAA for text), and the six data source 
 from each other. The palettes and their licences are listed in
 [`packages/desktop/scripts/palettes/NOTICE`](../../packages/desktop/scripts/palettes/NOTICE).
 
+Choose one in Settings → Appearance → **Theme**: type to filter the list, and the arrow keys preview
+each theme on the whole window before you pick it with `Enter`; `Escape` puts the previous one back.
+
+![Themes](../media/themes.gif)
+
 | Theme                     | Id                          | Scheme | Source                             | Licence    |
 | :------------------------ | :-------------------------- | :----- | :--------------------------------- | :--------- |
 | Dark                      | `dark`                      | Dark   | TableCraft                         | —          |

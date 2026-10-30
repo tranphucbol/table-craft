@@ -1,0 +1,11 @@
+# The README's etcd demo (plan 128), loaded by loadShopEtcd into a disposable etcd: one `key value`
+# per line, the value running to the end of the line. A key listed again is written again, so its
+# History lists each line as a version. A `.json` value is stored pretty-printed.
+/shop/config/db.json {"host":"db.shop.internal","port":5432,"pool":{"min":2,"max":10}}
+/shop/config/db.json {"host":"db.shop.internal","port":5432,"pool":{"min":4,"max":20}}
+/shop/config/db.json {"host":"db.shop.internal","port":6432,"pool":{"min":4,"max":40},"replica":"db-ro.shop.internal"}
+/shop/config/currency EUR
+/shop/config/log-level info
+/shop/feature/new-checkout on
+/shop/feature/gift-cards off
+/shop/feature/dark-mode on

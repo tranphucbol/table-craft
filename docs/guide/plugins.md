@@ -35,6 +35,8 @@ etcd (3.5 and later), about 400 KB, as
   from File…** in Settings → Plugins; TableCraft asks before installing any file.
 - Behind a corporate npm mirror, set its address in Settings → Plugins (`plugins.registryUrl`).
 
+![Plugins on demand](../media/plugins.gif)
+
 TableCraft installs the newest release its plugin API accepts (a beta too, with **Get beta
 versions** checked in Settings → Advanced), refuses a download whose sha512
 does not match the registry's, and keeps each version in `managed-plugins/` in the profile folder

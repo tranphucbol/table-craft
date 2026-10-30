@@ -50,6 +50,8 @@ inserts no text. `${key}` is editable text too. Inserting a snippet never runs i
 then run the SQL or command as usual. Editing templates and expanding them need no live database
 connection. A command language without a recognized highlighter uses plain text, not SQL keywords.
 
+![Snippets](../media/snippets.gif)
+
 Snippets are saved in `snippets.json` in your [profile folder](data-and-privacy.md), separately
 from settings. Their bodies are plain text; do not put passwords or other secrets in them.
 Older SQL-only snippets keep their SQL/dialect restrictions when loaded; reading does not rewrite

@@ -45,7 +45,8 @@ what to do when a run fails.
   packaged suite against it on the host
 - `bun run readme:media` - record the GIFs of the README and the guide into `docs/media/` (decision 036): builds the app,
   reloads the demo `shop` database in the `test:db:postgres` Postgres and the demo keys in db 3 of
-  the `test:db:redis` Redis, and drives one scene per GIF. Needs Docker, ffmpeg and a display, and
+  the `test:db:redis` Redis, starts a disposable etcd with the `/shop/` keys of
+  `test/readme/shop.etcd` for `etcd.gif`, and drives one scene per GIF. Needs Docker, ffmpeg and a display, and
   `agents-approval` the `opencode` CLI signed in to a model (`README_OPENCODE_MODEL`, default
   `anthropic/claude-sonnet-5-5`), `agents-warp` that and Warp on macOS, Screen Recording allowed for
   the terminal; `README_MEDIA=explain,grid` re-records only those. Re-record after a UI change a GIF shows
