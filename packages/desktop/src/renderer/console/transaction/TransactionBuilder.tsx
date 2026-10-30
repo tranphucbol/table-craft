@@ -9,6 +9,7 @@ import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { COMMAND_TXN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { useCommandTxn } from "./store.js";
+import { BUILDER_FIELD as FIELD, BuilderSelect } from "./BuilderSelect.js";
 import {
   byteEncoding,
   COMPARE_TARGETS,
@@ -21,8 +22,6 @@ import {
   newOperation,
 } from "./model.js";
 
-const FIELD =
-  "min-w-0 rounded border border-line bg-canvas px-cell py-1 text-ink outline-none focus:border-accent disabled:opacity-50";
 const BUTTON = "rounded px-cell py-1 text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40";
 
 function BytesInput({
@@ -37,19 +36,18 @@ function BytesInput({
   return (
     <label className="flex min-w-0 flex-1 items-center gap-1">
       <span className="sr-only">{label}</span>
-      <select
+      <BuilderSelect
         aria-label={`${label} encoding`}
         title="Text needs valid UTF-8 bytes; other bytes stay in Hex."
-        className={FIELD}
         value={value.hex === null ? "text" : "hex"}
         onChange={(event) => change(byteEncoding(value, event.target.value === "hex" ? "hex" : "text"))}
       >
         <option value="text">Text</option>
         <option value="hex">Hex</option>
-      </select>
+      </BuilderSelect>
       <input
         aria-label={label}
-        className={`${FIELD} w-full font-editor`}
+        className={`${FIELD} flex-1 font-editor`}
         value={value.hex ?? value.text}
         placeholder={label}
         onChange={(event) =>
@@ -63,10 +61,9 @@ function BytesInput({
 function RangeInput({ range, change }: { readonly range: KeyRange; readonly change: (range: KeyRange) => void }) {
   return (
     <div className="flex flex-wrap gap-1">
-      <select
+      <BuilderSelect
         aria-label="Key range"
         value={range.kind}
-        className={FIELD}
         onChange={(event) => {
           const kind = event.target.value;
           change(
@@ -84,7 +81,7 @@ function RangeInput({ range, change }: { readonly range: KeyRange; readonly chan
         <option value="prefix">Prefix</option>
         <option value="range">Range</option>
         <option value="all">All keys</option>
-      </select>
+      </BuilderSelect>
       {range.kind === "key" ? (
         <BytesInput label="Key" value={range.key} change={(key) => change({ ...range, key })} />
       ) : null}
@@ -144,9 +141,8 @@ function CompareRow({
     <div className="space-y-1">
       <RangeInput range={value.range} change={(range) => change({ ...value, range })} />
       <div className="flex flex-wrap gap-1">
-        <select
+        <BuilderSelect
           aria-label="Compare target"
-          className={FIELD}
           value={value.target}
           onChange={(event) => {
             const target = COMPARE_TARGETS.find((item) => item.value === event.target.value)?.value;
@@ -158,10 +154,9 @@ function CompareRow({
               {target.label}
             </option>
           ))}
-        </select>
-        <select
+        </BuilderSelect>
+        <BuilderSelect
           aria-label="Compare operator"
-          className={FIELD}
           value={value.operator}
           onChange={(event) => {
             const operator = COMPARE_OPERATORS.find((item) => item === event.target.value);
@@ -171,7 +166,7 @@ function CompareRow({
           {COMPARE_OPERATORS.map((operator) => (
             <option key={operator}>{operator}</option>
           ))}
-        </select>
+        </BuilderSelect>
         {typeof value.operand === "string" ? (
           <input
             aria-label="Decimal comparison value"
@@ -202,9 +197,8 @@ function OperationRow({
 }) {
   return (
     <div className="space-y-1">
-      <select
+      <BuilderSelect
         aria-label="Operation"
-        className={FIELD}
         value={operation.kind}
         onChange={(event) => {
           const kind = event.target.value;
@@ -217,7 +211,7 @@ function OperationRow({
         <option value="txn" disabled={depth >= MAX_TRANSACTION_DEPTH}>
           Nested Txn
         </option>
-      </select>
+      </BuilderSelect>
       {operation.kind === "txn" ? (
         <TransactionRows
           value={operation.transaction}
@@ -230,9 +224,8 @@ function OperationRow({
           <BytesInput label="Value" value={operation.value} change={(value) => change({ ...operation, value })} />
           <label className="flex flex-wrap items-center gap-1">
             Lease
-            <select
+            <BuilderSelect
               aria-label="Put lease"
-              className={FIELD}
               value={operation.lease.kind}
               onChange={(event) =>
                 change({
@@ -249,7 +242,7 @@ function OperationRow({
               <option value="detach">No lease</option>
               <option value="preserve">Keep current</option>
               <option value="attach">Attach ID</option>
-            </select>
+            </BuilderSelect>
             {operation.lease.kind === "attach" ? (
               <input
                 aria-label="Lease ID (decimal)"

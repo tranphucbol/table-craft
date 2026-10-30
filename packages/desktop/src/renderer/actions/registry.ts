@@ -28,6 +28,7 @@ export type ActionIcon =
   | "close"
   | "database"
   | "services"
+  | "watch"
   | "server"
   | "search"
   | "add"

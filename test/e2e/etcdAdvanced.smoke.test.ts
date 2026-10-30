@@ -36,6 +36,83 @@ const CONFIG = { ...ETCD_CONFIG, ...ETCD_ROOT_USER, namespace: PREFIX };
 const SOURCE = { id: "advanced-etcd", pluginId: "etcd", config: CONFIG };
 const USER = `tc_live_${randomUUID().replaceAll("-", "")}`;
 const PASSWORD = "isolated-live-password";
+const BUILDER_WIDTHS = [EVIDENCE_WINDOW.width, 1100, 960] as const;
+const GEOMETRY_TOLERANCE = 1;
+
+interface SelectBox {
+  readonly selectedOptions: readonly { readonly textContent: string | null }[];
+  readonly parentElement: { querySelector(selector: string): SelectBox | null };
+  getBoundingClientRect(): { left: number; right: number; top: number; height: number };
+  readonly ownerDocument: {
+    readonly defaultView: {
+      getComputedStyle(element: SelectBox): {
+        font: string;
+        paddingLeft: string;
+        borderLeftWidth: string;
+        appearance: string;
+      };
+    };
+    createElement(tag: "canvas"): {
+      getContext(kind: "2d"): { font: string; measureText(text: string): { width: number } } | null;
+    };
+  };
+}
+
+async function assertBuilderSelects(page: Page): Promise<void> {
+  const builder = page.getByRole("region", { name: "Transaction builder", exact: true });
+  const bounds = await builder.boundingBox();
+  if (bounds === null) throw new Error("Transaction builder must be visible.");
+  const selects = await builder.locator("select").evaluateAll((elements: SelectBox[]) =>
+    elements.map((element) => {
+      const style = element.ownerDocument.defaultView.getComputedStyle(element);
+      const context = element.ownerDocument.createElement("canvas").getContext("2d");
+      const arrow = element.parentElement.querySelector("svg")?.getBoundingClientRect();
+      if (context === null || arrow === undefined) throw new Error("Select text and chevron must be measurable.");
+      context.font = style.font;
+      const box = element.getBoundingClientRect();
+      return {
+        ...box,
+        left: box.left,
+        right: box.right,
+        height: box.height,
+        textEnd:
+          box.left +
+          Number.parseFloat(style.paddingLeft) +
+          Number.parseFloat(style.borderLeftWidth) +
+          context.measureText(element.selectedOptions[0]?.textContent ?? "").width,
+        arrowLeft: arrow.left,
+        centerOffset: Math.abs(box.top + box.height / 2 - (arrow.top + arrow.height / 2)),
+        appearance: style.appearance,
+      };
+    }),
+  );
+  expect(selects.length).toBeGreaterThan(0);
+  for (const select of selects) {
+    expect(select.appearance).toBe("none");
+    expect(select.textEnd).toBeLessThan(select.arrowLeft);
+    expect(select.centerOffset).toBeLessThanOrEqual(GEOMETRY_TOLERANCE);
+    expect(select.left).toBeGreaterThanOrEqual(bounds.x);
+    expect(select.right).toBeLessThanOrEqual(bounds.x + bounds.width);
+    expect(select.height).toBe(selects[0]!.height);
+  }
+}
+
+async function assertDistinctRail(page: Page): Promise<void> {
+  const rail = page.getByRole("navigation", { name: "Left tool window stripe", exact: true });
+  const watch = rail.getByRole("button", { name: "Watch", exact: true });
+  const services = rail.getByRole("button", { name: "Services", exact: true });
+  expect(await watch.count()).toBe(1);
+  expect(await services.count()).toBe(1);
+  expect(await watch.locator("svg").innerHTML()).not.toBe(await services.locator("svg").innerHTML());
+  await watch.focus();
+  await expect.poll(() => page.getByRole("tooltip").textContent()).toContain("Watch");
+  await page.keyboard.press("Escape");
+  await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
+  await services.focus();
+  await expect.poll(() => page.getByRole("tooltip").textContent()).toContain("Services");
+  await page.keyboard.press("Escape");
+  await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
+}
 
 describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () => {
   let running: RunningApp | null = null;
@@ -149,6 +226,8 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       expect(events).toContain("watch/a");
       await findAction(page, "Services");
       await capture(page, "advanced-03-watch-put-delete-private-export");
+      await assertDistinctRail(page);
+      await capture(page, "fix-03-watch-distinct-rail");
       await watch.getByRole("button", { name: "Stop", exact: true }).click();
 
       await session!.execute("put transferred roundtrip");
@@ -218,6 +297,17 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       await expect.poll(() => then.getByLabel("Value", { exact: true }).inputValue()).toBe("after");
       expect(await value("built")).toBeNull();
       await capture(page, "advanced-06-visual-txn-roundtrip-not-executed");
+      for (const width of BUILDER_WIDTHS) {
+        await setWindowSize(running!.app, { width, height: EVIDENCE_WINDOW.height });
+        await assertBuilderSelects(page);
+        await then.getByLabel("Value encoding", { exact: true }).selectOption("hex");
+        await expect.poll(() => then.getByLabel("Value", { exact: true }).inputValue()).toBe("6166746572");
+        await assertBuilderSelects(page);
+        await then.getByLabel("Value encoding", { exact: true }).selectOption("text");
+        await expect.poll(() => then.getByLabel("Value", { exact: true }).inputValue()).toBe("after");
+        if (width !== 1100) await capture(page, `fix-txn-selects-${String(width)}`);
+      }
+      expect(await value("built")).toBeNull();
     },
     SCENARIO_TIMEOUT_MS,
   );

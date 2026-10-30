@@ -176,6 +176,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   close: X,
   database: Database,
   services: HardDrives,
+  watch: Pulse,
   server: Cpu,
   search: MagnifyingGlass,
   add: Plus,

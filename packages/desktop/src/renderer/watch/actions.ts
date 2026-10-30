@@ -28,7 +28,7 @@ export const WATCH_ACTIONS: readonly AnyAction[] = [
     id: WATCH_ACTION_IDS.toggle,
     title: "Watch",
     category: "Tool Windows",
-    icon: "services",
+    icon: "watch",
     shortcut: "Mod+6",
     run: () => useLayout.getState().toggle("watch"),
   }),
@@ -36,7 +36,7 @@ export const WATCH_ACTIONS: readonly AnyAction[] = [
     id: WATCH_ACTION_IDS.start,
     title: "Watch Key or Prefix…",
     category: "Database",
-    icon: "services",
+    icon: "watch",
     shortcut: "Mod+Alt+W",
     available: (context) => context.datasource?.capabilities.includes("watch") === true,
     run: async (context, args) => {
