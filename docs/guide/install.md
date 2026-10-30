@@ -17,6 +17,32 @@ The builds are not signed with a paid certificate, so the first launch needs one
   anyway**.
 - **Linux**: make the AppImage executable with `chmod +x TableCraft-*.AppImage` and run it.
 
+To make sure a download arrived intact, [check it against `SHA256SUMS`](#check-a-download).
+
+## Check a download
+
+Every release also carries `SHA256SUMS`, the SHA-256 of each file on the release
+([decision 135](../decisions/135-every-release-lists-its-checksums.md)). Download it into the
+folder that holds the installer, then run, from that folder:
+
+```sh
+# macOS
+shasum -a 256 -c --ignore-missing SHA256SUMS
+# Linux
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+Each file you downloaded prints `OK`; anything else means the download is damaged, so delete it and
+download it again. On Windows, compare the output of this PowerShell command with the installer's
+line in `SHA256SUMS`:
+
+```powershell
+(Get-FileHash .\TableCraft-<version>-x64.exe -Algorithm SHA256).Hash.ToLower()
+```
+
+The checksums prove a download is intact, not who made it. Updates the app installs itself are
+checked against a signed manifest instead ([Updates](#updates)).
+
 ## Running the unsigned macOS app
 
 The DMGs are ad-hoc signed rather than notarized, because a Developer ID belongs to whoever ships
