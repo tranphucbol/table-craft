@@ -28,6 +28,7 @@ import {
   toolWindow,
   waitUntilReady,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("037");
@@ -89,7 +90,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
       await fillServer(page, POSTGRES_TLS_CONFIG);
       await field(page, "User").fill(POSTGRES_TLS_CONFIG.user);
       await field(page, "Password").fill(POSTGRES_TLS_CONFIG.password);
-      await field(page, "SSL mode").selectOption({ label: "Verify full" });
+      await chooseOption(field(page, "SSL mode"), { label: "Verify full" });
       await field(page, "SSL root certificate").fill(TLS_FILES.ca);
       await field(page, "Client key").scrollIntoViewIfNeeded();
       expect(await dataSourcesDialog(page).getByTestId("ca-file-note").count()).toBe(0);
@@ -123,7 +124,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
       const page = await launch();
       await newDatasource(page, "PostgreSQL", "pg-require-ca");
       await fillServer(page, POSTGRES_TLS_CONFIG);
-      await field(page, "SSL mode").selectOption({ label: "Require" });
+      await chooseOption(field(page, "SSL mode"), { label: "Require" });
       await field(page, "SSL root certificate").fill(TLS_FILES.ca);
 
       const note = dataSourcesDialog(page).getByTestId("ca-file-note");
@@ -132,7 +133,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
       expect(await text(note)).toBe("Use Verify CA or Verify full to check this CA file.");
       await note.scrollIntoViewIfNeeded();
       await captureWindow(page, "04-ca-file-with-require-hint");
-      await field(page, "SSL mode").selectOption({ label: "Verify CA" });
+      await chooseOption(field(page, "SSL mode"), { label: "Verify CA" });
       await note.waitFor({ state: "detached" });
     },
     SCENARIO_TIMEOUT_MS,
@@ -146,7 +147,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
       await fillServer(page, MYSQL_TLS_CONFIG);
       await field(page, "User").fill(MYSQL_TLS_CONFIG.user);
       await field(page, "Password").fill(MYSQL_TLS_CONFIG.password);
-      await field(page, "SSL mode").selectOption({ label: "Verify CA" });
+      await chooseOption(field(page, "SSL mode"), { label: "Verify CA" });
       await field(page, "SSL root certificate").fill(TLS_FILES.wrongCa);
 
       const result = await testConnection(page);
@@ -167,7 +168,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
       await newDatasource(page, "MySQL", "mysql-client-cert");
       await fillServer(page, MYSQL_TLS_CONFIG);
       await field(page, "User").fill(TLS_FILES.certUser);
-      await field(page, "SSL mode").selectOption({ label: "Verify full" });
+      await chooseOption(field(page, "SSL mode"), { label: "Verify full" });
       await field(page, "SSL root certificate").fill(TLS_FILES.ca);
       await field(page, "Client certificate").fill(TLS_FILES.clientCert);
       await field(page, "Client key").fill(TLS_FILES.encryptedClientKey);
@@ -243,7 +244,7 @@ describe.runIf(DATABASES_ENABLED)("SSL certificates live test", () => {
       await newDatasource(page, "PostgreSQL", "pg-missing-key");
       await fillServer(page, POSTGRES_TLS_CONFIG);
       await field(page, "User").fill(TLS_FILES.certUser);
-      await field(page, "SSL mode").selectOption({ label: "Verify full" });
+      await chooseOption(field(page, "SSL mode"), { label: "Verify full" });
       await field(page, "SSL root certificate").fill(TLS_FILES.ca);
       await field(page, "Client certificate").fill(TLS_FILES.clientCert);
       await field(page, "Client key").fill(`${TLS_FILES.clientKey}.missing`);

@@ -239,9 +239,7 @@ export function ThemePicker() {
         <Swatch colors={chosen.colors} />
         <span className="min-w-0 flex-1 truncate">{chosen.name}</span>
         {chosen.colorScheme === null ? null : (
-          <span className="shrink-0 rounded-sm border border-line px-1 text-ink-muted">
-            {SCHEME_LABEL[chosen.colorScheme]}
-          </span>
+          <span className="shrink-0 border border-line px-1 text-ink-muted">{SCHEME_LABEL[chosen.colorScheme]}</span>
         )}
         <DropdownIcon aria-hidden className="size-icon shrink-0 text-ink-muted" />
       </button>

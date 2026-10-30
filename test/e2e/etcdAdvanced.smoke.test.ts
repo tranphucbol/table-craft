@@ -14,6 +14,7 @@ import type { Session } from "@table-craft/plugin-api";
 import { ETCD_CONFIG, ETCD_ROOT_USER, WITHOUT_ETCD } from "../support/databases.js";
 import {
   closeApp,
+  chooseOption,
   CLOSE_HOOK_TIMEOUT_MS,
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
@@ -39,19 +40,15 @@ const PASSWORD = "isolated-live-password";
 const BUILDER_WIDTHS = [EVIDENCE_WINDOW.width, 1100, 960] as const;
 const GEOMETRY_TOLERANCE = 1;
 
-interface SelectBox {
-  readonly selectedOptions: readonly { readonly textContent: string | null }[];
-  readonly parentElement: { querySelector(selector: string): SelectBox | null };
+interface Measured {
   getBoundingClientRect(): { left: number; right: number; top: number; height: number };
+}
+
+interface TriggerBox extends Measured {
+  readonly textContent: string | null;
+  querySelector(selector: "span" | "svg"): Measured | null;
   readonly ownerDocument: {
-    readonly defaultView: {
-      getComputedStyle(element: SelectBox): {
-        font: string;
-        paddingLeft: string;
-        borderLeftWidth: string;
-        appearance: string;
-      };
-    };
+    readonly defaultView: { getComputedStyle(element: Measured): { font: string } };
     createElement(tag: "canvas"): {
       getContext(kind: "2d"): { font: string; measureText(text: string): { width: number } } | null;
     };
@@ -62,33 +59,27 @@ async function assertBuilderSelects(page: Page): Promise<void> {
   const builder = page.getByRole("region", { name: "Transaction builder", exact: true });
   const bounds = await builder.boundingBox();
   if (bounds === null) throw new Error("Transaction builder must be visible.");
-  const selects = await builder.locator("select").evaluateAll((elements: SelectBox[]) =>
+  const selects = await builder.locator('[role="combobox"]').evaluateAll((elements: TriggerBox[]) =>
     elements.map((element) => {
-      const style = element.ownerDocument.defaultView.getComputedStyle(element);
+      const text = element.querySelector("span");
+      const arrow = element.querySelector("svg")?.getBoundingClientRect();
       const context = element.ownerDocument.createElement("canvas").getContext("2d");
-      const arrow = element.parentElement.querySelector("svg")?.getBoundingClientRect();
-      if (context === null || arrow === undefined) throw new Error("Select text and chevron must be measurable.");
-      context.font = style.font;
+      if (text === null || context === null || arrow === undefined)
+        throw new Error("Dropdown text and chevron must be measurable.");
+      context.font = element.ownerDocument.defaultView.getComputedStyle(text).font;
       const box = element.getBoundingClientRect();
       return {
-        ...box,
         left: box.left,
         right: box.right,
         height: box.height,
-        textEnd:
-          box.left +
-          Number.parseFloat(style.paddingLeft) +
-          Number.parseFloat(style.borderLeftWidth) +
-          context.measureText(element.selectedOptions[0]?.textContent ?? "").width,
+        textEnd: text.getBoundingClientRect().left + context.measureText(element.textContent ?? "").width,
         arrowLeft: arrow.left,
         centerOffset: Math.abs(box.top + box.height / 2 - (arrow.top + arrow.height / 2)),
-        appearance: style.appearance,
       };
     }),
   );
   expect(selects.length).toBeGreaterThan(0);
   for (const select of selects) {
-    expect(select.appearance).toBe("none");
     expect(select.textEnd).toBeLessThan(select.arrowLeft);
     expect(select.centerOffset).toBeLessThanOrEqual(GEOMETRY_TOLERANCE);
     expect(select.left).toBeGreaterThanOrEqual(bounds.x);
@@ -300,10 +291,10 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       for (const width of BUILDER_WIDTHS) {
         await setWindowSize(running!.app, { width, height: EVIDENCE_WINDOW.height });
         await assertBuilderSelects(page);
-        await then.getByLabel("Value encoding", { exact: true }).selectOption("hex");
+        await chooseOption(then.getByLabel("Value encoding", { exact: true }), "hex");
         await expect.poll(() => then.getByLabel("Value", { exact: true }).inputValue()).toBe("6166746572");
         await assertBuilderSelects(page);
-        await then.getByLabel("Value encoding", { exact: true }).selectOption("text");
+        await chooseOption(then.getByLabel("Value encoding", { exact: true }), "text");
         await expect.poll(() => then.getByLabel("Value", { exact: true }).inputValue()).toBe("after");
         if (width !== 1100) await capture(page, `fix-txn-selects-${String(width)}`);
       }

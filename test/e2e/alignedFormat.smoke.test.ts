@@ -33,6 +33,7 @@ import {
   type Datasource,
   type RunningApp,
   waitUntilReady,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("030");
@@ -225,7 +226,7 @@ describe.runIf(DATABASES_ENABLED)("Aligned Reformat Code live test", () => {
       await expect.poll(() => editorText(page)).toBe(ALIASES);
 
       await openEditorSettings(page);
-      await settingsDialog(page).getByLabel("Style", { exact: true }).selectOption("standard");
+      await chooseOption(settingsDialog(page).getByLabel("Style", { exact: true }), "standard");
       await expect.poll(() => settingsDialog(page).getByLabel("Align aliases").isDisabled()).toBe(true);
       await closeSettings(page);
       await reformat(page, languageOf(postgres).format(ALIASES, { ...DEFAULTS, style: "standard" }));
@@ -235,7 +236,7 @@ describe.runIf(DATABASES_ENABLED)("Aligned Reformat Code live test", () => {
       await expect.poll(() => editorText(page)).toBe(ALIASES);
 
       await openEditorSettings(page);
-      await settingsDialog(page).getByLabel("Style", { exact: true }).selectOption("aligned");
+      await chooseOption(settingsDialog(page).getByLabel("Style", { exact: true }), "aligned");
       await settingsDialog(page).getByLabel("Align aliases").uncheck();
       await captureWindow(page, "aligned-settings");
       await closeSettings(page);

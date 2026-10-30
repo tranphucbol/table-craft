@@ -59,6 +59,8 @@ const RENDERER_FENCE_IMPORTS = [
 const RENDERER_FENCE_GLOBALS = ["process", "Buffer", "require", "__dirname", "__filename", "global"];
 const RENDERER_FENCE_RULE =
   "The renderer is a pure view. Reach the engine over the port; import types from @table-craft/desktop/engine/protocol.js.";
+const NATIVE_SELECT_RULE =
+  "The OS menu ignores the theme and density. Use Dropdown from @table-craft/desktop/renderer/ui/Dropdown.js (decision 140).";
 
 /**
  * Theme, settings and log-record modules that main and the renderer both import (decision 032,
@@ -197,6 +199,10 @@ export default tseslint.config(
       "no-restricted-globals": [
         "error",
         ...RENDERER_FENCE_GLOBALS.map((name) => ({ name, message: RENDERER_FENCE_RULE })),
+      ],
+      "no-restricted-syntax": [
+        "error",
+        { selector: "JSXOpeningElement[name.name='select']", message: NATIVE_SELECT_RULE },
       ],
     },
   },

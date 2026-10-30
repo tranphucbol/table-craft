@@ -1,7 +1,20 @@
 import { useState } from "react";
 import type { AccessPermission, KeyBytes, KeyRange } from "@table-craft/desktop/engine/protocol.js";
 import { bytesLabel, type AdminData } from "./store.js";
+import { Dropdown, type DropdownOption } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { CELL, CommandButton, INPUT } from "./controls.js";
+
+const ACCESS_OPTIONS: readonly DropdownOption[] = [
+  { value: "read", label: "Read" },
+  { value: "write", label: "Write" },
+  { value: "readwrite", label: "Read & write" },
+];
+const RANGE_KIND_OPTIONS: readonly DropdownOption[] = [
+  { value: "key", label: "Key" },
+  { value: "prefix", label: "Prefix" },
+  { value: "range", label: "Range" },
+  { value: "all", label: "All keys" },
+];
 
 export function permissionRange(kind: KeyRange["kind"], from: string, to: string, hex: boolean): KeyRange {
   const bytes = (value: string): KeyBytes => {
@@ -54,24 +67,23 @@ function PermissionForm({
       <legend className="text-ink-muted">Grant permission</legend>
       <label className="flex flex-col gap-cell">
         Access
-        <select
-          className={INPUT}
+        <Dropdown
+          variant="field"
+          label="Access"
           value={access}
-          onChange={(event) => setAccess(event.target.value as AccessPermission["access"])}
-        >
-          <option value="read">Read</option>
-          <option value="write">Write</option>
-          <option value="readwrite">Read & write</option>
-        </select>
+          options={ACCESS_OPTIONS}
+          onChange={(value) => setAccess(value as AccessPermission["access"])}
+        />
       </label>
       <label className="flex flex-col gap-cell">
         Keys
-        <select className={INPUT} value={kind} onChange={(event) => setKind(event.target.value as KeyRange["kind"])}>
-          <option value="key">Key</option>
-          <option value="prefix">Prefix</option>
-          <option value="range">Range</option>
-          <option value="all">All keys</option>
-        </select>
+        <Dropdown
+          variant="field"
+          label="Keys"
+          value={kind}
+          options={RANGE_KIND_OPTIONS}
+          onChange={(value) => setKind(value as KeyRange["kind"])}
+        />
       </label>
       {kind === "all" ? null : (
         <label className="flex min-w-0 flex-col gap-cell">

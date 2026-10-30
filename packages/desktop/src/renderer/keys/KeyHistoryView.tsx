@@ -13,6 +13,7 @@ import { formatBytes } from "@table-craft/desktop/renderer/model/format.js";
 import { pendingKeyCount, type KeyTab } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 
 const STOP_LABELS = {
   snapshotEnd: "end of the retained snapshot",
@@ -137,18 +138,18 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
           <div className="flex shrink-0 flex-wrap items-center gap-gap border-b border-line bg-panel px-gap py-1">
             <span className="mr-auto text-ink-muted">
               Comparing {selected.kind === "DELETE" ? "deletion" : `v${selected.version}`} with{" "}
-              <select
-                aria-label="Compare version with"
-                className="rounded bg-canvas text-ink"
+              <Dropdown
+                variant="inline"
+                label="Compare version with"
+                className="inline-flex align-middle"
                 value={activeTarget}
-                onChange={(event) => setTarget(event.target.value)}
-              >
-                <option value="current">Current (last read)</option>
-                <option value="previous" disabled={previous === null}>
-                  Previous version
-                </option>
-                {unsaved ? <option value="unsaved">My unsaved edits</option> : null}
-              </select>
+                options={[
+                  { value: "current", label: "Current (last read)" },
+                  { value: "previous", label: "Previous version", disabled: previous === null },
+                  ...(unsaved ? [{ value: "unsaved", label: "My unsaved edits" }] : []),
+                ]}
+                onChange={setTarget}
+              />
             </span>
             <ActionButton
               actionId={KEY_ACTION_IDS.restoreHistory}

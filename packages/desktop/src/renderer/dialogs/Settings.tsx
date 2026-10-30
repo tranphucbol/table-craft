@@ -12,7 +12,6 @@ import {
   Button,
   CONTENT_CLASS,
   FieldRow,
-  INPUT_CLASS,
   OVERLAY_CLASS,
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
@@ -28,6 +27,7 @@ import {
   useDraft,
 } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { ThemePicker } from "@table-craft/desktop/renderer/dialogs/ThemePicker.js";
+import { Dropdown, type DropdownOption } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { installedFontFamilies, type FontFamilies } from "@table-craft/desktop/renderer/settings/fonts.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import {
@@ -114,7 +114,7 @@ const FONT_LABELS: Readonly<Record<FontRole, string>> = {
   grid: "Grid font",
 };
 
-/** The `<select>` value standing for the built-in stack, which no installed family can be named. */
+/** The dropdown value standing for the built-in stack, which no installed family can be named. */
 const BUILT_IN_FAMILY = "";
 
 /** Each page's Restore Defaults puts back only what that page shows. */
@@ -160,17 +160,8 @@ function useFontFamilies(): FontFamilies | null {
   return families;
 }
 
-function FamilyGroup({ label, families }: { readonly label: string; readonly families: readonly string[] }) {
-  if (families.length === 0) return null;
-  return (
-    <optgroup label={label}>
-      {families.map((family) => (
-        <option key={family} value={family}>
-          {family}
-        </option>
-      ))}
-    </optgroup>
-  );
+function familyOptions(group: string, families: readonly string[]): DropdownOption[] {
+  return families.map((family) => ({ value: family, label: family, group }));
 }
 
 function FamilyControl({
@@ -220,27 +211,23 @@ function FamilyControl({
   }
   const monospaceFirst = role !== "ui";
   const listed = [...families.monospace, ...families.proportional];
+  const monospace = familyOptions("Monospace", families.monospace);
+  const proportional = familyOptions("Proportional", families.proportional);
+  const options: DropdownOption[] = [
+    { value: BUILT_IN_FAMILY, label: "Built-in" },
+    ...(family !== null && !listed.includes(family) ? [{ value: family, label: `${family} (not installed)` }] : []),
+    ...(monospaceFirst ? [...monospace, ...proportional] : [...proportional, ...monospace]),
+  ];
   return (
-    <select
+    <Dropdown
       id={id}
-      className={cn(INPUT_CLASS, "min-w-0 flex-1")}
+      label={FONT_LABELS[role]}
+      variant="field"
+      className="flex-1"
       value={family ?? BUILT_IN_FAMILY}
-      onChange={(event) => onChange(event.target.value === BUILT_IN_FAMILY ? null : event.target.value)}
-    >
-      <option value={BUILT_IN_FAMILY}>Built-in</option>
-      {family !== null && !listed.includes(family) ? <option value={family}>{family} (not installed)</option> : null}
-      {monospaceFirst ? (
-        <>
-          <FamilyGroup label="Monospace" families={families.monospace} />
-          <FamilyGroup label="Proportional" families={families.proportional} />
-        </>
-      ) : (
-        <>
-          <FamilyGroup label="Proportional" families={families.proportional} />
-          <FamilyGroup label="Monospace" families={families.monospace} />
-        </>
-      )}
-    </select>
+      options={options}
+      onChange={(chosen) => onChange(chosen === BUILT_IN_FAMILY ? null : chosen)}
+    />
   );
 }
 
@@ -405,38 +392,35 @@ function FormattingFields() {
   return (
     <>
       <FieldRow label="Style" htmlFor={styleId}>
-        <select
+        <Dropdown
           id={styleId}
-          className={cn(INPUT_CLASS, "w-28")}
+          label="Style"
+          variant="field"
+          className="w-28"
           value={format.style}
-          onChange={(event) => {
-            const chosen = FORMAT_STYLES.find((style) => style === event.target.value);
+          options={FORMAT_STYLES.map((style) => ({ value: style, label: FORMAT_STYLE_LABELS[style] }))}
+          onChange={(value) => {
+            const chosen = FORMAT_STYLES.find((style) => style === value);
             if (chosen !== undefined) setFormat({ style: chosen });
           }}
-        >
-          {FORMAT_STYLES.map((style) => (
-            <option key={style} value={style}>
-              {FORMAT_STYLE_LABELS[style]}
-            </option>
-          ))}
-        </select>
+        />
       </FieldRow>
       <FieldRow label="Keyword case" htmlFor={caseId}>
-        <select
+        <Dropdown
           id={caseId}
-          className={cn(INPUT_CLASS, "w-28")}
+          label="Keyword case"
+          variant="field"
+          className="w-28"
           value={format.keywordCase}
-          onChange={(event) => {
-            const chosen = KEYWORD_CASES.find((keywordCase) => keywordCase === event.target.value);
+          options={KEYWORD_CASES.map((keywordCase) => ({
+            value: keywordCase,
+            label: KEYWORD_CASE_LABELS[keywordCase],
+          }))}
+          onChange={(value) => {
+            const chosen = KEYWORD_CASES.find((keywordCase) => keywordCase === value);
             if (chosen !== undefined) setFormat({ keywordCase: chosen });
           }}
-        >
-          {KEYWORD_CASES.map((keywordCase) => (
-            <option key={keywordCase} value={keywordCase}>
-              {KEYWORD_CASE_LABELS[keywordCase]}
-            </option>
-          ))}
-        </select>
+        />
       </FieldRow>
       <NumberField
         label="Indent width"
@@ -542,22 +526,22 @@ function RunAllOnErrorField() {
   return (
     <>
       <FieldRow label="When a statement fails" htmlFor={id}>
-        <select
+        <Dropdown
           id={id}
-          className={cn(INPUT_CLASS, "w-40")}
+          label="When a statement fails"
+          variant="field"
+          className="w-40"
           value={onError}
-          onChange={(event) => {
-            const runAllOnError = RUN_ALL_ON_ERROR_CHOICES.find((choice) => choice === event.target.value);
+          options={RUN_ALL_ON_ERROR_CHOICES.map((choice) => ({
+            value: choice,
+            label: RUN_ALL_ON_ERROR_LABELS[choice],
+          }))}
+          onChange={(value) => {
+            const runAllOnError = RUN_ALL_ON_ERROR_CHOICES.find((choice) => choice === value);
             if (runAllOnError === undefined) return;
             update((current) => ({ ...current, console: { ...current.console, runAllOnError } }));
           }}
-        >
-          {RUN_ALL_ON_ERROR_CHOICES.map((choice) => (
-            <option key={choice} value={choice}>
-              {RUN_ALL_ON_ERROR_LABELS[choice]}
-            </option>
-          ))}
-        </select>
+        />
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
         For Run All, a run of several selected statements and Run SQL Script. A lost connection always stops.

@@ -9,7 +9,7 @@ import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { COMMAND_TXN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { useCommandTxn } from "./store.js";
-import { BUILDER_FIELD as FIELD, BuilderSelect } from "./BuilderSelect.js";
+import { Dropdown, type DropdownOption } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import {
   byteEncoding,
   COMPARE_TARGETS,
@@ -21,6 +21,39 @@ import {
   newCompare,
   newOperation,
 } from "./model.js";
+
+const FIELD =
+  "h-row min-w-0 rounded border border-line bg-canvas px-cell text-ink outline-none focus:border-accent disabled:opacity-50";
+const SELECT_CLASS = "max-w-full shrink-0";
+const ENCODING_OPTIONS: readonly DropdownOption[] = [
+  { value: "text", label: "Text" },
+  { value: "hex", label: "Hex" },
+];
+const RANGE_OPTIONS: readonly DropdownOption[] = [
+  { value: "key", label: "Key" },
+  { value: "prefix", label: "Prefix" },
+  { value: "range", label: "Range" },
+  { value: "all", label: "All keys" },
+];
+const TARGET_OPTIONS: readonly DropdownOption[] = COMPARE_TARGETS.map(({ value, label }) => ({ value, label }));
+const OPERATOR_OPTIONS: readonly DropdownOption[] = COMPARE_OPERATORS.map((operator) => ({
+  value: operator,
+  label: operator,
+}));
+const LEASE_OPTIONS: readonly DropdownOption[] = [
+  { value: "detach", label: "No lease" },
+  { value: "preserve", label: "Keep current" },
+  { value: "attach", label: "Attach ID" },
+];
+
+function operationOptions(depth: number): readonly DropdownOption[] {
+  return [
+    { value: "get", label: "Get" },
+    { value: "put", label: "Put" },
+    { value: "delete", label: "Delete" },
+    { value: "txn", label: "Nested Txn", disabled: depth >= MAX_TRANSACTION_DEPTH },
+  ];
+}
 
 const BUTTON = "rounded px-cell py-1 text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40";
 
@@ -36,15 +69,15 @@ function BytesInput({
   return (
     <label className="flex min-w-0 flex-1 items-center gap-1">
       <span className="sr-only">{label}</span>
-      <BuilderSelect
-        aria-label={`${label} encoding`}
+      <Dropdown
+        variant="field"
+        className={SELECT_CLASS}
+        label={`${label} encoding`}
         title="Text needs valid UTF-8 bytes; other bytes stay in Hex."
         value={value.hex === null ? "text" : "hex"}
-        onChange={(event) => change(byteEncoding(value, event.target.value === "hex" ? "hex" : "text"))}
-      >
-        <option value="text">Text</option>
-        <option value="hex">Hex</option>
-      </BuilderSelect>
+        options={ENCODING_OPTIONS}
+        onChange={(encoding) => change(byteEncoding(value, encoding === "hex" ? "hex" : "text"))}
+      />
       <input
         aria-label={label}
         className={`${FIELD} flex-1 font-editor`}
@@ -61,11 +94,13 @@ function BytesInput({
 function RangeInput({ range, change }: { readonly range: KeyRange; readonly change: (range: KeyRange) => void }) {
   return (
     <div className="flex flex-wrap gap-1">
-      <BuilderSelect
-        aria-label="Key range"
+      <Dropdown
+        variant="field"
+        className={SELECT_CLASS}
+        label="Key range"
         value={range.kind}
-        onChange={(event) => {
-          const kind = event.target.value;
+        options={RANGE_OPTIONS}
+        onChange={(kind) => {
           change(
             kind === "all"
               ? { kind }
@@ -76,12 +111,7 @@ function RangeInput({ range, change }: { readonly range: KeyRange; readonly chan
                   : { kind: "key", key: EMPTY_BYTES },
           );
         }}
-      >
-        <option value="key">Key</option>
-        <option value="prefix">Prefix</option>
-        <option value="range">Range</option>
-        <option value="all">All keys</option>
-      </BuilderSelect>
+      />
       {range.kind === "key" ? (
         <BytesInput label="Key" value={range.key} change={(key) => change({ ...range, key })} />
       ) : null}
@@ -141,32 +171,28 @@ function CompareRow({
     <div className="space-y-1">
       <RangeInput range={value.range} change={(range) => change({ ...value, range })} />
       <div className="flex flex-wrap gap-1">
-        <BuilderSelect
-          aria-label="Compare target"
+        <Dropdown
+          variant="field"
+          className={SELECT_CLASS}
+          label="Compare target"
           value={value.target}
-          onChange={(event) => {
-            const target = COMPARE_TARGETS.find((item) => item.value === event.target.value)?.value;
+          options={TARGET_OPTIONS}
+          onChange={(chosen) => {
+            const target = COMPARE_TARGETS.find((item) => item.value === chosen)?.value;
             if (target !== undefined) change({ ...value, target, operand: target === "value" ? EMPTY_BYTES : "0" });
           }}
-        >
-          {COMPARE_TARGETS.map((target) => (
-            <option key={target.value} value={target.value}>
-              {target.label}
-            </option>
-          ))}
-        </BuilderSelect>
-        <BuilderSelect
-          aria-label="Compare operator"
+        />
+        <Dropdown
+          variant="field"
+          className={SELECT_CLASS}
+          label="Compare operator"
           value={value.operator}
-          onChange={(event) => {
-            const operator = COMPARE_OPERATORS.find((item) => item === event.target.value);
+          options={OPERATOR_OPTIONS}
+          onChange={(chosen) => {
+            const operator = COMPARE_OPERATORS.find((item) => item === chosen);
             if (operator !== undefined) change({ ...value, operator });
           }}
-        >
-          {COMPARE_OPERATORS.map((operator) => (
-            <option key={operator}>{operator}</option>
-          ))}
-        </BuilderSelect>
+        />
         {typeof value.operand === "string" ? (
           <input
             aria-label="Decimal comparison value"
@@ -197,21 +223,16 @@ function OperationRow({
 }) {
   return (
     <div className="space-y-1">
-      <BuilderSelect
-        aria-label="Operation"
+      <Dropdown
+        variant="field"
+        className={SELECT_CLASS}
+        label="Operation"
         value={operation.kind}
-        onChange={(event) => {
-          const kind = event.target.value;
+        options={operationOptions(depth)}
+        onChange={(kind) => {
           if (kind === "get" || kind === "put" || kind === "delete" || kind === "txn") change(newOperation(kind));
         }}
-      >
-        <option value="get">Get</option>
-        <option value="put">Put</option>
-        <option value="delete">Delete</option>
-        <option value="txn" disabled={depth >= MAX_TRANSACTION_DEPTH}>
-          Nested Txn
-        </option>
-      </BuilderSelect>
+      />
       {operation.kind === "txn" ? (
         <TransactionRows
           value={operation.transaction}
@@ -224,25 +245,24 @@ function OperationRow({
           <BytesInput label="Value" value={operation.value} change={(value) => change({ ...operation, value })} />
           <label className="flex flex-wrap items-center gap-1">
             Lease
-            <BuilderSelect
-              aria-label="Put lease"
+            <Dropdown
+              variant="field"
+              className={SELECT_CLASS}
+              label="Put lease"
               value={operation.lease.kind}
-              onChange={(event) =>
+              options={LEASE_OPTIONS}
+              onChange={(lease) =>
                 change({
                   ...operation,
                   lease:
-                    event.target.value === "attach"
+                    lease === "attach"
                       ? { kind: "attach", leaseId: "" }
-                      : event.target.value === "preserve"
+                      : lease === "preserve"
                         ? { kind: "preserve" }
                         : { kind: "detach" },
                 })
               }
-            >
-              <option value="detach">No lease</option>
-              <option value="preserve">Keep current</option>
-              <option value="attach">Attach ID</option>
-            </BuilderSelect>
+            />
             {operation.lease.kind === "attach" ? (
               <input
                 aria-label="Lease ID (decimal)"
