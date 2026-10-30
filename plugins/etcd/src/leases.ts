@@ -6,6 +6,7 @@ import type {
   LeaseRevokePreview,
 } from "@table-craft/plugin-api";
 import type { IDuplexStream, ILeaseKeepAliveRequest, ILeaseKeepAliveResponse, ILeaseTimeToLiveResponse } from "etcd3";
+import { closeStream } from "./client.js";
 import { keyBytesOf } from "./keyBytes.js";
 import {
   budget,
@@ -133,7 +134,7 @@ export class EtcdLeases implements LeaseManager {
         clearTimeout(timer);
         clearTimeout(timeout);
         if (reason !== null) stoppedReason = reason;
-        stream?.cancel();
+        if (stream !== undefined) closeStream(stream);
         pending?.reject(new Error(reason ?? "Lease renewal stopped; the lease was not revoked."));
         pending = undefined;
         release();
@@ -171,7 +172,7 @@ export class EtcdLeases implements LeaseManager {
     try {
       stream = await this.host.globalCall((etcd) => etcd.leaseClient.leaseKeepAlive());
       if (closed) {
-        stream.cancel();
+        closeStream(stream);
         return { once, close, onClosed };
       }
       stream.on("error", () => {

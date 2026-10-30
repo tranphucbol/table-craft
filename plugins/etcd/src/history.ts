@@ -9,7 +9,7 @@ import {
 import type { IDuplexStream, IKeyValue, IWatchRequest, IWatchResponse } from "etcd3";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Call } from "./admin.js";
-import { errorText } from "./client.js";
+import { closeStream, errorText } from "./client.js";
 import { bytesOf, keyBytesOf } from "./keyBytes.js";
 
 const MAX_EVENTS = 100;
@@ -19,6 +19,7 @@ const MAX_RETRIES = 2;
 const DECIMAL = /^(0|[1-9]\d*)$/;
 const MAX_CURSOR_LENGTH = 2048;
 const SIGNING_KEY_BYTES = 32;
+const COMPACTED = /required revision has been compacted/i;
 
 /** Session-private authentication keeps cursor state bounded without retaining searches. */
 export class HistoryState {
@@ -86,6 +87,30 @@ function positionOf(cursor: string, key: string, state: HistoryState): Position 
   }
 }
 
+async function terminalVersion(
+  call: Call,
+  key: Buffer,
+  position: Position,
+  deadline: number,
+): Promise<IKeyValue | null> {
+  const read = async (revision?: string) => {
+    const response = await call((etcd) =>
+      etcd.kv.range({ key, ...(revision === undefined ? {} : { revision }) }, { deadline }),
+    );
+    const kv = response.kvs[0];
+    return kv?.mod_revision === position.terminal ? kv : null;
+  };
+  const current = await read();
+  if (current !== null) return current;
+  try {
+    return await read(position.snapshot);
+  } catch (cause) {
+    // The key changed after the pinned snapshot and compaction reached past it: that version is gone.
+    if (COMPACTED.test(errorText(cause))) return null;
+    throw cause;
+  }
+}
+
 /** Replay ends only at the pinned key's actual terminal event, never at a watch header. */
 export async function keyHistory(call: Call, request: KeyHistoryRequest, state: HistoryState): Promise<KeyHistoryPage> {
   state.checkOpen();
@@ -125,7 +150,7 @@ export async function keyHistory(call: Call, request: KeyHistoryRequest, state: 
     await call(async (etcd) => {
       const stream: IDuplexStream<IWatchRequest, IWatchResponse> = await etcd.watchClient.watch({ deadline });
       if (state.signal.aborted || Date.now() >= deadline) {
-        stream.cancel();
+        closeStream(stream);
         state.checkOpen();
         return;
       }
@@ -136,7 +161,7 @@ export async function keyHistory(call: Call, request: KeyHistoryRequest, state: 
           done = true;
           clearTimeout(timer);
           state.signal.removeEventListener("abort", onClose);
-          stream.cancel();
+          closeStream(stream);
           if (error === undefined) resolve();
           else reject(error instanceof Error ? error : new Error(errorText(error)));
         };
@@ -211,9 +236,34 @@ export async function keyHistory(call: Call, request: KeyHistoryRequest, state: 
     if (compacted === null) break;
     const compactRevision: string = compacted;
     position = { ...position, unavailable: compactRevision, next: (BigInt(compactRevision) + 1n).toString() };
-    if (position.terminal !== null && BigInt(compactRevision) >= BigInt(position.terminal)) {
-      reachedEnd = true;
+    const terminalRevision = position.terminal;
+    if (terminalRevision !== null && BigInt(compactRevision) >= BigInt(terminalRevision)) {
       stopReason = "compacted";
+      // Compaction keeps a live key's latest version, so the terminal event is still readable.
+      const terminal = await terminalVersion(call, key, position, deadline);
+      if (terminal !== null && events.at(-1)?.modRevision !== terminalRevision) {
+        const size = terminal.key.length + terminal.value.length;
+        if (size > maxBytes && events.length === 0) {
+          throw new PluginError(
+            "statementFailed",
+            "etcd history event exceeds the byte limit. Increase maxBytes or inspect the current value.",
+          );
+        }
+        if (usedBytes + size > maxBytes || events.length >= count) {
+          stopReason = usedBytes + size > maxBytes ? "byteLimit" : "pageLimit";
+          // A watch from the terminal revision is either compacted again or replays that event.
+          position = { ...position, next: terminalRevision };
+          break;
+        }
+        usedBytes += size;
+        events.push({
+          ...revisionOf(terminal),
+          kind: "PUT",
+          key: keyBytesOf(terminal.key),
+          value: keyBytesOf(terminal.value),
+        });
+      }
+      reachedEnd = true;
       break;
     }
     if (++retries > MAX_RETRIES) {

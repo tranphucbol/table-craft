@@ -8,6 +8,7 @@ import type {
   KeyWatchState,
 } from "@table-craft/plugin-api";
 import type { IDuplexStream, IEvent, IWatchRequest, IWatchResponse } from "etcd3";
+import { closeStream } from "./client.js";
 import { keyBytesOf } from "./keyBytes.js";
 import { revisionOf } from "./history.js";
 import {
@@ -88,7 +89,7 @@ export class EtcdWatcher implements KeyWatcher {
       generation++;
       const old = stream;
       stream = undefined;
-      old?.cancel();
+      if (old !== undefined) closeStream(old);
     };
     const markGap = (reason: KeyWatchGap["reason"], toRevision: string | null) => {
       gap = { reason, fromRevision: completed === null ? start : (BigInt(completed) + 1n).toString(), toRevision };
@@ -135,7 +136,7 @@ export class EtcdWatcher implements KeyWatcher {
       try {
         const opened = await this.host.call((etcd) => etcd.watchClient.watch());
         if (mine !== generation || state === "stopped" || state === "gap") {
-          opened.cancel();
+          closeStream(opened);
           return;
         }
         stream = opened;

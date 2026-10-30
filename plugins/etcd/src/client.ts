@@ -128,6 +128,19 @@ function createEtcd(settings: ClientSettings): Etcd3 {
   return etcd;
 }
 
+/**
+ * Stops a watch or keep-alive stream the plugin no longer needs. etcd3 takes an error on a stream
+ * that is still writable for a failed host and closes every gRPC client of the connection
+ * (`stream.writable && this.client.markFailed(resource, err)` in etcd3 1.1.2 lib/rpc.js, see
+ * https://github.com/microsoft/etcd3/blob/v1.1.2/src/rpc.ts); a call queued behind that, such
+ * as the next get over TLS, then fails with "Channel closed before call started". Half-closing
+ * first turns the CANCELLED that `cancel()` raises into a local teardown.
+ */
+export function closeStream(stream: { end(): void; cancel(): void }): void {
+  stream.end();
+  stream.cancel();
+}
+
 export function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
