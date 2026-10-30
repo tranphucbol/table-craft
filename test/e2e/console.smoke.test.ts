@@ -629,7 +629,7 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
         expect(await button.isEnabled()).toBe(false);
         expect(await computedOpacity(button)).toBe("1");
       }
-      expect(await runButton(page).textContent()).toBe("Run");
+      expect(await runButton(page).getAttribute("aria-label")).toBe("Run");
       await captureSpinner(page, "01-spinning");
     },
     SCENARIO_TIMEOUT_MS,
