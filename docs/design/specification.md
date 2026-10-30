@@ -2561,7 +2561,7 @@ is passed as `extraMetadata.version`; nothing in the tree holds it. A developmen
 Signing: without a Developer ID (`CSC_LINK` or `CSC_NAME`), macOS builds are signed ad hoc with
 the hardened runtime off, so the arm64 app launches; a Developer ID build keeps the hardened runtime
 with `build/entitlements.mac.plist` (JIT and unsigned executable memory). Windows and Linux are
-unsigned. The icon is `build/icon.png`, a woven 3×3 grid of ribbons on an indigo tile: a 1024 px
+unsigned. The icon is `build/icon.png`, three stacked blue crystal slabs on a near-black tile: a 1024 px
 raster with a transparent margin around an 824 px tile, the macOS icon grid. It is the source
 itself, generated as an image rather than drawn from vectors, so a new icon replaces the file.
 
