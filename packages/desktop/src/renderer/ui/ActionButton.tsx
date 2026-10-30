@@ -2,7 +2,7 @@ import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/acti
 import { invoke, registry, useActionBusy, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { ACTION_ICONS, CopiedIcon, SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { ACTION_ICONS, CopiedIcon, SOLID_ACTION_ICONS, SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 import { COPIED_LABEL, useCopyConfirmation } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
@@ -72,6 +72,7 @@ export function ActionButton({
   const copies = action.icon === "copy";
   const copied = copies && confirmation.copied;
   const glyph = icon ?? action.icon;
+  const solid = glyph !== undefined && SOLID_ACTION_ICONS.has(glyph);
   const Icon = copied ? CopiedIcon : busy ? SpinnerIcon : glyph === undefined ? null : ACTION_ICONS[glyph];
   const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
   return (
@@ -99,7 +100,7 @@ export function ActionButton({
         {Icon === null ? null : (
           <Icon
             aria-hidden
-            weight={copied || busy ? "bold" : compact ? "regular" : "fill"}
+            weight={copied || busy ? "bold" : compact && !solid ? "regular" : "fill"}
             className={cn("size-icon", copied && "text-success", busy && "animate-spin")}
           />
         )}
