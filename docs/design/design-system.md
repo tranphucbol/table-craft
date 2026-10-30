@@ -253,6 +253,19 @@ the strip's lines. A control standing free in a form or a dialog keeps `rounded`
 Transaction mode, the value panel's format picker, the plan view's Tree / Raw group, the result
 search field and its filter chips, and the Theme trigger's scheme tag follow it.
 
+## Hints
+
+Help that explains a field lives behind an (i), not under it. `ui/InfoHint.tsx` is an `InfoIcon`
+button in `text-ink-muted` (`text-ink` on hover or focus), named "About …", that shows its text
+as a tooltip after 150 ms of hover or on keyboard focus: `bg-raised`, a `border-line` frame,
+`rounded`, `shadow-lg`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
+takes `hint` and puts one after the control. Help longer than a few sentences, or with a table or
+a button, is a `ui/Popover` behind the same (i) instead (the MCP Timeout cell).
+
+Only three kinds of text stay on the form: a warning or error (`text-danger`, `role="alert"`), the
+result of something the user just did (a pasted URL), and, where a choice changes what the form
+asks for, one short muted line beside the (i). Form labels wrap rather than run into the next row.
+
 ## Settings dialog
 
 Plan 013. `⌘,` (Settings… in the macOS app menu, File elsewhere) opens a modal the size of Data

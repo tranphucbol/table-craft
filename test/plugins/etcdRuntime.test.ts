@@ -43,10 +43,14 @@ function host(fake: unknown, prefix = "", readOnly = false): RuntimeHost {
 class Stream extends EventEmitter {
   readonly writes: unknown[] = [];
   cancelled = false;
+  ended = false;
   readonly pause = vi.fn();
   readonly resume = vi.fn();
   write(request: unknown) {
     this.writes.push(request);
+  }
+  end() {
+    this.ended = true;
   }
   cancel() {
     this.cancelled = true;

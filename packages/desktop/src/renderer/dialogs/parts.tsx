@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { FIELD_CLASS } from "@table-craft/desktop/renderer/ui/fieldClasses.js";
+import { InfoHint } from "@table-craft/desktop/renderer/ui/InfoHint.js";
 import { DIALOG_MOTION, OVERLAY_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { FILLED_DANGER_PRESS, FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
@@ -41,14 +42,41 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
   return <input className={cn(INPUT_CLASS, className)} spellCheck={false} {...props} />;
 }
 
-/** A label column and its control, in the dialog's two-column grid. */
-export function FieldRow({ label, htmlFor, children }: { label: string; htmlFor?: string; children: ReactNode }) {
+/**
+ * A label column and its control, in the dialog's two-column grid. A long label wraps and the row
+ * grows; `hint` puts an (i) after the control, named "About" the label or `hintLabel`.
+ */
+export function FieldRow({
+  label,
+  htmlFor,
+  hint,
+  hintLabel,
+  hintTestId,
+  children,
+}: {
+  readonly label: string;
+  readonly htmlFor?: string;
+  readonly hint?: ReactNode;
+  readonly hintLabel?: string;
+  readonly hintTestId?: string;
+  readonly children: ReactNode;
+}) {
   return (
     <>
-      <label htmlFor={htmlFor} className="flex h-row items-center justify-end text-ink-muted">
+      <label
+        htmlFor={htmlFor}
+        className="flex min-h-row min-w-0 items-center justify-end text-right leading-tight text-ink-muted"
+      >
         {label}
       </label>
-      <div className="flex min-w-0 items-center gap-cell">{children}</div>
+      <div className="flex min-h-row min-w-0 items-center gap-cell">
+        {children}
+        {hint === undefined || hint === null ? null : (
+          <InfoHint label={hintLabel ?? `About ${label}`} {...(hintTestId === undefined ? {} : { testId: hintTestId })}>
+            {hint}
+          </InfoHint>
+        )}
+      </div>
     </>
   );
 }

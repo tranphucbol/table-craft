@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react";
+import type { KeyHistoryPage } from "@table-craft/desktop/engine/protocol.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { KeyDiffView } from "@table-craft/desktop/renderer/keys/KeyDiffView.js";
@@ -14,6 +16,7 @@ import { pendingKeyCount, type KeyTab } from "@table-craft/desktop/renderer/stat
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
+import { InfoHint } from "@table-craft/desktop/renderer/ui/InfoHint.js";
 
 const STOP_LABELS = {
   snapshotEnd: "end of the retained snapshot",
@@ -23,6 +26,44 @@ const STOP_LABELS = {
   compacted: "older revisions compacted",
 } as const;
 const HEX_DIGITS_PER_BYTE = 2;
+const FIRST_REVISION = "1";
+const AGES_HINT =
+  "etcd keeps no timestamps, so a version's age counts the changes made in the cluster since it was written.";
+const COMPACTION_HINT =
+  "etcd keeps only recent revisions. The cluster compacts older ones from time to time to save space, and compacted versions cannot be recovered.";
+
+function HistoryFooter({ page }: { readonly page: KeyHistoryPage }) {
+  const compacted = page.unavailableThrough !== null || (!page.complete && page.stopReason === "compacted");
+  const gaps = page.gaps.filter(
+    (gap) => gap.fromRevision !== FIRST_REVISION || gap.toRevision !== page.unavailableThrough,
+  );
+  const incomplete = !page.complete && page.stopReason !== "compacted";
+  if (!compacted && gaps.length === 0 && !incomplete) return null;
+  return (
+    <div data-testid="key-history-footer" className="space-y-1 border-t border-line p-gap text-ink-muted">
+      {compacted ? (
+        <p className="flex items-start gap-cell">
+          <span className="min-w-0 flex-1">
+            Older versions were removed by etcd compaction
+            {page.unavailableThrough === null ? "." : ` (through rev ${page.unavailableThrough}).`}
+          </span>
+          <InfoHint label="About compaction">{COMPACTION_HINT}</InfoHint>
+        </p>
+      ) : null}
+      {gaps.map((gap) => (
+        <p key={`${gap.fromRevision}:${gap.toRevision}`}>
+          Versions in revs {gap.fromRevision}–{gap.toRevision} were removed by compaction.
+        </p>
+      ))}
+      {incomplete ? (
+        <p>
+          History is incomplete: {STOP_LABELS[page.stopReason]}.
+          {page.cursor === null ? " Reload the key to try again." : " Load more to continue."}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
   const [target, setTarget] = useState("current");
@@ -57,6 +98,10 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
         aria-label="Key versions"
         className="flex w-dialog-list max-w-1/3 shrink-0 flex-col border-r border-line bg-panel"
       >
+        <div className="flex h-row shrink-0 items-center justify-between border-b border-line px-gap font-semibold text-ink-muted">
+          Versions
+          <InfoHint label="About version ages">{AGES_HINT}</InfoHint>
+        </div>
         <div className="min-h-0 flex-1 overflow-auto">
           {history.events.map((event) => (
             <button
@@ -111,25 +156,7 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
             <p className="p-gap text-ink-muted">No retained versions.</p>
           ) : null}
         </div>
-        {page === null ? null : (
-          <div className="space-y-1 border-t border-line p-gap text-ink-muted">
-            {page.unavailableThrough === null ? null : (
-              <p>Older revisions through {page.unavailableThrough} were compacted.</p>
-            )}
-            {page.gaps.map((gap) => (
-              <p key={`${gap.fromRevision}:${gap.toRevision}`}>
-                Gap: revisions {gap.fromRevision}–{gap.toRevision} were compacted.
-              </p>
-            ))}
-            {!page.complete ? (
-              <p>
-                History is incomplete: {STOP_LABELS[page.stopReason]}.
-                {page.cursor === null ? " Reload the key to try again." : " Load more to continue."}
-              </p>
-            ) : null}
-            <p>No timestamps are available. Ages count revisions.</p>
-          </div>
-        )}
+        {page === null ? null : <HistoryFooter page={page} />}
       </aside>
       {selected === undefined ? (
         <p className="p-gap text-ink-muted">Choose a version to compare.</p>
@@ -187,4 +214,3 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
     </div>
   );
 }
-import { useMemo, useState } from "react";

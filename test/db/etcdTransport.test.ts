@@ -14,7 +14,12 @@ import { serverQuery } from "../support/smokeFixtures.js";
 
 const WRONG_HOST_NAME = "wrong-name.example";
 const CONNECT_TIMEOUT_SECONDS = 3;
-const PROBE_COMMAND = "get /seed/probe";
+const PROBE_KEY = "/seed/probe";
+const PROBE_COMMAND = `get ${PROBE_KEY}`;
+const HISTORY_DATABASE = 0;
+const HISTORY_EVENTS = 10;
+const HISTORY_BYTES = 4096;
+const HISTORY_TIMEOUT_MS = 2_000;
 const CONFIG = { ...ETCD_TLS_CONFIG, connectTimeout: CONNECT_TIMEOUT_SECONDS };
 const LOADED: LoadedPlugin = {
   status: "loaded",
@@ -67,6 +72,26 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd TLS, mTLS and SSH transport", ()
 
   it("givenTrustedServerAndClientCertificate_whenVerifyFull_thenReads", async () => {
     await succeeds();
+  });
+
+  it("givenHistoryRead_whenPlainGetFollows_thenGetSucceeds", async () => {
+    const session = await connect();
+    try {
+      const keyspace = session.keyspace;
+      if (keyspace?.history === undefined) throw new Error("etcd history capability is unavailable");
+      const page = await keyspace.history({
+        database: HISTORY_DATABASE,
+        key: { text: PROBE_KEY, hex: null },
+        cursor: null,
+        count: HISTORY_EVENTS,
+        maxBytes: HISTORY_BYTES,
+        timeoutMs: HISTORY_TIMEOUT_MS,
+      });
+      expect(page.events.length).toBeGreaterThan(0);
+      await assertProbe(session);
+    } finally {
+      await session.close();
+    }
   });
 
   it("givenWrongHostname_whenVerifyFull_thenRejectsHostname", async () => {
