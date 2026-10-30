@@ -25,10 +25,19 @@ function kv(revision: string, value = Buffer.from([0xff, 0])): IKeyValue {
 
 function fixture(terminal: string | null, batches: readonly Record<string, unknown>[][], acquisition?: Promise<void>) {
   const state = new HistoryState();
-  const snapshot = { revision: "9007199254741001", terminal, reads: 0 };
+  const snapshot = {
+    revision: "9007199254741001",
+    terminal,
+    reads: 0,
+    current: undefined as IKeyValue | null | undefined,
+    compactedThrough: null as string | null,
+    ranges: [] as (string | number | undefined)[],
+  };
   const streams: Stream[] = [];
   class Stream extends EventEmitter {
     canceled = false;
+    ended = false;
+    canceledWhileWritable = false;
     start: string | number | undefined;
     write(value: IWatchRequest) {
       this.start = value.create_request?.start_revision;
@@ -41,14 +50,34 @@ function fixture(terminal: string | null, batches: readonly Record<string, unkno
         }
       });
     }
+    end() {
+      this.ended = true;
+    }
     cancel() {
       this.canceled = true;
+      this.canceledWhileWritable = !this.ended;
     }
   }
   const client = {
     kv: {
-      range: () => {
-        snapshot.reads++;
+      range: (range: { keys_only?: boolean; revision?: string | number }) => {
+        if (range.keys_only === true) snapshot.reads++;
+        else {
+          snapshot.ranges.push(range.revision);
+          if (
+            range.revision !== undefined &&
+            snapshot.compactedThrough !== null &&
+            BigInt(range.revision) < BigInt(snapshot.compactedThrough)
+          ) {
+            return Promise.reject(new Error("etcdserver: mvcc: required revision has been compacted"));
+          }
+          if (range.revision === undefined && snapshot.current !== undefined) {
+            return Promise.resolve({
+              header: { revision: snapshot.revision },
+              kvs: snapshot.current === null ? [] : [snapshot.current],
+            });
+          }
+        }
         return Promise.resolve({
           header: { revision: snapshot.revision },
           kvs: snapshot.terminal === null ? [] : [kv(snapshot.terminal)],
@@ -91,6 +120,8 @@ describe("etcd bounded history", () => {
     ]);
     expect(f.streams[0]?.start).toBe("1");
     expect(f.streams.every((s) => s.canceled)).toBe(true);
+    // etcd3 resets every gRPC client of the connection when a still-writable stream errors.
+    expect(f.streams.some((s) => s.canceledWhileWritable)).toBe(false);
   });
 
   it("givenPageLimit_whenContinuing_thenPinnedTerminalAndExactLastIncludedPlusOne", async () => {
@@ -207,17 +238,40 @@ describe("etcd bounded history", () => {
     expect(f.streams.every((s) => s.canceled)).toBe(true);
   });
 
-  it("givenCompactionThroughTerminal_whenReading_thenNeverInventHistoricalBaselineEvent", async () => {
+  it("givenCompactionThroughTerminal_whenReading_thenCurrentVersionIsTheOnlyEvent", async () => {
     const f = fixture("8", [[{ canceled: true, compact_revision: "9" }]]);
     const page = await f.history(request);
     expect(page).toMatchObject({
-      events: [],
       complete: false,
       cursor: null,
       stopReason: "compacted",
       unavailableThrough: "9",
+      gaps: [{ fromRevision: "1", toRevision: "9", reason: "compacted" }],
     });
+    expect(page.events.map((e) => [e.kind, e.modRevision, e.value?.hex ?? null])).toEqual([["PUT", "8", "ff00"]]);
+    expect(f.snapshot.ranges).toEqual([undefined]);
     expect(f.streams).toHaveLength(1);
+  });
+
+  it("givenKeyChangedAfterSnapshot_whenTerminalCompacted_thenReadPinnedSnapshotVersion", async () => {
+    const f = fixture("8", [[{ canceled: true, compact_revision: "9" }]]);
+    f.snapshot.current = kv("9007199254741005");
+    const page = await f.history(request);
+    expect(page.events.map((e) => e.modRevision)).toEqual(["8"]);
+    expect(f.snapshot.ranges).toEqual([undefined, f.snapshot.revision]);
+  });
+
+  it("givenSnapshotItselfCompactedAfterChange_whenTerminalCompacted_thenNoInventedEvent", async () => {
+    const f = fixture("8", [[{ canceled: true, compact_revision: "9" }]]);
+    f.snapshot.current = null;
+    f.snapshot.compactedThrough = "9007199254741002";
+    const page = await f.history(request);
+    expect(page).toMatchObject({ events: [], cursor: null, stopReason: "compacted", unavailableThrough: "9" });
+  });
+
+  it("givenCompactedTerminalOverByteBudget_whenReading_thenExplicitError", async () => {
+    const f = fixture("8", [[{ canceled: true, compact_revision: "9" }]]);
+    await expect(f.history({ ...request, maxBytes: 2 })).rejects.toThrow(/exceeds the byte limit/);
   });
 
   it("givenRepeatedCompaction_whenRetryBudgetExhausted_thenBoundedPartialAndEveryStreamCanceled", async () => {

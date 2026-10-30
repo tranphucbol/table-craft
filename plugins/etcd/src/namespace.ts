@@ -1,6 +1,7 @@
 import { PluginError, type KeyRange } from "@table-craft/plugin-api";
 import type { IDuplexStream, IWatchRequest, IWatchResponse } from "etcd3";
 import type { Call } from "./admin.js";
+import { closeStream } from "./client.js";
 import { bytesOf } from "./keyBytes.js";
 import { NO_END, prefixEnd } from "./scan.js";
 
@@ -131,7 +132,7 @@ export function namespaceCall(call: Call, mapper: NamespaceMapper, serializable 
                               listener(mapResponse(response, mapper));
                             } catch (error) {
                               for (const handler of errors) handler(error);
-                              raw.cancel();
+                              closeStream(raw);
                             }
                           }
                         : listener,

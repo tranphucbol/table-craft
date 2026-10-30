@@ -160,14 +160,15 @@ describe.skipIf(WITHOUT_ETCD).each(IMAGES)("isolated etcd $version history compa
     });
   });
 
-  it("givenTerminalAlreadyCompacted_whenReading_thenCurrentBaselineIsNotInventedAsHistory", async () => {
+  it("givenTerminalAlreadyCompacted_whenReading_thenCurrentVersionIsTheOnlyEvent", async () => {
     await withIsolatedServer(image, async (server) => {
       const f = await lifecycle(server);
       const through = await server.put(`${f.key}/unrelated`, "advance revision");
       await server.compact(through);
       const page = await f.history(f.request);
       assertGap(page, through);
-      expect(page).toMatchObject({ events: [], cursor: null, terminalRevision: f.recreated, stopReason: "compacted" });
+      expect(page).toMatchObject({ cursor: null, terminalRevision: f.recreated, stopReason: "compacted" });
+      expect(eventsOf(page)).toEqual([["PUT", f.recreated, "recreated"]]);
       const baseline = await f.keyspace.read(DATABASE, f.request.key, { window: READ_WINDOW });
       expect(baseline.value).toBe("recreated");
       expect(baseline.details.revision?.modRevision).toBe(f.recreated);
