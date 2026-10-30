@@ -212,6 +212,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     id: ACTION_IDS.reformat,
     title: "Reformat Code",
     category: "Console",
+    icon: "reformat",
     shortcut: "Mod+Alt+L",
     tabKind: "console",
     available: (context) => context.capabilities.includes("sql"),
