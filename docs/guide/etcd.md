@@ -44,5 +44,5 @@ Serializable, the member you reach answers alone, and results are marked as poss
   interrupted run resumes after the last confirmed chunk. Files are chosen in the system dialog
   and never overwrite an existing one.
 
-See [decision 135](../decisions/135-etcd-is-one-string-keyspace-guarded-by-revisions.md) and
-[decision 138](../decisions/138-etcd-endpoints-are-the-configured-set.md).
+See [decision 136](../decisions/136-etcd-is-one-string-keyspace-guarded-by-revisions.md) and
+[decision 139](../decisions/139-etcd-endpoints-are-the-configured-set.md).

@@ -1,4 +1,4 @@
-# 135: etcd is one string keyspace over raw RPC, guarded by revisions, with history from Watch
+# 136: etcd is one string keyspace over raw RPC, guarded by revisions, with history from Watch
 
 Status: Accepted
 
@@ -8,7 +8,7 @@ etcd ships as an optional plugin (`plugins/etcd`, downloaded on demand like Redi
 built on the `etcd3` driver's raw gRPC clients (`kv`, `watchClient`, `leaseClient`,
 `maintenance`, `auth`, `cluster`), not its high-level builders. It declares `commands` and
 `keyValue`, so the key tree, key tab, console and Server tab are the Redis ones (decisions
-112-113), plus the optional services of decision 136.
+112-113), plus the optional services of decision 137.
 
 - **One database, string keys only.** The keyspace is one database (index 0). Every key is type
   `string` holding one value; the tree splits names on a configurable delimiter (`/`). Any edit
