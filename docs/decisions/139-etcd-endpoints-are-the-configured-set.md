@@ -1,4 +1,4 @@
-# 138: etcd endpoints are the configured set; sent mutations are never replayed
+# 139: etcd endpoints are the configured set; sent mutations are never replayed
 
 Status: Accepted
 
@@ -31,7 +31,7 @@ Status: Accepted
 addresses that bypass the user's SSH tunnel and TLS identity. A write that timed out may have
 committed, so replaying it could apply it twice; telling the user the outcome is unknown is the
 only honest answer. `etcd3`'s `namespace()` wraps only its high-level builders, so the raw clients
-the plugin uses (decision 135) would silently read and write outside the namespace unless every
+the plugin uses (decision 136) would silently read and write outside the namespace unless every
 path maps keys itself.
 
 ## Consequences

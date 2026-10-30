@@ -1,4 +1,4 @@
-# 136: Advanced key-value services are optional capabilities in API 1.8.0
+# 137: Advanced key-value services are optional capabilities in API 1.8.0
 
 Status: Accepted
 
@@ -19,8 +19,8 @@ as optional session services, each gated by a capability the plugin declares:
 | `bulkTransfer` | `keyTransfer` (`KeyTransfer`) | resumable export and import of a key range                     |
 
 Alongside them, also optional: `KeyDetails.attributes`, `CommandLanguage.admit` with its
-admissions and intents (decision 137), `connectionEndpoints` and `ConnectOptions.transports`
-(decision 138). After rebasing onto released API 1.7.0, these additive changes take the next minor,
+admissions and intents (decision 138), `connectionEndpoints` and `ConnectOptions.transports`
+(decision 139). After rebasing onto released API 1.7.0, these additive changes take the next minor,
 `API_VERSION` 1.8.0; none takes a version of its own.
 
 The shapes share rules: revisions, lease and member IDs, TTLs, sizes and unbounded counts are
@@ -50,4 +50,4 @@ dedicated resources and no-replay rules are part of the contract rather than plu
 - Coordination is a viewer over configured prefixes, not a lock or election client.
 - Watch keeps a byte- and event-bounded ring in the engine; overflow, compaction and oversized
   events surface as explicit gaps, and the checkpoint advances only after a whole revision.
-- Snapshot and transfer files go only through host file grants (decision 137).
+- Snapshot and transfer files go only through host file grants (decision 138).

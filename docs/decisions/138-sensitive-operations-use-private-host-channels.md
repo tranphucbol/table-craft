@@ -1,4 +1,4 @@
-# 137: Sensitive operations use private host channels, and consoles admit commands before history
+# 138: Sensitive operations use private host channels, and consoles admit commands before history
 
 Status: Accepted
 
