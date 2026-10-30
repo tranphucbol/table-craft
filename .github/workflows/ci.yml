@@ -1,6 +1,7 @@
 # Plan 014, decisions 15 and 16: verify on Linux, package and smoke-test the packaged app on every
 # target, and on a `v*` tag collect the installers into a draft release with the signed update
-# manifest the installed apps read (decision 044), beside the plugin packages (decision 109).
+# manifest the installed apps read (decision 044), beside the plugin packages (decision 109) and
+# the SHA256SUMS of them all (decision 135).
 name: CI
 
 on:
@@ -204,6 +205,9 @@ jobs:
         env:
           TABLE_CRAFT_UPDATE_SIGNING_KEY: ${{ secrets.TABLE_CRAFT_UPDATE_SIGNING_KEY }}
         run: bun packages/desktop/scripts/update-manifest.ts --tag "$GITHUB_REF_NAME" --assets installers --out installers
+      # Decision 135: the same globs as `gh release create` below, so SHA256SUMS lists every asset.
+      - name: Write the checksums
+        run: bun packages/desktop/scripts/checksums.ts --out installers/SHA256SUMS installers/* plugin-packages/*.tgz
       # Plan 124: a vX.Y.Z-beta.N tag drafts a pre-release whose notes start at the tag before it;
       # a stable release's notes start at the previous stable tag, betas in between included.
       - name: Draft the release

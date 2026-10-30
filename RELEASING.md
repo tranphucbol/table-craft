@@ -22,6 +22,7 @@ release tag is `0.0.0-dev.<short sha>`, and nothing built from a branch is publi
 | macOS `.dmg` and `.zip`, arm64 and x64                 | the GitHub release  | the tag                            |
 | Windows `.exe`, Linux `.AppImage` (best-effort)        | the GitHub release  | the tag                            |
 | `update-manifest.json` and `update-manifest.json.sig`  | the GitHub release  | the tag (decision 044)             |
+| `SHA256SUMS`, the SHA-256 of every other asset         | the GitHub release  | the tag (decision 135)             |
 | `@tablecraft-app/plugin-<id>`, one per optional plugin | npm and the release | the release it last changed in     |
 | `@tablecraft-app/plugin-api` (stable releases only)    | npm and the release | `API_VERSION` (decisions 106, 107) |
 
@@ -119,14 +120,14 @@ gh run list --workflow ci.yml --branch v1.15.0 --limit 1
 gh run watch <run id>
 ```
 
-| Job       | What it does on a tag                                                                                     |
-| --------- | --------------------------------------------------------------------------------------------------------- |
-| `verify`  | lint, format check, typecheck, `test` and `test:db`                                                       |
-| `changes` | decides which opt-in database suites the commit needs                                                     |
-| `test-db` | runs `test:db:postgres` on every tag, plus the Oracle and SQL Server suites when their paths changed      |
-| `package` | builds the installers and runs the packaged suite on each platform; macOS blocks, Windows and Linux don't |
-| `plugins` | packs the plugins that changed, reuses the npm tarball of the rest, load-checks them and keeps them       |
-| `release` | waits for approval of the `release` environment, signs the update manifest and drafts the release         |
+| Job       | What it does on a tag                                                                                                  |
+| --------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `verify`  | lint, format check, typecheck, `test` and `test:db`                                                                    |
+| `changes` | decides which opt-in database suites the commit needs                                                                  |
+| `test-db` | runs `test:db:postgres` on every tag, plus the Oracle and SQL Server suites when their paths changed                   |
+| `package` | builds the installers and runs the packaged suite on each platform; macOS blocks, Windows and Linux don't              |
+| `plugins` | packs the plugins that changed, reuses the npm tarball of the rest, load-checks them and keeps them                    |
+| `release` | waits for approval of the `release` environment, signs the update manifest, writes `SHA256SUMS` and drafts the release |
 
 The `plugins` job needs the npm registry on a tag: when it cannot reach it, the job fails rather
 than republish every plugin. Rerun it.
@@ -150,6 +151,7 @@ Check that the draft has:
 - `TableCraft-1.15.0-arm64.dmg`, `.zip`, and the same two for x64.
 - The Windows `.exe` and the Linux `.AppImage`, unless you accepted their absence above.
 - `update-manifest.json` and `update-manifest.json.sig`.
+- `SHA256SUMS`, with one line for each other asset on the draft.
 - A `.tgz` for `@tablecraft-app/plugin-api` (not on a beta) and one for each optional plugin. An
   unchanged plugin's tarball carries its older version, such as
   `tablecraft-app-plugin-postgres-1.14.0.tgz`.
@@ -331,6 +333,7 @@ reproducible and every release would republish it; fix the build in a pull reque
 | The draft exists but is wrong, and it was never published | Delete the draft (`gh release delete v1.15.0`) and the tag as above, fix on `main`, and tag again. Nothing outside the repository has seen it                               |
 | The release job waits                                     | Approve the `release` environment in the run                                                                                                                                |
 | The release job fails on the signing key                  | The `TABLE_CRAFT_UPDATE_SIGNING_KEY` secret is missing or does not match the public key in `packages/desktop/src/main/update/manifest.ts`. Fix the secret and rerun the job |
+| The release job fails writing the checksums               | Two attachments share a name, or one has a character `sha256sum` cannot read back. Delete the tag as above, fix the build that produced it on `main`, and tag again         |
 | `publish-plugins` failed partway                          | Rerun it (`gh run rerun <run id>`): versions already on npm are skipped                                                                                                     |
 | The `plugins` job says the registry is unreachable        | Rerun the job once npm answers. On a tag it never falls back to republishing every plugin                                                                                   |
 | `publish-channel` refused the manifest                    | A higher beta is already on `update-channels`. Publish betas in order; the refused one reaches nobody, which is what you want                                               |
