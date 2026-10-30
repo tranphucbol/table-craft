@@ -8,8 +8,7 @@
  *
  * `--key-file`, `--public-key-file` and `--base-url` exist for the live test's local release only.
  */
-import { createHash, createPrivateKey, sign } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { createPrivateKey, sign } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -24,6 +23,7 @@ import {
   type UpdateAsset,
 } from "../src/main/update/manifest.js";
 import { channelOf } from "../src/settings/channel.js";
+import { sha256Of } from "./checksums.js";
 import { releaseTagVersion } from "./version.js";
 
 export const SIGNING_KEY_ENV = "TABLE_CRAFT_UPDATE_SIGNING_KEY";
@@ -92,12 +92,6 @@ export function manifestBody(input: ManifestInput): Buffer {
 
 export function signBody(body: Buffer, privateKeyPem: string): string {
   return sign(null, body, createPrivateKey(privateKeyPem)).toString("base64");
-}
-
-async function sha256Of(path: string): Promise<string> {
-  const hash = createHash("sha256");
-  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer);
-  return hash.digest("hex");
 }
 
 async function installersIn(directory: string): Promise<InstallerFile[]> {
