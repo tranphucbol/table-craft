@@ -106,6 +106,8 @@ export interface SceneScript {
   readonly alsoSaved?: readonly SavedDatasource[];
   /** What `shop` is saved with on top of `SHOP_POSTGRES`, such as its agent access. */
   readonly shop?: Partial<SavedDatasource>;
+  /** Before launch, ahead of `settings` and `env`: what the app must find running, such as a server. */
+  readonly prepare?: () => Promise<void>;
   /** Settings seeded beside the pinned appearance, such as `mcp`. */
   readonly settings?: () => Record<string, unknown>;
   /** Variables the app launches with on top of the harness's, such as a fixture `HOME`. */
@@ -127,12 +129,13 @@ export function scene(name: string, script: SceneScript) {
     name,
     async () => {
       loadShopPostgres();
+      teardown = script.teardown ?? null;
+      await script.prepare?.();
       const profile = newProfile();
       const sqlite = shopSqlite(join(sqliteDirectory, SHOP_FILE));
       const saved = { ...SHOP_POSTGRES, ...shop };
       seedDatasources(profile, [...(withoutShop ? [sqlite] : [saved, sqlite]), ...alsoSaved]);
       seedSettings(profile, { ...APPEARANCE, ...settings?.() });
-      teardown = script.teardown ?? null;
       const { app, page } = await launchApp(null, { userDataDir: profile, env: env?.() ?? {} });
       running = app;
       await setWindowSize(app, EVIDENCE_WINDOW);

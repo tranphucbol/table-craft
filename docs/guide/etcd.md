@@ -9,6 +9,8 @@ only the keys under a prefix; it is a view, not a permission, and leases, users,
 maintenance still act on the whole cluster, which the app says each time. With **Read mode**
 Serializable, the member you reach answers alone, and results are marked as possibly stale.
 
+![etcd keys and History](../media/etcd.gif)
+
 - **Key tree.** Keys in folders split on `/`, listed from the server 500 at a time per folder, with
   counts as folders scroll into view and a lease's time to live beside its key. Filter by prefix,
   by range, by name among the loaded keys, or to leased keys only. Deleting a key or a folder

@@ -74,6 +74,13 @@ from them.
 
 ![SQL console](../media/console.gif)
 
+**New Console** in the tab strip opens another console on the current data source. Right-click a tab
+and choose **Split Right** or **Split Left** to put it in a group of its own beside the current
+one; each group has its own toolbar, runs and results, and tabs drag from one group to another.
+Closing a group's last tab closes the group.
+
+![Console groups](../media/console-groups.gif)
+
 See [SQL console](../design/specification.md#sql-console).
 
 ## Explain
