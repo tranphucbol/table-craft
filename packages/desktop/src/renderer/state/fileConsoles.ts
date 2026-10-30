@@ -14,6 +14,10 @@ import {
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import type { ModalRequest } from "@table-craft/desktop/renderer/state/modal.js";
 import type { SqlFileAccess } from "@table-craft/desktop/renderer/state/sqlFiles.js";
+import {
+  assertConsoleTextPersistable,
+  ConsolePersistenceFailure,
+} from "@table-craft/desktop/renderer/state/consolePersistence.js";
 import type { Tab, TabsStore } from "@table-craft/desktop/renderer/state/tabs.js";
 
 /** The answers of the unsaved-files question; Cancel answers null. */
@@ -29,6 +33,7 @@ export interface FileConsoleDependencies {
   readonly ask: (request: ModalRequest) => Promise<string | null>;
   readonly newTab: (title: string) => Tab;
   readonly datasourceExists: (id: string) => boolean;
+  readonly validateText?: (datasourceId: string, text: string) => Promise<void>;
   /** Absent, the global timers. */
   readonly timers?: Timers;
   readonly autosaveDelayMs?: number;
@@ -99,6 +104,7 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
   const { files, consoles, tabs, ask } = dependencies;
   const timers = dependencies.timers ?? GLOBAL_TIMERS;
   const delayMs = dependencies.autosaveDelayMs ?? AUTOSAVE_DELAY_MS;
+  const validateText = dependencies.validateText ?? assertConsoleTextPersistable;
   const pending = new Map<string, unknown>();
   /** Each console's write in flight, so two never race and the older text never lands last. */
   const writing = new Map<string, Promise<unknown>>();
@@ -110,7 +116,7 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
       kind: "notice",
       title,
       message: cause instanceof Error ? cause.message : String(cause),
-      hint: cause instanceof ConsoleFileFailure ? cause.hint : FILE_HINT,
+      hint: cause instanceof ConsoleFileFailure || cause instanceof ConsolePersistenceFailure ? cause.hint : FILE_HINT,
     });
   }
 
@@ -168,6 +174,7 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
     const source = session === undefined ? null : fileSourceOf(session);
     if (session === undefined || source === null) return;
     const sql = session.sql;
+    await validateText(session.datasourceId, sql);
     const modifiedAt = await files.write(source.path, sql, source.lineEnding);
     const current = fileSourceOf(consoles.getState().consoles[id]) ?? source;
     consoles.getState().saved(id, { ...current, savedSql: sql, modifiedAt });
@@ -314,9 +321,12 @@ export function createFileConsoles(dependencies: FileConsoleDependencies): FileC
         });
         return false;
       }
-      const sql = consoles.getState().consoles[id]?.sql ?? session.sql;
+      const current = consoles.getState().consoles[id];
+      if (current === undefined) return false;
+      const sql = current.sql;
       const lineEnding = source?.lineEnding ?? "lf";
       try {
+        await validateText(current.datasourceId, sql);
         const modifiedAt = await files.write(path, sql, lineEnding);
         const name = fileNameOf(path);
         consoles.getState().saved(id, { kind: "file", path, savedSql: sql, lineEnding, modifiedAt }, name);

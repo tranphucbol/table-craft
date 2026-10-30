@@ -1,4 +1,5 @@
 import type { EngineError, KeyHistoryEvent, KeyHistoryPage } from "@table-craft/desktop/engine/protocol.js";
+import { diffText, keyDiff } from "@table-craft/desktop/renderer/model/keyDiff.js";
 
 export interface KeyHistoryState {
   readonly mode: "value" | "history";
@@ -20,6 +21,34 @@ export const EMPTY_KEY_HISTORY: KeyHistoryState = {
 
 export function historyEventId(event: KeyHistoryEvent): string {
   return `${event.modRevision}:${event.kind}`;
+}
+
+export function previousHistoryVersion(
+  events: readonly KeyHistoryEvent[],
+  event: KeyHistoryEvent,
+): KeyHistoryEvent | null {
+  const index = events.findIndex((candidate) => historyEventId(candidate) === historyEventId(event));
+  const previous = events[index + 1];
+  return index >= 0 &&
+    previous?.kind === "PUT" &&
+    event.kind === "PUT" &&
+    previous.createRevision === event.createRevision &&
+    BigInt(previous.version) + 1n === BigInt(event.version)
+    ? previous
+    : null;
+}
+
+export function historyLineDelta(
+  event: KeyHistoryEvent,
+  previous: KeyHistoryEvent | null,
+): { readonly added: number; readonly removed: number } | null {
+  if (event.value === null || event.value.hex !== null || previous?.value == null || previous.value.hex !== null)
+    return null;
+  const lines = keyDiff(diffText(previous.value), diffText(event.value));
+  return {
+    added: lines.filter((line) => line.kind === "insert").length,
+    removed: lines.filter((line) => line.kind === "delete").length,
+  };
 }
 
 /** Deduplicate pages without converting int64 revision strings into imprecise numbers. */

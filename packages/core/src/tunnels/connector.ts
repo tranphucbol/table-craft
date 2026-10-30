@@ -65,6 +65,57 @@ export function createConnector(options: ConnectorOptions): Connector {
     return { connect: direct, hop: null, close: () => Promise.resolve() };
   }
   const values: Values = parsed.data;
+  const endpoints = loaded.plugin.connectionEndpoints?.(parsed.data);
+  if (endpoints !== undefined) {
+    if (endpoints.length === 0 || new Set(endpoints.map((endpoint) => endpoint.id)).size !== endpoints.length) {
+      throw new PluginError("connectionFailed", "The plugin supplied an empty or duplicate connection endpoint list.");
+    }
+    let hop: SshHop | null = null;
+    const now = options.now ?? Date.now;
+    const open = options.openTunnel ?? openTunnel;
+    const seconds =
+      network.connectTimeout === undefined ? DEFAULT_TIMEOUT_SECONDS : Number(values[network.connectTimeout]);
+    const pools = endpoints.map((target) =>
+      createTunnelPool(async () => {
+        const started = now();
+        const tunnel = await open({
+          ssh,
+          target,
+          verifyHostKey: options.verifyHostKey,
+          timeoutMs: (Number.isFinite(seconds) ? seconds : DEFAULT_TIMEOUT_SECONDS) * MS_PER_SECOND,
+          ...(options.keepAliveMs === undefined ? {} : { keepAliveMs: options.keepAliveMs }),
+        });
+        hop = { host: ssh.host, user: ssh.user, elapsedMs: now() - started };
+        return tunnel;
+      }),
+    );
+    return {
+      async connect(connect) {
+        const leases: Awaited<ReturnType<(typeof pools)[number]["acquire"]>>[] = [];
+        try {
+          for (const pool of pools) leases.push(await pool.acquire());
+          const transports = endpoints.map((endpoint, index) => ({
+            id: endpoint.id,
+            host: LOOPBACK,
+            port: leases[index]!.localPort,
+            serverName: endpoint.host,
+          }));
+          let session = await openSession(plugins, pluginId, values, { ...connect, transports });
+          for (const lease of leases) session = tunneledSession(session, lease, ssh.host);
+          return session;
+        } catch (cause) {
+          for (const lease of leases) lease.release();
+          throw cause;
+        }
+      },
+      get hop() {
+        return hop;
+      },
+      async close() {
+        await Promise.all(pools.map((pool) => pool.close()));
+      },
+    };
+  }
   const target = { host: String(values[network.host]), port: Number(values[network.port]) };
   const seconds =
     network.connectTimeout === undefined ? DEFAULT_TIMEOUT_SECONDS : Number(values[network.connectTimeout]);

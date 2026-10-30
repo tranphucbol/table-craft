@@ -1,5 +1,14 @@
 import type { ExecuteResult } from "./plugin.js";
 import type { WireValue } from "./values.js";
+import type {
+  KeyChildrenPage,
+  KeyChildrenRequest,
+  KeyDeletePreview,
+  KeyDeleteResult,
+  KeyLeaseAssignment,
+  KeyRange,
+  KeyRangeCount,
+} from "./keyAdvanced.js";
 
 /** The key types the key tree tells apart (decision 113); a module type such as RedisJSON is `other`. */
 export const KEY_TYPES = ["string", "hash", "list", "set", "zset", "stream", "json", "other"] as const;
@@ -37,6 +46,7 @@ export interface KeyConflictSnapshot {
 
 /** Optional operations a keyspace implements; absent fields mean unsupported. */
 export interface KeyspaceFeatures {
+  readonly leaseAssignment?: boolean;
   /** `apply` atomically enforces `revisionGuard`, even when `guard` is false. */
   readonly revisionGuard?: boolean;
 }
@@ -217,6 +227,8 @@ export type KeyChange =
   | { readonly kind: "deleteEntry"; readonly id: string };
 
 export interface KeyApplyOptions {
+  /** Absent preserves the current lease; detach never revokes it. */
+  readonly lease?: KeyLeaseAssignment;
   /** Compare the CURRENT read's mod revision atomically, including "0" for an absent key. */
   readonly revisionGuard?: { readonly modRevision: string };
   /** The key's type as read, or the type of the key the changes create. */
@@ -240,6 +252,10 @@ export type KeyExpiry = { readonly inMs: number } | { readonly at: string } | nu
  * session exactly when the plugin declares `keyValue`. Calls queue on the session they hang off.
  */
 export interface Keyspace {
+  children?(request: KeyChildrenRequest): Promise<KeyChildrenPage>;
+  countRange?(database: number, range: KeyRange): Promise<KeyRangeCount>;
+  prepareDelete?(database: number, range: KeyRange): Promise<KeyDeletePreview>;
+  deletePrepared?(token: string): Promise<KeyDeleteResult>;
   readonly features?: KeyspaceFeatures;
   /** Finite history only, not a live watch. Events are chronological within and across pages. */
   history?(request: KeyHistoryRequest): Promise<KeyHistoryPage>;

@@ -67,6 +67,49 @@ describe("etcd client", () => {
     await expect(client.call(() => Promise.reject(new Error("boom")))).rejects.toThrow("boom");
     expect(made).toHaveLength(1);
   });
+
+  it("givenConfiguredPool_whenPinned_thenOnlyNamedConfiguredAddressAndAllClose", async () => {
+    const made: { address: string; closed: boolean }[] = [];
+    const client = new EtcdClient(
+      {
+        ...SETTINGS,
+        endpoints: [
+          { id: "a", address: "127.0.0.1:40001", tls: null },
+          { id: "b", address: "127.0.0.1:40002", tls: null },
+        ],
+      },
+      (settings) => {
+        const fake = {
+          address: settings.address,
+          closed: false,
+          close() {
+            fake.closed = true;
+          },
+        };
+        made.push(fake);
+        return fake as unknown as Etcd3;
+      },
+    );
+    await expect(
+      client.pinned("b").call((etcd) => Promise.resolve((etcd as unknown as { address: string }).address)),
+    ).resolves.toBe("127.0.0.1:40002");
+    expect(() => client.pinned("advertised-member")).toThrow("configured");
+    client.close();
+    expect(made.every((item) => item.closed)).toBe(true);
+  });
+
+  it("givenAmbiguousMutationFailure_whenCalled_thenNeverRetried", async () => {
+    const { client } = fakeClient();
+    let writes = 0;
+    await expect(
+      client.call(async () => {
+        await Promise.resolve();
+        writes += 1;
+        throw new Error("deadline exceeded after send");
+      }),
+    ).rejects.toMatchObject({ code: "statementFailed", outcome: "unknown" });
+    expect(writes).toBe(1);
+  });
 });
 
 describe("etcd byte order marks", () => {

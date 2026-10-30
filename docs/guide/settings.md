@@ -48,6 +48,7 @@ back to its default without affecting the others.
 | `data.blobLimitMb`                     | 1–128; the largest file, in MiB, Load from File puts into a binary cell, and Save to File reads | 16                                             |
 | `log.level`                            | `info`, `debug`                                                                                 | `info`                                         |
 | `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                               | 120                                            |
+| `data.watchRetention`                  | 1,000–100,000; events retained per new watch                                                    | 10,000                                         |
 | `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and daily                                  | `true`                                         |
 | `updates.channel`                      | `auto`, `stable`, `beta`; `auto` follows the build you run. Plugins follow it too               | `auto`                                         |
 | `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |

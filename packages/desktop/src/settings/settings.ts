@@ -64,6 +64,7 @@ export interface DataSettings {
   readonly aggregates: readonly AggregateName[];
   /** The largest file, in MiB, Load from File puts into a bytes cell. */
   readonly blobLimitMb: number;
+  readonly watchRetention: number;
 }
 
 /** The selection aggregates the grid can show, in the order it shows them. */
@@ -197,6 +198,10 @@ export const PAGE_ROWS_RANGE: NumberRange = { min: 10, max: 10_000 };
 export const FETCH_ALL_CAP_RANGE: NumberRange = { min: 1_000, max: 1_000_000 };
 export const EXPORT_STALL_SECONDS_RANGE: NumberRange = { min: 10, max: 3_600 };
 export const BLOB_LIMIT_MB_RANGE: NumberRange = { min: 1, max: 128 };
+export const WATCH_RETENTION_RANGE: NumberRange = { min: 1_000, max: 100_000 };
+export function watchRetentionError(value: number): string | null {
+  return rangeError(value, WATCH_RETENTION_RANGE, "Watch retention");
+}
 export const NULL_TEXT_LENGTH: NumberRange = { min: 1, max: 16 };
 export const INDENT_WIDTH_RANGE: NumberRange = { min: 1, max: 8 };
 export const LINES_BETWEEN_STATEMENTS_RANGE: NumberRange = { min: 0, max: 5 };
@@ -249,6 +254,7 @@ export const DEFAULT_SETTINGS: Settings = {
     exportStallSeconds: 120,
     aggregates: AGGREGATE_NAMES,
     blobLimitMb: 16,
+    watchRetention: 10_000,
   },
   log: {
     level: "info",
@@ -496,6 +502,9 @@ export function readSettings(input: unknown): Settings {
         ? AGGREGATE_NAMES.filter((name) => (data.aggregates as unknown[]).includes(name))
         : defaults.data.aggregates,
       blobLimitMb: inRange(data.blobLimitMb, BLOB_LIMIT_MB_RANGE) ? data.blobLimitMb : defaults.data.blobLimitMb,
+      watchRetention: inRange(data.watchRetention, WATCH_RETENTION_RANGE)
+        ? data.watchRetention
+        : defaults.data.watchRetention,
     },
     log: {
       level: LOG_LEVEL_CHOICES.includes(log.level as LogLevelChoice)

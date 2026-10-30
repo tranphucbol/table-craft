@@ -10,6 +10,7 @@ import { Console } from "@table-craft/desktop/renderer/console/Console.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
 import { KeyTab } from "@table-craft/desktop/renderer/keys/KeyTab.js";
+import { AdminView } from "@table-craft/desktop/renderer/keyAdmin/AdminView.js";
 import { ServerTab } from "@table-craft/desktop/renderer/server/ServerTab.js";
 import { deferTabDrag } from "@table-craft/desktop/renderer/model/tabDrag.js";
 import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
@@ -337,6 +338,8 @@ function EditorContent({ active }: { readonly active: Tab | null }) {
     <KeyTab key={active.id} tabId={active.id} />
   ) : active.kind === "server" ? (
     <ServerTab key={active.id} tabId={active.id} />
+  ) : active.kind === "keyAdmin" ? (
+    <AdminView key={active.id} tabId={active.id} />
   ) : (
     <Console key={active.id} consoleId={active.id} />
   );

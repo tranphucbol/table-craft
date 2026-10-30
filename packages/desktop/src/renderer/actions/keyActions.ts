@@ -6,7 +6,12 @@ import { keyIdentity, type KeyFilter } from "@table-craft/desktop/renderer/model
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { formatPattern, VALUE_FORMATS, type ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
+import {
+  formatPattern,
+  isKubernetesKeyValue,
+  VALUE_FORMATS,
+  type ValueFormat,
+} from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
   canReloadKey,
   pendingKeyCount,
@@ -41,6 +46,7 @@ export const KEY_ACTION_IDS = {
   chooseMerge: "key.chooseMerge",
   acknowledgeMerge: "key.acknowledgeMerge",
   nextMergeConflict: "key.nextMergeConflict",
+  previousMergeConflict: "key.previousMergeConflict",
   valueFormat: "key.valueFormat",
   toggleEmptyDatabases: "explorer.toggleEmptyDatabases",
   openFromResult: "key.openFromResult",
@@ -127,7 +133,7 @@ export function openKey(_context: ActionContext, target: OpenKeyArgs): void {
 
 /** The key carries facts beyond the common ones, which the Details panel lists. */
 export function hasAttributes(tab: KeyTab | null): boolean {
-  return (tab?.details?.attributes?.length ?? 0) > 0;
+  return (tab?.details?.attributes?.length ?? 0) > 0 || tab?.details?.revision !== undefined;
 }
 
 /** The pattern the active key tab's value format is remembered under. */
@@ -342,6 +348,17 @@ export const KEY_ACTIONS: readonly AnyAction[] = [
     },
   }),
   defineAction({
+    id: KEY_ACTION_IDS.previousMergeConflict,
+    title: "Previous Key Conflict",
+    category: "Key Editor",
+    tabKind: "key",
+    shortcut: "Shift+F7",
+    when: (context) => context.keyTab?.merge?.visible === true && context.keyTab.merge.merged.conflicts.length > 0,
+    run: (context) => {
+      if (context.activeTab !== null) useKeyTabs.getState().previousMergeConflict(context.activeTab.id);
+    },
+  }),
+  defineAction({
     id: KEY_ACTION_IDS.history,
     title: "Key History",
     category: "Key Editor",
@@ -403,7 +420,7 @@ export const KEY_ACTIONS: readonly AnyAction[] = [
       return (
         selected?.kind === "PUT" &&
         selected.value !== null &&
-        selected.value.hex === null &&
+        !isKubernetesKeyValue(selected.value) &&
         selected.modRevision !== tab.details.revision?.modRevision
       );
     },

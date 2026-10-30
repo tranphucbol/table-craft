@@ -26,7 +26,6 @@ const DATABASE = 0;
 const READ_WINDOW = 10;
 const LEASE_MS = 600_000;
 const MAX_MERGE_CONFLICTS = 10;
-const SUBMITTED_NOTICE = "Changes saved atomically";
 const RESTORE_NOTICE = "Historical value staged. The current lease is kept; an old lease is not restored.";
 const INITIAL = JSON.stringify({ service: "billing", mode: "draft", retries: 1 }, null, 2);
 const PRIOR = JSON.stringify({ service: "billing", mode: "safe", retries: 2 }, null, 2);
@@ -174,7 +173,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("etcd History, Restore and Me
           );
           expect(await history(page).textContent()).toContain("No timestamps are available. Ages count revisions.");
           expect(await versions.allTextContents()).toEqual(
-            expect.arrayContaining([expect.stringContaining("DeletedDELETE")]),
+            expect.arrayContaining([expect.stringContaining("DeletedKey removed")]),
           );
           const comparison = history(page).getByRole("region", { name: "Value comparison" });
           expect(await comparison.textContent()).toContain('"safe"');
@@ -202,7 +201,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("etcd History, Restore and Me
           await preview.getByRole("button", { name: "Submit", exact: true }).click();
           await expect
             .poll(() => keyTab(page).getByTestId("key-notice").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
-            .toBe(SUBMITTED_NOTICE);
+            .toBe(`Saved as v${String(BigInt(before.details.revision?.version ?? "0") + 1n)}`);
           await expect.poll(() => editor(page).textContent()).toBe(PRIOR);
           const after = await fixture.current();
           expect(after.value).toBe(PRIOR);

@@ -3,6 +3,8 @@ import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
+import { settleAdminRenewals } from "@table-craft/desktop/renderer/keyAdmin/actions.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 
 const HISTORY_DELETED = " Its query history is deleted too.";
 
@@ -34,6 +36,10 @@ export async function deleteDatasource(view: DatasourceView): Promise<void> {
     destructive: true,
   });
   if (confirmed === null) return;
+  const adminIds = Object.entries(useKeyAdmin.getState().tabs)
+    .filter(([, tab]) => tab.datasourceId === view.id)
+    .map(([id]) => id);
+  if (!(await settleAdminRenewals(adminIds, "delete this data source"))) return;
   // Main broadcasts the new list; `wireStores` closes the consoles when it arrives.
   await settle("Could not delete the data source", bridge().deleteDatasource(view.id));
 }

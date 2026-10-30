@@ -9,10 +9,26 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { EngineRequestError, type EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { alignDiff, diffText, keyDiff } from "@table-craft/desktop/renderer/model/keyDiff.js";
-import { appendHistory, historyEventId, revisionAge } from "@table-craft/desktop/renderer/model/keyHistory.js";
+import {
+  appendHistory,
+  historyEventId,
+  revisionAge,
+  previousHistoryVersion,
+  historyLineDelta,
+} from "@table-craft/desktop/renderer/model/keyHistory.js";
 import { mergeKeyText } from "@table-craft/desktop/renderer/model/keyMerge.js";
 import { beginKeyMerge, canSaveKeyMerge } from "@table-craft/desktop/renderer/model/keyMergeSession.js";
-import { createKeyTabsStore, pendingKeyChanges } from "@table-craft/desktop/renderer/state/keyTabs.js";
+import {
+  createKeyTabsStore,
+  pendingKeyChanges,
+  KEY_SAVED_NOTICE_MS,
+} from "@table-craft/desktop/renderer/state/keyTabs.js";
+import { keyValueSize, keyValueCount } from "@table-craft/desktop/renderer/keys/keyValueFacts.js";
+import { parseKeyYaml } from "@table-craft/desktop/renderer/model/valueFormats.js";
+import { KEY_ACTIONS, KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
+import { createActionRegistry } from "@table-craft/desktop/renderer/actions/registry.js";
+import { createKeyDispatcher, findClashes } from "@table-craft/desktop/renderer/actions/keymap.js";
+import { IDLE_CONTEXT, keydown } from "./support.js";
 
 const bytes = (text: string) => ({ text, hex: null });
 const KEY = bytes("/config/app");
@@ -104,6 +120,91 @@ async function fixture(
 }
 
 describe("key history", () => {
+  it.each([
+    { value: { text: "\\xff", hex: "ff" }, enabled: true },
+    { value: bytes("k8s\u0000protobuf"), enabled: false },
+    { value: { text: "k8s\\x00", hex: "6b387300ff" }, enabled: false },
+  ])("givenHistoryValue_whenRestoreActionChecked_thenBinaryAndKubernetesAgreeWithStore", async ({ value, enabled }) => {
+    const { store } = await fixture({ history: () => Promise.resolve(page([{ ...event("9"), value }])) });
+    await store.getState().loadHistory("key");
+    const registry = createActionRegistry(() => ({
+      ...IDLE_CONTEXT,
+      activeTab: { id: "key", kind: "key", title: KEY.text },
+      keyTab: store.getState().tabs.key!,
+    }));
+    registry.register(KEY_ACTIONS);
+    expect(registry.isEnabled(KEY_ACTION_IDS.restoreHistory)).toBe(enabled);
+    expect(store.getState().restoreHistory("key")).toBe(enabled);
+  });
+  it("givenPendingTextOrBinary_whenCounted_thenMeasuredUtf8BytesAndNoInventedLines", async () => {
+    const { store } = await fixture();
+    store.getState().setStringValue("key", bytes("é\n猫"));
+    expect(keyValueSize(store.getState().tabs.key!)).toBe(6);
+    expect(keyValueCount(store.getState().tabs.key!)).toBe("2 lines · 6 bytes");
+    store.getState().setStringValue("key", { text: "\\xff", hex: "ff00" });
+    expect(keyValueSize(store.getState().tabs.key!)).toBe(2);
+    expect(keyValueCount(store.getState().tabs.key!)).toBe("2 bytes");
+  });
+  it("givenAdjacentVersions_whenCompared_thenLineDeltaAndNoGuessedPreviousAcrossGap", () => {
+    const current = { ...event("9", "a\nc"), version: "3" };
+    const previous = { ...event("8", "a\nb"), version: "2" };
+    expect(previousHistoryVersion([current, previous], current)).toEqual(previous);
+    expect(historyLineDelta(current, previous)).toEqual({ added: 1, removed: 1 });
+    expect(previousHistoryVersion([current, { ...previous, version: "1" }], current)).toBeNull();
+    expect(previousHistoryVersion([current, { ...previous, createRevision: "7" }], current)).toBeNull();
+    expect(historyLineDelta(current, { ...previous, value: { text: "", hex: "ff" } })).toBeNull();
+  });
+
+  it("givenRestoredValue_whenSaveRefused_thenRestoreNoticeDoesNotSurviveConflict", async () => {
+    const { store } = await fixture({ apply: () => Promise.reject(failure("theirs")) });
+    await store.getState().loadHistory("key");
+    store.getState().restoreHistory("key");
+    expect(store.getState().tabs.key?.notice).toContain("Historical value staged");
+    expect(await store.getState().submit("key")).toBe(false);
+    expect(store.getState().tabs.key?.notice).toBeNull();
+    expect(store.getState().tabs.key?.merge?.visible).toBe(true);
+  });
+
+  it("givenSuccessfulGuardedSave_whenFourSecondsPass_thenVersionNoticeClears", async () => {
+    vi.useFakeTimers();
+    try {
+      const { store } = await fixture();
+      store.getState().setStringValue("key", bytes("mine"));
+      expect(await store.getState().submit("key")).toBe(true);
+      expect(store.getState().tabs.key?.notice).toBe("Saved as v3");
+      vi.advanceTimersByTime(KEY_SAVED_NOTICE_MS - 1);
+      expect(store.getState().tabs.key?.notice).toBe("Saved as v3");
+      vi.advanceTimersByTime(1);
+      expect(store.getState().tabs.key?.notice).toBeNull();
+      store.getState().close("key");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("givenSavedNotice_whenInvalidInputOrReload_thenNoStaleSavedOrRestoreNotice", async () => {
+    const { store } = await fixture();
+    store.getState().setStringValue("key", bytes("mine"));
+    await store.getState().submit("key");
+    store.getState().setStringProblem("key", "Invalid hex");
+    expect(store.getState().tabs.key?.notice).toBeNull();
+    store.getState().revertAll("key");
+    await store.getState().loadHistory("key");
+    store.getState().restoreHistory("key");
+    await store.getState().reload("key");
+    expect(store.getState().tabs.key?.notice).toBeNull();
+    store.getState().close("key");
+  });
+
+  it("givenKubernetesEnvelope_whenRead_thenWritesBlockedWithTruthfulDisclosure", async () => {
+    const { store, call } = await fixture({
+      opened: () => Promise.resolve({ details: DETAILS, value: "k8s\u0000protobuf", statement: null, readOnly: null }),
+    });
+    expect(store.getState().tabs.key?.readOnly).toContain("Decoding is not supported");
+    store.getState().setStringValue("key", bytes("changed"));
+    expect(await store.getState().submit("key")).toBe(false);
+    expect(call.mock.calls.some(([type]) => type === "keyspace.apply")).toBe(false);
+  });
   it("givenLargeRevisions_whenPagesOverlap_thenExactOrderAndDistance", () => {
     const events = appendHistory([event("9007199254740993")], [event("9007199254740994"), event("9007199254740993")]);
     expect(events.map(historyEventId)).toEqual(["9007199254740994:PUT", "9007199254740993:PUT"]);
@@ -148,15 +249,31 @@ describe("key history", () => {
     expect(store.getState().restoreHistory("key")).toBe(false);
   });
 
-  it.each([event("9", "binary"), { ...event("8"), kind: "DELETE" as const, value: null }])(
-    "givenBinaryOrDeletion_whenRestored_thenRefused",
+  it.each([{ ...event("8"), kind: "DELETE" as const, value: null }, event("9", "k8s\u0000protobuf")])(
+    "givenDeletionOrKubernetes_whenRestored_thenRefused",
     async (version) => {
-      const selected = version.kind === "PUT" ? { ...version, value: { text: "\\xff", hex: "ff" } } : version;
-      const { store } = await fixture({ history: () => Promise.resolve(page([selected])) });
+      const { store } = await fixture({ history: () => Promise.resolve(page([version])) });
       await store.getState().loadHistory("key");
       expect(store.getState().restoreHistory("key")).toBe(false);
     },
   );
+
+  it("givenBinaryHistory_whenRestored_thenStagesExactBytesAndKeepsGuard", async () => {
+    const value = { text: "\\xff\\x00", hex: "ff00" };
+    const { store, call } = await fixture({ history: () => Promise.resolve(page([{ ...event("9"), value }])) });
+    await store.getState().loadHistory("key");
+    expect(store.getState().restoreHistory("key")).toBe(true);
+    expect(store.getState().tabs.key?.stringValue).toEqual(value);
+    expect(call.mock.calls.some(([type]) => type === "keyspace.apply")).toBe(false);
+    await store.getState().submit("key");
+    expect(call).toHaveBeenCalledWith(
+      "keyspace.apply",
+      expect.objectContaining({
+        changes: [{ kind: "setString", value, original: bytes("base") }],
+        options: { type: "string", guard: true, revisionGuard: { modRevision: "10" } },
+      }),
+    );
+  });
 
   it("givenPartialPages_whenAppended_thenKeepsGapsAndDeduplicates", async () => {
     let calls = 0;
@@ -247,6 +364,86 @@ describe("key history", () => {
 });
 
 describe("key merge", () => {
+  it("givenIndependentYamlPaths_whenMerged_thenStructuredAndIntegersRemainExact", () => {
+    const merged = mergeKeyText(
+      "# Original comment\nlimits:\n  daily: 1\n  weekly: 2\nrevision: 9007199254740993\n",
+      "limits:\n  daily: 3\n  weekly: 2\nrevision: 9007199254740993\n",
+      "limits:\n  daily: 1\n  weekly: 4\nrevision: 9007199254740993\n",
+    );
+    expect(merged.format).toBe("yaml");
+    expect(merged.conflicts).toEqual([]);
+    expect(parseKeyYaml(merged.text)).toEqual({ limits: { daily: 3n, weekly: 4n }, revision: 9007199254740993n });
+    expect(merged.text).not.toContain("Original comment");
+  });
+
+  it("givenOverlappingYamlPaths_whenChosen_thenOnlyThatPathIsReplaced", () => {
+    const base = "limits:\n  daily: 1\nflag: true\n";
+    const theirs = "limits:\n  daily: 2\nflag: true\n";
+    const yours = "limits:\n  daily: 3\nflag: false\n";
+    const merged = mergeKeyText(base, theirs, yours);
+    expect(merged.conflicts.map((conflict) => conflict.path)).toEqual(["/limits/daily"]);
+    const resolved = mergeKeyText(base, theirs, yours, { "/limits/daily": "theirs" });
+    expect(resolved.conflicts).toEqual([]);
+    expect(parseKeyYaml(resolved.text)).toEqual({ limits: { daily: 2n }, flag: false });
+    expect(mergeKeyText("a: 1\n", "{}\n# YAML\n", "a: null\n").conflicts).toHaveLength(1);
+  });
+
+  it("givenYamlArrays_whenBothChanged_thenWholeArrayConflicts", () => {
+    const merged = mergeKeyText("items: [a, b]\n", "items: [c, b]\n", "items: [a, d]\n");
+    expect(merged.format).toBe("yaml");
+    expect(merged.conflicts.map((conflict) => conflict.path)).toEqual(["/items"]);
+  });
+
+  it("givenUnsafeYamlFloatOrAliases_whenMerged_thenNoLossyNormalization", () => {
+    for (const source of ["value: 1.0000000000000001\n", "value: &anchor [1]\ncopy: *anchor\n"]) {
+      const merged = mergeKeyText(source, source, source);
+      expect(merged.format).toBe("text");
+      expect(merged.text).toBe(source);
+      expect(diffText(bytes(source))).toBe(source);
+    }
+  });
+
+  it("givenYamlFormattingOnly_whenDiffed_thenNormalizedForComparison", () => {
+    expect(diffText(bytes("limits: {daily: 1, weekly: 2}\n"))).toBe(
+      diffText(bytes("limits:\n  daily: 1\n  weekly: 2\n")),
+    );
+  });
+
+  it("givenInvalidManualYamlResult_whenAcknowledged_thenSaveStillBlocked", () => {
+    const merge = beginKeyMerge(snapshot("a: 2\nb: 1\n"), bytes("a: 1\nb: 1\n"), bytes("a: 1\nb: 2\n"));
+    expect(merge.merged.format).toBe("yaml");
+    expect(canSaveKeyMerge(merge)).toBe(true);
+    expect(canSaveKeyMerge({ ...merge, manual: true, acknowledged: true, text: "a: [" })).toBe(false);
+  });
+
+  it("givenMultipleConflicts_whenNavigatingBackward_thenWrapsAndHasDistinctShortcut", async () => {
+    const { store } = await fixture({
+      opened: () => Promise.resolve({ details: DETAILS, value: '{"a":1,"b":1}', statement: null, readOnly: null }),
+      apply: () => Promise.reject(failure('{"a":2,"b":2}')),
+    });
+    store.getState().setStringValue("key", bytes('{"a":3,"b":3}'));
+    await store.getState().submit("key");
+    expect(store.getState().tabs.key?.merge?.merged.conflicts).toHaveLength(2);
+    store.getState().previousMergeConflict("key");
+    expect(store.getState().tabs.key?.merge?.conflictIndex).toBe(1);
+    store.getState().previousMergeConflict("key");
+    expect(store.getState().tabs.key?.merge?.conflictIndex).toBe(0);
+    store.getState().nextMergeConflict("key");
+    expect(store.getState().tabs.key?.merge?.conflictIndex).toBe(1);
+    expect(KEY_ACTIONS.find((action) => action.id === KEY_ACTION_IDS.previousMergeConflict)?.shortcut).toBe("Shift+F7");
+    expect(findClashes(KEY_ACTIONS)).toEqual([]);
+    const ran = vi.fn();
+    const registry = createActionRegistry(() => ({
+      ...IDLE_CONTEXT,
+      activeTab: { id: "key", kind: "key", title: KEY.text },
+      keyTab: store.getState().tabs.key!,
+    }));
+    const previousAction = KEY_ACTIONS.find((action) => action.id === KEY_ACTION_IDS.previousMergeConflict)!;
+    registry.register([{ ...previousAction, run: ran }]);
+    const dispatch = createKeyDispatcher({ registry, platform: "mac", paletteOpen: () => false });
+    dispatch(keydown({ key: "F7", shiftKey: true }));
+    expect(ran).toHaveBeenCalledOnce();
+  });
   it.each(["base", "", '{"a":1}'])(
     "givenDeletedBaseline_whenConcurrentKeyRecreated_thenRequiresExplicitResolution_%s",
     (recreated) => {

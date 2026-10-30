@@ -1,12 +1,12 @@
 import { PluginError } from "@table-craft/plugin-api";
 import type { IRequestOp } from "etcd3";
-import { argumentsOf, hexId, leaseIdOf, numberFlag, type Arguments } from "./args.js";
+import { argumentsOf, hexId, type Arguments } from "./args.js";
+import { consoleInt64, consoleLeaseId } from "./consoleNumbers.js";
 import { commandOf, type CommandDoc } from "./docs.js";
 import { NO_END, prefixEnd } from "./scan.js";
 import { quoteBytes, type Token } from "./tokens.js";
 
 const NO_LEASE = "0";
-const DECIMAL = /^\d+$/;
 const SORT_TARGETS: Readonly<Record<string, string>> = {
   KEY: "Key",
   CREATE: "Create",
@@ -27,7 +27,7 @@ export interface RangeOp {
   /** Answer with the first value alone, as `etcdctl --print-value-only` prints it. */
   readonly printValueOnly: boolean;
   readonly limit: number;
-  readonly revision: number;
+  readonly revision: string | number;
   readonly sortTarget: string | null;
   readonly sortOrder: string | null;
 }
@@ -80,6 +80,13 @@ function choiceOf(doc: CommandDoc, args: Arguments, name: string, choices: Reado
   return choice;
 }
 
+function integerFlag(args: Arguments, name: string): string {
+  const value = args.flags.get(name);
+  if (value === undefined) return "0";
+  if (value === true) throw new PluginError("statementFailed", `--${name} requires a decimal int64.`);
+  return consoleInt64(value);
+}
+
 /** A `get`, `put` or `del` line's tokens, the name first, as the op it runs; throws for any other command. */
 export function kvOpOf(tokens: readonly Token[]): KvOp {
   const found = commandOf(tokens.map((token) => token.text));
@@ -107,8 +114,8 @@ export function kvOpOf(tokens: readonly Token[]): KvOp {
         keysOnly: args.flags.has("keys-only"),
         countOnly: args.flags.has("count-only"),
         printValueOnly: args.flags.has("print-value-only"),
-        limit: numberFlag(doc, args, "limit", 0),
-        revision: numberFlag(doc, args, "rev", 0),
+        limit: safeLimit(args),
+        revision: integerFlag(args, "rev"),
         sortTarget,
         sortOrder: order ?? (sortTarget === null ? null : (SORT_ORDERS[DEFAULT_ORDER] ?? null)),
       };
@@ -119,7 +126,7 @@ export function kvOpOf(tokens: readonly Token[]): KvOp {
         kind: "put",
         key,
         value: args.positional[1]?.bytes ?? Buffer.alloc(0),
-        lease: typeof lease === "string" ? leaseIdOf(doc, lease) : NO_LEASE,
+        lease: typeof lease === "string" ? consoleLeaseId(lease) : NO_LEASE,
         prevKv: args.flags.has("prev-kv"),
         ignoreLease: args.flags.has("ignore-lease"),
         ignoreValue: args.flags.has("ignore-value"),
@@ -128,6 +135,14 @@ export function kvOpOf(tokens: readonly Token[]): KvOp {
     case "del":
       return { kind: "del", key: start, rangeEnd, prevKv: args.flags.has("prev-kv") };
   }
+}
+
+function safeLimit(args: Arguments): number {
+  const value = integerFlag(args, "limit");
+  const limit = Number(value);
+  if (!Number.isSafeInteger(limit))
+    throw new PluginError("statementFailed", "--limit exceeds the supported exact integer range.");
+  return limit;
 }
 
 /** The op as the request etcd's `Range`, `Put` or `DeleteRange` takes, alone or in a `Txn`. */
@@ -182,7 +197,7 @@ export function opText(op: KvOp): string {
       if (op.countOnly) words.push("--count-only");
       if (op.printValueOnly) words.push("--print-value-only");
       if (op.limit > 0) words.push(`--limit=${String(op.limit)}`);
-      if (op.revision > 0) words.push(`--rev=${String(op.revision)}`);
+      if (String(op.revision) !== "0") words.push(`--rev=${String(op.revision)}`);
       const target = sortName(SORT_TARGETS, op.sortTarget);
       const order = sortName(SORT_ORDERS, op.sortOrder);
       if (target !== null) words.push(`--sort-by=${target}`);
@@ -192,7 +207,7 @@ export function opText(op: KvOp): string {
     case "put":
       words.push(op.ignoreValue ? '""' : quoteBytes(op.value));
       if (op.lease !== NO_LEASE && !op.ignoreLease) {
-        words.push(`--lease=${DECIMAL.test(op.lease) ? hexId(op.lease) : op.lease}`);
+        words.push(`--lease=${hexId(BigInt.asUintN(64, BigInt(op.lease)).toString())}`);
       }
       if (op.prevKv) words.push("--prev-kv");
       if (op.ignoreLease) words.push("--ignore-lease");

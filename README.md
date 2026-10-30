@@ -29,6 +29,8 @@ are reached through datasource plugins loaded at runtime.
   roles, and a compact layout.
 - [Redis, standalone and Cluster](docs/guide/redis.md): a key tree that scans instead of blocking, typed key
   tabs with guarded edits, a `redis-cli` console with completion from the server, and a Server tab.
+- [etcd, from keys to cluster](docs/guide/etcd.md): guarded key editing with history and merge,
+  leases, live Watch, members and maintenance, users and roles, and a visual transaction builder.
 - [Oracle without the Instant Client](docs/guide/oracle.md): schemas, packages and their members in the tree,
   `DBMS_OUTPUT` in Output, every SQL function of the manual in completion, sessions and plans.
 - [Plugins for any database](docs/guide/plugins.md): PostgreSQL, MySQL, SQLite, Oracle and SQL Server are
@@ -102,6 +104,7 @@ plugins. The [specification](docs/design/specification.md) describes the whole o
 
 - [Plugins](docs/guide/plugins.md): which databases ship in the box and which download on demand.
 - [Redis](docs/guide/redis.md): the key tree, key tabs, the command console and the Server tab.
+- [etcd](docs/guide/etcd.md): revision-guarded keys, leases, Watch and cluster administration.
 - [Oracle](docs/guide/oracle.md): connecting without the Instant Client, and what differs from SQL
   databases.
 

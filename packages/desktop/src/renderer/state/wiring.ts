@@ -1,4 +1,8 @@
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { useWatch } from "@table-craft/desktop/renderer/watch/store.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
+import { installDesktopAdminHost } from "@table-craft/desktop/renderer/keyAdmin/host.js";
+import { useCommandTxn } from "@table-craft/desktop/renderer/console/transaction/store.js";
 import { useCatalog, type CatalogStore } from "@table-craft/desktop/renderer/state/catalog.js";
 import {
   consolesOf,
@@ -174,8 +178,75 @@ function followAttaches(datasources: DatasourcesStore, catalog: CatalogStore, ke
   });
 }
 
+type CommandTxnStore = typeof useCommandTxn;
+
+/**
+ * A closed console drops its transaction draft; a datasource whose engine went away or whose
+ * plugins were replaced is probed again on its next connect, because the probe answer belongs to
+ * the plugin that gave it.
+ */
+export function followCommandTxn(
+  datasources: DatasourcesStore,
+  consoles: ConsolesStore,
+  txn: CommandTxnStore,
+): () => void {
+  const offConsoles = consoles.subscribe((state, previous) => {
+    if (state.consoles === previous.consoles) return;
+    for (const id of Object.keys(previous.consoles)) if (!(id in state.consoles)) txn.getState().forget(id);
+  });
+  const offDetached = datasources.onDetached((id) => txn.getState().invalidate(id));
+  const offSources = datasources.subscribe((state, previous) => {
+    if (state.plugins !== previous.plugins) txn.getState().invalidate();
+    for (const [id, connection] of Object.entries(state.connections)) {
+      if (connection.status !== "connected" || previous.connections[id]?.status === "connected") continue;
+      if (txn.getState().supported[id] !== undefined) continue;
+      const source = state.datasources.find((candidate) => candidate.id === id);
+      if (source === undefined || !capabilitiesOf(state.plugins, source.pluginId).includes("commands")) continue;
+      if (consolesOf(consoles.getState().consoles, id).length !== 0) void txn.getState().probe(id);
+    }
+  });
+  return () => {
+    offConsoles();
+    offDetached();
+    offSources();
+  };
+}
+
 /** Loads the list and plugins from main and follows main's broadcasts; returns the unsubscribe. */
 export function installDatasourceSync(onFirstList: () => void): () => void {
+  const offAdminHost = installDesktopAdminHost();
+  const offCommandTxn = followCommandTxn(useDatasources, useConsoles, useCommandTxn);
+  const offAdvancedDetached = useDatasources.onDetached((id) => {
+    useWatch.getState().detach(id);
+    useKeyAdmin.getState().detach(id);
+  });
+  const offAdvancedRemoved = useDatasources.onRemoved((ids) => {
+    for (const id of ids) {
+      useWatch.getState().detach(id);
+      useKeyAdmin.getState().detach(id);
+      for (const [tabId, tab] of Object.entries(useKeyAdmin.getState().tabs))
+        if (tab.datasourceId === id) {
+          useTabs.getState().close(tabId);
+          useKeyAdmin.getState().close(tabId);
+        }
+    }
+  });
+  let advancedTick = 0;
+  const advancedTimer = setInterval(() => {
+    advancedTick++;
+    for (const [id, entry] of Object.entries(useWatch.getState().entries))
+      if (entry.summary.state !== "stopped") void useWatch.getState().poll(id);
+    void useWatch.getState().exportPoll();
+    for (const [id, connection] of Object.entries(useDatasources.getState().connections)) {
+      if (connection.status !== "connected") continue;
+      const source = useDatasources.getState().datasources.find((source) => source.id === id);
+      const caps = capabilitiesOf(useDatasources.getState().plugins, source?.pluginId ?? "");
+      if (advancedTick % CLUSTER_REFRESH_TICKS === 0 && (caps.includes("members") || caps.includes("maintenance")))
+        void useKeyAdmin.getState().refresh(id, "members");
+      if (caps.includes("bulkTransfer") || caps.includes("maintenance")) void useKeyAdmin.getState().tasks(id);
+      void useKeyAdmin.getState().pollQueues(id);
+    }
+  }, ADVANCED_POLL_MS);
   const store = useDatasources.getState();
   const offWired = wireStores({
     datasources: useDatasources,
@@ -205,12 +276,20 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     onFirstList();
   })();
   return () => {
+    clearInterval(advancedTimer);
+    offAdminHost();
+    offCommandTxn();
+    offAdvancedDetached();
+    offAdvancedRemoved();
     offWired();
     offChanged();
     offExited();
     offPlugins();
   };
 }
+
+const ADVANCED_POLL_MS = 1_000;
+const CLUSTER_REFRESH_TICKS = 5;
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 const MORE_CONTRAST_QUERY = "(prefers-contrast: more)";

@@ -1,5 +1,6 @@
 import type { KeyBytes, KeyConflictSnapshot } from "@table-craft/desktop/engine/protocol.js";
 import { mergeKeyText, type KeyMerge, type MergeChoices } from "@table-craft/desktop/renderer/model/keyMerge.js";
+import { encodeValue } from "@table-craft/desktop/renderer/model/valueFormats.js";
 
 export interface KeyMergeSession {
   readonly snapshot: KeyConflictSnapshot;
@@ -49,5 +50,10 @@ export function beginKeyMerge(
 }
 
 export function canSaveKeyMerge(merge: KeyMergeSession): boolean {
-  return !merge.binary && (merge.merged.conflicts.length === 0 || merge.acknowledged);
+  const format = merge.merged.format;
+  return (
+    !merge.binary &&
+    (merge.merged.conflicts.length === 0 || merge.acknowledged) &&
+    (format === "text" || encodeValue(merge.text, format).ok)
+  );
 }

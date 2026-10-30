@@ -16,6 +16,7 @@ const TAB_ICONS = {
   sessions: SessionsIcon,
   key: KeyTabIcon,
   server: ServerTabIcon,
+  keyAdmin: ServerTabIcon,
 } as const satisfies Record<TabKind, unknown>;
 
 export function TabIcon({ kind }: { readonly kind: TabKind }) {

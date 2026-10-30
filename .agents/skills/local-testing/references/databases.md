@@ -40,6 +40,16 @@ from `test/db/schema/redis.redis`. Each cluster is one container running every n
 | `redis-6-cluster` | 6.2     | 47011-47013 | Three primaries                       |
 | `redis-5-cluster` | 5.0     | 47021-47026 | Three primaries and three replicas    |
 
+## etcd
+
+The `etcd` profile selects `etcd` (3.6, port 52379, auth on), `etcd-3-5` (3.5, port 52380,
+no auth), `etcd-tls` (3.6, port 52381, required mTLS, no password auth) and the SSH bastion.
+`etcd-seed` seeds the first two from `test/db/schema/etcd.etcd`: users `root`, `table_craft` and
+`limited`, the last reading `/app/` only. `etcd-tls-seed` writes `/seed/probe` using the etcd-only
+server trust anchor and shared test CA/client certificates. `test/db/etcdTransport.test.ts` checks
+verification and tunnelling. Destructive auth, compaction, membership and quota scenarios use
+the disposable `test/support/etcdIsolated.ts` fixture, never shared external clusters.
+
 ## The remote TiDB
 
 When the git-ignored `.env` names a remote TiDB (`TABLE_CRAFT_TIDB_REMOTE_HOST`, `_PORT`, `_USER`,

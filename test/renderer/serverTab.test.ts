@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { SERVER_ACTION_IDS, SERVER_ACTIONS } from "@table-craft/desktop/renderer/actions/serverActions.js";
+import { useServer } from "@table-craft/desktop/renderer/state/server.js";
+import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
+import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
+import { IDLE_CONTEXT } from "./support.js";
+import { view } from "./datasourceViews.js";
 import type { ServerInfo, ServerNode, SlowCommand } from "@table-craft/desktop/engine/protocol.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { keyspaceStatusText, EMPTY_KEYSPACE } from "@table-craft/desktop/renderer/model/keyTree.js";
@@ -65,6 +71,36 @@ function serverEngine(nodes: readonly ServerNode[]) {
 }
 
 describe("server tab", () => {
+  it("givenMembersAndServerInfo_whenServerDetailsInvoked_thenFactsTabIsReachableWithoutReplacingMembers", async () => {
+    const context = {
+      ...IDLE_CONTEXT,
+      capabilities: ["serverInfo", "members"] as const,
+      datasource: {
+        view: view({ id: "kv", name: "kv" }),
+        capabilities: ["serverInfo", "members"] as const,
+        connection: { status: "connected", error: null, serverVersion: "3.6", serverBrand: null } as const,
+      },
+    };
+    const details = SERVER_ACTIONS.find((action) => action.id === SERVER_ACTION_IDS.details)!;
+    const show = SERVER_ACTIONS.find((action) => action.id === SERVER_ACTION_IDS.show)!;
+    const openTab = vi.spyOn(useTabs.getState(), "open").mockImplementation(() => undefined);
+    const openInfo = vi.spyOn(useServer.getState(), "open").mockResolvedValue(undefined);
+    const openAdmin = vi.spyOn(useKeyAdmin.getState(), "open").mockResolvedValue(undefined);
+    try {
+      expect(details.available?.(context)).toBe(true);
+      await show.run(context, undefined as never);
+      expect(openAdmin).toHaveBeenCalledWith(expect.any(String), "kv", "members");
+      await details.run(context, { datasourceId: "kv" } as never);
+      expect(openTab).toHaveBeenCalledWith(expect.objectContaining({ kind: "server", title: "Server" }));
+      expect(openInfo).toHaveBeenCalledWith(expect.any(String), "kv");
+      expect(details.available?.({ ...context, capabilities: ["members"] })).toBe(false);
+    } finally {
+      openTab.mockRestore();
+      openInfo.mockRestore();
+      openAdmin.mockRestore();
+    }
+  });
+
   it("givenInfo_whenCards_thenMemoryFirstStatsWithHitRatioUnknownLast", () => {
     const cards = serverCards(INFO);
     expect(cards.map((card) => card.title)).toEqual(["Memory", "Stats", "Server", "Errorstats"]);

@@ -74,6 +74,8 @@ import {
   statementTimeoutSecondsError,
   sessionsRefreshSecondsError,
   SESSIONS_REFRESH_SECONDS_RANGE,
+  WATCH_RETENTION_RANGE,
+  watchRetentionError,
 } from "@table-craft/desktop/settings/settings.js";
 
 const PAGE_TITLES: Readonly<Record<SettingsPage, string>> = {
@@ -673,6 +675,16 @@ function DataEditorPage() {
       />
       <p className="col-start-2 text-ink-muted">Applies to the next statement; open results keep theirs.</p>
       <SectionTitle>Export and import</SectionTitle>
+      <NumberField
+        label="Events retained per watch"
+        value={data.watchRetention}
+        range={WATCH_RETENTION_RANGE}
+        check={watchRetentionError}
+        onValid={(watchRetention) => setData({ watchRetention })}
+      />
+      <p className="col-start-2 text-ink-muted">
+        Applies to new watches. Older display events are dropped at this cap; server gaps are reported separately.
+      </p>
       <NumberField
         label="Transfer stall timeout (s)"
         value={data.exportStallSeconds}

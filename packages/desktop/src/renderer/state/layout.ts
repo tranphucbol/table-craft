@@ -9,7 +9,7 @@ import type { EditorGroupId } from "@table-craft/desktop/renderer/state/tabs.js"
  */
 export const LAYOUT_STORAGE_KEY = "table-craft.layout.v1";
 
-export const TOOL_WINDOWS = ["database", "services", "log"] as const;
+export const TOOL_WINDOWS = ["database", "services", "log", "watch"] as const;
 export type ToolWindowId = (typeof TOOL_WINDOWS)[number];
 
 export interface Layout {
@@ -72,8 +72,8 @@ export const MIN_CONSOLE_PANE_PERCENT = 10;
 const MAX_CONSOLE_EDITOR_PERCENT = 100 - MIN_CONSOLE_PANE_PERCENT;
 
 export const DEFAULT_LAYOUT: Layout = {
-  visible: { database: true, services: true, log: false },
-  sizes: { database: 22, services: 28, log: 30 },
+  visible: { database: true, services: true, log: false, watch: false },
+  sizes: { database: 22, services: 28, log: 30, watch: 30 },
   hidden: null,
   showSystemSchemas: false,
   showEmptyDatabases: false,
@@ -225,7 +225,11 @@ export function toggled(layout: Layout, id: ToolWindowId): Layout {
 export function hiddenAll(layout: Layout): Layout {
   const anyVisible = TOOL_WINDOWS.some((id) => layout.visible[id]);
   if (anyVisible)
-    return { ...layout, visible: { database: false, services: false, log: false }, hidden: layout.visible };
+    return {
+      ...layout,
+      visible: { database: false, services: false, log: false, watch: false },
+      hidden: layout.visible,
+    };
   if (layout.hidden !== null) return { ...layout, visible: layout.hidden, hidden: null };
   return layout;
 }

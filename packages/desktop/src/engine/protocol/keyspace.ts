@@ -1,5 +1,6 @@
 import type { ExecutedStatement } from "./sessions.js";
 import type { WireValue } from "./wire.js";
+import type { KeyLeaseAssignment } from "./keyAdvanced.js";
 
 /** Mirrors `KEY_TYPES` in plugin-api (decision 113). */
 export const KEY_TYPES = ["string", "hash", "list", "set", "zset", "stream", "json", "other"] as const;
@@ -29,6 +30,7 @@ export interface KeyConflictSnapshot {
 }
 
 export interface KeyspaceFeatures {
+  readonly leaseAssignment?: boolean;
   readonly revisionGuard?: boolean;
 }
 
@@ -170,6 +172,7 @@ export type KeyChange =
 
 /** Mirrors `KeyApplyOptions` in plugin-api. */
 export interface KeyApplyOptions {
+  readonly lease?: KeyLeaseAssignment;
   readonly revisionGuard?: { readonly modRevision: string };
   readonly type: KeyType;
   readonly guard: boolean;

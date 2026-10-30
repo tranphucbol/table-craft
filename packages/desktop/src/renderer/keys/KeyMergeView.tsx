@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { diffText } from "@table-craft/desktop/renderer/model/keyDiff.js";
+import { encodeValue } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import { useKeyTabs, type KeyTab } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 
@@ -24,6 +25,7 @@ export function KeyMergeView({
   }, [index]);
   if (merge == null) return null;
   const unresolved = merge.acknowledged ? 0 : merge.merged.conflicts.length;
+  const validation = merge.merged.format === "text" ? null : encodeValue(merge.text, merge.merged.format);
   return (
     <section data-testid="key-merge" aria-label="Merge changes" className="flex min-h-0 min-w-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-gap border-b border-line bg-panel px-gap py-1">
@@ -119,6 +121,7 @@ export function KeyMergeView({
             · {merge.merged.automatic} changes merged automatically · {unresolved} conflicts left
           </span>
         </label>
+        <ActionButton actionId={KEY_ACTION_IDS.previousMergeConflict} />
         <ActionButton actionId={KEY_ACTION_IDS.nextMergeConflict} />
         {merge.manual ? <ActionButton actionId={KEY_ACTION_IDS.acknowledgeMerge} /> : null}
       </div>
@@ -131,10 +134,17 @@ export function KeyMergeView({
         className="min-h-0 flex-1 resize-none bg-canvas p-gap font-editor text-editor text-ink outline-none focus:ring-1 focus:ring-inset focus:ring-accent"
         onChange={(event) => useKeyTabs.getState().editMerge(tabId, event.target.value)}
       />
+      {validation?.ok === false ? (
+        <p role="alert" className="shrink-0 border-t border-line bg-panel px-gap py-1 text-danger">
+          {validation.error}
+        </p>
+      ) : null}
       <p className="shrink-0 border-t border-line bg-panel px-gap py-1 text-ink-muted">
         {merge.merged.format === "json"
           ? "JSON objects merge by path; arrays are compared as a whole."
-          : "Text merge only. YAML is not merged by structure."}{" "}
+          : merge.merged.format === "yaml"
+            ? "YAML objects merge by path; arrays are compared as a whole. Combined output may normalize formatting and remove comments."
+            : "Text merge only; this value could not be safely merged by structure."}{" "}
         Save Merged checks the server revision again.
       </p>
     </section>

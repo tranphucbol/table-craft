@@ -249,7 +249,7 @@ describe("engine", () => {
     expect(response).toMatchObject({ type: "engine.error", error: { code: "pluginUnavailable" } });
   });
 
-  it("givenClosedConnection_whenItsHandleRequestedAgain_thenUnknownHandleError", async () => {
+  it("givenClosedConnection_whenItsHandleRequestedAgain_thenConnectionClosedError", async () => {
     const connection = connected();
     const sessionId = await openSession(connection);
     const { handle } = resultOf<ExecutedStatement>(
@@ -259,7 +259,11 @@ describe("engine", () => {
     await connection.close();
     const response = await connection.handle({ id: 3, type: "result.window", handle, offset: 0, limit: 1 });
 
-    expect(response).toMatchObject({ type: "engine.error", error: { code: "unknownHandle" } });
+    expect(response).toMatchObject({
+      id: 3,
+      type: "engine.error",
+      error: { code: "connectionLost", message: "This engine connection has closed." },
+    });
   });
 
   it("givenSessionOpened_whenAnswered_thenCarriesPluginNameAndCapabilities", async () => {

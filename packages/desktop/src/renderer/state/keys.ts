@@ -6,9 +6,15 @@ import {
   appendKeys,
   EMPTY_KEYSPACE,
   keyIdentity,
+  keyStartsWith,
   KEYS_PER_PASS,
   NO_KEY_FILTER,
   UNSCANNED_KEYS,
+  UNLISTED_FOLDER,
+  ROOT_KEY,
+  CHILDREN_PER_PAGE,
+  CHILDREN_TIMEOUT_MS,
+  keyFilterRange,
   type DatabaseKeys,
   type DatasourceKeyspace,
   type KeyFilter,
@@ -29,6 +35,10 @@ export interface KeysState {
   readonly expandDatabase: (datasourceId: string, database: number) => Promise<void>;
   /** Scans one more pass of up to 10,000 keys. */
   readonly loadMore: (datasourceId: string, database: number) => Promise<void>;
+  readonly expandFolder: (datasourceId: string, database: number, parent: KeyName) => Promise<void>;
+  readonly loadChildren: (datasourceId: string, database: number, parent: KeyName, restart?: boolean) => Promise<void>;
+  readonly countFolder: (datasourceId: string, database: number, parent: KeyName) => Promise<void>;
+  readonly readLeaseTtl: (datasourceId: string, leaseId: string) => Promise<void>;
   /** Forgets the database's keys and scans again under `filter`. */
   readonly setFilter: (datasourceId: string, database: number, filter: KeyFilter) => Promise<void>;
   /** Reads the type and expiry of the keys not described yet; the tree asks for its visible rows. */
@@ -37,6 +47,12 @@ export interface KeysState {
   readonly synchronize: (datasourceId: string) => Promise<void>;
   /** Puts keys found some other way, by Go to Key say, in the loaded list. */
   readonly remember: (datasourceId: string, database: number, keys: readonly KeyName[]) => void;
+  /**
+   * Relists only the shallowest loaded folders that showed something under `prefix`, and drops
+   * every folder count, since an ancestor's count changed too. Without listed children it
+   * falls back to `synchronize`.
+   */
+  readonly refreshRange: (datasourceId: string, database: number, prefix: KeyName) => Promise<void>;
   /** Drops keys deleted or renamed away from the loaded list. */
   readonly forget: (datasourceId: string, database: number, keys: readonly KeyName[]) => void;
   /** Forgets the datasource's keyspace; its engine is gone. */
@@ -94,10 +110,15 @@ export function createKeysStore(dependencies: KeysDependencies) {
       update(id, (keyspace) => ({ ...keyspace, loading: true, error: null }));
       try {
         const client = await dependencies.connect(id);
-        const [listed, nodes] = await Promise.all([client.call("keyspace.databases", {}), dependencies.nodes(id)]);
+        const [listed, nodes, features] = await Promise.all([
+          client.call("keyspace.databases", {}),
+          dependencies.nodes(id),
+          client.call("keyspace.features", {}),
+        ]);
         if (generationOf(id) !== generation) return false;
         update(id, (keyspace) => ({
           ...keyspace,
+          features,
           delimiter: listed.delimiter,
           databases: listed.databases,
           nodes,
@@ -114,6 +135,23 @@ export function createKeysStore(dependencies: KeysDependencies) {
 
     /** One pass: SCAN batches until 10,000 keys came back or the cursor ended. */
     async function pass(id: string, database: number, fresh: boolean): Promise<void> {
+      if (keyspaceOf(id).features?.children === true) {
+        if (fresh) {
+          scans.set(scanKey(id, database), (scans.get(scanKey(id, database)) ?? 0) + 1);
+          updateDatabase(id, database, (keys) => ({
+            ...UNSCANNED_KEYS,
+            filter:
+              keys.filter.mode === undefined
+                ? { ...keys.filter, match: keys.filter.match === "*" ? "" : keys.filter.match, mode: "prefix" }
+                : keys.filter,
+            started: true,
+            folders: {},
+            counts: {},
+          }));
+        }
+        await get().loadChildren(id, database, ROOT_KEY, fresh);
+        return;
+      }
       const generation = generationOf(id);
       const token = (scans.get(scanKey(id, database)) ?? 0) + 1;
       scans.set(scanKey(id, database), token);
@@ -183,15 +221,168 @@ export function createKeysStore(dependencies: KeysDependencies) {
       },
 
       async loadMore(id, database) {
+        if (keyspaceOf(id).features?.children === true) {
+          await get().loadChildren(id, database, ROOT_KEY);
+          return;
+        }
         const keys = databaseOf(id, database);
         if (keys.loading || keys.cursor === null) return;
         await pass(id, database, false);
       },
 
       async setFilter(id, database, filter) {
+        if (keyspaceOf(id).features?.children === true) {
+          const previous = databaseOf(id, database).filter;
+          updateDatabase(id, database, (keys) => ({ ...keys, filter: { ...filter, type: null } }));
+          if (filter.mode === "loadedName") return;
+          if (previous.mode === filter.mode && previous.match === filter.match && previous.end === filter.end) return;
+          await pass(id, database, true);
+          return;
+        }
         const match = filter.match.trim() === "" ? NO_KEY_FILTER.match : filter.match.trim();
         updateDatabase(id, database, (keys) => ({ ...keys, filter: { match, type: filter.type } }));
         await pass(id, database, true);
+      },
+
+      async expandFolder(id, database, parent) {
+        const rest = parent.hex === null ? [parent.text] : [parent.text, parent.hex];
+        dependencies.expand([keyTreeKey(id, "keyFolder", database, ...rest)]);
+        if (keyspaceOf(id).features?.children !== true) return;
+        const folder = databaseOf(id, database).folders?.[keyIdentity(parent)];
+        if (folder?.started === true) return;
+        await get().loadChildren(id, database, parent, true);
+      },
+
+      async loadChildren(id, database, parent, restart = false) {
+        if (keyspaceOf(id).features?.children !== true) return;
+        const identity = keyIdentity(parent);
+        const old = databaseOf(id, database).folders?.[identity] ?? UNLISTED_FOLDER;
+        if (!restart && (old.loading || old.error !== null || (old.started && old.cursor === null))) return;
+        const generation = generationOf(id);
+        const databaseToken = scans.get(scanKey(id, database));
+        const mark = `${scanKey(id, database)}\u0000folder\u0000${identity}`;
+        const token = (scans.get(mark) ?? 0) + 1;
+        scans.set(mark, token);
+        const current = () =>
+          generationOf(id) === generation &&
+          scans.get(mark) === token &&
+          scans.get(scanKey(id, database)) === databaseToken;
+        const change = (updateFolder: (folder: typeof UNLISTED_FOLDER) => typeof UNLISTED_FOLDER) =>
+          updateDatabase(id, database, (keys) => ({
+            ...keys,
+            started: true,
+            folders: { ...keys.folders, [identity]: updateFolder(keys.folders?.[identity] ?? UNLISTED_FOLDER) },
+          }));
+        if (restart) {
+          const descendants = Object.entries(databaseOf(id, database).folders ?? {}).filter(
+            ([childIdentity, folder]) => childIdentity !== identity && keyStartsWith(folder.parent, parent),
+          );
+          for (const [childIdentity] of descendants) {
+            const childMark = `${scanKey(id, database)}\u0000folder\u0000${childIdentity}`;
+            scans.set(childMark, (scans.get(childMark) ?? 0) + 1);
+          }
+          const removed = new Set(descendants.map(([childIdentity]) => childIdentity));
+          updateDatabase(id, database, (keys) => ({
+            ...keys,
+            keys: keys.keys.filter((key) => !keyStartsWith(key, parent)),
+            info: Object.fromEntries(Object.entries(keys.info).filter(([, info]) => !keyStartsWith(info.key, parent))),
+            folders: Object.fromEntries(
+              Object.entries(keys.folders ?? {}).filter(([childIdentity]) => !removed.has(childIdentity)),
+            ),
+            counts: Object.fromEntries(
+              Object.entries(keys.counts ?? {}).filter(
+                ([childIdentity]) => childIdentity !== identity && !removed.has(childIdentity),
+              ),
+            ),
+          }));
+        }
+        change((folder) => ({
+          ...(restart ? UNLISTED_FOLDER : folder),
+          parent,
+          started: true,
+          loading: true,
+          error: null,
+        }));
+        try {
+          const client = await dependencies.connect(id);
+          const page = await client.call("keyspace.children", {
+            database,
+            parent,
+            range: keyFilterRange(databaseOf(id, database).filter),
+            cursor: restart ? null : old.cursor,
+            count: CHILDREN_PER_PAGE,
+            timeoutMs: CHILDREN_TIMEOUT_MS,
+          });
+          if (!current()) return;
+          if (!restart && old.revision !== null && old.revision !== page.revision)
+            throw new Error("The listing revision changed. Restart listing to read a fresh snapshot.");
+          change((folder) => {
+            const baseline = restart ? [] : folder.children;
+            const seen = new Set(baseline.map((child) => `${child.kind}:${keyIdentity(child.key)}`));
+            const children = [
+              ...baseline,
+              ...page.children.filter((child) => !seen.has(`${child.kind}:${keyIdentity(child.key)}`)),
+            ];
+            return { ...folder, children, revision: page.revision, cursor: page.cursor, loading: false };
+          });
+          updateDatabase(id, database, (keys) => ({
+            ...keys,
+            keys: appendKeys(
+              keys.keys,
+              page.children.filter((child) => child.kind === "key").map((child) => child.key),
+            ),
+          }));
+        } catch (cause) {
+          if (current()) change((folder) => ({ ...folder, loading: false, error: toEngineError(cause) }));
+        }
+      },
+
+      async countFolder(id, database, parent) {
+        if (keyspaceOf(id).features?.countRange !== true) return;
+        const identity = keyIdentity(parent);
+        const counts = databaseOf(id, database).counts;
+        const mark = `${scanKey(id, database)}\u0000count\u0000${identity}`;
+        if ((counts !== undefined && identity in counts) || describing.has(mark)) return;
+        describing.add(mark);
+        const generation = generationOf(id);
+        const token = scans.get(scanKey(id, database));
+        const current = () => generationOf(id) === generation && scans.get(scanKey(id, database)) === token;
+        try {
+          const client = await dependencies.connect(id);
+          const count = await client.call("keyspace.countRange", {
+            database,
+            range: { kind: "prefix", prefix: parent },
+          });
+          if (current())
+            updateDatabase(id, database, (keys) => ({ ...keys, counts: { ...keys.counts, [identity]: count.keys } }));
+        } catch {
+          if (current())
+            updateDatabase(id, database, (keys) => ({ ...keys, counts: { ...keys.counts, [identity]: null } }));
+        } finally {
+          describing.delete(mark);
+        }
+      },
+
+      async readLeaseTtl(id, leaseId) {
+        const mark = `${id}\u0000lease\u0000${leaseId}`;
+        if (leaseId === "0" || keyspaceOf(id).leaseTtls?.[leaseId] !== undefined || describing.has(mark)) return;
+        describing.add(mark);
+        const generation = generationOf(id);
+        let seconds: string | null = null;
+        try {
+          const client = await dependencies.connect(id);
+          const lease = await client.call("leases.get", { leaseId });
+          seconds = lease.remainingTtlSeconds;
+        } catch {
+          // Lease metadata may be inaccessible even when the key can be listed.
+        } finally {
+          if (generationOf(id) === generation)
+            update(id, (keyspace) => ({
+              ...keyspace,
+              leaseTtls: { ...keyspace.leaseTtls, [leaseId]: { seconds, readAt: Date.now() } },
+            }));
+          describing.delete(mark);
+        }
       },
 
       async describe(id, database, keys) {
@@ -225,6 +416,7 @@ export function createKeysStore(dependencies: KeysDependencies) {
 
       async synchronize(id) {
         if (!(await listDatabases(id))) return;
+        update(id, (keyspace) => ({ ...keyspace, leaseTtls: {} }));
         const scanned = Object.entries(keyspaceOf(id).byDatabase)
           .filter(([, keys]) => keys.started)
           .map(([database]) => Number(database));
@@ -233,6 +425,28 @@ export function createKeysStore(dependencies: KeysDependencies) {
 
       remember(id, database, keys) {
         updateDatabase(id, database, (current) => ({ ...current, keys: appendKeys(current.keys, keys) }));
+        if (keyspaceOf(id).features?.children === true) {
+          for (const folder of Object.values(databaseOf(id, database).folders ?? {})) {
+            if (folder.started && keys.some((key) => keyStartsWith(key, folder.parent))) {
+              void get().loadChildren(id, database, folder.parent, true);
+            }
+          }
+        }
+      },
+
+      async refreshRange(id, database, prefix) {
+        if (keyspaceOf(id).features?.children !== true) {
+          await get().synchronize(id);
+          return;
+        }
+        const listed = Object.values(databaseOf(id, database).folders ?? {}).filter(
+          (folder) => folder.started && folder.children.some((child) => keyStartsWith(child.key, prefix)),
+        );
+        const shallowest = listed.filter(
+          (folder) => !listed.some((other) => other !== folder && keyStartsWith(folder.parent, other.parent)),
+        );
+        updateDatabase(id, database, (keys) => ({ ...keys, counts: {} }));
+        await Promise.all(shallowest.map((folder) => get().loadChildren(id, database, folder.parent, true)));
       },
 
       forget(id, database, keys) {
@@ -241,6 +455,16 @@ export function createKeysStore(dependencies: KeysDependencies) {
           ...current,
           keys: current.keys.filter((key) => !gone.has(keyIdentity(key))),
           info: Object.fromEntries(Object.entries(current.info).filter(([identity]) => !gone.has(identity))),
+          folders: Object.fromEntries(
+            Object.entries(current.folders ?? {}).map(([identity, folder]) => [
+              identity,
+              {
+                ...folder,
+                children: folder.children.filter((child) => child.kind !== "key" || !gone.has(keyIdentity(child.key))),
+              },
+            ]),
+          ),
+          counts: {},
         }));
       },
 

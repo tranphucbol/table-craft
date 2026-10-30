@@ -32,6 +32,7 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { statementRunners } from "@table-craft/desktop/engine/statements.js";
 import { bytesRunners } from "@table-craft/desktop/engine/bytes.js";
+import { keyOperations } from "@table-craft/desktop/engine/keyOperations/index.js";
 import { SessionLost, StatementTimedOut, watchStatement, type LostReason } from "@table-craft/desktop/engine/watch.js";
 
 export interface OpenSession {
@@ -171,6 +172,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   } = context;
 
   const sessions = new Map<string, OpenSession>();
+  const keyResources = keyOperations(context);
   /** Each live result handle, mapped to the session that produced it. */
   const handles = new Map<string, string>();
   /** The one result per session whose cursor is still open (decision 025). */
@@ -651,6 +653,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   }
 
   async function close(): Promise<void> {
+    await keyResources.scope.close();
     unsubscribe();
     unsubscribeImports();
     unsubscribeScripts();
@@ -669,6 +672,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
 
   return {
     ...context,
+    keyOperations: keyResources,
     sessions,
     handles,
     cursors,

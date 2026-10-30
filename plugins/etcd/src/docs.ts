@@ -14,6 +14,7 @@ export interface ParameterDoc {
   readonly name: string;
   readonly optional?: true;
   readonly key?: true;
+  readonly completion?: "lease" | "user" | "role" | "revision" | "member" | "endpoint";
 }
 
 /** One console command, keyed by its words: `get`, `lease grant` (decision 8 of plan 110). */
@@ -24,11 +25,12 @@ export interface CommandDoc {
   readonly kind: StatementKind;
   readonly parameters: readonly ParameterDoc[];
   readonly flags: readonly FlagDoc[];
+  readonly action?: "watch" | "keepAlive" | "snapshot" | "credentials" | "access" | "cluster" | "leaseRevoke";
 }
 
 const KEY: ParameterDoc = { name: "key", key: true };
 const RANGE_END: ParameterDoc = { name: "range_end", optional: true, key: true };
-const LEASE_ID: ParameterDoc = { name: "lease_id" };
+const LEASE_ID: ParameterDoc = { name: "lease_id", completion: "lease" };
 const NAME: ParameterDoc = { name: "name" };
 
 const PREFIX: FlagDoc = { name: "prefix", summary: "every key starting with key" };
@@ -94,7 +96,7 @@ export const COMMANDS: readonly CommandDoc[] = [
     summary: "Discards the history before a revision.",
     group: "kv",
     kind: "write",
-    parameters: [{ name: "revision" }],
+    parameters: [{ name: "revision", completion: "revision" }],
     flags: [{ name: "physical", summary: "wait until the compaction is applied to the backend" }],
   },
   {
@@ -122,6 +124,110 @@ export const COMMANDS: readonly CommandDoc[] = [
     flags: [{ name: "keys", summary: "list the keys attached to the lease" }],
   },
   { name: "lease list", summary: "Lists the active leases.", group: "lease", kind: "read", parameters: [], flags: [] },
+  {
+    name: "lease ttl",
+    summary: "Shows a lease's remaining TTL (global lease).",
+    group: "lease",
+    kind: "read",
+    parameters: [LEASE_ID],
+    flags: [{ name: "keys", summary: "show namespace-relative attached keys" }],
+  },
+  {
+    name: "lease keep-alive",
+    summary: "Opens managed renewal; stopping renewal never revokes a lease.",
+    group: "lease",
+    kind: "write",
+    parameters: [LEASE_ID],
+    flags: [{ name: "once", summary: "renew once" }],
+    action: "keepAlive",
+  },
+  {
+    name: "watch",
+    summary: "Opens the Watch tool window; never blocks a console request.",
+    group: "kv",
+    kind: "read",
+    parameters: [KEY, RANGE_END],
+    flags: [PREFIX, FROM_KEY, { name: "rev", value: "revision", summary: "start revision (decimal)" }],
+    action: "watch",
+  },
+  {
+    name: "snapshot save",
+    summary: "Save a sensitive full-cluster snapshot through an authorized file dialog.",
+    group: "cluster",
+    kind: "read",
+    parameters: [],
+    flags: [],
+    action: "snapshot",
+  },
+  ...["promote", "remove"].map((verb): CommandDoc => ({
+    name: `member ${verb}`,
+    summary: `${verb} a global cluster member after confirmation.`,
+    group: "cluster",
+    kind: "write",
+    parameters: [{ name: "member_id", completion: "member" }],
+    flags: [],
+    action: "cluster",
+  })),
+  ...["add", "delete", "passwd"].map((verb): CommandDoc => ({
+    name: `user ${verb}`,
+    summary:
+      verb === "delete"
+        ? "Delete a global user after confirmation."
+        : "Open the secure credential dialog; console passwords are never accepted.",
+    group: "auth",
+    kind: "write",
+    parameters: [{ name: "user", completion: "user" }],
+    flags: [],
+    action: verb === "delete" ? "access" : "credentials",
+  })),
+  ...["grant-role", "revoke-role"].map((verb): CommandDoc => ({
+    name: `user ${verb}`,
+    summary: `${verb} for a global user.`,
+    group: "auth",
+    kind: "write",
+    parameters: [
+      { name: "user", completion: "user" },
+      { name: "role", completion: "role" },
+    ],
+    flags: [],
+    action: "access",
+  })),
+  ...["add", "delete"].map((verb): CommandDoc => ({
+    name: `role ${verb}`,
+    summary: `${verb} a global role.`,
+    group: "auth",
+    kind: "write",
+    parameters: [{ name: "role", completion: "role" }],
+    flags: [],
+    action: "access",
+  })),
+  {
+    name: "role grant-permission",
+    summary: "Grant a cluster-global key-range permission to a global role (not namespace-relative).",
+    group: "auth",
+    kind: "write",
+    parameters: [{ name: "role", completion: "role" }, { name: "permission" }, KEY, RANGE_END],
+    flags: [PREFIX, FROM_KEY],
+    action: "access",
+  },
+  {
+    name: "role revoke-permission",
+    summary: "Revoke a cluster-global key-range permission from a global role (not namespace-relative).",
+    group: "auth",
+    kind: "write",
+    parameters: [{ name: "role", completion: "role" }, KEY, RANGE_END],
+    flags: [PREFIX, FROM_KEY],
+    action: "access",
+  },
+  ...["enable", "disable"].map((verb): CommandDoc => ({
+    name: `auth ${verb}`,
+    summary: `${verb} global authentication with self-lockout safeguards.`,
+    group: "auth",
+    kind: "write",
+    parameters: [],
+    flags: [],
+    action: "access",
+  })),
   {
     name: "member list",
     summary: "Lists the cluster's members.",
@@ -179,14 +285,21 @@ export const COMMANDS: readonly CommandDoc[] = [
     flags: [],
   },
   { name: "user list", summary: "Lists the users.", group: "auth", kind: "read", parameters: [], flags: [] },
-  { name: "user get", summary: "Shows a user's roles.", group: "auth", kind: "read", parameters: [NAME], flags: [] },
+  {
+    name: "user get",
+    summary: "Shows a user's roles.",
+    group: "auth",
+    kind: "read",
+    parameters: [{ ...NAME, completion: "user" }],
+    flags: [],
+  },
   { name: "role list", summary: "Lists the roles.", group: "auth", kind: "read", parameters: [], flags: [] },
   {
     name: "role get",
     summary: "Shows a role's permissions.",
     group: "auth",
     kind: "read",
-    parameters: [NAME],
+    parameters: [{ ...NAME, completion: "role" }],
     flags: [],
   },
   {
@@ -199,33 +312,17 @@ export const COMMANDS: readonly CommandDoc[] = [
   },
 ];
 
-const LIVE_FEED = "opens a live feed, which the console cannot show yet; use etcdctl for it";
+const LIVE_FEED = "requires a managed resource; use the corresponding tool window";
 const NOT_YET = "is not in the console yet; use etcdctl for it";
 
 /** Commands the console refuses, keyed by their words, with why (decision 8 of plan 110). */
 const REFUSED: Readonly<Record<string, string>> = {
-  watch: LIVE_FEED,
-  "lease keep-alive": LIVE_FEED,
   lock: LIVE_FEED,
   elect: LIVE_FEED,
-  snapshot: NOT_YET,
   "make-mirror": NOT_YET,
   "move-leader": NOT_YET,
   "member add": NOT_YET,
-  "member remove": NOT_YET,
-  "member promote": NOT_YET,
   "member update": NOT_YET,
-  "user add": NOT_YET,
-  "user delete": NOT_YET,
-  "user grant-role": NOT_YET,
-  "user revoke-role": NOT_YET,
-  "user passwd": NOT_YET,
-  "role add": NOT_YET,
-  "role delete": NOT_YET,
-  "role grant-permission": NOT_YET,
-  "role revoke-permission": NOT_YET,
-  "auth enable": NOT_YET,
-  "auth disable": NOT_YET,
 };
 
 const BY_NAME: ReadonlyMap<string, CommandDoc> = new Map(COMMANDS.map((doc) => [doc.name, doc]));

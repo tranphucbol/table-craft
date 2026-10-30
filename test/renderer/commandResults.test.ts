@@ -68,6 +68,8 @@ function fakeEngine(options: { conflict?: boolean } = {}) {
         };
         return Promise.resolve(sql === "" ? [] : [statement]);
       }
+      case "commands.admit":
+        return Promise.resolve((params.commands as readonly string[]).map(() => ({ admit: "execute", safeLabel: "" })));
       case "statement.execute": {
         const command = String(params.sql);
         ran.push(command);

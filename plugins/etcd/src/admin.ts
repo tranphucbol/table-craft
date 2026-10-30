@@ -5,6 +5,7 @@ import { isPermissionDenied } from "./client.js";
 import type { CommandDoc } from "./docs.js";
 import { bytesCell, columnsOf, replyResult, tableResult, utf8OrNull } from "./results.js";
 import type { Token } from "./tokens.js";
+import type { NamespaceMapper } from "./namespace.js";
 
 /** Runs one call on the session's client, with its re-auth retry. */
 export type Call = <T>(work: (etcd: Etcd3) => Promise<T>) => Promise<T>;
@@ -12,6 +13,7 @@ export type Call = <T>(work: (etcd: Etcd3) => Promise<T>) => Promise<T>;
 /** What a cluster, lease or auth command reads besides its arguments. */
 export interface AdminHost {
   readonly call: Call;
+  readonly namespace?: NamespaceMapper;
   /** The endpoint, `host:port`, as dialled. */
   readonly address: string;
 }
@@ -36,6 +38,11 @@ const STATUS_COLUMNS = columnsOf(
   STATUS_INTEGERS,
 );
 const PERMISSIONS: Readonly<Record<string, string>> = { Read: "read", Write: "write", Readwrite: "readwrite" };
+const LEASE_ID_BITS = 64;
+const HEX_RADIX = 16;
+function leaseHex(id: string): string {
+  return BigInt.asUintN(LEASE_ID_BITS, BigInt(id)).toString(HEX_RADIX);
+}
 
 /**
  * `HashKV`, by the method name gRPC's loader gives it: etcd3 asks for `hashKV`, which the loader
@@ -71,22 +78,33 @@ async function lease(host: AdminHost, doc: CommandDoc, tokens: readonly Token[])
   switch (doc.name) {
     case "lease grant": {
       const granted = await host.call((etcd) => etcd.leaseClient.leaseGrant({ TTL: decimalOf(doc, "ttl", first) }));
-      const id = hexId(granted.ID);
+      const id = leaseHex(granted.ID);
       return replyResult(id, `lease ${id} granted with TTL(${granted.TTL}s)`);
     }
     case "lease revoke": {
       await host.call((etcd) => etcd.leaseClient.leaseRevoke({ ID: leaseIdOf(doc, first) }));
       return replyResult(first, `lease ${first} revoked`);
     }
+    case "lease ttl":
     case "lease timetolive": {
       const keys = args.flags.has("keys");
       const live = await host.call((etcd) => etcd.leaseClient.leaseTimeToLive({ ID: leaseIdOf(doc, first), keys }));
       const columns = columnsOf(["id", "ttl", "granted_ttl", ...(keys ? ["keys"] : [])], ["ttl", "granted_ttl"]);
       const row: Row = [
-        hexId(live.ID),
+        leaseHex(live.ID),
         toWireInteger(live.TTL),
         toWireInteger(live.grantedTTL),
-        ...(keys ? [live.keys.map((key) => utf8OrNull(key) ?? key.toString("hex")).join(", ")] : []),
+        ...(keys
+          ? [
+              live.keys
+                .filter((key) => host.namespace?.contains(key) ?? true)
+                .map((key) => {
+                  const scoped = host.namespace?.strip(key) ?? key;
+                  return utf8OrNull(scoped) ?? scoped.toString("hex");
+                })
+                .join(", "),
+            ]
+          : []),
       ];
       return tableResult(columns, [row]);
     }
@@ -94,7 +112,7 @@ async function lease(host: AdminHost, doc: CommandDoc, tokens: readonly Token[])
       const listed = await host.call((etcd) => etcd.leaseClient.leaseLeases());
       return tableResult(
         columnsOf(["id"]),
-        listed.leases.map((entry) => [hexId(entry.ID)]),
+        listed.leases.map((entry) => [leaseHex(entry.ID)]),
       );
     }
   }

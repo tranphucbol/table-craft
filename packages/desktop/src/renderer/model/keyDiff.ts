@@ -1,5 +1,6 @@
 import type { KeyBytes } from "@table-craft/desktop/engine/protocol.js";
 import { parseKeyJson } from "@table-craft/desktop/renderer/model/keyMerge.js";
+import { normalizedKeyYaml, parseKeyYaml } from "@table-craft/desktop/renderer/model/valueFormats.js";
 
 const JSON_INDENT = 2;
 const MAX_DIFF_CELLS = 250_000;
@@ -50,7 +51,11 @@ export function diffText(value: KeyBytes | null): string {
     const parsed: unknown = parseKeyJson(value.text);
     return JSON.stringify(parsed, null, JSON_INDENT);
   } catch {
-    return value.text;
+    try {
+      return normalizedKeyYaml(parseKeyYaml(value.text));
+    } catch {
+      return value.text;
+    }
   }
 }
 
