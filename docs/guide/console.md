@@ -6,7 +6,12 @@ followed by the warnings and notices the server left about it (MySQL's and TiDB'
 PostgreSQL's `RAISE NOTICE`); the result tab shows how many warnings there were.
 `UPDATE` or `DELETE` without a `WHERE`, `DROP` and `TRUNCATE` are listed in a confirmation before
 anything runs. Switch
-**Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**. Consoles
+**Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**; while a
+transaction is open the mode turns amber with a dot. The console toolbar groups Run, Run All,
+Explain and Cancel, then Query History and Reformat Code, then the transaction controls; the
+schema switcher and the data source sit at its right. While a statement runs, the title bar shows
+its elapsed time beside **Cancel**; with a transaction open, it shows **Tx open** with **Commit**
+and **Rollback**, so you can end it from any tab layout. Consoles
 are saved as files as you type. Drag the line between the editor and its results to give either
 more room; every console keeps the split you last dragged to, across launches.
 
@@ -23,7 +28,10 @@ Files are UTF-8; Windows line endings are kept as they were.
 Right-click an editor tab to close the others, all, or those to its right; to copy its file's path,
 show it in Finder (or its folder elsewhere) or rename it; to **Duplicate** it as a new console on
 the same data source and schema; or to **Pin** it at the left, where closing many tabs leaves it
-open. **Reopen Closed Tab** (`⇧⌘T`) brings back the consoles you closed, newest first.
+open. **Reopen Closed Tab** (`⇧⌘T`) brings back the consoles you closed, newest first. At the right
+of the tab strip, **+** opens a new console on the current data source, **Open Tabs** lists every
+tab on that side, even those scrolled out of sight, and **Tab Actions** closes the others or all,
+reopens a closed tab, and splits or unsplits.
 
 Drag a tab toward the left or right side of the editor, or right-click it and choose **Split Left**
 or **Split Right**, to work in two consoles side by side. Each side keeps its own selected tab;

@@ -7,12 +7,14 @@ import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/setti
 
 import { MAIN_MENU_ANCHOR_ATTRIBUTE, WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { tabCaption, windowTitle } from "@table-craft/desktop/renderer/model/windowTitle.js";
+import { ActivityCapsule } from "@table-craft/desktop/renderer/shell/ActivityCapsule.js";
 import { DatasourceWidget } from "@table-craft/desktop/renderer/shell/DatasourceWidget.js";
 import { UpdateButton } from "@table-craft/desktop/renderer/shell/UpdateButton.js";
 import { activeTab, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { ToolbarDivider } from "@table-craft/desktop/renderer/ui/ToolbarDivider.js";
 
 /** The active tab and the name of its datasource, which the toolbar and the window are titled by. */
 function useActiveCaption() {
@@ -27,8 +29,8 @@ function AvailableButton({ actionId }: { readonly actionId: string }) {
 
 /**
  * The window's title bar is this toolbar (decision 034): the traffic lights or the main-menu button,
- * the datasource widget, the title, the run controls, Search Everywhere, Update (only while one is
- * offered, decision 045) and Settings. Its empty
+ * the datasource widget, the title, Run and the activity capsule (plan 127), Search Everywhere,
+ * Update (only while one is offered, decision 045) and Settings. Its empty
  * space drags the window; every control in it is `app-no-drag`.
  */
 export function MainToolbar() {
@@ -65,11 +67,10 @@ export function MainToolbar() {
         {caption}
       </span>
       <div className="flex shrink-0 items-center gap-1">
-        <ActionButton actionId={ACTION_IDS.run} compact />
-        <AvailableButton actionId={ACTION_IDS.cancel} />
-        <AvailableButton actionId={ACTION_IDS.commit} />
-        <AvailableButton actionId={ACTION_IDS.rollback} />
+        <ActionButton actionId={ACTION_IDS.run} compact tone="success" />
+        <ActivityCapsule />
       </div>
+      <ToolbarDivider />
       <div className="flex shrink-0 items-center gap-1">
         <ActionButton actionId={ACTION_IDS.searchEverywhere} compact />
         <UpdateButton />

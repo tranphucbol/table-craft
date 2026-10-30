@@ -58,7 +58,6 @@ import {
   CopySimple,
   Database,
   Eye,
-  FastForward,
   FolderSimple,
   Function as FunctionGlyph,
   Key,
@@ -77,24 +76,25 @@ import {
   HardDrives,
   MagnifyingGlass,
   Minus,
-  Play,
   Plus,
   Power,
   Pulse,
   Question,
   Robot,
   PushPin,
-  Stop,
   Swap,
   Terminal,
   UploadSimple,
   FloppyDisk,
   CalendarBlank,
+  DotsThreeVertical,
+  TextIndent,
   X,
   type Icon,
 } from "@phosphor-icons/react";
 import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
 import { PreviewChangesGlyph, SubmitGlyph } from "@table-craft/desktop/renderer/ui/editGlyphs.js";
+import { RunAllGlyph, RunGlyph, StopGlyph } from "@table-craft/desktop/renderer/ui/runGlyphs.js";
 
 /** Every glyph the app draws, in one family (Phosphor), so this file is the audit. */
 export {
@@ -166,12 +166,12 @@ export const TYPE_GLYPHS = {
 } as const satisfies Readonly<Record<string, Icon>>;
 
 export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
-  run: Play,
-  runAll: FastForward,
+  run: RunGlyph,
+  runAll: RunAllGlyph,
   commit: Check,
   rollback: ArrowCounterClockwise,
   pin: PushPin,
-  cancel: Stop,
+  cancel: StopGlyph,
   newConsole: Terminal,
   close: X,
   database: Database,
@@ -229,4 +229,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   transpose: Swap,
   saveFile: FloppyDisk,
   loadFile: UploadSimple,
+  reformat: TextIndent,
+  more: DotsThreeVertical,
+  tabs: CaretDown,
 };
