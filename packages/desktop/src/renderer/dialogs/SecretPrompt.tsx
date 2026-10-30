@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useState } from "react";
 import { Button, CONTENT_CLASS, OVERLAY_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import type { SecretMode } from "@table-craft/desktop/preload/bridge.js";
 import type { SecretRequest } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useSecretPrompt } from "@table-craft/desktop/renderer/state/secretPrompt.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -13,6 +14,24 @@ export function inSentence(label: string): string {
     .split(" ")
     .map((word) => (ACRONYM.test(word) ? word : word.toLowerCase()))
     .join(" ");
+}
+
+const MODE_ORDER: readonly SecretMode[] = ["forever", "untilRestart", "never"];
+
+function keptSentence(name: string, mode: SecretMode, fields: string): string {
+  if (mode === "forever") return `TableCraft saves the ${fields} in the system keychain.`;
+  if (mode === "untilRestart") return `TableCraft keeps the ${fields} until it quits.`;
+  return `${name} does not keep its ${fields}. It is used for this connection only.`;
+}
+
+/** What happens to each asked-for secret once the connection works, in the datasource's save modes. */
+export function promptDescription(request: SecretRequest): string {
+  return MODE_ORDER.flatMap((mode) => {
+    const labels = request.fields
+      .filter((field) => (request.datasource.secretModes[field.key] ?? "never") === mode)
+      .map((field) => inSentence(field.label));
+    return labels.length === 0 ? [] : [keptSentence(request.datasource.name, mode, labels.join(" and "))];
+  }).join(" ");
 }
 
 function Body({ request }: { readonly request: SecretRequest }) {
@@ -30,10 +49,7 @@ function Body({ request }: { readonly request: SecretRequest }) {
       }}
     >
       <Dialog.Title className="font-semibold">Connect to {request.datasource.name}</Dialog.Title>
-      <Dialog.Description className="text-ink-muted">
-        {request.datasource.name} does not keep its{" "}
-        {request.fields.map((field) => inSentence(field.label)).join(" or ")}. It is used for this connection only.
-      </Dialog.Description>
+      <Dialog.Description className="text-ink-muted">{promptDescription(request)}</Dialog.Description>
       {request.fields.map((field, index) => (
         <label key={field.key} className="flex flex-col gap-1">
           <span className="text-ink-muted">{field.label}</span>
@@ -56,7 +72,10 @@ function Body({ request }: { readonly request: SecretRequest }) {
   );
 }
 
-/** Asks for secrets kept Never, or lost from the keychain, when a datasource connects (decision 020). */
+/**
+ * Asks for the secrets a datasource has no value for when it connects: kept Never, not saved yet,
+ * or lost from the keychain (decision 020). A typed one is kept in its mode once the connection works.
+ */
 export function SecretPrompt() {
   const pending = useSecretPrompt((state) => state.pending);
   return (

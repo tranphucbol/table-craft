@@ -85,6 +85,7 @@ export interface DatasourceService<Target> {
   /**
    * Remembers the product and limits a connection reported (decision 131). Writes nothing for the
    * ephemeral or an unknown datasource, or when the facts are unchanged and were seen within a day.
+   * The connection has worked, so the secrets typed for it are kept in their modes first.
    */
   rememberServer(datasourceId: string, seen: ServerSeen): Promise<void>;
 }
@@ -187,6 +188,8 @@ export async function createDatasourceService<Target>(
   const loaded = await store.load();
   let datasources: Datasource[] = [...loaded.datasources];
   let warning = loaded.warning;
+  /** Secrets typed at the prompt for a connection not yet known to work, by datasource. */
+  const unconfirmed = new Map<string, Readonly<Record<string, string>>>();
   const pluginOf = (pluginId: string) => options.plugins().find((plugin) => plugin.id === pluginId);
   const ephemeral =
     options.ephemeral === null ? null : ephemeralRecord(options.ephemeral, pluginOf(options.ephemeral.pluginId));
@@ -382,6 +385,7 @@ export async function createDatasourceService<Target>(
       );
     }
     find(id);
+    unconfirmed.delete(id);
     await hosts.stop(id);
     await secrets.clearAll(id);
     datasources = datasources.filter((datasource) => datasource.id !== id);
@@ -487,6 +491,7 @@ export async function createDatasourceService<Target>(
       return { status: "failed", message: reason, hint: "Install or fix the plugin, then restart." };
     }
     const values: Record<string, string> = {};
+    const toKeep: Record<string, string> = {};
     const missing: string[] = [];
     const isEphemeral = ephemeral?.id === datasourceId;
     const needed = [
@@ -501,13 +506,41 @@ export async function createDatasourceService<Target>(
         continue;
       }
       values[key] = value;
-      if (typed[key] !== undefined && mode === "untilRestart") {
-        await secrets.set(datasourceId, key, mode, value);
-      }
+      if (typed[key] !== undefined && mode !== "never") toKeep[key] = value;
     }
     if (missing.length > 0) return { status: "needsSecrets", keys: missing };
+    if (Object.keys(toKeep).length > 0) unconfirmed.set(datasourceId, toKeep);
+    else unconfirmed.delete(datasourceId);
     hosts.open(engineConfig(datasource, values), target);
     return { status: "connected" };
+  }
+
+  /**
+   * Keeps what was typed at the prompt once the engine has reached the server, which main learns
+   * from `rememberServer`; storing at `connect` would keep a mistyped password.
+   */
+  async function keepConfirmed(datasourceId: string): Promise<void> {
+    const typed = unconfirmed.get(datasourceId);
+    unconfirmed.delete(datasourceId);
+    const datasource = datasources.find((candidate) => candidate.id === datasourceId);
+    if (typed === undefined || datasource === undefined) return;
+    let kept = false;
+    for (const [key, value] of Object.entries(typed)) {
+      const mode = datasource.secretModes[key] ?? "never";
+      if (mode === "never") continue;
+      try {
+        await secrets.set(datasourceId, key, mode, value);
+        kept = true;
+      } catch {
+        // The connection works without it; the prompt simply comes back next time.
+      }
+    }
+    if (kept) changed();
+  }
+
+  async function disconnect(datasourceId: string): Promise<void> {
+    unconfirmed.delete(datasourceId);
+    await hosts.stop(datasourceId);
   }
 
   async function setAgentAccess(datasourceId: string, access: AgentAccess): Promise<void> {
@@ -545,6 +578,7 @@ export async function createDatasourceService<Target>(
   }
 
   async function rememberServer(datasourceId: string, seen: ServerSeen): Promise<void> {
+    await keepConfirmed(datasourceId);
     if (ephemeral?.id === datasourceId) return;
     const previous = datasources.find((datasource) => datasource.id === datasourceId);
     if (previous === undefined) return;
@@ -574,7 +608,7 @@ export async function createDatasourceService<Target>(
     parseUrl,
     url: urlOf,
     connect,
-    disconnect: (datasourceId) => hosts.stop(datasourceId),
+    disconnect,
     setAgentAccess,
     setAgentPolicy,
     rememberServer,

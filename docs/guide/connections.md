@@ -4,7 +4,8 @@ The **Data Sources** dialog lists your data sources on the left and edits one on
 folder, comment, the plugin's connection fields, read-only mode and a colour that tints its tabs.
 **Test Connection** reports the server version and round trip before you save. Each password has a
 save mode: _Forever_ keeps it encrypted by the operating system's keychain, _Until restart_ keeps it
-in memory, and _Never_ asks on every connect.
+in memory, and _Never_ asks on every connect. A _Forever_ or _Until restart_ password left blank is
+asked for when you connect, and kept in its mode once the connection works.
 
 Paste a connection URL such as `postgresql://alice:secret@db.example.com:5432/sales?sslmode=require`
 into the URL row, or into Host, and the fields fill themselves; the password goes to its save mode,
