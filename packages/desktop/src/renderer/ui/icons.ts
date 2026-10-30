@@ -90,6 +90,8 @@ import {
   UploadSimple,
   FloppyDisk,
   CalendarBlank,
+  DotsThreeVertical,
+  TextIndent,
   X,
   type Icon,
 } from "@phosphor-icons/react";
@@ -229,4 +231,7 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   transpose: Swap,
   saveFile: FloppyDisk,
   loadFile: UploadSimple,
+  reformat: TextIndent,
+  more: DotsThreeVertical,
+  tabs: CaretDown,
 };
