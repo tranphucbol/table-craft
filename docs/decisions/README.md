@@ -128,3 +128,4 @@ started, not when it is merged.
 | 133 | [Testing know-how is a skill agents load when they test](133-testing-know-how-is-a-skill-agents-load-when-they-test.md)                                                |
 | 134 | [A beta channel, and plugins publish only when they change](134-beta-channel-and-plugins-publish-on-change.md)                                                         |
 | 135 | [Every release lists its checksums](135-every-release-lists-its-checksums.md)                                                                                          |
+| 135 | [etcd is one string keyspace over raw RPC, guarded by revisions, with history from Watch](135-etcd-is-one-string-keyspace-guarded-by-revisions.md)                     |
