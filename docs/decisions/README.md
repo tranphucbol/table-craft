@@ -131,3 +131,4 @@ started, not when it is merged.
 | 135 | [etcd is one string keyspace over raw RPC, guarded by revisions, with history from Watch](135-etcd-is-one-string-keyspace-guarded-by-revisions.md)                     |
 | 136 | [Advanced key-value services are optional capabilities in API 1.8.0](136-advanced-key-value-services-are-optional-capabilities.md)                                     |
 | 137 | [Sensitive operations use private host channels, and consoles admit commands before history](137-sensitive-operations-use-private-host-channels.md)                    |
+| 138 | [etcd endpoints are the configured set; sent mutations are never replayed](138-etcd-endpoints-are-the-configured-set.md)                                               |
