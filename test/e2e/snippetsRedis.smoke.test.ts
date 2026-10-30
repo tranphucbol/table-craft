@@ -25,6 +25,7 @@ import {
   type Datasource,
   type RunningApp,
   waitUntilReady,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("119");
@@ -90,7 +91,7 @@ async function createSnippet(
   await snippetDialog(page).locator("#snippet-name").fill(snippet.name);
   await snippetDialog(page).locator("#snippet-prefix").fill(snippet.prefix);
   await snippetDialog(page).locator("#snippet-body").fill(snippet.body);
-  await snippetDialog(page).locator("#snippet-scope").selectOption({ label: scope });
+  await chooseOption(snippetDialog(page).locator("#snippet-scope"), { label: scope });
   await snippetDialog(page).getByRole("button", { name: "Save", exact: true }).click();
   await expect
     .poll(() => snippetDialog(page).getByRole("status").textContent())

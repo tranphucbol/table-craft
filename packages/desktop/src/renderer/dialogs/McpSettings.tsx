@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS, type AgentPolicyArgs } from "@table-craft/desktop/renderer/actions/mcpActions.js";
-import { Button, FieldRow, INPUT_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { Button, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { NumberField, SectionTitle, update } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
 import { TimeoutInfo } from "@table-craft/desktop/renderer/dialogs/TimeoutInfo.js";
 import { mcpStatusText, MCP_STATE_DOT } from "@table-craft/desktop/renderer/model/mcp.js";
@@ -12,6 +12,7 @@ import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { Switch } from "@table-craft/desktop/renderer/ui/Switch.js";
 import { useCopyConfirmation, COPIED_LABEL } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
 import { CloseIcon, InfoIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -196,21 +197,22 @@ function AccessRow({
         </span>
       </td>
       <td className={CELL_CLASS}>
-        <select
-          aria-label={`AI agent access for ${datasource.name}`}
-          data-testid="mcp-access"
-          className={cn(INPUT_CLASS, "w-full")}
+        <Dropdown
+          label={`AI agent access for ${datasource.name}`}
+          testId="mcp-access"
+          variant="field"
+          className="w-full"
           value={access}
-          onChange={(event) =>
-            invoke(MCP_ACTION_IDS.setAccess, { datasourceId: datasource.id, access: event.target.value as AgentAccess })
-          }
-        >
-          {AGENT_ACCESS_LEVELS.map((level) => (
-            <option key={level} value={level} disabled={lockedReason(datasource, level) !== null}>
-              {AGENT_ACCESS_LABELS[level]}
-            </option>
-          ))}
-        </select>
+          options={AGENT_ACCESS_LEVELS.map((level) => ({
+            value: level,
+            label: AGENT_ACCESS_LABELS[level],
+            disabled: lockedReason(datasource, level) !== null,
+          }))}
+          onChange={(value) => {
+            const chosen = AGENT_ACCESS_LEVELS.find((level) => level === value);
+            if (chosen !== undefined) invoke(MCP_ACTION_IDS.setAccess, { datasourceId: datasource.id, access: chosen });
+          }}
+        />
       </td>
       <td className={CELL_CLASS}>
         {exposed ? (

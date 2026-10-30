@@ -6,6 +6,7 @@ import { INPUT_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { installLogSync, matches, scopesOf, useLogView } from "@table-craft/desktop/renderer/state/logView.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 
 const LEVEL_CLASS: Readonly<Record<LogLevel, string>> = {
   error: "text-danger",
@@ -21,6 +22,7 @@ const LEVEL_LABELS: Readonly<Record<LogLevel, string>> = {
   info: "Info and up",
   debug: "Everything",
 };
+const LEVEL_OPTIONS = LOG_LEVELS.map((level) => ({ value: level, label: LEVEL_LABELS[level] }));
 
 const ALL_SCOPES = "";
 const ENVELOPE_KEYS: ReadonlySet<string> = new Set(["ts", "level", "process", "scope", "msg"]);
@@ -64,31 +66,28 @@ function Toolbar({ scopes }: { readonly scopes: readonly string[] }) {
         onChange={(event) => setFilter({ text: event.target.value })}
       />
       <div className="flex min-w-0 items-center gap-1">
-        <select
-          aria-label="Level"
-          className={cn(INPUT_CLASS, "min-w-0 flex-1")}
+        <Dropdown
+          label="Level"
+          variant="field"
+          className="flex-1"
           value={filter.level}
-          onChange={(event) => setFilter({ level: event.target.value as LogLevel })}
-        >
-          {LOG_LEVELS.map((level) => (
-            <option key={level} value={level}>
-              {LEVEL_LABELS[level]}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Scope"
-          className={cn(INPUT_CLASS, "min-w-0 flex-1")}
+          options={LEVEL_OPTIONS}
+          onChange={(chosen) => {
+            const level = LOG_LEVELS.find((candidate) => candidate === chosen);
+            if (level !== undefined) setFilter({ level });
+          }}
+        />
+        <Dropdown
+          label="Scope"
+          variant="field"
+          className="flex-1"
           value={filter.scope}
-          onChange={(event) => setFilter({ scope: event.target.value })}
-        >
-          <option value={ALL_SCOPES}>All scopes</option>
-          {scopes.map((scope) => (
-            <option key={scope} value={scope}>
-              {scope}
-            </option>
-          ))}
-        </select>
+          options={[
+            { value: ALL_SCOPES, label: "All scopes" },
+            ...scopes.map((scope) => ({ value: scope, label: scope })),
+          ]}
+          onChange={(scope) => setFilter({ scope })}
+        />
         {filter.requestId === null ? null : <span className="shrink-0 text-ink-muted">request {filter.requestId}</span>}
         <ActionButton actionId={LOG_ACTION_IDS.clearFilter} compact />
         <ActionButton actionId={LOG_ACTION_IDS.copyRecord} compact />

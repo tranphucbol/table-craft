@@ -20,6 +20,7 @@ import {
   chooseTheme,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
+  computedOpacity,
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
@@ -41,9 +42,11 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("013");
+const dropdownEvidence = evidenceFor("129");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -442,18 +445,21 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
       await runStatement(page, "SELECT * FROM customers ORDER BY id");
 
       await openSettings(page, "Editor");
-      const family = settingsDialog(page).getByLabel("Editor font", { exact: true });
-      await expect.poll(() => family.locator("optgroup").count(), { timeout: LAUNCH_TIMEOUT_MS }).toBeGreaterThan(0);
-      const groups = await family
-        .locator("optgroup")
-        .evaluateAll((elements: readonly { getAttribute(name: string): string | null }[]) =>
-          elements.map((element) => element.getAttribute("label")),
-        );
-      expect(groups).toEqual(["Monospace", "Proportional"]);
-      const monospace = await family.locator('optgroup[label="Monospace"] option').allTextContents();
+      const family = page.locator('[aria-label="Editor font"]');
+      await family.click();
+      const list = page.getByRole("listbox");
+      await expect.poll(() => list.getByRole("group").count(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(2);
+      expect(await list.getByRole("group", { name: "Monospace", exact: true }).count()).toBe(1);
+      expect(await list.getByRole("group", { name: "Proportional", exact: true }).count()).toBe(1);
+      const monospace = await list
+        .getByRole("group", { name: "Monospace", exact: true })
+        .getByRole("option")
+        .allTextContents();
       const chosen = monospace.includes(PREFERRED_MONOSPACE) ? PREFERRED_MONOSPACE : (monospace[0] ?? "");
       expect(chosen).not.toBe("");
-      await family.selectOption(chosen);
+      await expect.poll(() => computedOpacity(list)).toBe("1");
+      await dropdownEvidence(page, "04-settings-font");
+      await chooseOption(family, { label: chosen });
       await fillSetting(page, "Size", String(CHOSEN_EDITOR_PX));
       await closeSettings(page);
 

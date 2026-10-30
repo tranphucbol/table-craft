@@ -37,6 +37,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("042");
@@ -263,7 +264,7 @@ describe.runIf(SMOKE_ENABLED)("error location live test", () => {
         .getByRole("tablist", { name: "Settings pages" })
         .getByRole("tab", { name: "Advanced", exact: true })
         .click();
-      await settings.getByLabel("When a statement fails").selectOption({ label: "Skip it and go on" });
+      await chooseOption(settings.getByLabel("When a statement fails"), { label: "Skip it and go on" });
       await captureWindow(page, "settings-when-a-statement-fails");
       await page.keyboard.press("Escape");
       await settings.waitFor({ state: "detached" });

@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { _electron, type ElectronApplication, type Locator, type Page } from "playwright-core";
+import { _electron, type ElectronApplication, type ElementHandle, type Locator, type Page } from "playwright-core";
 import { expect } from "vitest";
 
 export const SMOKE_ENABLED = process.env["TABLE_CRAFT_SMOKE"] === "1";
@@ -285,6 +285,7 @@ interface StyledElement {
         readonly animationName: string;
         readonly animationPlayState: string;
         readonly opacity: string;
+        readonly borderTopLeftRadius: string;
       };
     };
   };
@@ -301,6 +302,13 @@ export async function iconSpin(button: Locator): Promise<{ readonly name: string
 /** The computed opacity of `element`: `"1"` for a busy button, which is disabled but not dimmed. */
 export async function computedOpacity(element: Locator): Promise<string> {
   return element.evaluate((node: StyledElement) => node.ownerDocument.defaultView.getComputedStyle(node).opacity);
+}
+
+/** The computed corner radius of `element`: `"0px"` for a control flush with its strip (decision 140). */
+export async function cornerRadius(element: Locator): Promise<string> {
+  return element.evaluate(
+    (node: StyledElement) => node.ownerDocument.defaultView.getComputedStyle(node).borderTopLeftRadius,
+  );
 }
 
 /** Resolves once `button` shows its busy spinner: `aria-busy` and a spinning icon (plan 112). */
@@ -468,8 +476,51 @@ export async function fillNewDatasource(page: Page, form: DatasourceForm): Promi
   }
   if (form.password !== undefined) await dialog.getByLabel("Password", { exact: true }).fill(form.password);
   if (form.passwordMode !== undefined) {
-    await dialog.getByLabel("Save password", { exact: true }).selectOption(form.passwordMode);
+    await chooseOption(dialog.getByLabel("Save password", { exact: true }), form.passwordMode);
   }
+}
+
+/**
+ * Picks an option of an in-app dropdown (decision 140), by its value or by `{ label }`, opening it
+ * first unless it already is open.
+ */
+export async function chooseOption(trigger: Locator, option: string | { readonly label: string }): Promise<void> {
+  // An open dropdown hides the rest of the page from the accessibility tree, so a role or label
+  // locator stops resolving its trigger; hold the element itself.
+  const element = await trigger.elementHandle();
+  if (element === null) throw new Error("The dropdown trigger is gone; locate it before choosing an option.");
+  if ((await element.getAttribute("aria-expanded")) !== "true") await element.click();
+  const list = trigger.page().locator(`[id=${JSON.stringify(await listIdOf(element))}]`);
+  const item =
+    typeof option === "string"
+      ? list.locator(`[role="option"][data-value=${JSON.stringify(option)}]`)
+      : list.getByRole("option", { name: option.label, exact: true });
+  await item.click();
+  await list.waitFor({ state: "detached" });
+}
+
+/** Whether an in-app dropdown's option for `value` is disabled; opens the list and closes it again. */
+export async function optionDisabled(trigger: Locator, value: string): Promise<boolean> {
+  const element = await trigger.elementHandle();
+  if (element === null) throw new Error("The dropdown trigger is gone; locate it before reading its options.");
+  await element.click();
+  const list = trigger.page().locator(`[id=${JSON.stringify(await listIdOf(element))}]`);
+  const disabled = await list
+    .locator(`[role="option"][data-value=${JSON.stringify(value)}]`)
+    .getAttribute("aria-disabled");
+  await trigger.page().keyboard.press("Escape");
+  await list.waitFor({ state: "detached" });
+  return disabled === "true";
+}
+
+async function listIdOf(trigger: ElementHandle): Promise<string> {
+  await expect.poll(() => trigger.getAttribute("aria-controls")).not.toBeNull();
+  return (await trigger.getAttribute("aria-controls")) ?? "";
+}
+
+/** The value an in-app dropdown holds. */
+export async function optionValue(trigger: Locator): Promise<string | null> {
+  return trigger.getAttribute("data-value");
 }
 
 /** The Test Connection outcome once it has arrived. */

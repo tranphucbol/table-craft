@@ -46,6 +46,8 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 import { builtRelease } from "./pluginFixtures.js";
 import {
@@ -131,10 +133,10 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       await form.locator('button[data-download="redis"]').click();
       await form.getByLabel("Mode", { exact: true }).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
 
-      await form.getByLabel("Mode", { exact: true }).selectOption("cluster");
+      await chooseOption(form.getByLabel("Mode", { exact: true }), "cluster");
       await expect.poll(() => form.getByLabel("Database", { exact: true }).count()).toBe(0);
       expect(await form.getByLabel("Node address map", { exact: true }).count()).toBe(1);
-      await form.getByLabel("Mode", { exact: true }).selectOption("standalone");
+      await chooseOption(form.getByLabel("Mode", { exact: true }), "standalone");
       await form.getByLabel("Database", { exact: true }).waitFor();
 
       await form.getByLabel("URL", { exact: true }).fill("rediss://ann:secret@cache.example.com:6380/2");
@@ -142,7 +144,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       await expect.poll(() => form.getByLabel("Host", { exact: true }).inputValue()).toBe("cache.example.com");
       expect(await form.getByLabel("Port", { exact: true }).inputValue()).toBe("6380");
       expect(await form.getByLabel("Database", { exact: true }).inputValue()).toBe("2");
-      expect(await form.getByLabel("TLS mode", { exact: true }).inputValue()).toBe("require");
+      expect(await optionValue(form.getByLabel("TLS mode", { exact: true }))).toBe("require");
       await captureWindow(page, "01-form");
     },
     SCENARIO_TIMEOUT_MS,
@@ -203,7 +205,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
         .poll(() => attributes(treeRows(page, "keyFolder"), "aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
         .toEqual(["user: 3"]);
 
-      await explorer(page).getByTestId("key-type-filter").first().selectOption("hash");
+      await chooseOption(explorer(page).getByTestId("key-type-filter").first(), "hash");
       await expect
         .poll(() => attributes(treeRows(page, "keyFolder"), "aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
         .toEqual(["user: 2"]);
@@ -250,7 +252,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       await openKey(page, "type_probe:binary");
       const value = keyTab(page).getByTestId("string-value");
       await value.waitFor();
-      await expect.poll(() => value.getByTestId("value-format").inputValue()).toBe("auto");
+      await expect.poll(() => optionValue(value.getByTestId("value-format"))).toBe("auto");
       await expect.poll(() => value.getByTestId("value-formatted").getAttribute("data-format")).toBe("hex");
       await captureWindow(page, "06-types");
     },
@@ -386,7 +388,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       const page = await launch(CLUSTER);
       const runOn = page.getByTestId("run-on");
       await runOn.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      await runOn.selectOption({ label: "All primaries" });
+      await chooseOption(runOn, { label: "All primaries" });
       await sqlEditor(page).fill("DBSIZE");
       await runAllButton(page).click();
       await expect
@@ -395,7 +397,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       expect((await gridText(page)).cells.length).toBe(6);
       await waitUntilReady(page);
 
-      await runOn.selectOption({ label: "Auto" });
+      await chooseOption(runOn, { label: "Auto" });
       await sqlEditor(page).fill("MSET a 1 b 2");
       await runAllButton(page).click();
       await expect
@@ -468,7 +470,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       const cards = server.getByTestId("server-card");
       await cards.first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       expect(await cards.first().textContent()).toContain("Memory");
-      await server.getByTestId("server-refresh").selectOption({ label: "Refresh: 2 s" });
+      await chooseOption(server.getByTestId("server-refresh"), { label: "Refresh: 2 s" });
       await captureWindow(page, "14-server");
 
       await server.getByTestId("server-view-slowLog").click();
@@ -593,7 +595,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
 
       const runOn = page.getByTestId("run-on");
       await runOn.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      await runOn.selectOption({ label: "All primaries" });
+      await chooseOption(runOn, { label: "All primaries" });
       await sqlEditor(page).fill("DBSIZE");
       await runAllButton(page).click();
       await expect.poll(async () => (await gridText(page)).cells.length, { timeout: LAUNCH_TIMEOUT_MS }).toBe(6);

@@ -24,6 +24,8 @@ import {
   type Datasource,
   type RunningApp,
   waitUntilReady,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("119");
@@ -65,7 +67,7 @@ async function makeSnippet(page: Page, snippet: typeof CUSTOMER_LOOKUP, scope: s
   await dialog(page).locator("#snippet-name").fill(snippet.name);
   await dialog(page).locator("#snippet-prefix").fill(snippet.prefix);
   await dialog(page).locator("#snippet-body").fill(snippet.body);
-  await dialog(page).locator("#snippet-scope").selectOption({ label: scope });
+  await chooseOption(dialog(page).locator("#snippet-scope"), { label: scope });
   await dialog(page).getByRole("button", { name: "Save", exact: true }).click();
   await expect
     .poll(() => dialog(page).getByRole("status").textContent())
@@ -183,7 +185,7 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
       await dialog(page).locator("#snippet-name").fill("Invalid snippet");
       await dialog(page).locator("#snippet-prefix").fill("not valid");
       await dialog(page).locator("#snippet-body").fill("SELECT 1");
-      await dialog(page).locator("#snippet-scope").selectOption({ label: ALL_SQL_CONSOLES });
+      await chooseOption(dialog(page).locator("#snippet-scope"), { label: ALL_SQL_CONSOLES });
       await dialog(page).getByRole("button", { name: "Save", exact: true }).click();
       await expect.poll(() => dialog(page).getByRole("alert").textContent()).toContain("Enter a prefix");
       await expect.poll(() => dialog(page).locator("#snippet-prefix").inputValue()).toBe("not valid");
@@ -230,7 +232,7 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
       expect(await importing.locator("#snippet-body").inputValue()).toBe("SELECT ${field}${cursor}");
       expect(await importing.getByTestId("snippet-preview").textContent()).toBe("SELECT field");
       expect(await importing.locator("#snippet-prefix").inputValue()).toMatch(/^[a-z_][a-z0-9_]*$/);
-      expect(await importing.locator("#snippet-scope").inputValue()).toBe("plugin:sqlite");
+      expect(await optionValue(importing.locator("#snippet-scope"))).toBe("plugin:sqlite");
       await captureWindow(page, "snippet-selection-dialog");
       await importing.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect.poll(() => importing.count()).toBe(0);
@@ -291,7 +293,7 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
       const importing = page.getByRole("dialog", { name: "Import into Snippet", exact: true });
       await importing.waitFor();
       expect(await importing.locator("#snippet-body").inputValue()).toBe(leftText);
-      expect(await importing.locator("#snippet-scope").inputValue()).toBe("plugin:sqlite");
+      expect(await optionValue(importing.locator("#snippet-scope"))).toBe("plugin:sqlite");
       await importing.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect.poll(() => importing.count()).toBe(0);
       expect(await left.getAttribute("data-focused")).toBe("true");
@@ -347,7 +349,7 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
       await dialog(page).locator("#snippet-name").fill("Discard me");
       await dialog(page).locator("#snippet-prefix").fill("discard_me");
       await dialog(page).locator("#snippet-body").fill("SELECT 2");
-      await dialog(page).locator("#snippet-scope").selectOption({ label: ALL_TEXT_CONSOLES });
+      await chooseOption(dialog(page).locator("#snippet-scope"), { label: ALL_TEXT_CONSOLES });
       await dialog(page).getByRole("button", { name: "Close", exact: true }).click();
       let guard = page.getByRole("dialog", { name: "Unsaved snippet" });
       await guard.getByRole("button", { name: "Cancel", exact: true }).click();

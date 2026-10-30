@@ -14,6 +14,7 @@ import {
   chooseTheme,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
+  cornerRadius,
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
@@ -35,6 +36,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("032");
+const dropdownEvidence = evidenceFor("129");
 
 const SQLITE_QUERY = "SELECT * FROM customers ORDER BY id";
 const POSTGRES_QUERY =
@@ -186,6 +188,9 @@ describe.runIf(SMOKE_ENABLED)("ported themes and the theme dropdown live test", 
       await expect.poll(() => savedTheme(userDataDir)).toBe("gruvbox-light");
       expect(await canvas(page)).toBe(BUNDLED_THEMES["gruvbox-light"].colors.canvas);
       expect(await themePickerTrigger(page).textContent()).toContain("Light");
+      const schemeTag = themePickerTrigger(page).getByText("Light", { exact: true });
+      expect(await cornerRadius(schemeTag)).toBe("0px");
+      await dropdownEvidence(page, "04-settings-theme");
       await closeSettings(page);
       await flashGone(page);
       await captureWindow(page, "06-gruvbox-light");

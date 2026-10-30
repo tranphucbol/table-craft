@@ -25,6 +25,7 @@ import {
   sqlEditor,
   toolWindow,
   waitUntilReady,
+  chooseOption,
 } from "../e2e/harness.js";
 import { stubSaveDialog } from "../e2e/workflows.js";
 import { clickVisibly, pause, pointAt, pressVisibly, typeSlowly } from "./pace.js";
@@ -188,7 +189,7 @@ mediaSuite("README media", () => {
       await page.keyboard.press("ControlOrMeta+End");
       const mode = consoleToolbar(page).getByRole("combobox", { name: "Transaction mode" });
       await pointAt(page, mode);
-      await mode.selectOption("manual");
+      await chooseOption(mode, "manual");
       await pause(page);
       await typeSlowly(page, "\nUPDATE products SET stock = 0 WHERE id = 1;");
       await pressVisibly(page, "Mod+Enter");
@@ -251,7 +252,7 @@ mediaSuite("README media", () => {
       await pause(page, 1200);
       const extractor = page.getByRole("toolbar", { name: "Result" }).getByLabel("Extractor");
       await pointAt(page, extractor);
-      await extractor.selectOption("markdown");
+      await chooseOption(extractor, "markdown");
       await pause(page);
       await clickVisibly(page, resultToolbarButton(page, "Copy"));
       await pause(page);

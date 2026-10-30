@@ -129,11 +129,11 @@ function Tree({ consoleId, plan }: { readonly consoleId: string; readonly plan: 
         className="w-full border-collapse font-grid text-grid"
         onKeyDown={onKeyDown}
       >
-        <thead className="sticky top-0 bg-panel text-ink-muted">
+        <thead className="sticky top-0 z-10 bg-panel text-ink-muted">
           <tr className="h-row">
-            <th className="w-full px-cell text-left font-normal">Operation</th>
+            <th className="w-full bg-panel px-cell text-left font-normal">Operation</th>
             {columns.map((column) => (
-              <th key={column.title} className="w-px px-cell text-right font-normal whitespace-nowrap">
+              <th key={column.title} className="w-px bg-panel px-cell text-right font-normal whitespace-nowrap">
                 {column.title}
               </th>
             ))}
@@ -227,8 +227,8 @@ export function PlanView({ consoleId, plan }: { readonly consoleId: string; read
           {EFFECT_TEXT[plan.effect]}
         </div>
       ) : null}
-      <div className="flex h-row shrink-0 items-center gap-gap border-b border-line bg-panel px-gap">
-        <div role="group" aria-label="Plan view" className="flex shrink-0 overflow-hidden rounded border border-line">
+      <div className="flex h-row shrink-0 items-center gap-gap border-b border-line bg-panel pr-gap">
+        <div role="group" aria-label="Plan view" className="flex shrink-0 self-stretch border-r border-line">
           {VIEWS.map(({ view, label, actionId }) => (
             <button
               key={view}

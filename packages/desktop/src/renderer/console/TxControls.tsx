@@ -3,9 +3,10 @@ import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js"
 import { invoke, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import type { ConsoleSession } from "@table-craft/desktop/renderer/state/consoles.js";
-import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 
 const MODE_LABEL: Readonly<Record<TransactionMode, string>> = { auto: "Tx: Auto", manual: "Tx: Manual" };
+const MODE_OPTIONS = (["auto", "manual"] as const).map((mode) => ({ value: mode, label: MODE_LABEL[mode] }));
 const OPEN_STATUS = "transaction open";
 
 /**
@@ -20,22 +21,18 @@ export function TxControls({ session }: { readonly session: Pick<ConsoleSession,
     <div className="flex shrink-0 items-center gap-1">
       <span className="flex items-center gap-1">
         {open ? <span aria-hidden data-testid="transaction-dot" className="size-2 rounded-full bg-warning" /> : null}
-        <select
-          aria-label="Transaction mode"
+        <Dropdown
+          label="Transaction mode"
           title="Auto commits every statement; Manual keeps a transaction open until Commit or Rollback."
-          className={cn(
-            "h-row rounded border border-transparent bg-panel px-1 hover:border-line disabled:opacity-50",
-            open ? "text-warning" : "text-ink",
-          )}
+          variant="inline"
+          tone={open ? "warning" : "ink"}
           value={session.txMode}
+          options={MODE_OPTIONS}
           disabled={!canToggle}
-          onChange={(event) => {
-            if (event.target.value !== session.txMode) void invoke(ACTION_IDS.toggleTransactionMode);
+          onChange={(chosen) => {
+            if (chosen !== session.txMode) void invoke(ACTION_IDS.toggleTransactionMode);
           }}
-        >
-          <option value="auto">{MODE_LABEL.auto}</option>
-          <option value="manual">{MODE_LABEL.manual}</option>
-        </select>
+        />
       </span>
       <ActionButton actionId={ACTION_IDS.commit} compact tone="success" />
       <ActionButton actionId={ACTION_IDS.rollback} compact tone="danger" />

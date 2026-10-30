@@ -30,6 +30,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 import {
   attributes,
@@ -142,7 +143,7 @@ describe.runIf(DATABASES_ENABLED)("redis 5.0 live test", () => {
 
       const runOn = page.getByTestId("run-on");
       await runOn.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      await runOn.selectOption({ label: "All primaries" });
+      await chooseOption(runOn, { label: "All primaries" });
       expect(await gridHeaders(page, "DBSIZE")).toEqual(["node", "value"]);
       expect((await gridText(page)).cells).toHaveLength(6);
       await captureWindow(page, "03-redis5-cluster");
@@ -159,7 +160,7 @@ describe.runIf(DATABASES_ENABLED)("redis 5.0 live test", () => {
       const filter = explorer(page).getByTestId("key-filter").first();
       await filter.fill("user:*");
       await filter.press("Enter");
-      await explorer(page).getByTestId("key-type-filter").first().selectOption("hash");
+      await chooseOption(explorer(page).getByTestId("key-type-filter").first(), "hash");
       await expect
         .poll(() => attributes(treeRows(page, "keyFolder"), "aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
         .toEqual(["user: 2"]);

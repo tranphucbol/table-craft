@@ -16,11 +16,14 @@ import {
   answerExportDialog,
   closeApp,
   columnSnapshot,
+  cornerRadius,
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
   LAUNCH_TIMEOUT_MS,
   launchApp,
+  newProfile,
+  optionValue,
   pressChord,
   runAllButton,
   SCENARIO_TIMEOUT_MS,
@@ -30,9 +33,17 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("007");
+const dropdownEvidence = evidenceFor("129");
+const VALUE_PANEL_DRAG_PX = 100;
+/**
+ * Narrower than the evidence window, still wide enough that the dragged panel stays under 70 % of
+ * the result area and the rows keep their 240 px.
+ */
+const NARROW_WINDOW = { width: 1100, height: EVIDENCE_WINDOW.height } as const;
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -339,7 +350,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     async () => {
       const { app, page } = await launch(MYSQL);
       await query(page, "SELECT * FROM type_probe ORDER BY id");
-      await toolbar(page).getByLabel("Extractor").selectOption({ label: "SQL Inserts" });
+      await chooseOption(toolbar(page).getByLabel("Extractor"), { label: "SQL Inserts" });
 
       await cell(page, 0, 0).click();
       await pressChord(page, "A");
@@ -363,7 +374,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
       await query(page, "SELECT id, big_int, exact_decimal, doc, payload FROM type_probe ORDER BY id");
       const extractor = toolbar(page).getByLabel("Extractor");
 
-      await extractor.selectOption({ label: "JSON" });
+      await chooseOption(extractor, { label: "JSON" });
       await cell(page, 0, 0).click();
       await pressChord(page, "A");
       await pressChord(page, "C");
@@ -377,7 +388,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
         payload: "0xdeadbeef",
       });
 
-      await extractor.selectOption({ label: "Markdown" });
+      await chooseOption(extractor, { label: "Markdown" });
       await cell(page, 0, 0).click();
       await pressChord(page, "A");
       await pressChord(page, "C");
@@ -387,6 +398,66 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
 
       await sqlEditor(page).fill(`${JSON.stringify(json[0])}\n\n${markdown}`);
       await captureWindow(page, "copy-json-markdown");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenExtractorDropdown_whenOpenedAndTypedJ_thenInAppListboxAndJsonChosen",
+    async () => {
+      const { page } = await launch(sqlite());
+      await query(page, "SELECT * FROM customers");
+      const extractor = toolbar(page).getByLabel("Extractor");
+      expect(await cornerRadius(extractor)).toBe("0px");
+
+      await extractor.click();
+      const list = page.getByRole("listbox");
+      await list.waitFor();
+      expect(await list.getByRole("option").allTextContents()).toContain("JSON");
+      await dropdownEvidence(page, "03-extractor");
+      await page.keyboard.press("j");
+      await list.locator('[role="option"][data-value="json"][data-highlighted]').waitFor();
+      await page.keyboard.press("Enter");
+
+      await list.waitFor({ state: "detached" });
+      expect(await optionValue(extractor)).toBe("json");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenValuePanel_whenHandleDraggedAndRelaunched_thenPanelWidensAndKeepsItsWidth",
+    async () => {
+      const userDataDir = newProfile();
+      scratch.push(userDataDir);
+      running = await launchApp(sqlite(), { userDataDir });
+      await setWindowSize(running.app, EVIDENCE_WINDOW);
+      let { page } = running;
+      await waitUntilReady(page);
+      await query(page, "SELECT * FROM customers");
+      await cell(page, 0, 1).click();
+      await page.keyboard.press("Shift+Enter");
+      const panel = (current: Page) => current.getByRole("complementary", { name: "Value" });
+      await panel(page).waitFor();
+      const before = await widthOf(panel(page));
+
+      await dragBy(page, page.getByRole("separator", { name: "Value panel" }), -VALUE_PANEL_DRAG_PX);
+
+      await expect.poll(() => widthOf(panel(page))).toBeGreaterThan(before + VALUE_PANEL_DRAG_PX / 2);
+      const widened = await widthOf(panel(page));
+      await dropdownEvidence(page, "02-value-panel");
+
+      await setWindowSize(running.app, NARROW_WINDOW);
+      await expect.poll(async () => Math.abs((await widthOf(panel(page))) - widened)).toBeLessThanOrEqual(1);
+
+      await closeRunning();
+      running = await launchApp(sqlite(), { userDataDir });
+      await setWindowSize(running.app, EVIDENCE_WINDOW);
+      page = running.page;
+      await waitUntilReady(page);
+      await query(page, "SELECT * FROM customers");
+      await panel(page).waitFor();
+      expect(Math.abs((await widthOf(panel(page))) - widened)).toBeLessThanOrEqual(1);
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -426,7 +497,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
       const path = join(folder, "customers.tsv");
       await query(page, "SELECT * FROM customers ORDER BY id");
 
-      await toolbar(page).getByLabel("Extractor").selectOption({ label: "TSV" });
+      await chooseOption(toolbar(page).getByLabel("Extractor"), { label: "TSV" });
       await toolbarButton(page, "Export Data…").click();
       await answerExportDialog(page, path);
 

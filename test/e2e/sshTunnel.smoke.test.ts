@@ -40,6 +40,7 @@ import {
   toolWindow,
   waitUntilReady,
   type RunningApp,
+  chooseOption,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("036");
@@ -215,7 +216,7 @@ describe.runIf(DATABASES_ENABLED)("SSH tunnel live test", () => {
       await newDatasource(page, "MySQL", "mysql-ssh-key");
       await fillDatabase(page, MYSQL);
       await fillBastion(page);
-      await field(page, "Authentication").selectOption({ label: "Key pair" });
+      await chooseOption(field(page, "Authentication"), { label: "Key pair" });
       await field(page, "Private key").fill(SSH_BASTION.keyPath);
       await field(page, "Key passphrase").fill(SSH_BASTION.passphrase);
       await field(page, "Key passphrase").scrollIntoViewIfNeeded();

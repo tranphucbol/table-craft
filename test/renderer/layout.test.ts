@@ -7,6 +7,8 @@ import {
   loadLayout,
   memoryStorage,
   MIN_CONSOLE_PANE_PERCENT,
+  MIN_VALUE_PANEL_PX,
+  valuePanelResized,
 } from "@table-craft/desktop/renderer/state/layout.js";
 
 describe("layout", () => {
@@ -158,5 +160,39 @@ describe("layout", () => {
     store.getState().resizeConsoleEditor(DEFAULT_CONSOLE_EDITOR_PERCENT);
 
     expect(store.getState().layout).toBe(before);
+  });
+
+  function savedWith(extra: Record<string, unknown>) {
+    const storage = memoryStorage();
+    storage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({ visible: DEFAULT_LAYOUT.visible, sizes: DEFAULT_LAYOUT.sizes, ...extra }),
+    );
+    return storage;
+  }
+
+  it("givenNoValuePanelWidth_whenLayoutRead_thenDefaultWidth", () => {
+    expect(loadLayout(savedWith({})).valuePanelWidthPx).toBeNull();
+  });
+
+  it("givenWidthBelowMinimum_whenLayoutRead_thenClampedToMinimum", () => {
+    expect(loadLayout(savedWith({ valuePanelWidthPx: 20 })).valuePanelWidthPx).toBe(MIN_VALUE_PANEL_PX);
+  });
+
+  it("givenNonNumericWidth_whenLayoutRead_thenDefaultWidth", () => {
+    expect(loadLayout(savedWith({ valuePanelWidthPx: "wide" })).valuePanelWidthPx).toBeNull();
+  });
+
+  it("givenDrag_whenValuePanelResized_thenWidthStoredInPixels", () => {
+    const storage = memoryStorage();
+    createLayoutStore(storage).getState().resizeValuePanel(487.6);
+
+    expect(createLayoutStore(storage).getState().layout.valuePanelWidthPx).toBe(488);
+  });
+
+  it("givenSameWidth_whenValuePanelResized_thenLayoutUnchanged", () => {
+    const layout = valuePanelResized(DEFAULT_LAYOUT, 400);
+
+    expect(valuePanelResized(layout, 400)).toBe(layout);
   });
 });

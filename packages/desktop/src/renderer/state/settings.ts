@@ -170,6 +170,11 @@ export function useRowHeightPx(): number {
   return useSettings((state) => DENSITIES[state.settings.appearance.density].rowHeightPx);
 }
 
+/** The value panel's width until the user drags its edge (plan 129 decision 4). */
+export function useDefaultValuePanelPx(): number {
+  return useSettings((state) => DENSITIES[state.settings.appearance.density].valuePanelWidthPx);
+}
+
 /** How the grid draws and measures cells; the same object until a Data Editor setting changes. */
 export function useCellFormats(): CellFormats {
   return useSettings((state) => state.settings.data);

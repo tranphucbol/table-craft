@@ -19,6 +19,7 @@ import {
   answerSecretPrompt,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
+  cornerRadius,
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
@@ -42,9 +43,21 @@ import {
   type RunningApp,
   type SavedDatasource,
   waitUntilReady,
+  chooseOption,
+  optionValue,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("012");
+const dropdownEvidence = evidenceFor("129");
+/** More than a row's height, so a row and its time bar sit under the header. */
+const PLAN_SCROLL_PX = 40;
+/** The header's bottom line, where a time bar hangs from its cell. */
+const HEADER_EDGE_PX = 2;
+
+/** The members the plan header check touches; the e2e program has no DOM lib. */
+interface Scrollable {
+  scrollTop: number;
+}
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -63,6 +76,8 @@ const SAVED_POSTGRES: SavedDatasource = {
 };
 
 const JOIN_SQL = "SELECT o.id, c.name FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.total > 10";
+/** Four joins in one plan: more rows than the result pane shows, so the tree scrolls. */
+const TALL_PLAN_SQL = Array.from({ length: 4 }, () => JOIN_SQL).join(" UNION ALL ");
 /**
  * PostgreSQL picks a nested loop once autovacuum has analysed the three-row fixtures and a hash
  * join on a freshly seeded container, which estimates rows from pages.
@@ -155,8 +170,8 @@ function transactionBadge(page: Page) {
 async function chooseTransactionMode(page: Page, mode: "auto" | "manual"): Promise<void> {
   const select = page.getByLabel("Transaction mode", { exact: true });
   await expect.poll(() => select.isEnabled()).toBe(true);
-  await select.selectOption(mode);
-  await expect.poll(() => select.inputValue()).toBe(mode);
+  await chooseOption(select, mode);
+  await expect.poll(() => optionValue(select)).toBe(mode);
 }
 
 /** Replaces the console's text; the caret ends after the last character, inside the statement. */
@@ -267,6 +282,44 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
       await page.getByRole("button", { name: "Tree", exact: true }).click();
       await planRows(page).first().waitFor();
       await captureWindow(page, "plan-mysql");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenAnalysedPlanScrolled_whenHeaderHitTested_thenHeaderOnTop",
+    async () => {
+      const page = await launch(MYSQL);
+      const mode = page.getByLabel("Transaction mode", { exact: true });
+      expect(await cornerRadius(mode)).toBe("0px");
+      await expect.poll(() => mode.isEnabled()).toBe(true);
+      await mode.click();
+      await page.getByRole("listbox").getByRole("option", { name: "Tx: Manual" }).waitFor();
+      await dropdownEvidence(page, "05-tx-mode");
+      await page.keyboard.press("Escape");
+      await page.getByRole("listbox").waitFor({ state: "hidden" });
+      await typeStatement(page, TALL_PLAN_SQL);
+      await sqlEditor(page).press("Escape");
+
+      await analyseButton(page).click();
+      await planShown(page, "Plan (analysed)");
+      const scroller = planTree(page).locator("..");
+      await scroller.evaluate((element: Scrollable, top) => {
+        element.scrollTop = top;
+      }, PLAN_SCROLL_PX);
+      await expect.poll(() => scroller.evaluate((element: Scrollable) => element.scrollTop)).toBeGreaterThan(0);
+
+      for (const name of ["Rows (est.)", "Time (ms)"]) {
+        const box = await planTree(page).getByRole("columnheader", { name }).boundingBox();
+        if (box === null) throw new Error(`The ${name} header is not on screen.`);
+        const x = box.x + box.width / 2;
+        const y = box.y + box.height - HEADER_EDGE_PX;
+        expect(
+          await page.evaluate(`document.elementFromPoint(${String(x)}, ${String(y)})?.closest("thead") != null`),
+        ).toBe(true);
+      }
+      expect(await cornerRadius(page.getByRole("group", { name: "Plan view" }))).toBe("0px");
+      await dropdownEvidence(page, "01-plan-header");
     },
     SCENARIO_TIMEOUT_MS,
   );

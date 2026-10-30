@@ -93,7 +93,7 @@ export function FindBar({
         data-testid="find-input"
         spellCheck={false}
         placeholder="Find in fetched rows"
-        className="h-row w-60 min-w-0 rounded border border-line bg-canvas px-cell font-grid text-grid text-ink outline-none focus:border-accent"
+        className="h-row w-60 min-w-0 border border-line bg-canvas px-cell font-grid text-grid text-ink outline-none focus:border-accent"
         value={text}
         onChange={(event) => type(event.target.value)}
         onKeyDown={(event) => {
@@ -140,13 +140,13 @@ export function FilterChips({ result, local }: { readonly result: ResultTab; rea
           <span
             key={`${String(index)}:${label}`}
             data-testid="filter-chip"
-            className="flex h-row max-w-80 items-center gap-1 rounded border border-line bg-raised pl-cell"
+            className="flex h-row max-w-80 items-center gap-1 border border-line bg-raised pl-cell"
           >
             <span className="truncate font-grid text-grid">{label}</span>
             <button
               type="button"
               aria-label={`Remove ${label}`}
-              className="flex h-row items-center rounded px-1 text-ink-muted hover:bg-selection hover:text-ink"
+              className="flex h-row items-center px-1 text-ink-muted hover:bg-selection hover:text-ink"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => invoke(GRID_ACTION_IDS.removeFilter, { index })}
             >
