@@ -220,7 +220,7 @@ function RawText({ text }: { readonly text: string }) {
   );
 }
 
-const PANEL_CLASS = "flex w-value-panel min-w-0 shrink-0 flex-col border-l border-line bg-panel font-grid text-grid";
+const PANEL_CLASS = "flex h-full w-full min-w-0 flex-col bg-panel font-grid text-grid";
 
 /** Where a panel keeps its `{}` choice: the result's `jsonOwnerKey`; the column names the rest. */
 function jsonTarget(owner: string | undefined, column: Column | null) {
