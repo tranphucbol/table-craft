@@ -14,7 +14,7 @@ const AUTH_LABEL: Readonly<Record<SshAuthMethod, string>> = {
 };
 const AUTH_METHODS = Object.keys(AUTH_LABEL) as readonly SshAuthMethod[];
 const KEY_FILE_TITLE = "Private key";
-const AGENT_NOTE = "Uses the keys of the running SSH agent (SSH_AUTH_SOCK; on Windows the OpenSSH agent).";
+const AGENT_NOTE = "Uses the keys loaded in the running SSH agent (SSH_AUTH_SOCK; on Windows, the OpenSSH agent).";
 
 interface SshSectionProps {
   readonly draft: FormDraft;
@@ -66,7 +66,12 @@ export function SshSection({ draft, encryption, onChange }: SshSectionProps) {
             onChange={(event) => set({ user: event.target.value })}
           />
         </FieldRow>
-        <FieldRow label="Authentication" htmlFor={authId}>
+        <FieldRow
+          label="Authentication"
+          htmlFor={authId}
+          hint={ssh.auth === "agent" ? AGENT_NOTE : undefined}
+          hintLabel="About SSH agent"
+        >
           <Dropdown
             id={authId}
             label="Authentication"
@@ -104,7 +109,6 @@ export function SshSection({ draft, encryption, onChange }: SshSectionProps) {
         {secret === null ? null : (
           <SecretField field={secret} draft={draft} encryption={encryption} onChange={onChange} />
         )}
-        {ssh.auth === "agent" ? <p className="col-start-2 text-ink-muted">{AGENT_NOTE}</p> : null}
       </fieldset>
     </>
   );

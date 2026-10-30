@@ -114,7 +114,7 @@ function history(page: Page) {
 
 async function selectPrior(page: Page, fixture: Fixture): Promise<void> {
   await keyButton(page, "History").click();
-  const versions = history(page).getByRole("complementary", { name: "Key versions" }).getByRole("button");
+  const versions = history(page).getByRole("complementary", { name: "Key versions" }).locator("button[aria-pressed]");
   await expect.poll(() => versions.count(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(fixture.events.length);
   const prior = fixture.events[1];
   if (prior === undefined) throw new Error("prior event missing");
@@ -165,13 +165,19 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("etcd History, Restore and Me
         await withApp(async (page) => {
           await openKey(page, fixture.key);
           await selectPrior(page, fixture);
-          const versions = history(page).getByRole("complementary", { name: "Key versions" }).getByRole("button");
+          const versions = history(page)
+            .getByRole("complementary", { name: "Key versions" })
+            .locator("button[aria-pressed]");
           expect(await attributes(versions, "title")).toEqual(
             [...fixture.events]
               .reverse()
               .map((event) => `${event.kind} · v${event.version} · rev ${event.modRevision} · lease ${event.lease}`),
           );
-          expect(await history(page).textContent()).toContain("No timestamps are available. Ages count revisions.");
+          await history(page).getByRole("button", { name: "About version ages", exact: true }).hover();
+          await expect
+            .poll(() => page.getByRole("tooltip").textContent())
+            .toContain("etcd keeps no timestamps, so a version's age counts the changes");
+          await page.mouse.move(0, 0);
           expect(await versions.allTextContents()).toEqual(
             expect.arrayContaining([expect.stringContaining("DeletedKey removed")]),
           );

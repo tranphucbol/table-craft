@@ -131,22 +131,22 @@ export function connectionFieldVisible(
 export function connectionFieldHelp(key: string): string | null {
   switch (key) {
     case "namespace":
-      return "Every key is read and written under this prefix; the tree shows keys without it. This is not an authorization boundary. Cluster, lease and access operations remain global.";
+      return "Every key is read and written under this prefix, and the tree shows keys without it. It does not limit access: cluster, lease and user operations still apply to the whole cluster.";
     case "serverName":
-      return "Overrides SNI and certificate hostname checks for every endpoint, including through SSH. Leave blank to verify each original endpoint hostname.";
+      return "The host name every endpoint's certificate is checked against, also through SSH. Leave blank to check each endpoint's own host name.";
     case "autoSyncInterval":
-      return "0 disables refresh (the default). Only configured endpoints are refreshed and their cluster identity rechecked; advertised member URLs are never added. Keep the configured addresses reachable through SSH, NAT or port-forwards.";
+      return "How often to recheck that the endpoints above still belong to the same cluster. 0, the default, turns it off. Members the cluster advertises are never added.";
     case "lockPrefix":
     case "electionPrefix":
-      return "Inspection prefix relative to the namespace. Only explicitly configured prefixes are viewed; this does not acquire locks or elect a leader. Leave blank to disable.";
+      return "A prefix, under the namespace, to list for viewing. TableCraft only reads it: it never takes a lock or runs an election. Leave blank to skip.";
     case "namespaceEncoding":
-      return "UTF-8 text, or canonical Base64 for an exact byte prefix. Keys in the tree are relative to these bytes.";
+      return "How the namespace is written: UTF-8 text, or Base64 for an exact byte prefix.";
     case "readMode":
-      return "Linearizable reads are current. Serializable reads can be faster but may show stale data.";
+      return "Linearizable reads always see the latest data. Serializable reads can be faster but may be slightly out of date.";
     case "maxRequestBytes":
-      return "Configured send limit in bytes, not a measured server limit. The server may impose a smaller limit.";
+      return "The largest request TableCraft sends, in bytes. The server may accept less.";
     case "maxMessageMb":
-      return "Maximum response size in MiB; this also bounds outbound messages.";
+      return "The largest response TableCraft accepts, in MiB. It also caps the size of what it sends.";
     default:
       return null;
   }
