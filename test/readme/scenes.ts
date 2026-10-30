@@ -27,7 +27,15 @@ import {
   toolWindow,
   waitUntilReady,
 } from "../e2e/harness.js";
-import { type Gif, GIF_MAX_BYTES, GIFS_MAX_BYTES, MEDIA_DIRECTORY, requireFfmpeg, startRecording } from "./recorder.js";
+import {
+  type Gif,
+  GIF_MAX_BYTES,
+  GIFS_MAX_BYTES,
+  MEDIA_DIRECTORY,
+  type Recording,
+  requireFfmpeg,
+  startRecording,
+} from "./recorder.js";
 import { clickAtVisibly, clickVisibly, END_PAUSE_MS, pause, pressVisibly, typeSlowly } from "./pace.js";
 import { buildShopSqlite, loadShopPostgres, SHOP_DATABASE } from "./shop.js";
 
@@ -96,14 +104,24 @@ export interface SceneScript {
   readonly withoutShop?: boolean;
   /** Saved after `shop` and `shop.db`, for the scenes about another database. */
   readonly alsoSaved?: readonly SavedDatasource[];
+  /** What `shop` is saved with on top of `SHOP_POSTGRES`, such as its agent access. */
+  readonly shop?: Partial<SavedDatasource>;
+  /** Settings seeded beside the pinned appearance, such as `mcp`. */
+  readonly settings?: () => Record<string, unknown>;
   /** Variables the app launches with on top of the harness's, such as a fixture `HOME`. */
   readonly env?: () => Record<string, string>;
   /** Runs once the scene ends, passed or failed, before the app closes: what `setup` opened outside it. */
   readonly teardown?: () => Promise<void>;
+  /** The longest any frame is held in the GIF, for a scene that waits on something outside the app. */
+  readonly maxFrameSeconds?: number;
+  /** For a scene that waits on something slower than the app, such as a model. */
+  readonly timeoutMs?: number;
+  /** Records more than the app's window, such as a terminal beside it; the window alone otherwise. */
+  readonly record?: (scene: Scene) => Promise<Recording>;
 }
 
 export function scene(name: string, script: SceneScript) {
-  const { setup, run, withoutShop = false, alsoSaved = [], env } = script;
+  const { setup, run, withoutShop = false, alsoSaved = [], shop = {}, settings, env, maxFrameSeconds } = script;
   const skipped = ONLY.length > 0 && !ONLY.includes(name);
   it.skipIf(skipped)(
     name,
@@ -111,8 +129,9 @@ export function scene(name: string, script: SceneScript) {
       loadShopPostgres();
       const profile = newProfile();
       const sqlite = shopSqlite(join(sqliteDirectory, SHOP_FILE));
-      seedDatasources(profile, [...(withoutShop ? [sqlite] : [SHOP_POSTGRES, sqlite]), ...alsoSaved]);
-      seedSettings(profile, APPEARANCE);
+      const saved = { ...SHOP_POSTGRES, ...shop };
+      seedDatasources(profile, [...(withoutShop ? [sqlite] : [saved, sqlite]), ...alsoSaved]);
+      seedSettings(profile, { ...APPEARANCE, ...settings?.() });
       teardown = script.teardown ?? null;
       const { app, page } = await launchApp(null, { userDataDir: profile, env: env?.() ?? {} });
       running = app;
@@ -121,18 +140,18 @@ export function scene(name: string, script: SceneScript) {
       const recording = await failureShot(page, name, async () => {
         await setup({ app, page });
         await pause(page);
-        const started = await startRecording(app, page);
+        const started = await (script.record?.({ app, page }) ?? startRecording(app, page));
         await run({ app, page });
         return started;
       });
       await pause(page, END_PAUSE_MS);
-      const gif = await recording.stop(name);
+      const gif = await recording.stop(name, maxFrameSeconds);
       recorded.push(gif);
       expect(statSync(gif.path).size).toBe(gif.bytes);
       expect(gif.bytes, `${name}.gif is ${String(gif.bytes)} bytes`).toBeLessThanOrEqual(GIF_MAX_BYTES);
       expect(gif.seconds, `${name}.gif lasts ${gif.seconds.toFixed(1)} s`).toBeLessThanOrEqual(MAX_GIF_SECONDS);
     },
-    SCENE_TIMEOUT_MS,
+    script.timeoutMs ?? SCENE_TIMEOUT_MS,
   );
 }
 

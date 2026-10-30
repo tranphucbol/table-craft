@@ -29,10 +29,10 @@ export const FFMPEG_MISSING = "Install ffmpeg (`brew install ffmpeg`, `apt insta
  * Bayer dithering with `diff_mode=rectangle` re-encodes only the changed rectangle of each frame,
  * which keeps a mostly static window small; `stats_mode=diff` builds the palette from what moves.
  */
-const GIF_FILTER =
-  `fps=${GIF_FPS},scale=${GIF_WIDTH_PX}:-1:flags=lanczos,split[frames][copy];` +
-  "[copy]palettegen=stats_mode=diff[palette];" +
+export const GIF_PALETTE =
+  "split[frames][copy];[copy]palettegen=stats_mode=diff[palette];" +
   "[frames][palette]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle";
+const GIF_FILTER = `fps=${String(GIF_FPS)},scale=${String(GIF_WIDTH_PX)}:-1:flags=lanczos,${GIF_PALETTE}`;
 
 export interface Frame {
   readonly file: string;
@@ -47,24 +47,79 @@ export interface Gif {
 }
 
 export interface Recording {
-  /** Stops the screencast and writes `docs/media/<name>.gif`. */
-  stop(name: string): Promise<Gif>;
+  /**
+   * Stops the screencast and writes `docs/media/<name>.gif`. `maxFrameSeconds` shortens every
+   * frame held longer, for a scene that waits on something outside the app, such as a model.
+   */
+  stop(name: string, maxFrameSeconds?: number): Promise<Gif>;
+}
+
+export interface ConcatList {
+  readonly script: string;
+  readonly seconds: number;
 }
 
 /**
  * The ffmpeg concat-demuxer script for `frames`: each frame lasts until the next one was painted,
- * the last until `endSeconds`. The last file is listed twice because the demuxer ignores the
- * duration of the final entry.
+ * the last until `endSeconds`, none longer than `maxFrameSeconds`. The last file is listed twice
+ * because the demuxer ignores the duration of the final entry.
  */
-export function concatList(frames: readonly Frame[], endSeconds: number): string {
+export function concatList(frames: readonly Frame[], endSeconds: number, maxFrameSeconds = Infinity): ConcatList {
   const lines = ["ffconcat version 1.0"];
+  let seconds = 0;
   frames.forEach((frame, index) => {
     const next = frames[index + 1]?.timestamp ?? Math.max(endSeconds, frame.timestamp + MIN_LAST_FRAME_SECONDS);
-    lines.push(`file '${frame.file}'`, `duration ${(next - frame.timestamp).toFixed(3)}`);
+    const duration = Math.min(next - frame.timestamp, maxFrameSeconds);
+    seconds += duration;
+    lines.push(`file '${frame.file}'`, `duration ${duration.toFixed(3)}`);
   });
   const last = frames.at(-1);
   if (last !== undefined) lines.push(`file '${last.file}'`);
-  return `${lines.join("\n")}\n`;
+  return { script: `${lines.join("\n")}\n`, seconds };
+}
+
+/**
+ * Concat lists for several recordings of the same moment, one per source, on one timeline from
+ * `startSeconds` to `endSeconds`: every source shows its latest frame at each instant, and a span in
+ * which no source painted is held at most `maxFrameSeconds` in all of them alike, so they stay in
+ * step. A source that painted nothing yet at `startSeconds` shows its first frame from the start.
+ */
+export function alignedLists(
+  sources: readonly (readonly Frame[])[],
+  startSeconds: number,
+  endSeconds: number,
+  maxFrameSeconds = Infinity,
+): ConcatList[] {
+  const inside = (time: number) => Math.min(Math.max(time, startSeconds), endSeconds);
+  const instants = [...new Set([startSeconds, endSeconds, ...sources.flat().map((frame) => inside(frame.timestamp))])];
+  instants.sort((a, b) => a - b);
+  const shown = new Map<number, number>();
+  instants.forEach((instant, index) => {
+    const previous = instants[index - 1];
+    const before =
+      previous === undefined ? 0 : (shown.get(previous) ?? 0) + Math.min(instant - previous, maxFrameSeconds);
+    shown.set(instant, before);
+  });
+  const at = (time: number) => shown.get(inside(time)) ?? 0;
+  return sources.map((frames) => {
+    const current = frames.filter(
+      (frame, index) => frame.timestamp <= endSeconds && (frames[index + 1]?.timestamp ?? Infinity) > startSeconds,
+    );
+    const timed = current.map((frame, index) => ({
+      file: frame.file,
+      timestamp: index === 0 ? startSeconds : frame.timestamp,
+    }));
+    const lines = ["ffconcat version 1.0"];
+    timed.forEach((frame, index) => {
+      const next = timed[index + 1]?.timestamp ?? endSeconds;
+      const duration = Math.max(at(next) - at(frame.timestamp), 0);
+      if (duration > 0 || index === timed.length - 1)
+        lines.push(`file '${frame.file}'`, `duration ${duration.toFixed(3)}`);
+    });
+    const last = timed.at(-1);
+    if (last !== undefined) lines.push(`file '${last.file}'`);
+    return { script: `${lines.join("\n")}\n`, seconds: at(endSeconds) };
+  });
 }
 
 /** Throws `FFMPEG_MISSING` when no `ffmpeg` runs from the PATH. */
@@ -118,7 +173,12 @@ async function waitForFreshFrame(page: Page, frames: readonly Frame[], name: str
   }
 }
 
-export async function startRecording(app: ElectronApplication, page: Page): Promise<Recording> {
+export interface Screencast {
+  /** Ends the screencast; the frames stay in `directory` until the caller removes it. */
+  stop(name: string): Promise<{ readonly frames: readonly Frame[]; readonly directory: string }>;
+}
+
+export async function startScreencast(app: ElectronApplication, page: Page): Promise<Screencast> {
   await keepPainting(app);
   const directory = mkdtempSync(join(tmpdir(), FRAMES_PREFIX));
   const frames: Frame[] = [];
@@ -132,22 +192,43 @@ export async function startRecording(app: ElectronApplication, page: Page): Prom
   await session.send("Page.startScreencast", { format: "png", everyNthFrame: 1 });
   return {
     async stop(name) {
-      const endSeconds = Date.now() / 1000;
       try {
         await waitForFreshFrame(page, frames, name);
         await session.send("Page.stopScreencast");
         await session.detach().catch(() => undefined);
-        const first = frames[0];
-        if (first === undefined) throw new Error(`Recording "${name}" captured no frames; is the window visible?`);
-        writeFileSync(join(directory, CONCAT_LIST), concatList(frames, endSeconds));
-        mkdirSync(MEDIA_DIRECTORY, { recursive: true });
-        const path = join(MEDIA_DIRECTORY, `${name}.gif`);
-        execFileSync(
-          FFMPEG,
-          ["-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", CONCAT_LIST, "-vf", GIF_FILTER, "-loop", "0", path],
-          { cwd: directory, stdio: ["ignore", "ignore", "pipe"] },
-        );
-        return { path, bytes: statSync(path).size, seconds: endSeconds - first.timestamp };
+        if (frames.length === 0) throw new Error(`Recording "${name}" captured no frames; is the window visible?`);
+      } catch (error) {
+        rmSync(directory, { recursive: true, force: true });
+        throw error;
+      }
+      return { frames, directory };
+    },
+  };
+}
+
+/** Writes `docs/media/<name>.gif` from ffmpeg concat lists in `directory`, through `filter`. */
+export function writeGif(name: string, directory: string, lists: readonly string[], filter: string): string {
+  mkdirSync(MEDIA_DIRECTORY, { recursive: true });
+  const path = join(MEDIA_DIRECTORY, `${name}.gif`);
+  const inputs = lists.flatMap((list) => ["-f", "concat", "-safe", "0", "-i", list]);
+  execFileSync(FFMPEG, ["-y", "-v", "error", ...inputs, "-filter_complex", filter, "-loop", "0", path], {
+    cwd: directory,
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  return path;
+}
+
+export async function startRecording(app: ElectronApplication, page: Page): Promise<Recording> {
+  const screencast = await startScreencast(app, page);
+  return {
+    async stop(name, maxFrameSeconds) {
+      const endSeconds = Date.now() / 1000;
+      const { frames, directory } = await screencast.stop(name);
+      try {
+        const list = concatList(frames, endSeconds, maxFrameSeconds);
+        writeFileSync(join(directory, CONCAT_LIST), list.script);
+        const path = writeGif(name, directory, [CONCAT_LIST], GIF_FILTER);
+        return { path, bytes: statSync(path).size, seconds: list.seconds };
       } finally {
         rmSync(directory, { recursive: true, force: true });
       }
