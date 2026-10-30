@@ -4,6 +4,7 @@ import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.j
 import { ConsoleFileFailure, type Timers } from "@table-craft/desktop/renderer/state/consoleFiles.js";
 import { createConsolesStore, DETACHED, isDirty } from "@table-craft/desktop/renderer/state/consoles.js";
 import { createFileConsoles, UNSAVED_CHOICES } from "@table-craft/desktop/renderer/state/fileConsoles.js";
+import { checkConsolePersistence } from "@table-craft/desktop/renderer/state/consolePersistence.js";
 import type { ModalRequest } from "@table-craft/desktop/renderer/state/modal.js";
 import type { SqlFileAccess } from "@table-craft/desktop/renderer/state/sqlFiles.js";
 import { createTabsStore, type Tab } from "@table-craft/desktop/renderer/state/tabs.js";
@@ -86,7 +87,11 @@ function manualTimers() {
   return { timers, fire, count: () => set.size };
 }
 
-function harness(initial: Record<string, string> = { [FILE]: "SELECT 1;\n" }, answer: string | null = null) {
+function harness(
+  initial: Record<string, string> = { [FILE]: "SELECT 1;\n" },
+  answer: string | null = null,
+  validateText?: (datasourceId: string, text: string) => Promise<void>,
+) {
   const disk = fakeDisk(initial);
   const clock = manualTimers();
   const consoles = createConsolesStore({
@@ -107,6 +112,7 @@ function harness(initial: Record<string, string> = { [FILE]: "SELECT 1;\n" }, an
     newTab: (title): Tab => ({ id: `console-${String(opened++)}`, kind: "console", title }),
     datasourceExists: (id) => id === DATASOURCE,
     timers: clock.timers,
+    validateText: validateText ?? (() => Promise.resolve()),
   });
   const session = (id: string) => {
     const current = consoles.getState().consoles[id];
@@ -125,6 +131,46 @@ async function openedFile(initial?: Record<string, string>, answer?: string | nu
 }
 
 describe("file consoles", () => {
+  it("givenAttachmentChangedDuringSaveAs_whenNewTextIsRead_thenAdmissionUsesItsCurrentDatasource", async () => {
+    const validateText = vi.fn(() => Promise.reject(new Error("Text was not saved.")));
+    const context = harness(undefined, null, validateText);
+    await context.fileConsoles.open([FILE], DATASOURCE);
+    const id = context.fileConsoles.consoleOf(FILE)!;
+    context.chooseSaveAt(OTHER);
+    const saving = context.fileConsoles.saveAs(id);
+    context.consoles.getState().release(id);
+    context.consoles.getState().attach(id, "commands-source");
+    context.consoles.getState().setSql(id, "user add bob:private-password");
+    expect(await saving).toBe(false);
+    expect(validateText).toHaveBeenCalledWith("commands-source", "user add bob:private-password");
+    expect(context.writes).toEqual([]);
+  });
+
+  it("givenInlinePassword_whenFileAutosavesOrSavesAsBeforeExecute_thenNoSecretIsWritten", async () => {
+    const call = vi.fn(() => Promise.resolve([{ admit: "reject", safeLabel: "credential command" }]));
+    const validator = vi.fn((_datasourceId: string, text: string) =>
+      checkConsolePersistence(text, {
+        capabilities: ["commands"],
+        client: () => Promise.resolve({ call } as unknown as EngineClient),
+        scrub: () => undefined,
+      }),
+    );
+    const context = harness({ [FILE]: "get /a" }, null, validator);
+    await context.fileConsoles.open([FILE], DATASOURCE);
+    const id = context.fileConsoles.consoleOf(FILE)!;
+    const stop = context.fileConsoles.autosave();
+    context.consoles.getState().setSql(id, "user add bob:private-password");
+    await context.clock.fire();
+    expect(context.writes).toEqual([]);
+    expect(await context.fileConsoles.save(id)).toBe(false);
+    context.chooseSaveAt(OTHER);
+    expect(await context.fileConsoles.saveAs(id)).toBe(false);
+    expect(context.writes).toEqual([]);
+    expect(validator).toHaveBeenCalledTimes(3);
+    expect(JSON.stringify(context.asked)).not.toContain("private-password");
+    stop();
+  });
+
   it("givenSqlFile_whenOpened_thenTabNamedAfterFileOnDatasource", async () => {
     const { id, tabs, session } = await openedFile();
 

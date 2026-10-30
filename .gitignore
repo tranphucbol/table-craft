@@ -16,3 +16,4 @@ docs/evidence/
 
 # Local pull request drafts of .agents/skills/create-pr.
 gdb/
+.slim/deepwork/

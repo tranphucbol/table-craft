@@ -25,7 +25,9 @@ export function agentCaller(): Caller {
 }
 
 /** An engine port in the same process: what a `MessagePortMain` carries, without Electron. */
-export function inProcessPort(connection: EngineConnection): EnginePort & { readonly closed: () => boolean } {
+export function inProcessPort(
+  connection: Pick<EngineConnection, "handle" | "close">,
+): EnginePort & { readonly closed: () => boolean } {
   const messageListeners: ((data: unknown) => void)[] = [];
   const closeListeners: (() => void)[] = [];
   let closed = false;

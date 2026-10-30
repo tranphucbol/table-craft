@@ -1,3 +1,4 @@
+import { assertExecutable } from "@table-craft/desktop/engine/admission.js";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
 import { BUG_HINT, EngineFailure } from "@table-craft/desktop/engine/failures.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
@@ -6,6 +7,7 @@ export function statementRoutes(connection: ConnectionContext): RoutesFor<"state
   const { sessionFor, runStatement, explainStatement } = connection;
   return {
     "statement.execute": (request) => {
+      assertExecutable(connection.commandLanguage(), request.sql);
       const { sessionId, sql, parameters, pageRows, fetchAllCap, node, repeat } = request;
       return runStatement(sessionId, sql, parameters, { pageRows, fetchAllCap }, request, {
         ...(node === undefined ? {} : { node }),
@@ -28,6 +30,9 @@ export function statementRoutes(connection: ConnectionContext): RoutesFor<"state
       if (open.running > 0) await open.session.cancel();
       return null;
     },
-    "statement.explain": (request) => explainStatement(request),
+    "statement.explain": async (request) => {
+      assertExecutable(connection.commandLanguage(), request.sql);
+      return explainStatement(request);
+    },
   };
 }

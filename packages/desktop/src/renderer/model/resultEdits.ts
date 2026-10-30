@@ -186,9 +186,9 @@ export function submitCommandsLabel(commands: number): string {
   return `Submit ${String(commands)} ${commands === 1 ? "command" : "commands"}`;
 }
 
-/** A whole-key result's submit, which ran as one `MULTI` (decision 119). */
+/** A whole-key result's atomic submit. */
 export function submittedCommandsText(commands: number): string {
-  return `Submitted ${String(commands)} ${commands === 1 ? "command" : "commands"} as one MULTI`;
+  return `Submitted ${String(commands)} ${commands === 1 ? "command" : "commands"} atomically`;
 }
 
 /** The result with its selection kept inside the rows and columns `buffer` draws. */

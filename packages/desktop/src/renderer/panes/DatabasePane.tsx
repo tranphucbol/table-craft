@@ -16,6 +16,7 @@ import {
   KEYSPACE_MENU,
 } from "@table-craft/desktop/renderer/panes/keyMenus.js";
 import { KEY_ACTION_IDS, type KeyDatabaseArgs } from "@table-craft/desktop/renderer/actions/keyActions.js";
+import { KEY_EDIT_ACTION_IDS, type KeyChildrenArgs } from "@table-craft/desktop/renderer/actions/keyEditActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import { ROUTINE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/routineActions.js";
 import { SERVER_ACTION_IDS } from "@table-craft/desktop/renderer/actions/serverActions.js";
@@ -47,6 +48,7 @@ import {
 } from "@table-craft/desktop/renderer/model/speedSearch.js";
 import {
   Highlighted,
+  EscapedKeyName,
   NodeDetail,
   NodeIcon,
   nodeAriaLabel,
@@ -232,6 +234,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   KEY_ACTION_IDS.loadMore,
   ACTION_IDS.manageShownSchemas,
   ...KEY_HIDDEN_WHEN_DISABLED,
+  KEY_EDIT_ACTION_IDS.refreshFolder,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {
@@ -315,7 +318,7 @@ function menuOf(node: ExplorerNode): readonly (string | null)[] {
   if (node.kind === "column") return COLUMN_MENU;
   if (node.kind === "routine") return ROUTINE_MENU;
   if (node.kind === "keyEntry") return KEY_MENU;
-  if (KEY_TREE_KINDS.has(node.kind)) return KEYSPACE_MENU;
+  if (KEY_TREE_KINDS.has(node.kind)) return [KEY_EDIT_ACTION_IDS.refreshFolder, ...KEYSPACE_MENU];
   if (node.kind === "namespace" || node.kind === "objectGroup") return NAMESPACE_MENU;
   return CATALOG_MENU;
 }
@@ -439,9 +442,17 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
           tabIndex={selected ? 0 : -1}
           data-state={connection?.status ?? (failedNamespace ? "failed" : undefined)}
           data-kind={node.kind}
-          style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(depth * INDENT_PX)}px)` }}
+          style={{
+            paddingLeft:
+              node.kind === "keyFilter" && node.serverChildren === true
+                ? "var(--spacing-gap)"
+                : `calc(var(--spacing-gap) + ${String(depth * INDENT_PX)}px)`,
+          }}
           className={cn(
-            "flex h-row w-full cursor-default items-center gap-cell pr-gap whitespace-nowrap outline-none hover:bg-raised",
+            "flex h-row cursor-default items-center gap-cell pr-gap whitespace-nowrap outline-none hover:bg-raised",
+            // The filter row is as wide as the pane and pinned there: sized by its controls it
+            // would widen the whole tree and let the pane scroll sideways off its own fields.
+            node.kind === "keyFilter" ? "sticky left-0 w-[100cqw]" : "w-full",
             selected && "bg-selection hover:bg-selection",
             (failedNamespace || node.kind === "error") && "text-danger",
           )}
@@ -466,7 +477,7 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
             >
               {row.expanded ? <ExpandedIcon /> : <CollapsedIcon />}
             </button>
-          ) : (
+          ) : node.kind === "keyFilter" && node.serverChildren === true ? null : (
             <span aria-hidden className="size-icon shrink-0" />
           )}
           {node.kind === "folder" ? (
@@ -477,11 +488,15 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
           ) : node.kind === "datasource" ? (
             <DatasourceLabel node={node} positions={positions} shown={shown} />
           ) : node.kind === "keyFilter" ? (
-            <KeyFilterRow key={node.filter.match} node={node} onFocus={() => onSelect(row, true)} />
+            <KeyFilterRow key={JSON.stringify(node.filter)} node={node} onFocus={() => onSelect(row, true)} />
           ) : (
             <>
               <NodeIcon node={node} />
-              <Highlighted text={nodeText(row)} positions={positions} />
+              {node.kind === "keyEntry" && node.key.hex !== null ? (
+                <EscapedKeyName text={nodeText(row)} positions={positions} />
+              ) : (
+                <Highlighted text={nodeText(row)} positions={positions} />
+              )}
               <NodeDetail node={node} />
             </>
           )}
@@ -647,6 +662,59 @@ export function DatabasePane() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [undescribedSignature.join("\n")]);
 
+  const visibleFolders = virtualItems.flatMap((item) => {
+    const node = rows[item.index]?.node;
+    return node?.kind === "keyFolder" && node.key !== undefined ? [node] : [];
+  });
+  const visibleFolderSignature = visibleFolders
+    .map((node) => JSON.stringify([node.datasourceId, node.database, node.key]))
+    .join("\n");
+  useEffect(() => {
+    for (const node of visibleFolders) {
+      if (node.key !== undefined) void useKeys.getState().countFolder(node.datasourceId, node.database, node.key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleFolderSignature]);
+
+  const expandedKeyFolders = virtualItems.flatMap((item) => {
+    const row = rows[item.index];
+    return row?.expanded === true && row.node.kind === "keyFolder" && row.node.key !== undefined ? [row.node] : [];
+  });
+  const expandedKeyFolderSignature = expandedKeyFolders
+    .map((node) =>
+      JSON.stringify([
+        node.datasourceId,
+        node.database,
+        node.key,
+        node.key === undefined
+          ? false
+          : keyspaces[node.datasourceId]?.byDatabase[node.database]?.folders?.[keyIdentity(node.key)]?.started,
+      ]),
+    )
+    .join("\n");
+  useEffect(() => {
+    for (const node of expandedKeyFolders) {
+      if (node.key !== undefined) void useKeys.getState().expandFolder(node.datasourceId, node.database, node.key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedKeyFolderSignature]);
+
+  const visibleLeases = virtualItems.flatMap((item) => {
+    const node = rows[item.index]?.node;
+    if (node?.kind !== "keyEntry" || node.revision === undefined || node.revision.lease === "0") return [];
+    const datasource = datasources.find((candidate) => candidate.id === node.datasourceId);
+    return datasource !== undefined && capabilitiesOf(plugins, datasource.pluginId).includes("leases")
+      ? [[node.datasourceId, node.revision.lease] as const]
+      : [];
+  });
+  const visibleLeaseSignature = visibleLeases
+    .map(([id, lease]) => JSON.stringify([id, lease, keyspaces[id]?.leaseTtls?.[lease]]))
+    .join("\n");
+  useEffect(() => {
+    for (const [id, lease] of visibleLeases) void useKeys.getState().readLeaseTtl(id, lease);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleLeaseSignature]);
+
   // A catalog node that stopped being a row (its datasource detached, system schemas hidden)
   // hands the selection to its datasource, as DataGrip does.
   useEffect(() => {
@@ -705,6 +773,10 @@ export function DatabasePane() {
       void useKeys.getState().expandDatasource(node.datasource.id);
     } else if (node.kind === "datasource") void catalog.expandDatasource(node.datasource.id);
     else if (node.kind === "keyDatabase") void useKeys.getState().expandDatabase(node.datasourceId, node.database);
+    else if (node.kind === "keyFolder")
+      void useKeys
+        .getState()
+        .expandFolder(node.datasourceId, node.database, node.key ?? { text: node.prefix, hex: null });
     else if (node.kind === "namespace") void catalog.expandNamespace(node.datasourceId, node.namespace);
     else catalog.setExpanded(row.key, true);
   }
@@ -719,6 +791,16 @@ export function DatabasePane() {
       const args: OpenKeyArgs = { datasourceId: node.datasourceId, database: node.database, key: node.key };
       invoke(KEY_ACTION_IDS.open, args);
     } else if (node.kind === "keyLoadMore") {
+      if (node.parent !== undefined) {
+        const args: KeyChildrenArgs = {
+          datasourceId: node.datasourceId,
+          database: node.database,
+          parent: node.parent,
+          ...(node.restart === undefined ? {} : { restart: node.restart }),
+        };
+        invoke(KEY_EDIT_ACTION_IDS.loadChildren, args);
+        return;
+      }
       const args: KeyDatabaseArgs = { datasourceId: node.datasourceId, database: node.database };
       invoke(KEY_ACTION_IDS.loadMore, args);
     } else if (node.kind === "keyFilter") {
@@ -815,7 +897,7 @@ export function DatabasePane() {
           <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-1">
             {/* Long names scroll sideways by trackpad, Shift+wheel or focus, with no bar: the
                 tree's own height never overflows here, so the vertical bar stays the outer one's. */}
-            <div data-testid="database-tree-scroll" className="overflow-x-auto scrollbar-none">
+            <div data-testid="database-tree-scroll" className="@container overflow-x-auto scrollbar-none">
               <ul
                 role="tree"
                 aria-label="Datasources"

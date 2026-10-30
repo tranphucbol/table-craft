@@ -4,7 +4,7 @@ TableCraft (this repository, `table-craft`) is a desktop database IDE in the spi
 DataGrip: connections, a database explorer, SQL consoles, a result grid and a table data editor.
 Users read "TableCraft"; identifiers keep `table-craft` (decision 037). It is a Bun workspace
 written in TypeScript, shipped as an Electron app. Databases are reached through datasource
-plugins loaded at runtime; MySQL and SQLite ship in the box, PostgreSQL and Redis download on
+plugins loaded at runtime; MySQL and SQLite ship in the box, PostgreSQL, Oracle, SQL Server, Redis and etcd download on
 demand. Read `docs/design/specification.md` for the v1 scope and `docs/decisions/` before changing
 the process model, the plugin contract, or where data lives.
 
@@ -19,7 +19,7 @@ what to do when a run fails.
 - `bun run test` - Vitest, unit tests plus the plugin contract suite against SQLite
 - `bun run test:db` - the contract suites against MySQL, TiDB and MariaDB in `docker compose`
   (decision 099); `TABLE_CRAFT_DATABASES` picks the servers, and `test:db:postgres`, `:oracle`,
-  `:mssql`, `:redis` and `:all` set it. Run the one for a plugin you touch. A git-ignored `.env`
+  `:mssql`, `:redis`, `:etcd` and `:all` set it. Run the one for a plugin you touch. A git-ignored `.env`
   names a shared remote TiDB the suites use instead of the container: never start a TiDB container
   by hand or pass `--profile tidb`, and never touch that server outside the run's own `tc_run_*`
   database. A worktree copies the main checkout's `.env` into its root
@@ -173,7 +173,7 @@ packages/desktop/          @table-craft/desktop, the Electron app
                            settings, `appearance/` applies them as CSS variables,
                            `dialogs/Settings.tsx` edits them
 plugins/<id>/              datasource plugins (@table-craft/plugin-<id>): mysql and
-                           sqlite built in, postgres and redis optional (`BUILT_IN_PLUGINS`,
+                           sqlite built in, postgres, oracle, mssql, redis and etcd optional (`BUILT_IN_PLUGINS`,
                            `OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, decision 108;
                            an optional one builds to `dist/optional-plugins/`, loads in
                            development runs and downloads from npm). Each depends on

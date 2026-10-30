@@ -13,12 +13,18 @@ import { Stripe } from "@table-craft/desktop/renderer/shell/Stripe.js";
 import { ToolWindow } from "@table-craft/desktop/renderer/shell/ToolWindow.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
+import { WatchPane } from "@table-craft/desktop/renderer/watch/WatchPane.js";
+import { WATCH_ACTION_IDS } from "@table-craft/desktop/renderer/watch/actions.js";
+import { AdminSecretPrompt } from "@table-craft/desktop/renderer/keyAdmin/SecretPrompt.js";
 
 const LEFT_STRIPE_TOP = [
   { toolWindow: "database", actionId: ACTION_IDS.toggleDatabase },
   { actionId: SNIPPET_ACTION_IDS.show },
 ] as const;
-const LEFT_STRIPE_BOTTOM = [{ toolWindow: "services", actionId: ACTION_IDS.toggleServices }] as const;
+const LEFT_STRIPE_BOTTOM = [
+  { toolWindow: "watch", actionId: WATCH_ACTION_IDS.toggle },
+  { toolWindow: "services", actionId: ACTION_IDS.toggleServices },
+] as const;
 const RIGHT_STRIPE_TOP = [
   { toolWindow: "log", actionId: ACTION_IDS.toggleLog },
   { actionId: MCP_ACTION_IDS.settings },
@@ -26,6 +32,7 @@ const RIGHT_STRIPE_TOP = [
 const SERVICES_FOLD_ACTIONS = [SERVICES_ACTION_IDS.collapseAll, SERVICES_ACTION_IDS.expandAll] as const;
 const MIN_TOOL_WINDOW_PERCENT = "10";
 const MIN_EDITOR_PERCENT = "20";
+const MIN_WATCH_PERCENT = "40%";
 /** The library's panels scroll by default; ours lay out their own scrolling regions. */
 const PANEL_STYLE = { overflow: "hidden" } as const;
 
@@ -41,7 +48,7 @@ function persistSize(...ids: readonly ToolWindowId[]) {
 }
 
 const persistSides = persistSize("database", "log");
-const persistServices = persistSize("services");
+const persistServices = persistSize("services", "watch");
 
 /** DataGrip's frame: the main toolbar, stripes, Database left, editor tabs centre, Services bottom, status bar. */
 export function Shell() {
@@ -85,6 +92,16 @@ export function Shell() {
               ) : null}
             </Group>
           </Panel>
+          {visible.watch ? (
+            <>
+              <Handle axis="horizontal" />
+              <Panel id="watch" defaultSize={String(sizes.watch)} minSize={MIN_WATCH_PERCENT} style={PANEL_STYLE}>
+                <ToolWindow id="watch" title="Watch" toggleActionId={WATCH_ACTION_IDS.toggle}>
+                  <WatchPane />
+                </ToolWindow>
+              </Panel>
+            </>
+          ) : null}
           {visible.services ? (
             <>
               <Handle axis="horizontal" />
@@ -109,6 +126,7 @@ export function Shell() {
         <Stripe side="right" top={RIGHT_STRIPE_TOP} />
       </div>
       <StatusBar />
+      <AdminSecretPrompt />
     </main>
   );
 }

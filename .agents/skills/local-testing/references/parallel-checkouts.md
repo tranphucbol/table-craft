@@ -21,6 +21,9 @@ the worktree is made (`cp <main checkout>/.env .env`, when the main checkout has
 | `TABLE_CRAFT_REDIS_TLS_PORT`       | 56380       | `redis-tls`                |
 | `TABLE_CRAFT_REDIS6_PORT`          | 56362       | `redis-6`                  |
 | `TABLE_CRAFT_REDIS5_PORT`          | 56350       | `redis-5`                  |
+| `TABLE_CRAFT_ETCD_PORT`            | 52379       | `etcd`                     |
+| `TABLE_CRAFT_ETCD35_PORT`          | 52380       | `etcd-3-5`                 |
+| `TABLE_CRAFT_ETCD_TLS_PORT`        | 52381       | `etcd-tls`                 |
 | `TABLE_CRAFT_REDIS_CLUSTER_PORTS`  | 47001-47006 | `redis-cluster`, a range   |
 | `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` | 47011-47013 | `redis-6-cluster`, a range |
 | `TABLE_CRAFT_REDIS5_CLUSTER_PORTS` | 47021-47026 | `redis-5-cluster`, a range |
@@ -38,6 +41,7 @@ export COMPOSE_PROJECT_NAME=table-craft-second \
   TABLE_CRAFT_ORACLE_PORT=51621 TABLE_CRAFT_MSSQL_PORT=51533 \
   TABLE_CRAFT_REDIS_PORT=56479 TABLE_CRAFT_REDIS_TLS_PORT=56480 \
   TABLE_CRAFT_REDIS6_PORT=56462 TABLE_CRAFT_REDIS5_PORT=56450 \
+  TABLE_CRAFT_ETCD_PORT=52479 TABLE_CRAFT_ETCD35_PORT=52480 TABLE_CRAFT_ETCD_TLS_PORT=52481 \
   TABLE_CRAFT_REDIS_CLUSTER_PORTS=47101-47106 TABLE_CRAFT_REDIS6_CLUSTER_PORTS=47111-47113 \
   TABLE_CRAFT_REDIS5_CLUSTER_PORTS=47121-47126
 ```

@@ -23,6 +23,9 @@ import { logResponse } from "@table-craft/desktop/engine/requestLog.js";
 import { engineRequestSchema, readRequestId } from "@table-craft/desktop/engine/requests.js";
 import { routesOf } from "@table-craft/desktop/engine/routes/index.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
+import type { EngineOperationFiles } from "@table-craft/desktop/engine/keyOperations/files.js";
+import { applyAccessSecret } from "@table-craft/desktop/engine/keyOperations/index.js";
+import { KeyOperationScope, invalidOperation } from "@table-craft/desktop/engine/keyOperations/scope.js";
 
 export interface EngineOptions {
   readonly datasource: DatasourceConfig;
@@ -31,17 +34,21 @@ export interface EngineOptions {
   readonly log?: Logger;
   /** Asks main whether to trust an SSH host key (decision 071); absent, every key is refused unknown. */
   readonly verifyHostKey?: HostKeyVerifier;
+  readonly operationFiles?: EngineOperationFiles;
 }
 
 /** One renderer port's view of the engine. Its sessions and results die with it. */
 export interface EngineConnection {
+  applyAccessSecret(change: unknown, sessionId?: string): Promise<void>;
   handle(message: unknown): Promise<EngineResponse>;
   close(): Promise<void>;
 }
 
 export interface Engine {
+  /** Trusted private control only; never expose through the renderer MessagePort. */
+  applyAccessSecret(change: unknown): Promise<void>;
   /** `emit` receives every export and import event, whichever connection started the task (decisions 040, 046). */
-  connect(emit?: (event: EngineEvent) => void): EngineConnection;
+  connect(emit?: (event: EngineEvent) => void, files?: EngineOperationFiles): EngineConnection;
   /** Resolves once no export or import runs, so a reloading window does not cut one short. */
   tasksSettled(): Promise<void>;
   /** Closes what the engine holds for every connection: export and import tasks and the introspection session. */
@@ -109,9 +116,20 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
 export function createEngine(options: EngineOptions, now: () => number = Date.now): Engine {
   const context = createEngineContext(options, datasourceConnector(options), now);
   const { log, logContext, tasks, imports, scripts, connector } = context;
+  const connections = new Set<ReturnType<typeof createConnectionContext>>();
+  const credentials = new KeyOperationScope(context);
+  let closed = false;
 
-  function connect(emit: (event: EngineEvent) => void = () => undefined): EngineConnection {
-    const connection = createConnectionContext(context, emit);
+  function connect(
+    emit: (event: EngineEvent) => void = () => undefined,
+    files?: EngineOperationFiles,
+  ): EngineConnection {
+    if (closed) throw invalidOperation("This engine has closed.");
+    const connection = createConnectionContext(
+      files === undefined ? context : { ...context, options: { ...options, operationFiles: files } },
+      emit,
+    );
+    connections.add(connection);
     const routes = routesOf(connection);
 
     async function route<M extends EngineMethod>(request: RequestOf<M>): Promise<EngineResponse> {
@@ -121,7 +139,21 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
     }
 
     return {
+      applyAccessSecret: async (change, sessionId) => {
+        if (sessionId !== undefined) connection.sessionFor(sessionId);
+        await applyAccessSecret(connection.keyOperations.scope, change);
+      },
       async handle(message) {
+        if (closed || !connections.has(connection))
+          return {
+            id: readRequestId(message),
+            type: "engine.error",
+            error: {
+              code: "connectionLost",
+              message: "This engine connection has closed.",
+              hint: "Reconnect to the datasource.",
+            },
+          };
         const parsed = engineRequestSchema.safeParse(message);
         if (!parsed.success) {
           return {
@@ -147,20 +179,34 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
           return { id: request.id, type: "engine.error", error };
         }
       },
-      close: connection.close,
+      close: async () => {
+        connections.delete(connection);
+        await connection.close();
+      },
     };
   }
 
   async function close(): Promise<void> {
+    if (closed) return;
+    closed = true;
+    await Promise.allSettled([...connections].map((connection) => connection.close()));
+    connections.clear();
+    await credentials.close();
     await Promise.all([tasks.close(), imports.close(), scripts.close()]);
     await context.closeIntrospection();
     await connector.close();
   }
 
   return {
+    applyAccessSecret: (change) => applyAccessSecret(credentials, change),
     connect,
     tasksSettled: async () => {
-      await Promise.all([tasks.settled(), imports.settled(), scripts.settled()]);
+      await Promise.all([
+        tasks.settled(),
+        imports.settled(),
+        scripts.settled(),
+        ...[...connections].map((connection) => connection.keyOperations.tasks.settled()),
+      ]);
     },
     close,
   };

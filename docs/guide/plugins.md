@@ -16,10 +16,13 @@ Redis downloads the same way, about 290 KB, as
 Oracle, about 360 KB, as
 [`@tablecraft-app/plugin-oracle`](https://www.npmjs.com/package/@tablecraft-app/plugin-oracle), and
 SQL Server (2017 and later, and Azure SQL), about 760 KB, as
-[`@tablecraft-app/plugin-mssql`](https://www.npmjs.com/package/@tablecraft-app/plugin-mssql)
+[`@tablecraft-app/plugin-mssql`](https://www.npmjs.com/package/@tablecraft-app/plugin-mssql), and
+etcd (3.5 and later), about 400 KB, as
+[`@tablecraft-app/plugin-etcd`](https://www.npmjs.com/package/@tablecraft-app/plugin-etcd)
+(see [etcd](etcd.md))
 ([decision 108](../decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
 
-- **Data Sources +** lists PostgreSQL, Redis, Oracle and SQL Server with **Download**. Choosing it
+- **Data Sources +** lists PostgreSQL, Redis, Oracle, SQL Server and etcd with **Download**. Choosing it
   shows the progress, then the connection form.
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the

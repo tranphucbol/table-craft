@@ -2,8 +2,9 @@
 # Ports sit far from the defaults so a developer's own server keeps 5432 and 3306. Parallel
 # worktrees each set COMPOSE_PROJECT_NAME, TABLE_CRAFT_PG_PORT, TABLE_CRAFT_MYSQL_PORT,
 # TABLE_CRAFT_MARIADB_PORT, TABLE_CRAFT_TIDB_PORT, TABLE_CRAFT_SSH_PORT,
-# TABLE_CRAFT_PG_TLS_PORT, TABLE_CRAFT_MYSQL_TLS_PORT, TABLE_CRAFT_ORACLE_PORT and
-# TABLE_CRAFT_MSSQL_PORT so one checkout's `up` never recreates the containers another checkout is
+# TABLE_CRAFT_PG_TLS_PORT, TABLE_CRAFT_MYSQL_TLS_PORT, TABLE_CRAFT_ORACLE_PORT,
+# TABLE_CRAFT_MSSQL_PORT, TABLE_CRAFT_ETCD_PORT, TABLE_CRAFT_ETCD35_PORT and TABLE_CRAFT_ETCD_TLS_PORT
+# so one checkout's `up` never recreates the containers another checkout is
 # testing against.
 # Every database service sits behind a profile named after the database (decision 099):
 # `TABLE_CRAFT_DATABASES` (default `mysql,tidb,mariadb`) picks the profiles `stack.ts` passes.
@@ -189,7 +190,7 @@ services:
   # targets postgres:5432, mysql:3306, oracle:1521 and mssql:1433 wherever the test runs. Keys in
   # ./ssh are test-only.
   ssh:
-    profiles: ["mysql", "postgres", "oracle", "mssql"]
+    profiles: ["mysql", "postgres", "oracle", "mssql", "etcd"]
     build: ./ssh
     image: table-craft-ssh:local
     ports:
@@ -345,6 +346,143 @@ services:
       timeout: 5s
       retries: 120
 
+  # etcd for plan 110: 3.6 with auth on (users root, table_craft and limited, made by the seeder)
+  # and 3.5 without auth. The images are distroless, so `etcd-seed` (Alpine with etcdctl) seeds
+  # both from ./schema/etcd.etcd, turns auth on last, then stays up: its healthcheck is what
+  # `up --wait` waits on. One member each, data on tmpfs.
+  etcd:
+    profiles: ["etcd"]
+    image: gcr.io/etcd-development/etcd:v3.6.5
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_ETCD_SEED:-none}
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd
+      - --data-dir=/var/lib/etcd
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://127.0.0.1:${TABLE_CRAFT_ETCD_PORT:-52379}
+      - --listen-peer-urls=http://127.0.0.1:2380
+      - --initial-advertise-peer-urls=http://127.0.0.1:2380
+      - --initial-cluster=etcd=http://127.0.0.1:2380
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_ETCD_PORT:-52379}:2379"
+    tmpfs:
+      - /var/lib/etcd
+    healthcheck:
+      # With auth on, 3.6 reports an anonymous health check unhealthy; before, the user is ignored.
+      test: ["CMD", "/usr/local/bin/etcdctl", "--user=root:table_craft", "endpoint", "health"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  etcd-3-5:
+    profiles: ["etcd"]
+    image: gcr.io/etcd-development/etcd:v3.5.21
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_ETCD35_SEED:-none}
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd-3-5
+      - --data-dir=/var/lib/etcd
+      - --listen-client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://127.0.0.1:${TABLE_CRAFT_ETCD35_PORT:-52380}
+      - --listen-peer-urls=http://127.0.0.1:2380
+      - --initial-advertise-peer-urls=http://127.0.0.1:2380
+      - --initial-cluster=etcd-3-5=http://127.0.0.1:2380
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_ETCD35_PORT:-52380}:2379"
+    tmpfs:
+      - /var/lib/etcd
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/etcdctl", "endpoint", "health"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  etcd-tls:
+    profiles: ["etcd"]
+    image: gcr.io/etcd-development/etcd:v3.6.5
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_ETCD_TLS_SEED:-none}
+    command:
+      - /usr/local/bin/etcd
+      - --name=etcd-tls
+      - --data-dir=/var/lib/etcd
+      - --listen-client-urls=https://0.0.0.0:2379
+      - --advertise-client-urls=https://etcd-tls:2379
+      - --listen-peer-urls=http://127.0.0.1:2380
+      - --initial-advertise-peer-urls=http://127.0.0.1:2380
+      - --initial-cluster=etcd-tls=http://127.0.0.1:2380
+      - --cert-file=/etcd/server.crt
+      - --key-file=/etcd/server.key
+      - --trusted-ca-file=/tls/ca.crt
+      - --client-cert-auth=true
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_ETCD_TLS_PORT:-52381}:2379"
+    volumes:
+      - ./etcd:/etcd:ro
+      - ./tls:/tls:ro
+    tmpfs:
+      - /var/lib/etcd
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/usr/local/bin/etcdctl",
+          "--endpoints=https://localhost:2379",
+          "--cacert=/etcd/server.crt",
+          "--cert=/tls/client.crt",
+          "--key=/tls/client.key",
+          "endpoint",
+          "health",
+        ]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  etcd-tls-seed:
+    profiles: ["etcd"]
+    build: ./etcd
+    image: table-craft-etcd-seed:local
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_ETCD_TLS_SEED:-none}
+    depends_on:
+      etcd-tls:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/etcd/transport-seed.sh"]
+    volumes:
+      - ./etcd:/etcd:ro
+      - ./tls:/tls:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/seeded"]
+      interval: 1s
+      timeout: 5s
+      retries: 60
+
+  etcd-seed:
+    profiles: ["etcd"]
+    build: ./etcd
+    image: table-craft-etcd-seed:local
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_ETCD_SEED:-none}-${TABLE_CRAFT_ETCD35_SEED:-none}
+    depends_on:
+      etcd:
+        condition: service_healthy
+      etcd-3-5:
+        condition: service_healthy
+    environment:
+      ETCD_SEED_ENDPOINTS: etcd:2379 etcd-3-5:2379
+      ETCD_AUTH_ENDPOINT: etcd:2379
+    entrypoint: ["/bin/sh", "/etcd/seed.sh"]
+    volumes:
+      - ./etcd:/etcd:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/seeded"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
   # The headless box the smoke and live tests run in (plan 031), on this project's network so it
   # reaches the databases by service name. Only `--profile e2e` starts it.
   e2e:
@@ -396,6 +534,12 @@ services:
       TABLE_CRAFT_REDIS5_PORT: "6379"
       TABLE_CRAFT_REDIS5_CLUSTER_HOST: redis-5-cluster
       TABLE_CRAFT_REDIS5_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS5_CLUSTER_PORTS:-47021-47026}
+      TABLE_CRAFT_ETCD_HOST: etcd
+      TABLE_CRAFT_ETCD_PORT: "2379"
+      TABLE_CRAFT_ETCD35_HOST: etcd-3-5
+      TABLE_CRAFT_ETCD35_PORT: "2379"
+      TABLE_CRAFT_ETCD_TLS_HOST: etcd-tls
+      TABLE_CRAFT_ETCD_TLS_PORT: "2379"
       TABLE_CRAFT_DATABASES: ${TABLE_CRAFT_DATABASES:-}
       TABLE_CRAFT_EVIDENCE_DIR: ${TABLE_CRAFT_EVIDENCE_DIR:-}
     volumes:
@@ -410,6 +554,7 @@ services:
       - node-modules-redis:/work/plugins/redis/node_modules
       - node-modules-oracle:/work/plugins/oracle/node_modules
       - node-modules-mssql:/work/plugins/mssql/node_modules
+      - node-modules-etcd:/work/plugins/etcd/node_modules
       - bun-cache:/root/.bun/install/cache
       - electron-cache:/root/.cache/electron
 
@@ -521,6 +666,7 @@ volumes:
   node-modules-redis:
   node-modules-oracle:
   node-modules-mssql:
+  node-modules-etcd:
   # Downloads only, shared by every checkout; node_modules stay per checkout.
   bun-cache:
     name: table-craft-e2e-bun-cache

@@ -63,6 +63,7 @@ export interface HostRegistryOptions<Target> {
   readonly now?: () => number;
   /** Rules on a host key an engine's SSH tunnel was offered (decision 071); absent, every key is rejected. */
   readonly hostKeys?: (offer: HostKeyOffer) => Promise<HostKeyVerdict>;
+  readonly onStopping?: (datasourceId: string) => void;
 }
 
 /** How the registry reaches main's log (plan 017 decisions 7 and 9). */
@@ -177,6 +178,7 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
     const host = hosts.get(datasourceId);
     if (host === undefined) return Promise.resolve();
     hosts.delete(datasourceId);
+    options.onStopping?.(datasourceId);
     host.stopping = true;
     host.process.postMessage({ kind: ENGINE_SHUTDOWN_MESSAGE });
     const timer = dependencies.setTimeout(() => host.process.kill(), SHUTDOWN_GRACE_MS);
@@ -257,6 +259,7 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
     stop,
     probe,
     closeAll() {
+      for (const datasourceId of hosts.keys()) options.onStopping?.(datasourceId);
       for (const host of hosts.values()) {
         host.stopping = true;
         host.process.kill();

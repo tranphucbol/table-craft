@@ -538,6 +538,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     statementKind,
     logContext,
     sqlLanguage,
+    datasourcePlugin,
     commandLanguage,
     consoleLanguage,
     helperSession,

@@ -46,6 +46,7 @@ import {
   type McpProcess,
   type McpSupervisor,
 } from "@table-craft/desktop/main/mcp.js";
+import { PrivateOperations } from "@table-craft/desktop/main/privateOperations.js";
 import { createSnippetsService } from "@table-craft/desktop/main/snippets.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 import {
@@ -354,6 +355,33 @@ const hostKeys = createHostKeyService({
   ask: askHostKey,
 });
 
+const privateOperations = new PrivateOperations<WebContents>({
+  choose: (contents, operation) => {
+    if (contents.isDestroyed() || BrowserWindow.fromWebContents(contents) === null)
+      return Promise.reject(new Error("The requesting window is closed."));
+    if (operation === "transfer.import") return openFile(contents, "Import key data", true);
+    if (operation === "watch.export") return saveFile(contents, "Export retained Watch events", "watch-events.jsonl");
+    return saveFile(
+      contents,
+      operation === "cluster.snapshot" ? "Save sensitive cluster snapshot" : "Export key data",
+      operation === "cluster.snapshot" ? "snapshot.db" : "keys.tc-key-transfer",
+    );
+  },
+  onSenderGone(contents, dispose) {
+    const navigation = (_event: unknown, _url: string, isInPlace: boolean, isMainFrame: boolean) => {
+      if (isMainFrame && !isInPlace) dispose();
+    };
+    contents.once("destroyed", dispose);
+    contents.once("render-process-gone", dispose);
+    contents.on("did-start-navigation", navigation);
+    return () => {
+      contents.removeListener("destroyed", dispose);
+      contents.removeListener("render-process-gone", dispose);
+      contents.removeListener("did-start-navigation", navigation);
+    };
+  },
+});
+
 /** An engine port goes to a window, or to the MCP host for an agent (decision 126). */
 type PortTarget = WebContents | McpEngineTarget;
 
@@ -367,7 +395,12 @@ const hosts = createHostRegistry<PortTarget>({
     },
     connectPort(host, datasourceId, target) {
       const channel = new MessageChannelMain();
-      (host as UtilityProcess).postMessage({ kind: ENGINE_PORT_MESSAGE }, [channel.port1]);
+      const datasource = savedDatasources().find((source) => source.id === datasourceId);
+      const privateFiles = !isMcpEngineTarget(target);
+      const ownerId = isMcpEngineTarget(target)
+        ? randomUUID()
+        : privateOperations.attach(host, target, datasourceId, datasource?.readOnly ?? true);
+      (host as UtilityProcess).postMessage({ kind: ENGINE_PORT_MESSAGE, ownerId, privateFiles }, [channel.port1]);
       if (isMcpEngineTarget(target)) {
         if (mcpSupervisor === null) channel.port2.close();
         else mcpSupervisor.sendPort(target, channel.port2);
@@ -376,7 +409,10 @@ const hosts = createHostRegistry<PortTarget>({
     setTimeout: (run, ms) => setTimeout(run, ms),
     clearTimeout: (timer) => clearTimeout(timer as NodeJS.Timeout),
   },
-  onExit: (datasourceId, code, clean) => broadcast(CHANNELS.engineExited, { datasourceId, code, clean }),
+  onExit: (datasourceId, code, clean) => {
+    broadcast(CHANNELS.engineExited, { datasourceId, code, clean });
+  },
+  onStopping: (datasourceId) => privateOperations.revokeDatasource(datasourceId),
   log: {
     logger: mainLog,
     forward(record, process) {
@@ -926,6 +962,23 @@ void app.whenReady().then(async () => {
       },
     },
   });
+  privateOperations.register({
+    handle(channel, listener) {
+      ipcMain.handle(channel, (event, payload: unknown) => {
+        if (
+          event.senderFrame !== event.sender.mainFrame ||
+          event.sender.isDestroyed() ||
+          BrowserWindow.fromWebContents(event.sender) === null
+        ) {
+          return {
+            ok: false,
+            error: { message: "The requesting window is not authorized.", hint: "Reconnect before trying again." },
+          };
+        }
+        return listener(event, payload);
+      });
+    },
+  });
   installApplicationMenu(menuTarget, await attachments.recent());
   createWindow(settings);
   void mcp.start();
@@ -941,6 +994,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", () => closeGuard.beforeQuit());
 
 app.on("will-quit", (event) => {
+  privateOperations.close();
   hosts.closeAll();
   void mcpSupervisor?.stop();
   updateSchedule?.stop();

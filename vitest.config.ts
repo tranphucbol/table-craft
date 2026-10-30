@@ -128,6 +128,9 @@ export default defineConfig({
         replacement: resolve(WORKSPACE_ROOT, "plugins/mssql/src/$1.ts"),
       },
       { find: "@table-craft/plugin-mssql", replacement: resolve(WORKSPACE_ROOT, "plugins/mssql/src/index.ts") },
+      // The etcd plugin's parts, which its unit tests drive without a server (plan 110).
+      { find: /^@table-craft\/plugin-etcd\/(\w+)$/, replacement: resolve(WORKSPACE_ROOT, "plugins/etcd/src/$1.ts") },
+      { find: "@table-craft/plugin-etcd", replacement: resolve(WORKSPACE_ROOT, "plugins/etcd/src/index.ts") },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },
       { find: "@table-craft/plugin-mysql", replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/index.ts") },

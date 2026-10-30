@@ -1,4 +1,4 @@
-import { PluginError, isPluginError, type Session } from "@table-craft/plugin-api";
+import { PluginError, type Session } from "@table-craft/plugin-api";
 import { TunnelError } from "@table-craft/core/errors.js";
 import type { Tunnel } from "@table-craft/core/tunnels/tunnel.js";
 
@@ -62,6 +62,14 @@ export function createTunnelPool(open: () => Promise<Tunnel>): TunnelPool {
           );
         }
         const shared = await (current ?? start());
+        if (closed) {
+          await shared.tunnel.close();
+          throw new TunnelError(
+            "sshTunnelLost",
+            "The data source's engine is closing.",
+            "Connect to the data source again.",
+          );
+        }
         if (shared.lost !== null) continue;
         shared.leases += 1;
         let released = false;
@@ -95,8 +103,19 @@ export function createTunnelPool(open: () => Promise<Tunnel>): TunnelPool {
   };
 }
 
-const UNGUARDED: ReadonlySet<PropertyKey> = new Set(["cancel"]);
-const NESTED: ReadonlySet<PropertyKey> = new Set(["introspector", "transactions"]);
+const UNGUARDED: ReadonlySet<PropertyKey> = new Set(["cancel", "close", "dispose", "stop", "return"]);
+const NESTED: ReadonlySet<PropertyKey> = new Set([
+  "introspector",
+  "transactions",
+  "keyspace",
+  "sessions",
+  "leases",
+  "watch",
+  "cluster",
+  "access",
+  "coordination",
+  "keyTransfer",
+]);
 
 /**
  * `session` with its lease: `close()` releases it once, a call after the tunnel dropped is refused
@@ -104,41 +123,80 @@ const NESTED: ReadonlySet<PropertyKey> = new Set(["introspector", "transactions"
  * cut short fails `sshTunnelLost`, since it may have reached the server.
  */
 export function tunneledSession(session: Session, lease: TunnelLease, describe: string): Session {
-  function guarded(call: () => Promise<unknown>): Promise<unknown> {
+  function guarded(call: () => unknown): unknown {
+    if (closing !== null) return Promise.reject(new PluginError("connectionLost", "The session is closed."));
     const before = lease.lost;
     if (before !== null) {
       return Promise.reject(new PluginError("connectionLost", `The SSH tunnel to ${describe} closed: ${before}.`));
     }
-    return call().catch((cause: unknown) => {
+    const failed = (cause: unknown): never => {
       const lost = lease.lost;
-      if (lost === null || (isPluginError(cause) && cause.code === "connectionLost")) throw cause;
+      if (lost === null) throw cause;
       throw new TunnelError(
         "sshTunnelLost",
         `The SSH tunnel to ${describe} closed while the statement ran (${lost}); it may have completed on the server.`,
-        "Run it again; TableCraft reconnects through a new tunnel first, but check whether it took effect.",
+        "Check whether it took effect before deciding whether to run it again.",
       );
-    });
+    };
+    try {
+      const result = call();
+      if (result instanceof Promise) return result.then(resource).catch(failed);
+      return resource(result);
+    } catch (cause) {
+      return failed(cause);
+    }
+  }
+
+  function resource(value: unknown): unknown {
+    if (typeof value !== "object" || value === null || Array.isArray(value) || ArrayBuffer.isView(value)) return value;
+    if (
+      !["close", "cancel", "dispose", "stop", "next", Symbol.asyncIterator].some(
+        (key) => typeof Reflect.get(value, key) === "function",
+      )
+    )
+      return value;
+    if (typeof Reflect.get(value, "close") === "function") resources.add(value);
+    const known = wrapped.get(value) ?? wrap(value);
+    wrapped.set(value, known);
+    return known;
   }
 
   function wrap<T extends object>(target: T): T {
     return new Proxy(target, {
       get(object, property) {
         const value: unknown = Reflect.get(object, property, object);
-        if (typeof value !== "function") return value;
+        if (typeof value !== "function") {
+          if (typeof value === "object" && value !== null && NESTED.has(property)) return wrap(value);
+          return resource(value);
+        }
         const method = value as (...args: unknown[]) => unknown;
+        if (property === "close")
+          return (...args: unknown[]) => {
+            resources.delete(object);
+            return method.apply(object, args);
+          };
         if (UNGUARDED.has(property)) return method.bind(object);
-        return (...args: unknown[]) => guarded(() => method.apply(object, args) as Promise<unknown>);
+        return (...args: unknown[]) => guarded(() => method.apply(object, args));
       },
     });
   }
 
   const wrapped = new WeakMap<object, object>();
+  const resources = new Set<object>();
   let closing: Promise<void> | null = null;
   return new Proxy(session, {
     get(object, property) {
       if (property === "close") {
         return () => {
-          closing ??= object.close().finally(() => lease.release());
+          closing ??= Promise.allSettled(
+            [...resources].map(async (handle) => {
+              resources.delete(handle);
+              const close = Reflect.get(handle, "close") as () => unknown;
+              await close.call(handle);
+            }),
+          )
+            .then(() => object.close())
+            .finally(() => lease.release());
           return closing;
         };
       }
@@ -151,7 +209,7 @@ export function tunneledSession(session: Session, lease: TunnelLease, describe: 
       if (typeof value !== "function") return value;
       const method = value as (...args: unknown[]) => unknown;
       if (UNGUARDED.has(property)) return method.bind(object);
-      return (...args: unknown[]) => guarded(() => method.apply(object, args) as Promise<unknown>);
+      return (...args: unknown[]) => guarded(() => method.apply(object, args));
     },
   });
 }

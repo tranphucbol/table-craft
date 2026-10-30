@@ -48,6 +48,7 @@ const CHOSEN: Settings = {
     exportStallSeconds: 300,
     aggregates: ["sum", "avg"],
     blobLimitMb: 64,
+    watchRetention: 10_000,
   },
   log: { level: "debug" },
   updates: { checkAutomatically: false, channel: "beta" },
@@ -182,6 +183,7 @@ describe("settings document", () => {
       exportStallSeconds: 120,
       aggregates: ["count", "max"],
       blobLimitMb: 16,
+      watchRetention: 10_000,
     });
   });
 

@@ -17,6 +17,11 @@ import {
 } from "@table-craft/desktop/preload/bridge.js";
 import type { AgentAccess } from "@table-craft/desktop/settings/mcp.js";
 import { keepAliveSecondsError, statementTimeoutSecondsError } from "@table-craft/desktop/settings/settings.js";
+import {
+  connectionFieldVisible,
+  connectionProblems,
+  offersEndpointConnection,
+} from "@table-craft/desktop/renderer/model/datasourceConnection.js";
 
 /** One datasource as the Data Sources dialog edits it: every input as typed, nothing saved yet. */
 export interface FormDraft {
@@ -307,6 +312,14 @@ export function draftProblems(draft: FormDraft, plugin: PluginInfo | undefined):
   if (draft.name.trim() === "") problems.push("Name is required.");
   for (const field of plainFieldsOf(plugin)) {
     if (!fieldVisible(field, draft)) continue;
+    if (!connectionFieldVisible(field, draft, plugin)) continue;
+    if (
+      offersEndpointConnection(plugin) &&
+      typeof draft.values.endpoints === "string" &&
+      draft.values.endpoints.trim() !== "" &&
+      (field.key === plugin?.network?.host || field.key === plugin?.network?.port)
+    )
+      continue;
     const value = draft.values[field.key];
     if (typeof value !== "string") continue;
     if (field.required === true && value.trim() === "") problems.push(`${field.label} is required.`);
@@ -314,6 +327,7 @@ export function draftProblems(draft: FormDraft, plugin: PluginInfo | undefined):
       problems.push(`${field.label} must be a number.`);
     }
   }
+  if (offersEndpointConnection(plugin) && plugin !== undefined) problems.push(...connectionProblems(draft, plugin));
   const keepAlive = secondsOf(draft.keepAliveSeconds);
   if (Number.isNaN(keepAlive)) problems.push("The keepalive interval must be a whole number of seconds.");
   else if (keepAlive !== undefined) pushError(problems, keepAliveSecondsError(keepAlive));
@@ -378,6 +392,7 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
   const config: Record<string, ConfigValue> = {};
   for (const field of plainFieldsOf(plugin)) {
     if (!fieldVisible(field, draft)) continue;
+    if (!connectionFieldVisible(field, draft, plugin)) continue;
     const value = configValue(field, draft.values[field.key]);
     if (value !== undefined) config[field.key] = value;
   }
@@ -385,7 +400,11 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
   const tunnel = offersSshTunnel(plugin) && sshTouched(draft.ssh);
   const clientKey = namesClientKey(draft, plugin);
   const kept = (key: string): boolean =>
-    (tunnel || !SSH_KEYS.includes(key)) && (clientKey || key !== keyPassphraseOf(plugin));
+    (tunnel || !SSH_KEYS.includes(key)) &&
+    (clientKey || key !== keyPassphraseOf(plugin)) &&
+    (!offersEndpointConnection(plugin) ||
+      key !== "password" ||
+      (draft.values.authMode !== "none" && draft.values.authMode !== "clientCN"));
   return {
     datasource: {
       id: draft.id,
@@ -433,6 +452,12 @@ export function applyParsedUrl(
   for (const field of plainFieldsOf(plugin)) {
     const value = parsed.values[field.key];
     if (value !== undefined) values[field.key] = inputOf(field, value);
+  }
+  if (offersEndpointConnection(plugin) && plugin?.network != null && parsed.values[plugin.network.host] !== undefined) {
+    const host = String(values[plugin.network.host] ?? "");
+    const port = String(values[plugin.network.port] ?? "");
+    values.endpoints = `${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${port}`;
+    if (Object.keys(parsed.secrets).length > 0 || parsed.values.user !== undefined) values.authMode = "password";
   }
   const secrets = { ...draft.secrets };
   const filled: string[] = [];

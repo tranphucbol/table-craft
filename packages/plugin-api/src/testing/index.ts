@@ -241,12 +241,12 @@ export interface KeyspaceFixture {
   readonly expiring: string;
   /** A key whose name is not valid UTF-8, as lower-case hex, a glob that finds it, and its value. */
   readonly binary: { readonly hex: string; readonly match: string; readonly type: KeyType; readonly value: string };
-  /** A hash key and its first two columns' rows, in any order. */
-  readonly hash: KeyRowsFixture;
-  /** A sorted-set key and its member and score cells, in rank order. */
-  readonly zset: KeyRowsFixture;
-  /** A stream key, its columns and its rows, in id order. */
-  readonly stream: KeyRowsFixture & { readonly columns: readonly string[] };
+  /** A hash key and its first two columns' rows, in any order; without it the hash test is skipped. */
+  readonly hash?: KeyRowsFixture;
+  /** A sorted-set key and its member and score cells, in rank order; without it the test is skipped. */
+  readonly zset?: KeyRowsFixture;
+  /** A stream key, its columns and its rows, in id order; without it the stream test is skipped. */
+  readonly stream?: KeyRowsFixture & { readonly columns: readonly string[] };
   /** A scratch key the suite creates, changes and removes. */
   readonly edit: KeyEditFixture;
   /**
@@ -759,6 +759,20 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       await withSession(plugin, fixture, (session) => {
         expect(session.nodes !== undefined).toBe(plugin.capabilities.includes("nodes"));
         expect(session.serverInfo !== undefined).toBe(plugin.capabilities.includes("serverInfo"));
+        return Promise.resolve();
+      });
+    });
+
+    it("givenAdvancedCapabilities_whenConnected_thenExposesOnlyDeclaredServices", async () => {
+      await withSession(plugin, fixture, (session) => {
+        expect(session.watch !== undefined).toBe(plugin.capabilities.includes("watch"));
+        expect(session.leases !== undefined).toBe(plugin.capabilities.includes("leases"));
+        expect(session.access !== undefined).toBe(plugin.capabilities.includes("access"));
+        expect(session.coordination !== undefined).toBe(plugin.capabilities.includes("coordination"));
+        expect(session.keyTransfer !== undefined).toBe(plugin.capabilities.includes("bulkTransfer"));
+        expect(session.cluster !== undefined).toBe(
+          plugin.capabilities.includes("members") || plugin.capabilities.includes("maintenance"),
+        );
         return Promise.resolve();
       });
     });
@@ -2622,6 +2636,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
+      function fixtureRows<T>(rows: T | undefined, name: string): T {
+        if (rows === undefined) throw new Error(`keyValue needs fixture.keyspace.${name}`);
+        return rows;
+      }
+
       /** The key's rows, each cut to its first `width` cells. */
       async function readRows(session: Session, key: string, width: number) {
         const contents = await keyspaceOf(session).read(
@@ -2638,9 +2657,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         };
       }
 
-      it("givenHash_whenRead_thenFieldValueRows", async () => {
+      it.runIf(fixture.keyspace?.hash !== undefined)("givenHash_whenRead_thenFieldValueRows", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const { hash } = keyspaceFixture();
+          const hash = fixtureRows(keyspaceFixture().hash, "hash");
           const read = await readRows(session, hash.key, 2);
           expect(read.columns.slice(0, 2)).toEqual(["field", "value"]);
           const sorted = (rows: readonly Row[]) =>
@@ -2650,9 +2669,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenZset_whenRead_thenMemberScoreRowsInRankOrder", async () => {
+      it.runIf(fixture.keyspace?.zset !== undefined)("givenZset_whenRead_thenMemberScoreRowsInRankOrder", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const { zset } = keyspaceFixture();
+          const zset = fixtureRows(keyspaceFixture().zset, "zset");
           const read = await readRows(session, zset.key, 3);
           expect(read.columns).toEqual(["#", "member", "score"]);
           expect(read.rows.map((row) => row.slice(1))).toEqual(zset.rows);
@@ -2660,9 +2679,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenStream_whenRead_thenIdAndFieldColumns", async () => {
+      it.runIf(fixture.keyspace?.stream !== undefined)("givenStream_whenRead_thenIdAndFieldColumns", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const { stream } = keyspaceFixture();
+          const stream = fixtureRows(keyspaceFixture().stream, "stream");
           const read = await readRows(session, stream.key, stream.columns.length);
           expect(read.columns).toEqual(stream.columns);
           expect(read.rows).toEqual(stream.rows);

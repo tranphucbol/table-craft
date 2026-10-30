@@ -1,3 +1,4 @@
+export * from "./keyAdvanced.js";
 export {
   byName,
   type ColumnMeta,
@@ -43,6 +44,7 @@ export {
 } from "./inspection.js";
 export {
   ConflictError,
+  type ConflictErrorOptions,
   DefinitionNotFoundError,
   type ErrorPosition,
   errorPositionOf,
@@ -66,12 +68,21 @@ export {
   KEY_TYPES,
   type KeyApplied,
   type KeyApplyOptions,
+  type KeyAttribute,
   type KeyBytes,
   type KeyChange,
   type KeyContents,
+  type KeyConflictSnapshot,
   type KeyDatabase,
   type KeyDetails,
   type KeyExpiry,
+  type KeyHistoryRequest,
+  type KeyHistoryEvent,
+  type KeyHistoryGap,
+  type KeyHistoryStopReason,
+  type KeyHistoryPage,
+  type KeyRevision,
+  type KeyspaceFeatures,
   type KeyInfo,
   type KeyName,
   type KeyReadRequest,

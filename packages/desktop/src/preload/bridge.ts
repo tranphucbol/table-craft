@@ -64,6 +64,8 @@ export const CHANNELS = {
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
 export const INVOKE_CHANNELS = {
+  chooseOperationFile: "table-craft:operation-file.choose",
+  applyAccessSecret: "table-craft:access-secret.apply",
   listDatasources: "table-craft:datasources.list",
   saveDatasource: "table-craft:datasources.save",
   deleteDatasource: "table-craft:datasources.delete",
@@ -641,6 +643,8 @@ export interface MenuPoint {
 }
 
 export interface TableCraftBridge {
+  chooseOperationFile(datasourceId: string, operation: OperationFileKind): Promise<InvokeResult<string | null>>;
+  applyAccessSecret(request: AccessSecretRequest): Promise<InvokeResult<null>>;
   listDatasources(): Promise<InvokeResult<DatasourceList>>;
   saveDatasource(request: SaveDatasourceRequest): Promise<InvokeResult<DatasourceView>>;
   deleteDatasource(id: string): Promise<InvokeResult<null>>;
@@ -795,4 +799,14 @@ export interface TableCraftBridge {
   mcpCopyClientConfig(client: McpClient): Promise<InvokeResult<null>>;
   /** A new token; connected clients are dropped and must be configured again. */
   mcpRegenerateToken(): Promise<InvokeResult<null>>;
+}
+
+export type OperationFileKind = "cluster.snapshot" | "transfer.export" | "transfer.import" | "watch.export";
+
+export interface AccessSecretRequest {
+  readonly datasourceId: string;
+  readonly sessionId: string;
+  readonly user: string;
+  readonly action: "create" | "password";
+  readonly password: string;
 }

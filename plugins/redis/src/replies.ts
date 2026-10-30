@@ -12,7 +12,7 @@ import {
 /** A reply as node-redis decodes it here: bulk strings as `Buffer`, maps as `Map`. */
 export type Reply = unknown;
 
-const UTF8 = new TextDecoder("utf-8", { fatal: true });
+const UTF8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 const PRINTABLE_ASCII_FIRST = 0x20;
 const PRINTABLE_ASCII_LAST = 0x7e;
 const HEX_RADIX = 16;
