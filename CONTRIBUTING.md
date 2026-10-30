@@ -229,7 +229,10 @@ platform. `verify` and the macOS packages must pass; Windows and Linux are best-
   images, links and anchors, the shortcut table, the settings table, the themes, the plugin
   capabilities and the scripts above.
 - Re-record a GIF with `bun run readme:media` when the scene it shows changed
-  ([036](docs/decisions/036-readme-media-is-recorded-by-a-script.md)).
+  ([036](docs/decisions/036-readme-media-is-recorded-by-a-script.md)). The `agents-approval` scene
+  runs the real `opencode` CLI, so it needs OpenCode signed in to a model; `README_OPENCODE_MODEL`
+  picks it. `agents-warp` runs the OpenCode TUI in a Warp window beside the app and films it, so it
+  also needs macOS, Warp, and Screen Recording allowed for the terminal running the suite.
 - A choice a future reader would otherwise reopen gets a record in [docs/decisions](docs/decisions/),
   from its `TEMPLATE.md`, and a row in its index.
 - `docs/plans/` and `docs/evidence/` are local working files and are never committed
