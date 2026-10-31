@@ -11,6 +11,7 @@ import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   databaseEnabled,
+  ETCD_CONFIG,
   MARIADB_CONFIG,
   MYSQL_CONFIG,
   POSTGRES_CONFIG,
@@ -125,6 +126,17 @@ function everyBrand(): readonly Row[] {
       },
       glyph: "redis",
       product: "Redis",
+    },
+    {
+      saved: {
+        id: "config",
+        name: "config",
+        pluginId: "etcd",
+        config: withoutPassword(ETCD_CONFIG),
+        secretModes: { password: "never" },
+      },
+      glyph: "etcd",
+      product: "etcd",
     },
   ];
 }
