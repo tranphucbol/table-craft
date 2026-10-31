@@ -22,12 +22,17 @@ export function nodeLabel(node: ServerNode, nodes: readonly ServerNode[]): strin
   return slots === "" ? `${node.address} primary` : `${node.address} primary ${slots}`;
 }
 
+/** A cluster shares out slots; a primary with replicas lists several nodes and serves none (plan 133). */
+export function isCluster(nodes: readonly ServerNode[]): boolean {
+  return nodes.length > 1 && nodes.some((node) => node.slots.length > 0);
+}
+
 /** What the Run on picker offers (decision 114); nothing when one server is all there is to pick. */
 export function runOnChoices(nodes: readonly ServerNode[]): readonly RunOnChoice[] {
   if (nodes.length <= 1) return [];
   return [
     { value: NODE_AUTO, label: AUTO_LABEL },
-    { value: NODE_ALL_PRIMARIES, label: ALL_PRIMARIES_LABEL },
+    ...(isCluster(nodes) ? [{ value: NODE_ALL_PRIMARIES, label: ALL_PRIMARIES_LABEL }] : []),
     ...nodes.map((node) => ({ value: node.id, label: nodeLabel(node, nodes) })),
   ];
 }

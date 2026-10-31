@@ -39,6 +39,16 @@ const KEYSPACE: DatasourceKeyspace = {
   byDatabase: { 0: scanned(["user:42:session", "queue", "user:42:profile", "order:7", "user:43:profile"]) },
 };
 
+function node(
+  id: string,
+  port: number,
+  role: ServerNode["role"],
+  primaryId: string | null,
+  slots: ServerNode["slots"] = [],
+): ServerNode {
+  return { id, address: `127.0.0.1:${String(port)}`, role, slots, primaryId, state: "connected" };
+}
+
 function rowsOf(expanded: readonly string[], keyspace: DatasourceKeyspace = KEYSPACE, showEmptyDatabases = false) {
   return explorerRows({
     tree: buildTree([REDIS_VIEW]),
@@ -90,15 +100,7 @@ describe("key tree", () => {
   });
 
   it("givenCluster_whenRows_thenClusterNodesGroupAfterDatabases", () => {
-    const node = (id: string, port: number, role: ServerNode["role"], primaryId: string | null): ServerNode => ({
-      id,
-      address: `127.0.0.1:${String(port)}`,
-      role,
-      slots: role === "primary" ? [[0, 5460]] : [],
-      primaryId,
-      state: "connected",
-    });
-    const nodes = [node("a", 7001, "primary", null), node("b", 7004, "replica", "a")];
+    const nodes = [node("a", 7001, "primary", null, [[0, 5460]]), node("b", 7004, "replica", "a")];
     const rows = rowsOf([keyTreeKey("cache", "clusterNodes")], {
       ...KEYSPACE,
       databases: [database(0, 6, true)],
@@ -110,6 +112,25 @@ describe("key tree", () => {
       "1 Cluster nodes",
       "2 127.0.0.1:7001 primary 0–5460",
       "2 127.0.0.1:7004 replica of 127.0.0.1:7001",
+    ]);
+  });
+
+  it("givenPrimaryWithReplicas_whenRows_thenNodesGroup", () => {
+    const nodes = [
+      node("127.0.0.1:6379", 6379, "primary", null),
+      node("127.0.0.1:6380", 6380, "replica", "127.0.0.1:6379"),
+    ];
+    const rows = rowsOf([keyTreeKey("cache", "clusterNodes")], {
+      ...KEYSPACE,
+      databases: [database(0, 6, true)],
+      nodes,
+    });
+    expect(outline(rows)).toEqual([
+      "0 cache",
+      "1 db0",
+      "1 Nodes",
+      "2 127.0.0.1:6379 primary",
+      "2 127.0.0.1:6380 replica of 127.0.0.1:6379",
     ]);
   });
 
