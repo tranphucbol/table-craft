@@ -1,6 +1,6 @@
 import { STATUS_ITEMS, type StatusItem } from "@table-craft/desktop/renderer/shell/statusItems.js";
 import { ClusterStatus } from "@table-craft/desktop/renderer/keyAdmin/ClusterStatus.js";
-import { FRAME_SURFACE } from "@table-craft/desktop/renderer/shell/islands.js";
+import { FRAME_SURFACE, STATUS_BAR_ISLAND_INSET } from "@table-craft/desktop/renderer/shell/islands.js";
 import { useIslands } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
@@ -14,8 +14,8 @@ export function StatusBar() {
     <footer
       aria-label="Status bar"
       className={cn(
-        "flex h-status-bar shrink-0 items-center justify-between gap-gap bg-panel px-gap text-ink-muted",
-        islands ? FRAME_SURFACE : "border-t border-line",
+        "flex h-status-bar shrink-0 items-center justify-between gap-gap bg-panel text-ink-muted",
+        islands ? cn(FRAME_SURFACE, STATUS_BAR_ISLAND_INSET) : "border-t border-line px-gap",
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-gap">

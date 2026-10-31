@@ -19,6 +19,7 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-canvas": colors.canvas,
     "--tc-frame": frame.frame,
     "--tc-frame-raised": frame.frameRaised,
+    "--tc-island-edge": frame.islandEdge,
     "--tc-editor-tooltip-radius": `${EDITOR_TOOLTIP_RADIUS_PX}px`,
     "--tc-panel": colors.panel,
     "--tc-raised": colors.raised,

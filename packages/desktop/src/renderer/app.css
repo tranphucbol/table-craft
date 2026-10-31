@@ -4,6 +4,7 @@
 @theme inline {
   --color-canvas: var(--tc-canvas);
   --color-frame: var(--tc-frame);
+  --color-island-edge: var(--tc-island-edge);
   --color-panel: var(--tc-panel);
   --color-raised: var(--tc-raised);
   --color-line: var(--tc-border);

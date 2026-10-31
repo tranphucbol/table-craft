@@ -31,6 +31,7 @@ import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { TAB_FOCUS_RING } from "@table-craft/desktop/renderer/ui/focusRing.js";
 import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { TableEditor } from "@table-craft/desktop/renderer/table/TableEditor.js";
 import { ACTION_ICONS, CloseIcon, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -177,6 +178,7 @@ function TabButton({
           }}
           className={cn(
             "group flex h-tab shrink-0 items-center gap-cell border-r border-b-2 border-r-line px-gap",
+            TAB_FOCUS_RING,
             active ? "border-b-accent text-ink" : "border-b-transparent text-ink-muted hover:bg-raised",
             tint ?? (active ? "bg-canvas" : null),
           )}

@@ -18,7 +18,14 @@ export interface StripeAction {
 
 export type StripeEntry = StripeButton | StripeAction;
 
+/**
+ * The frame's hover tone is too close to the frame to say which tool window is open, so an open one
+ * is drawn as a small island, edge included where the theme's islands need one (decision 141).
+ */
+const OPEN_ON_FRAME = "bg-canvas text-ink ring-1 ring-island-edge ring-inset";
+
 function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
+  const islands = useIslands();
   const action = registry.get(actionId);
   const open = useLayout((state) => state.layout.visible[toolWindow]);
   const enabled = useActionEnabled(actionId);
@@ -33,8 +40,8 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
         aria-pressed={open}
         disabled={!enabled}
         className={cn(
-          "flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink",
-          open && "bg-raised text-ink",
+          "flex size-tab items-center justify-center rounded",
+          open ? (islands ? OPEN_ON_FRAME : "bg-raised text-ink") : "text-ink-muted hover:bg-raised hover:text-ink",
         )}
         onClick={() => invoke(actionId)}
       >

@@ -6,5 +6,12 @@
  */
 export const FRAME_SURFACE = "[--tc-panel:var(--tc-frame)] [--tc-raised:var(--tc-frame-raised)]";
 
-/** An island shares the editor's surface: what draws on `panel` inside it draws on `canvas` (decision 141). */
-export const ISLAND_SURFACE = "h-full min-h-0 overflow-hidden rounded-island bg-canvas [--tc-panel:var(--tc-canvas)]";
+/** The status bar's items line up with the islands' content: past the stripe, the gap, and the island's own padding. */
+export const STATUS_BAR_ISLAND_INSET = "px-[calc(var(--tc-stripe-width)+var(--tc-island-gap)+var(--tc-gap))]";
+
+/**
+ * An island shares the editor's surface: what draws on `panel` inside it draws on `canvas` (decision 141).
+ * It clips its content to its corners, so focus outlines inside it draw inward or the edge would cut them.
+ */
+export const ISLAND_SURFACE =
+  "h-full min-h-0 overflow-hidden rounded-island border border-island-edge bg-canvas [--tc-panel:var(--tc-canvas)] [&_:focus-visible]:-outline-offset-2";

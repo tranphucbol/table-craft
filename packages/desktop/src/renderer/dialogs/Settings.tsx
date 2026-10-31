@@ -400,7 +400,7 @@ function TitleBarField() {
         </label>
       </FieldRow>
       <div className="col-start-2 flex items-center gap-gap text-ink-muted">
-        Takes effect after restart.
+        The title bar changes after a restart.
         {pending ? <ActionButton actionId={WINDOW_ACTION_IDS.relaunch} /> : null}
       </div>
     </>

@@ -166,7 +166,7 @@ live row height.
 | `density.pickerListHeightPx`   | `--tc-picker-list-height`    | 220 px      | 220 px  |
 | `density.planDetailsWidthPx`   | `--tc-plan-details-width`    | 320 px      | 320 px  |
 | `density.planBarHeightPx`      | `--tc-plan-bar-height`       | 3 px        | 3 px    |
-| `density.islandGapPx`          | `--tc-island-gap`            | 5 px        | 3 px    |
+| `density.islandGapPx`          | `--tc-island-gap`            | 5 px        | 4 px    |
 | `density.islandRadiusPx`       | `--tc-island-radius`         | 10 px       | 8 px    |
 
 ## Motion
@@ -367,7 +367,7 @@ highlighted first row; toolbar buttons add reduced opacity beside their enabled 
 
 Plan 132, decision 141. The tables above describe the Classic window style. With Islands (the
 default, `appearance.windowStyle`), the editor area and the Database, Log, Watch and Services tool
-windows are islands, `rounded-island` cards of `bg-canvas` with no border, set `p-island-gap`
+windows are islands, `rounded-island` cards of `bg-canvas`, set `p-island-gap`
 inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
 sizes are the Classic ones.
 
@@ -375,7 +375,8 @@ sizes are the Classic ones.
 | ------------------------ | -------------------- | --------------------------------- | ------------------ | --------------- | ------------------------------------------------------------ |
 | `frame` (`frameColors`)  | `--tc-frame`         | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar |
 | `frameRaised`            | `--tc-frame-raised`  | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                     |
-| `density.islandGapPx`    | `--tc-island-gap`    | `p-island-gap`, `w-/h-island-gap` | 5 px               | 3 px            | Between islands and around them; the shell's resize handles  |
+| `islandEdge`             | `--tc-island-edge`   | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame |
+| `density.islandGapPx`    | `--tc-island-gap`    | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles  |
 | `density.islandRadiusPx` | `--tc-island-radius` | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                       |
 
 The frame is no theme token: `appearance/islands.ts` derives it from `panel`, stepped in 1 %
@@ -383,19 +384,25 @@ mixes toward white in a dark scheme and black in a light one, as JetBrains' fram
 holds 1.20:1 against `canvas` (JetBrains' floor), and `frameRaised` steps on until it stands out
 from the frame as much as `raised` does from `panel`. Neither steps past where `ink` and
 `inkMuted` stop meeting the theme's contrast level, so a ported palette whose muted text is
-already near AA keeps a frame closer to `panel`; the gaps still separate its islands. Every
-bundled, ported and user theme gets a frame this way.
+already near AA keeps a frame closer to `panel`. Where that frame stays under 1.20:1, the gaps
+alone no longer separate the islands, so `islandEdge` is the theme's `border` and each island
+draws the 1 px line Classic drew between its panes; elsewhere it is `canvas` and the edge vanishes
+into the island. Every bundled, ported and user theme gets a frame this way.
 
 Two surfaces re-point the tokens inside them, so components keep writing `bg-panel` and
 `bg-raised` (`shell/islands.ts`): an island sets `--tc-panel` to `--tc-canvas`, so a tool window's
 header, a toolbar and the tab strip take the island's surface; the frame's bars (`FRAME_SURFACE`
 on the main toolbar, stripes and status bar) set `--tc-panel` to `--tc-frame` and `--tc-raised` to
 `--tc-frame-raised` and drop their `border-line` edges. Lines inside an island stay. The shell's
-four resize handles (`Handle` with `gutter`) become the transparent gaps between islands, `bg-line`
-on hover and `bg-accent` while dragged; inner handles, such as the split editor's and the result
-panel's, stay 1 px lines. A datasource tint frame (`tintFrame`) rounds its bottom corners to the
-island's radius. The macOS window background and the Windows and Linux caption buttons take the
-frame colour.
+four resize handles (`Handle` with `gutter`) become the transparent gaps between islands, marked
+by a 2 px bar centred in the gap: `ink-muted` on hover, `accent` while dragged or focused from the
+keyboard; inner handles, such as the split editor's and the result panel's, stay 1 px lines. An
+island clips its content to its corners, so focus outlines inside it draw 2 px inward. An open
+tool window's stripe button is drawn as a small island, `bg-canvas` with the `island-edge` ring,
+since `frameRaised` sits too close to the frame to mark it. The status bar's items line up with the islands' content. A datasource
+tint frame (`tintFrame`) rounds its bottom corners to the island's radius where it meets the
+island's bottom; a console's stops above its results and stays square. The macOS window
+background and the Windows and Linux caption buttons take the frame colour.
 
 ## Database explorer
 

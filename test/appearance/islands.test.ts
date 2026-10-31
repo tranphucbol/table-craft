@@ -86,6 +86,33 @@ describe("island frame", () => {
     expect(failures).toEqual([]);
   });
 
+  it("givenBuiltInTheme_whenFrameDerived_thenIslandHasNoVisibleEdge", () => {
+    const edged = BUILT_IN_THEME_IDS.filter((id) => {
+      const theme = BUILT_IN_THEMES[id];
+      return frameColors(theme).islandEdge !== theme.colors.canvas;
+    });
+
+    expect(edged).toEqual([]);
+  });
+
+  it("givenFrameCappedForReadability_whenFrameDerived_thenIslandDrawsTheBorder", () => {
+    const theme = BUNDLED_THEMES["dracula-dark"];
+    const { frame, islandEdge } = frameColors(theme);
+
+    expect(contrastRatio(frame, theme.colors.canvas)).toBeLessThan(ISLAND_MIN_CONTRAST);
+    expect(islandEdge).toBe(theme.colors.border);
+  });
+
+  it("givenEveryBundledTheme_whenFrameDerived_thenIslandStandsApartByToneOrEdge", () => {
+    const failures = BUNDLED_THEME_IDS.filter((id) => {
+      const theme = BUNDLED_THEMES[id];
+      const { frame, islandEdge } = frameColors(theme);
+      return contrastRatio(frame, theme.colors.canvas) < ISLAND_MIN_CONTRAST && islandEdge !== theme.colors.border;
+    });
+
+    expect(failures).toEqual([]);
+  });
+
   it("givenClassic_whenWindowPainted_thenCanvasAndPanelAsBefore", () => {
     const theme = BUILT_IN_THEMES.light;
     const { frame } = frameColors(theme);
