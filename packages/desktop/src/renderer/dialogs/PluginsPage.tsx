@@ -8,6 +8,7 @@ import { downloadLabel, installText, SOURCE_LABELS } from "@table-craft/desktop/
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
+import { DatasourceGlyph } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { registryUrlError } from "@table-craft/desktop/settings/settings.js";
 
@@ -32,6 +33,7 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
   return (
     <FieldRow label={plugin.name}>
       <span data-plugin-row={plugin.id} className="flex min-w-0 items-center gap-cell">
+        <DatasourceGlyph brand={plugin.brands[0] ?? null} className="size-icon shrink-0" />
         <span className="shrink-0">{plugin.version ?? ""}</span>
         <span className="shrink-0 text-ink-muted">{SOURCE_LABELS[plugin.source]}</span>
         {plugin.unavailableReason === null ? null : (
@@ -58,6 +60,7 @@ function DownloadRow({ entry }: { readonly entry: CatalogPlugin }) {
   return (
     <FieldRow label={entry.name}>
       <span data-plugin-row={entry.id} className="flex min-w-0 items-center gap-cell">
+        <DatasourceGlyph brand={entry.brands[0] ?? null} tone="muted" className="size-icon shrink-0" />
         <span className="shrink-0 text-ink-muted">{entry.packageName}</span>
         <Progress entry={entry} />
         <Button
@@ -114,8 +117,7 @@ export function PluginsPage() {
         <InstalledRow key={plugin.id} plugin={plugin} entry={catalog.find((candidate) => candidate.id === plugin.id)} />
       ))}
       <p className="col-start-2 text-ink-muted">
-        Built-in plugins come with TableCraft. Downloaded ones update in the background while “Check for updates
-        automatically” is on in Settings → Advanced.
+        Downloaded plugins update in the background while “Check for updates automatically” is on.
       </p>
       <SectionTitle>Available</SectionTitle>
       {downloadable.length === 0 ? (

@@ -382,7 +382,7 @@ function ClientSnippet({ port }: { readonly port: number }) {
       </div>
       <pre
         data-testid="mcp-client-config"
-        className="col-span-2 rounded border border-line bg-canvas p-cell font-mono wrap-break-word whitespace-pre-wrap"
+        className="col-span-2 rounded border border-line bg-canvas p-cell font-grid wrap-break-word whitespace-pre-wrap"
       >
         {mcpClientConfig(client, port)}
       </pre>
@@ -480,7 +480,7 @@ export function McpSettingsPage() {
       ) : null}
       <FieldRow label="Endpoint">
         <span className="flex min-w-0 items-center gap-cell">
-          <code data-testid="mcp-endpoint" className="min-w-0 truncate font-mono select-text">
+          <code data-testid="mcp-endpoint" className="min-w-0 truncate font-grid select-text">
             {mcpEndpoint(mcp.port)}
           </code>
           <ActionButton actionId={MCP_ACTION_IDS.copyEndpoint} compact />
@@ -488,6 +488,7 @@ export function McpSettingsPage() {
       </FieldRow>
       <NumberField
         label="Port"
+        grouped={false}
         value={mcp.port}
         range={MCP_PORT_RANGE}
         check={mcpPortError}
@@ -496,7 +497,7 @@ export function McpSettingsPage() {
       <p className="col-start-2 text-ink-muted">Listens on this computer only; other machines cannot reach it.</p>
       <FieldRow label="Access token">
         <span className="flex min-w-0 flex-wrap items-center gap-cell">
-          <code data-testid="mcp-token-hint" className="font-mono text-ink-muted">
+          <code data-testid="mcp-token-hint" className="font-grid text-ink-muted">
             {status.tokenHint ?? "Made when the server first starts"}
           </code>
           <ActionButton actionId={MCP_ACTION_IDS.copyToken} compact />

@@ -11,6 +11,8 @@ import { WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowA
 import {
   Button,
   CONTENT_CLASS,
+  DialogCloseButton,
+  FIELD_GRID_CLASS,
   FieldRow,
   OVERLAY_CLASS,
   TextInput,
@@ -601,6 +603,7 @@ function NullTextField() {
 
 function DataEditorPage() {
   const data = useSettings((state) => state.settings.data);
+  const stripeId = useId();
   const groupId = useId();
   const jsonId = useId();
   const setData = (patch: Partial<Settings["data"]>) =>
@@ -611,6 +614,17 @@ function DataEditorPage() {
       <FontFields role="grid" />
       <SectionTitle>Display</SectionTitle>
       <NullTextField />
+      <FieldRow label="Rows" htmlFor={stripeId}>
+        <label className="flex items-center gap-cell">
+          <input
+            id={stripeId}
+            type="checkbox"
+            checked={data.stripedRows}
+            onChange={(event) => setData({ stripedRows: event.target.checked })}
+          />
+          Striped rows
+        </label>
+      </FieldRow>
       <FieldRow label="Numbers" htmlFor={groupId}>
         <label className="flex items-center gap-cell">
           <input
@@ -660,16 +674,6 @@ function DataEditorPage() {
       <p className="col-start-2 text-ink-muted">Applies to the next statement; open results keep theirs.</p>
       <SectionTitle>Export and import</SectionTitle>
       <NumberField
-        label="Events retained per watch"
-        value={data.watchRetention}
-        range={WATCH_RETENTION_RANGE}
-        check={watchRetentionError}
-        onValid={(watchRetention) => setData({ watchRetention })}
-      />
-      <p className="col-start-2 text-ink-muted">
-        Applies to new watches. Older display events are dropped at this cap; server gaps are reported separately.
-      </p>
-      <NumberField
         label="Transfer stall timeout (s)"
         value={data.exportStallSeconds}
         range={EXPORT_STALL_SECONDS_RANGE}
@@ -679,6 +683,17 @@ function DataEditorPage() {
       <p className="col-start-2 text-ink-muted">
         An export or import the database answers nothing to for this long stops and says so. The statement timeout never
         cuts one.
+      </p>
+      <SectionTitle>Watch</SectionTitle>
+      <NumberField
+        label="Events retained per watch"
+        value={data.watchRetention}
+        range={WATCH_RETENTION_RANGE}
+        check={watchRetentionError}
+        onValid={(watchRetention) => setData({ watchRetention })}
+      />
+      <p className="col-start-2 text-ink-muted">
+        Applies to new watches. Older display events are dropped at this cap; server gaps are reported separately.
       </p>
     </>
   );
@@ -796,7 +811,7 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
                   <div
                     key={TOOLS_GROUP_TITLE}
                     role="presentation"
-                    className="mt-1 flex h-row items-end border-t border-line px-cell text-label font-semibold tracking-wider text-ink-muted uppercase"
+                    className="mt-1 flex h-row items-end border-t border-line px-cell text-label font-semibold text-ink-muted"
                   >
                     {TOOLS_GROUP_TITLE}
                   </div>,
@@ -807,8 +822,9 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
               type="button"
               role="tab"
               aria-selected={id === page}
+              autoFocus={id === page}
               className={cn(
-                "flex h-row items-center rounded px-cell text-left",
+                "flex h-row items-center rounded px-cell text-left outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
                 id === page ? "bg-selection" : "hover:bg-raised",
               )}
               onClick={() => useSettingsDialog.getState().show(id)}
@@ -820,7 +836,7 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
         <div
           role="tabpanel"
           aria-label={PAGE_TITLES[page]}
-          className="grid min-h-0 min-w-0 flex-1 grid-cols-[8rem_1fr] content-start items-center gap-x-gap gap-y-1 overflow-y-auto p-gap"
+          className={cn(FIELD_GRID_CLASS, "min-h-0 min-w-0 flex-1 content-start overflow-y-auto p-gap")}
         >
           <Page />
         </div>
@@ -861,6 +877,7 @@ export function SettingsDialog() {
           )}
         >
           {page === null ? null : <SettingsEditor page={page} />}
+          <DialogCloseButton dialog="Settings" />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

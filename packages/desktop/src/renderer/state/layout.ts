@@ -76,7 +76,7 @@ export const MIN_VALUE_PANEL_PX = 200;
 const MAX_VALUE_PANEL_PX = 2000;
 
 export const DEFAULT_LAYOUT: Layout = {
-  visible: { database: true, services: true, log: false, watch: false },
+  visible: { database: true, services: false, log: false, watch: false },
   sizes: { database: 22, services: 28, log: 30, watch: 30 },
   hidden: null,
   showSystemSchemas: false,

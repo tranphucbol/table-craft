@@ -215,7 +215,6 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       expect(events).toContain('"PUT"');
       expect(events).toContain('"DELETE"');
       expect(events).toContain("watch/a");
-      await findAction(page, "Services");
       await capture(page, "advanced-03-watch-put-delete-private-export");
       await assertDistinctRail(page);
       await capture(page, "fix-03-watch-distinct-rail");

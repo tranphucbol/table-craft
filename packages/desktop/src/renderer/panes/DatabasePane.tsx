@@ -380,7 +380,7 @@ function DatasourceLabel({
         </span>
       )}
       {dot === null ? null : <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dot)} />}
-      {connection.status === "disconnected" ? null : (
+      {connection.status === "disconnected" || connection.status === "connected" ? null : (
         <span className={cn("truncate", failed ? "text-danger" : "text-ink-muted")}>{connectionText(connection)}</span>
       )}
       {plugin === undefined || logo || connection.status !== "disconnected" ? null : (
@@ -453,7 +453,9 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
             // The filter row is as wide as the pane and pinned there: sized by its controls it
             // would widen the whole tree and let the pane scroll sideways off its own fields.
             node.kind === "keyFilter" ? "sticky left-0 w-[100cqw]" : "w-full",
-            selected && "bg-selection hover:bg-selection",
+            // Selection blue only while the tree has focus; elsewhere the row stays marked in grey, as
+            // DataGrip draws an inactive selection (plan 130 decision 24).
+            selected && "bg-raised group-focus-within/tree:bg-selection",
             (failedNamespace || node.kind === "error") && "text-danger",
           )}
           onMouseDown={() => onSelect(row)}
@@ -902,7 +904,7 @@ export function DatabasePane() {
                 role="tree"
                 aria-label="Datasources"
                 tabIndex={selectedIndex === -1 ? 0 : -1}
-                className="w-max min-w-full outline-none"
+                className="group/tree w-max min-w-full outline-none"
                 style={{ height: virtualizer.getTotalSize(), paddingTop: virtualItems[0]?.start ?? 0 }}
                 onKeyDown={onKeyDown}
                 onBlur={(event) => {

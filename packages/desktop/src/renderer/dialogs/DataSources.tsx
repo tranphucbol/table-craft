@@ -24,6 +24,8 @@ import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import {
   Button,
   CONTENT_CLASS,
+  DialogCloseButton,
+  FIELD_GRID_CLASS,
   FieldRow,
   OVERLAY_CLASS,
   Select,
@@ -368,10 +370,7 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
   // gaps, so a plain div scrolls and the fieldset only lays out and disables.
   return (
     <div data-testid="datasource-form" className="min-h-0 flex-1 overflow-y-auto p-gap">
-      <fieldset
-        disabled={draft.ephemeral}
-        className="grid min-w-0 grid-cols-[8rem_1fr] content-start items-center gap-x-gap gap-y-1"
-      >
+      <fieldset disabled={draft.ephemeral} className={cn(FIELD_GRID_CLASS, "min-w-0 content-start")}>
         {draft.ephemeral ? (
           <p className="col-span-2 mb-gap text-ink-muted">
             From TABLE_CRAFT_DATASOURCE: not saved, and not editable here. Duplicate it to keep a copy.
@@ -843,15 +842,14 @@ function Editor({ target }: { readonly target: DialogTarget }) {
         </p>
       )}
       <div className="flex shrink-0 items-center gap-gap border-t border-line p-gap">
-        <Button
-          disabled={current === undefined || current.ephemeral || test?.kind === "testing"}
-          onClick={() => {
-            if (current !== undefined) void runTest(current);
-          }}
-        >
-          Test Connection
-        </Button>
-        <TestResult state={test} brands={plugin?.brands} />
+        {current === undefined ? null : (
+          <>
+            <Button disabled={current.ephemeral || test?.kind === "testing"} onClick={() => void runTest(current)}>
+              Test Connection
+            </Button>
+            <TestResult state={test} brands={plugin?.brands} />
+          </>
+        )}
         <span className="flex-1" />
         <Button variant="primary" disabled={saving} onClick={() => void saveAll(true)}>
           OK
@@ -945,6 +943,7 @@ export function DataSourcesDialog() {
           )}
         >
           {target === null ? null : <Editor key={JSON.stringify(target)} target={target} />}
+          <DialogCloseButton dialog="Data Sources" />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

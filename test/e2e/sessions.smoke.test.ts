@@ -39,12 +39,12 @@ import {
   seedDatasources,
   setWindowSize,
   startStatement,
-  toolWindow,
   treeNode,
   waitUntilReady,
   type Datasource,
   type RunningApp,
   type SavedDatasource,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("045");
@@ -383,7 +383,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
       const page = await launch(MYSQL_ROOT);
       await runStatement(page, "SELECT 1 AS one");
 
-      const execution = toolWindow(page, "Services").locator('[role="treeitem"][data-kind="execution"]').first();
+      const execution = (await showServices(page)).locator('[role="treeitem"][data-kind="execution"]').first();
       await execution.click({ button: "right" });
       await page.getByRole("menuitem", { name: /^Show in Sessions/ }).click();
 

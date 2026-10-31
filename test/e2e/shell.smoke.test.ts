@@ -69,14 +69,14 @@ describe.runIf(SMOKE_ENABLED)("shell smoke", () => {
   }, CLOSE_HOOK_TIMEOUT_MS);
 
   it(
-    "givenLaunch_whenShellRenders_thenBothToolWindowsAndOneConsoleShow",
+    "givenLaunch_whenShellRenders_thenDatabaseOpenServicesClosedAndOneConsoleShows",
     async () => {
       running = await launchApp();
       const { page } = running;
       await waitUntilReady(page);
 
       await expect.poll(() => toolWindow(page, "Database").isVisible()).toBe(true);
-      expect(await toolWindow(page, "Services").isVisible()).toBe(true);
+      expect(await toolWindow(page, "Services").count()).toBe(0);
       expect(await editorTabs(page).allTextContents()).toEqual(["console [scratch]"]);
       await expect.poll(() => datasourceStatus(page).textContent()).toMatch(/^scratch · connected · SQLite \d/);
     },
@@ -186,16 +186,16 @@ describe.runIf(SMOKE_ENABLED)("shell smoke", () => {
       await waitUntilReady(page);
 
       await clickMenuItem(running, MENU_PATH);
-      await expect.poll(() => toolWindow(page, "Services").count()).toBe(0);
+      await expect.poll(() => toolWindow(page, "Services").count()).toBe(1);
       await captureWindow(page, "menu-dispatch");
       await clickMenuItem(running, MENU_PATH);
-      await expect.poll(() => toolWindow(page, "Services").count()).toBe(1);
+      await expect.poll(() => toolWindow(page, "Services").count()).toBe(0);
     },
     SCENARIO_TIMEOUT_MS,
   );
 
   it(
-    "givenResizedDatabaseAndClosedServices_whenRelaunched_thenLayoutRestored",
+    "givenResizedDatabaseAndOpenedServices_whenRelaunched_thenLayoutRestored",
     async () => {
       running = await launchApp();
       let { page } = running;
@@ -210,7 +210,7 @@ describe.runIf(SMOKE_ENABLED)("shell smoke", () => {
       await page.mouse.move(handle.x + handle.width / 2 + RESIZE_DRAG_PX, y, { steps: 10 });
       await page.mouse.up();
       await pressChord(page, "8");
-      await expect.poll(() => toolWindow(page, "Services").count()).toBe(0);
+      await expect.poll(() => toolWindow(page, "Services").count()).toBe(1);
       const resized = await toolWindow(page, "Database").boundingBox();
       expect(resized?.width ?? 0).toBeGreaterThan(before.width + RESIZE_DRAG_PX / 2);
 
@@ -221,7 +221,7 @@ describe.runIf(SMOKE_ENABLED)("shell smoke", () => {
       await waitUntilReady(page);
 
       await expect.poll(() => toolWindow(page, "Database").isVisible(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(true);
-      expect(await toolWindow(page, "Services").count()).toBe(0);
+      expect(await toolWindow(page, "Services").count()).toBe(1);
       const restored = await toolWindow(page, "Database").boundingBox();
       expect(Math.abs((restored?.width ?? 0) - (resized?.width ?? 0))).toBeLessThanOrEqual(RESIZE_TOLERANCE_PX);
       await captureWindow(page, "layout-restored");

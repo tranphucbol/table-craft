@@ -2,12 +2,14 @@ import { useId } from "react";
 import type { PluginInfo } from "@table-craft/desktop/preload/bridge.js";
 import type { ProbeResult } from "@table-craft/desktop/engine/protocol.js";
 import { Button, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import {
   endpointRows,
   endpointRowsChange,
   MAX_CONNECTION_ENDPOINTS,
 } from "@table-craft/desktop/renderer/model/datasourceConnection.js";
 import type { FormDraft } from "@table-craft/desktop/renderer/model/datasourceForm.js";
+import { ErrorIcon, SuccessIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { InfoHint } from "@table-craft/desktop/renderer/ui/InfoHint.js";
 
 const ENDPOINTS_HINT =
@@ -28,14 +30,18 @@ function EndpointProbe({ result, number }: { readonly result: ProbeResult | unde
       data-testid={`endpoint-test-${String(number)}`}
       data-ok={result.ok}
       role="status"
-      className={result.ok ? "text-success" : "text-danger"}
+      className={cn("flex items-center", result.ok ? "text-success" : "text-danger")}
       title={
         result.ok
           ? "Connection succeeded through the configured transport"
           : `${result.error.message} ${result.error.hint}`
       }
     >
-      {result.ok ? "✓" : "✗"}
+      {result.ok ? (
+        <SuccessIcon aria-hidden weight="fill" className="size-icon" />
+      ) : (
+        <ErrorIcon aria-hidden weight="fill" className="size-icon" />
+      )}
       <span className="sr-only">
         Endpoint {number} {result.ok ? "succeeded" : "failed"}
       </span>

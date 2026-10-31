@@ -40,6 +40,22 @@ describe("palette model", () => {
     expect(paletteResults([ACTIONS], "nc", []).map((entry) => entry.title)[0]).toBe("New Console");
   });
 
+  it("givenDisabledBetterMatch_whenRanked_thenEnabledResultsFirst", () => {
+    const disabledFirst: SearchProvider = {
+      id: "actions",
+      title: "Actions",
+      search: (query) =>
+        TITLES.map((title) => item(title, query))
+          .filter((entry) => entry !== null)
+          .map((entry) => ({ ...entry, enabled: entry.title !== "New Console" })),
+    };
+
+    const titles = paletteResults([disabledFirst], "nc", []).map((entry) => entry.title);
+
+    expect(titles.at(-1)).toBe("New Console");
+    expect(titles.length).toBeGreaterThan(1);
+  });
+
   it("givenProviderTab_whenRanked_thenOnlyThatProvidersItems", () => {
     expect(paletteResults([ACTIONS, TABLES], "c", [], "tables").map((entry) => entry.title)).toEqual(["customers"]);
     expect(paletteResults([ACTIONS, TABLES], "cu", [], "all").map((entry) => entry.title)).toContain("customers");

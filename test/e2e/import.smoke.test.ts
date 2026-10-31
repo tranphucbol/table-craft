@@ -33,6 +33,7 @@ import {
   type RunningApp,
   chooseOption,
   optionValue,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("021");
@@ -150,6 +151,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
     running = await launchApp(datasource);
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
+    await showServices(running.page);
     return running.page;
   }
 

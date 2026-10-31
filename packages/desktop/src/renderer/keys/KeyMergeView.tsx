@@ -5,6 +5,7 @@ import { diffText } from "@table-craft/desktop/renderer/model/keyDiff.js";
 import { encodeValue } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import { useKeyTabs, type KeyTab } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
+import { SuccessIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 
 export function KeyMergeView({
   tab,
@@ -85,9 +86,13 @@ export function KeyMergeView({
               data-conflict-index={conflictIndex}
               className="flex flex-wrap items-baseline gap-gap border-l-2 border-danger bg-edit-deleted px-gap py-1"
             >
-              <span className="mr-auto font-grid">
-                {merge.acknowledged ? "✓" : "!"} {conflict.path || "Whole value"} ·{" "}
-                {merge.acknowledged ? "Resolved in Result" : "Conflict"}
+              <span className="mr-auto flex items-center gap-1 font-grid">
+                {merge.acknowledged ? (
+                  <SuccessIcon aria-hidden weight="fill" className="size-icon shrink-0 text-success" />
+                ) : (
+                  <WarningIcon aria-hidden weight="fill" className="size-icon shrink-0 text-danger" />
+                )}
+                {conflict.path || "Whole value"} · {merge.acknowledged ? "Resolved in Result" : "Conflict"}
               </span>
               <button
                 type="button"

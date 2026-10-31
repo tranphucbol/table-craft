@@ -4,6 +4,7 @@ import { memberLag, removalBlocked, type AdminData, type AdminView } from "./sto
 import { CELL, CommandButton, Fact, INPUT } from "./controls.js";
 import { TaskRows } from "./TaskRows.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
+import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 
 export function endpointOrder(data: AdminData): readonly string[] {
   return [...data.endpoints]
@@ -62,8 +63,9 @@ export function ClusterView({
           key={`${alarm.memberId}-${alarm.kind}`}
           className="flex flex-wrap items-center gap-gap border-b border-line bg-panel p-gap text-danger"
         >
+          <WarningIcon aria-hidden weight="fill" className="size-icon shrink-0" />
           <strong>
-            ⚠ {alarm.kind} on {data.members.find((member) => member.id === alarm.memberId)?.name ?? alarm.memberId}
+            {alarm.kind} on {data.members.find((member) => member.id === alarm.memberId)?.name ?? alarm.memberId}
           </strong>
           <span>
             {alarm.kind === "NOSPACE"

@@ -62,7 +62,7 @@ so every scroller, the editor's included, follows a theme switch with no token o
 | `colors.editModified`          | `--tc-edit-modified`        | `#2f4a6b` | `#dce8fc` | `#12305c`     |
 | `colors.editInserted`          | `--tc-edit-inserted`        | `#2f4d34` | `#dcf2df` | `#0f3d16`     |
 | `colors.editDeleted`           | `--tc-edit-deleted`         | `#4d2f33` | `#fbe0e2` | `#4a1015`     |
-| `colors.statementFlash`        | `--tc-statement-flash`      | `#3d4a2e` | `#e1f1d3` | `#2b4a10`     |
+| `colors.statementFlash`        | `--tc-statement-flash`      | `#2c3427` | `#e1f1d3` | `#2b4a10`     |
 | `colors.planBar`               | `--tc-plan-bar`             | `#4f80c9` | `#4a7fe0` | `#66b2ff`     |
 | `colors.analysedBanner`        | `--tc-analysed-banner`      | `#4a3d22` | `#faecd0` | `#4a3a00`     |
 | `colors.syntax.keyword`        | `--tc-syntax-keyword`       | `#cf8e6d` | `#0033b3` | `#ff9e5e`     |
@@ -155,9 +155,10 @@ live row height.
 | `density.statusBarHeightPx`    | `--tc-status-bar-height`     | 24 px       | 24 px   |
 | `density.iconPx`               | `--tc-icon`                  | 16 px       | 16 px   |
 | `density.paletteWidthPx`       | `--tc-palette-width`         | 576 px      | 576 px  |
-| `density.dialogWidthPx`        | `--tc-dialog-width`          | 880 px      | 880 px  |
-| `density.dialogHeightPx`       | `--tc-dialog-height`         | 580 px      | 580 px  |
+| `density.dialogWidthPx`        | `--tc-dialog-width`          | 1040 px     | 1040 px |
+| `density.dialogHeightPx`       | `--tc-dialog-height`         | 720 px      | 720 px  |
 | `density.dialogListWidthPx`    | `--tc-dialog-list-width`     | 240 px      | 240 px  |
+| `density.dialogLabelMaxPx`     | `--tc-dialog-label-max`      | 200 px      | 200 px  |
 | `density.popoverWidthPx`       | `--tc-popover-width`         | 480 px      | 480 px  |
 | `density.popoverHeightPx`      | `--tc-popover-height`        | 360 px      | 360 px  |
 | `density.generatorWidthPx`     | `--tc-generator-width`       | 640 px      | 640 px  |
@@ -286,7 +287,7 @@ as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink
   as four (System, Full, Reduced, Off), with a muted "Following the system: …" line under System;
   UI font.
 - **Editor**: Editor font and a muted line naming the zoom chords.
-- **Data Editor**: Grid font, NULL text, Group digits, page size and Fetch All limit, with a muted
+- **Data Editor**: Grid font, NULL text, Striped rows, Group digits, page size and Fetch All limit, with a muted
   note that formats are display only and paging applies to the next statement.
 - **MCP Server** › Data source access (plan 121, decision 131): an exposed row's Timeout cell
   starts with an (i) (`InfoIcon`): `text-ink-muted` when every statement stops on the server at the
@@ -319,26 +320,27 @@ components write (`app.css` maps one to the other). In this and the later tables
 compact column gives a colour token's Light value and a density token's compact one; the Themes
 and Fonts and density sections above hold every value.
 
-| Token (`appearance/themes.ts`) | CSS variable               | Tailwind                     | Dark / comfortable | Light / compact | Used by                                                         |
-| ------------------------------ | -------------------------- | ---------------------------- | ------------------ | --------------- | --------------------------------------------------------------- |
-| `density.stripeWidthPx`        | `--tc-stripe-width`        | `w-stripe`                   | 36 px              | 36 px           | The left and right tool-window stripes                          |
-| `density.tabHeightPx`          | `--tc-tab-height`          | `h-tab`, `size-tab`          | 32 px              | 32 px           | Editor tabs, tool-window headers, stripe buttons, palette input |
-| `density.statusBarHeightPx`    | `--tc-status-bar-height`   | `h-status-bar`               | 24 px              | 24 px           | The status bar                                                  |
-| `density.iconPx`               | `--tc-icon`                | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                    |
-| `density.paletteWidthPx`       | `--tc-palette-width`       | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                 |
-| `colors.selection`             | `--tc-selection`           | `bg-selection`               | `#2e436e`          | `#dfe1e5`       | Pressed stripe button, selected palette and Services rows       |
-| `colors.success`               | `--tc-success`             | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                  |
-| `colors.danger`                | `--tc-danger`              | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                 |
-| `colors.panel`                 | `--tc-panel`               | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette           |
-| `colors.canvas`                | `--tc-canvas`              | `bg-canvas`                  | `#1e1f22`          | `#ffffff`       | The editor area and the active tab                              |
-| `colors.raised`                | `--tc-raised`              | `bg-raised`                  | `#393b40`          | `#ebecf0`       | Hovered tabs and buttons, the tab context menu                  |
-| `colors.accent`                | `--tc-accent`              | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle             |
-| `colors.border`                | `--tc-border`              | `border-line`, `bg-line`     | `#43454a`          | `#d3d5db`       | Dividers and resize handles at rest                             |
-| `density.dialogWidthPx`        | `--tc-dialog-width`        | `w-dialog`                   | 880 px             | 880 px          | The Data Sources and Settings dialogs                           |
-| `density.dialogHeightPx`       | `--tc-dialog-height`       | `h-dialog-height`            | 580 px             | 580 px          | The Data Sources and Settings dialogs                           |
-| `density.dialogListWidthPx`    | `--tc-dialog-list-width`   | `w-dialog-list`              | 240 px             | 240 px          | The datasource list, the Settings page list                     |
-| `density.titleBarHeightPx`     | `--tc-title-bar-height`    | `h-title-bar`                | 40 px              | 32 px           | The main toolbar; the native controls' height                   |
-| `TRAFFIC_LIGHT_INSET_PX`       | `--tc-traffic-light-inset` | `pl-traffic-lights`          | 76 px              | 76 px           | The main toolbar's left inset for the macOS traffic lights      |
+| Token (`appearance/themes.ts`) | CSS variable               | Tailwind                     | Dark / comfortable | Light / compact | Used by                                                                            |
+| ------------------------------ | -------------------------- | ---------------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
+| `density.stripeWidthPx`        | `--tc-stripe-width`        | `w-stripe`                   | 36 px              | 36 px           | The left and right tool-window stripes                                             |
+| `density.tabHeightPx`          | `--tc-tab-height`          | `h-tab`, `size-tab`          | 32 px              | 32 px           | Editor tabs, tool-window headers, stripe buttons, palette input                    |
+| `density.statusBarHeightPx`    | `--tc-status-bar-height`   | `h-status-bar`               | 24 px              | 24 px           | The status bar                                                                     |
+| `density.iconPx`               | `--tc-icon`                | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
+| `density.paletteWidthPx`       | `--tc-palette-width`       | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
+| `colors.selection`             | `--tc-selection`           | `bg-selection`               | `#2e436e`          | `#dfe1e5`       | Selected palette and Services rows, the focused tree's selection                   |
+| `colors.success`               | `--tc-success`             | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                                     |
+| `colors.danger`                | `--tc-danger`              | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                                    |
+| `colors.panel`                 | `--tc-panel`               | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
+| `colors.canvas`                | `--tc-canvas`              | `bg-canvas`                  | `#1e1f22`          | `#ffffff`       | The editor area and the active tab                                                 |
+| `colors.raised`                | `--tc-raised`              | `bg-raised`                  | `#393b40`          | `#ebecf0`       | Hovered tabs and buttons, the pressed stripe button, an unfocused tree's selection |
+| `colors.accent`                | `--tc-accent`              | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle                                |
+| `colors.border`                | `--tc-border`              | `border-line`, `bg-line`     | `#43454a`          | `#d3d5db`       | Dividers and resize handles at rest                                                |
+| `density.dialogWidthPx`        | `--tc-dialog-width`        | `w-dialog`                   | 1040 px            | 1040 px         | The Data Sources and Settings dialogs                                              |
+| `density.dialogHeightPx`       | `--tc-dialog-height`       | `h-dialog-height`            | 720 px             | 720 px          | The Data Sources and Settings dialogs                                              |
+| `density.dialogListWidthPx`    | `--tc-dialog-list-width`   | `w-dialog-list`              | 240 px             | 240 px          | The datasource list, the Settings page list                                        |
+| `density.dialogLabelMaxPx`     | `--tc-dialog-label-max`    | `max-w-dialog-label`         | 200 px             | 200 px          | A form label's widest; a longer one wraps                                          |
+| `density.titleBarHeightPx`     | `--tc-title-bar-height`    | `h-title-bar`                | 40 px              | 32 px           | The main toolbar; the native controls' height                                      |
+| `TRAFFIC_LIGHT_INSET_PX`       | `--tc-traffic-light-inset` | `pl-traffic-lights`          | 76 px              | 76 px           | The main toolbar's left inset for the macOS traffic lights                         |
 
 The main toolbar (plan 015) is the window's title bar: `h-title-bar`, `bg-panel`, a
 `border-line` bottom edge, `px-gap` with `gap-gap` between items. Its buttons are the compact
@@ -355,8 +357,9 @@ centred in the toolbar. `.app-drag` makes the toolbar the drag region; `.app-no-
 control keeps it clickable.
 
 The active editor tab is `bg-canvas` with a 2 px `border-accent` underline; inactive tabs are
-`text-ink-muted` on the strip's `bg-panel` and show their close button on hover. Disabled actions,
-in the palette and on toolbar buttons, are `text-ink-muted` at reduced opacity.
+`text-ink-muted` on the strip's `bg-panel` and show their close button on hover. Disabled actions are `text-ink-muted`: in the palette at
+full opacity and after every enabled result, so they stay legible (4.5:1) and never take the
+highlighted first row; toolbar buttons add reduced opacity beside their enabled neighbours.
 
 ## Database explorer
 
@@ -403,7 +406,7 @@ Phosphor `ArrowsClockwise`, `ArrowsInLineVertical` and `CopySimple` glyphs.
 ### Key tree
 
 Plan 058. A `keyValue` datasource's rows add no tokens. A key's type badge (`ui/KeyTypeBadge.tsx`)
-stands where a catalog row draws its icon: a `w-9` `rounded-sm` box, `font-mono font-semibold` in `text-canvas` on a
+stands where a catalog row draws its icon: a `w-9` `rounded-sm` box, `font-ui font-semibold` in `text-canvas` on a
 datasource tint, invisible until the key is described.
 
 | Type        | Badge                                        | Background     |
@@ -438,7 +441,7 @@ colours are their own tokens, read by the `HighlightStyle` through the CSS varia
 | `colors.syntax.operator`       | `--tc-syntax-operator`      |                              | `#bcbec4`          | `#080808`       | Operators and punctuation                                |
 | `colors.syntax.variable`       | `--tc-syntax-variable`      |                              | `#56a8f5`          | `#9e5a00`       | Bind parameters (`$1`, `:name`, `?`)                     |
 | `colors.syntax.bracketMatch`   | `--tc-syntax-bracket-match` |                              | `#43454a`          | `#d3e1fb`       | The matching bracket's background                        |
-| `colors.statementFlash`        | `--tc-statement-flash`      |                              | `#3d4a2e`          | `#e1f1d3`       | The statement just run, for 900 ms                       |
+| `colors.statementFlash`        | `--tc-statement-flash`      |                              | `#2c3427`          | `#e1f1d3`       | The statement just run, for 900 ms                       |
 | `colors.warning`               | `--tc-warning`              | `text-warning`, `bg-warning` | `#e0a84a`          | `#8a5a00`       | Output warnings (skipped, cancelled), `transaction open` |
 
 Live problems (plan 108) reuse these tokens, no new ones. An error is a `--tc-danger` wavy
@@ -498,7 +501,7 @@ and accent colours; it adds three tokens and leans on two older ones.
 | `colors.gridSelection`         | `--tc-grid-selection`        | `bg-grid-selection`    | `#214283`          | `#c9dafc`       | Selected cells; stronger than `bg-selection` |
 | `colors.gridNull`              | `--tc-grid-null`             | `text-grid-null`       | `#868a91`          | `#6f737a`       | NULL, italic, in cells and the value panel   |
 | `density.valuePanelWidthPx`    | `--tc-value-panel-width`     | `w-value-panel`        | 360 px             | 360 px          | The value panel's width until it is dragged  |
-| `colors.gridStripe`            | `--tc-grid-stripe`           | `bg-grid-stripe`       | `#26282b`          | `#f5f6f8`       | Every second row                             |
+| `colors.gridStripe`            | `--tc-grid-stripe`           | `bg-grid-stripe`       | `#26282b`          | `#f5f6f8`       | Every second row, with Striped rows on       |
 | `density.gridColumnMaxWidthPx` | `--tc-grid-column-max-width` | `--spacing-column-max` | 320 px             | 320 px          | The cap on a column's automatic width        |
 
 The header and the row-number gutter are `bg-panel` with `border-line` dividers and stay put while

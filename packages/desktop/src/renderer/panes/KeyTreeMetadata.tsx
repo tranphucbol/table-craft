@@ -65,7 +65,7 @@ export function KeyTreeContent({ node }: { readonly node: KeyEntryNode }) {
     <span
       aria-label={label}
       className={cn(
-        "shrink-0 rounded-sm px-1 py-1 font-mono font-semibold text-canvas leading-none",
+        "shrink-0 rounded-sm px-1 py-1 font-ui font-semibold text-canvas leading-none",
         CONTENT_TONES[label],
       )}
     >

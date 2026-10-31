@@ -38,18 +38,32 @@ function operationText(row: PlanRow): string {
   return row.node.target === null ? row.node.operation : `${row.node.operation} ${row.node.target}`;
 }
 
-function columnsOf(analyzed: boolean): readonly PlanColumn[] {
+const NOTHING_COLLAPSED: ReadonlySet<string> = new Set();
+
+/** Every node of the plan, collapsed or not: what the columns and the details pane are decided on. */
+function everyRow(plan: PlanTab["plan"]): readonly PlanRow[] {
+  return planRows(plan, NOTHING_COLLAPSED);
+}
+
+/** A column no node fills is left out: SQLite's plan has no estimates (plan 130 decision 11). */
+function columnsOf(analyzed: boolean, rows: readonly PlanRow[]): readonly PlanColumn[] {
   const estimated: PlanColumn[] = [
     { title: "Rows (est.)", value: (row) => row.node.estimatedRows },
     { title: "Cost (est.)", value: (row) => row.node.estimatedCost, bar: !analyzed },
   ];
-  if (!analyzed) return estimated;
-  return [
-    ...estimated,
-    { title: "Actual Rows", value: (row) => row.node.actualRows },
-    { title: "Time (ms)", value: (row) => row.node.actualTimeMs, bar: true },
-    { title: "Loops", value: (row) => row.node.loops },
-  ];
+  const columns = analyzed
+    ? [
+        ...estimated,
+        { title: "Actual Rows", value: (row: PlanRow) => row.node.actualRows },
+        { title: "Time (ms)", value: (row: PlanRow) => row.node.actualTimeMs, bar: true },
+        { title: "Loops", value: (row: PlanRow) => row.node.loops },
+      ]
+    : estimated;
+  return columns.filter((column) => rows.some((row) => column.value(row) !== null));
+}
+
+function hasDetails(rows: readonly PlanRow[]): boolean {
+  return rows.some((row) => row.node.detail !== null || row.node.properties.length > 0);
 }
 
 const VIEWS: readonly { readonly view: PlanViewKind; readonly label: string; readonly actionId: string }[] = [
@@ -97,7 +111,7 @@ function Tree({ consoleId, plan }: { readonly consoleId: string; readonly plan: 
   const updatePlan = useConsoles((state) => state.updatePlan);
   const collapsed = useMemo(() => new Set(plan.collapsed), [plan.collapsed]);
   const rows = useMemo(() => planRows(plan.plan, collapsed), [plan.plan, collapsed]);
-  const columns = columnsOf(plan.analyzed);
+  const columns = useMemo(() => columnsOf(plan.analyzed, everyRow(plan.plan)), [plan.analyzed, plan.plan]);
   const elements = useRef(new Map<string, HTMLTableRowElement>());
 
   function select(key: string | null): void {
@@ -214,6 +228,7 @@ function Tree({ consoleId, plan }: { readonly consoleId: string; readonly plan: 
  */
 export function PlanView({ consoleId, plan }: { readonly consoleId: string; readonly plan: PlanTab }) {
   const summary = plan.plan.summary.map((entry) => `${entry.name}: ${entry.value}`).join(" · ");
+  const detailed = useMemo(() => hasDetails(everyRow(plan.plan)), [plan.plan]);
   return (
     <div data-testid="plan-view" data-view={plan.view} className="flex min-h-0 flex-1 flex-col">
       {plan.analyzed ? (
@@ -258,7 +273,7 @@ export function PlanView({ consoleId, plan }: { readonly consoleId: string; read
       ) : (
         <div className="flex min-h-0 flex-1">
           <Tree consoleId={consoleId} plan={plan} />
-          <Details plan={plan} />
+          {detailed ? <Details plan={plan} /> : null}
         </div>
       )}
     </div>

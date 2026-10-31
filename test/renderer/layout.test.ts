@@ -20,7 +20,7 @@ describe("layout", () => {
 
     const restored = createLayoutStore(storage).getState().layout;
 
-    expect(restored.visible).toEqual({ database: true, services: false, log: false, watch: false });
+    expect(restored.visible).toEqual({ database: true, services: true, log: false, watch: false });
     expect(restored.sizes.database).toBe(35);
   });
 
@@ -45,7 +45,13 @@ describe("layout", () => {
     store.getState().hideAll();
     expect(store.getState().layout.visible).toEqual({ database: false, services: false, log: false, watch: false });
     store.getState().hideAll();
-    expect(store.getState().layout.visible).toEqual({ database: true, services: false, log: false, watch: false });
+    expect(store.getState().layout.visible).toEqual({ database: true, services: true, log: false, watch: false });
+  });
+
+  it("givenFreshProfile_whenLoaded_thenOnlyDatabaseOpen", () => {
+    const layout = createLayoutStore(memoryStorage()).getState().layout;
+
+    expect(layout.visible).toEqual({ database: true, services: false, log: false, watch: false });
   });
 
   it("givenProductionWarningClosed_whenRelaunched_thenStillClosedUntilShown", () => {

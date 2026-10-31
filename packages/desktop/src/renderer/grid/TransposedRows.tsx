@@ -27,7 +27,7 @@ import {
   windowOffsetOf,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
-import { useCellFormats, useRowHeightPx } from "@table-craft/desktop/renderer/state/settings.js";
+import { useCellFormats, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { TYPE_GLYPHS } from "@table-craft/desktop/renderer/ui/icons.js";
 
@@ -55,6 +55,7 @@ export function TransposedRows({ ownerId, result, visible, host, edits }: RowsPr
   const bounds: GridBounds = { rows: recordCount, columns: visible.length };
   const rowHeightPx = useRowHeightPx();
   const formats = useCellFormats();
+  const striped = useSettings((state) => state.settings.data.stripedRows);
   const nameChars = Math.min(
     MAX_NAME_CHARS,
     Math.max(MIN_NAME_CHARS, ...visible.map((column) => displayChars(result.columns[column]?.name ?? ""))),
@@ -177,7 +178,7 @@ export function TransposedRows({ ownerId, result, visible, host, edits }: RowsPr
                 key={column}
                 role="row"
                 data-transposed-col={position}
-                className={cn("flex h-row", position % 2 === 1 && "bg-grid-stripe")}
+                className={cn("flex h-row", striped && position % 2 === 1 && "bg-grid-stripe")}
                 style={{ width: rowWidth }}
               >
                 <div

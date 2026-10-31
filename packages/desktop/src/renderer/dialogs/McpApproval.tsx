@@ -2,7 +2,13 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useId, useState } from "react";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS, type ApprovalAnswerArgs } from "@table-craft/desktop/renderer/actions/mcpActions.js";
-import { Button, CONTENT_CLASS, FieldRow, OVERLAY_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import {
+  Button,
+  CONTENT_CLASS,
+  FIELD_GRID_CLASS,
+  FieldRow,
+  OVERLAY_CLASS,
+} from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { McpApprovalPlan } from "@table-craft/desktop/renderer/dialogs/McpApprovalPlan.js";
 import { countdown } from "@table-craft/desktop/renderer/model/mcp.js";
 import { useApprovalPlans } from "@table-craft/desktop/renderer/state/approvalPlans.js";
@@ -66,7 +72,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
         {approval.clientName} wants to {reads ? "read" : "change"} data
         {of > 1 ? <span className="font-normal text-ink-muted"> · 1 of {String(of)}</span> : null}
       </Dialog.Title>
-      <div className="grid grid-cols-[8rem_1fr] items-center gap-x-gap gap-y-1">
+      <div className={FIELD_GRID_CLASS}>
         <FieldRow label="Data source">
           <span data-testid="mcp-approval-datasource" className="truncate">
             {approval.datasourceName}
@@ -75,7 +81,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
         <FieldRow label="Kind">
           <span
             className={cn(
-              "rounded-sm border px-1 font-mono font-semibold",
+              "rounded-sm border px-1 font-ui font-semibold",
               leading !== null && CAP_CENTRED,
               badgeTone(approval),
             )}
@@ -88,7 +94,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
         </FieldRow>
         {approval.subject === "key" ? (
           <FieldRow label="Key">
-            <span data-testid="mcp-approval-key" className="min-w-0 font-mono wrap-anywhere select-text">
+            <span data-testid="mcp-approval-key" className="min-w-0 font-grid wrap-anywhere select-text">
               {approval.sql}
               {approval.database === null ? null : (
                 <span className="font-sans text-ink-muted"> · database {String(approval.database)}</span>
@@ -133,7 +139,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
       ) : (
         <pre
           data-testid="mcp-approval-sql"
-          className={cn(STATEMENT_BOX, "p-cell font-mono whitespace-pre-wrap select-text")}
+          className={cn(STATEMENT_BOX, "p-cell font-grid whitespace-pre-wrap select-text")}
         >
           {approval.sql}
         </pre>

@@ -29,6 +29,7 @@ import {
   toolWindow,
   type RunningApp,
   type SavedDatasource,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("125");
@@ -145,8 +146,7 @@ describe.runIf(SMOKE_ENABLED && DATABASES_ENABLED)("Agent call time without the 
 
   /** The finished call's line in Services, and its duration: working time, the wait in its title. */
   async function finishedCall(page: Page, text: string): Promise<{ line: Locator; duration: Locator }> {
-    const services = toolWindow(page, "Services");
-    if (!(await services.isVisible())) await findAction(page, "Services");
+    const services = await showServices(page);
     const line = services.locator('[role="treeitem"][data-kind="agentCall"]').filter({ hasText: text });
     await line.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
     const duration = line.locator("span[title]").filter({ hasText: /^\d+(\.\d)? m?s$/ });

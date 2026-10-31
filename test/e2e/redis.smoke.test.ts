@@ -42,12 +42,12 @@ import {
   seedSettings,
   setWindowSize,
   sqlEditor,
-  toolWindow,
   waitUntilReady,
   type Datasource,
   type RunningApp,
   chooseOption,
   optionValue,
+  showServices,
 } from "./harness.js";
 import { builtRelease } from "./pluginFixtures.js";
 import {
@@ -542,7 +542,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
         .filter({ hasText: /^Delete/ })
         .click();
 
-      const services = toolWindow(page, "Services");
+      const services = await showServices(page);
       await expect
         .poll(() => services.getByTestId("key-delete-progress").first().textContent(), { timeout: LAUNCH_TIMEOUT_MS })
         .toBe(`${String(DELETE_COUNT)} of ${String(DELETE_COUNT)}`);
