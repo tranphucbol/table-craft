@@ -420,7 +420,10 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     async () => {
       holder = await TIDB_SERVER.plugin.connect(TIDB_SERVER.config, { readOnly: false });
       const holderId = holder.serverSessionId ?? "";
-      if (holder.serverInstance === undefined) throw new Error("A TiDB 4 session knows the server it is on.");
+      const holderInstance = await holder.findServerInstance?.();
+      if (holderInstance === undefined || holderInstance === null) {
+        throw new Error("A TiDB 4 session finds the server it is on.");
+      }
       const page = await launch(TIDB);
       await startStatement(page, TIDB_SLEEP);
 
@@ -438,7 +441,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
         .toEqual(expect.arrayContaining([expect.stringContaining("This TiDB version cannot cancel")]));
       await captureWindow(page, "tidb-sleep-listed");
 
-      const holderRow = sessionRow(page, `${holder.serverInstance}/${holderId}`);
+      const holderRow = sessionRow(page, `${holderInstance}/${holderId}`);
       await holderRow.click();
       await sessionsButton(page, "Terminate Session…").click();
       const dialog = terminateDialog(page);

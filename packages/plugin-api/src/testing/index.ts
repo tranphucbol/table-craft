@@ -3005,6 +3005,18 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
+      it("givenInstanceLookup_whenAsked_thenOwnRowListedUnderIt", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          if (session.findServerInstance === undefined) return;
+          const instance = await session.findServerInstance();
+          expect(instance).not.toBeNull();
+          await withMonitor(async (monitor) => {
+            const { sessions } = await monitor.list();
+            expect(sessions.some((row) => row.id === idOf(session) && row.instance === instance)).toBe(true);
+          });
+        });
+      });
+
       it("givenSleepingSession_whenList_thenActiveWithQueryText", async () => {
         await withMonitor(async (monitor) => {
           await withSleeper(async (sleeper) => {

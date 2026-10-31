@@ -6,7 +6,6 @@ import {
   type Column,
   type KeySource,
   type Row,
-  type ServerSession,
   type Session,
 } from "@table-craft/plugin-api";
 import { MS_PER_SECOND, connectDatasource, drained } from "@table-craft/desktop/engine/connect.js";
@@ -30,6 +29,7 @@ import type {
   Reconnection,
   SessionsListing,
 } from "@table-craft/desktop/engine/protocol.js";
+import { isListedAs, learnInstance, repeatedIds } from "@table-craft/desktop/engine/serverInstances.js";
 import { statementRunners } from "@table-craft/desktop/engine/statements.js";
 import { bytesRunners } from "@table-craft/desktop/engine/bytes.js";
 import { keyOperations } from "@table-craft/desktop/engine/keyOperations/index.js";
@@ -142,12 +142,6 @@ async function* heldThenRest(held: readonly Row[], rest: AsyncIterable<Row>): As
 async function* heldRows(held: readonly Row[]): AsyncGenerator<Row> {
   await Promise.resolve();
   yield* held;
-}
-
-/** Whether `row` is `session`'s own connection, by id and, where ids repeat across a cluster, instance. */
-function isListedAs(session: Session, row: ServerSession): boolean {
-  if (session.serverSessionId !== row.id) return false;
-  return session.serverInstance === undefined || session.serverInstance === row.instance;
 }
 
 /** What the engine remembers about a `table.query` result so edits and conditions can be written. */
@@ -436,9 +430,25 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     return session;
   }
 
+  /**
+   * Asks an idle console which server it is on; the lookup counts as closing, so a statement sent
+   * meanwhile waits for it instead of reaching the plugin beside it.
+   */
+  async function learnOn(sessionId: string, open: OpenSession, repeated: ReadonlySet<string>): Promise<void> {
+    const busy = open.running > 0 || open.exporting > 0 || open.closing !== null || cursors.has(sessionId);
+    if (busy || open.lost !== null || open.session.transactions?.open === true) return;
+    const lookup = learnInstance(open.session, repeated);
+    if (lookup === null) return;
+    noteClosing(sessionId, lookup);
+    await lookup;
+  }
+
   /** Tags each row this engine holds: a console's with its session id, the catalog's with none. */
   async function listedSessions(): Promise<SessionsListing> {
     const { listing, catalog } = await listServerSessions();
+    const repeated = repeatedIds(listing.sessions);
+    if (repeated.size > 0)
+      await Promise.all([...sessions].map(([sessionId, open]) => learnOn(sessionId, open, repeated)));
     return {
       notes: listing.notes,
       sessions: listing.sessions.map((row) => {

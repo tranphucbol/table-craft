@@ -65,6 +65,9 @@ function tidbSlowRead(seconds: number): string {
   return `SELECT COUNT(*) FROM ${digits.join(", ")}, (${repeats}) r`;
 }
 
+/** The server each TiDB 4 session found it is on, asked before it runs anything: a lookup waits behind a running statement. */
+const instances = new WeakMap<Session, string>();
+
 /**
  * Polls for `session`'s own row, by id and server: the TiDB may be shared, and an id alone can name
  * someone else's connection on another of its servers.
@@ -75,9 +78,10 @@ async function listedUntil(
   ready: (row: ServerSession | undefined) => boolean,
 ): Promise<ServerSession | undefined> {
   const deadline = Date.now() + LISTED_WITHIN_MS;
+  const instance = instances.get(session) ?? session.serverInstance;
   for (;;) {
     const row = (await monitor.list()).sessions.find(
-      (listed) => listed.id === session.serverSessionId && listed.instance === session.serverInstance,
+      (listed) => listed.id === session.serverSessionId && listed.instance === instance,
     );
     if (ready(row)) return row;
     if (Date.now() > deadline)
@@ -427,8 +431,20 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
     if (session.sessions === undefined) throw new Error("The mysql plugin declares sessions.");
+    const instance = await session.findServerInstance?.();
+    if (instance !== undefined && instance !== null) instances.set(session, instance);
     return session as Session & { sessions: SessionMonitor };
   }
+
+  it("givenTidb4_whenConnect_thenNoServerInstanceUntilAsked", async () => {
+    const sent = spySql();
+    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+    cleanup.push(() => session.close());
+
+    expect(sent.filter((sql) => sql.includes("CLUSTER_PROCESSLIST"))).toEqual([]);
+    expect(session.serverInstance).toBeUndefined();
+    expect(await session.findServerInstance?.()).toEqual(expect.any(String));
+  });
 
   it("givenSleepOnTidb4_whenList_thenActiveWithoutCancel", async () => {
     const monitor = (await connected()).sessions;
@@ -446,7 +462,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
       cancel: null,
       terminate: `KILL TIDB ${row?.id ?? ""}`,
     });
-    expect(sleeper.serverInstance).toEqual(expect.any(String));
+    expect(instances.get(sleeper)).toEqual(expect.any(String));
     expect(notes.join("\n")).toMatch(/cannot cancel/);
     expect(notes.join("\n")).toMatch(/Blocked by is empty/);
     await expect(monitor.cancelSession({ id: row?.id ?? "", instance: row?.instance ?? null })).rejects.toMatchObject({
@@ -532,7 +548,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
   it("givenServerEnforced_whenEngineCannotKill_thenServerStops", async () => {
     const monitor = (await connected()).sessions;
     const sleeper = await connected();
-    const dropped = { serverSessionId: sleeper.serverSessionId, serverInstance: sleeper.serverInstance } as Session;
+    const dropped = { serverSessionId: sleeper.serverSessionId, serverInstance: instances.get(sleeper) } as Session;
     const sleeping = drained(sleeper, SLEEP_SQL, SERVER_LIMIT_MS).catch(() => undefined);
     cleanup.push(() => sleeping);
     await listedUntil(monitor, sleeper, (listed) => listed?.state === "active");

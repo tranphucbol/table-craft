@@ -9,7 +9,13 @@ import {
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
-import type { EngineResponse, OpenedSession, SessionsListing } from "@table-craft/desktop/engine/protocol.js";
+import {
+  RESULT_FETCH_ALL_CAP,
+  RESULT_PAGE_ROWS,
+  type EngineResponse,
+  type OpenedSession,
+  type SessionsListing,
+} from "@table-craft/desktop/engine/protocol.js";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { fakeManifest, SQLITE_MANIFEST } from "../support/manifests.js";
 
@@ -18,6 +24,7 @@ const CAPABILITIES: readonly Capability[] = ["sql", "schemaTree", "sessions"];
 const FOREIGN_ID = "900";
 const KILL_TEXT = "SELECT pg_terminate_backend(900) -- the statement nobody may log";
 const SECRET_QUERY = "SELECT 'a query nobody may log'";
+const HELD_SQL = "SELECT 'held'";
 
 function row(id: string, overrides: Partial<ServerSession> = {}): ServerSession {
   return {
@@ -45,9 +52,20 @@ const OWN_INSTANCE = "10.0.0.1:10080";
 const OTHER_INSTANCE = "10.0.0.2:10080";
 
 /** SQLite with a pretend server: every connection gets a server id, and the monitor lists them all plus a stranger. */
-function monitoredEngine(options: { readOnly?: boolean; failStop?: string; instance?: string } = {}) {
+function monitoredEngine(
+  options: {
+    readOnly?: boolean;
+    failStop?: string;
+    instance?: string;
+    /** Answers the instance through `findServerInstance` instead of `serverInstance`. */
+    lookup?: boolean;
+    /** Holds `HELD_SQL` until it settles. */
+    held?: Promise<void>;
+  } = {},
+) {
   const live = new Set<string>();
   const stopped: { readonly stop: string; readonly target: SessionTarget }[] = [];
+  const lookups: string[] = [];
   let next = 100;
   const plugin: DatasourcePlugin = {
     ...sqlite,
@@ -63,7 +81,10 @@ function monitoredEngine(options: { readOnly?: boolean; failStop?: string; insta
         return Promise.resolve();
       };
       return {
-        execute: (sql, params) => session.execute(sql, params),
+        execute: async (sql, params) => {
+          if (sql === HELD_SQL) await options.held;
+          return session.execute(sql, params);
+        },
         ...(session.introspector === undefined ? {} : { introspector: session.introspector }),
         sessions: {
           list: () =>
@@ -79,7 +100,16 @@ function monitoredEngine(options: { readOnly?: boolean; failStop?: string; insta
           terminateSession: stop("terminate"),
         },
         serverSessionId,
-        ...(options.instance === undefined ? {} : { serverInstance: options.instance }),
+        ...(options.instance === undefined
+          ? {}
+          : options.lookup === true
+            ? {
+                findServerInstance: () => {
+                  lookups.push(serverSessionId);
+                  return Promise.resolve(options.instance ?? null);
+                },
+              }
+            : { serverInstance: options.instance }),
         serverVersion: session.serverVersion,
         close: async () => {
           live.delete(serverSessionId);
@@ -106,7 +136,7 @@ function monitoredEngine(options: { readOnly?: boolean; failStop?: string; insta
     plugins: [loaded],
     log: createLogger({ process: "engine", scope: "engine", sink: (record) => records.push(record) }),
   }).connect();
-  return { connection, stopped, records };
+  return { connection, stopped, records, lookups };
 }
 
 function resultOf<T>(response: EngineResponse): T {
@@ -144,6 +174,53 @@ describe("engine server sessions", () => {
     const tagged = listing.sessions.filter((session) => session.ownSessionId === sessionId);
     expect(tagged.map((session) => session.instance)).toEqual([OWN_INSTANCE]);
     expect(listing.sessions.filter((session) => session.instance === OTHER_INSTANCE && session.own)).toEqual([]);
+  });
+
+  it("givenSameIdOnAnotherServer_whenListWithLookup_thenOnlyOwnServersRowTagged", async () => {
+    const { connection, lookups } = monitoredEngine({ instance: OWN_INSTANCE, lookup: true });
+    const { sessionId } = resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open" }));
+
+    const listing = resultOf<SessionsListing>(await connection.handle({ id: 2, type: "sessions.list" }));
+    resultOf<SessionsListing>(await connection.handle({ id: 3, type: "sessions.list" }));
+
+    const tagged = listing.sessions.filter((session) => session.ownSessionId === sessionId);
+    expect(tagged.map((session) => session.instance)).toEqual([OWN_INSTANCE]);
+    expect(listing.sessions.filter((session) => session.instance === OTHER_INSTANCE && session.own)).toEqual([]);
+    expect(lookups).toHaveLength(2);
+    expect(new Set(lookups).size).toBe(2);
+  });
+
+  it("givenUniqueIds_whenList_thenNoLookup", async () => {
+    const { connection, lookups } = monitoredEngine({ lookup: true });
+    resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open" }));
+
+    resultOf<SessionsListing>(await connection.handle({ id: 2, type: "sessions.list" }));
+
+    expect(lookups).toEqual([]);
+  });
+
+  it("givenRunningConsole_whenListWithRepeatedId_thenNoLookupOnIt", async () => {
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { connection, lookups } = monitoredEngine({ instance: OWN_INSTANCE, lookup: true, held });
+    const { sessionId } = resultOf<OpenedSession>(await connection.handle({ id: 1, type: "session.open" }));
+    const running = connection.handle({
+      id: 2,
+      type: "statement.execute",
+      pageRows: RESULT_PAGE_ROWS,
+      fetchAllCap: RESULT_FETCH_ALL_CAP,
+      sessionId,
+      sql: HELD_SQL,
+    });
+
+    const listing = resultOf<SessionsListing>(await connection.handle({ id: 3, type: "sessions.list" }));
+    release();
+    await running;
+
+    expect(lookups).toHaveLength(1);
+    expect(listing.sessions.filter((session) => session.ownSessionId === sessionId)).toHaveLength(2);
   });
 
   it("givenTerminate_whenRun_thenPluginGetsTarget", async () => {

@@ -430,7 +430,6 @@ interface Identity {
   /** What stops this connection's running statement from another connection; `null` when nothing safely does. */
   readonly kill: string | null;
   readonly serverSessionId: string;
-  readonly serverInstance: string | null;
   /** The session refuses writes itself, because the server would not. */
   readonly refusesWrites: boolean;
 }
@@ -461,7 +460,6 @@ async function prepareConnection(connection: mysql.Connection, options: ConnectO
     dialect,
     kill: Number.isSafeInteger(id) ? killStatementFor(serverVersion, id) : null,
     serverSessionId,
-    serverInstance: tidbGlobalKill(serverVersion) === false ? await tidbInstanceOf(connection).catch(() => null) : null,
     refusesWrites,
   };
 }
@@ -647,7 +645,7 @@ class MysqlSession implements Session {
   readonly transactions: Transactions;
   readonly sessions: SessionMonitor;
   readonly serverSessionId: string;
-  readonly serverInstance?: string;
+  readonly findServerInstance?: () => Promise<string | null>;
 
   constructor(config: MysqlConfig, serverName: string | undefined, connection: mysql.Connection, identity: Identity) {
     this.#config = config;
@@ -664,7 +662,8 @@ class MysqlSession implements Session {
     this.introspector = mysqlIntrospector(connection);
     this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));
     this.serverSessionId = identity.serverSessionId;
-    if (identity.serverInstance !== null) this.serverInstance = identity.serverInstance;
+    // Asked for on demand: CLUSTER_PROCESSLIST asks every TiDB server, and one that never answers held each connect for 40 s.
+    if (tidbGlobalKill(identity.serverVersion) === false) this.findServerInstance = () => tidbInstanceOf(connection);
     const state = this.#transaction;
     this.transactions = {
       setMode: (mode) => this.#setMode(mode),
