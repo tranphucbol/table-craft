@@ -81,7 +81,11 @@ export class RedisSession implements Session {
     this.#database = config.mode === "cluster" ? 0 : config.database;
     this.serverVersion = connection.version;
     this.delimiter = config.keyDelimiter;
-    this.#router = new Router(connection, () => this.commandTable());
+    this.#router = new Router(
+      connection,
+      () => this.commandTable(),
+      () => this.#database,
+    );
     this.keyspace = new RedisKeyspace({
       mode: connection.mode,
       delimiter: config.keyDelimiter,

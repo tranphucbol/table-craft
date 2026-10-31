@@ -346,6 +346,27 @@ services:
       timeout: 5s
       retries: 120
 
+  # Redis Sentinel for plan 133: a 7.4 master, one replica and three Sentinels (password `sentinel`)
+  # monitoring `mymaster`, all in one container on the ports they publish (sentinel.sh).
+  redis-sentinel:
+    profiles: ["redis"]
+    image: redis:7.4-alpine
+    labels:
+      table-craft.seed: ${TABLE_CRAFT_REDIS_SENTINEL_SEED:-none}
+    environment:
+      SENTINEL_PORTS: ${TABLE_CRAFT_REDIS_SENTINEL_PORTS:-47031-47035}
+    entrypoint: ["/bin/sh", "/redis/sentinel.sh"]
+    ports:
+      - "127.0.0.1:${TABLE_CRAFT_REDIS_SENTINEL_PORTS:-47031-47035}:${TABLE_CRAFT_REDIS_SENTINEL_PORTS:-47031-47035}"
+    volumes:
+      - ./redis:/redis:ro
+      - ./schema:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/seeded"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+
   # etcd for plan 110: 3.6 with auth on (users root, table_craft and limited, made by the seeder)
   # and 3.5 without auth. The images are distroless, so `etcd-seed` (Alpine with etcdctl) seeds
   # both from ./schema/etcd.etcd, turns auth on last, then stays up: its healthcheck is what
@@ -534,6 +555,8 @@ services:
       TABLE_CRAFT_REDIS5_PORT: "6379"
       TABLE_CRAFT_REDIS5_CLUSTER_HOST: redis-5-cluster
       TABLE_CRAFT_REDIS5_CLUSTER_PORTS: ${TABLE_CRAFT_REDIS5_CLUSTER_PORTS:-47021-47026}
+      TABLE_CRAFT_REDIS_SENTINEL_HOST: redis-sentinel
+      TABLE_CRAFT_REDIS_SENTINEL_PORTS: ${TABLE_CRAFT_REDIS_SENTINEL_PORTS:-47031-47035}
       TABLE_CRAFT_ETCD_HOST: etcd
       TABLE_CRAFT_ETCD_PORT: "2379"
       TABLE_CRAFT_ETCD35_HOST: etcd-3-5

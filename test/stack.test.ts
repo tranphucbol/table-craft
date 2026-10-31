@@ -62,6 +62,7 @@ describe("seed hashes (test/db/stack.ts)", () => {
       etcd: "o",
       "etcd-3-5": "p",
       "etcd-tls": "q",
+      "redis-sentinel": "r",
     });
 
     expect(env).toEqual({
@@ -82,6 +83,7 @@ describe("seed hashes (test/db/stack.ts)", () => {
       [SEED_ENV.etcd]: "o",
       [SEED_ENV["etcd-3-5"]]: "p",
       [SEED_ENV["etcd-tls"]]: "q",
+      [SEED_ENV["redis-sentinel"]]: "r",
     });
   });
 
@@ -169,6 +171,7 @@ describe("database selector (decision 099)", () => {
         "redis-6-cluster",
         "redis-5",
         "redis-5-cluster",
+        "redis-sentinel",
         "etcd",
         "etcd-3-5",
         "etcd-tls",

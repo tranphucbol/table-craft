@@ -27,8 +27,9 @@ the worktree is made (`cp <main checkout>/.env .env`, when the main checkout has
 | `TABLE_CRAFT_REDIS_CLUSTER_PORTS`  | 47001-47006 | `redis-cluster`, a range   |
 | `TABLE_CRAFT_REDIS6_CLUSTER_PORTS` | 47011-47013 | `redis-6-cluster`, a range |
 | `TABLE_CRAFT_REDIS5_CLUSTER_PORTS` | 47021-47026 | `redis-5-cluster`, a range |
+| `TABLE_CRAFT_REDIS_SENTINEL_PORTS` | 47031-47035 | `redis-sentinel`, a range  |
 
-A cluster range keeps its length. A node's bus port is its port + 10000, so keep cluster ports
+A cluster or Sentinel range keeps its length. A node's bus port is its port + 10000, so keep cluster ports
 below 55536.
 
 For example, shifting every port by 100:
@@ -43,7 +44,7 @@ export COMPOSE_PROJECT_NAME=table-craft-second \
   TABLE_CRAFT_REDIS6_PORT=56462 TABLE_CRAFT_REDIS5_PORT=56450 \
   TABLE_CRAFT_ETCD_PORT=52479 TABLE_CRAFT_ETCD35_PORT=52480 TABLE_CRAFT_ETCD_TLS_PORT=52481 \
   TABLE_CRAFT_REDIS_CLUSTER_PORTS=47101-47106 TABLE_CRAFT_REDIS6_CLUSTER_PORTS=47111-47113 \
-  TABLE_CRAFT_REDIS5_CLUSTER_PORTS=47121-47126
+  TABLE_CRAFT_REDIS5_CLUSTER_PORTS=47121-47126 TABLE_CRAFT_REDIS_SENTINEL_PORTS=47131-47135
 ```
 
 A variable set for one command and missing on the next starts or reseeds the default project's
