@@ -189,7 +189,7 @@ function PanelHeader({
   readonly children?: ReactNode;
 }) {
   return (
-    <div className="flex h-row shrink-0 items-center gap-gap border-b border-line px-cell text-ui">
+    <div className="flex h-row shrink-0 items-center gap-gap border-b border-line px-cell font-ui text-ui">
       <span className="truncate text-ink">{column?.name ?? "Value"}</span>
       {column?.type == null ? null : <span className="truncate text-ink-muted">{column.type}</span>}
       {json === undefined ? null : (
@@ -204,7 +204,7 @@ function PanelHeader({
 
 function JsonHint() {
   return (
-    <p data-testid="value-json-hint" className="shrink-0 px-cell pt-cell text-ink-muted">
+    <p data-testid="value-json-hint" className="shrink-0 px-cell pt-cell font-ui text-ui text-ink-muted">
       {JSON_HINT}
     </p>
   );
@@ -259,7 +259,9 @@ export function ValueEditor({
   return (
     <aside aria-label="Value" {...{ [REGION_ATTRIBUTE]: "valuePanel" }} className={PANEL_CLASS}>
       <PanelHeader column={column} json={toggle}>
-        <span className={cn("shrink-0 text-ink-muted", toggle === undefined && "ml-auto")}>{applyHint} applies</span>
+        <span className={cn("shrink-0 text-ink-muted", toggle === undefined && "ml-auto")}>
+          <kbd className="font-ui">{applyHint}</kbd> applies
+        </span>
       </PanelHeader>
       {view.on ? <JsonHint /> : null}
       {invalid ? (

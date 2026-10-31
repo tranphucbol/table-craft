@@ -10,7 +10,7 @@ anything runs. Switch
 transaction is open the mode turns amber with a dot. The console toolbar groups Run, Run All,
 Explain and Cancel, then Query History and Reformat Code, then the transaction controls; the
 schema switcher and the data source sit at its right. While a statement runs, the title bar shows
-its elapsed time beside **Cancel**; with a transaction open, it shows **Tx open** with **Commit**
+its elapsed time, to the millisecond, beside **Cancel** where the database can cancel it; with a transaction open, it shows **Tx open** with **Commit**
 and **Rollback**, so you can end it from any tab layout. Consoles
 are saved as files as you type. Drag the line between the editor and its results to give either
 more room; every console keeps the split you last dragged to, across launches.
@@ -49,7 +49,8 @@ failing statement is handled as in a console run (below): the line asks **Skip**
 file where the database pointed, every failure of that file underlined.
 
 When a statement fails, the console underlines where the database says it went wrong, with a mark in
-the gutter and the message on hover; **Go to Error** beside the error jumps there, and `F2` / `⇧F2`
+the gutter and the message on hover. The error itself sits above the results, with **Go to Error**
+to jump there, **Show in Log** and **Run Again**; `F2` / `⇧F2`
 step through the marks. Editing the statement drops its mark. When one of several statements fails,
 the run asks above the results: **Skip** it, **Skip All** failures from now on, **Stop**, or
 **Retry**. Settings → Advanced → Running → _When a statement fails_ can stop or continue without asking; a run that

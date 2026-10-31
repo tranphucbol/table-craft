@@ -235,18 +235,22 @@ describe.runIf(DATABASES_ENABLED)("editable console results live test", () => {
       const page = await launch(POSTGRES);
 
       await query(page, "SELECT o.id, c.name FROM orders o JOIN customers c ON c.id = o.customer_id");
-      await expect.poll(() => readOnly(page).textContent()).toBe("Read-only: the result joins two or more tables");
+      await expect
+        .poll(() => readOnly(page).getAttribute("aria-label"))
+        .toBe("Read-only: the result joins two or more tables");
       await cell(page, 0, 1).click();
       await page.keyboard.press("Enter");
       expect(await editField(page).count()).toBe(0);
       await captureWindow(page, "read-only-join");
 
       await query(page, "SELECT customer_id, count(*) FROM orders GROUP BY customer_id");
-      await expect.poll(() => readOnly(page).textContent()).toBe("Read-only: the result aggregates rows");
+      await expect.poll(() => readOnly(page).getAttribute("aria-label")).toBe("Read-only: the result aggregates rows");
       await captureWindow(page, "read-only-aggregate");
 
       await query(page, "SELECT * FROM no_key_probe");
-      await expect.poll(() => readOnly(page).textContent()).toBe("Read-only: the result has no primary key column");
+      await expect
+        .poll(() => readOnly(page).getAttribute("aria-label"))
+        .toBe("Read-only: the result has no primary key column");
       await captureWindow(page, "read-only-no-key");
     },
     SCENARIO_TIMEOUT_MS,

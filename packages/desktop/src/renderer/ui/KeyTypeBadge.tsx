@@ -36,7 +36,7 @@ export function KeyTypeBadge({ info }: { readonly info: Pick<KeyInfo, "type" | "
     <span
       data-key-type={info?.type ?? undefined}
       className={cn(
-        "inline-block w-9 shrink-0 rounded-sm text-center font-mono font-semibold text-canvas",
+        "inline-block w-9 shrink-0 rounded-sm text-center font-ui font-semibold text-canvas",
         CAP_CENTRED,
         info?.type == null ? "invisible" : BADGES[info.type].className,
       )}

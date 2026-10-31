@@ -403,6 +403,14 @@ export function toolWindow(page: Page, title: string) {
   return page.getByRole("region", { name: title, exact: true });
 }
 
+/** The Services tool window, opened first when hidden: the default layout keeps it closed (plan 130 decision 4). */
+export async function showServices(page: Page): Promise<Locator> {
+  const services = toolWindow(page, "Services");
+  if ((await services.count()) === 0) await pressChord(page, "8");
+  await services.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+  return services;
+}
+
 export function editorTabs(page: Page) {
   return page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab");
 }

@@ -20,6 +20,7 @@ import {
   startStatement,
   toolWindow,
   treeNode,
+  showServices,
 } from "../e2e/harness.js";
 import { clickVisibly, pause, pointAt, pressVisibly, typeSlowly } from "./pace.js";
 import {
@@ -97,10 +98,6 @@ function header(page: Page, column: string): Locator {
   return page.locator(`[role="columnheader"][data-column-name="${column}"]`);
 }
 
-function hideServices(page: Page): Promise<void> {
-  return toolWindow(page, "Services").getByRole("button", { name: "Hide Services" }).click();
-}
-
 function keyRows(page: Page, kind: string): Locator {
   return toolWindow(page, "Database").locator(`[role="treeitem"][data-kind="${kind}"]`);
 }
@@ -172,7 +169,6 @@ mediaSuite("README feature media", () => {
     setup: async ({ page }) => {
       await connect(page, SHOP, PASSWORD);
       await openConsole(page, SHOP);
-      await hideServices(page);
       await setConsoleText(page, "SELECT count(*) AS orders FROM orders;\n");
     },
     run: async ({ page }) => {
@@ -213,7 +209,6 @@ mediaSuite("README feature media", () => {
     setup: async ({ page }) => {
       await connect(page, SHOP, PASSWORD);
       await openConsole(page, SHOP);
-      await hideServices(page);
       await setConsoleText(page, "SELECT * FROM products ORDER BY id");
       await page.keyboard.press("Escape");
     },
@@ -275,7 +270,9 @@ mediaSuite("README feature media", () => {
       await expect.poll(() => start.isEnabled()).toBe(true);
       await clickVisibly(page, start);
       await dialog.waitFor({ state: "detached", timeout: LAUNCH_TIMEOUT_MS });
-      await toolWindow(page, "Services")
+      await (
+        await showServices(page)
+      )
         .locator('[role="treeitem"][data-kind="import"][data-state="done"]')
         .waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await pause(page);
@@ -470,7 +467,6 @@ mediaSuite("README feature media", () => {
       await loadShopRedis();
       await connect(page, CACHE, REDIS_CONFIG.password);
       await openConsole(page, CACHE);
-      await hideServices(page);
     },
     run: async ({ page }) => {
       await typeSlowly(page, "KEYS *");

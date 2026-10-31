@@ -29,7 +29,8 @@ function AvailableButton({ actionId }: { readonly actionId: string }) {
 
 /**
  * The window's title bar is this toolbar (decision 034): the traffic lights or the main-menu button,
- * the datasource widget, the title, Run and the activity capsule (plan 127), Search Everywhere,
+ * the datasource widget, the title, Run on a console tab and the activity capsule (plans 127 and
+ * 129), Search Everywhere,
  * Update (only while one is offered, decision 045) and Settings. Its empty
  * space drags the window; every control in it is `app-no-drag`.
  */
@@ -67,7 +68,7 @@ export function MainToolbar() {
         {caption}
       </span>
       <div className="flex shrink-0 items-center gap-1">
-        <ActionButton actionId={ACTION_IDS.run} compact tone="success" />
+        {tab?.kind === "console" ? <ActionButton actionId={ACTION_IDS.run} compact tone="success" /> : null}
         <ActivityCapsule />
       </div>
       <ToolbarDivider />

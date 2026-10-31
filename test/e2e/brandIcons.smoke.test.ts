@@ -43,6 +43,7 @@ import {
   treeNode,
   type RunningApp,
   type SavedDatasource,
+  showServices,
 } from "./harness.js";
 
 const captureNow = evidenceFor("118");
@@ -367,9 +368,7 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
         if (password !== null) await answerSecretPrompt(page, name, password);
       }
 
-      const services = toolWindow(page, "Services");
-      if ((await services.count()) === 0) await pressChord(page, "8");
-      await services.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      const services = await showServices(page);
       for (const { name, glyph } of opened) {
         const line = services
           .locator('[role="treeitem"][data-kind="datasource"]')

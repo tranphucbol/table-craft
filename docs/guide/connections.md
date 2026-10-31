@@ -15,7 +15,7 @@ or a `sqlite:` URL. **Copy as URL** in a data
 source's context menu copies its URL without the password.
 
 A PostgreSQL, MySQL, Oracle or SQL Server data source can go through an **SSH tunnel**: tick _Use SSH tunnel_ in the
-SSH/SSL section and give the bastion's host, port and user, then sign in with a password, a private
+SSH/SSL section, and in the rows that appear give the bastion's host, port and user, then sign in with a password, a private
 key (OpenSSH or PEM, with its passphrase if it has one) or the running SSH agent. The host and port
 above stay the database's address as the bastion sees it. The SSH password and passphrase take save
 modes like the database password, and **Test Connection** reports each hop. The first time a bastion

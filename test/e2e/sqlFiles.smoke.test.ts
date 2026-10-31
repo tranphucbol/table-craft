@@ -42,6 +42,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("041");
@@ -172,7 +173,10 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
   async function launch(datasource: Datasource, userDataDir?: string): Promise<RunningApp> {
     running = await launchApp(datasource, userDataDir === undefined ? {} : { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
-    if (userDataDir === undefined) await waitUntilReady(running.page);
+    if (userDataDir === undefined) {
+      await waitUntilReady(running.page);
+      await showServices(running.page);
+    }
     return running;
   }
 
@@ -418,6 +422,7 @@ describe.runIf(SMOKE_ENABLED)("SQL files live test", () => {
     running = await launchApp(datasource, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
+    await showServices(running.page);
     const current = running;
     const { page } = current;
     const path = file(folder(), "broken.sql", BROKEN_SCRIPT);

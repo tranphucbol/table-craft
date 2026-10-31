@@ -30,6 +30,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("003");
@@ -69,6 +70,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
       const node = toolWindow(page, "Database").locator('[role="treeitem"][data-kind="datasource"]');
       expect(await node.getAttribute("data-state")).toBe("connected");
       expect(await editorTabs(page).allTextContents()).toEqual(["console [postgres]"]);
+      await showServices(page);
       expect(await serviceSessions(page).count()).toBe(1);
       await captureWindow(page, "shell-default");
     },
@@ -80,7 +82,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
     async () => {
       const page = await launchPostgres();
       const database = toolWindow(page, "Database");
-      const services = toolWindow(page, "Services");
+      const services = await showServices(page);
 
       await pressChord(page, "1");
       await expect.poll(() => database.count()).toBe(0);
@@ -162,6 +164,7 @@ describe.runIf(DATABASES_ENABLED)("shell live test", () => {
       await editorTabs(page).filter({ hasText: "console_1 " }).click();
       await expect.poll(() => gridText(page)).toEqual(customers);
 
+      await showServices(page);
       const consoles = serviceSessions(page);
       expect(await consoles.count()).toBe(2);
       for (const text of await consoles.allTextContents()) expect(text).toMatch(/idle.*\d+ ms|idle.*\d+(\.\d+)? s/);

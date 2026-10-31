@@ -19,7 +19,7 @@ export function AgentAccessBadge({ datasource }: { readonly datasource: Datasour
       data-access={access}
       title={`AI agents: ${AGENT_ACCESS_LABELS[access]}`}
       className={cn(
-        "shrink-0 rounded-sm border px-0.5 font-mono font-semibold",
+        "shrink-0 rounded-sm border px-0.5 font-ui font-semibold",
         CAP_CENTRED,
         access === "read" ? "border-line text-ink-muted" : "border-warning text-warning",
       )}

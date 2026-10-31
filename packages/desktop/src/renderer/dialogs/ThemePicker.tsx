@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { BUNDLED_THEMES, type ColorTokens } from "@table-craft/desktop/appearance/themes.js";
+import { BUILT_IN_THEMES, BUNDLED_THEMES, type ColorTokens } from "@table-craft/desktop/appearance/themes.js";
 import { TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
   chosenOption,
@@ -22,8 +22,22 @@ const SWATCH_TOKENS: readonly (keyof Pick<ColorTokens, "canvas" | "panel" | "ink
   "accent",
 ];
 const SCHEME_LABEL = { dark: "Dark", light: "Light" } as const;
+const FOLLOW_SYSTEM: ThemeChoice = "system";
 
-function Swatch({ colors }: { readonly colors: ColorTokens | null }) {
+/** Follow system's swatch: Light's canvas beside Dark's, the two it switches between (plan 130 decision 20). */
+const FOLLOW_SYSTEM_HALVES = [BUILT_IN_THEMES.light.colors.canvas, BUILT_IN_THEMES.dark.colors.canvas] as const;
+
+function Swatch({ option }: { readonly option: ThemePickerOption }) {
+  const { colors } = option;
+  if (option.choice === FOLLOW_SYSTEM) {
+    return (
+      <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
+        {FOLLOW_SYSTEM_HALVES.map((color) => (
+          <span key={color} className="h-2.5 w-5" style={{ backgroundColor: color }} />
+        ))}
+      </span>
+    );
+  }
   if (colors === null) return <span aria-hidden className="w-10 shrink-0" />;
   return (
     <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
@@ -87,7 +101,7 @@ function Row({
       <span className="flex size-icon shrink-0 items-center">
         {chosen ? <CurrentIcon aria-label="chosen" className="size-icon text-accent" /> : null}
       </span>
-      <Swatch colors={option.colors} />
+      <Swatch option={option} />
       <span className="min-w-0 flex-1 truncate">{option.name}</span>
       {broken ? (
         <span className="shrink-0 text-danger">{plural(option.errors?.length ?? 0, "error")}</span>
@@ -236,7 +250,7 @@ export function ThemePicker() {
         className="flex h-row w-full max-w-popover items-center gap-cell rounded border border-line bg-canvas px-cell text-left hover:bg-raised"
         onClick={() => setOpen((value) => !value)}
       >
-        <Swatch colors={chosen.colors} />
+        <Swatch option={chosen} />
         <span className="min-w-0 flex-1 truncate">{chosen.name}</span>
         {chosen.colorScheme === null ? null : (
           <span className="shrink-0 border border-line px-1 text-ink-muted">{SCHEME_LABEL[chosen.colorScheme]}</span>

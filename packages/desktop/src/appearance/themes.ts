@@ -105,6 +105,8 @@ export interface DensityTokens {
   readonly dialogHeightPx: number;
   /** The list or page list inside them. */
   readonly dialogListWidthPx: number;
+  /** A form label's widest; a longer one wraps rather than pushing its field over. */
+  readonly dialogLabelMaxPx: number;
   /** Quick Documentation's popover, at most this big; its columns list scrolls. */
   readonly popoverWidthPx: number;
   readonly popoverHeightPx: number;
@@ -173,7 +175,7 @@ export const DARK_COLORS: ColorTokens = {
   searchMatch: "#6b5a1e",
   keyIcon: "#d9a343",
   warning: "#e0a84a",
-  statementFlash: "#3d4a2e",
+  statementFlash: "#2c3427",
   planBar: "#4f80c9",
   analysedBanner: "#4a3d22",
   datasource: {
@@ -331,9 +333,10 @@ export const COMFORTABLE_DENSITY: DensityTokens = {
   statusBarHeightPx: 24,
   iconPx: 16,
   paletteWidthPx: 576,
-  dialogWidthPx: 880,
-  dialogHeightPx: 580,
+  dialogWidthPx: 1040,
+  dialogHeightPx: 720,
   dialogListWidthPx: 240,
+  dialogLabelMaxPx: 200,
   popoverWidthPx: 480,
   popoverHeightPx: 360,
   generatorWidthPx: 640,

@@ -54,9 +54,9 @@ function ActivityRow({ entry, now }: { readonly entry: McpActivityView; readonly
     >
       <td className={cn(CELL, "text-ink-muted")}>{historyTime(entry.at, now)}</td>
       <td className={CELL}>{entry.clientName}</td>
-      <td className={cn(CELL, "font-mono")}>{entry.tool}</td>
+      <td className={cn(CELL, "font-ui")}>{entry.tool}</td>
       <td className={CELL}>{datasource ?? "—"}</td>
-      <td className={cn(CELL, "max-w-64 truncate font-mono")}>
+      <td className={cn(CELL, "max-w-64 truncate font-grid")}>
         {entry.target === null ? "—" : firstLine(entry.target)}
       </td>
       <td className={cn(CELL, "text-right tabular-nums")}>{entry.rowCount === null ? "—" : String(entry.rowCount)}</td>

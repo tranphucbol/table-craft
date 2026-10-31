@@ -279,11 +279,11 @@ describe.runIf(DATABASES_ENABLED)("redis console results live test", () => {
       const page = await launch(REDIS);
       await query(page, `ZRANGE ${ZSET_KEY} 0 -1`, ["member"]);
       await expect
-        .poll(() => readOnly(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .poll(() => readOnly(page).getAttribute("aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
         .toContain("without its scores");
       await query(page, `LRANGE ${LIST_KEY} 0 1`, ["#", "value"]);
       await expect
-        .poll(() => readOnly(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .poll(() => readOnly(page).getAttribute("aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
         .toContain("not one whole key");
       expect(await button(page, "Open Key").count()).toBe(1);
       await captureWindow(page, "08-partial-readonly");
@@ -336,7 +336,7 @@ describe.runIf(DATABASES_ENABLED)("redis console results live test", () => {
 
       await query(page, `HGETALL ${HASH_KEY}`, ["field", "value"]);
       await expect
-        .poll(() => readOnly(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .poll(() => readOnly(page).getAttribute("aria-label"), { timeout: LAUNCH_TIMEOUT_MS })
         .toContain("the datasource is read-only");
       expect(await button(page, "Add Row").count()).toBe(0);
       await captureWindow(page, "10-readonly");

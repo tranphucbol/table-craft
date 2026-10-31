@@ -27,6 +27,7 @@ import {
   toolWindow,
   waitUntilReady,
   chooseOption,
+  showServices,
 } from "../e2e/harness.js";
 import { stubSaveDialog } from "../e2e/workflows.js";
 import { clickVisibly, pause, pointAt, pressVisibly, typeSlowly } from "./pace.js";
@@ -240,8 +241,6 @@ mediaSuite("README media", () => {
     setup: async ({ page }) => {
       await connect(page, SHOP, PASSWORD);
       await openConsole(page, SHOP);
-      // The grid is the subject; Services would take a third of its height.
-      await toolWindow(page, "Services").getByRole("button", { name: "Hide Services" }).click();
       await setConsoleText(page, "SELECT * FROM order_items");
     },
     run: async ({ app, page }) => {
@@ -338,6 +337,7 @@ mediaSuite("README media", () => {
     setup: async ({ page }) => {
       await connect(page, SHOP, PASSWORD);
       await openConsole(page, SHOP);
+      await showServices(page);
       for (const sql of [
         "SELECT * FROM customer_revenue ORDER BY revenue DESC LIMIT 5",
         "SELECT status, count(*) FROM orders GROUP BY status",

@@ -8,7 +8,7 @@ import {
 } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
-const INPUT_CLASS = "h-row min-w-0 flex-1 rounded border bg-canvas px-cell font-mono text-ink outline-none";
+const INPUT_CLASS = "h-row min-w-0 flex-1 rounded border bg-canvas px-cell font-grid text-ink outline-none";
 
 function Field({
   tabId,

@@ -63,7 +63,7 @@ function Row({ item, selected, onRun }: { item: SearchItem; selected: boolean; o
       className={cn(
         "flex h-row cursor-default items-center gap-gap rounded px-gap",
         selected && "bg-selection",
-        !item.enabled && "text-ink-muted opacity-60",
+        !item.enabled && "text-ink-muted",
       )}
       // Keeps focus in the input, so typing continues after a click on a row.
       onMouseDown={(event) => event.preventDefault()}

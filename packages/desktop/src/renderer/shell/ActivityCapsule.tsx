@@ -1,27 +1,20 @@
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { useActionAvailable } from "@table-craft/desktop/renderer/actions/index.js";
 import { activityOf } from "@table-craft/desktop/renderer/model/activity.js";
-import { formatDuration } from "@table-craft/desktop/renderer/model/format.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { NO_EXECUTIONS, useExecutions } from "@table-craft/desktop/renderer/state/executions.js";
 import { activeTab, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
-import { SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
-import { useClock } from "@table-craft/desktop/renderer/ui/useClock.js";
+import { Elapsed } from "@table-craft/desktop/renderer/ui/Elapsed.js";
 
 const CAPSULE_CLASS = "flex h-row shrink-0 items-center gap-1 rounded-full pr-0.5 pl-gap";
 const TRANSACTION_TEXT = "Tx open";
 const RUNNING_LABEL = "Running";
 
-function Elapsed({ startedAt }: { readonly startedAt: number }) {
-  const now = useClock();
-  return <span className="tabular-nums">{formatDuration(Math.max(0, now - startedAt))}</span>;
-}
-
 /**
- * The title bar's activity capsule (plan 127 decision 8): while the active console runs, its
- * elapsed time and Cancel; while it holds a transaction open, Commit and Rollback; otherwise
- * nothing, so the idle title bar keeps only Run.
+ * The title bar's activity capsule (plan 127 decision 8, plan 130 decision 1): while the active
+ * console runs, its elapsed time and Cancel, with no spinner of its own since Run already spins;
+ * while it holds a transaction open, Commit and Rollback; otherwise nothing.
  */
 export function ActivityCapsule() {
   const tabId = useTabs((state) => activeTab(state)?.id ?? "");
@@ -33,9 +26,8 @@ export function ActivityCapsule() {
   if (activity.kind === "running") {
     return (
       <div data-testid="activity-capsule" data-kind="running" className={`${CAPSULE_CLASS} bg-selection text-accent`}>
-        <span role="status" aria-label={RUNNING_LABEL} className="flex items-center gap-1">
-          <SpinnerIcon aria-hidden weight="bold" className="size-icon animate-spin" />
-          {activity.startedAt === null ? null : <Elapsed startedAt={activity.startedAt} />}
+        <span role="status" aria-label={RUNNING_LABEL} className="flex items-center">
+          {activity.startedAt === null ? RUNNING_LABEL : <Elapsed startedAt={activity.startedAt} />}
         </span>
         {canCancel ? <ActionButton actionId={ACTION_IDS.cancel} compact tone="danger" /> : null}
       </div>
