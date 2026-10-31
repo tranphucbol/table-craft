@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { menuActionIds, menuActionItems, menuFor, type MenuEntry } from "@table-craft/desktop/preload/menu.js";
 import { ALL_ACTIONS } from "@table-craft/desktop/renderer/actions/allActions.js";
+import { MCP_NOTICE_ACTIONS } from "@table-craft/desktop/settings/mcpNotice.js";
 
 const ELECTRON_MOD = "CmdOrCtrl";
 
@@ -64,6 +65,12 @@ describe("application menu", () => {
     const registered = new Set(ALL_ACTIONS.map((action) => action.id));
 
     expect(menuActionIds().filter((id) => !registered.has(id))).toEqual([]);
+  });
+
+  it("givenMcpNoticeActions_whenComparedWithRegistry_thenBothExist", () => {
+    const registered = new Set(ALL_ACTIONS.map((action) => action.id));
+
+    expect(Object.values(MCP_NOTICE_ACTIONS).filter((id) => !registered.has(id))).toEqual([]);
   });
 
   it("givenMenuAccelerator_whenComparedWithAction_thenItShowsTheActionChord", () => {
