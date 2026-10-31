@@ -363,7 +363,8 @@ export const COMPACT_DENSITY: DensityTokens = {
   cellPaddingPx: 6,
   gapPx: 6,
   titleBarHeightPx: 32,
-  islandGapPx: 3,
+  // JetBrains' compact 3 px reads as a seam rather than a gap at 20 px rows.
+  islandGapPx: 4,
   islandRadiusPx: 8,
 };
 

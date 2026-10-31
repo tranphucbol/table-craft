@@ -15,7 +15,7 @@ changes live.
 The frame is derived, not a theme token. `appearance/islands.ts` steps `panel` toward white in a
 dark scheme and toward black in a light one until it holds JetBrains' 1.20:1 against `canvas`,
 stopping earlier where `ink` or `inkMuted` would fall below the theme's contrast level. Gap and
-radius are density tokens: 5 px and 10 px comfortable, 3 px and 8 px compact.
+radius are density tokens: 5 px and 10 px comfortable, 4 px and 8 px compact.
 
 Inside an island `--tc-panel` reads `--tc-canvas`; on the frame `--tc-panel` and `--tc-raised` read
 the frame and its hover colour. Components keep writing `bg-panel` and `bg-raised`.

@@ -1,7 +1,8 @@
 /**
  * Plan 132's live test: the editor and the tool windows drawn as islands on the window frame, in a
  * dark, a light and a ported theme and at both densities, and Window style switching to Classic
- * and back live. SQLite in memory, so it needs only a display and a fresh build:
+ * and back live; then the audit's fixes: an edge where a ported frame is capped, a coloured
+ * console's square tint frame, the gutters' hover and focus bar, and inward focus rings. SQLite in memory, so it needs only a display and a fresh build:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/132 bun run test:smoke:headless test/e2e/islands.smoke.test.ts
  */
@@ -15,9 +16,11 @@ import {
   launchApp,
   mainToolbar,
   newProfile,
+  openConsoleOn,
   pressChord,
   runAllButton,
   SCENARIO_TIMEOUT_MS,
+  seedDatasources,
   seedSettings,
   showServices,
   SMOKE_ENABLED,
@@ -40,15 +43,32 @@ const COMPACT_RADIUS = "8px";
 const ISLAND = "xpath=ancestor::div[contains(@class, 'rounded-island')][1]";
 const SAMPLE_QUERY = "SELECT 1 AS id, 'islands' AS style";
 const PORTED_THEME = "jetbrains-dark";
+/** Ported palettes whose frame stops short of 1.20:1 to keep their muted text readable. */
+const CAPPED_THEMES = [
+  { theme: "dracula-dark", evidence: "07-islands-capped-dark" },
+  { theme: "tokyonight-light", evidence: "08-islands-capped-light" },
+] as const;
+const TINTED = "Tinted";
+const TINT_FRAME = ".border-ds-red";
+const GUTTER = "[role=separator].w-island-gap";
+const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
 /** The few DOM members the evaluations touch; the e2e program is compiled without the DOM lib. */
 interface Styled {
   readonly ownerDocument: {
     readonly defaultView: {
-      getComputedStyle(element: Styled): {
+      getComputedStyle(
+        element: Styled,
+        pseudo?: string,
+      ): {
         readonly backgroundColor: string;
         readonly borderTopLeftRadius: string;
+        readonly borderBottomLeftRadius: string;
         readonly borderBottomWidth: string;
+        readonly borderTopColor: string;
+        readonly borderTopWidth: string;
+        readonly outlineStyle: string;
+        readonly outlineOffset: string;
         getPropertyValue(name: string): string;
       };
     };
@@ -70,6 +90,33 @@ async function lookOf(locator: Locator): Promise<Look> {
       bottomEdge: style.borderBottomWidth,
     };
   });
+}
+
+async function styleOf(
+  locator: Locator,
+  property: "borderTopColor" | "borderTopWidth" | "borderBottomLeftRadius" | "outlineStyle" | "outlineOffset",
+): Promise<string> {
+  return locator.evaluate(
+    (element: Styled, name) => element.ownerDocument.defaultView.getComputedStyle(element)[name],
+    property,
+  );
+}
+
+async function barOf(locator: Locator): Promise<string> {
+  return locator.evaluate(
+    (element: Styled) => element.ownerDocument.defaultView.getComputedStyle(element, "::after").backgroundColor,
+  );
+}
+
+/** A colour variable as the browser resolves it, `rgb(…)`, read off a probe element's background. */
+async function resolvedColor(page: Page, variable: string): Promise<string> {
+  return page.locator("html").evaluate((element: Styled & { style: { backgroundColor: string } }, name) => {
+    const before = element.style.backgroundColor;
+    element.style.backgroundColor = `var(${name})`;
+    const value = element.ownerDocument.defaultView.getComputedStyle(element).backgroundColor;
+    element.style.backgroundColor = before;
+    return value;
+  }, variable);
 }
 
 async function rootVariable(page: Page, name: string): Promise<string> {
@@ -156,7 +203,7 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
       const { page } = await launch({ theme: "dark", density: "compact" });
       await fillWindow(page);
 
-      expect(await rootVariable(page, "--tc-island-gap")).toBe("3px");
+      expect(await rootVariable(page, "--tc-island-gap")).toBe("4px");
       expect((await lookOf(toolWindow(page, "Database").locator(ISLAND))).radius).toBe(COMPACT_RADIUS);
       await captureWindow(page, "03-islands-compact");
     },
@@ -199,6 +246,93 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
       await settingsDialog(page).getByRole("tab", { name: "Appearance", exact: true }).click();
       await windowStyleChoice(page, "Islands").check();
       await expect.poll(() => rootVariable(page, "--tc-island-radius")).toBe(COMFORTABLE_RADIUS);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  for (const { theme, evidence } of CAPPED_THEMES) {
+    it(
+      `givenCappedFrame_${theme}_whenWindowOpens_thenIslandsDrawTheBorder`,
+      async () => {
+        const { page } = await launch({ theme });
+        await fillWindow(page);
+
+        const island = toolWindow(page, "Database").locator(ISLAND);
+        expect(await styleOf(island, "borderTopWidth")).toBe("1px");
+        expect(await styleOf(island, "borderTopColor")).toBe(await resolvedColor(page, "--tc-border"));
+        await captureWindow(page, evidence);
+      },
+      SCENARIO_TIMEOUT_MS,
+    );
+  }
+
+  it(
+    "givenBuiltInDark_whenWindowOpens_thenIslandEdgeIsItsOwnColour",
+    async () => {
+      const { page } = await launch({ theme: "dark" });
+
+      const island = toolWindow(page, "Database").locator(ISLAND);
+      expect(await styleOf(island, "borderTopColor")).toBe(DARK_CANVAS);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenColouredDatasource_whenConsoleOpens_thenTintFrameStaysSquareAboveResults",
+    async () => {
+      const userDataDir = newProfile();
+      seedSettings(userDataDir, { version: 1, appearance: { theme: "dark" } });
+      seedDatasources(userDataDir, [
+        { id: "tinted", name: TINTED, pluginId: "sqlite", color: "red", config: { path: ":memory:" } },
+      ]);
+      running = await launchApp(null, { userDataDir });
+      const { page } = running;
+      await setWindowSize(running.app, EVIDENCE_WINDOW);
+      await toolWindow(page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await openConsoleOn(page, TINTED);
+      await waitUntilReady(page);
+      await fillWindow(page);
+
+      expect(await styleOf(page.locator(TINT_FRAME).first(), "borderBottomLeftRadius")).toBe("0px");
+      await captureWindow(page, "09-tinted-console");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenGutter_whenHoveredThenFocusedFromKeyboard_thenCentredBarShows",
+    async () => {
+      const { page } = await launch({ theme: "dark" });
+      await fillWindow(page);
+      const gutter = page.locator(GUTTER).first();
+
+      expect(await barOf(gutter)).toBe(TRANSPARENT);
+      await gutter.hover();
+      await expect.poll(() => barOf(gutter)).not.toBe(TRANSPARENT);
+      await captureWindow(page, "10-gutter-hover");
+
+      await page.mouse.move(0, 0);
+      await page.keyboard.press("Shift");
+      await gutter.focus();
+      await expect.poll(() => barOf(gutter)).toBe(await resolvedColor(page, "--tc-accent"));
+      await captureWindow(page, "11-gutter-focus");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenEditorTab_whenFocusedFromKeyboard_thenRingDrawsInsideTheIsland",
+    async () => {
+      const { page } = await launch({ theme: "dark" });
+      await fillWindow(page);
+      const tab = page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab").first();
+
+      await page.keyboard.press("Shift");
+      await tab.focus();
+      const strip = tab.locator("xpath=..");
+      await expect.poll(() => styleOf(strip, "outlineStyle")).toBe("solid");
+      expect(await styleOf(strip, "outlineOffset")).toBe("-2px");
+      await captureWindow(page, "12-tab-focus");
     },
     SCENARIO_TIMEOUT_MS,
   );

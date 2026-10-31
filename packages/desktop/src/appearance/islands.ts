@@ -22,6 +22,11 @@ export interface FrameColors {
   readonly frame: string;
   /** A hovered or pressed button on the frame. */
   readonly frameRaised: string;
+  /**
+   * The line around an island: `border` where the frame stops short of `ISLAND_MIN_CONTRAST` to
+   * keep text readable, so the island does not melt into it; `canvas`, the island's own colour, elsewhere.
+   */
+  readonly islandEdge: string;
 }
 
 const WHITE = "#ffffff";
@@ -81,7 +86,8 @@ export function frameColors({ colors, colorScheme, contrast }: FrameSource): Fra
     contrastRatio(colors.inkMuted, surface) >= requiredContrast(contrast, "text");
   const frame = stepAway(colors.panel, colors.canvas, toward, ISLAND_MIN_CONTRAST, readable);
   const frameRaised = stepAway(frame, frame, toward, contrastRatio(colors.raised, colors.panel), readable);
-  return { frame, frameRaised };
+  const islandEdge = contrastRatio(frame, colors.canvas) >= ISLAND_MIN_CONTRAST ? colors.canvas : colors.border;
+  return { frame, frameRaised, islandEdge };
 }
 
 /** What the window paints before and behind the renderer. */

@@ -2405,7 +2405,7 @@ The page size and Fetch All limit travel with each request (see Renderer to engi
 
 The Settings dialog (`⌘,`; the macOS app menu's Settings…, File → Settings… elsewhere) has four
 pages: Appearance (theme, Reload Themes, Open Themes Folder, density, UI font, and under Window,
-Use system title bar with "Takes effect after restart." and a Restart Now button, `app.relaunch`,
+Use system title bar with "The title bar changes after a restart." and a Restart Now button, `app.relaunch`,
 shown while the choice differs from the running window; it asks to close dirty tabs first, as Quit
 does, then relaunches), Editor (editor
 font, the zoom chords, and under Running, query parameters and the statement timeout) and Data Editor (grid font, NULL text, Group digits, page size, Fetch All

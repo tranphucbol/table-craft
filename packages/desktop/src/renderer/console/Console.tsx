@@ -306,7 +306,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           style={PANEL_STYLE}
         >
           <TransactionBuilder consoleId={consoleId} />
-          <div className={cn("min-h-0 flex-1 overflow-hidden", tintFrame(color))}>
+          <div className={cn("min-h-0 flex-1 overflow-hidden", tintFrame(color, { roundBottom: false }))}>
             <Editor consoleId={consoleId} />
           </div>
           {notice?.consoleId === consoleId ? (

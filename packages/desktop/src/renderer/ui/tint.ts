@@ -31,10 +31,16 @@ const TINT_BORDER: Readonly<Record<DatasourceColor, string>> = {
   violet: "border-ds-violet",
 };
 
+export interface TintFrameOptions {
+  /** False when something sits below the frame inside the island, as a console's results do. */
+  readonly roundBottom?: boolean;
+}
+
 /**
- * The frame around a coloured datasource's console or view. It always meets the bottom of the
- * editor's island, so it rounds there to the island's radius, which is zero in classic (decision 141).
+ * The frame around a coloured datasource's console or view. Where it meets the bottom of the
+ * editor's island it rounds to the island's radius, which is zero in classic (decision 141).
  */
-export function tintFrame(color: DatasourceColor | null): string | null {
-  return color === null ? null : `border-2 rounded-b-island ${TINT_BORDER[color]}`;
+export function tintFrame(color: DatasourceColor | null, { roundBottom = true }: TintFrameOptions = {}): string | null {
+  if (color === null) return null;
+  return roundBottom ? `border-2 rounded-b-island ${TINT_BORDER[color]}` : `border-2 ${TINT_BORDER[color]}`;
 }

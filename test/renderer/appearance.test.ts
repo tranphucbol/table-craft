@@ -134,12 +134,13 @@ describe("island variables", () => {
     expect(appearanceVariables(appearanceOf(withWindowStyle("islands"), theme, NO_PREFERENCE))).toMatchObject({
       "--tc-frame": frame.frame,
       "--tc-frame-raised": frame.frameRaised,
+      "--tc-island-edge": frame.islandEdge,
       "--tc-island-gap": "5px",
       "--tc-island-radius": "10px",
     });
     expect(
       appearanceVariables(appearanceOf(withWindowStyle("islands", "compact"), theme, NO_PREFERENCE)),
-    ).toMatchObject({ "--tc-island-gap": "3px", "--tc-island-radius": "8px" });
+    ).toMatchObject({ "--tc-island-gap": "4px", "--tc-island-radius": "8px" });
   });
 
   it("givenClassic_whenVariablesBuilt_thenIslandRadiusIsZero", () => {
