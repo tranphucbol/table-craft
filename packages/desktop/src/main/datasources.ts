@@ -76,6 +76,7 @@ const datasourceSchema = z.strictObject({
     .max(STATEMENT_TIMEOUT_SECONDS_RANGE.max)
     .optional(),
   enforceTimeoutOnServer: z.literal(true).optional(),
+  loadKeysOnDemand: z.literal(true).optional(),
   comment: z.string(),
   config: z.record(z.string(), configValue),
   secretModes: z.record(z.string(), z.enum(SECRET_MODES)),
@@ -188,6 +189,7 @@ export function toDatasource(
     ...(draft.keepAliveSeconds === undefined ? {} : { keepAliveSeconds: draft.keepAliveSeconds }),
     ...(draft.statementTimeoutSeconds === undefined ? {} : { statementTimeoutSeconds: draft.statementTimeoutSeconds }),
     ...(draft.enforceTimeoutOnServer === true ? { enforceTimeoutOnServer: true } : {}),
+    ...(draft.loadKeysOnDemand === true ? { loadKeysOnDemand: true } : {}),
     comment: draft.comment,
     config,
     secretModes,

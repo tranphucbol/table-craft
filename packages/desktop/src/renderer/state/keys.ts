@@ -31,9 +31,9 @@ export interface KeysState {
   readonly keyspaces: Readonly<Record<string, DatasourceKeyspace>>;
   /** Expands the datasource, connecting it first; the first listing also opens the configured database. */
   readonly expandDatasource: (datasourceId: string) => Promise<void>;
-  /** Expands the database, starting its scan when none has. */
+  /** Expands the database, starting its scan when none has, unless the datasource loads on demand. */
   readonly expandDatabase: (datasourceId: string, database: number) => Promise<void>;
-  /** Scans one more pass of up to 10,000 keys. */
+  /** Scans one more pass of up to 10,000 keys; on a database not loaded yet, its first pass. */
   readonly loadMore: (datasourceId: string, database: number) => Promise<void>;
   readonly expandFolder: (datasourceId: string, database: number, parent: KeyName) => Promise<void>;
   readonly loadChildren: (datasourceId: string, database: number, parent: KeyName, restart?: boolean) => Promise<void>;
@@ -65,6 +65,8 @@ export interface KeysDependencies {
   readonly collapse: (key: string) => void;
   /** The datasource's servers; empty unless its plugin declares `nodes`. */
   readonly nodes: (datasourceId: string) => Promise<readonly ServerNode[]>;
+  /** The datasource lists its databases but loads keys only when asked (decision 144). */
+  readonly loadsOnDemand: (datasourceId: string) => boolean;
 }
 
 function toEngineError(cause: unknown): EngineError {
@@ -216,11 +218,17 @@ export function createKeysStore(dependencies: KeysDependencies) {
       async expandDatabase(id, database) {
         expandDatabaseKeys(id, database);
         const keys = databaseOf(id, database);
-        if (keys.started) return;
+        if (keys.started || dependencies.loadsOnDemand(id)) return;
         await pass(id, database, true);
       },
 
       async loadMore(id, database) {
+        const unloaded = databaseOf(id, database);
+        if (!unloaded.started) {
+          if (unloaded.loading) return;
+          await pass(id, database, true);
+          return;
+        }
         if (keyspaceOf(id).features?.children === true) {
           await get().loadChildren(id, database, ROOT_KEY);
           return;
@@ -232,10 +240,16 @@ export function createKeysStore(dependencies: KeysDependencies) {
 
       async setFilter(id, database, filter) {
         if (keyspaceOf(id).features?.children === true) {
-          const previous = databaseOf(id, database).filter;
+          const { filter: previous, started } = databaseOf(id, database);
           updateDatabase(id, database, (keys) => ({ ...keys, filter: { ...filter, type: null } }));
           if (filter.mode === "loadedName") return;
-          if (previous.mode === filter.mode && previous.match === filter.match && previous.end === filter.end) return;
+          if (
+            started &&
+            previous.mode === filter.mode &&
+            previous.match === filter.match &&
+            previous.end === filter.end
+          )
+            return;
           await pass(id, database, true);
           return;
         }
@@ -490,4 +504,6 @@ export const useKeys = createKeysStore({
   expand: (keys) => useCatalog.getState().expandAll(keys),
   collapse: (key) => useCatalog.getState().setExpanded(key, false),
   nodes: async (id) => (declaresNodes(id) ? useServer.getState().loadNodes(id) : []),
+  loadsOnDemand: (id) =>
+    useDatasources.getState().datasources.find((datasource) => datasource.id === id)?.loadKeysOnDemand === true,
 });

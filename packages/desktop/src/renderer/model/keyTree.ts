@@ -154,6 +154,8 @@ export interface KeyLoadMoreNode extends KeyNodeBase {
   readonly estimate: number;
   readonly parent?: KeyName;
   readonly restart?: boolean;
+  /** The database loads on demand and has not loaded yet: the row starts its first pass. */
+  readonly unloaded?: true;
 }
 
 export interface ClusterNodesNode {
@@ -274,6 +276,8 @@ export interface KeyRowSink {
 export interface KeyTreeOptions {
   /** Whether empty databases other than the configured one show (Show Empty Databases). */
   readonly showEmpty: boolean;
+  /** The datasource loads keys only when asked (decision 144). */
+  readonly loadOnDemand: boolean;
 }
 
 export function keyDatabaseKey(sink: Pick<KeyRowSink, "keyOf">, database: number): string {
@@ -322,29 +326,40 @@ function databaseRows(
   keyspace: DatasourceKeyspace,
   summary: KeyDatabase,
   depth: number,
+  loadOnDemand: boolean,
 ): void {
   const base: KeyNodeBase = { datasourceId, path: [], database: summary.index };
   const keys = keyspace.byDatabase[summary.index] ?? UNSCANNED_KEYS;
+  const serverChildren = keyspace.features?.children === true;
   const node: KeyDatabaseNode = { ...base, kind: "keyDatabase", summary, keys };
   if (
-    !sink.push(
-      node,
-      depth,
-      keyDatabaseKey(sink, summary.index),
-      keyspace.features?.children === true ? "Keys" : databaseLabel(summary.index),
-      true,
-    )
+    !sink.push(node, depth, keyDatabaseKey(sink, summary.index), treeDatabaseLabel(summary.index, serverChildren), true)
   )
     return;
-  const filter: KeyFilterNode = {
-    ...base,
-    kind: "keyFilter",
-    filter: keys.filter,
-    serverChildren: keyspace.features?.children === true,
-  };
+  const filter: KeyFilterNode = { ...base, kind: "keyFilter", filter: keys.filter, serverChildren };
   sink.push(filter, depth + 1, sink.keyOf("keyFilter", summary.index), "", false);
-  if (keyspace.features?.children === true) {
-    childrenRows(sink, base, ROOT_KEY, keys, depth + 1, keyspace.delimiter);
+  const unloaded = loadOnDemand && !keys.started && !keys.loading;
+  const unloadedRow = () => {
+    const more: KeyLoadMoreNode = { ...base, kind: "keyLoadMore", loaded: 0, estimate: summary.keys, unloaded: true };
+    sink.push(
+      more,
+      depth + 1,
+      sink.keyOf("keyLoadMore", summary.index),
+      unloadedKeysText(summary.keys, serverChildren),
+      false,
+    );
+  };
+  if (serverChildren) {
+    if (!unloaded) {
+      childrenRows(sink, base, ROOT_KEY, keys, depth + 1, keyspace.delimiter);
+      return;
+    }
+    for (const key of keys.keys) {
+      const identity = keyIdentity(key);
+      const node: KeyEntryNode = { ...base, kind: "keyEntry", key, info: keys.info[identity] ?? null, serverChildren };
+      sink.push(node, depth + 1, sink.keyOf("keyEntry", base.database, identity), key.text, false);
+    }
+    unloadedRow();
     return;
   }
   if (keys.error !== null) {
@@ -352,7 +367,9 @@ function databaseRows(
     sink.push(error, depth + 1, sink.keyOf("keyError", summary.index), keys.error.message, false);
   }
   folderRows(sink, base, groupKeys(keys.keys, keyspace.delimiter), keys, depth + 1);
-  if (keys.loading || !keys.started) {
+  if (unloaded) {
+    unloadedRow();
+  } else if (keys.loading || !keys.started) {
     const loading: LoadingNode = { kind: "loading", datasourceId };
     sink.push(loading, depth + 1, sink.keyOf("keyLoading", summary.index), "", false);
   } else if (keys.cursor !== null) {
@@ -489,6 +506,20 @@ export function loadMoreText(node: Pick<KeyLoadMoreNode, "loaded" | "estimate">)
   return `Scanned ${node.loaded.toLocaleString("en-US")} of ~${node.estimate.toLocaleString("en-US")} · Load more`;
 }
 
+/** `Not scanned · ~48,213 keys · Scan`, or for a server-listed keyspace `Not listed · ~1,204 keys · List`. */
+export function unloadedKeysText(estimate: number, serverChildren: boolean): string {
+  const keys = `~${estimate.toLocaleString("en-US")} ${estimate === 1 ? "key" : "keys"}`;
+  return serverChildren ? `Not listed · ${keys} · List` : `Not scanned · ${keys} · Scan`;
+}
+
+/** The label of a server-listed keyspace's one database, which has no number worth showing. */
+export const KEYS_DATABASE_LABEL = "Keys";
+
+/** The database as the tree labels it: `db0`, or `Keys` for a server-listed keyspace. */
+export function treeDatabaseLabel(database: number, serverChildren: boolean): string {
+  return serverChildren ? KEYS_DATABASE_LABEL : databaseLabel(database);
+}
+
 /**
  * The status bar's keyspace part: `db0 · 48,213 keys`, or for a cluster `cluster · 3 primaries`;
  * null before the databases are listed.
@@ -531,7 +562,7 @@ export function keyspaceRows(
     return;
   }
   for (const summary of shownDatabases(keyspace.databases, options.showEmpty)) {
-    databaseRows(sink, datasourceId, keyspace, summary, depth);
+    databaseRows(sink, datasourceId, keyspace, summary, depth, options.loadOnDemand);
   }
   if (keyspace.nodes.length <= 1) return;
   const group: ClusterNodesNode = { kind: "clusterNodes", datasourceId, path: [], count: keyspace.nodes.length };
