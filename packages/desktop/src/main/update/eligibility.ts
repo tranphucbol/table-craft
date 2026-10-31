@@ -12,6 +12,7 @@ export const INELIGIBLE_REASONS = [
   "translocated",
   "readOnlyVolume",
   "notWritable",
+  "appManagement",
   "notAppImage",
 ] as const;
 export type IneligibleReason = (typeof INELIGIBLE_REASONS)[number];
@@ -32,6 +33,11 @@ export interface InstallFacts {
   /** `$APPIMAGE`, set by the AppImage runtime to the image's own path; undefined otherwise. */
   readonly appImagePath: string | undefined;
   readonly writable: (directory: string) => boolean;
+  /**
+   * Whether TableCraft may change its own `.app`. macOS App Management can refuse that to an
+   * ad-hoc signed app whose folder is writable, and otherwise only the swap script finds out.
+   */
+  readonly bundleModifiable: (bundlePath: string) => boolean;
 }
 
 export type Eligibility =
@@ -59,6 +65,7 @@ function macTarget(facts: InstallFacts): Eligibility {
   if (bundlePath.includes(TRANSLOCATION_SEGMENT)) return { eligible: false, reason: "translocated" };
   if (bundlePath.startsWith(VOLUMES_PREFIX)) return { eligible: false, reason: "readOnlyVolume" };
   if (!facts.writable(dirname(bundlePath))) return { eligible: false, reason: "notWritable" };
+  if (!facts.bundleModifiable(bundlePath)) return { eligible: false, reason: "appManagement" };
   return { eligible: true, target: { kind: "macBundle", bundlePath } };
 }
 
@@ -81,6 +88,10 @@ export function eligibility(facts: InstallFacts, manifest: UpdateManifest, asset
   return { eligible: false, reason: "noAsset" };
 }
 
+/** Shared with the swap failure, which ends the same way when the permission went missing after the check. */
+export const APP_MANAGEMENT_HINT =
+  "macOS does not allow TableCraft to replace itself. Turn TableCraft on in System Settings → Privacy & Security → App Management and check again, or download and install the release by hand.";
+
 /** What the popover says; each names what to do instead. */
 export const INELIGIBLE_MESSAGES: Readonly<Record<IneligibleReason, string>> = {
   unpackaged: "This is a development build; it cannot replace itself. Download the release instead.",
@@ -91,5 +102,6 @@ export const INELIGIBLE_MESSAGES: Readonly<Record<IneligibleReason, string>> = {
   readOnlyVolume:
     "TableCraft is running from a disk image. Drag it to Applications, open it from there, and check again.",
   notWritable: "TableCraft cannot write to the folder it is installed in. Download and install the release by hand.",
+  appManagement: APP_MANAGEMENT_HINT,
   notAppImage: "Only the AppImage updates itself. Install the release from the release page.",
 };
