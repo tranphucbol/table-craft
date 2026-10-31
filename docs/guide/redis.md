@@ -19,7 +19,9 @@ to one of them. A Sentinel setup cannot go through an SSH tunnel either.
 - **Key tree.** Each database lists its keys in folders by `:`, with a type badge and TTL. The tree
   scans 10,000 keys at a time behind a **Load more** row, never with `KEYS`; the filter row takes a
   `MATCH` pattern and a type. **Go to Key…** opens a key by name, and Search Everywhere has a Keys
-  tab.
+  tab. On a large production server, tick **Load keys only when asked** under Options in the Data
+  Sources dialog: the tree then lists databases and their key counts, and a database shows
+  `Not scanned · ~48,213 keys · Scan` until you choose Scan, filter or Load more.
 - **Key tabs.** A hash, list, set, sorted set or stream opens in the result grid with its own
   columns; a string opens in a value editor that reads it as Text, JSON, Hex, Base64, MessagePack or
   gzip. The header counts the TTL down and shows length, memory and encoding. Edit cells, add and

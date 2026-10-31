@@ -42,6 +42,7 @@ function fixture(children: (request: KeyChildrenRequest) => Promise<KeyChildrenP
     expand: vi.fn(),
     collapse: vi.fn(),
     nodes: () => Promise.resolve([]),
+    loadsOnDemand: () => false,
   });
   return { store, call };
 }

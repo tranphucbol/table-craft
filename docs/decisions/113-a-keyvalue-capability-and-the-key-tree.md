@@ -15,7 +15,8 @@ a key tree instead of the catalog tree; the two never mix in one datasource.
 - **Scanning, never `KEYS`.** The tree scans in batches of the datasource's SCAN batch and stops
   at 10,000 keys per pass with a `Scanned 10,000 of ~48,213 · Load more` row; the estimate is the
   server's key count. The cursor is opaque to the host; in a cluster the plugin encodes the
-  primary it is scanning. A filter row takes a `MATCH` glob and a type and rescans.
+  primary it is scanning. A filter row takes a `MATCH` glob and a type and rescans. A datasource
+  set to load keys only when asked starts no pass until the user does (decision 144).
 - **Folders** come from the delimiter the plugin reports (`:` by default), counted over loaded
   keys only. Types and TTLs are described for visible rows only, in batches.
 - **Key names are bytes.** A key crosses as `{ text, hex }`: `text` decodes UTF-8 with invalid

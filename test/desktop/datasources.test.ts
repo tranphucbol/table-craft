@@ -74,6 +74,31 @@ describe("datasource store", () => {
     });
   });
 
+  it("givenLoadKeysOnDemand_whenSaveAndLoad_thenRoundTrips", async () => {
+    const { files, store: first } = store();
+    const onDemand = { ...LOCAL_PG, loadKeysOnDemand: true as const };
+    await first.save([onDemand]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.datasources).toEqual([onDemand]);
+    expect(toDatasource(onDemand, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).toMatchObject({
+      loadKeysOnDemand: true,
+    });
+  });
+
+  it("givenFileWithoutLoadKeysOnDemand_whenLoad_thenAbsent", async () => {
+    const { files, store: first } = store();
+    await first.save([LOCAL_PG]);
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.datasources[0]).not.toHaveProperty("loadKeysOnDemand");
+    expect(toDatasource({ ...LOCAL_PG }, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).not.toHaveProperty(
+      "loadKeysOnDemand",
+    );
+  });
+
   it("givenAskReads_whenSavedAndReloaded_thenKept", async () => {
     const { files, store: first } = store();
     const asking = { ...LOCAL_PG, agentAccess: "askReads" as const };

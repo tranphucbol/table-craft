@@ -67,6 +67,8 @@ export interface SavedDatasource {
   readonly comment?: string;
   readonly keepAliveSeconds?: number;
   readonly statementTimeoutSeconds?: number;
+  /** Plan 135's key tree that loads keys only when asked; absent loads on open. */
+  readonly loadKeysOnDemand?: true;
   /** Plans 117 and 120's per-datasource MCP access; absent is off. */
   readonly agentAccess?: "off" | "askReads" | "read" | "ask";
   /** Plan 118's remembered product, a manifest brand id such as `tidb`. */
