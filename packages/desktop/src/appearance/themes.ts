@@ -384,7 +384,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   fonts: DEFAULT_FONTS,
   density: COMFORTABLE_DENSITY,
   motion: MOTION.full,
-  windowStyle: "classic",
+  windowStyle: "islands",
   frame: frameColors(BUILT_IN_THEMES.dark),
 };
 
