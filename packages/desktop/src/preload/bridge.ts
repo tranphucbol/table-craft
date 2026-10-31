@@ -172,8 +172,14 @@ export interface ConnectionField {
   readonly options?: readonly { readonly value: string; readonly label: string }[] | undefined;
   readonly group?: "general" | "advanced" | undefined;
   readonly secret?: boolean | undefined;
-  /** Drawn only while the named select or checkbox holds `equals` (plan 058). */
-  readonly visibleWhen?: { readonly key: string; readonly equals: string | boolean } | undefined;
+  /** Drawn only while the named select or checkbox holds `equals`, or one of them (plans 058, 133). */
+  readonly visibleWhen?: { readonly key: string; readonly equals: string | boolean | readonly string[] } | undefined;
+}
+
+/** Whether `value` satisfies a `visibleWhen`'s `equals`; the form and main share this rule. */
+export function visibleWhenHolds(equals: string | boolean | readonly string[], value: unknown): boolean {
+  if (typeof equals === "string" || typeof equals === "boolean") return value === equals;
+  return typeof value === "string" && equals.includes(value);
 }
 
 export type ConfigValue = string | number | boolean;
