@@ -8,7 +8,11 @@ Listing, cancelling and terminating a server's sessions is the `sessions` capabi
 `sql` and `schemaTree`, because the engine lists on its introspection session, which only a
 `schemaTree` plugin opens. A plugin that declares it gives every `Session` a `sessions` monitor and
 a `serverSessionId`, the server's id of that connection, and, where ids repeat across a cluster's
-servers (TiDB before Global Kill), a `serverInstance` naming the server it landed on.
+servers, a way to name the server it landed on: a `serverInstance` when the plugin knows it for
+free, or a `findServerInstance()` the host asks on demand when finding it costs a round trip (TiDB
+before Global Kill, plugin API 1.9.0). The MySQL plugin does not look at connect:
+`CLUSTER_PROCESSLIST` asks every TiDB server, and a cluster with one silent server held each
+connect for 40 s (plan 131).
 
 - `SessionMonitor.list()` returns a `SessionListing`: typed `ServerSession` rows (`id`, `instance`,
   `state` of `active | idle | idleInTransaction | blocked | other` with the server's `rawState`,
@@ -28,7 +32,10 @@ servers (TiDB before Global Kill), a `serverInstance` naming the server it lande
   runs a terminate only on a connection that has reached the row's instance. **SQLite** does not
   declare it.
 - The engine tags the rows that are its own sessions with their engine session id, by
-  `serverSessionId` and, when the session has one, `serverInstance`, never by application name. It refuses cancel and terminate on a read-only data
+  `serverSessionId` and, when the session knows it, its instance, never by application name. It
+  calls `findServerInstance` only for a session whose id the listing shows on more than one
+  instance, only while nothing runs on it and no transaction is open, and remembers the answer
+  for that connection; without an answer it matches by id alone. It refuses cancel and terminate on a read-only data
   source. The request log records the session id and the data source, never the statement or the
   query text.
 - The renderer asks before a terminate and shows the statement. On a data source coloured red the
