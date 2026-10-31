@@ -10,7 +10,7 @@
 import type { Locator, Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
-import { ETCD_CONFIG, TIDB_CONFIG } from "../support/databases.js";
+import { ETCD_CONFIG, MSSQL_CONFIG, ORACLE_CONFIG, TIDB_CONFIG } from "../support/databases.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
   answerSecretPrompt,
@@ -64,16 +64,28 @@ const TIDB: SavedDatasource = {
   shownNamespaces: [TIDB_CONFIG.database],
   ...(TIDB_PASSWORD === "" ? {} : { secretModes: { password: "untilRestart" } }),
 };
-const { password: _etcdPassword, ...ETCD_PLAIN } = ETCD_CONFIG;
-/** Saved and never connected: the logo comes from the plugin's manifest, so no etcd server is needed. */
-const ETCD: SavedDatasource = {
-  id: "config",
-  name: "config",
-  pluginId: "etcd",
-  config: ETCD_PLAIN,
-  secretModes: { password: "never" },
-};
-const ETCD_GLYPH = "etcd";
+interface LogoRow {
+  readonly saved: SavedDatasource;
+  readonly glyph: string;
+  /** How the kind picker's button for its plugin starts. */
+  readonly kind: RegExp;
+}
+
+function neverConnected(
+  id: string,
+  pluginId: string,
+  config: Readonly<Record<string, string | number | boolean>>,
+): SavedDatasource {
+  const { password: _password, ...plain } = config;
+  return { id, name: id, pluginId, config: plain, secretModes: { password: "never" } };
+}
+
+/** Saved and never connected: a logo comes from the plugin's manifest, so no server is needed. */
+const LOGO_ROWS: readonly LogoRow[] = [
+  { saved: neverConnected("config", "etcd", ETCD_CONFIG), glyph: "etcd", kind: /^etcd/ },
+  { saved: neverConnected("billing", "oracle", ORACLE_CONFIG), glyph: "oracle", kind: /^Oracle/ },
+  { saved: neverConnected("payroll", "mssql", MSSQL_CONFIG), glyph: "microsoftsqlserver", kind: /^SQL Server/ },
+];
 const SEED = [
   "DROP TABLE IF EXISTS orders",
   "DROP TABLE IF EXISTS customers",
@@ -262,27 +274,35 @@ describe.runIf(DATABASES_ENABLED)("plan 130 UI fixes live test", () => {
   );
 
   it(
-    "givenSavedEtcd_whenLaunched_thenTheTreeAndTheDialogDrawTheEtcdLogo",
+    "givenSavedEtcdOracleAndSqlServer_whenLaunched_thenTheTreeAndTheDialogDrawTheirLogos",
     async () => {
       const profile = newProfile();
-      seedDatasources(profile, [ETCD]);
+      seedDatasources(
+        profile,
+        LOGO_ROWS.map((row) => row.saved),
+      );
       const page = await launch(profile);
 
-      const glyph = treeNode(page, ETCD.name).locator("[data-glyph]").first();
-      await expect.poll(() => glyph.getAttribute("data-glyph"), { timeout: LAUNCH_TIMEOUT_MS }).toBe(ETCD_GLYPH);
-      await captureWindow(page, "15-etcd-tree");
+      for (const row of LOGO_ROWS) {
+        const glyph = treeNode(page, row.saved.name).locator("[data-glyph]").first();
+        await expect.poll(() => glyph.getAttribute("data-glyph"), { timeout: LAUNCH_TIMEOUT_MS }).toBe(row.glyph);
+      }
+      await captureWindow(page, "15-logos-tree");
 
       await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
       const dialog = dataSourcesDialog(page);
-      const option = dialog
-        .getByRole("listbox", { name: "Data sources" })
-        .getByRole("option")
-        .filter({ has: page.getByText(ETCD.name, { exact: true }) });
-      await expect.poll(() => option.locator("[data-glyph]").getAttribute("data-glyph")).toBe(ETCD_GLYPH);
-      const kind = dialog.getByRole("list", { name: "Database kinds" }).getByRole("button", { name: /^etcd/ });
-      await expect.poll(() => kind.locator("[data-glyph]").getAttribute("data-glyph")).toBe(ETCD_GLYPH);
+      const kinds = dialog.getByRole("list", { name: "Database kinds" });
+      for (const row of LOGO_ROWS) {
+        const option = dialog
+          .getByRole("listbox", { name: "Data sources" })
+          .getByRole("option")
+          .filter({ has: page.getByText(row.saved.name, { exact: true }) });
+        await expect.poll(() => option.locator("[data-glyph]").getAttribute("data-glyph")).toBe(row.glyph);
+        const kind = kinds.getByRole("button", { name: row.kind });
+        await expect.poll(() => kind.locator("[data-glyph]").getAttribute("data-glyph")).toBe(row.glyph);
+      }
       await expect.poll(() => computed(dialog, "opacity")).toBe("1");
-      await captureWindow(page, "16-etcd-dialog");
+      await captureWindow(page, "16-logos-dialog");
     },
     SCENARIO_TIMEOUT_MS,
   );

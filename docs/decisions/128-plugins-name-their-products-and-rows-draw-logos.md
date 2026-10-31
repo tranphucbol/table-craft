@@ -21,7 +21,9 @@ Brand ids choose a glyph and a name, never behaviour; the UI still branches on c
 Simple Icons colour, moved toward the theme's ink just far enough to hold WCAG non-text contrast
 (3:1) on the canvas, panel, raised and selection surfaces (`appearance/brandInk.ts`). A failed row
 paints its logo `danger` and a missing plugin's `inkMuted`, so the state still outranks the brand.
-A brand without a bundled path (Oracle, SQL Server) draws the generic glyph in the accent.
+A brand without a bundled path draws the generic glyph in the accent. Oracle and SQL Server, whose
+logos Simple Icons has since dropped, keep the paths of its last release that held them
+(`ui/retiredBrandGlyphs.ts`).
 `appearance.brandIconColor` set to `gray` draws every logo in `inkMuted` instead, for users who
 want the shapes without the colour.
 
