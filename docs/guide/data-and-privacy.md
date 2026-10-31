@@ -28,3 +28,6 @@ TableCraft talks only to GitHub, to [check for updates](install.md#updates), and
 [download plugins](plugins.md#databases-in-the-box-and-on-demand), and sends nothing about you to either;
 turn **Check for updates automatically** off and it asks only when you choose **Help → Check for
 Updates…** or install a plugin.
+
+[Agent notifications](agents.md) go through your system's notification centre, which may keep
+them; they name the client and the data source, never a statement, key or reason.

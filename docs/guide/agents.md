@@ -31,6 +31,11 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
 - **Clients.** The first call from a client you have not met turns the chip amber; open it and
   choose **Allow** or **Block**. Unanswered for a minute, the call is refused. Settings → MCP Server
   lists the clients you answered, to flip or forget.
+- **Notifications.** While a request or a new client waits and TableCraft is in the background, a
+  system notification names the client, the data source and what it asks, and the dock icon counts
+  what waits. Clicking it brings the window forward with the request open; you still answer there.
+  It never shows the statement, the key or the agent's reason. Turn it off with **Notifications**
+  in Settings → MCP Server (`mcp.notifications`); your system's notification settings apply too.
 - **Per data source.** Beside the access level, **Schemas** narrows what agents list and read
   (blank keeps the schemas the Database pane shows), **Row cap** overrides `mcp.rowCap`, and
   **Timeout** overrides `mcp.statementTimeoutSeconds`. The (i) before it says what really stops a

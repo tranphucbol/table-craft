@@ -60,6 +60,7 @@ back to its default without affecting the others.
 | `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |
 | `mcp.clients`                          | `{ "name", "allowed" }` per MCP client you answered; [Allow or Block](agents.md)                | `[]`                                           |
 | `mcp.enabled`                          | `true`, `false`; run the [MCP server](agents.md) for AI agents                                  | `false`                                        |
+| `mcp.notifications`                    | `true`, `false`; a system notification and dock badge while an agent waits in the background    | `true`                                         |
 | `mcp.port`                             | 1,024–65,535; the port it listens on, on 127.0.0.1 only                                         | 47,820                                         |
 | `mcp.rowCap`                           | 1–1,000; the most rows one agent answer carries                                                 | 100                                            |
 | `mcp.statementTimeoutSeconds`          | 1–3,600; an agent's statement running longer is stopped, by the database too where it can       | 120                                            |

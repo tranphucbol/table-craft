@@ -161,6 +161,8 @@ export interface McpSettings {
   readonly statementTimeoutSeconds: number;
   /** Client names the user allowed or blocked; a name not listed waits for an answer (decision 127). */
   readonly clients: readonly McpKnownClient[];
+  /** A system notification and a dock badge while an agent waits and no window is focused (decision 143). */
+  readonly notifications: boolean;
 }
 
 export interface Settings {
@@ -279,6 +281,7 @@ export const DEFAULT_SETTINGS: Settings = {
     rowCap: 100,
     statementTimeoutSeconds: 120,
     clients: [],
+    notifications: true,
   },
 };
 
@@ -541,6 +544,7 @@ export function readSettings(input: unknown): Settings {
         ? mcp.statementTimeoutSeconds
         : defaults.mcp.statementTimeoutSeconds,
       clients: Array.isArray(mcp.clients) ? knownClients(mcp.clients) : defaults.mcp.clients,
+      notifications: typeof mcp.notifications === "boolean" ? mcp.notifications : defaults.mcp.notifications,
     },
   };
 }
