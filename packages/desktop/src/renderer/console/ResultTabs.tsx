@@ -18,6 +18,7 @@ import {
   warningsText,
 } from "@table-craft/desktop/renderer/model/serverMessages.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { TAB_FOCUS_RING } from "@table-craft/desktop/renderer/ui/focusRing.js";
 import { ACTION_ICONS, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 
 const OUTPUT_TITLE = "Output";
@@ -46,8 +47,9 @@ function TabButton({
       tabIndex={selected ? 0 : -1}
       title={tooltip}
       className={cn(
-        "flex h-full shrink-0 cursor-default items-center gap-1 border-r border-line px-gap outline-none",
-        selected ? "bg-canvas text-ink" : "text-ink-muted hover:bg-raised",
+        "flex h-full shrink-0 cursor-default items-center gap-1 border-r border-b-2 border-r-line px-gap",
+        TAB_FOCUS_RING,
+        selected ? "border-b-accent bg-canvas text-ink" : "border-b-transparent text-ink-muted hover:bg-raised",
       )}
       onMouseDown={onSelect}
       onKeyDown={(event) => {

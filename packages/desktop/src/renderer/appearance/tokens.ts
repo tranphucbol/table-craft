@@ -1,6 +1,7 @@
 import {
   DEFAULT_FONTS,
   DENSITIES,
+  frameColors,
   type Appearance,
   type FontToken,
   type Theme,
@@ -29,9 +30,11 @@ export function appearanceOf(
   theme: Theme,
   system: { readonly prefersReducedMotion: boolean },
 ): Appearance {
-  const { fonts, density, motion } = settings.appearance;
+  const { fonts, density, motion, windowStyle } = settings.appearance;
   return {
     colors: theme.colors,
+    windowStyle,
+    frame: frameColors(theme),
     fonts: {
       ui: fontOf(fonts.ui, DEFAULT_FONTS.ui),
       editor: fontOf(fonts.editor, DEFAULT_FONTS.editor),

@@ -23,7 +23,7 @@ import {
 import { FilterBar } from "@table-craft/desktop/renderer/table/FilterBar.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
-import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { tintFrame } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const STATUS_TEXT = {
   connecting: "Connecting…",
@@ -136,7 +136,7 @@ export function TableEditor({ tableId }: { readonly tableId: string }) {
       data-testid="table-editor"
       data-color={color ?? undefined}
       {...{ [REGION_ATTRIBUTE]: "tableEditor" }}
-      className={cn("flex min-h-0 flex-1 flex-col", color !== null && `border-2 ${TINT_BORDER[color]}`)}
+      className={cn("flex min-h-0 flex-1 flex-col", tintFrame(color))}
     >
       <div className="flex shrink-0 items-center gap-gap border-b border-line bg-panel p-gap">
         <FilterBar

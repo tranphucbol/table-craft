@@ -5,10 +5,12 @@
  * ported themes are generated into `themes/` by `scripts/generate-themes.ts` (decision 064).
  */
 import type { ContrastLevel } from "./contrast.js";
+import { frameColors, type FrameColors, type WindowStyle } from "./islands.js";
 import { MOTION, type MotionTokens } from "./motion.js";
 import { PORTED_THEME_IDS, PORTED_THEMES, type PortedThemeId } from "./themes/index.js";
 
 export * from "./contrast.js";
+export * from "./islands.js";
 export { PORTED_THEME_IDS, PORTED_THEMES, type PortedThemeId } from "./themes/index.js";
 
 /** Mirrors `DATASOURCE_COLORS` in the bridge; a datasource stores the name, the theme the value. */
@@ -120,6 +122,9 @@ export interface DensityTokens {
   readonly planDetailsWidthPx: number;
   /** The plan bar's thickness under a Cost or Time cell. */
   readonly planBarHeightPx: number;
+  /** The frame showing between two islands, and around them (decision 141). */
+  readonly islandGapPx: number;
+  readonly islandRadiusPx: number;
 }
 
 export interface Appearance {
@@ -127,6 +132,8 @@ export interface Appearance {
   readonly fonts: FontTokens;
   readonly density: DensityTokens;
   readonly motion: MotionTokens;
+  readonly windowStyle: WindowStyle;
+  readonly frame: FrameColors;
 }
 
 /** TableCraft's own themes, the ones Follow system chooses between. */
@@ -344,6 +351,9 @@ export const COMFORTABLE_DENSITY: DensityTokens = {
   pickerListHeightPx: 220,
   planDetailsWidthPx: 320,
   planBarHeightPx: 3,
+  // JetBrains' Islands: the gap is `Island.borderWidth` less one, the radius half `Island.arc`.
+  islandGapPx: 5,
+  islandRadiusPx: 10,
 };
 
 /** DataGrip's Compact Mode: tighter rows and gutters, every panel size as comfortable. */
@@ -353,6 +363,9 @@ export const COMPACT_DENSITY: DensityTokens = {
   cellPaddingPx: 6,
   gapPx: 6,
   titleBarHeightPx: 32,
+  // JetBrains' compact 3 px reads as a seam rather than a gap at 20 px rows.
+  islandGapPx: 4,
+  islandRadiusPx: 8,
 };
 
 /** The width the macOS traffic lights take at x = 12 (they end near 72 px), plus a margin. */
@@ -371,6 +384,8 @@ export const DEFAULT_APPEARANCE: Appearance = {
   fonts: DEFAULT_FONTS,
   density: COMFORTABLE_DENSITY,
   motion: MOTION.full,
+  windowStyle: "classic",
+  frame: frameColors(BUILT_IN_THEMES.dark),
 };
 
 /** Every colour token a user theme may override; `syntax` and `datasource` are partial in turn. */

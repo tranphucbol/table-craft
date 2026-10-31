@@ -930,16 +930,18 @@ TableCraft` or `TableCraft`, which Electron mirrors to the window's title for th
 taskbar and the window switcher.
 
 Main builds the window chrome in one pure function, `windowChrome({platform, theme, density,
-systemTitleBar})` in `main/chrome.ts`:
+systemTitleBar, windowStyle})` in `main/chrome.ts`:
 
-| Platform         | Window options                               | Native controls                                               |
-| ---------------- | -------------------------------------------- | ------------------------------------------------------------- |
-| macOS            | `titleBarStyle: "hiddenInset"`               | traffic lights at `{x: 12, y: (height − 14) / 2}`             |
-| Windows, Linux   | `titleBarStyle: "hidden"`, `titleBarOverlay` | caption buttons on `{color: panel, symbolColor: ink, height}` |
-| system title bar | none                                         | the platform's frame                                          |
+| Platform         | Window options                               | Native controls                                                       |
+| ---------------- | -------------------------------------------- | --------------------------------------------------------------------- |
+| macOS            | `titleBarStyle: "hiddenInset"`               | traffic lights at `{x: 12, y: (height − 14) / 2}`                     |
+| Windows, Linux   | `titleBarStyle: "hidden"`, `titleBarOverlay` | caption buttons on `{color: titleBarColor, symbolColor: ink, height}` |
+| system title bar | none                                         | the platform's frame                                                  |
 
-`applyWindowAppearance` re-applies the overlay (`setTitleBarOverlay`) and the traffic lights
-(`setWindowButtonPosition`) with the background whenever the theme or density changes. On Windows
+`titleBarColor` and the window's background (`appearance/islands.ts`) are the frame colour with
+the Islands window style and `panel` and `canvas` with Classic. `applyWindowAppearance` re-applies
+the overlay (`setTitleBarOverlay`) and the traffic lights (`setWindowButtonPosition`) with the
+background whenever the theme, density or window style changes. On Windows
 and Linux the toolbar's right padding keeps its controls clear of the overlay
 (`env(titlebar-area-width)`). The toolbar is the window's drag region (`.app-drag`); every control
 in it is `.app-no-drag`, and double-click is left to the system. Main sends
@@ -2311,6 +2313,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
   "appearance": {
     "theme": "system",
     "density": "comfortable",
+    "windowStyle": "classic",
     "systemTitleBar": false,
     "brandIcons": true,
     "brandIconColor": "brand",
@@ -2334,32 +2337,33 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 }
 ```
 
-| Field                                  | Values                                                                                        | Default       |
-| -------------------------------------- | --------------------------------------------------------------------------------------------- | ------------- |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, a ported theme id, `user:<file stem>`              | `system`      |
-| `appearance.density`                   | `comfortable`, `compact`                                                                      | `comfortable` |
-| `appearance.systemTitleBar`            | boolean; read once when the window is created                                                 | `false`       |
-| `appearance.brandIcons`                | boolean; datasource rows draw their database's logo (decision 128)                            | `true`        |
-| `appearance.brandIconColor`            | `brand` (the brand's colour fitted to the theme) or `gray` (muted ink)                        | `brand`       |
-| `appearance.fonts.*`                   | `{ family: string \| null, sizePx: 8–32 }`; `null` is the built-in stack                      | 13, 13, 12    |
-| `editor.format.style`                  | `aligned`, `standard`                                                                         | `aligned`     |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`                                                                  | `upper`       |
-| `editor.format.indentWidth`            | 1–8 spaces                                                                                    | 2             |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                               | 1             |
-| `editor.format.alignAliases`           | boolean; line up `AS` in a select list (aligned style)                                        | `true`        |
-| `console.parameters`                   | boolean; ask for `:name`, `?` and `$1` values before a run                                    | `true`        |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override | 0             |
-| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements, or a script, does on a failure   | `ask`         |
-| `data.nullText`                        | 1–16 characters                                                                               | `<null>`      |
-| `data.stripedRows`                     | boolean                                                                                       | `false`       |
-| `data.groupDigits`                     | boolean                                                                                       | `false`       |
-| `data.pageRows`                        | 10–10,000                                                                                     | 500           |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                          | 100,000       |
-| `mcp.clients`                          | `{ name, allowed }` per client answered ([Agents (MCP)](#agents-mcp))                         | `[]`          |
-| `mcp.enabled`                          | boolean; serve AI agents ([Agents (MCP)](#agents-mcp))                                        | `false`       |
-| `mcp.port`                             | 1,024–65,535, on 127.0.0.1                                                                    | 47,820        |
-| `mcp.rowCap`                           | 1–1,000 rows an agent's query returns at once                                                 | 100           |
-| `mcp.statementTimeoutSeconds`          | 1–3,600 seconds an agent's statement runs, also on the server (decision 129)                  | 120           |
+| Field                                  | Values                                                                                          | Default       |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------- |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, a ported theme id, `user:<file stem>`                | `system`      |
+| `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable` |
+| `appearance.windowStyle`               | `islands` (rounded islands on a window frame, decision 141) or `classic` (flat panes and lines) | `classic`     |
+| `appearance.systemTitleBar`            | boolean; read once when the window is created                                                   | `false`       |
+| `appearance.brandIcons`                | boolean; datasource rows draw their database's logo (decision 128)                              | `true`        |
+| `appearance.brandIconColor`            | `brand` (the brand's colour fitted to the theme) or `gray` (muted ink)                          | `brand`       |
+| `appearance.fonts.*`                   | `{ family: string \| null, sizePx: 8–32 }`; `null` is the built-in stack                        | 13, 13, 12    |
+| `editor.format.style`                  | `aligned`, `standard`                                                                           | `aligned`     |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`                                                                    | `upper`       |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                      | 2             |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                 | 1             |
+| `editor.format.alignAliases`           | boolean; line up `AS` in a select list (aligned style)                                          | `true`        |
+| `console.parameters`                   | boolean; ask for `:name`, `?` and `$1` values before a run                                      | `true`        |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override   | 0             |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements, or a script, does on a failure     | `ask`         |
+| `data.nullText`                        | 1–16 characters                                                                                 | `<null>`      |
+| `data.stripedRows`                     | boolean                                                                                         | `false`       |
+| `data.groupDigits`                     | boolean                                                                                         | `false`       |
+| `data.pageRows`                        | 10–10,000                                                                                       | 500           |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                            | 100,000       |
+| `mcp.clients`                          | `{ name, allowed }` per client answered ([Agents (MCP)](#agents-mcp))                           | `[]`          |
+| `mcp.enabled`                          | boolean; serve AI agents ([Agents (MCP)](#agents-mcp))                                          | `false`       |
+| `mcp.port`                             | 1,024–65,535, on 127.0.0.1                                                                      | 47,820        |
+| `mcp.rowCap`                           | 1–1,000 rows an agent's query returns at once                                                   | 100           |
+| `mcp.statementTimeoutSeconds`          | 1–3,600 seconds an agent's statement runs, also on the server (decision 129)                    | 120           |
 
 Each field is read on its own: a missing or out-of-range one takes its default and the rest stand.
 A file that is not JSON, not an object or from a newer version is renamed to
@@ -2401,7 +2405,7 @@ The page size and Fetch All limit travel with each request (see Renderer to engi
 
 The Settings dialog (`⌘,`; the macOS app menu's Settings…, File → Settings… elsewhere) has four
 pages: Appearance (theme, Reload Themes, Open Themes Folder, density, UI font, and under Window,
-Use system title bar with "Takes effect after restart." and a Restart Now button, `app.relaunch`,
+Use system title bar with "The title bar changes after a restart." and a Restart Now button, `app.relaunch`,
 shown while the choice differs from the running window; it asks to close dirty tabs first, as Quit
 does, then relaunches), Editor (editor
 font, the zoom chords, and under Running, query parameters and the statement timeout) and Data Editor (grid font, NULL text, Group digits, page size, Fetch All
