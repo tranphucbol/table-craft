@@ -35,6 +35,7 @@ import {
   waitUntilReady,
   type Datasource,
   type RunningApp,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("018");
@@ -126,6 +127,7 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
     running = await launchApp(datasource, userDataDir === undefined ? {} : { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
+    await showServices(running.page);
     return running.page;
   }
 

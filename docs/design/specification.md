@@ -2351,6 +2351,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override | 0             |
 | `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements, or a script, does on a failure   | `ask`         |
 | `data.nullText`                        | 1–16 characters                                                                               | `<null>`      |
+| `data.stripedRows`                     | boolean                                                                                       | `false`       |
 | `data.groupDigits`                     | boolean                                                                                       | `false`       |
 | `data.pageRows`                        | 10–10,000                                                                                     | 500           |
 | `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                          | 100,000       |

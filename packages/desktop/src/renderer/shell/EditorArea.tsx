@@ -28,6 +28,7 @@ import {
   type EditorGroupId,
 } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
@@ -249,20 +250,19 @@ function TabButton({
   );
 }
 
+const NO_SELECTION_REASON = "Select a data source in the Database tool window first.";
+
+/** The empty canvas keeps one sentence and the first action where the work will appear (plan 130 decision 5). */
 function EmptyEditor() {
   const hasDatasources = useDatasources((state) => state.datasources.length > 0);
-  const action = registry.get(hasDatasources ? ACTION_IDS.newConsole : ACTION_IDS.newDatasource);
-  const shortcut = action?.shortcut === undefined ? "" : formatChord(action.shortcut, currentPlatform());
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-gap text-ink-muted">
+    <div data-testid="empty-editor" className="flex flex-1 flex-col items-center justify-center gap-gap text-ink-muted">
       <p>No open consoles.</p>
+      <p>{hasDatasources ? "Open a console on a data source to start." : "Add a data source to start."}</p>
       {hasDatasources ? (
-        <p>
-          Select a data source and press{" "}
-          <kbd className="rounded border border-line px-1 font-ui text-ink">{shortcut}</kbd> to open a console on it.
-        </p>
+        <ActionButton actionId={ACTION_IDS.newConsole} primary reason={NO_SELECTION_REASON} />
       ) : (
-        <p>Add a data source in the Database tool window to start.</p>
+        <ActionButton actionId={ACTION_IDS.newDatasource} primary />
       )}
     </div>
   );

@@ -14,7 +14,7 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 
 const ROW_CLASS =
-  "flex min-h-row w-full items-center gap-cell rounded px-gap text-left hover:bg-raised disabled:opacity-50";
+  "flex min-h-row w-full min-w-0 items-center gap-cell rounded px-gap py-1 text-left hover:bg-raised disabled:opacity-50";
 
 function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; readonly onDownload: () => void }) {
   const DownloadIcon = ACTION_ICONS.download;
@@ -32,7 +32,7 @@ function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; rea
       <DatasourceGlyph brand={entry.brands[0] ?? null} tone="muted" className="size-icon shrink-0" />
       <span className="shrink-0">{entry.name}</span>
       {progress === null ? (
-        <span className="flex items-center gap-1 text-ink-muted">
+        <span className="flex min-w-0 items-center gap-1 truncate text-ink-muted">
           <DownloadIcon aria-hidden className="size-icon" />
           {downloadLabel(entry)}
         </span>
@@ -47,7 +47,8 @@ function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; rea
 }
 
 /**
- * The New Data Source list: installed plugins, then the ones TableCraft can download (decision 110).
+ * The New Data Source kinds, two to a row: installed plugins, then the ones TableCraft can download
+ * (decision 110; plan 130 decision 18).
  * A downloaded one opens its form once main reports it installed.
  */
 export function PluginPicker({
@@ -81,7 +82,7 @@ export function PluginPicker({
     <div className="flex flex-col gap-gap p-gap">
       <h3 className="font-semibold">New data source</h3>
       <p className="text-ink-muted">Choose the kind of database.</p>
-      <ul aria-label="Database kinds" className="flex flex-col gap-1">
+      <ul aria-label="Database kinds" className="grid grid-cols-2 gap-1">
         {pickerEntries(plugins, catalog).map((item) =>
           item.kind === "plugin" ? (
             <li key={`${item.plugin.id}:${item.brand?.id ?? ""}`}>
@@ -96,7 +97,7 @@ export function PluginPicker({
                 <DatasourceGlyph brand={item.brand} className="size-icon shrink-0" />
                 <span className="shrink-0">{entryName(item)}</span>
                 {item.plugin.unavailableReason === null ? null : (
-                  <span className="text-ink-muted">{item.plugin.unavailableReason}</span>
+                  <span className="truncate text-ink-muted">{item.plugin.unavailableReason}</span>
                 )}
               </button>
             </li>

@@ -46,7 +46,7 @@ export function KeyHeader({ tab, datasourceName, onExpired }: KeyHeaderProps) {
     <div data-testid="key-header" className="flex shrink-0 flex-col gap-1 border-b border-line bg-panel p-gap">
       <div className="flex min-w-0 items-center gap-gap">
         <KeyTypeBadge info={tab.details} />
-        <span data-testid="key-name" className="truncate font-mono text-ink" title={tab.key.text}>
+        <span data-testid="key-name" className="truncate font-grid text-ink" title={tab.key.text}>
           {tab.key.text}
         </span>
         {facts.length === 0 ? null : (

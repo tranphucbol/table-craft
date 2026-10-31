@@ -16,7 +16,6 @@ import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   activeEditorTab,
   closeApp,
-  consoleToolbar,
   DATABASES_ENABLED,
   EVIDENCE_WINDOW,
   evidenceFor,
@@ -38,6 +37,7 @@ import {
   type Datasource,
   type RunningApp,
   chooseOption,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("042");
@@ -114,6 +114,7 @@ describe.runIf(SMOKE_ENABLED)("error location live test", () => {
     running = await launchApp(datasource, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
+    await showServices(running.page);
     return running;
   }
 
@@ -148,7 +149,7 @@ describe.runIf(SMOKE_ENABLED)("error location live test", () => {
 
     await page.mouse.move(0, 0);
     await sqlEditor(page).press("ControlOrMeta+Home");
-    await consoleToolbar(page).getByRole("button", { name: "Go to Error", exact: true }).click();
+    await page.getByTestId("run-error").getByRole("button", { name: "Go to Error", exact: true }).click();
     await expect.poll(() => flashed(page).allTextContents()).toEqual([ERROR_TOKEN]);
     await captureWindow(page, `go-to-error-${label}`);
   }

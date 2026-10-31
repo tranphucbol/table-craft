@@ -26,7 +26,7 @@ function Body({ prompt }: { readonly prompt: Prompt }) {
         <dt className="text-ink-muted">Key type</dt>
         <dd>{offer.algorithm}</dd>
         <dt className="text-ink-muted">Fingerprint</dt>
-        <dd data-testid="host-key-fingerprint" className="font-mono break-all select-text">
+        <dd data-testid="host-key-fingerprint" className="font-grid break-all select-text">
           {offer.fingerprint}
         </dd>
       </dl>

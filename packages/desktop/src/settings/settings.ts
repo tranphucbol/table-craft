@@ -50,6 +50,8 @@ export interface AppearanceSettings {
 export interface DataSettings {
   /** What a NULL cell draws. */
   readonly nullText: string;
+  /** Tint every second grid row; off by default, the selection and the row lines carry the eye (plan 130 decision 8). */
+  readonly stripedRows: boolean;
   /** Group the integer digits of a number column with `,`; display only. */
   readonly groupDigits: boolean;
   /** Open text values holding a JSON object or array formatted in the value panel (plan 126). */
@@ -247,6 +249,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   data: {
     nullText: "<null>",
+    stripedRows: false,
     groupDigits: false,
     detectJson: true,
     pageRows: 500,
@@ -491,6 +494,7 @@ export function readSettings(input: unknown): Settings {
         typeof data.nullText === "string" && nullTextError(data.nullText) === null
           ? data.nullText
           : defaults.data.nullText,
+      stripedRows: typeof data.stripedRows === "boolean" ? data.stripedRows : defaults.data.stripedRows,
       groupDigits: typeof data.groupDigits === "boolean" ? data.groupDigits : defaults.data.groupDigits,
       detectJson: typeof data.detectJson === "boolean" ? data.detectJson : defaults.data.detectJson,
       pageRows,

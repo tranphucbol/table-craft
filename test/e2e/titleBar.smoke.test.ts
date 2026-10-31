@@ -101,8 +101,9 @@ const CENTRE_TOLERANCE_PX = 1.5;
 const LIGHT_PANEL = "rgb(247, 248, 250)";
 const DARK_PANEL = "rgb(43, 45, 48)";
 const SLEEP_SQL = "SELECT pg_sleep(30)";
-/** `formatDuration`'s seconds, which the capsule ticks once a second. */
-const ELAPSED = /^\d+\.\d s$/;
+/** `formatElapsed`'s live time, with milliseconds (plan 130 decision 2). */
+const ELAPSED = /^(\d+ ms|\d+\.\d{3} s|\d+:\d{2}\.\d{3})$/;
+const SPINNER = ".animate-spin";
 const CANCEL_DEADLINE_MS = 10_000;
 const TOTAL_SQL = "SELECT total FROM orders WHERE id = 1";
 const UPDATE_SQL = "UPDATE orders SET total = total + 1 WHERE id = 1";
@@ -355,6 +356,18 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
+  it(
+    "givenNoConsoleTab_whenTitleBarShown_thenNoRun",
+    async () => {
+      const { page } = await launch(null, newProfile());
+      await toolWindow(page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+
+      expect(await mainToolbarButton(page, "Search Everywhere").isVisible()).toBe(true);
+      expect(await mainToolbarButton(page, "Run").count()).toBe(0);
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
   it.runIf(MAC)(
     "givenMac_whenWindowCaptured_thenTrafficLightsCentredInTheToolbar",
     async () => {
@@ -445,6 +458,11 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
       await expect.poll(() => cancel.isEnabled()).toBe(true);
       expect(await activityCapsule(page).getAttribute("data-kind")).toBe("running");
       await expect.poll(() => activityCapsule(page).textContent()).toMatch(ELAPSED);
+      const first = await activityCapsule(page).textContent();
+      await expect.poll(() => activityCapsule(page).textContent()).not.toBe(first);
+      // Run's spinner waits out ActionButton's busy delay before it shows.
+      await expect.poll(() => mainToolbar(page).locator(SPINNER).count()).toBe(1);
+      expect(await activityCapsule(page).locator(SPINNER).count()).toBe(0);
       await captureWindow(page, "cancel");
       await captureActivity(page, "capsule-running");
       const clickedAt = Date.now();

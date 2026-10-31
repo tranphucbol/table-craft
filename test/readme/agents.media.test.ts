@@ -9,7 +9,7 @@
 import type { ElectronApplication, Page } from "playwright-core";
 import { beforeAll, expect } from "vitest";
 import { freePort } from "../e2e/mcpAgent.js";
-import { chooseOption, findAction, LAUNCH_TIMEOUT_MS, optionValue, toolWindow } from "../e2e/harness.js";
+import { chooseOption, findAction, LAUNCH_TIMEOUT_MS, optionValue, showServices } from "../e2e/harness.js";
 import { callLine, EVENT_LOG, opencodeModel, OpencodeFolder, requireOpencode, resultLine } from "./opencode.js";
 import { clickVisibly, pause, pointAt } from "./pace.js";
 import { connect, datasourceRow, mediaSuite, PASSWORD, READ_PAUSE_MS, scene, SHOP } from "./scenes.js";
@@ -290,7 +290,7 @@ async function approveWrites(
 
 /** Ends on the write in the Services tree, where the app logs every call an agent made. */
 async function showWrite(page: Page): Promise<void> {
-  const write = toolWindow(page, "Services").getByText(WRITE_SHOWN).first();
+  const write = (await showServices(page)).getByText(WRITE_SHOWN).first();
   await write.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
   await pause(page, READ_PAUSE_MS);
   await pointAt(page, write);

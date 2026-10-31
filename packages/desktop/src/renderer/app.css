@@ -55,6 +55,7 @@
   --spacing-dialog: var(--tc-dialog-width);
   --spacing-dialog-height: var(--tc-dialog-height);
   --spacing-dialog-list: var(--tc-dialog-list-width);
+  --spacing-dialog-label: var(--tc-dialog-label-max);
   --spacing-popover: var(--tc-popover-width);
   --spacing-popover-height: var(--tc-popover-height);
   --spacing-generator: var(--tc-generator-width);

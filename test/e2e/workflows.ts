@@ -28,6 +28,7 @@ import {
   toolWindow,
   treeNode,
   waitUntilReady,
+  showServices,
 } from "./harness.js";
 
 /** What the loop needs to know about the datasource it drives. */
@@ -326,7 +327,7 @@ function filterBar(page: Page, bar: "where" | "order-by"): Locator {
 export async function applyFilter(page: Page, where: string, orderBy: string): Promise<void> {
   await filterBar(page, "where").fill(where);
   await filterBar(page, "order-by").fill(orderBy);
-  const executions = toolWindow(page, "Services").locator('[role="treeitem"][data-kind="execution"]');
+  const executions = (await showServices(page)).locator('[role="treeitem"][data-kind="execution"]');
   const before = await executions.count();
   for (let attempt = 1; ; attempt++) {
     await filterBar(page, "order-by").press("Enter");

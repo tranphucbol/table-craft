@@ -22,7 +22,10 @@ interface SshSectionProps {
   readonly onChange: (change: Partial<FormDraft>) => void;
 }
 
-/** The rows under SSH/SSL: the tunnel the session's database connection runs through (decision 070). */
+/**
+ * The rows under SSH/SSL: the tunnel the session's database connection runs through (decision 070).
+ * Its rows show only while the tunnel is on; the draft keeps their values meanwhile (plan 130 decision 16).
+ */
 export function SshSection({ draft, encryption, onChange }: SshSectionProps) {
   const hostId = useId();
   const portId = useId();
@@ -37,79 +40,81 @@ export function SshSection({ draft, encryption, onChange }: SshSectionProps) {
       <FieldRow label="">
         <Check label="Use SSH tunnel" checked={ssh.enabled} onChange={(enabled) => set({ enabled })} />
       </FieldRow>
-      <fieldset disabled={!ssh.enabled} className="contents">
-        <FieldRow label="SSH host" htmlFor={hostId}>
-          <TextInput
-            id={hostId}
-            className="flex-1"
-            placeholder="bastion.example.com"
-            value={ssh.host}
-            onChange={(event) => set({ host: event.target.value })}
-          />
-          <label htmlFor={portId} className="text-ink-muted">
-            SSH port
-          </label>
-          <TextInput
-            id={portId}
-            className="w-24"
-            inputMode="numeric"
-            placeholder={String(DEFAULT_SSH_PORT)}
-            value={ssh.port}
-            onChange={(event) => set({ port: event.target.value })}
-          />
-        </FieldRow>
-        <FieldRow label="SSH user" htmlFor={userId}>
-          <TextInput
-            id={userId}
-            className="flex-1"
-            value={ssh.user}
-            onChange={(event) => set({ user: event.target.value })}
-          />
-        </FieldRow>
-        <FieldRow
-          label="Authentication"
-          htmlFor={authId}
-          hint={ssh.auth === "agent" ? AGENT_NOTE : undefined}
-          hintLabel="About SSH agent"
-        >
-          <Dropdown
-            id={authId}
-            label="Authentication"
-            variant="field"
-            value={ssh.auth}
-            options={AUTH_METHODS.map((method) => ({ value: method, label: AUTH_LABEL[method] }))}
-            onChange={(value) => {
-              const auth = AUTH_METHODS.find((method) => method === value);
-              if (auth !== undefined) set({ auth });
-            }}
-          />
-        </FieldRow>
-        {ssh.auth === "key" ? (
-          <FieldRow label={KEY_FILE_TITLE} htmlFor={keyId}>
+      {ssh.enabled ? (
+        <>
+          <FieldRow label="SSH host" htmlFor={hostId}>
             <TextInput
-              id={keyId}
+              id={hostId}
               className="flex-1"
-              placeholder="~/.ssh/id_ed25519"
-              value={ssh.keyPath}
-              onChange={(event) => set({ keyPath: event.target.value })}
+              placeholder="bastion.example.com"
+              value={ssh.host}
+              onChange={(event) => set({ host: event.target.value })}
             />
-            <Button
-              onClick={() => {
-                void bridge()
-                  .chooseFile(KEY_FILE_TITLE)
-                  .then((chosen) => {
-                    if (chosen.ok && chosen.value !== null) set({ keyPath: chosen.value });
-                  });
-              }}
-            >
-              Browse…
-            </Button>
+            <label htmlFor={portId} className="text-ink-muted">
+              SSH port
+            </label>
+            <TextInput
+              id={portId}
+              className="w-24"
+              inputMode="numeric"
+              placeholder={String(DEFAULT_SSH_PORT)}
+              value={ssh.port}
+              onChange={(event) => set({ port: event.target.value })}
+            />
           </FieldRow>
-        ) : null}
-        {secret === null ? null : (
-          <SecretField field={secret} draft={draft} encryption={encryption} onChange={onChange} />
-        )}
-      </fieldset>
+          <FieldRow label="SSH user" htmlFor={userId}>
+            <TextInput
+              id={userId}
+              className="flex-1"
+              value={ssh.user}
+              onChange={(event) => set({ user: event.target.value })}
+            />
+          </FieldRow>
+          <FieldRow
+            label="Authentication"
+            htmlFor={authId}
+            hint={ssh.auth === "agent" ? AGENT_NOTE : undefined}
+            hintLabel="About SSH agent"
+          >
+            <Dropdown
+              id={authId}
+              label="Authentication"
+              variant="field"
+              value={ssh.auth}
+              options={AUTH_METHODS.map((method) => ({ value: method, label: AUTH_LABEL[method] }))}
+              onChange={(value) => {
+                const auth = AUTH_METHODS.find((method) => method === value);
+                if (auth !== undefined) set({ auth });
+              }}
+            />
+          </FieldRow>
+          {ssh.auth === "key" ? (
+            <FieldRow label={KEY_FILE_TITLE} htmlFor={keyId}>
+              <TextInput
+                id={keyId}
+                className="flex-1"
+                placeholder="~/.ssh/id_ed25519"
+                value={ssh.keyPath}
+                onChange={(event) => set({ keyPath: event.target.value })}
+              />
+              <Button
+                onClick={() => {
+                  void bridge()
+                    .chooseFile(KEY_FILE_TITLE)
+                    .then((chosen) => {
+                      if (chosen.ok && chosen.value !== null) set({ keyPath: chosen.value });
+                    });
+                }}
+              >
+                Browse…
+              </Button>
+            </FieldRow>
+          ) : null}
+          {secret === null ? null : (
+            <SecretField field={secret} draft={draft} encryption={encryption} onChange={onChange} />
+          )}
+        </>
+      ) : null}
     </>
   );
 }

@@ -39,6 +39,7 @@ import {
   toolWindow,
   type RunningApp,
   type SavedDatasource,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("123");
@@ -238,6 +239,7 @@ describe.runIf(DATABASES_ENABLED)("Services brand icons and Collapse All live te
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     const page = running.page;
     await toolWindow(page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+    await showServices(page);
     await expect.poll(() => page.getByTestId("status-mcp").isVisible(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(true);
 
     const ordered = [

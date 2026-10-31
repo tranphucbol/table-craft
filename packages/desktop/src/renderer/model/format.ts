@@ -11,11 +11,25 @@ import type { ConsoleSession } from "@table-craft/desktop/renderer/state/console
 import { ENGINE_EXITED_HINT, type Connection } from "@table-craft/desktop/renderer/state/datasources.js";
 
 const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60_000;
 
 /** `12 ms` under a second, `1.4 s` above, as DataGrip's Services window shows a run. */
 export function formatDuration(ms: number): string {
   if (ms < MS_PER_SECOND) return `${Math.round(ms)} ms`;
   return `${(ms / MS_PER_SECOND).toFixed(1)} s`;
+}
+
+const ELAPSED_DECIMALS = 3;
+const SECONDS_WIDTH = 2;
+
+/** A live elapsed time: `847 ms`, `2.043 s`, `1:02.381`, so the milliseconds run while it ticks. */
+export function formatElapsed(ms: number): string {
+  const whole = Math.max(0, Math.floor(ms));
+  if (whole < MS_PER_SECOND) return `${whole} ms`;
+  if (whole < MS_PER_MINUTE) return `${(whole / MS_PER_SECOND).toFixed(ELAPSED_DECIMALS)} s`;
+  const minutes = Math.floor(whole / MS_PER_MINUTE);
+  const seconds = ((whole % MS_PER_MINUTE) / MS_PER_SECOND).toFixed(ELAPSED_DECIMALS);
+  return `${minutes}:${seconds.padStart(SECONDS_WIDTH + 1 + ELAPSED_DECIMALS, "0")}`;
 }
 
 /** What an agent call's time leaves out: `Waited 23.9 s for approval, not counted`, or null when it did not wait. */
@@ -63,6 +77,15 @@ const COUNT_FORMAT = new Intl.NumberFormat("en-US");
 /** `50,000`: grouped the way the grid's row count reads. */
 export function formatCount(count: number): string {
   return COUNT_FORMAT.format(count);
+}
+
+const WHOLE_NUMBER = /^\d+$/;
+const DIGIT_GROUP_SEPARATOR = /,/g;
+
+/** A whole number typed or pasted with or without `formatCount`'s separators; NaN for anything else. */
+export function parseWholeNumber(text: string): number {
+  const digits = text.trim().replace(DIGIT_GROUP_SEPARATOR, "");
+  return WHOLE_NUMBER.test(digits) ? Number(digits) : Number.NaN;
 }
 
 const BYTES_PER_KIB = 1024;
@@ -178,7 +201,6 @@ export function datasourceText(datasource: DatasourceView, pluginName: string | 
   return parts.join(" · ");
 }
 
-const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 

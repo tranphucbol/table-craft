@@ -5,7 +5,7 @@ What you ran, what is running on the server, and what TableCraft itself did.
 ## Query history and Services
 
 Every statement you run is kept per data source in a local history. **Query History…** (`⌥⌘E`)
-searches it, and `↩` puts the chosen statement at the caret. The Services tool window (`⌘8`) shows
+searches it, and `↩` puts the chosen statement at the caret. The Services tool window (`⌘8`, closed until you open it) shows
 each connected data source, a session per tab, and its recent executions with outcome, rows,
 duration and start time. The fold button in its header is **Collapse All** while anything is
 unfolded and **Expand All** once everything is folded; `⌘-` and `⌘=` with focus in Services do the

@@ -55,7 +55,11 @@ function rankScore(recent: readonly string[], item: SearchItem): number {
   return rank === -1 ? item.score : item.score + RECENT_BOOST * (RECENT_ACTIONS_LIMIT - rank);
 }
 
-/** The palette's rows for `query`, best first; `tab` narrows Search Everywhere to one provider. */
+/**
+ * The palette's rows for `query`, best first; `tab` narrows Search Everywhere to one provider.
+ * Enabled rows come before disabled ones, so the highlighted first row runs whenever anything
+ * can (plan 130 decision 12).
+ */
 export function paletteResults(
   providers: readonly SearchProvider[],
   query: string,
@@ -66,7 +70,7 @@ export function paletteResults(
   return shown
     .flatMap((provider) => provider.search(query))
     .map((item, index) => ({ item, index, rank: rankScore(recent, item) }))
-    .sort((a, b) => b.rank - a.rank || a.index - b.index)
+    .sort((a, b) => Number(b.item.enabled) - Number(a.item.enabled) || b.rank - a.rank || a.index - b.index)
     .map(({ item }) => item);
 }
 
