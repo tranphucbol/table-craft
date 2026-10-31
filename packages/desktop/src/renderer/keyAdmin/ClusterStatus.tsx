@@ -2,6 +2,7 @@ import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useC
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { selectedDatasourceId, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { ADMIN_ACTION_IDS } from "./actions.js";
 import { useKeyAdmin } from "./store.js";
 
@@ -24,8 +25,12 @@ export function ClusterStatus() {
         rev {status.revision} · {data.members.length} members · leader {leader?.name ?? "Unknown"}
       </span>
       {data.alarms.map((alarm) => (
-        <span key={`${alarm.kind}-${alarm.memberId}`} className="rounded bg-edit-deleted px-cell text-danger">
-          ⚠ {alarm.kind}
+        <span
+          key={`${alarm.kind}-${alarm.memberId}`}
+          className="flex items-center gap-1 rounded bg-edit-deleted px-cell text-danger"
+        >
+          <WarningIcon aria-hidden weight="fill" className="size-icon shrink-0" />
+          {alarm.kind}
         </span>
       ))}
     </button>

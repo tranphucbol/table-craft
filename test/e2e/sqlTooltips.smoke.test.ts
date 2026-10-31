@@ -7,7 +7,6 @@ import {
   closeApp,
   EVIDENCE_WINDOW,
   evidenceFor,
-  findAction,
   LAUNCH_TIMEOUT_MS,
   launchApp,
   newProfile,
@@ -112,7 +111,6 @@ describe.runIf(SMOKE_ENABLED)("SQL tooltip geometry", () => {
     async () => {
       const page = await launch();
       await setWindowSize((running as RunningApp).app, SHORT_WINDOW);
-      await findAction(page, "Services");
       await sqlEditor(page).fill(SCROLLED_SQL);
       await page.keyboard.press("Control+End");
       await page.keyboard.press("Escape");

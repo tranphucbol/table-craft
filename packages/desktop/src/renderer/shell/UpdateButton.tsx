@@ -48,7 +48,7 @@ function UpdatePopover({ anchor }: { readonly anchor: PopoverAnchor }) {
     <Popover anchor={anchor} label="Update" testId="update-popover" onClose={() => useUpdate.getState().setOpen(false)}>
       <div className="flex flex-col gap-gap p-gap">
         <div className="font-semibold">{view.title}</div>
-        <div data-testid="update-versions" className="font-mono text-ink-muted">
+        <div data-testid="update-versions" className="font-grid text-ink-muted">
           {view.versions}
           {view.size === null ? null : <span> · {view.size}</span>}
         </div>

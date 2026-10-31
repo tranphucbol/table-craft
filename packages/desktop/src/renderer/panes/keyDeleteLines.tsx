@@ -39,7 +39,7 @@ export function KeyDeleteLine({ task }: { readonly task: KeyDeleteTask }) {
   const detail = task.error === null ? `${task.prefix}*` : `${task.error.message}\n${task.error.hint}`;
   return (
     <>
-      <span className="min-w-0 truncate font-mono" title={detail}>
+      <span className="min-w-0 truncate font-grid" title={detail}>
         {task.prefix}*
       </span>
       <span className={cn("shrink-0", task.state === "failed" ? "text-danger" : "text-ink-muted")}>

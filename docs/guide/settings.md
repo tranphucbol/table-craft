@@ -1,6 +1,7 @@
 # Settings and appearance
 
-**Settings…** (`⌘,`) has pages for Appearance, Editor, Data Editor and Advanced. The theme is a
+**Settings…** (`⌘,`) has pages for Appearance, Editor, Data Editor, Plugins, MCP and Advanced; the X in its corner,
+Close or Escape shuts it. Numbers show their digit separators until you edit them. The theme is a
 dropdown: type to filter by name or source, and the theme under the arrow keys or the mouse
 previews live; Enter or a click keeps it, Escape puts the previous one back. Themes and density
 change live; Follow system picks Dark, Light or High contrast from the operating system. `⌘=`, `⌘-` and
@@ -40,6 +41,7 @@ back to its default without affecting the others.
 | `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                              | 5                                              |
 | `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure   | `ask`                                          |
 | `data.nullText`                        | 1–16 characters                                                                                 | `<null>`                                       |
+| `data.stripedRows`                     | `true`, `false`                                                                                 | `false`                                        |
 | `data.groupDigits`                     | `true`, `false`                                                                                 | `false`                                        |
 | `data.detectJson`                      | `true`, `false`; open a text value holding a JSON object or array formatted in the value panel  | `true`                                         |
 | `data.pageRows`                        | 10–10,000                                                                                       | 500                                            |

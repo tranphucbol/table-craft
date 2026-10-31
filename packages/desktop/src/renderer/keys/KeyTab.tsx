@@ -143,7 +143,7 @@ function MissingBanner({
       className="flex h-row shrink-0 items-center gap-gap border-b border-line bg-panel px-gap text-ink-muted"
     >
       <span className="mr-auto truncate">
-        <code className="font-mono text-ink">{tab.key.text}</code> no longer exists
+        <code className="font-grid text-ink">{tab.key.text}</code> no longer exists
         {tab.recreating ? RECREATE_PENDING_TEXT : ""}
       </span>
       {canRecreate && !tab.recreating ? (

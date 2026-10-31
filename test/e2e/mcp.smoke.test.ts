@@ -42,6 +42,7 @@ import {
   chooseOption,
   optionDisabled,
   optionValue,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("117");
@@ -502,7 +503,7 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
       await agent.initialize("Claude Code");
 
       const slow = agent.tool("run_query", { datasource: "shop", sql: SLOW_COUNT });
-      const services = toolWindow(page, "Services");
+      const services = await showServices(page);
       const call = services.locator('[role="treeitem"][data-kind="agentRun"]');
       await call.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       expect(await services.locator('[role="treeitem"][data-kind="agentClient"]').textContent()).toContain(

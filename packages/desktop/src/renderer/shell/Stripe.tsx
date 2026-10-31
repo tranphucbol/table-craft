@@ -32,7 +32,7 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
         disabled={!enabled}
         className={cn(
           "flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink",
-          open && "bg-selection text-ink",
+          open && "bg-raised text-ink",
         )}
         onClick={() => invoke(actionId)}
       >

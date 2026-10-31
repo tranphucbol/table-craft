@@ -99,6 +99,7 @@ import {
   TableIcon,
   WarningIcon,
 } from "@table-craft/desktop/renderer/ui/icons.js";
+import { Elapsed } from "@table-craft/desktop/renderer/ui/Elapsed.js";
 import { OutcomeGlyph } from "@table-craft/desktop/renderer/ui/Outcome.js";
 
 const STATE_CLASS: Readonly<Record<ServiceState, string>> = {
@@ -111,7 +112,7 @@ const STATE_CLASS: Readonly<Record<ServiceState, string>> = {
   disconnected: "text-ink-muted",
 };
 const INDENT_PX = 16;
-/** A running execution's elapsed time ticks this often (plan 011 decision 12). */
+/** A running agent call's elapsed time ticks this often (plan 011 decision 12). */
 const TICK_MS = 1000;
 const NO_COLLAPSED: ReadonlySet<string> = new Set();
 
@@ -253,9 +254,11 @@ function DatasourceLine({ row }: { readonly row: Extract<ServiceRow, { kind: "da
         className="size-icon shrink-0"
       />
       <span className="truncate">{row.node.name}</span>
-      <span className={cn("truncate", connection.status === "failed" ? "text-danger" : "text-ink-muted")}>
-        {connectionText(connection)}
-      </span>
+      {connection.status === "connected" ? null : (
+        <span className={cn("truncate", connection.status === "failed" ? "text-danger" : "text-ink-muted")}>
+          {connectionText(connection)}
+        </span>
+      )}
     </>
   );
 }
@@ -278,8 +281,7 @@ function SessionLine({ row }: { readonly row: Extract<ServiceRow, { kind: "sessi
   );
 }
 
-function ExecutionLine({ execution, now }: { readonly execution: Execution; readonly now: number }) {
-  const duration = execution.durationMs ?? Math.max(0, now - execution.startedAt);
+function ExecutionLine({ execution }: { readonly execution: Execution }) {
   const warnings = warningCount(execution.messages);
   return (
     <>
@@ -295,7 +297,11 @@ function ExecutionLine({ execution, now }: { readonly execution: Execution; read
           </span>
         )}
         {execution.rowCount === null ? null : <span>{rowsText(execution.rowCount)}</span>}
-        <span data-testid="execution-duration">{formatDuration(duration)}</span>
+        {execution.durationMs === null ? (
+          <Elapsed testId="execution-duration" startedAt={execution.startedAt} />
+        ) : (
+          <span data-testid="execution-duration">{formatDuration(execution.durationMs)}</span>
+        )}
         <span>{clockTime(execution.startedAt)}</span>
       </span>
     </>
@@ -571,9 +577,7 @@ export function ServicesPane() {
     () => serviceRows(tree, NO_COLLAPSED, exports, imports, scripts, keyDeletes, agents),
     [tree, exports, imports, scripts, keyDeletes, agents],
   );
-  const running =
-    mcpStatus.running.length > 0 || rows.some((row) => row.kind === "execution" && row.node.outcome === "running");
-  const now = useNow(running);
+  const now = useNow(mcpStatus.running.length > 0);
   const selectedIndex = rows.findIndex((row) => row.key === selected);
 
   function select(key: string | null): void {
@@ -735,7 +739,7 @@ export function ServicesPane() {
               ) : row.kind === "agentCall" ? (
                 <AgentCallLine call={row.node} />
               ) : (
-                <ExecutionLine execution={row.node} now={now} />
+                <ExecutionLine execution={row.node} />
               )}
             </li>
           );

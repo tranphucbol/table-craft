@@ -72,6 +72,8 @@ export interface SavedDatasource {
   /** Plan 118's remembered product, a manifest brand id such as `tidb`. */
   readonly brand?: string;
   readonly config: Readonly<Record<string, string | number | boolean>>;
+  /** The databases or schemas the explorer lists; absent lists every one. */
+  readonly shownNamespaces?: readonly string[];
   readonly secretModes?: Readonly<Record<string, "forever" | "untilRestart" | "never">>;
   /** Plan 036's tunnel; its secrets are `ssh.password` and `ssh.passphrase` in `secretModes`. */
   readonly ssh?: {
@@ -401,6 +403,14 @@ export function consoleAlert(page: Page) {
 /** A tool window by title, e.g. "Database"; absent from the page while hidden. */
 export function toolWindow(page: Page, title: string) {
   return page.getByRole("region", { name: title, exact: true });
+}
+
+/** The Services tool window, opened first when hidden: the default layout keeps it closed (plan 130 decision 4). */
+export async function showServices(page: Page): Promise<Locator> {
+  const services = toolWindow(page, "Services");
+  if ((await services.count()) === 0) await pressChord(page, "8");
+  await services.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+  return services;
 }
 
 export function editorTabs(page: Page) {

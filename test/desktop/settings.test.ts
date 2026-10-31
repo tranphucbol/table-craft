@@ -41,6 +41,7 @@ const CHOSEN: Settings = {
   console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30, runAllOnError: "continue" },
   data: {
     nullText: "∅",
+    stripedRows: true,
     groupDigits: true,
     detectJson: false,
     pageRows: 100,
@@ -161,6 +162,7 @@ describe("settings document", () => {
       appearance: { theme: "neon", density: "compact", fonts: { editor: { family: "a;b", sizePx: 99 } } },
       data: {
         nullText: "",
+        stripedRows: "yes",
         groupDigits: "yes",
         detectJson: "no",
         pageRows: 200,
@@ -176,6 +178,7 @@ describe("settings document", () => {
     expect(read.appearance.fonts.editor).toEqual({ family: null, sizePx: 13 });
     expect(read.data).toEqual({
       nullText: "<null>",
+      stripedRows: false,
       groupDigits: false,
       detectJson: true,
       pageRows: 200,

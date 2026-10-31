@@ -41,6 +41,7 @@ import {
   type Datasource,
   type RunningApp,
   type SavedDatasource,
+  showServices,
 } from "./harness.js";
 import { applyFilter } from "./workflows.js";
 
@@ -185,6 +186,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     running = await launchApp(null, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await toolWindow(running.page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+    await showServices(running.page);
     return running.page;
   }
 
@@ -198,6 +200,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
     running = await launchApp(datasource);
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
+    await showServices(running.page);
     return running.page;
   }
 
@@ -414,7 +417,7 @@ describe.runIf(DATABASES_ENABLED)("query history and Services live test", () => 
       await expect.poll(() => execution.getAttribute("data-state")).toBe("running");
       expect(await serviceRow(page, "session").getAttribute("data-state")).toBe("running");
       const duration = execution.getByTestId("execution-duration");
-      await expect.poll(() => duration.textContent()).toMatch(/^1\.\d s$/);
+      await expect.poll(() => duration.textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toMatch(/^1\.\d{3} s$/);
       await captureWindow(page, "services-running");
       await expect.poll(() => execution.getAttribute("data-state"), { timeout: LAUNCH_TIMEOUT_MS }).toBe("success");
       expect(await duration.textContent()).toMatch(/^2\.\d s$/);

@@ -11,8 +11,11 @@ import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   databaseEnabled,
+  ETCD_CONFIG,
   MARIADB_CONFIG,
+  MSSQL_CONFIG,
   MYSQL_CONFIG,
+  ORACLE_CONFIG,
   POSTGRES_CONFIG,
   REDIS_CONFIG,
   tidbConfigFromEnv,
@@ -43,6 +46,7 @@ import {
   treeNode,
   type RunningApp,
   type SavedDatasource,
+  showServices,
 } from "./harness.js";
 
 const captureNow = evidenceFor("118");
@@ -124,6 +128,39 @@ function everyBrand(): readonly Row[] {
       },
       glyph: "redis",
       product: "Redis",
+    },
+    {
+      saved: {
+        id: "config",
+        name: "config",
+        pluginId: "etcd",
+        config: withoutPassword(ETCD_CONFIG),
+        secretModes: { password: "never" },
+      },
+      glyph: "etcd",
+      product: "etcd",
+    },
+    {
+      saved: {
+        id: "billing",
+        name: "billing",
+        pluginId: "oracle",
+        config: withoutPassword(ORACLE_CONFIG),
+        secretModes: { password: "never" },
+      },
+      glyph: "oracle",
+      product: "Oracle",
+    },
+    {
+      saved: {
+        id: "payroll",
+        name: "payroll",
+        pluginId: "mssql",
+        config: withoutPassword(MSSQL_CONFIG),
+        secretModes: { password: "never" },
+      },
+      glyph: "microsoftsqlserver",
+      product: "SQL Server",
     },
   ];
 }
@@ -367,9 +404,7 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
         if (password !== null) await answerSecretPrompt(page, name, password);
       }
 
-      const services = toolWindow(page, "Services");
-      if ((await services.count()) === 0) await pressChord(page, "8");
-      await services.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      const services = await showServices(page);
       for (const { name, glyph } of opened) {
         const line = services
           .locator('[role="treeitem"][data-kind="datasource"]')

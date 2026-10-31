@@ -43,6 +43,7 @@ import {
   type Datasource,
   type RunningApp,
   chooseOption,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("013");
@@ -62,6 +63,8 @@ const USER_CANVAS = "#002b36";
 const USER_PANEL = "#073642";
 
 const COMPACT_ROW_PX = 20;
+/** The Editor page lists every SQL inspection, so it scrolls inside the dialog. */
+const SCROLLING_TAB = "Editor";
 const SERIES_ROWS = 5_000;
 const SERIES = `SELECT g AS n FROM generate_series(1, ${String(SERIES_ROWS)}) g`;
 const SMALL_PAGE = 100;
@@ -311,7 +314,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
       for (const tab of ["Editor", "Data Editor", "Appearance"]) {
         await settingsTab(page, tab).click();
         expect(await dialogInsideWindow(page)).toBe(true);
-        expect(await pageFits(page)).toBe(true);
+        if (tab !== SCROLLING_TAB) expect({ tab, fits: await pageFits(page) }).toEqual({ tab, fits: true });
       }
       await closeSettings(page);
 
@@ -331,7 +334,7 @@ describe.runIf(DATABASES_ENABLED)("settings and appearance live test", () => {
       await page.emulateMedia({ colorScheme: "dark" });
       await expect.poll(() => canvas(page)).toBe(DARK_CANVAS);
       await runStatement(page, "SELECT * FROM customers ORDER BY id");
-      await toolWindow(page, "Services").waitFor();
+      await showServices(page);
       const surfaces = [
         toolWindow(page, "Database").getByRole("treeitem"),
         page.locator('[data-testid="sql-editor"] .cm-content'),

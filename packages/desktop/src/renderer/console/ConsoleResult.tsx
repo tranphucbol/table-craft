@@ -84,15 +84,17 @@ function EditToolbar({ edits, editable }: { readonly edits: ConsoleResultEdits; 
   const reason = consoleReadOnlyReason(edits);
   if (reason !== null) {
     return (
+      // The reason is a sentence the toolbar truncated mid-word; it lives in the tooltip (plan 130 decision 10).
       <span
         role="status"
         data-testid="result-read-only"
         title={`Read-only: ${reason}`}
-        className="flex min-w-0 shrink items-center gap-1 px-1 text-ink-muted"
+        aria-label={`Read-only: ${reason}`}
+        className="flex shrink-0 items-center gap-1 px-1 text-ink-muted"
       >
         <span className="mx-1 h-4 w-px shrink-0 bg-line" />
         <ReadOnlyIcon aria-hidden className="size-icon shrink-0" />
-        <span className="truncate">Read-only: {reason}</span>
+        <span>Read-only</span>
       </span>
     );
   }

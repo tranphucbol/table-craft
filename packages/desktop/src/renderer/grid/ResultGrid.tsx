@@ -51,6 +51,7 @@ import {
   useCellFormats,
   useDefaultValuePanelPx,
   useRowHeightPx,
+  useSettings,
 } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
@@ -218,6 +219,7 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
   });
   useEffect(() => virtualizer.measure(), [virtualizer, rowHeightPx]);
   const formats = useCellFormats();
+  const striped = useSettings((state) => state.settings.data.stripedRows);
   const { autoChars: storedChars, typeClasses } = result;
   /** Widths were measured with the formats of their time; a later NULL text or grouping must still fit. */
   const autoChars = useMemo(
@@ -341,7 +343,10 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
                 key={item.key}
                 role="row"
                 aria-rowindex={item.index + 2}
-                className={cn("absolute left-0 grid h-row w-max min-w-full", item.index % 2 === 1 && "bg-grid-stripe")}
+                className={cn(
+                  "absolute left-0 grid h-row w-max min-w-full",
+                  striped && item.index % 2 === 1 && "bg-grid-stripe",
+                )}
                 style={{ gridTemplateColumns: template, transform: `translateY(${String(item.start)}px)` }}
               >
                 <div

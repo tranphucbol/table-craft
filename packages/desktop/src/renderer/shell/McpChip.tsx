@@ -49,7 +49,7 @@ function LastCall({ call }: { readonly call: McpCallView }) {
   );
   return (
     <span
-      className={cn("truncate font-mono", call.outcome === "ok" ? "text-ink-muted" : "text-warning")}
+      className={cn("truncate font-grid", call.outcome === "ok" ? "text-ink-muted" : "text-warning")}
       title={approvalWaitText(call.approvalWaitMs) ?? undefined}
     >
       {call.tool}

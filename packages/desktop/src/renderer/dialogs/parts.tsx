@@ -1,6 +1,8 @@
+import * as Dialog from "@radix-ui/react-dialog";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
+import { CloseIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { FIELD_CLASS } from "@table-craft/desktop/renderer/ui/fieldClasses.js";
 import { InfoHint } from "@table-craft/desktop/renderer/ui/InfoHint.js";
 import { DIALOG_MOTION, OVERLAY_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
@@ -38,13 +40,36 @@ export function Button({
   );
 }
 
+/** The X in a big dialog's top-right corner, over its title row (plan 130 decision 14). */
+export function DialogCloseButton({ dialog }: { readonly dialog: string }) {
+  return (
+    <Dialog.Close
+      aria-label={`Close ${dialog}`}
+      title={`Close ${dialog}`}
+      className={cn(
+        "absolute top-cell right-gap rounded p-0.5 text-ink-muted hover:bg-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
+        TEXT_PRESS,
+      )}
+    >
+      <CloseIcon aria-hidden className="size-icon" />
+    </Dialog.Close>
+  );
+}
+
 export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn(INPUT_CLASS, className)} spellCheck={false} {...props} />;
 }
 
 /**
- * A label column and its control, in the dialog's two-column grid. A long label wraps and the row
- * grows; `hint` puts an (i) after the control, named "About" the label or `hintLabel`.
+ * The two columns `FieldRow`s sit in: the labels as wide as the widest of them, up to
+ * `max-w-dialog-label`, so the fields line up on one edge (plan 130 decision 15).
+ */
+export const FIELD_GRID_CLASS = "grid grid-cols-[minmax(0,max-content)_1fr] items-center gap-x-gap gap-y-1";
+
+/**
+ * A label column and its control, in the dialog's two-column grid (`FIELD_GRID_CLASS`). A long
+ * label wraps and the row grows; `hint` puts an (i) after the control, named "About" the label or
+ * `hintLabel`.
  */
 export function FieldRow({
   label,
@@ -65,7 +90,7 @@ export function FieldRow({
     <>
       <label
         htmlFor={htmlFor}
-        className="flex min-h-row min-w-0 items-center justify-end text-right leading-tight text-ink-muted"
+        className="flex min-h-row max-w-dialog-label min-w-0 items-center leading-tight text-ink-muted"
       >
         {label}
       </label>

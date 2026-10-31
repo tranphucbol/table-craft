@@ -45,6 +45,7 @@ import {
   waitUntilReady,
   chooseOption,
   optionValue,
+  showServices,
 } from "./harness.js";
 
 const captureWindow = evidenceFor("012");
@@ -325,7 +326,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
   );
 
   it(
-    "givenJoinOnSqlite_whenShiftModE_thenTreeFromQueryPlanWithoutCosts",
+    "givenJoinOnSqlite_whenShiftModE_thenTreeFromQueryPlanWithoutEstimateColumns",
     async () => {
       const page = await launch(sqlite());
 
@@ -333,8 +334,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
 
       const columns = await planColumns(page);
       expect(columns["Operation"]).toEqual(["SCAN o", "SEARCH c USING INTEGER PRIMARY KEY (rowid=?)"]);
-      expect(columns["Rows (est.)"]).toEqual(["", ""]);
-      expect(columns["Cost (est.)"]).toEqual(["", ""]);
+      expect(Object.keys(columns)).toEqual(["Operation"]);
       await captureWindow(page, "plan-sqlite");
     },
     SCENARIO_TIMEOUT_MS,
@@ -575,7 +575,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
 
       await explainJoin(page);
 
-      const execution = toolWindow(page, "Services").locator('[role="treeitem"][data-kind="execution"]');
+      const execution = (await showServices(page)).locator('[role="treeitem"][data-kind="execution"]');
       await expect.poll(() => execution.first().getAttribute("aria-label")).toBe(`Explain: ${JOIN_SQL}, success`);
       await pressChord(page, "Alt+E");
       const history = page.getByRole("dialog", { name: "Query History: pg" });

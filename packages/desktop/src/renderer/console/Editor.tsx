@@ -466,7 +466,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
               onSelect={() => invoke(SNIPPET_ACTION_IDS[command])}
             >
               {command === "cut" ? "Cut" : command === "copy" ? "Copy" : "Paste"}
-              <span className="ml-auto font-editor text-ink-muted">
+              <span className="ml-auto text-ink-muted">
                 {formatChord(`Mod+${command === "cut" ? "X" : command === "copy" ? "C" : "V"}`, currentPlatform())}
               </span>
             </ContextMenu.Item>

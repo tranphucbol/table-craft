@@ -2,6 +2,7 @@ import { Group, Panel, type Layout } from "react-resizable-panels";
 import { useEffect } from "react";
 import { useCommandTxn } from "./transaction/store.js";
 import { TransactionBuilder } from "./transaction/TransactionBuilder.js";
+import type { EngineError } from "@table-craft/desktop/engine/protocol.js";
 import { COMMAND_TXN_ACTION_IDS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
@@ -28,7 +29,14 @@ import { MIN_CONSOLE_PANE_PERCENT, useLayout } from "@table-craft/desktop/render
 import { groupOf, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
-import { DatabaseIcon, ReadOnlyIcon, SchemaIcon, WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import {
+  DatabaseIcon,
+  ErrorIcon,
+  ReadOnlyIcon,
+  SchemaIcon,
+  SuccessIcon,
+  WarningIcon,
+} from "@table-craft/desktop/renderer/ui/icons.js";
 import { ToolbarDivider } from "@table-craft/desktop/renderer/ui/ToolbarDivider.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
@@ -132,6 +140,48 @@ function ErrorQuestionBanner({ question }: { readonly question: ErrorQuestion })
   );
 }
 
+/**
+ * The failed run, at the head of the results it did not produce, with the ways out of it (plan 130
+ * decision 9); the toolbar keeps only a dot.
+ */
+function RunError({ error, located }: { readonly error: EngineError; readonly located: boolean }) {
+  return (
+    <div
+      role="alert"
+      data-testid="run-error"
+      className="flex shrink-0 items-start gap-gap border-b border-line bg-panel px-gap py-1"
+    >
+      <ErrorIcon aria-hidden weight="fill" className="my-0.5 size-icon shrink-0 text-danger" />
+      <span className="min-w-0 flex-1 break-words">
+        <span className="text-danger">{error.message}</span> <span className="text-ink-muted">{error.hint}</span>
+      </span>
+      {located ? (
+        <button
+          type="button"
+          className="shrink-0 text-accent hover:underline"
+          onClick={() => void invoke(ERROR_ACTION_IDS.show)}
+        >
+          Go to Error
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className="shrink-0 text-accent hover:underline"
+        onClick={() => void invoke(LOG_ACTION_IDS.showFor, { requestId: null, message: error.message })}
+      >
+        Show in Log
+      </button>
+      <button
+        type="button"
+        className="shrink-0 text-accent hover:underline"
+        onClick={() => void invoke(ACTION_IDS.run)}
+      >
+        Run Again
+      </button>
+    </div>
+  );
+}
+
 /** One console tab: its toolbar, its SQL editor, and its Output and result tabs. */
 export function Console({ consoleId }: { readonly consoleId: string }) {
   const session = useConsoles((state) => state.consoles[consoleId]);
@@ -198,32 +248,12 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         {txnSupported ? <ActionButton actionId={COMMAND_TXN_ACTION_IDS.toggle} pressed={txnOpen} /> : null}
         {statusText === "" ? null : <span className="shrink-0 text-ink-muted">{statusText}</span>}
         {error === null ? null : (
-          // The room the datasource label leaves, but never none; Output holds the whole error.
           <span
-            role="alert"
-            className="min-w-16 flex-1 basis-0 truncate text-danger"
+            aria-hidden
+            data-testid="console-error-dot"
             title={`${error.message} ${error.hint}`}
-          >
-            {error.message} <span className="text-ink-muted">{error.hint}</span>
-          </span>
-        )}
-        {error === null ? null : (
-          <button
-            type="button"
-            className="shrink-0 text-accent hover:underline"
-            onClick={() => void invoke(LOG_ACTION_IDS.showFor, { requestId: null, message: error.message })}
-          >
-            Show in Log
-          </button>
-        )}
-        {markOfError(session.errorMarks, error) === null ? null : (
-          <button
-            type="button"
-            className="shrink-0 text-accent hover:underline"
-            onClick={() => void invoke(ERROR_ACTION_IDS.show)}
-          >
-            Go to Error
-          </button>
+            className="size-2 shrink-0 rounded-full bg-danger"
+          />
         )}
         <div className="ml-auto flex min-w-0 items-center gap-gap">
           {capabilities.includes("nodes") ? <RunOnPicker session={session} /> : null}
@@ -281,8 +311,9 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           </div>
           {notice?.consoleId === consoleId ? (
             <div role="status" className="flex shrink-0 items-center gap-gap bg-success px-gap py-cell text-accent-ink">
+              <SuccessIcon aria-hidden weight="fill" className="size-icon shrink-0" />
               <span className="min-w-0 flex-1">
-                ✓ Snippet “{notice.snippet.name}” created. Type{" "}
+                Snippet “{notice.snippet.name}” created. Type{" "}
                 <code className="font-editor">{notice.snippet.prefix}</code> to use it.
               </span>
               <button
@@ -304,6 +335,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           style={PANEL_STYLE}
         >
           {session.question === null ? null : <ErrorQuestionBanner question={session.question} />}
+          {error === null ? null : <RunError error={error} located={markOfError(session.errorMarks, error) !== null} />}
           <ResultTabs consoleId={consoleId} session={session} />
         </Panel>
       </Group>
