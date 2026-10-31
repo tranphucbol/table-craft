@@ -57,6 +57,7 @@ import type {
   SwitchStatement,
 } from "@table-craft/desktop/engine/protocol.js";
 import { connectionTarget, type LoggedRequest, type RequestContext } from "@table-craft/desktop/engine/requestLog.js";
+import { learnInstance, repeatedIds } from "@table-craft/desktop/engine/serverInstances.js";
 import { transferContext } from "@table-craft/desktop/engine/transfers.js";
 import type { LogFields, Logger } from "@table-craft/desktop/log/record.js";
 
@@ -491,13 +492,19 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     return session.sessions;
   }
 
-  /** The listing, and the catalog's own connection, which is this engine's too. */
+  /**
+   * The listing, and the catalog's own connection, which is this engine's too. The catalog learns
+   * its server in the same turn, so the plugin never sees the lookup beside other work.
+   */
   function listServerSessions(): Promise<{ readonly listing: SessionListing; readonly catalog: Session }> {
     requireSessions();
-    if (commandLanguage() !== null) {
-      return onHelper(async (session) => ({ listing: await monitorOf(session).list(), catalog: session }));
-    }
-    return introspect(async ({ session }) => ({ listing: await monitorOf(session).list(), catalog: session }));
+    const listOn = async (session: Session) => {
+      const listing = await monitorOf(session).list();
+      await learnInstance(session, repeatedIds(listing.sessions));
+      return { listing, catalog: session };
+    };
+    if (commandLanguage() !== null) return onHelper(listOn);
+    return introspect(({ session }) => listOn(session));
   }
 
   /** Runs the row's statement on the plugin's fresh connection; no retry, since a kill is not idempotent. */
