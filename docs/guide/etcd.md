@@ -13,7 +13,9 @@ Serializable, the member you reach answers alone, and results are marked as poss
 
 - **Key tree.** Keys in folders split on `/`, listed from the server 500 at a time per folder, with
   counts as folders scroll into view and a lease's time to live beside its key. Filter by prefix,
-  by range, by name among the loaded keys, or to leased keys only. Deleting a key or a folder
+  by range, by name among the loaded keys, or to leased keys only. With **Load keys only when
+  asked** ticked under Options in the Data Sources dialog, **Keys** shows
+  `Not listed · ~1,204 keys · List` and reads nothing until you choose List or filter. Deleting a key or a folder
   previews the keys first and fails if any of them changed since; a whole-keyspace or very large
   delete asks you to type the prefix.
 - **Key editor.** One value per key, read as Text, JSON, YAML, Hex or Base64, with its version,

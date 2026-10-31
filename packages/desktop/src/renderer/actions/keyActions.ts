@@ -2,7 +2,7 @@ import type { KeyName } from "@table-craft/desktop/engine/protocol.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { datasourceKey, keyTreeKey, keyTreeRowOf } from "@table-craft/desktop/renderer/model/explorerTree.js";
-import { keyIdentity, type KeyFilter } from "@table-craft/desktop/renderer/model/keyTree.js";
+import { keyIdentity, treeDatabaseLabel, type KeyFilter } from "@table-craft/desktop/renderer/model/keyTree.js";
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -56,6 +56,9 @@ export const KEY_ACTION_IDS = {
 
 /** Characters a Redis glob gives meaning to, escaped so Go to Key matches them literally. */
 const GLOB_SPECIAL = /[*?[\]\\]/g;
+
+/** On demand, Go to Key skips the partial-name search: an unanchored `MATCH` walks the whole keyspace. */
+const GO_TO_KEY_ON_DEMAND_HINT = "Filter the database to search by prefix or pattern.";
 
 const browsesKeys = (context: ActionContext) => context.datasource?.capabilities.includes("keyValue") === true;
 
@@ -213,6 +216,17 @@ async function goToKey(context: ActionContext): Promise<void> {
     openKey(context, { datasourceId, database, key });
     return;
   }
+  if (context.datasource?.view.loadKeysOnDemand === true) {
+    const serverChildren = useKeys.getState().keyspaces[datasourceId]?.features?.children === true;
+    await useModal.getState().ask({
+      kind: "notice",
+      title: "Go to Key",
+      message: `No key named "${text}" in ${treeDatabaseLabel(database, serverChildren)}.`,
+      hint: GO_TO_KEY_ON_DEMAND_HINT,
+      tone: "info",
+    });
+    return;
+  }
   useCatalog.getState().expandAll([datasourceKey(datasourceId), keyTreeKey(datasourceId, "keyDatabase", database)]);
   await useKeys
     .getState()
@@ -242,8 +256,12 @@ function databaseTarget(context: ActionContext, args: unknown): KeyDatabaseArgs 
 function canLoadMore(context: ActionContext): boolean {
   const target = databaseTarget(context, undefined);
   if (target === null) return false;
-  const keys = useKeys.getState().keyspaces[target.datasourceId]?.byDatabase[target.database];
-  return keys !== undefined && keys.started && !keys.loading && keys.cursor !== null;
+  const keyspace = useKeys.getState().keyspaces[target.datasourceId];
+  if (keyspace?.databases == null) return false;
+  const keys = keyspace.byDatabase[target.database];
+  if (keys?.loading === true) return false;
+  if (keys?.started === true) return keys.cursor !== null;
+  return context.datasource?.view.loadKeysOnDemand === true;
 }
 
 async function filterKeys(context: ActionContext, args: KeyFilterArgs | undefined): Promise<void> {

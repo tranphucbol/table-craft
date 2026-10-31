@@ -74,6 +74,8 @@ const TIMEOUT_HINT =
 const NO_SERVER_TIMEOUT_HINT = "This data source's plugin cannot ask the database to stop statements.";
 const URL_SEPARATOR = "://";
 const READ_ONLY_HINT = "A guard against accidents, not a security boundary: use a read-only database user for that.";
+const LOAD_ON_DEMAND_HINT =
+  "For large keyspaces: the tree lists databases and their key counts, and reads keys only when you choose Scan or List, filter or Load more.";
 const AGENT_ACCESS_OPTIONS = AGENT_ACCESS_LEVELS.map((value) => ({ value, label: AGENT_ACCESS_LABELS[value] }));
 const AGENT_READ_ONLY_NOTE = "Read only while Read-only is on";
 const AGENT_ACCESS_HINT =
@@ -360,6 +362,7 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
   const keepAlive = capabilities.includes("keepAlive");
   const timeout = capabilities.includes("cancel");
   const enforceable = capabilities.includes("serverTimeout");
+  const browsesKeys = capabilities.includes("keyValue");
   const onPasteUrl = (field: ConnectionField, text: string): boolean => {
     if (spec === null || urlFieldKey(spec) !== field.key || !looksLikeUrl(spec, text)) return false;
     onUrl(text);
@@ -509,6 +512,19 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
             <span className="text-ink-muted">Refuse writes in this data source's sessions</span>
           </label>
         </FieldRow>
+        {browsesKeys ? (
+          <FieldRow label="Key tree" hint={LOAD_ON_DEMAND_HINT}>
+            <label className="flex items-center gap-cell">
+              <input
+                type="checkbox"
+                data-testid="load-keys-on-demand"
+                checked={draft.loadKeysOnDemand}
+                onChange={(event) => onChange({ loadKeysOnDemand: event.target.checked })}
+              />
+              <span>Load keys only when asked</span>
+            </label>
+          </FieldRow>
+        ) : null}
         <FieldRow label="AI agent access" hint={AGENT_ACCESS_HINT}>
           <Select
             label="AI agent access"

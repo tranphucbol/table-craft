@@ -515,7 +515,11 @@ function datasourceRows(builder: Builder, node: DatasourceNode, depth: number): 
       keyOf: (...parts: readonly unknown[]) => catalogKey(datasource.id, ...parts),
     };
     const keyspace = builder.input.keyspaces?.[datasource.id] ?? EMPTY_KEYSPACE;
-    keyspaceRows(sink, datasource.id, keyspace, { showEmpty: builder.input.showEmptyDatabases === true }, depth + 1);
+    const options = {
+      showEmpty: builder.input.showEmptyDatabases === true,
+      loadOnDemand: datasource.loadKeysOnDemand === true,
+    };
+    keyspaceRows(sink, datasource.id, keyspace, options, depth + 1);
     return;
   }
   const catalog = builder.input.catalogs[datasource.id] ?? EMPTY_CATALOG;

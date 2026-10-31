@@ -2276,6 +2276,15 @@ plugin's delimiter with the count of loaded keys, then keys with their type badg
 scans `SCAN` batches until 10,000 keys, then shows `Scanned 10,000 of ~48,213 · Load more`. Only
 visible keys are described (type and TTL), in batches of 200. Synchronize rescans.
 
+A datasource with **Load keys only when asked** (`loadKeysOnDemand`, decision 144; the dialog's
+Options › Key tree row, shown for `keyValue` plugins) lists its databases and expands the
+configured one without a pass. An unloaded database shows its filter row and
+`Not scanned · ~48,213 keys · Scan`, or for a keyspace with server-side children
+`Not listed · ~1,204 keys · List`; Enter or a double-click runs the first pass, as does applying a
+filter or Load More Keys. Synchronize rescans only databases already loaded. A key opened from the
+console shows above that row, and Go to Key reports a name it cannot find instead of filtering by
+it.
+
 Enter or a double-click opens a key tab: a header with the type badge, the name, the datasource
 and database, a TTL counting down, then length, memory, encoding and idle time, each left out when
 the server refuses it; a filter bar (`Match` for hash, set and zset, From and To ids for streams);

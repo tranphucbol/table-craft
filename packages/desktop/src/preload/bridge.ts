@@ -331,6 +331,8 @@ export interface Datasource {
   readonly statementTimeoutSeconds?: number | undefined;
   /** The console, grid and Explain also ask the database to stop at that limit (decision 129); absent, the app alone. */
   readonly enforceTimeoutOnServer?: true | undefined;
+  /** The key tree lists databases but loads keys only when asked (decision 144); absent, it loads on open. */
+  readonly loadKeysOnDemand?: true | undefined;
   readonly comment: string;
   /** The non-secret connection fields, by key. */
   readonly config: Readonly<Record<string, ConfigValue>>;

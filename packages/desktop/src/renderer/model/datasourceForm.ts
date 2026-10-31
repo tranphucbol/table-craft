@@ -43,6 +43,8 @@ export interface FormDraft {
   readonly statementTimeoutSeconds: string;
   /** The database stops statements at that limit too (decision 129); stored only when ticked. */
   readonly enforceTimeoutOnServer: boolean;
+  /** The key tree loads keys only when asked (decision 144); stored only when ticked. */
+  readonly loadKeysOnDemand: boolean;
   /** The URL row as typed or as last filled in from a pasted URL, never with its password. */
   readonly url: string;
   /** What the last pasted URL left out or set; null until one is pasted. */
@@ -214,6 +216,7 @@ export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefin
     keepAliveSeconds: secondsInput(view.keepAliveSeconds),
     statementTimeoutSeconds: secondsInput(view.statementTimeoutSeconds),
     enforceTimeoutOnServer: view.enforceTimeoutOnServer === true,
+    loadKeysOnDemand: view.loadKeysOnDemand === true,
     url: "",
     urlNote: null,
     values,
@@ -257,6 +260,7 @@ export function newDraft(
     keepAliveSeconds: "",
     statementTimeoutSeconds: "",
     enforceTimeoutOnServer: false,
+    loadKeysOnDemand: false,
     url: "",
     urlNote: null,
     values,
@@ -418,6 +422,7 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
       ...secondsField("keepAliveSeconds", draft.keepAliveSeconds),
       ...secondsField("statementTimeoutSeconds", draft.statementTimeoutSeconds),
       ...(draft.enforceTimeoutOnServer ? { enforceTimeoutOnServer: true } : {}),
+      ...(draft.loadKeysOnDemand ? { loadKeysOnDemand: true } : {}),
       comment: draft.comment,
       config,
       secretModes: Object.fromEntries(Object.entries(draft.secretModes).filter(([key]) => kept(key))),

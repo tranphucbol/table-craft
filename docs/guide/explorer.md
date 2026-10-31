@@ -11,6 +11,11 @@ On a server with many databases, **Manage Shown Schemas…** on a data source pi
 or schemas the tree lists, as DataGrip does; the data source then shows how many of them it lists,
 such as `3 of 40`. Ones created later stay hidden until you pick them, unless **All schemas** is on.
 
+A [Redis](redis.md) or [etcd](etcd.md) data source expands into its keys instead. Tick
+**Load keys only when asked** under Options in the Data Sources dialog to have it list only its
+databases and their key counts; each database then waits behind a **Scan** (Redis) or **List**
+(etcd) row until you choose it, filter, or Load More Keys.
+
 Each data source shows the logo of the database it is: MySQL, MariaDB or TiDB (whichever the server
 says it is on connect), PostgreSQL, SQLite or Redis, in the tree, the Data Sources dialog and the
 Services tool window. **View → Brand Icons**, **Toggle Brand Icons** in Find Action, or Settings ›

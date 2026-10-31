@@ -159,6 +159,23 @@ describe("datasource form", () => {
     expect(newDraft("new-0", POSTGRES_PLUGIN, [], "forever").enforceTimeoutOnServer).toBe(false);
   });
 
+  it("givenLoadOnDemandTicked_whenToSaveRequest_thenFieldSaved", () => {
+    const ticked = draftFromView({ ...SAVED, loadKeysOnDemand: true }, POSTGRES_PLUGIN);
+
+    expect(ticked.loadKeysOnDemand).toBe(true);
+    expect(toSaveRequest(ticked, POSTGRES_PLUGIN).datasource).toMatchObject({ loadKeysOnDemand: true });
+  });
+
+  it("givenLoadOnDemandUnticked_whenToSaveRequest_thenFieldAbsent", () => {
+    const unticked = {
+      ...draftFromView({ ...SAVED, loadKeysOnDemand: true }, POSTGRES_PLUGIN),
+      loadKeysOnDemand: false,
+    };
+
+    expect(toSaveRequest(unticked, POSTGRES_PLUGIN).datasource).not.toHaveProperty("loadKeysOnDemand");
+    expect(newDraft("new-0", POSTGRES_PLUGIN, [], "forever").loadKeysOnDemand).toBe(false);
+  });
+
   it("givenShownNamespaces_whenEditedAndSaved_thenKeptAndCopiedByDuplicate", () => {
     const filtered = view({ ...SAVED, shownNamespaces: ["shop", "billing"] });
 
