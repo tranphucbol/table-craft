@@ -61,6 +61,7 @@ import { readLogRecord } from "@table-craft/desktop/main/log/schema.js";
 import { createLogWriter, LOG_DIRECTORY, nodeLogFiles } from "@table-craft/desktop/main/log/writer.js";
 import { zip } from "@table-craft/desktop/main/log/zip.js";
 import { installApplicationMenu } from "@table-craft/desktop/main/menu.js";
+import { createElectronMcpNotices } from "@table-craft/desktop/main/mcpNoticesElectron.js";
 import { FILE_ATTACHMENTS_FILE, createFileAttachments } from "@table-craft/desktop/main/fileAttachments.js";
 import { createSqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { createLoneAlt, menuButtonAnchor, popupApplicationMenu } from "@table-craft/desktop/main/menuPopup.js";
@@ -863,6 +864,10 @@ void app.whenReady().then(async () => {
   if (datasourcesWarning !== null)
     mainLog.child("datasources").warn("datasources file set aside", { warning: datasourcesWarning });
   forwardAppendedRecords();
+  const mcpNotices = createElectronMcpNotices(
+    () => settings.snapshot().settings.mcp.notifications,
+    mainLog.child(MCP_LOG_PROCESS),
+  );
   const mcp = createMcpSupervisor({
     fork(): McpProcess {
       const host = utilityProcess.fork(paths.mcpEntry, [], { serviceName: MCP_SERVICE_NAME, stdio: HOST_STDIO });
@@ -875,7 +880,10 @@ void app.whenReady().then(async () => {
     connect: (datasourceId, target) => service.connect(datasourceId, {}, target),
     history,
     rememberServer: (datasourceId, seen) => service.rememberServer(datasourceId, seen),
-    onStatus: (status) => broadcast(CHANNELS.mcpStatus, status),
+    onStatus(status) {
+      broadcast(CHANNELS.mcpStatus, status);
+      mcpNotices.statusChanged(status);
+    },
     forward(record, process) {
       const read = readLogRecord(record, process);
       if (read !== null) logHub.write(read);
@@ -889,7 +897,10 @@ void app.whenReady().then(async () => {
     log: mainLog.child(MCP_LOG_PROCESS),
   });
   mcpSupervisor = mcp;
-  settingsListeners.push((changed) => void mcp.settingsChanged(changed.mcp));
+  settingsListeners.push((changed) => {
+    void mcp.settingsChanged(changed.mcp);
+    mcpNotices.settingsChanged();
+  });
   const updates = await startUpdater(directory, settings);
   updater = updates;
   nativeTheme.on("updated", () => {

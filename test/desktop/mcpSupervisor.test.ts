@@ -25,7 +25,14 @@ import type { McpSettings } from "@table-craft/desktop/settings/settings.js";
 import { tokenHint, type McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { fakeCipher, memoryFiles } from "../support/memoryFiles.js";
 
-const ON: McpSettings = { enabled: true, port: 47_820, rowCap: 100, statementTimeoutSeconds: 120, clients: [] };
+const ON: McpSettings = {
+  enabled: true,
+  port: 47_820,
+  rowCap: 100,
+  statementTimeoutSeconds: 120,
+  clients: [],
+  notifications: true,
+};
 const OFF: McpSettings = { ...ON, enabled: false };
 const SILENT = createLogger({ process: "main", scope: "test", sink: () => undefined });
 

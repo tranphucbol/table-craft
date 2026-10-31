@@ -61,6 +61,7 @@ const CHOSEN: Settings = {
     rowCap: 250,
     statementTimeoutSeconds: 45,
     clients: [{ name: "Claude Code", allowed: true }],
+    notifications: false,
   },
 };
 
@@ -340,7 +341,18 @@ describe("settings document", () => {
       rowCap: 100,
       statementTimeoutSeconds: 120,
       clients: [],
+      notifications: true,
     });
+  });
+
+  it("givenNoNotificationsField_whenRead_thenDefaultsOn", () => {
+    const { notifications: _notifications, ...older } = CHOSEN.mcp;
+
+    expect(readSettings({ ...CHOSEN, mcp: older }).mcp.notifications).toBe(true);
+  });
+
+  it("givenNotificationsFalse_whenRead_thenKeptOff", () => {
+    expect(readSettings(CHOSEN).mcp.notifications).toBe(false);
   });
 
   it("givenMcpTimeoutOutOfRange_whenRead_thenDefault", () => {

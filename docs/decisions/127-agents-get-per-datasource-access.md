@@ -1,7 +1,8 @@
 # 127: Agents get per-datasource access, and writes wait for the user
 
 Status: Accepted. Amended by 130: a fourth level, `askReads` (Ask before reads), makes reads wait
-for the user too and refuses writes.
+for the user too and refuses writes. Amended by 143: while no window is focused, a waiting request
+also posts a system notification and sets the dock badge.
 
 ## Decision
 
