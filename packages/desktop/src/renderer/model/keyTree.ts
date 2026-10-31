@@ -11,7 +11,7 @@ import type {
   KeyRevision,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { ErrorNode, ExplorerNode, LoadingNode } from "@table-craft/desktop/renderer/model/explorerTree.js";
-import { nodeLabel } from "@table-craft/desktop/renderer/model/runOn.js";
+import { isCluster, nodeLabel } from "@table-craft/desktop/renderer/model/runOn.js";
 
 /** A pass of the key tree's scan stops after this many keys, behind a Load more row (decision 113). */
 export const KEYS_PER_PASS = 10_000;
@@ -498,7 +498,7 @@ export function keyspaceStatusText(
   nodes: readonly ServerNode[],
 ): string | null {
   const primaries = nodes.filter((node) => node.role === "primary").length;
-  if (nodes.length > 1) return `cluster · ${String(primaries)} ${primaries === 1 ? "primary" : "primaries"}`;
+  if (isCluster(nodes)) return `cluster · ${String(primaries)} ${primaries === 1 ? "primary" : "primaries"}`;
   const current = keyspace?.databases?.find((database) => database.current);
   if (current === undefined) return null;
   const keys = current.keys.toLocaleString("en-US");
@@ -512,7 +512,7 @@ export function shownDatabases(databases: readonly KeyDatabase[], showEmpty: boo
 
 /**
  * A key-value datasource's rows under its node (decision 113): its databases, each with its filter
- * row, folders by delimiter, keys and the Load more row; then a cluster's nodes.
+ * row, folders by delimiter, keys and the Load more row; then the nodes, when there are several.
  */
 export function keyspaceRows(
   sink: KeyRowSink,
@@ -535,7 +535,8 @@ export function keyspaceRows(
   }
   if (keyspace.nodes.length <= 1) return;
   const group: ClusterNodesNode = { kind: "clusterNodes", datasourceId, path: [], count: keyspace.nodes.length };
-  if (!sink.push(group, depth, sink.keyOf("clusterNodes"), "Cluster nodes", true)) return;
+  const label = isCluster(keyspace.nodes) ? "Cluster nodes" : "Nodes";
+  if (!sink.push(group, depth, sink.keyOf("clusterNodes"), label, true)) return;
   for (const node of keyspace.nodes) {
     const row: ClusterNodeNode = { kind: "clusterNode", datasourceId, path: [], node };
     sink.push(row, depth + 1, sink.keyOf("clusterNode", node.id), nodeLabel(node, keyspace.nodes), false);
