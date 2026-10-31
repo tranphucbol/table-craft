@@ -32,6 +32,7 @@ export type SeededService =
   | "redis-6-cluster"
   | "redis-5"
   | "redis-5-cluster"
+  | "redis-sentinel"
   | "etcd"
   | "etcd-3-5"
   | "etcd-tls";
@@ -45,6 +46,13 @@ const REDIS_STANDALONE_SEED = [
   "schema/redis-db1.redis",
 ];
 const REDIS_CLUSTER_SEED = ["redis/users.sh", "redis/seed.sh", "redis/cluster.sh", "schema/redis.redis"];
+const REDIS_SENTINEL_SEED = [
+  "redis/users.sh",
+  "redis/seed.sh",
+  "redis/sentinel.sh",
+  "schema/redis.redis",
+  "schema/redis-db1.redis",
+];
 /** What `etcd-seed` reads, which seeds both etcd servers: its image, its script and the keys. */
 const ETCD_SEED = ["etcd/Dockerfile", "etcd/seed.sh", "schema/etcd.etcd"];
 
@@ -68,6 +76,7 @@ const SEED_FILES: Readonly<Record<SeededService, readonly string[]>> = {
   "redis-6-cluster": REDIS_CLUSTER_SEED,
   "redis-5": REDIS_STANDALONE_SEED,
   "redis-5-cluster": REDIS_CLUSTER_SEED,
+  "redis-sentinel": REDIS_SENTINEL_SEED,
   etcd: ETCD_SEED,
   "etcd-3-5": ETCD_SEED,
   "etcd-tls": [
@@ -97,6 +106,7 @@ export const SEED_ENV: Readonly<Record<SeededService, string>> = {
   "redis-6-cluster": "TABLE_CRAFT_REDIS6_CLUSTER_SEED",
   "redis-5": "TABLE_CRAFT_REDIS5_SEED",
   "redis-5-cluster": "TABLE_CRAFT_REDIS5_CLUSTER_SEED",
+  "redis-sentinel": "TABLE_CRAFT_REDIS_SENTINEL_SEED",
   etcd: "TABLE_CRAFT_ETCD_SEED",
   "etcd-3-5": "TABLE_CRAFT_ETCD35_SEED",
   "etcd-tls": "TABLE_CRAFT_ETCD_TLS_SEED",

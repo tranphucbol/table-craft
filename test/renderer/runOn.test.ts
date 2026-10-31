@@ -33,6 +33,16 @@ describe("run on", () => {
     ]);
   });
 
+  it("givenPrimaryWithReplica_whenChoices_thenAutoThenEachNodeWithoutAllPrimaries", () => {
+    const primary = { ...PRIMARY, slots: [] };
+    const replica = { ...REPLICA, slots: [] };
+    expect(runOnChoices([primary, replica])).toEqual([
+      { value: NODE_AUTO, label: "Auto" },
+      { value: "a1", label: "127.0.0.1:7001 primary" },
+      { value: "b4", label: "127.0.0.1:7004 replica of 127.0.0.1:7001" },
+    ]);
+  });
+
   it("givenSplitSlots_whenLabelled_thenEveryRangeListed", () => {
     expect(
       nodeLabel(

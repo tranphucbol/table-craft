@@ -14,6 +14,7 @@ import {
   type SecretChange,
   type SecretMode,
   type SshSettings,
+  visibleWhenHolds,
 } from "@table-craft/desktop/preload/bridge.js";
 import type { AgentAccess } from "@table-craft/desktop/settings/mcp.js";
 import { keepAliveSecondsError, statementTimeoutSecondsError } from "@table-craft/desktop/settings/settings.js";
@@ -298,12 +299,12 @@ export function duplicateDraft(
 
 /**
  * Whether the form draws `field`: always, unless its `visibleWhen` names a select or checkbox that
- * holds another value (plan 058 decision 3). A hidden field is neither checked nor saved.
+ * holds another value (plan 058 decision 3, plan 133). A hidden field is neither checked nor saved.
  */
 export function fieldVisible(field: ConnectionField, draft: Pick<FormDraft, "values">): boolean {
   const rule = field.visibleWhen;
   if (rule === undefined) return true;
-  return draft.values[rule.key] === rule.equals;
+  return visibleWhenHolds(rule.equals, draft.values[rule.key]);
 }
 
 /** What stops the draft from saving, as sentences; empty when it can. */

@@ -235,6 +235,10 @@ const DEFAULT_REDIS_CLUSTER_PORTS = "47001-47006";
 const DEFAULT_REDIS6_CLUSTER_PORTS = "47011-47013";
 const DEFAULT_REDIS5_PORT = 56350;
 const DEFAULT_REDIS5_CLUSTER_PORTS = "47021-47026";
+const DEFAULT_REDIS_SENTINEL_PORTS = "47031-47035";
+/** The Sentinels' `requirepass` in `redis/sentinel.sh`. */
+const SENTINEL_PASSWORD = "sentinel";
+const SENTINEL_OFFSET = 2;
 
 /** The first port of a `first-last` range variable, which `compose.yml` publishes one to one. */
 function firstPortFromEnv(name: string, fallback: string): number {
@@ -328,6 +332,39 @@ export const REDIS5_CLUSTER_CONFIG = {
   ...clusterConfig("TABLE_CRAFT_REDIS5_CLUSTER_HOST", "TABLE_CRAFT_REDIS5_CLUSTER_PORTS", DEFAULT_REDIS5_CLUSTER_PORTS),
   user: "",
 } as const;
+
+function sentinelConfig() {
+  const host = hostFromEnv("TABLE_CRAFT_REDIS_SENTINEL_HOST");
+  const value = process.env.TABLE_CRAFT_REDIS_SENTINEL_PORTS;
+  const ports = value === undefined || value === "" ? DEFAULT_REDIS_SENTINEL_PORTS : value;
+  const [first, last] = ports.split("-").map(Number) as [number, number];
+  const sentinels: string[] = [];
+  for (let port = first + SENTINEL_OFFSET + 1; port <= last; port += 1) sentinels.push(`${host}:${port}`);
+  return {
+    mode: "sentinel",
+    host,
+    port: first + SENTINEL_OFFSET,
+    sentinels: sentinels.join(", "),
+    masterName: "mymaster",
+    sentinelPassword: SENTINEL_PASSWORD,
+    database: 0,
+    user: CREDENTIAL,
+    password: CREDENTIAL,
+    nodeAddressMap: clusterAddressMap(host, `${String(first)}-${String(first + 1)}`),
+  } as const;
+}
+
+/**
+ * A master, its replica and three Sentinels (plan 133): Host and Port are the first Sentinel, Other
+ * sentinels the rest, and the two data servers announce 127.0.0.1 like a cluster's nodes.
+ */
+export const REDIS_SENTINEL_CONFIG = sentinelConfig();
+
+/** The two data servers of `REDIS_SENTINEL_CONFIG`, either of which may be the master after a failover. */
+export function sentinelDataPorts(): readonly [number, number] {
+  const first = firstPortFromEnv("TABLE_CRAFT_REDIS_SENTINEL_PORTS", DEFAULT_REDIS_SENTINEL_PORTS);
+  return [first, first + 1];
+}
 
 const DEFAULT_ETCD_PORT = 52379;
 const DEFAULT_ETCD35_PORT = 52380;
