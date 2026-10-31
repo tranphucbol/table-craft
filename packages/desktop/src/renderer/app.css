@@ -66,6 +66,8 @@
   --spacing-plan-details: var(--tc-plan-details-width);
   --spacing-plan-bar: var(--tc-plan-bar-height);
   --spacing-island-gap: var(--tc-island-gap);
+  --spacing-pane-inset: var(--tc-pane-inset);
+  --spacing-tool-header: var(--tc-tool-header-height);
 
   --radius-island: var(--tc-island-radius);
 

@@ -31,7 +31,7 @@ export function ToolWindow({ id, title, toggleActionId, switchingActions, childr
       tabIndex={-1}
       className="flex h-full min-h-0 flex-col bg-panel outline-none"
     >
-      <header className="flex h-row shrink-0 items-center justify-between px-gap">
+      <header className="flex h-tool-header shrink-0 items-center justify-between px-pane-inset">
         <h2 className="text-ui font-semibold">{title}</h2>
         <div className="flex items-center">
           {switchingActions === undefined ? null : <SwitchingActionButton actionIds={switchingActions} />}

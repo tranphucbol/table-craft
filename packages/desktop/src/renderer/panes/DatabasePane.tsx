@@ -65,7 +65,8 @@ import {
   type TreeSelection,
 } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
-import { themeOf, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
+import { ICON_BUTTON_ROW_INSET } from "@table-craft/desktop/renderer/shell/islands.js";
+import { themeOf, useIslands, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { DatasourceGlyph, useBrandLogo, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
@@ -445,11 +446,11 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
           style={{
             paddingLeft:
               node.kind === "keyFilter" && node.serverChildren === true
-                ? "var(--spacing-gap)"
-                : `calc(var(--spacing-gap) + ${String(depth * INDENT_PX)}px)`,
+                ? "var(--spacing-pane-inset)"
+                : `calc(var(--spacing-pane-inset) + ${String(depth * INDENT_PX)}px)`,
           }}
           className={cn(
-            "flex h-row cursor-default items-center gap-cell pr-gap whitespace-nowrap outline-none hover:bg-raised",
+            "flex h-row cursor-default items-center gap-cell pr-pane-inset whitespace-nowrap outline-none hover:bg-raised",
             // The filter row is as wide as the pane and pinned there: sized by its controls it
             // would widen the whole tree and let the pane scroll sideways off its own fields.
             node.kind === "keyFilter" ? "sticky left-0 w-[100cqw]" : "w-full",
@@ -512,7 +513,7 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
 function EmptyState() {
   const shortcut = shortcutOf(ACTION_IDS.newDatasource);
   return (
-    <div className="flex flex-col items-start gap-gap p-gap text-ink-muted">
+    <div className="flex flex-col items-start gap-gap px-pane-inset py-gap text-ink-muted">
       <p>No data sources.</p>
       <button
         type="button"
@@ -530,7 +531,10 @@ function LoadWarning() {
   const dismiss = useDatasources((state) => state.dismissWarning);
   if (warning === null) return null;
   return (
-    <div role="alert" className="mx-gap mb-gap flex items-start gap-cell rounded border border-danger p-cell text-ink">
+    <div
+      role="alert"
+      className="mx-pane-inset mb-gap flex items-start gap-cell rounded border border-danger p-cell text-ink"
+    >
       <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0 text-danger" />
       <span className="min-w-0 flex-1">{warning}</span>
       <button type="button" className="text-ink-muted hover:text-ink" onClick={dismiss}>
@@ -550,7 +554,7 @@ function SettingsNotice() {
     <div
       role="alert"
       data-testid="settings-notice"
-      className="mx-gap mb-gap flex items-start gap-cell rounded border border-warning p-cell text-ink"
+      className="mx-pane-inset mb-gap flex items-start gap-cell rounded border border-warning p-cell text-ink"
     >
       <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0 text-warning" />
       <span className="flex min-w-0 flex-1 flex-col gap-1 break-words">
@@ -595,6 +599,7 @@ function isUnder(rows: readonly ExplorerRow[], ancestor: number, index: number):
  * (plan 005): one flat virtualized list of the expanded rows.
  */
 export function DatabasePane() {
+  const islands = useIslands();
   const datasources = useDatasources((state) => state.datasources);
   const plugins = useDatasources((state) => state.plugins);
   const emptyFolders = useDatasources((state) => state.emptyFolders);
@@ -872,7 +877,11 @@ export function DatabasePane() {
   const noMatch = query !== null && matches.length === 0;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div role="toolbar" aria-label="Database toolbar" className="flex shrink-0 items-center gap-1 px-1">
+      <div
+        role="toolbar"
+        aria-label="Database toolbar"
+        className={cn("flex shrink-0 items-center gap-1", islands ? ICON_BUTTON_ROW_INSET : "px-1")}
+      >
         {TOOLBAR_ACTIONS.map((actionId) => (
           <ToolbarButton key={actionId} actionId={actionId} />
         ))}
