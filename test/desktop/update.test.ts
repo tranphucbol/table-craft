@@ -186,6 +186,7 @@ async function installedApp(): Promise<InstallFacts> {
     executablePath: join(bundle, "Contents", "MacOS", "TableCraft"),
     appImagePath: undefined,
     writable: () => true,
+    bundleModifiable: () => true,
   };
 }
 
@@ -369,6 +370,7 @@ describe("update eligibility", () => {
     executablePath: "/Applications/TableCraft.app/Contents/MacOS/TableCraft",
     appImagePath: undefined,
     writable: () => true,
+    bundleModifiable: () => true,
     ...overrides,
   });
 
@@ -395,6 +397,7 @@ describe("update eligibility", () => {
       "readOnlyVolume",
     ],
     ["a read-only parent", { writable: () => false }, "darwin-arm64", "notWritable"],
+    ["a bundle App Management protects", { bundleModifiable: () => false }, "darwin-arm64", "appManagement"],
     ["an executable outside a bundle", { executablePath: "/usr/local/bin/table-craft" }, "darwin-arm64", "unpackaged"],
     ["a Linux build that is not an AppImage", { platform: "linux" as const, arch: "x64" }, "linux-x64", "noAsset"],
   ])("givenInstallFrom %s_whenChecked_thenIneligible", (_what, overrides, key, reason) => {
@@ -536,6 +539,44 @@ describe("updater", () => {
     expect(memory.value).toEqual({ skippedVersion: "0.2.0" });
     expect(await updater.check("automatic")).toEqual({ phase: "idle", current: "0.1.0" });
     expect((await updater.check("manual")).phase).toBe("available");
+  });
+
+  it("givenTheLastSwapWasDenied_whenChecked_thenTheFailureIsExplainedOnceAndRetryable", async () => {
+    const { updater } = await harness(release(), {
+      lastSwapFailure: { reason: "the installed app could not be moved aside; nothing was replaced", denied: true },
+    });
+
+    const first = await updater.check("automatic");
+    updater.dismiss();
+    const second = await updater.check("automatic");
+
+    expect(first).toMatchObject({ phase: "error", release: { version: "0.2.0" }, retryable: true });
+    expect(first.phase === "error" ? first.message : "").toMatch(/was not installed.*App Management/);
+    expect(second.phase).toBe("available");
+  });
+
+  it("givenTheLastSwapFailedOtherwise_whenChecked_thenItsReasonIsShown", async () => {
+    const { updater } = await harness(release(), {
+      lastSwapFailure: { reason: "the new app has no executable; the installed app was restored", denied: false },
+    });
+
+    const state = await updater.check("manual");
+    await updater.download();
+
+    expect(state.phase === "error" ? state.message : "").toMatch(/no executable; the installed app was restored/);
+    expect(updater.state().phase).toBe("ready");
+  });
+
+  it("givenBundleMacOSWillNotLetChange_whenChecked_thenIneligibleWithTheAppManagementHint", async () => {
+    const facts = { ...(await installedApp()), bundleModifiable: () => false };
+    const fetch = fakeFetch(release());
+    const { updater } = await harness(release(), { facts, fetch });
+
+    const state = await updater.check("automatic");
+
+    expect(state).toMatchObject({ phase: "ineligible", release: { version: "0.2.0" } });
+    expect(state.phase === "ineligible" ? state.message : "").toMatch(/App Management/);
+    expect(fetch.calls).not.toContain(ASSET_URL);
   });
 
   it("givenIneligibleInstall_whenChecked_thenIneligibleWithAMessageAndNoDownload", async () => {
@@ -1149,10 +1190,45 @@ describe("update memory", () => {
       },
     };
 
-    await drainSwapLog("/p/update-swap.log", store, recordingLogger(lines));
-    await drainSwapLog("/p/update-swap.log", store, recordingLogger(lines));
+    const first = await drainSwapLog("/p/update-swap.log", store, recordingLogger(lines));
+    const second = await drainSwapLog("/p/update-swap.log", store, recordingLogger(lines));
 
     expect(lines.map((line) => line.level)).toEqual(["info", "warn"]);
+    expect(first).toMatchObject({ denied: false });
+    expect(second).toBeNull();
+  });
+
+  it.each([
+    [
+      "macOS refused the move",
+      [
+        "2026-10-31T01:00:00Z waiting for TableCraft (pid 1) to quit",
+        "mv: rename /Applications/TableCraft.app to /Applications/TableCraft.app.update-backup: Operation not permitted",
+        "2026-10-31T01:00:01Z the installed app could not be moved aside; nothing was replaced",
+      ],
+      { reason: "the installed app could not be moved aside; nothing was replaced", denied: true },
+    ],
+    [
+      "a later swap succeeded",
+      [
+        "2026-10-31T01:00:01Z the installed app could not be moved aside; nothing was replaced",
+        "2026-10-31T02:00:00Z replaced; relaunching",
+      ],
+      null,
+    ],
+    ["the swap succeeded", ["2026-10-31T02:00:00Z replaced; relaunching"], null],
+  ])("givenSwapLogWhere %s_whenDrained_thenTheFailureIsReturned", async (_what, swapLines, expected) => {
+    const files = new Map([["/p/update-swap.log", `${swapLines.join("\n")}\n`]]);
+    const store = {
+      readText: (path: string) => Promise.resolve(files.get(path) ?? null),
+      writeText: () => Promise.resolve(),
+      remove: (path: string) => {
+        files.delete(path);
+        return Promise.resolve();
+      },
+    };
+
+    expect(await drainSwapLog("/p/update-swap.log", store, recordingLogger([]))).toEqual(expected);
   });
 });
 

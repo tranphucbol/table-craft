@@ -93,7 +93,10 @@ closes the popover and leaves the button where it is.
   ([decision 044](../decisions/044-the-app-signs-its-own-updates.md)).
 - On macOS the app replaces itself only from a folder you can write to, such as `/Applications`.
   Run from the disk image or from a folder macOS moved it to, the button explains what to do and
-  links to the release instead.
+  links to the release instead. The same goes when macOS's **App Management** protection would stop
+  the app from replacing itself: allow TableCraft in System Settings → Privacy & Security → App
+  Management, or install the release by hand. If a Restart to Update still leaves the old version
+  in place, the button says why on the next launch instead of offering the update as if new.
 - **macOS asks for your keychain password after every update.** The app is ad-hoc signed, so each
   version looks like a different app to the keychain. Before the new version opens, macOS asks
   for your login keychain password to let it read “TableCraft Safe Storage”; enter it and choose
