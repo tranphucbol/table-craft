@@ -67,6 +67,11 @@ const MAX_VALUE_PANEL_SIZE = "70%";
 /** The library's panels scroll by default; the rows and the value panel scroll themselves. */
 const PANEL_STYLE = { overflow: "hidden" } as const;
 const NOT_ID_CHAR = /[^\w-]/g;
+/**
+ * Closes the column lines under the last row. It hangs just below the row, so it never covers the
+ * focused cell's outline, and above the sticky row header, which is drawn on its own layer.
+ */
+const LAST_ROW_EDGE = "after:absolute after:inset-x-0 after:top-full after:z-20 after:h-px after:bg-line";
 
 export interface ResultGridProps {
   /** The console or table tab the result belongs to. */
@@ -346,6 +351,7 @@ function Rows({ ownerId, result, visible, host, edits }: RowsProps) {
                 className={cn(
                   "absolute left-0 grid h-row w-max min-w-full",
                   striped && item.index % 2 === 1 && "bg-grid-stripe",
+                  item.index === rowCount - 1 && LAST_ROW_EDGE,
                 )}
                 style={{ gridTemplateColumns: template, transform: `translateY(${String(item.start)}px)` }}
               >

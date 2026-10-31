@@ -24,6 +24,11 @@ export type StripeEntry = StripeButton | StripeAction;
  */
 const OPEN_ON_FRAME = "bg-canvas text-ink ring-1 ring-island-edge ring-inset";
 
+/** On the frame a stripe button rounds like the islands beside it, so the open one reads as one of them. */
+function buttonShape(islands: boolean): string {
+  return islands ? "rounded-island" : "rounded";
+}
+
 function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
   const islands = useIslands();
   const action = registry.get(actionId);
@@ -40,7 +45,8 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
         aria-pressed={open}
         disabled={!enabled}
         className={cn(
-          "flex size-tab items-center justify-center rounded",
+          "flex size-tab items-center justify-center",
+          buttonShape(islands),
           open ? (islands ? OPEN_ON_FRAME : "bg-raised text-ink") : "text-ink-muted hover:bg-raised hover:text-ink",
         )}
         onClick={() => invoke(actionId)}
@@ -52,6 +58,7 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
 }
 
 function ActionButton2({ actionId }: StripeAction) {
+  const islands = useIslands();
   const action = registry.get(actionId);
   const enabled = useActionEnabled(actionId);
   if (action === undefined) return null;
@@ -63,7 +70,10 @@ function ActionButton2({ actionId }: StripeAction) {
         type="button"
         aria-label={action.title}
         disabled={!enabled}
-        className="flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink"
+        className={cn(
+          "flex size-tab items-center justify-center text-ink-muted hover:bg-raised hover:text-ink",
+          buttonShape(islands),
+        )}
         onClick={() => invoke(actionId)}
       >
         {Icon === null ? action.title : <Icon aria-hidden className="size-icon" />}
