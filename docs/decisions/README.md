@@ -135,3 +135,4 @@ started, not when it is merged.
 | 140 | [Every dropdown is drawn in-app](140-in-app-dropdowns.md)                                                                                                              |
 | 141 | [The window draws as islands](141-the-window-draws-as-islands.md)                                                                                                      |
 | 142 | [Redis Sentinel is asked at connect; a failover is a lost connection](142-redis-sentinel-is-asked-at-connect.md)                                                       |
+| 143 | [A waiting agent posts a system notification while TableCraft is in the background](143-waiting-agents-notify-while-in-the-background.md)                              |
