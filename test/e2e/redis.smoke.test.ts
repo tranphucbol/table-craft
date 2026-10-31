@@ -136,8 +136,15 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       await chooseOption(form.getByLabel("Mode", { exact: true }), "cluster");
       await expect.poll(() => form.getByLabel("Database", { exact: true }).count()).toBe(0);
       expect(await form.getByLabel("Node address map", { exact: true }).count()).toBe(1);
+      await chooseOption(form.getByLabel("Mode", { exact: true }), "sentinel");
+      await form.getByLabel("Master name", { exact: true }).waitFor();
+      expect(await form.getByLabel("Database", { exact: true }).count()).toBe(1);
+      expect(await form.getByLabel("Other sentinels", { exact: true }).count()).toBe(1);
+      expect(await form.getByLabel("Node address map", { exact: true }).count()).toBe(1);
       await chooseOption(form.getByLabel("Mode", { exact: true }), "standalone");
       await form.getByLabel("Database", { exact: true }).waitFor();
+      expect(await form.getByLabel("Master name", { exact: true }).count()).toBe(0);
+      expect(await form.getByLabel("Node address map", { exact: true }).count()).toBe(0);
 
       await form.getByLabel("URL", { exact: true }).fill("rediss://ann:secret@cache.example.com:6380/2");
       await form.getByLabel("URL", { exact: true }).press("Enter");
