@@ -2,7 +2,7 @@
   "id": "redis",
   "name": "Redis",
   "version": "0.0.0",
-  "apiVersion": "1.9.0",
+  "apiVersion": "1.10.0",
   "entry": "index.js",
   "capabilities": ["commands", "cancel", "keepAlive", "keyValue", "nodes", "serverInfo", "sessions"],
   "highlight": "redis",
@@ -17,6 +17,7 @@
         "required": true,
         "options": [
           { "value": "standalone", "label": "Standalone" },
+          { "value": "sentinel", "label": "Sentinel" },
           { "value": "cluster", "label": "Cluster" }
         ]
       },
@@ -25,12 +26,40 @@
       { "key": "user", "label": "Username", "kind": "text" },
       { "key": "password", "label": "Password", "kind": "password", "secret": true },
       {
+        "key": "masterName",
+        "label": "Master name",
+        "kind": "text",
+        "default": "mymaster",
+        "required": true,
+        "visibleWhen": { "key": "mode", "equals": "sentinel" }
+      },
+      {
+        "key": "sentinels",
+        "label": "Other sentinels",
+        "kind": "text",
+        "placeholder": "10.0.1.6:26379, 10.0.1.7:26379",
+        "visibleWhen": { "key": "mode", "equals": "sentinel" }
+      },
+      {
+        "key": "sentinelUser",
+        "label": "Sentinel username",
+        "kind": "text",
+        "visibleWhen": { "key": "mode", "equals": "sentinel" }
+      },
+      {
+        "key": "sentinelPassword",
+        "label": "Sentinel password",
+        "kind": "password",
+        "secret": true,
+        "visibleWhen": { "key": "mode", "equals": "sentinel" }
+      },
+      {
         "key": "database",
         "label": "Database",
         "kind": "number",
         "default": 0,
         "required": true,
-        "visibleWhen": { "key": "mode", "equals": "standalone" }
+        "visibleWhen": { "key": "mode", "equals": ["standalone", "sentinel"] }
       },
       {
         "key": "nodeAddressMap",
@@ -38,7 +67,7 @@
         "kind": "text",
         "group": "advanced",
         "placeholder": "10.0.1.5:6379=127.0.0.1:7001, …",
-        "visibleWhen": { "key": "mode", "equals": "cluster" }
+        "visibleWhen": { "key": "mode", "equals": ["cluster", "sentinel"] }
       },
       {
         "key": "tlsMode",

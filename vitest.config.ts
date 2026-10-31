@@ -100,7 +100,7 @@ export default defineConfig({
       },
       // The Redis plugin's parts, which its unit tests drive without a server (plan 058).
       {
-        find: /^@table-craft\/plugin-redis\/(language|tokens|features|replies|routing|readOnly|complete|connect|apply|server|sessions|resp2|read)$/,
+        find: /^@table-craft\/plugin-redis\/(language|tokens|features|replies|routing|readOnly|complete|connect|apply|server|sessions|resp2|read|sentinel)$/,
         replacement: resolve(WORKSPACE_ROOT, "plugins/redis/src/$1.ts"),
       },
       { find: "@table-craft/plugin-redis", replacement: resolve(WORKSPACE_ROOT, "plugins/redis/src/index.ts") },

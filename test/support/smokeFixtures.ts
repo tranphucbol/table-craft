@@ -26,8 +26,10 @@ import {
   REDIS6_CONFIG,
   REDIS_CLUSTER_CONFIG,
   REDIS_CONFIG,
+  REDIS_SENTINEL_CONFIG,
   REDIS_TLS_CONFIG,
   selectedDatabases,
+  sentinelDataPorts,
   SMOKE_DATABASES,
   TLS_FILES,
 } from "./databases.js";
@@ -52,6 +54,7 @@ const REDIS_SERVICES = [
   "redis-6-cluster",
   "redis-5",
   "redis-5-cluster",
+  "redis-sentinel",
 ] as const satisfies readonly SeededService[];
 
 const ETCD_SERVICES = ["etcd", "etcd-3-5", "etcd-tls"] as const satisfies readonly SeededService[];
@@ -444,6 +447,9 @@ export const serverQuery: SentinelQuery = (service, sql) => {
       return redisAnswersOne(REDIS5_CONFIG, sql);
     case "redis-5-cluster":
       return redisAnswersOne(REDIS5_CLUSTER_CONFIG, sql, { cluster: true });
+    case "redis-sentinel":
+      // Either data server holds the seed, master or replica, whichever a failover left it.
+      return redisAnswersOne({ ...REDIS_SENTINEL_CONFIG, port: sentinelDataPorts()[0] }, sql);
     case "etcd":
       return etcdHasKey(ETCD_CONFIG, sql);
     case "etcd-3-5":
