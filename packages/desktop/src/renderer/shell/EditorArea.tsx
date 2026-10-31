@@ -39,6 +39,7 @@ import { TabIcon, labelOfTab } from "@table-craft/desktop/renderer/shell/TabIcon
 import { TabStripCorner } from "@table-craft/desktop/renderer/shell/TabStripCorner.js";
 import { TINT_TAB } from "@table-craft/desktop/renderer/ui/tint.js";
 import { AUTOFOCUS_ATTRIBUTE, focusActivatedEditor } from "@table-craft/desktop/renderer/shell/focus.js";
+import { TEXT_TAB_ROW_INSET } from "@table-craft/desktop/renderer/shell/islands.js";
 
 const PinIcon = ACTION_ICONS.pin;
 const TAB_DRAG_TYPE = "application/x-tablecraft-editor-tab";
@@ -308,7 +309,7 @@ function EditorGroup({
           <div
             role="tablist"
             aria-label="Editor tabs"
-            className="flex min-w-0 flex-1 overflow-x-auto border-b border-line scrollbar-none"
+            className={`flex min-w-0 flex-1 overflow-x-auto border-b border-line scrollbar-none ${TEXT_TAB_ROW_INSET}`}
             onWheel={scrollTabsSideways}
           >
             {tabs.map((tab) => (

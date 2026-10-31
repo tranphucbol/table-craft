@@ -325,7 +325,7 @@ and Fonts and density sections above hold every value.
 | Token (`appearance/themes.ts`) | CSS variable               | Tailwind                     | Dark / comfortable | Light / compact | Used by                                                                            |
 | ------------------------------ | -------------------------- | ---------------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
 | `density.stripeWidthPx`        | `--tc-stripe-width`        | `w-stripe`                   | 36 px              | 36 px           | The left and right tool-window stripes                                             |
-| `density.tabHeightPx`          | `--tc-tab-height`          | `h-tab`, `size-tab`          | 32 px              | 32 px           | Editor tabs, tool-window headers, stripe buttons, palette input                    |
+| `density.tabHeightPx`          | `--tc-tab-height`          | `h-tab`, `size-tab`          | 32 px              | 32 px           | Editor tabs, tool-window headers with Islands, stripe buttons, palette input       |
 | `density.statusBarHeightPx`    | `--tc-status-bar-height`   | `h-status-bar`               | 24 px              | 24 px           | The status bar                                                                     |
 | `density.iconPx`               | `--tc-icon`                | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
 | `density.paletteWidthPx`       | `--tc-palette-width`       | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
@@ -371,13 +371,15 @@ windows are islands, `rounded-island` cards of `bg-canvas`, set `p-island-gap`
 inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
 sizes are the Classic ones.
 
-| Token                    | CSS variable         | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                      |
-| ------------------------ | -------------------- | --------------------------------- | ------------------ | --------------- | ------------------------------------------------------------ |
-| `frame` (`frameColors`)  | `--tc-frame`         | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar |
-| `frameRaised`            | `--tc-frame-raised`  | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                     |
-| `islandEdge`             | `--tc-island-edge`   | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame |
-| `density.islandGapPx`    | `--tc-island-gap`    | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles  |
-| `density.islandRadiusPx` | `--tc-island-radius` | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                       |
+| Token                    | CSS variable              | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                           |
+| ------------------------ | ------------------------- | --------------------------------- | ------------------ | --------------- | ----------------------------------------------------------------- |
+| `frame` (`frameColors`)  | `--tc-frame`              | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar      |
+| `frameRaised`            | `--tc-frame-raised`       | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                          |
+| `islandEdge`             | `--tc-island-edge`        | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame      |
+| `density.islandGapPx`    | `--tc-island-gap`         | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles       |
+| `density.islandRadiusPx` | `--tc-island-radius`      | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                            |
+| (derived)                | `--tc-pane-inset`         | `px-pane-inset`, `mx-pane-inset`  | 10 px              | 8 px            | Pane content's inset from the island edge; `gap` with Classic     |
+| (derived)                | `--tc-tool-header-height` | `h-tool-header`                   | 32 px              | 32 px           | A tool window's header, `tabHeightPx`; `rowHeightPx` with Classic |
 
 The frame is no theme token: `appearance/islands.ts` derives it from `panel`, stepped in 1 %
 mixes toward white in a dark scheme and black in a light one, as JetBrains' frames are, until it
@@ -404,6 +406,18 @@ since `frameRaised` sits too close to the frame to mark it; every stripe button 
 tint frame (`tintFrame`) rounds its bottom corners to the island's radius where it meets the
 island's bottom; a console's stops above its results and stays square. The macOS window
 background and the Windows and Linux caption buttons take the frame colour.
+
+Plan 134. Content inside an island keeps the island's radius from its edge, so nothing sits in a
+rounded corner: `pane-inset` is `islandRadiusPx` with Islands and `gap` with Classic, which leaves
+Classic as it was. A tool window's header is `h-tool-header`, as tall as an editor tab, so the
+titles of side-by-side islands share a line, and its title starts at `px-pane-inset`. Everything
+at a pane's edge starts there too: the Database, Services and Log rows and their tree indent base,
+the Log toolbar and record detail, the Watch controls, stats, hints and its table's outer cells,
+the empty states and the Database warnings. A row of controls carries its own padding, so it
+starts that much earlier and its first glyph lines up with the title: the Database toolbar
+(`ICON_BUTTON_ROW_INSET`), the Watch tabs and the editor tabs (`TEXT_TAB_ROW_INSET`), and the tab
+strip's corner buttons on the right (`CORNER_ISLAND_INSET`). The status bar lines up with
+`pane-inset` as well. Rows inside a tab, such as the console toolbar, keep `gap`.
 
 ## Database explorer
 

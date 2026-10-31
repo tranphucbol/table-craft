@@ -56,7 +56,7 @@ function Toolbar({ scopes }: { readonly scopes: readonly string[] }) {
   const filter = useLogView((state) => state.filter);
   const setFilter = useLogView((state) => state.setFilter);
   return (
-    <div className="flex shrink-0 flex-col gap-1 border-b border-line px-gap py-1">
+    <div className="flex shrink-0 flex-col gap-1 border-b border-line px-pane-inset py-1">
       <input
         type="search"
         aria-label="Search log"
@@ -122,11 +122,11 @@ export function LogPane() {
     <div className="flex h-full min-h-0 flex-col">
       <Toolbar scopes={scopes} />
       {error !== null ? (
-        <div className="p-gap text-danger">{error}</div>
+        <div className="px-pane-inset py-gap text-danger">{error}</div>
       ) : !loaded ? (
-        <div className="p-gap text-ink-muted">Reading the log…</div>
+        <div className="px-pane-inset py-gap text-ink-muted">Reading the log…</div>
       ) : shown.length === 0 ? (
-        <div className="p-gap text-ink-muted">No log records match.</div>
+        <div className="px-pane-inset py-gap text-ink-muted">No log records match.</div>
       ) : (
         <div
           role="log"
@@ -142,7 +142,7 @@ export function LogPane() {
               onClick={() => select(record === selected ? null : record)}
               onDoubleClick={() => void invoke(LOG_ACTION_IDS.copyRecord, { record })}
               title={`${record.process}/${record.scope} ${record.msg} ${fieldsText(record)}`}
-              className="flex w-full min-w-0 items-baseline gap-gap px-gap text-left leading-(--spacing-row) hover:bg-raised aria-pressed:bg-selection"
+              className="flex w-full min-w-0 items-baseline gap-gap px-pane-inset text-left leading-(--spacing-row) hover:bg-raised aria-pressed:bg-selection"
             >
               <span className="shrink-0 text-ink-muted">{timeOf(record)}</span>
               <span className={cn("w-10 shrink-0 uppercase", LEVEL_CLASS[record.level])}>{record.level}</span>
@@ -160,7 +160,7 @@ export function LogPane() {
       {selected === null ? null : (
         <pre
           aria-label="Log record"
-          className="max-h-1/2 shrink-0 overflow-auto border-t border-line p-gap font-editor text-editor break-all whitespace-pre-wrap"
+          className="max-h-1/2 shrink-0 overflow-auto border-t border-line px-pane-inset py-gap font-editor text-editor break-all whitespace-pre-wrap"
         >
           {JSON.stringify(selected, null, 2)}
         </pre>
