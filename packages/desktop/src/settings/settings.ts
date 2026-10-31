@@ -236,7 +236,7 @@ export const DEFAULT_SETTINGS: Settings = {
       grid: { family: null, sizePx: 12 },
     },
     motion: "system",
-    windowStyle: "islands",
+    windowStyle: "classic",
     systemTitleBar: false,
     brandIcons: true,
     brandIconColor: "brand",

@@ -365,8 +365,8 @@ highlighted first row; toolbar buttons add reduced opacity beside their enabled 
 
 ### Islands
 
-Plan 132, decision 141. The tables above describe the Classic window style. With Islands (the
-default, `appearance.windowStyle`), the editor area and the Database, Log, Watch and Services tool
+Plan 132, decision 141. The tables above describe the Classic window style, the default. With
+Islands (`appearance.windowStyle`), the editor area and the Database, Log, Watch and Services tool
 windows are islands, `rounded-island` cards of `bg-canvas`, set `p-island-gap`
 inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
 sizes are the Classic ones.

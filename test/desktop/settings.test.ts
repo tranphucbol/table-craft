@@ -30,7 +30,7 @@ const CHOSEN: Settings = {
       grid: { family: "Menlo", sizePx: 11 },
     },
     motion: "reduced",
-    windowStyle: "classic",
+    windowStyle: "islands",
     systemTitleBar: true,
     brandIcons: false,
     brandIconColor: "gray",
@@ -263,18 +263,18 @@ describe("settings document", () => {
     expect(readSettings({ ...CHOSEN, appearance }).appearance.brandIcons).toBe(true);
   });
 
-  it("givenWindowStyleMissing_whenSettingsRead_thenIslands", () => {
+  it("givenWindowStyleMissing_whenSettingsRead_thenClassic", () => {
     const { windowStyle: _omitted, ...appearance } = CHOSEN.appearance;
 
-    expect(DEFAULT_SETTINGS.appearance.windowStyle).toBe("islands");
-    expect(readSettings({ ...CHOSEN, appearance }).appearance.windowStyle).toBe("islands");
-    expect(readSettings(CHOSEN).appearance.windowStyle).toBe("classic");
+    expect(DEFAULT_SETTINGS.appearance.windowStyle).toBe("classic");
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.windowStyle).toBe("classic");
+    expect(readSettings(CHOSEN).appearance.windowStyle).toBe("islands");
   });
 
   it("givenUnknownWindowStyle_whenSettingsRead_thenDefault", () => {
     const appearance = { ...CHOSEN.appearance, windowStyle: "floating" };
 
-    expect(readSettings({ ...CHOSEN, appearance }).appearance.windowStyle).toBe("islands");
+    expect(readSettings({ ...CHOSEN, appearance }).appearance.windowStyle).toBe("classic");
   });
 
   it("givenBrandIconColorMissing_whenSettingsRead_thenBrand", () => {

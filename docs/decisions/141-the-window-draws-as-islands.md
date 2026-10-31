@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Decision
 
-The window has two styles, `appearance.windowStyle`: `islands`, the default, and `classic`. With
+The window has two styles, `appearance.windowStyle`: `classic`, the default, and `islands`. With
 Islands, after JetBrains' Islands theme, the editor area and the Database, Log, Watch and Services
 tool windows are rounded cards of the editor's surface (`canvas`), with no border, set apart by a
 gap on a window frame; the main toolbar, the stripes and the status bar sit on the frame without
@@ -38,13 +38,14 @@ to 1.20:1 would make the toolbar and status bar text fail; readability wins, and
 separate the islands.
 
 A setting, not a replacement, because the islands cost 10 px of width and height at the
-comfortable density and some users prefer the denser flat window.
+comfortable density and some users prefer the denser flat window. Classic stays the default so an
+update does not change the window under anyone; Islands is one choice away in Settings.
 
 ## Consequences
 
-- Existing users see the new look on update; Classic brings the old one back.
-- The README and guide GIFs show the classic window until `bun run readme:media` records them again.
+- Nobody sees a new look on update; Islands is opt-in under Settings › Appearance › Window style.
+- The README and guide GIFs show the Classic window, the default, so they need no new recording.
 - The editor tabs keep the accent underline; JetBrains' filled tab pill and the dimming of an
   unfocused window are not part of this.
 - A theme cannot choose its frame colour; adding a token later only adds an optional override.
-- End-to-end suites that read the toolbar's colour read the frame under the default style.
+- End-to-end suites that read the toolbar's colour keep reading `panel` under the default style.
