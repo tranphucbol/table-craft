@@ -2313,7 +2313,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
   "appearance": {
     "theme": "system",
     "density": "comfortable",
-    "windowStyle": "islands",
+    "windowStyle": "classic",
     "systemTitleBar": false,
     "brandIcons": true,
     "brandIconColor": "brand",
@@ -2341,7 +2341,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | -------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------- |
 | `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, a ported theme id, `user:<file stem>`                | `system`      |
 | `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable` |
-| `appearance.windowStyle`               | `islands` (rounded islands on a window frame, decision 141) or `classic` (flat panes and lines) | `islands`     |
+| `appearance.windowStyle`               | `islands` (rounded islands on a window frame, decision 141) or `classic` (flat panes and lines) | `classic`     |
 | `appearance.systemTitleBar`            | boolean; read once when the window is created                                                   | `false`       |
 | `appearance.brandIcons`                | boolean; datasource rows draw their database's logo (decision 128)                              | `true`        |
 | `appearance.brandIconColor`            | `brand` (the brand's colour fitted to the theme) or `gray` (muted ink)                          | `brand`       |

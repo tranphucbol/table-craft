@@ -1,7 +1,7 @@
 /**
  * Plan 132's live test: the editor and the tool windows drawn as islands on the window frame, in a
- * dark, a light and a ported theme and at both densities, and Window style switching to Classic
- * and back live; then the audit's fixes: an edge where a ported frame is capped, a coloured
+ * dark, a light and a ported theme and at both densities, and Window style switching from the
+ * default Classic to Islands live; then the audit's fixes: an edge where a ported frame is capped, a coloured
  * console's square tint frame, the gutters' hover and focus bar, and inward focus rings. SQLite in memory, so it needs only a display and a fresh build:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/132 bun run test:smoke:headless test/e2e/islands.smoke.test.ts
@@ -148,9 +148,13 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
     await closeApp(current?.app);
   });
 
-  async function launch(appearance?: object): Promise<RunningApp> {
+  /** Classic is the default, so every scenario but the default one asks for Islands. */
+  async function launch(appearance: object, windowStyle: "islands" | null = "islands"): Promise<RunningApp> {
     const userDataDir = newProfile();
-    if (appearance !== undefined) seedSettings(userDataDir, { version: 1, appearance });
+    seedSettings(userDataDir, {
+      version: 1,
+      appearance: windowStyle === null ? appearance : { ...appearance, windowStyle },
+    });
     running = await launchApp(undefined, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
@@ -168,7 +172,7 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
   }
 
   it(
-    "givenDefaultSettings_whenWindowOpens_thenToolWindowsAreIslandsOnTheFrame",
+    "givenIslands_whenWindowOpens_thenToolWindowsAreIslandsOnTheFrame",
     async () => {
       const { page } = await launch({ theme: "dark" });
       await fillWindow(page);
@@ -224,28 +228,27 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
   );
 
   it(
-    "givenIslands_whenClassicChosenInSettings_thenFlatPanesReturnLive",
+    "givenDefaultSettings_whenIslandsChosenInSettings_thenIslandsReplaceFlatPanesLive",
     async () => {
-      const { page } = await launch({ theme: "dark" });
+      const { page } = await launch({ theme: "dark" }, null);
       await fillWindow(page);
-      await pressChord(page, ",");
-      await settingsDialog(page).waitFor();
-      await settingsDialog(page).getByRole("tab", { name: "Appearance", exact: true }).click();
-      await expect.poll(() => windowStyleChoice(page, "Islands").isChecked()).toBe(true);
-      await captureWindow(page, "05-settings-window-style");
-
-      await windowStyleChoice(page, "Classic").check();
-      await expect.poll(() => rootVariable(page, "--tc-island-radius")).toBe("0px");
-      await page.keyboard.press("Escape");
-      await settingsDialog(page).waitFor({ state: "detached" });
+      expect(await rootVariable(page, "--tc-island-radius")).toBe("0px");
       expect(await toolWindow(page, "Database").locator(ISLAND).count()).toBe(0);
       expect(await lookOf(mainToolbar(page))).toMatchObject({ background: DARK_PANEL, bottomEdge: "1px" });
       await captureWindow(page, "06-classic");
 
       await pressChord(page, ",");
+      await settingsDialog(page).waitFor();
       await settingsDialog(page).getByRole("tab", { name: "Appearance", exact: true }).click();
+      await expect.poll(() => windowStyleChoice(page, "Classic").isChecked()).toBe(true);
+      await captureWindow(page, "05-settings-window-style");
+
       await windowStyleChoice(page, "Islands").check();
       await expect.poll(() => rootVariable(page, "--tc-island-radius")).toBe(COMFORTABLE_RADIUS);
+      await page.keyboard.press("Escape");
+      await settingsDialog(page).waitFor({ state: "detached" });
+      expect(await toolWindow(page, "Database").locator(ISLAND).count()).toBe(1);
+      expect((await lookOf(mainToolbar(page))).background).toBe(DARK_FRAME);
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -281,7 +284,7 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
     "givenColouredDatasource_whenConsoleOpens_thenTintFrameStaysSquareAboveResults",
     async () => {
       const userDataDir = newProfile();
-      seedSettings(userDataDir, { version: 1, appearance: { theme: "dark" } });
+      seedSettings(userDataDir, { version: 1, appearance: { theme: "dark", windowStyle: "islands" } });
       seedDatasources(userDataDir, [
         { id: "tinted", name: TINTED, pluginId: "sqlite", color: "red", config: { path: ":memory:" } },
       ]);
