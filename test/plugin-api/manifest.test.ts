@@ -353,4 +353,21 @@ describe("pluginManifestSchema visibleWhen", () => {
     expect(parses([flag, { ...HOST, visibleWhen: { key: "flag", equals: true } }])).toBe(true);
     expect(parses([MODE, { ...HOST, visibleWhen: { key: "mode", equals: true } }])).toBe(false);
   });
+
+  it("givenListOfSelectValues_whenParsed_thenAccepted", () => {
+    expect(parses([MODE, { ...HOST, visibleWhen: { key: "mode", equals: ["standalone", "cluster"] } }])).toBe(true);
+  });
+
+  it("givenListWithUndeclaredOption_whenParsed_thenRejected", () => {
+    expect(parses([MODE, { ...HOST, visibleWhen: { key: "mode", equals: ["standalone", "sentinel"] } }])).toBe(false);
+  });
+
+  it("givenListOnCheckbox_whenParsed_thenRejected", () => {
+    const flag = { key: "flag", label: "Flag", kind: "checkbox" };
+    expect(parses([flag, { ...HOST, visibleWhen: { key: "flag", equals: ["true"] } }])).toBe(false);
+  });
+
+  it("givenEmptyList_whenParsed_thenRejected", () => {
+    expect(parses([MODE, { ...HOST, visibleWhen: { key: "mode", equals: [] } }])).toBe(false);
+  });
 });
