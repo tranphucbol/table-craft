@@ -10,7 +10,9 @@ import {
   type EditorGroupId,
   type Tab,
 } from "@table-craft/desktop/renderer/state/tabs.js";
+import { useIslands } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS, CurrentIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
@@ -183,6 +185,7 @@ function CornerButton({
  */
 export function TabStripCorner({ groupId }: { readonly groupId: EditorGroupId }) {
   const strip = groupStrip(useTabs(), groupId);
+  const islands = useIslands();
   const [menu, setMenu] = useState<{ readonly kind: MenuKind; readonly anchor: PopoverAnchor } | null>(null);
   const close = () => setMenu(null);
   const facts: StripFacts = {
@@ -195,7 +198,10 @@ export function TabStripCorner({ groupId }: { readonly groupId: EditorGroupId })
     (group) => group.length > 0,
   );
   return (
-    <div data-testid="tab-strip-corner" className="flex shrink-0 items-center gap-1 border-b border-l border-line px-1">
+    <div
+      data-testid="tab-strip-corner"
+      className={cn("flex shrink-0 items-center gap-1 border-b border-line px-1", islands ? null : "border-l")}
+    >
       <ActionButton actionId={ACTION_IDS.newConsole} compact icon="add" />
       <CornerButton
         label={OPEN_TABS_LABEL}

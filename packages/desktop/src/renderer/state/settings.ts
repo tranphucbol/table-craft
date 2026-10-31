@@ -170,6 +170,11 @@ export function useRowHeightPx(): number {
   return useSettings((state) => DENSITIES[state.settings.appearance.density].rowHeightPx);
 }
 
+/** Whether the window draws as islands (decision 141). */
+export function useIslands(): boolean {
+  return useSettings((state) => state.settings.appearance.windowStyle === "islands");
+}
+
 /** The value panel's width until the user drags its edge (plan 129 decision 4). */
 export function useDefaultValuePanelPx(): number {
   return useSettings((state) => DENSITIES[state.settings.appearance.density].valuePanelWidthPx);

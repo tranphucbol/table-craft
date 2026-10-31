@@ -9,7 +9,9 @@ import { MAIN_MENU_ANCHOR_ATTRIBUTE, WINDOW_ACTION_IDS } from "@table-craft/desk
 import { tabCaption, windowTitle } from "@table-craft/desktop/renderer/model/windowTitle.js";
 import { ActivityCapsule } from "@table-craft/desktop/renderer/shell/ActivityCapsule.js";
 import { DatasourceWidget } from "@table-craft/desktop/renderer/shell/DatasourceWidget.js";
+import { FRAME_SURFACE } from "@table-craft/desktop/renderer/shell/islands.js";
 import { UpdateButton } from "@table-craft/desktop/renderer/shell/UpdateButton.js";
+import { useIslands } from "@table-craft/desktop/renderer/state/settings.js";
 import { activeTab, useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
@@ -38,6 +40,7 @@ export function MainToolbar() {
   const custom = useWindowState((state) => state.customTitleBar);
   const fullScreen = useWindowState((state) => state.fullScreen);
   const mac = currentPlatform() === "mac";
+  const islands = useIslands();
   const { tab, name } = useActiveCaption();
   const caption = tabCaption(tab, name);
   const title = windowTitle(tab, name);
@@ -52,7 +55,8 @@ export function MainToolbar() {
       role="toolbar"
       aria-label="Main toolbar"
       className={cn(
-        "flex h-title-bar shrink-0 items-center gap-gap border-b border-line bg-panel px-gap",
+        "flex h-title-bar shrink-0 items-center gap-gap bg-panel px-gap",
+        islands ? FRAME_SURFACE : "border-b border-line",
         custom && "app-drag",
         custom && mac && !fullScreen && "pl-traffic-lights",
         custom && !mac && "title-bar-overlay-inset",

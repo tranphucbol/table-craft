@@ -5,7 +5,7 @@ import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/da
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { SqlView } from "@table-craft/desktop/renderer/ui/SqlView.js";
-import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { tintFrame } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const DDL_LABEL = "DDL";
 
@@ -20,7 +20,7 @@ export function DdlView({ ddlId }: { readonly ddlId: string }) {
     <div
       data-testid="ddl-view"
       data-color={color ?? undefined}
-      className={cn("flex min-h-0 flex-1 flex-col", color !== null && `border-2 ${TINT_BORDER[color]}`)}
+      className={cn("flex min-h-0 flex-1 flex-col", tintFrame(color))}
     >
       <div className="flex h-tab shrink-0 items-center gap-gap border-b border-line bg-panel px-gap text-ink-muted">
         <ActionButton actionId={DDL_ACTION_IDS.refresh} compact />

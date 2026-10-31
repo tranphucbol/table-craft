@@ -97,7 +97,13 @@ import {
 import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { effectiveChannel } from "@table-craft/desktop/settings/channel.js";
 import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS } from "@table-craft/desktop/settings/settings.js";
-import { DENSITIES, resolveTheme, type DensityTokens, type Theme } from "@table-craft/desktop/appearance/themes.js";
+import {
+  DENSITIES,
+  resolveTheme,
+  windowBackground,
+  type DensityTokens,
+  type Theme,
+} from "@table-craft/desktop/appearance/themes.js";
 import { ENGINE_PORT_MESSAGE, type DatasourceConfig, type HostKeyOffer } from "@table-craft/desktop/engine/protocol.js";
 import { DEFAULT_LOG_LEVEL, enabled, LOG_READ_LIMIT, type LogRecord } from "@table-craft/desktop/log/record.js";
 import {
@@ -466,14 +472,17 @@ function applyWindowAppearance(settings: SettingsService): Theme {
   };
   const { theme } = resolveTheme(choice, system, themes);
   if (choice !== "system") pointAt(theme.colorScheme);
+  const { windowStyle } = current.appearance;
   const chrome = windowChrome({
     platform: process.platform,
     theme,
     density: densityOf(settings),
     systemTitleBar: false,
+    windowStyle,
   });
+  const background = windowBackground(theme, windowStyle);
   for (const window of BrowserWindow.getAllWindows()) {
-    window.setBackgroundColor(theme.colors.canvas);
+    window.setBackgroundColor(background);
     if (!customTitleBars.has(window)) continue;
     if (chrome.overlay !== null) window.setTitleBarOverlay(chrome.overlay);
     if (chrome.trafficLights !== null) window.setWindowButtonPosition(chrome.trafficLights);
@@ -483,15 +492,21 @@ function applyWindowAppearance(settings: SettingsService): Theme {
 
 function createWindow(settings: SettingsService): void {
   const theme = applyWindowAppearance(settings);
-  const { systemTitleBar } = settings.snapshot().settings.appearance;
-  const chrome = windowChrome({ platform: process.platform, theme, density: densityOf(settings), systemTitleBar });
+  const { systemTitleBar, windowStyle } = settings.snapshot().settings.appearance;
+  const chrome = windowChrome({
+    platform: process.platform,
+    theme,
+    density: densityOf(settings),
+    systemTitleBar,
+    windowStyle,
+  });
   const window = new BrowserWindow({
     title: APP_NAME,
     width: WINDOW_WIDTH,
     height: WINDOW_HEIGHT,
     show: false,
-    // The first frame, before the renderer's bundle runs, is already the theme's canvas.
-    backgroundColor: theme.colors.canvas,
+    // The first frame, before the renderer's bundle runs, is already what the shell paints.
+    backgroundColor: windowBackground(theme, windowStyle),
     ...chrome.options,
     // macOS takes the window's icon from the app bundle, or the dock in development.
     ...(process.platform === MAC_PLATFORM ? {} : { icon: paths.icon }),

@@ -1,5 +1,10 @@
 import type { BrowserWindowConstructorOptions, Point, TitleBarOverlayOptions } from "electron";
-import type { DensityTokens, Theme } from "@table-craft/desktop/appearance/themes.js";
+import {
+  titleBarColor,
+  type DensityTokens,
+  type Theme,
+  type WindowStyle,
+} from "@table-craft/desktop/appearance/themes.js";
 
 const MAC_PLATFORM = "darwin";
 /** The traffic lights' left edge, AppKit's own margin for a titled window. */
@@ -20,6 +25,7 @@ export interface WindowChromeInput {
   readonly theme: Theme;
   readonly density: DensityTokens;
   readonly systemTitleBar: boolean;
+  readonly windowStyle: WindowStyle;
 }
 
 /**
@@ -27,7 +33,13 @@ export interface WindowChromeInput {
  * lights centred in it or the Windows and Linux caption buttons drawn over its right end in the
  * toolbar's own colours. `systemTitleBar` frames the window as the OS would.
  */
-export function windowChrome({ platform, theme, density, systemTitleBar }: WindowChromeInput): WindowChrome {
+export function windowChrome({
+  platform,
+  theme,
+  density,
+  systemTitleBar,
+  windowStyle,
+}: WindowChromeInput): WindowChrome {
   if (systemTitleBar) return { options: {}, overlay: null, trafficLights: null };
   const height = density.titleBarHeightPx;
   if (platform === MAC_PLATFORM) {
@@ -38,6 +50,10 @@ export function windowChrome({ platform, theme, density, systemTitleBar }: Windo
       trafficLights,
     };
   }
-  const overlay = { color: theme.colors.panel, symbolColor: theme.colors.ink, height };
+  const overlay = {
+    color: titleBarColor(theme, windowStyle),
+    symbolColor: theme.colors.ink,
+    height,
+  };
   return { options: { titleBarStyle: "hidden", titleBarOverlay: overlay }, overlay, trafficLights: null };
 }
