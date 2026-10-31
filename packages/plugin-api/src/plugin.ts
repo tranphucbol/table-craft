@@ -366,9 +366,17 @@ export interface Session {
   /**
    * The `ServerSession.instance` this connection is listed under, where an id names a session on one
    * server of a cluster only (TiDB before Global Kill); absent elsewhere, or when the server would
-   * not say, and the host then matches by id alone.
+   * not say, and the host then matches by id alone. A plugin for which finding it costs a round trip
+   * offers `findServerInstance` instead.
    */
   readonly serverInstance?: string;
+  /**
+   * Present where an id names a session on one server of a cluster only and finding which costs a
+   * round trip (TiDB before Global Kill): the `ServerSession.instance` this connection is listed
+   * under, or null when the server would not say. The host calls it only while nothing runs on the
+   * session, and only when a listing shows the session's id on more than one instance.
+   */
+  findServerInstance?(): Promise<string | null>;
   /** Present exactly when the plugin declares `keyValue` (decision 113). */
   readonly keyspace?: Keyspace;
   /**
