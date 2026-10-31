@@ -11,7 +11,8 @@ built on the `etcd3` driver's raw gRPC clients (`kv`, `watchClient`, `leaseClien
 112-113), plus the optional services of decision 137.
 
 - **One database, string keys only.** The keyspace is one database (index 0). Every key is type
-  `string` holding one value; the tree splits names on a configurable delimiter (`/`). Any edit
+  `string` holding one value; the tree splits names on a configurable delimiter (`/`) and, on a
+  datasource set to load keys only when asked, lists the root only on request (decision 144). Any edit
   other than `setString` is refused with a typed error. Binary keys and values travel as text plus
   hex.
 - **Revision guards, not WATCH.** A key edit is one `Txn` guarded by a compare on the value, the

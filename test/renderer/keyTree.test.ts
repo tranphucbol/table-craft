@@ -6,9 +6,12 @@ import {
   appendKeys,
   EMPTY_KEYSPACE,
   groupKeys,
+  keyIdentity,
   loadMoreText,
   ttlText,
   undescribedKeys,
+  UNLISTED_FOLDER,
+  unloadedKeysText,
   UNSCANNED_KEYS,
   type DatabaseKeys,
   type DatasourceKeyspace,
@@ -152,5 +155,93 @@ describe("key tree", () => {
     [3 * 86_400_000, "3 d"],
   ])("givenTtl_whenText_thenShort %s", (ttl, text) => {
     expect(ttlText(ttl)).toBe(text);
+  });
+});
+
+const ON_DEMAND_VIEW = view({ id: "cache", name: "cache", pluginId: "redis", loadKeysOnDemand: true });
+const CHILDREN_FEATURES = { children: true, countRange: true, prepareDelete: true, history: false };
+
+function onDemandRowsOf(expanded: readonly string[], keyspace: DatasourceKeyspace, datasource = ON_DEMAND_VIEW) {
+  return explorerRows({
+    tree: buildTree([datasource]),
+    catalogs: {},
+    expanded: new Set([datasourceKey("cache"), ...expanded]),
+    collapsedFolders: new Set(),
+    showSystem: false,
+    canExpand: () => true,
+    keyspaces: { cache: keyspace },
+    browsesKeys: () => true,
+    showEmptyDatabases: false,
+  });
+}
+
+describe("key tree on demand", () => {
+  it("givenLoadOnDemandUnscanned_whenRows_thenScanRowWithEstimateNotLoading", () => {
+    const rows = onDemandRowsOf([DB0_KEY], { ...KEYSPACE, byDatabase: {} });
+    expect(outline(rows)).toEqual(["0 cache", "1 db0", "2 ", "2 Not scanned · ~6 keys · Scan", "1 db2"]);
+    expect(rows[3]?.node).toMatchObject({ kind: "keyLoadMore", loaded: 0, estimate: 6, unloaded: true });
+    expect(rows.some((row) => row.node.kind === "loading")).toBe(false);
+  });
+
+  it("givenLoadOnDemandScanned_whenRows_thenSameRowsAsLoadOnOpen", () => {
+    expect(outline(onDemandRowsOf([DB0_KEY, USER_KEY], KEYSPACE))).toEqual(outline(rowsOf([DB0_KEY, USER_KEY])));
+  });
+
+  it("givenLoadOnDemandRememberedKey_whenRows_thenKeyAboveScanRow", () => {
+    const rows = onDemandRowsOf([DB0_KEY], {
+      ...KEYSPACE,
+      byDatabase: { 0: { ...UNSCANNED_KEYS, keys: [name("queue")] } },
+    });
+    expect(outline(rows).slice(1, 5)).toEqual(["1 db0", "2 ", "2 queue", "2 Not scanned · ~6 keys · Scan"]);
+  });
+
+  it("givenLoadOnDemandChildrenUnlisted_whenRows_thenRememberedKeysThenListRow", () => {
+    const keyspace: DatasourceKeyspace = {
+      ...EMPTY_KEYSPACE,
+      features: CHILDREN_FEATURES,
+      delimiter: "/",
+      databases: [database(0, 1204, true)],
+      byDatabase: { 0: { ...UNSCANNED_KEYS, keys: [name("/app/config")] } },
+    };
+    const rows = onDemandRowsOf([DB0_KEY], keyspace);
+    expect(outline(rows)).toEqual(["0 cache", "1 Keys", "2 ", "2 /app/config", "2 Not listed · ~1,204 keys · List"]);
+    expect(rows[3]?.node).toMatchObject({ kind: "keyEntry", serverChildren: true });
+    expect(rows[4]?.node).toMatchObject({ kind: "keyLoadMore", unloaded: true });
+    expect(rows[4]?.node).not.toHaveProperty("parent");
+  });
+
+  it("givenLoadOnDemandChildrenListed_whenRows_thenSameRowsAsLoadOnOpen", () => {
+    const keyspace: DatasourceKeyspace = {
+      ...EMPTY_KEYSPACE,
+      features: CHILDREN_FEATURES,
+      delimiter: "/",
+      databases: [database(0, 2, true)],
+      byDatabase: {
+        0: {
+          ...UNSCANNED_KEYS,
+          started: true,
+          folders: {
+            [keyIdentity(name(""))]: {
+              ...UNLISTED_FOLDER,
+              started: true,
+              children: [
+                { kind: "folder", key: name("/app/") },
+                { kind: "key", key: name("/top") },
+              ],
+            },
+          },
+        },
+      },
+    };
+    expect(outline(onDemandRowsOf([DB0_KEY], keyspace))).toEqual(
+      outline(onDemandRowsOf([DB0_KEY], keyspace, REDIS_VIEW)),
+    );
+    expect(outline(onDemandRowsOf([DB0_KEY], keyspace))).toEqual(["0 cache", "1 Keys", "2 ", "2 app/", "2 top"]);
+  });
+
+  it("givenFlatAndChildren_whenUnloadedKeysText_thenScanAndListWording", () => {
+    expect(unloadedKeysText(48_213, false)).toBe("Not scanned · ~48,213 keys · Scan");
+    expect(unloadedKeysText(1204, true)).toBe("Not listed · ~1,204 keys · List");
+    expect(unloadedKeysText(1, false)).toBe("Not scanned · ~1 key · Scan");
   });
 });

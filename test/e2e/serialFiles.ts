@@ -14,6 +14,8 @@ export const SERIAL_SMOKE_FILES: Readonly<Record<string, string>> = {
   "test/e2e/explorer.smoke.test.ts": "creates a table and schemas and expects `tables 6`",
   "test/e2e/history.smoke.test.ts": "updates `orders` and expects `tables 6`",
   "test/e2e/jsonView.smoke.test.ts": "creates `json_view_probe` beside the fixtures, which changes `tables 6`",
+  "test/e2e/keyLoadOnDemand.smoke.test.ts":
+    "expects the Redis servers' `SCAN` count unchanged, which other files' key trees move",
   "test/e2e/namespace.smoke.test.ts": "expects `tables 6`",
   "test/e2e/oracle.smoke.test.ts": "holds a row lock on Oracle and edits `edit_probe` there",
   "test/e2e/packaged.smoke.test.ts": "shares the SSH bastion, whose sessions `sshTunnel` kills",
