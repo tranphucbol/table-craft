@@ -29,7 +29,7 @@ etcd (3.5 and later), about 400 KB, as
   background on the first start, with no question.
 - **Settings → Plugins** lists the built-in plugins, the downloaded ones with their version,
   **Update** and **Remove** (refused while a data source uses the plugin, naming it), and your
-  own. With **Check for updates automatically** on, downloaded plugins are checked once a day and
+  own. With **Check for updates automatically** on, downloaded plugins are checked every 2 hours and
   a newer compatible version is used from the next connection.
 - Offline, or behind a firewall: every release attaches the plugin `.tgz` files. Choose **Install
   from File…** in Settings → Plugins; TableCraft asks before installing any file.

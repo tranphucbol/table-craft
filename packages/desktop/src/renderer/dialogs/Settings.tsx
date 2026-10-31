@@ -784,7 +784,8 @@ function AdvancedPage() {
         </label>
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
-        Looks once after launch and then daily. Nothing downloads or installs until you click Update in the toolbar.
+        Looks once after launch and then every 2 hours. Nothing downloads or installs until you click Update in the
+        toolbar.
       </p>
       <FieldRow label="Beta versions" htmlFor={betaId}>
         <label className="flex items-center gap-cell">

@@ -50,7 +50,7 @@ async function checkNow(): Promise<void> {
     await notice(
       "You're up to date",
       `TableCraft ${state.current} is the newest version.`,
-      "TableCraft also checks once a day while “Check for updates automatically” is on in Settings → Advanced.",
+      "TableCraft also checks every 2 hours while “Check for updates automatically” is on in Settings → Advanced.",
       "info",
     );
     return;
