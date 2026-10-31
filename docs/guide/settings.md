@@ -8,8 +8,8 @@ change live; Follow system picks Dark, Light or High contrast from the operating
 `⌘0` zoom the editor font. Menus, popovers and dialogs fade in briefly and close at once; **Motion**
 turns that down to Reduced or Off, or follows the operating system's Reduce Motion (System).
 **Window style** draws the editor and each tool window as a rounded island on the window frame,
-the way JetBrains' Islands theme does (Islands), or as flat panes split by lines (Classic, the
-default); it changes live and works with every theme.
+the way JetBrains' Islands theme does (Islands, the default), or as flat panes split by lines
+(Classic); it changes live and works with every theme.
 
 ![Settings and appearance](../media/settings.gif)
 
@@ -26,7 +26,7 @@ back to its default without affecting the others.
 | `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](themes.md), `user:<file stem>`   | `system`                                       |
 | `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable`                                  |
 | `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                              | `system`                                       |
-| `appearance.windowStyle`               | `islands`, `classic`                                                                            | `classic`                                      |
+| `appearance.windowStyle`               | `islands`, `classic`                                                                            | `islands`                                      |
 | `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
 | `appearance.brandIcons`                | `true`, `false`; database logos on data sources                                                 | `true`                                         |
 | `appearance.brandIconColor`            | `brand`, `gray`; the logos' colour                                                              | `brand`                                        |

@@ -98,8 +98,9 @@ const LIGHTS_COMFORTABLE = { x: 12, y: 13 };
 const LIGHTS_COMPACT = { x: 12, y: 9 };
 /** The traffic lights' centre may sit this far off the bar's, in CSS pixels. */
 const CENTRE_TOLERANCE_PX = 1.5;
-const LIGHT_PANEL = "rgb(247, 248, 250)";
-const DARK_PANEL = "rgb(43, 45, 48)";
+/** The Islands frame (`frameColors`) the toolbar sits on under the default window style. */
+const LIGHT_FRAME = "rgb(232, 233, 235)";
+const DARK_FRAME = "rgb(45, 47, 50)";
 const SLEEP_SQL = "SELECT pg_sleep(30)";
 /** `formatElapsed`'s live time, with milliseconds (plan 130 decision 2). */
 const ELAPSED = /^(\d+ ms|\d+\.\d{3} s|\d+:\d{2}\.\d{3})$/;
@@ -529,7 +530,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
       const userDataDir = newProfile();
       seedSettings(userDataDir, { version: 1, appearance: { theme: "dark" } });
       const { app, page } = await launch(sqlite(), userDataDir);
-      expect((await styleOf(mainToolbar(page))).background).toBe(DARK_PANEL);
+      expect((await styleOf(mainToolbar(page))).background).toBe(DARK_FRAME);
       await openAppearance(page);
 
       await chooseTheme(page, "Light");
@@ -537,7 +538,7 @@ describe.runIf(DATABASES_ENABLED)("frameless window live test", () => {
       await closeSettings(page);
 
       await expect.poll(() => toolbarHeight(page)).toBe(COMPACT_BAR_PX);
-      expect((await styleOf(mainToolbar(page))).background).toBe(LIGHT_PANEL);
+      expect((await styleOf(mainToolbar(page))).background).toBe(LIGHT_FRAME);
       if (MAC) {
         await expect.poll(() => trafficLights(app)).toEqual(LIGHTS_COMPACT);
         await expectLightsCentred(app, COMPACT_BAR_PX, "compact-light-native");
