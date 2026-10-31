@@ -1,4 +1,4 @@
-import { siMariadb, siMongodb, siMysql, siPostgresql, siRedis, siSqlite, siTidb } from "simple-icons";
+import { siEtcd, siMariadb, siMongodb, siMysql, siPostgresql, siRedis, siSqlite, siTidb } from "simple-icons";
 import { brandInk } from "@table-craft/desktop/appearance/brandInk.js";
 import type { Brand, DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { datasourceBrand } from "@table-craft/desktop/renderer/model/brand.js";
@@ -28,6 +28,7 @@ export const BRAND_GLYPHS: Readonly<Record<string, BrandGlyph>> = {
   [siRedis.slug]: siRedis,
   [siSqlite.slug]: siSqlite,
   [siMongodb.slug]: siMongodb,
+  [siEtcd.slug]: siEtcd,
 };
 
 function brandGlyph(brand: Brand | null): BrandGlyph | undefined {
