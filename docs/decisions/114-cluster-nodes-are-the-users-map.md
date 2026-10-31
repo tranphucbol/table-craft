@@ -1,6 +1,6 @@
 # 114: Commands and server figures may target a node; cluster reachability is the user's map
 
-Status: Accepted
+Status: Accepted. Amended by 142.
 
 ## Decision
 

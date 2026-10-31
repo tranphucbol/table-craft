@@ -28,17 +28,19 @@ The certificate suite uses the test-only CA, server and client certificates in `
 
 The `redis` profile selects seven services (decision 116), all seeded by `test/db/redis/seed.sh`
 from `test/db/schema/redis.redis`. Each cluster is one container running every node
-(`test/db/redis/cluster.sh`).
+(`test/db/redis/cluster.sh`); so is the Sentinel setup (`test/db/redis/sentinel.sh`), whose tests
+fail over and so may leave either data server the master.
 
-| Service           | Version | Host ports  | Notes                                 |
-| :---------------- | :------ | :---------- | :------------------------------------ |
-| `redis`           | 7.4     | 56379       | ACL users `table_craft` and `limited` |
-| `redis-tls`       | 7.4     | 56380       | TLS                                   |
-| `redis-6`         | 6.2     | 56362       |                                       |
-| `redis-5`         | 5.0     | 56350       | Password `table_craft`, no ACL users  |
-| `redis-cluster`   | 7.4     | 47001-47006 | Three primaries and three replicas    |
-| `redis-6-cluster` | 6.2     | 47011-47013 | Three primaries                       |
-| `redis-5-cluster` | 5.0     | 47021-47026 | Three primaries and three replicas    |
+| Service           | Version | Host ports  | Notes                                                                          |
+| :---------------- | :------ | :---------- | :----------------------------------------------------------------------------- |
+| `redis`           | 7.4     | 56379       | ACL users `table_craft` and `limited`                                          |
+| `redis-tls`       | 7.4     | 56380       | TLS                                                                            |
+| `redis-6`         | 6.2     | 56362       |                                                                                |
+| `redis-5`         | 5.0     | 56350       | Password `table_craft`, no ACL users                                           |
+| `redis-cluster`   | 7.4     | 47001-47006 | Three primaries and three replicas                                             |
+| `redis-6-cluster` | 6.2     | 47011-47013 | Three primaries                                                                |
+| `redis-5-cluster` | 5.0     | 47021-47026 | Three primaries and three replicas                                             |
+| `redis-sentinel`  | 7.4     | 47031-47035 | Master, replica, three Sentinels on `mymaster` (password `sentinel`), plan 133 |
 
 ## etcd
 

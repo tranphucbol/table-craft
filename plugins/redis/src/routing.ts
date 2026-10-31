@@ -2,6 +2,7 @@ import { NODE_ALL_PRIMARIES, NODE_AUTO, PluginError, type ServerNode } from "@ta
 import { TYPE_MAPPING, type Client, type Connection } from "./connect.js";
 import { keyArguments, tableKey, type CommandTable } from "./readOnly.js";
 import { asResp3 } from "./resp2.js";
+import { replicasOfInfo } from "./sentinel.js";
 
 /** Keyless commands a cluster console runs on every primary unless a node is picked (decision 11 of plan 058). */
 const FAN_OUT_BY_DEFAULT = new Set([
@@ -19,6 +20,7 @@ const FAN_OUT_BY_DEFAULT = new Set([
 const COMMAND_OPTIONS = { typeMapping: TYPE_MAPPING };
 const RESP2 = 2;
 const REDIRECTED = /^(MOVED|ASK) /;
+const SELECT_ON_REPLICA = "SELECT switches the console's database on the master; pick the master in Run on.";
 const NODE_FIELDS = { id: 0, address: 1, flags: 2, primary: 3, link: 7, slots: 8 } as const;
 
 /** A connection a console command runs on: the node's address and the server's id for it. */
@@ -79,13 +81,15 @@ export function nodesOf(clusterNodes: string, reachable: (announced: string) => 
 export class Router {
   readonly #connection: Connection;
   readonly #table: () => Promise<CommandTable>;
+  readonly #database: () => number;
   readonly #replicas = new Map<string, Promise<Client>>();
   readonly #identities = new WeakMap<Client, Promise<RunningOn>>();
   readonly #running = new Set<RunningOn>();
 
-  constructor(connection: Connection, table: () => Promise<CommandTable>) {
+  constructor(connection: Connection, table: () => Promise<CommandTable>, database: () => number = () => 0) {
     this.#connection = connection;
     this.#table = table;
+    this.#database = database;
   }
 
   async nodes(): Promise<ServerNode[]> {
@@ -93,16 +97,22 @@ export class Router {
     if (connection.mode === "standalone") {
       const replication = String(await connection.client.sendCommand<Buffer | string>(["INFO", "replication"]));
       const replica = /^role:slave/m.test(replication);
-      return [
-        {
-          id: connection.address,
-          address: connection.address,
-          role: replica ? "replica" : "primary",
-          slots: [],
-          primaryId: null,
-          state: "connected",
-        },
-      ];
+      const server: ServerNode = {
+        id: connection.address,
+        address: connection.address,
+        role: replica ? "replica" : "primary",
+        slots: [],
+        primaryId: null,
+        state: "connected",
+      };
+      const sentinel = connection.sentinel;
+      if (sentinel === undefined) return [server];
+      // Sentinel's master announces its replicas; plain Standalone has no map entries for them.
+      const replicas = replicasOfInfo(replication).map((found): ServerNode => {
+        const address = sentinel.reachable(found.announced);
+        return { id: address, address, role: "replica", slots: [], primaryId: connection.address, state: found.state };
+      });
+      return [server, ...replicas.sort((a, b) => a.address.localeCompare(b.address, "en", { numeric: true }))];
     }
     const text = String(await (await this.#randomPrimary()).sendCommand<Buffer | string>(["CLUSTER", "NODES"]));
     return nodesOf(text, connection.reachable);
@@ -112,8 +122,10 @@ export class Router {
     const connection = this.#connection;
     const target = node ?? NODE_AUTO;
     if (connection.mode === "standalone") {
-      if (target !== NODE_AUTO && target !== NODE_ALL_PRIMARIES && target !== connection.address)
-        throw unknownNode(target);
+      if (target !== NODE_AUTO && target !== NODE_ALL_PRIMARIES && target !== connection.address) {
+        if (connection.sentinel === undefined) throw unknownNode(target);
+        return { fanned: false, reply: await this.#onReplica(target, args, words) };
+      }
       const reply = await this.#console(connection.client, args, connection.address);
       return target === NODE_ALL_PRIMARIES
         ? { fanned: true, replies: [{ node: connection.address, reply }] }
@@ -212,6 +224,14 @@ export class Router {
     }
   }
 
+  /** A command on a Sentinel replica, in the database the session is on (decision 12 of plan 133). */
+  async #onReplica(id: string, args: readonly Buffer[], words: readonly string[]): Promise<unknown> {
+    if (words[0] === "SELECT") throw new PluginError("statementFailed", SELECT_ON_REPLICA);
+    const client = await this.clientOf(id);
+    await client.sendCommand(["SELECT", String(this.#database())]);
+    return this.#console(client, args, id);
+  }
+
   /** A RESP2 reply in its RESP3 shape, so both protocols render alike (decision 116). */
   #shaped(args: readonly (string | Buffer)[], reply: unknown): unknown {
     return this.#connection.resp === RESP2 ? asResp3(args, reply) : reply;
@@ -254,7 +274,10 @@ export class Router {
 
   async #addressOf(client: Client): Promise<string> {
     const connection = this.#connection;
-    if (connection.mode === "standalone") return connection.address;
+    if (connection.mode === "standalone") {
+      for (const [id, replica] of this.#replicas) if ((await replica) === client) return id;
+      return connection.address;
+    }
     for (const master of connection.cluster.masters)
       if ((await connection.cluster.nodeClient(master)) === client) return connection.reachable(master.address);
     for (const [id, replica] of this.#replicas) {
@@ -269,21 +292,26 @@ export class Router {
   async clientOf(id: string): Promise<Client> {
     const connection = this.#connection;
     if (connection.mode === "standalone") {
-      if (id !== connection.address) throw unknownNode(id);
-      return connection.client;
+      if (id === connection.address) return connection.client;
+      if (connection.sentinel === undefined) throw unknownNode(id);
+    } else {
+      const cluster = connection.cluster;
+      const master = cluster.masters.find((candidate) => candidate.id === id || candidate.address === id);
+      if (master !== undefined) return await cluster.nodeClient(master);
     }
-    const cluster = connection.cluster;
-    const master = cluster.masters.find((candidate) => candidate.id === id || candidate.address === id);
-    if (master !== undefined) return await cluster.nodeClient(master);
     const node = (await this.nodes()).find((candidate) => candidate.id === id);
     if (node === undefined) throw unknownNode(id);
     let client = this.#replicas.get(node.id);
     if (client === undefined) {
       const open = connection.open;
-      client = open(node.address).then(async (opened) => {
-        await opened.sendCommand(["READONLY"]);
-        return opened;
-      });
+      // READONLY is a cluster command; a Sentinel replica answers reads as it is.
+      client =
+        connection.mode === "cluster"
+          ? open(node.address).then(async (opened) => {
+              await opened.sendCommand(["READONLY"]);
+              return opened;
+            })
+          : open(node.address);
       client.catch(() => this.#replicas.delete(node.id));
       this.#replicas.set(node.id, client);
     }

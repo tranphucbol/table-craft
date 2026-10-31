@@ -33,7 +33,7 @@
     {
       "key": "connectionFieldSchema",
       "kind": "addition",
-      "reason": "Gains the optional visibleWhen; every field valid before still parses the same (decision 112)."
+      "reason": "Gains the optional visibleWhen, whose equals may also be a list of a select's values; every field valid before still parses the same (decision 112, plan 133)."
     },
     {
       "key": "connectionUrlSchema",
@@ -43,7 +43,7 @@
     {
       "key": "pluginManifestSchema",
       "kind": "addition",
-      "reason": "Widens through CAPABILITIES, visibleWhen and sets above; every manifest valid before still parses the same."
+      "reason": "Widens through CAPABILITIES, visibleWhen (and its list of values) and sets above; every manifest valid before still parses the same."
     },
     {
       "key": "NamespaceStatementForm",
