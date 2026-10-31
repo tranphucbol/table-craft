@@ -447,6 +447,7 @@ export function McpSettingsPage() {
   const mcp = useSettings((state) => state.settings.mcp);
   const status = useMcp((state) => state.status);
   const enabledId = useId();
+  const notificationsId = useId();
   const setMcp = (patch: Partial<Settings["mcp"]>) =>
     update((current) => ({ ...current, mcp: { ...current.mcp, ...patch } }));
   return (
@@ -524,6 +525,18 @@ export function McpSettingsPage() {
       />
       <p className="col-start-2 text-ink-muted">
         Seconds an agent's statement may run. The database stops it there too where it can, even if the app cannot.
+      </p>
+      <FieldRow label="Notifications" htmlFor={notificationsId}>
+        <Switch
+          id={notificationsId}
+          label="Notify me when an agent waits for an answer"
+          testId="mcp-notifications"
+          checked={mcp.notifications}
+          onChange={(notifications) => setMcp({ notifications })}
+        />
+      </FieldRow>
+      <p className="col-start-2 text-ink-muted">
+        Only while TableCraft is in the background. The notification never shows the statement.
       </p>
       <SectionTitle>Connect a client</SectionTitle>
       <ClientSnippet port={mcp.port} />
