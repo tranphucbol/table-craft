@@ -5,11 +5,12 @@ import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions
 import { bytesLabel } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 import { permissionRange, rangeLabel } from "@table-craft/desktop/renderer/keyAdmin/AccessView.js";
 import { BUTTON, INPUT } from "@table-craft/desktop/renderer/keyAdmin/controls.js";
+import { TEXT_TAB_ROW_INSET } from "@table-craft/desktop/renderer/shell/islands.js";
 import { Dropdown, type DropdownOption } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { WATCH_ACTION_IDS } from "./actions.js";
 import { exportRunning, useWatch, type WatchEntry } from "./store.js";
 
-const CELL = "h-row border-b border-line px-gap text-left whitespace-nowrap";
+const CELL = "h-row border-b border-line px-gap text-left whitespace-nowrap first:pl-pane-inset last:pr-pane-inset";
 const WATCH_KIND_OPTIONS: readonly DropdownOption[] = [
   { value: "prefix", label: "Prefix" },
   { value: "key", label: "Key" },
@@ -58,7 +59,7 @@ function WatchForm() {
     error = "Enter a positive revision, or leave it empty for Now.";
   return (
     <form
-      className="flex flex-wrap items-end gap-cell border-b border-line bg-panel p-cell"
+      className="flex flex-wrap items-end gap-cell border-b border-line bg-panel px-pane-inset py-cell"
       onSubmit={(event) => {
         event.preventDefault();
         if (error === null)
@@ -123,11 +124,11 @@ export function exportStatusText(task: KeyTask): string {
 }
 function ExportStatus({ task }: { readonly task: KeyTask | undefined }) {
   if (task === undefined)
-    return <p className="border-b border-line px-gap py-cell text-ink-muted">{WATCH_EXPORT_HINT}</p>;
+    return <p className="border-b border-line px-pane-inset py-cell text-ink-muted">{WATCH_EXPORT_HINT}</p>;
   return (
     <p
       role={task.state === "failed" ? "alert" : "status"}
-      className={`border-b border-line px-gap py-cell ${
+      className={`border-b border-line px-pane-inset py-cell ${
         task.state === "failed" ? "text-danger" : task.state === "completed" ? "text-success" : "text-ink-muted"
       }`}
     >
@@ -159,7 +160,7 @@ function Stream({ entry }: { readonly entry: WatchEntry }) {
       <div
         role="toolbar"
         aria-label="Watch controls"
-        className="flex flex-wrap items-center gap-cell border-b border-line p-cell"
+        className="flex flex-wrap items-center gap-cell border-b border-line px-pane-inset py-cell"
       >
         <WatchButton id={id} kind="pause">
           {entry.paused ? "Resume" : "Pause"}
@@ -195,7 +196,7 @@ function Stream({ entry }: { readonly entry: WatchEntry }) {
           onChange={(event) => setContains(event.target.value)}
         />
       </div>
-      <div className="flex flex-wrap items-center gap-gap border-b border-line px-gap py-cell text-ink-muted">
+      <div className="flex flex-wrap items-center gap-gap border-b border-line px-pane-inset py-cell text-ink-muted">
         <svg
           aria-label="Events per second over the last 60 samples"
           viewBox="0 0 60 14"
@@ -219,18 +220,18 @@ function Stream({ entry }: { readonly entry: WatchEntry }) {
       </div>
       <ExportStatus task={exported} />
       {entry.summary.state === "reconnecting" ? (
-        <p role="status" className="p-cell text-warning">
+        <p role="status" className="px-pane-inset py-cell text-warning">
           Reconnecting from the last fully delivered revision. Any missing revisions will be reported, not hidden.
         </p>
       ) : null}
       {entry.summary.gap === null ? null : (
-        <p role="alert" className="p-cell text-danger">
+        <p role="alert" className="px-pane-inset py-cell text-danger">
           Missing events: {entry.summary.gap.reason} · revisions {entry.summary.gap.fromRevision} to{" "}
           {entry.summary.gap.toRevision ?? "unknown"}. Stop and start a new watch from Now or an available revision.
         </p>
       )}
       {entry.error === null ? null : (
-        <p role="alert" className="p-cell text-danger">
+        <p role="alert" className="px-pane-inset py-cell text-danger">
           {entry.error}
         </p>
       )}
@@ -346,7 +347,11 @@ export function WatchPane() {
   const entry = activeId === null ? undefined : entries[activeId];
   return (
     <section data-region="watch" aria-label="Watch" className="flex h-full min-h-0 flex-col overflow-auto text-ui">
-      <div role="tablist" aria-label="Watches" className="flex shrink-0 overflow-x-auto border-b border-line bg-panel">
+      <div
+        role="tablist"
+        aria-label="Watches"
+        className={`flex shrink-0 overflow-x-auto border-b border-line bg-panel ${TEXT_TAB_ROW_INSET}`}
+      >
         {Object.values(entries).map((item) => (
           <div key={item.summary.watchId} className="flex shrink-0 items-center border-r border-line">
             <button
@@ -380,7 +385,7 @@ export function WatchPane() {
       </div>
       {form || entry === undefined ? <WatchForm /> : null}
       {entry === undefined ? (
-        <p className="p-gap text-ink-muted">
+        <p className="px-pane-inset py-gap text-ink-muted">
           Watch a key, prefix or byte range. Watching is read-only; hiding this window does not stop a watch.
         </p>
       ) : (

@@ -625,7 +625,7 @@ export function ServicesPane() {
     return (
       <>
         <AdvancedServiceRows />
-        <p className="p-gap text-ink-muted">No open console sessions.</p>
+        <p className="px-pane-inset py-gap text-ink-muted">No open console sessions.</p>
       </>
     );
   return (
@@ -678,9 +678,9 @@ export function ServicesPane() {
                           ? row.node.outcome
                           : undefined
               }
-              style={{ paddingLeft: `calc(var(--spacing-gap) + ${String(row.depth * INDENT_PX)}px)` }}
+              style={{ paddingLeft: `calc(var(--spacing-pane-inset) + ${String(row.depth * INDENT_PX)}px)` }}
               className={cn(
-                "flex h-row cursor-default items-center gap-cell pr-gap outline-none hover:bg-raised",
+                "flex h-row cursor-default items-center gap-cell pr-pane-inset outline-none hover:bg-raised",
                 isSelected && "bg-selection hover:bg-selection",
                 !isSelected && active && "bg-raised",
               )}

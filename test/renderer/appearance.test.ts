@@ -3,6 +3,7 @@ import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_THEMES,
+  COMPACT_DENSITY,
   frameColors,
   type Appearance,
   type DensityId,
@@ -149,5 +150,27 @@ describe("island variables", () => {
     );
 
     expect(variables["--tc-island-radius"]).toBe("0px");
+  });
+
+  it("givenIslands_whenVariablesBuilt_thenPanesInsetByTheRadiusUnderATabHighHeader", () => {
+    const variables = (density: DensityId) =>
+      appearanceVariables(appearanceOf(withWindowStyle("islands", density), BUILT_IN_THEMES.dark, NO_PREFERENCE));
+
+    expect(variables("comfortable")).toMatchObject({ "--tc-pane-inset": "10px", "--tc-tool-header-height": "32px" });
+    expect(variables("compact")).toMatchObject({
+      "--tc-pane-inset": "8px",
+      "--tc-tool-header-height": `${String(COMPACT_DENSITY.tabHeightPx)}px`,
+    });
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenPanesKeepTheGapAndARowHighHeader", () => {
+    const variables = (density: DensityId) =>
+      appearanceVariables(appearanceOf(withWindowStyle("classic", density), BUILT_IN_THEMES.dark, NO_PREFERENCE));
+
+    expect(variables("comfortable")).toMatchObject({ "--tc-pane-inset": "8px", "--tc-tool-header-height": "24px" });
+    expect(variables("compact")).toMatchObject({
+      "--tc-pane-inset": `${String(COMPACT_DENSITY.gapPx)}px`,
+      "--tc-tool-header-height": `${String(COMPACT_DENSITY.rowHeightPx)}px`,
+    });
   });
 });
