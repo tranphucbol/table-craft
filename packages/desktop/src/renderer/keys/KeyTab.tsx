@@ -35,7 +35,7 @@ import { rowAt, shownHeld } from "@table-craft/desktop/renderer/state/resultTab.
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
-import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { tintFrame } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const STATUS_TEXT = {
   connecting: "Connecting…",
@@ -314,7 +314,7 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
       data-color={color ?? undefined}
       data-key-type={tab.details?.type ?? undefined}
       {...{ [REGION_ATTRIBUTE]: "tableEditor" }}
-      className={cn("flex min-h-0 flex-1 flex-col", color !== null && `border-2 ${TINT_BORDER[color]}`)}
+      className={cn("flex min-h-0 flex-1 flex-col", tintFrame(color))}
     >
       <KeyHeader tab={tab} datasourceName={datasource?.name ?? ""} onExpired={onExpired} />
       {missing ? (

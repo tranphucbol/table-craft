@@ -22,8 +22,7 @@ export const TINT_TAB: Readonly<Record<DatasourceColor, string>> = {
   violet: "bg-ds-violet/25",
 };
 
-/** The frame around a coloured datasource's console. */
-export const TINT_BORDER: Readonly<Record<DatasourceColor, string>> = {
+const TINT_BORDER: Readonly<Record<DatasourceColor, string>> = {
   red: "border-ds-red",
   orange: "border-ds-orange",
   yellow: "border-ds-yellow",
@@ -31,3 +30,11 @@ export const TINT_BORDER: Readonly<Record<DatasourceColor, string>> = {
   blue: "border-ds-blue",
   violet: "border-ds-violet",
 };
+
+/**
+ * The frame around a coloured datasource's console or view. It always meets the bottom of the
+ * editor's island, so it rounds there to the island's radius, which is zero in classic (decision 141).
+ */
+export function tintFrame(color: DatasourceColor | null): string | null {
+  return color === null ? null : `border-2 rounded-b-island ${TINT_BORDER[color]}`;
+}

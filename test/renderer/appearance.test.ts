@@ -1,7 +1,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { BUILT_IN_THEMES, type Appearance } from "@table-craft/desktop/appearance/themes.js";
+import {
+  BUILT_IN_THEMES,
+  frameColors,
+  type Appearance,
+  type DensityId,
+  type WindowStyle,
+} from "@table-craft/desktop/appearance/themes.js";
 import { appearanceVariables } from "@table-craft/desktop/renderer/appearance/apply.js";
 import { appearanceOf } from "@table-craft/desktop/renderer/appearance/tokens.js";
 import { createSettingsStore } from "@table-craft/desktop/renderer/state/settings.js";
@@ -113,5 +119,34 @@ describe("motion variables", () => {
       .filter((path) => MOTION_LITERAL.test(readFileSync(join(RENDERER, path), "utf8")));
 
     expect(offenders).toEqual([]);
+  });
+});
+
+function withWindowStyle(windowStyle: WindowStyle, density: DensityId = "comfortable"): Settings {
+  return { ...DEFAULT_SETTINGS, appearance: { ...DEFAULT_SETTINGS.appearance, windowStyle, density } };
+}
+
+describe("island variables", () => {
+  it("givenIslands_whenVariablesBuilt_thenFrameGapAndRadiusAreSet", () => {
+    const theme = BUILT_IN_THEMES.light;
+    const frame = frameColors(theme);
+
+    expect(appearanceVariables(appearanceOf(withWindowStyle("islands"), theme, NO_PREFERENCE))).toMatchObject({
+      "--tc-frame": frame.frame,
+      "--tc-frame-raised": frame.frameRaised,
+      "--tc-island-gap": "5px",
+      "--tc-island-radius": "10px",
+    });
+    expect(
+      appearanceVariables(appearanceOf(withWindowStyle("islands", "compact"), theme, NO_PREFERENCE)),
+    ).toMatchObject({ "--tc-island-gap": "3px", "--tc-island-radius": "8px" });
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenIslandRadiusIsZero", () => {
+    const variables = appearanceVariables(
+      appearanceOf(withWindowStyle("classic"), BUILT_IN_THEMES.dark, NO_PREFERENCE),
+    );
+
+    expect(variables["--tc-island-radius"]).toBe("0px");
   });
 });

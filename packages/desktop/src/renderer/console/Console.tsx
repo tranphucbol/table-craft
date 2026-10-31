@@ -39,7 +39,7 @@ import {
 } from "@table-craft/desktop/renderer/ui/icons.js";
 import { ToolbarDivider } from "@table-craft/desktop/renderer/ui/ToolbarDivider.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
-import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { tintFrame } from "@table-craft/desktop/renderer/ui/tint.js";
 import { useSnippetsDialog } from "@table-craft/desktop/renderer/state/snippetsDialog.js";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 
@@ -306,7 +306,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
           style={PANEL_STYLE}
         >
           <TransactionBuilder consoleId={consoleId} />
-          <div className={cn("min-h-0 flex-1 overflow-hidden", color !== null && `border-2 ${TINT_BORDER[color]}`)}>
+          <div className={cn("min-h-0 flex-1 overflow-hidden", tintFrame(color))}>
             <Editor consoleId={consoleId} />
           </div>
           {notice?.consoleId === consoleId ? (

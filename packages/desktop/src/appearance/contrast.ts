@@ -14,7 +14,7 @@ export function isHexColor(value: string): boolean {
 }
 
 /** Expands `#rgb` and drops the alpha of `#rrggbbaa`; contrast is measured on the opaque colour. */
-function channels(color: string): readonly [number, number, number] {
+export function hexChannels(color: string): readonly [number, number, number] {
   if (!isHexColor(color)) throw new Error(`${color} is not a #rgb, #rrggbb or #rrggbbaa colour.`);
   const hex = color.length === 4 ? [...color.slice(1)].map((digit) => digit + digit).join("") : color.slice(1, 7);
   return [0, 2, 4].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)) as unknown as readonly [
@@ -26,7 +26,7 @@ function channels(color: string): readonly [number, number, number] {
 
 /** WCAG 2.1 relative luminance: https://www.w3.org/TR/WCAG21/#dfn-relative-luminance */
 function luminance(color: string): number {
-  const [red, green, blue] = channels(color).map((channel) => {
+  const [red, green, blue] = hexChannels(color).map((channel) => {
     const value = channel / 255;
     return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
   }) as unknown as readonly [number, number, number];

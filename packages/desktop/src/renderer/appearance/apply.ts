@@ -12,11 +12,13 @@ function kebab(name: string): string {
 
 /** The CSS variables `app.css` maps onto Tailwind's theme. */
 export function appearanceVariables(appearance: Appearance): Readonly<Record<string, string>> {
-  const { colors, fonts, density, motion } = appearance;
+  const { colors, fonts, density, motion, frame, windowStyle } = appearance;
   const accentShades = fillShades(colors.accent, colors.accentInk);
   const dangerShades = fillShades(colors.danger, colors.accentInk);
   return {
     "--tc-canvas": colors.canvas,
+    "--tc-frame": frame.frame,
+    "--tc-frame-raised": frame.frameRaised,
     "--tc-editor-tooltip-radius": `${EDITOR_TOOLTIP_RADIUS_PX}px`,
     "--tc-panel": colors.panel,
     "--tc-raised": colors.raised,
@@ -72,6 +74,8 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-picker-list-height": `${density.pickerListHeightPx}px`,
     "--tc-plan-details-width": `${density.planDetailsWidthPx}px`,
     "--tc-plan-bar-height": `${density.planBarHeightPx}px`,
+    "--tc-island-gap": `${density.islandGapPx}px`,
+    "--tc-island-radius": `${windowStyle === "islands" ? density.islandRadiusPx : 0}px`,
     "--tc-motion-fast": `${motion.fastMs}ms`,
     "--tc-motion-base": `${motion.baseMs}ms`,
     "--tc-motion-slow": `${motion.slowMs}ms`,

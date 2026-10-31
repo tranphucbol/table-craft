@@ -3,6 +3,7 @@
 /* Values come from `appearance/apply.ts`; this file only names them for Tailwind (decision 012). */
 @theme inline {
   --color-canvas: var(--tc-canvas);
+  --color-frame: var(--tc-frame);
   --color-panel: var(--tc-panel);
   --color-raised: var(--tc-raised);
   --color-line: var(--tc-border);
@@ -63,6 +64,9 @@
   --spacing-picker-list: var(--tc-picker-list-height);
   --spacing-plan-details: var(--tc-plan-details-width);
   --spacing-plan-bar: var(--tc-plan-bar-height);
+  --spacing-island-gap: var(--tc-island-gap);
+
+  --radius-island: var(--tc-island-radius);
 
   /* Open animations only: Radix holds a closing surface until its exit animation ends, which
      delays the focus return, so nothing here runs on `data-state=closed` (decision 120). The
