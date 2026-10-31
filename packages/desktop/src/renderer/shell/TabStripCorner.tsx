@@ -10,6 +10,7 @@ import {
   type EditorGroupId,
   type Tab,
 } from "@table-craft/desktop/renderer/state/tabs.js";
+import { CORNER_ISLAND_INSET } from "@table-craft/desktop/renderer/shell/islands.js";
 import { useIslands } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -200,7 +201,10 @@ export function TabStripCorner({ groupId }: { readonly groupId: EditorGroupId })
   return (
     <div
       data-testid="tab-strip-corner"
-      className={cn("flex shrink-0 items-center gap-1 border-b border-line px-1", islands ? null : "border-l")}
+      className={cn(
+        "flex shrink-0 items-center gap-1 border-b border-line",
+        islands ? CORNER_ISLAND_INSET : "border-l px-1",
+      )}
     >
       <ActionButton actionId={ACTION_IDS.newConsole} compact icon="add" />
       <CornerButton

@@ -15,6 +15,7 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
   const { colors, fonts, density, motion, frame, windowStyle } = appearance;
   const accentShades = fillShades(colors.accent, colors.accentInk);
   const dangerShades = fillShades(colors.danger, colors.accentInk);
+  const islands = windowStyle === "islands";
   return {
     "--tc-canvas": colors.canvas,
     "--tc-frame": frame.frame,
@@ -76,7 +77,9 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-plan-details-width": `${density.planDetailsWidthPx}px`,
     "--tc-plan-bar-height": `${density.planBarHeightPx}px`,
     "--tc-island-gap": `${density.islandGapPx}px`,
-    "--tc-island-radius": `${windowStyle === "islands" ? density.islandRadiusPx : 0}px`,
+    "--tc-island-radius": `${islands ? density.islandRadiusPx : 0}px`,
+    "--tc-pane-inset": `${islands ? density.islandRadiusPx : density.gapPx}px`,
+    "--tc-tool-header-height": `${islands ? density.tabHeightPx : density.rowHeightPx}px`,
     "--tc-motion-fast": `${motion.fastMs}ms`,
     "--tc-motion-base": `${motion.baseMs}ms`,
     "--tc-motion-slow": `${motion.slowMs}ms`,

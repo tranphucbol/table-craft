@@ -19,14 +19,14 @@ export function AdvancedServiceRows() {
     <div aria-label="Independent background key services">
       {[...ids].map((source) => (
         <section key={source} className="border-b border-line">
-          <h3 className="bg-panel px-gap py-cell font-semibold">
+          <h3 className="bg-panel px-pane-inset py-cell font-semibold">
             {sources.find((item) => item.id === source)?.name ?? source}
           </h3>
           <ul>
             {Object.values(watches)
               .filter((watch) => watch.datasourceId === source)
               .map((watch) => (
-                <li key={watch.summary.watchId} className="flex flex-wrap items-center gap-gap px-gap py-cell">
+                <li key={watch.summary.watchId} className="flex flex-wrap items-center gap-gap px-pane-inset py-cell">
                   <button
                     type="button"
                     className="min-w-0 truncate text-left hover:text-accent"
