@@ -1,9 +1,10 @@
 import { connect as connectTcp } from "node:net";
 import type { ConnectionOptions } from "node:tls";
-import { PluginError, type ConnectOptions } from "@table-craft/plugin-api";
+import { PluginError, TlsSettingsError, type ConnectOptions } from "@table-craft/plugin-api";
 import { createClient, createCluster, RESP_TYPES } from "redis";
 import type { RedisConfig } from "./config.js";
 import { lowestVersion, requireSupported, versionOfInfo } from "./features.js";
+import { discoverPrimary, droppedWhenDemoted, formatAddress, parseSentinels, type Address } from "./sentinel.js";
 import { connectFailure, tlsOptions } from "./tls.js";
 
 const MS_PER_SECOND = 1000;
@@ -23,6 +24,12 @@ export const TYPE_MAPPING = { [RESP_TYPES.BLOB_STRING]: Buffer, [RESP_TYPES.MAP]
 
 export const SSH_IN_CLUSTER =
   "An SSH tunnel reaches one node; a cluster needs every node. Connect without SSH, or map each node through your own tunnels in Node address map.";
+
+export const SSH_IN_SENTINEL =
+  "An SSH tunnel reaches the Sentinel, not the master it names. Connect without SSH, or map the master and replicas through your own tunnels in Node address map.";
+
+const SENTINEL_NO_ACL_USERS =
+  "This Sentinel has no ACL users (Redis before 6.0): leave Sentinel username empty and use the Sentinel password.";
 
 type Argument = string | Buffer;
 interface CommandOptions {
@@ -68,6 +75,12 @@ export type Connection =
       readonly resp: Protocol;
       /** Opens a second client to the server, such as the short-lived one a cancel sends from. */
       readonly open: (address: string) => Promise<Client>;
+      /** Set when Sentinel named the server (plan 133): the data path is still this one server. */
+      readonly sentinel?: {
+        readonly masterName: string;
+        /** The address the client dials for an announced one, after Node address map. */
+        readonly reachable: (announced: string) => string;
+      };
     }
   | {
       readonly mode: "cluster";
@@ -84,8 +97,8 @@ export type Connection =
     };
 
 /** Node address map: `announced=reachable` pairs, comma or newline separated (decision 4 of plan 058). */
-export function parseNodeAddressMap(text: string): ReadonlyMap<string, { host: string; port: number }> {
-  const map = new Map<string, { host: string; port: number }>();
+export function parseNodeAddressMap(text: string): ReadonlyMap<string, Address> {
+  const map = new Map<string, Address>();
   for (const entry of text.split(/[,\n]/)) {
     const trimmed = entry.trim();
     if (trimmed === "") continue;
@@ -106,6 +119,20 @@ function credentials(config: RedisConfig): { username?: string; password?: strin
   return {
     ...(config.user === "" ? {} : { username: config.user }),
     ...(config.password === "" ? {} : { password: config.password }),
+  };
+}
+
+/** Each server is checked against the name it is dialled by, not the configured Host's. */
+function perServerTls(config: RedisConfig, verified: ConnectionOptions | false): ConnectionOptions | false {
+  return verified === false || config.tlsMode !== "verify-full"
+    ? verified
+    : (({ checkServerIdentity: _check, servername: _name, ...rest }) => rest)(verified);
+}
+
+function reachableThrough(map: ReadonlyMap<string, Address>): (announced: string) => string {
+  return (announced) => {
+    const target = map.get(announced);
+    return target === undefined ? announced : formatAddress(target);
   };
 }
 
@@ -278,16 +305,8 @@ async function clusterFailure(
 async function connectCluster(config: RedisConfig, options: ConnectOptions): Promise<Connection> {
   if (options.serverName !== undefined) throw new PluginError("connectionFailed", SSH_IN_CLUSTER);
   const map = parseNodeAddressMap(config.nodeAddressMap);
-  const verified = await tlsOptions(config, undefined);
-  // Each node is checked against the name it is dialled by, not the seed's.
-  const tls =
-    verified === false || config.tlsMode !== "verify-full"
-      ? verified
-      : (({ checkServerIdentity: _check, servername: _name, ...rest }) => rest)(verified);
-  const reachable = (announced: string): string => {
-    const target = map.get(announced);
-    return target === undefined ? announced : `${target.host}:${String(target.port)}`;
-  };
+  const tls = perServerTls(config, await tlsOptions(config, undefined));
+  const reachable = reachableThrough(map);
   // A failed cluster connect hides its cause, so the seed is asked first which protocol it speaks.
   let resp: Protocol;
   try {
@@ -331,7 +350,93 @@ async function connectCluster(config: RedisConfig, options: ConnectOptions): Pro
   }
 }
 
+async function openSentinel(
+  config: RedisConfig,
+  options: ConnectOptions,
+  address: Address,
+  tls: ConnectionOptions | false,
+): Promise<Client> {
+  const login = { ...config, user: config.sentinelUser, password: config.sentinelPassword };
+  try {
+    return (await openNegotiated(login, options, address.host, address.port, tls, 0)).client;
+  } catch (cause) {
+    if (cause instanceof PluginError && cause.message === NO_ACL_USERS) {
+      throw new PluginError("connectionFailed", SENTINEL_NO_ACL_USERS, { cause });
+    }
+    throw cause;
+  }
+}
+
+/** A failed TLS check names the setting to change; anything else is left for discovery to word. */
+function tlsCheckFailure(config: RedisConfig, host: string, cause: unknown): unknown {
+  const failure = connectFailure(config, host, cause);
+  return failure instanceof TlsSettingsError ? failure : cause;
+}
+
+/**
+ * Asks the Sentinels for the master and connects to it (decisions 6 and 7 of plan 133); the
+ * result is a standalone connection, so every later command takes the one-server path.
+ */
+async function connectSentinel(config: RedisConfig, options: ConnectOptions): Promise<Connection> {
+  if (options.serverName !== undefined) throw new PluginError("connectionFailed", SSH_IN_SENTINEL);
+  const map = parseNodeAddressMap(config.nodeAddressMap);
+  const sentinels = [{ host: config.host, port: config.port }, ...parseSentinels(config.sentinels)];
+  const tls = perServerTls(config, await tlsOptions(config, undefined));
+  const reachable = reachableThrough(map);
+  const primary = await discoverPrimary(
+    {
+      sentinel: async (address) => {
+        try {
+          return await openSentinel(config, options, address, tls);
+        } catch (cause) {
+          throw tlsCheckFailure(config, address.host, cause);
+        }
+      },
+      primary: async (address) => {
+        try {
+          return await openNegotiated(config, options, address.host, address.port, tls, config.database);
+        } catch (cause) {
+          throw tlsCheckFailure(config, address.host, cause);
+        }
+      },
+    },
+    sentinels,
+    config.masterName,
+    reachable,
+  ).catch((cause: unknown) => {
+    throw cause instanceof PluginError ? cause : connectFailure(config, undefined, cause);
+  });
+  const { client, resp } = primary;
+  try {
+    const version = await versionOf(client);
+    requireSupported(version);
+    const open = (address: string): Promise<Client> => {
+      const [host = "", port = ""] = address.split(/:(?=\d+$)/);
+      return openStandalone(config, options, host, Number(port), tls, 0, resp);
+    };
+    return {
+      mode: "standalone",
+      client: droppedWhenDemoted(client, primary.address, config.masterName),
+      address: primary.address,
+      version,
+      resp,
+      open,
+      sentinel: { masterName: config.masterName, reachable },
+    };
+  } catch (cause) {
+    client.destroy();
+    throw cause;
+  }
+}
+
 /** Connects in the configured mode, refusing a server older than 5.0 (decision 116). */
 export function openConnection(config: RedisConfig, options: ConnectOptions): Promise<Connection> {
-  return config.mode === "cluster" ? connectCluster(config, options) : connectStandalone(config, options);
+  switch (config.mode) {
+    case "cluster":
+      return connectCluster(config, options);
+    case "sentinel":
+      return connectSentinel(config, options);
+    case "standalone":
+      return connectStandalone(config, options);
+  }
 }

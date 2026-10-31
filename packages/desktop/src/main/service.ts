@@ -5,7 +5,7 @@ import type { DatasourceConfig, ProbeResult, SshTunnelConfig } from "@table-craf
 import { toDatasource, type DatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import type { HostRegistry } from "@table-craft/desktop/main/hosts.js";
 import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
-import { SSH_SECRET_KEYS } from "@table-craft/desktop/preload/bridge.js";
+import { SSH_SECRET_KEYS, visibleWhenHolds } from "@table-craft/desktop/preload/bridge.js";
 import type {
   ConfigValue,
   ConnectionField,
@@ -247,7 +247,7 @@ export async function createDatasourceService<Target>(
     const rule = field.visibleWhen;
     if (rule === undefined) return true;
     const value = config[rule.key] ?? plugin.fields.find((other) => other.key === rule.key)?.default;
-    return value === rule.equals;
+    return visibleWhenHolds(rule.equals, value);
   }
 
   function checkRequired(plugin: PluginInfo, config: Readonly<Record<string, ConfigValue>>): void {

@@ -159,4 +159,14 @@ describe("server tab", () => {
     expect(keyspaceStatusText(keyspace, [PRIMARY, REPLICA, { ...PRIMARY, id: "c" }])).toBe("cluster · 2 primaries");
     expect(keyspaceStatusText(undefined, [])).toBeNull();
   });
+
+  it("givenPrimaryWithReplicas_whenStatusText_thenDatabaseLine", () => {
+    const keyspace = {
+      ...EMPTY_KEYSPACE,
+      databases: [{ index: 1, keys: 3, expires: 0, current: true }],
+    };
+    const primary = { ...PRIMARY, slots: [] };
+    const replica = { ...REPLICA, slots: [] };
+    expect(keyspaceStatusText(keyspace, [primary, replica])).toBe("db1 · 3 keys");
+  });
 });

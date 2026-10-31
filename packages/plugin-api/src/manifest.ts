@@ -42,11 +42,15 @@ export const connectionFieldSchema = z.strictObject({
   group: z.enum(CONNECTION_FIELD_GROUPS).optional(),
   secret: z.boolean().optional(),
   /**
-   * Draw the field only while the `select` or `checkbox` named by `key` holds `equals` (plan 058);
-   * a hidden field is neither checked nor required.
+   * Draw the field only while the `select` or `checkbox` named by `key` holds `equals`, or one of
+   * them when it is a list of a select's values (plans 058, 133); a hidden field is neither checked
+   * nor required.
    */
   visibleWhen: z
-    .strictObject({ key: z.string().regex(FIELD_KEY), equals: z.union([z.string(), z.boolean()]) })
+    .strictObject({
+      key: z.string().regex(FIELD_KEY),
+      equals: z.union([z.string(), z.boolean(), z.array(z.string()).min(1)]),
+    })
     .optional(),
 });
 
@@ -180,18 +184,24 @@ function tlsFieldsDeclared(connection: {
   });
 }
 
-/** Every `visibleWhen` names another field of the form, a `select` or a `checkbox`. */
+function visibleWhenFits(equals: string | boolean | readonly string[], source: ConnectionField): boolean {
+  if (source.kind === "checkbox") return typeof equals === "boolean";
+  if (source.kind !== "select" || typeof equals === "boolean") return false;
+  if (typeof equals === "string") return true;
+  const values = new Set((source.options ?? []).map((option) => option.value));
+  return equals.every((value) => values.has(value));
+}
+
+/**
+ * Every `visibleWhen` names another field of the form, a `select` or a `checkbox`; a list of values
+ * names only a select's declared options.
+ */
 function visibilityFieldsDeclared(connection: { readonly fields: readonly ConnectionField[] }): boolean {
   return connection.fields.every((field) => {
     const condition = field.visibleWhen;
     if (condition === undefined) return true;
     const source = connection.fields.find((candidate) => candidate.key === condition.key);
-    return (
-      source !== undefined &&
-      source !== field &&
-      (source.kind === "select" || source.kind === "checkbox") &&
-      typeof condition.equals === (source.kind === "checkbox" ? "boolean" : "string")
-    );
+    return source !== undefined && source !== field && visibleWhenFits(condition.equals, source);
   });
 }
 
@@ -265,7 +275,7 @@ export const pluginManifestSchema = z
       })
       .refine(visibilityFieldsDeclared, {
         message:
-          "visibleWhen names a field the form does not declare, the field itself, or one that is not a select or checkbox, or compares it with a value of the wrong type",
+          "visibleWhen names a field the form does not declare, the field itself, or one that is not a select or checkbox, or compares it with a value of the wrong type or a list holding a value the select does not offer",
         path: ["fields"],
       })
       .refine(urlSetsDeclared, {

@@ -134,3 +134,4 @@ started, not when it is merged.
 | 139 | [etcd endpoints are the configured set; sent mutations are never replayed](139-etcd-endpoints-are-the-configured-set.md)                                               |
 | 140 | [Every dropdown is drawn in-app](140-in-app-dropdowns.md)                                                                                                              |
 | 141 | [The window draws as islands](141-the-window-draws-as-islands.md)                                                                                                      |
+| 142 | [Redis Sentinel is asked at connect; a failover is a lost connection](142-redis-sentinel-is-asked-at-connect.md)                                                       |

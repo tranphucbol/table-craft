@@ -102,6 +102,25 @@ describe("datasource form", () => {
     });
   });
 
+  it("givenListRule_whenModeOutsideList_thenFieldDroppedFromSaveRequest", () => {
+    const standalone = newDraft("new-0", REDIS_PLUGIN, [], "never");
+    const sentinel = { ...standalone, values: { ...standalone.values, mode: "sentinel", database: "2" } };
+    const cluster = { ...sentinel, values: { ...sentinel.values, mode: "cluster" } };
+
+    expect(toSaveRequest(sentinel, REDIS_PLUGIN).datasource.config).toEqual({
+      mode: "sentinel",
+      host: "localhost",
+      port: 6379,
+      masterName: "mymaster",
+      database: 2,
+    });
+    expect(toSaveRequest(cluster, REDIS_PLUGIN).datasource.config).toEqual({
+      mode: "cluster",
+      host: "localhost",
+      port: 6379,
+    });
+  });
+
   it("givenSavedDatasource_whenDuplicated_thenNewIdlessCopyWithoutStoredSecrets", () => {
     const copy = duplicateDraft("new-1", SAVED, POSTGRES_PLUGIN, ["pg", "pg copy"], "forever");
 
