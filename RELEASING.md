@@ -163,15 +163,18 @@ app](docs/guide/install.md#running-the-unsigned-macos-app)).
 ## Write the release notes
 
 Users read the notes: an installed app's update offer opens the release page. Every release's notes
-have the same three parts, in this order.
+have the same four parts, in this order.
 
 1. **Highlights**, written by you: what a user can now do, not how it was built.
-2. **What's Changed**, generated: every merged pull request under the heading of its label, then
+2. **Install**, from `.github/release-notes-install.md`: which file to download and the first-launch
+   step on each platform, above all the `xattr` line for the unsigned macOS app. Change that file,
+   not a release, when the steps change.
+3. **What's Changed**, generated: every merged pull request under the heading of its label, then
    the full changelog link.
-3. **Plugins on npm**, appended by the publish workflow.
+4. **Plugins on npm**, appended by the publish workflow.
 
-The draft holds only the generated part. `.github/release.yml` sorts the pull requests by label,
-and each goes under the first heading whose label it carries:
+The draft holds the Install part and the generated one. `.github/release.yml` sorts the pull
+requests by label, and each goes under the first heading whose label it carries:
 
 | Label           | Heading          | For                                                     |
 | --------------- | ---------------- | ------------------------------------------------------- |
@@ -194,8 +197,12 @@ kind for a beta; `version.ts --notes-start` names it, as the draft did:
 
 ```sh
 start=$(bun packages/desktop/scripts/version.ts --notes-start v1.15.0)
-gh api repos/tranphucbol/table-craft/releases/generate-notes \
-  -f tag_name=v1.15.0 -f previous_tag_name="$start" --jq .body > /tmp/v1.15.0-notes.md
+{
+  cat .github/release-notes-install.md
+  echo
+  gh api repos/tranphucbol/table-craft/releases/generate-notes \
+    -f tag_name=v1.15.0 -f previous_tag_name="$start" --jq .body
+} > /tmp/v1.15.0-notes.md
 # add the Highlights at the top of /tmp/v1.15.0-notes.md
 gh release edit v1.15.0 --notes-file /tmp/v1.15.0-notes.md
 ```
@@ -216,6 +223,8 @@ Only when a user must act: install by hand after a signing key change, a setting
 - No plan numbers, decision numbers, file names or class names.
 - A patch release of fixes alone may skip Highlights and keep only the generated list.
 - Keep **Before you update** only when there is something to do, and say exactly what.
+- Put both above **Install**, and leave Install as the file wrote it, so every release, a patch of
+  fixes alone included, tells a new user how to open the macOS app.
 - Do not add a `### Plugins on npm` heading: the publish workflow writes it, and skips writing it
   when one is already there.
 
