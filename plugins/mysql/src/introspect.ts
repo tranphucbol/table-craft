@@ -16,7 +16,14 @@ import {
   type RoutineParameterMode,
 } from "@table-craft/plugin-api";
 
-const SYSTEM_DATABASES: ReadonlySet<string> = new Set(["information_schema", "mysql", "performance_schema", "sys"]);
+/** `metrics_schema` is TiDB's own, listed to users holding PROCESS. */
+const SYSTEM_DATABASES: ReadonlySet<string> = new Set([
+  "information_schema",
+  "metrics_schema",
+  "mysql",
+  "performance_schema",
+  "sys",
+]);
 
 const VIEW_TYPES: ReadonlySet<string> = new Set(["VIEW", "SYSTEM VIEW"]);
 const AUTO_INCREMENT = /\bauto_increment\b/i;
@@ -37,12 +44,15 @@ const DEFAULT_ACTION = "NO ACTION";
 const CREATE_TABLE_COLUMN = "Create Table";
 const CREATE_VIEW_COLUMN = "Create View";
 
-const NAMESPACES_SQL = `
-  SELECT SCHEMA_NAME AS name, DATABASE() AS current
-  FROM information_schema.SCHEMATA
-  ORDER BY SCHEMA_NAME`;
-
-const DATABASE_SQL = "SELECT SCHEMA_NAME AS name FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?";
+/**
+ * Not `information_schema.SCHEMATA`: TiDB keeps a database there only for users with a global or
+ * database privilege on it, while `SHOW DATABASES` also lists those reached through table or
+ * column grants, as MySQL and MariaDB list both. The server sorts it by name.
+ */
+const DATABASES_SQL = "SHOW DATABASES";
+const DATABASE_SQL = "SHOW DATABASES LIKE ?";
+const CURRENT_DATABASE_SQL = "SELECT DATABASE() AS current";
+const LIKE_WILDCARDS = /[\\%_]/g;
 
 const RELATIONS_SQL = `
   SELECT TABLE_NAME AS name, TABLE_TYPE AS kind, TABLE_COMMENT AS comment
@@ -100,9 +110,19 @@ const RELATION_TYPE_SQL =
 /** information_schema hands some columns over in a binary collation, which mysql2 reads as bytes. */
 type Text = string | Buffer | null;
 
-interface NamespaceRow {
-  readonly name: Text;
+/** A `SHOW DATABASES` row, whose one column is `Database`, or `Database (<pattern>)` after `LIKE`. */
+type DatabaseRow = Readonly<Record<string, Text>>;
+
+interface CurrentDatabaseRow {
   readonly current: Text;
+}
+
+function databaseName(row: DatabaseRow): string {
+  return text(Object.values(row)[0] ?? null);
+}
+
+function likePattern(name: string): string {
+  return name.replace(LIKE_WILDCARDS, (wildcard) => `\\${wildcard}`);
 }
 
 interface RelationRow {
@@ -262,15 +282,19 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
 
   return {
     async namespaces(): Promise<readonly Namespace[]> {
-      const found = await rows<NamespaceRow>(NAMESPACES_SQL);
+      const [found, [currentRow]] = await Promise.all([
+        rows<DatabaseRow>(DATABASES_SQL),
+        rows<CurrentDatabaseRow>(CURRENT_DATABASE_SQL),
+      ]);
+      const current = text(currentRow?.current ?? null);
       return found.map((row): Namespace => {
-        const name = text(row.name);
+        const name = databaseName(row);
         return {
           path: [name],
           name,
           kind: "schema",
           system: SYSTEM_DATABASES.has(name.toLowerCase()),
-          current: name === text(row.current),
+          current: name === current,
         };
       });
     },
@@ -280,7 +304,7 @@ export function mysqlIntrospector(connection: mysql.Connection): Introspector {
       if (path.length !== 1 || database === undefined) {
         throw new PluginError("introspectionFailed", `"${path.join(".")}" is not a MySQL database.`);
       }
-      if ((await rows<NamespaceRow>(DATABASE_SQL, [database])).length === 0) {
+      if ((await rows<DatabaseRow>(DATABASE_SQL, [likePattern(database)])).length === 0) {
         throw new PluginError(
           "introspectionFailed",
           `Database "${database}" does not exist, or this user has no privileges on it.`,
