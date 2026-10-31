@@ -321,6 +321,21 @@ describe.runIf(SMOKE_ENABLED)("islands live test", () => {
   );
 
   it(
+    "givenResult_whenShown_thenLastRowClosedAndOpenStripeButtonRoundsLikeAnIsland",
+    async () => {
+      const { page } = await launch({ theme: "dark" });
+      await fillWindow(page);
+
+      const lastRow = page.getByRole("grid").getByRole("row").last();
+      expect(await barOf(lastRow)).toBe(await resolvedColor(page, "--tc-border"));
+      const openButton = page.getByRole("button", { name: "Database", exact: true, pressed: true });
+      expect((await lookOf(openButton)).radius).toBe(COMFORTABLE_RADIUS);
+      await captureWindow(page, "13-grid-last-row");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
     "givenEditorTab_whenFocusedFromKeyboard_thenRingDrawsInsideTheIsland",
     async () => {
       const { page } = await launch({ theme: "dark" });

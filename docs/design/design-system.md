@@ -399,7 +399,8 @@ by a 2 px bar centred in the gap: `ink-muted` on hover, `accent` while dragged o
 keyboard; inner handles, such as the split editor's and the result panel's, stay 1 px lines. An
 island clips its content to its corners, so focus outlines inside it draw 2 px inward. An open
 tool window's stripe button is drawn as a small island, `bg-canvas` with the `island-edge` ring,
-since `frameRaised` sits too close to the frame to mark it. The status bar's items line up with the islands' content. A datasource
+since `frameRaised` sits too close to the frame to mark it; every stripe button rounds to
+`rounded-island`, so hover and open match the islands' corners. The status bar's items line up with the islands' content. A datasource
 tint frame (`tintFrame`) rounds its bottom corners to the island's radius where it meets the
 island's bottom; a console's stops above its results and stays square. The macOS window
 background and the Windows and Linux caption buttons take the frame colour.
@@ -548,7 +549,8 @@ and accent colours; it adds three tokens and leans on two older ones.
 | `density.gridColumnMaxWidthPx` | `--tc-grid-column-max-width` | `--spacing-column-max` | 320 px             | 320 px          | The cap on a column's automatic width        |
 
 The header and the row-number gutter are `bg-panel` with `border-line` dividers and stay put while
-the rows scroll; gutter numbers are `text-ink-muted`, `text-ink` on a selected row. A header holds a
+the rows scroll; gutter numbers are `text-ink-muted`, `text-ink` on a selected row. Rows have no
+lines between them; one `bg-line` line under the last row closes the column dividers. A header holds a
 type glyph in `text-ink-muted` (`TYPE_GLYPHS` in `ui/icons.ts`: `Hash` number, `TextAa` text,
 `Calendar` date, `ToggleLeft` bool, `BracketsCurly` json, `Binary` bytes), the name, and, when
 sorted, an `ArrowUp` / `ArrowDown` in `text-accent` followed by the key's position when there are
