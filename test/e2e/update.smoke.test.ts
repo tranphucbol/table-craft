@@ -6,6 +6,7 @@
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/020 bun run test:smoke
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/124 bun run test:smoke:headless test/e2e/update.smoke.test.ts
+ *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/134 bun run test:smoke:headless test/e2e/update.smoke.test.ts
  */
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
@@ -41,6 +42,8 @@ import {
 
 const captureWindow = evidenceFor("020");
 const captureChannel = evidenceFor("124");
+const captureCadence = evidenceFor("134");
+const CADENCE_TEXT = "every 2 hours";
 const UNPACKAGED_FOUND = "update found; this install cannot update itself";
 const ASSET = Buffer.from("not a real zip; a development build never downloads it");
 
@@ -87,7 +90,9 @@ describe.runIf(SMOKE_ENABLED)("in-app update (development build)", () => {
       const notice = page.getByRole("dialog", { name: "You're up to date" });
       await notice.waitFor();
       await expect.poll(() => notice.textContent()).toContain("0.0.0");
+      expect(await notice.textContent()).toContain(CADENCE_TEXT);
       await captureWindow(page, "01-up-to-date");
+      await captureCadence(page, "02-up-to-date");
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -106,6 +111,7 @@ describe.runIf(SMOKE_ENABLED)("in-app update (development build)", () => {
         target: "9.0.0",
       });
       await captureWindow(page, "02-button-before-settings");
+      await captureCadence(page, "03-available");
 
       await updateButton(page).click();
       const popover = page.getByTestId("update-popover");
@@ -136,6 +142,8 @@ describe.runIf(SMOKE_ENABLED)("in-app update (development build)", () => {
         .getByRole("tablist", { name: "Settings pages" })
         .getByRole("tab", { name: "Advanced", exact: true })
         .click();
+      expect(await settingsDialog(page).textContent()).toContain(CADENCE_TEXT);
+      await captureCadence(page, "01-settings");
       const box = settingsDialog(page).getByTestId("settings-beta-channel");
       expect(await box.isChecked()).toBe(false);
       await box.click();

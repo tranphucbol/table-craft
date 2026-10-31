@@ -65,9 +65,9 @@ plugin is used by the next engine that starts, with no restart.
 
 On start, a saved datasource whose plugin is missing and in the catalog installs it in the
 background with no prompt, so users upgrading from a version with PostgreSQL built in keep it.
-Packaged, with `updates.checkAutomatically`, plugins installed from the registry are checked daily
-and a newer compatible version becomes current for the next engine; older versions are pruned at
-the next start. Plugins follow `updates.channel`: the beta channel also takes `X.Y.Z-beta.N`
+Packaged, with `updates.checkAutomatically`, plugins installed from the registry are checked every
+2 hours and a newer compatible version becomes current for the next engine; older versions are
+pruned at the next start. Plugins follow `updates.channel`: the beta channel also takes `X.Y.Z-beta.N`
 plugin versions, and on the stable channel an installed beta plugin stays until a stable version
 above it exists, unless it no longer fits the host's plugin API. Install from File asks decision 006's confirmation and is never updated from the
 registry. Offline, an install fails with a hint to use Install from File with the release's `.tgz`.
@@ -2487,9 +2487,10 @@ Show Update (the button), Download, Cancel Download, Retry, Restart to Update, S
 Later, Dismiss and Release Notes, each available only in the phases where it applies.
 
 **Checks.** With `updates.checkAutomatically` on (the default), a packaged app checks 10 s after
-the window first shows and every 24 h. An automatic check that fails on the network, or finds a
+the window first shows and every 2 h. An automatic check that fails on the network, or finds a
 manifest of a later schema, stays `idle` and logs a warning; one that finds the skipped version
-(`<userData>/update-state.json`) stays `idle`. A manual check reports every outcome; with nothing
+(`<userData>/update-state.json`) stays `idle`. An automatic check passes through `checking` only
+from `idle`, so a shown Update button and its popover stay put while it runs. A manual check reports every outcome; with nothing
 newer Help → Check for Updates… says "You're up to date". A development run never checks on its
 own and, asked, reports that it cannot replace itself.
 

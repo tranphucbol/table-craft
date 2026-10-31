@@ -25,7 +25,7 @@ export const UPDATE_OVERRIDE_ENV = {
 
 /** After the first window shows, so the check never competes with launch (plan 020 decision 6). */
 export const FIRST_CHECK_DELAY_MS = 10_000;
-export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 export interface UpdateEndpoint {
   readonly manifestUrl: string;
