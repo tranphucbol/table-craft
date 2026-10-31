@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import type { DensityId } from "@table-craft/desktop/appearance/themes.js";
+import { WINDOW_STYLES, type DensityId, type WindowStyle } from "@table-craft/desktop/appearance/themes.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { registry } from "@table-craft/desktop/renderer/actions/index.js";
@@ -94,6 +94,11 @@ const DENSITY_LABELS: Readonly<Record<DensityId, string>> = {
   compact: "Compact",
 };
 
+const WINDOW_STYLE_LABELS: Readonly<Record<WindowStyle, string>> = {
+  islands: "Islands",
+  classic: "Classic",
+};
+
 const BRAND_ICON_COLOR_LABELS: Readonly<Record<BrandIconColor, string>> = {
   brand: "Brand colours",
   gray: "Gray",
@@ -128,6 +133,7 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
       theme: DEFAULT_SETTINGS.appearance.theme,
       density: DEFAULT_SETTINGS.appearance.density,
       motion: DEFAULT_SETTINGS.appearance.motion,
+      windowStyle: DEFAULT_SETTINGS.appearance.windowStyle,
       fonts: { ...current.appearance.fonts, ui: DEFAULT_SETTINGS.appearance.fonts.ui },
       systemTitleBar: DEFAULT_SETTINGS.appearance.systemTitleBar,
       brandIcons: DEFAULT_SETTINGS.appearance.brandIcons,
@@ -295,8 +301,33 @@ function AppearancePage() {
       <BrandIconsField />
       <BrandIconColorField />
       <SectionTitle>Window</SectionTitle>
+      <WindowStyleField />
       <TitleBarField />
     </>
+  );
+}
+
+/** Islands draws each pane as a card on the window frame, as JetBrains' 2025.3 look does (decision 141). */
+function WindowStyleField() {
+  const windowStyle = useSettings((state) => state.settings.appearance.windowStyle);
+  return (
+    <FieldRow label="Style">
+      <div role="radiogroup" aria-label="Window style" className="flex gap-gap">
+        {WINDOW_STYLES.map((style) => (
+          <label key={style} className="flex items-center gap-1">
+            <input
+              type="radio"
+              name="windowStyle"
+              checked={windowStyle === style}
+              onChange={() =>
+                update((current) => ({ ...current, appearance: { ...current.appearance, windowStyle: style } }))
+              }
+            />
+            {WINDOW_STYLE_LABELS[style]}
+          </label>
+        ))}
+      </div>
+    </FieldRow>
   );
 }
 

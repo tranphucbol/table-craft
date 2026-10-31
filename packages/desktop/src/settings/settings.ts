@@ -9,6 +9,7 @@ import {
   type DensityId,
   type UserThemeId,
 } from "@table-craft/desktop/appearance/themes.js";
+import { isWindowStyle, type WindowStyle } from "@table-craft/desktop/appearance/islands.js";
 import { isMotionChoice, type MotionChoice } from "@table-craft/desktop/appearance/motion.js";
 import { isUpdateChannelSetting, type UpdateChannelSetting } from "@table-craft/desktop/settings/channel.js";
 import type { McpKnownClient } from "@table-craft/desktop/settings/mcp.js";
@@ -40,6 +41,8 @@ export interface AppearanceSettings {
   readonly fonts: FontSettings;
   /** How much the window animates (plan 109); `system` follows `prefers-reduced-motion`. */
   readonly motion: MotionChoice;
+  /** Islands draws the editor and tool windows as cards on a frame; classic butts them together (decision 141). */
+  readonly windowStyle: WindowStyle;
   /** Frame the window with the operating system's title bar; main reads it at window creation. */
   readonly systemTitleBar: boolean;
   /** Draw each data source's database logo instead of the generic glyph (decision 128). */
@@ -233,6 +236,7 @@ export const DEFAULT_SETTINGS: Settings = {
       grid: { family: null, sizePx: 12 },
     },
     motion: "system",
+    windowStyle: "islands",
     systemTitleBar: false,
     brandIcons: true,
     brandIconColor: "brand",
@@ -466,6 +470,7 @@ export function readSettings(input: unknown): Settings {
         grid: readFont(fonts.grid, defaults.appearance.fonts.grid),
       },
       motion: isMotionChoice(appearance.motion) ? appearance.motion : defaults.appearance.motion,
+      windowStyle: isWindowStyle(appearance.windowStyle) ? appearance.windowStyle : defaults.appearance.windowStyle,
       systemTitleBar:
         typeof appearance.systemTitleBar === "boolean" ? appearance.systemTitleBar : defaults.appearance.systemTitleBar,
       brandIcons: typeof appearance.brandIcons === "boolean" ? appearance.brandIcons : defaults.appearance.brandIcons,

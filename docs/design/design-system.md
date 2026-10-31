@@ -166,6 +166,8 @@ live row height.
 | `density.pickerListHeightPx`   | `--tc-picker-list-height`    | 220 px      | 220 px  |
 | `density.planDetailsWidthPx`   | `--tc-plan-details-width`    | 320 px      | 320 px  |
 | `density.planBarHeightPx`      | `--tc-plan-bar-height`       | 3 px        | 3 px    |
+| `density.islandGapPx`          | `--tc-island-gap`            | 5 px        | 3 px    |
+| `density.islandRadiusPx`       | `--tc-island-radius`         | 10 px       | 8 px    |
 
 ## Motion
 
@@ -285,7 +287,7 @@ as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink
   `aria-disabled`; highlighting it lists its errors under the list behind a `border-line` rule.
   Reload Themes and Open Themes Folder sit under the trigger. Density as two native radios; Motion
   as four (System, Full, Reduced, Off), with a muted "Following the system: …" line under System;
-  UI font.
+  UI font; under Window, Window style as two radios (Islands, Classic) before Use system title bar.
 - **Editor**: Editor font and a muted line naming the zoom chords.
 - **Data Editor**: Grid font, NULL text, Striped rows, Group digits, page size and Fetch All limit, with a muted
   note that formats are display only and paging applies to the next statement.
@@ -360,6 +362,40 @@ The active editor tab is `bg-canvas` with a 2 px `border-accent` underline; inac
 `text-ink-muted` on the strip's `bg-panel` and show their close button on hover. Disabled actions are `text-ink-muted`: in the palette at
 full opacity and after every enabled result, so they stay legible (4.5:1) and never take the
 highlighted first row; toolbar buttons add reduced opacity beside their enabled neighbours.
+
+### Islands
+
+Plan 132, decision 141. The tables above describe the Classic window style. With Islands (the
+default, `appearance.windowStyle`), the editor area and the Database, Log, Watch and Services tool
+windows are islands, `rounded-island` cards of `bg-canvas` with no border, set `p-island-gap`
+inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
+sizes are the Classic ones.
+
+| Token                    | CSS variable         | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                      |
+| ------------------------ | -------------------- | --------------------------------- | ------------------ | --------------- | ------------------------------------------------------------ |
+| `frame` (`frameColors`)  | `--tc-frame`         | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar |
+| `frameRaised`            | `--tc-frame-raised`  | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                     |
+| `density.islandGapPx`    | `--tc-island-gap`    | `p-island-gap`, `w-/h-island-gap` | 5 px               | 3 px            | Between islands and around them; the shell's resize handles  |
+| `density.islandRadiusPx` | `--tc-island-radius` | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                       |
+
+The frame is no theme token: `appearance/islands.ts` derives it from `panel`, stepped in 1 %
+mixes toward white in a dark scheme and black in a light one, as JetBrains' frames are, until it
+holds 1.20:1 against `canvas` (JetBrains' floor), and `frameRaised` steps on until it stands out
+from the frame as much as `raised` does from `panel`. Neither steps past where `ink` and
+`inkMuted` stop meeting the theme's contrast level, so a ported palette whose muted text is
+already near AA keeps a frame closer to `panel`; the gaps still separate its islands. Every
+bundled, ported and user theme gets a frame this way.
+
+Two surfaces re-point the tokens inside them, so components keep writing `bg-panel` and
+`bg-raised` (`shell/islands.ts`): an island sets `--tc-panel` to `--tc-canvas`, so a tool window's
+header, a toolbar and the tab strip take the island's surface; the frame's bars (`FRAME_SURFACE`
+on the main toolbar, stripes and status bar) set `--tc-panel` to `--tc-frame` and `--tc-raised` to
+`--tc-frame-raised` and drop their `border-line` edges. Lines inside an island stay. The shell's
+four resize handles (`Handle` with `gutter`) become the transparent gaps between islands, `bg-line`
+on hover and `bg-accent` while dragged; inner handles, such as the split editor's and the result
+panel's, stay 1 px lines. A datasource tint frame (`tintFrame`) rounds its bottom corners to the
+island's radius. The macOS window background and the Windows and Linux caption buttons take the
+frame colour.
 
 ## Database explorer
 

@@ -19,7 +19,7 @@ import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { SqlView } from "@table-craft/desktop/renderer/ui/SqlView.js";
-import { TINT_BORDER } from "@table-craft/desktop/renderer/ui/tint.js";
+import { tintFrame } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const QUERY_LABEL = "Session query";
 const MS_PER_SECOND = 1_000;
@@ -86,7 +86,7 @@ export function SessionsView({ sessionsId }: { readonly sessionsId: string }) {
     <div
       data-testid="sessions-view"
       data-color={color ?? undefined}
-      className={cn("flex min-h-0 flex-1 flex-col", color !== null && `border-2 ${TINT_BORDER[color]}`)}
+      className={cn("flex min-h-0 flex-1 flex-col", tintFrame(color))}
     >
       <div className="flex h-tab shrink-0 items-center gap-gap border-b border-line bg-panel px-gap text-ink-muted">
         <ActionButton actionId={SESSIONS_ACTION_IDS.refresh} compact />
