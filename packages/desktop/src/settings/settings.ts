@@ -139,7 +139,7 @@ export interface LogSettings {
 }
 
 export interface UpdateSettings {
-  /** Look for a new version after launch and once a day; installing always waits for a click (plan 020). */
+  /** Look for a new version after launch and every 2 hours; installing always waits for a click (plan 020). */
   readonly checkAutomatically: boolean;
   /** Which releases updates and plugins come from (plan 124); resolve with `effectiveChannel`. */
   readonly channel: UpdateChannelSetting;

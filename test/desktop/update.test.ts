@@ -17,6 +17,7 @@ import {
 import { drainSwapLog, readUpdateMemory, writeUpdateMemory } from "@table-craft/desktop/main/update/memory.js";
 import {
   BETA_MANIFEST_URL,
+  CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
   RELEASE_MANIFEST_URL,
   updateEndpoint,
@@ -553,6 +554,37 @@ describe("updater", () => {
     expect(fetch.calls).not.toContain(ASSET_URL);
   });
 
+  it("givenUpdateAvailable_whenAnAutomaticCheckRuns_thenCheckingIsNeverPushed", async () => {
+    const { updater, states } = await harness(release());
+    await updater.check("automatic");
+    states.length = 0;
+
+    await updater.check("automatic");
+
+    expect(states.map((state) => state.phase)).toEqual(["available"]);
+  });
+
+  it("givenUpdateFailed_whenAnAutomaticCheckIsUnreachable_thenTheErrorStaysWithoutAFlicker", async () => {
+    const { updater, states } = await harness({});
+    await updater.check("manual");
+    states.length = 0;
+
+    const state = await updater.check("automatic");
+
+    expect(state).toMatchObject({ phase: "error", retryable: true });
+    expect(states.map((each) => each.phase)).toEqual(["error"]);
+  });
+
+  it("givenUpdateAvailable_whenAManualCheckRuns_thenCheckingIsPushedFirst", async () => {
+    const { updater, states } = await harness(release());
+    await updater.check("automatic");
+    states.length = 0;
+
+    await updater.check("manual");
+
+    expect(states.map((state) => state.phase)).toEqual(["checking", "available"]);
+  });
+
   it("givenTwoChecksAtOnce_whenBothRun_thenTheManifestIsFetchedOnce", async () => {
     const fetch = fakeFetch(release());
     const { updater } = await harness(release(), { fetch });
@@ -1047,7 +1079,11 @@ describe("update schedule", () => {
     };
   }
 
-  it("givenEnabled_whenStarted_thenOneCheckAfterTheDelayThenDaily", () => {
+  it("givenReleaseBuild_whenTheIntervalIsRead_thenChecksRepeatEveryTwoHours", () => {
+    expect(CHECK_INTERVAL_MS).toBe(2 * 60 * 60 * 1000);
+  });
+
+  it("givenEnabled_whenStarted_thenOneCheckAfterTheDelayThenEveryInterval", () => {
     const check = vi.fn();
     const clock = timers();
     const schedule = createUpdateSchedule({

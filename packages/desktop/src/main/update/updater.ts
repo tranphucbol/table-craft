@@ -247,7 +247,8 @@ export function createUpdater(options: UpdaterOptions): Updater {
     const channel = options.channel();
     const checkLog = log.child(UPDATE_SCOPE, { step: "check", trigger, current, channel });
     const before = state;
-    set({ phase: "checking", current });
+    // Every two hours a `checking` push would hide a shown Update button and close its popover.
+    if (trigger === "manual" || before.phase === "idle") set({ phase: "checking", current });
     const urls =
       channel === "beta" ? [options.manifestUrls.stable, options.manifestUrls.beta] : [options.manifestUrls.stable];
     checkLog.info("checking for updates", { urls: urls.map(loggableUrl) });
