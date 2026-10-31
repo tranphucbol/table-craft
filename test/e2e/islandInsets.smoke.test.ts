@@ -170,7 +170,7 @@ describe.runIf(SMOKE_ENABLED)("island insets live test", () => {
   it(
     "givenClassic_whenWindowOpens_thenRowsAndInsetsStayAsBefore",
     async () => {
-      const page = await launch({ theme: "dark" });
+      const page = await launch({ theme: "dark", windowStyle: "classic" });
       const database = toolWindow(page, "Database");
 
       expect((await boxOf(header(page, "Database"))).height).toBe(24);
