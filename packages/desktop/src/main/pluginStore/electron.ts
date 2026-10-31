@@ -1,6 +1,6 @@
 /**
  * The plugin store wired to Electron (decision 110): `net.fetch` honours the system proxy as the
- * app updater does, the dialogs are native, and the background update rides the updater's daily
+ * app updater does, the dialogs are native, and the background update rides the updater's 2-hour
  * schedule.
  */
 import { readFile } from "node:fs/promises";
@@ -50,7 +50,7 @@ export interface PluginStore {
   readonly channels: PluginChannels<WebContents>;
   /** Prunes and discovers, logging each plugin; before any engine starts. */
   start(): Promise<void>;
-  /** After the first window shows: downloads plugins saved data sources miss, then starts the daily check. */
+  /** After the first window shows: downloads plugins saved data sources miss, then starts the 2-hour check. */
   startBackground(): void;
   setAutomatic(enabled: boolean): void;
   stop(): void;

@@ -75,7 +75,7 @@ directly.
 
 ## Updates
 
-A little after launch, and once a day while it runs, TableCraft asks GitHub whether a newer release
+A little after launch, and every 2 hours while it runs, TableCraft asks GitHub whether a newer release
 is out. When there is one, an **Update** button appears in the main toolbar, just left of Settings;
 nothing is downloaded until you click it and choose **Download**. The button shows the progress,
 then turns into **Restart to Update**: TableCraft quits, puts the new version in place of the old
