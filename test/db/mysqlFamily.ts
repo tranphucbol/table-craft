@@ -1,5 +1,7 @@
 import mysql from "@table-craft/plugin-mysql";
+import type { Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
+import { expect, it } from "vitest";
 import { withWrongPassword } from "../support/databases.js";
 import { MYSQL_MANIFEST } from "../support/manifests.js";
 import { TYPE_PROBE_COPY_AS, TYPE_PROBE_EXPECTED, TYPE_PROBE_WRITE } from "../support/typeProbe.js";
@@ -74,6 +76,19 @@ export function mysqlRoutines(int = "int"): ContractOptions["routines"] {
 /** A quarter-second `SLEEP` per row: the server's limit stops it between rows with an error. */
 const SLEEPS_PER_SECOND = 4;
 
+/** Plan 135: a user holding a table grant and nothing on its database. */
+const TABLE_GRANT_USER_NAME = "table_craft_table_grant";
+const TABLE_GRANT_USER = `'${TABLE_GRANT_USER_NAME}'@'%'`;
+const TABLE_GRANT_DATABASE = "archive";
+const TABLE_GRANT_TABLE = "old_orders";
+
+async function run(session: Session, sql: string): Promise<void> {
+  const result = await session.execute(sql);
+  for await (const _row of result.rows) {
+    // A statement is done once its rows are.
+  }
+}
+
 /**
  * A read of `seconds` that MySQL and MariaDB stop with an error at their limit. A lone
  * `SELECT SLEEP(n)` will not do: MySQL answers one cut short by `max_execution_time` with 1.
@@ -125,5 +140,31 @@ export function runMysqlFamilyContract(
     sessions: { monitorConfig: rootConfig, limited: { config, note: /GRANT PROCESS/ } },
     routines: mysqlRoutines(),
     ...overrides,
+  });
+
+  it("givenTableGrantOnly_whenNamespacesAndDescribe_thenDatabaseAndTableShown", async () => {
+    const root = await mysql.connect(rootConfig, { readOnly: false });
+    try {
+      await run(root, `DROP USER IF EXISTS ${TABLE_GRANT_USER}`);
+      await run(root, `CREATE USER ${TABLE_GRANT_USER} IDENTIFIED BY '${config.password}'`);
+      await run(root, `GRANT SELECT ON ${TABLE_GRANT_DATABASE}.${TABLE_GRANT_TABLE} TO ${TABLE_GRANT_USER}`);
+      const session = await mysql.connect(
+        { ...config, user: TABLE_GRANT_USER_NAME, database: TABLE_GRANT_DATABASE },
+        { readOnly: true },
+      );
+      try {
+        const namespaces = (await session.introspector?.namespaces()) ?? [];
+        expect(namespaces.filter((namespace) => !namespace.system)).toEqual([
+          { path: [TABLE_GRANT_DATABASE], name: TABLE_GRANT_DATABASE, kind: "schema", system: false, current: true },
+        ]);
+        const catalog = await session.introspector?.describe([TABLE_GRANT_DATABASE]);
+        expect(catalog?.relations.map((relation) => relation.name)).toEqual([TABLE_GRANT_TABLE]);
+      } finally {
+        await session.close();
+      }
+    } finally {
+      await run(root, `DROP USER IF EXISTS ${TABLE_GRANT_USER}`);
+      await root.close();
+    }
   });
 }
