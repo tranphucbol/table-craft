@@ -6,6 +6,7 @@ import { connectionOf, pluginOf, useDatasources } from "@table-craft/desktop/ren
 import { themeOf, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { DatabaseIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { ORACLE_GLYPH, SQL_SERVER_GLYPH } from "@table-craft/desktop/renderer/ui/retiredBrandGlyphs.js";
 
 /** Every simple-icons path is drawn on this square. */
 const SIMPLE_ICONS_VIEW_BOX = "0 0 24 24";
@@ -29,6 +30,8 @@ export const BRAND_GLYPHS: Readonly<Record<string, BrandGlyph>> = {
   [siSqlite.slug]: siSqlite,
   [siMongodb.slug]: siMongodb,
   [siEtcd.slug]: siEtcd,
+  [ORACLE_GLYPH.slug]: ORACLE_GLYPH,
+  [SQL_SERVER_GLYPH.slug]: SQL_SERVER_GLYPH,
 };
 
 function brandGlyph(brand: Brand | null): BrandGlyph | undefined {

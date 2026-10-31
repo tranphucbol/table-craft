@@ -13,7 +13,9 @@ import {
   databaseEnabled,
   ETCD_CONFIG,
   MARIADB_CONFIG,
+  MSSQL_CONFIG,
   MYSQL_CONFIG,
+  ORACLE_CONFIG,
   POSTGRES_CONFIG,
   REDIS_CONFIG,
   tidbConfigFromEnv,
@@ -137,6 +139,28 @@ function everyBrand(): readonly Row[] {
       },
       glyph: "etcd",
       product: "etcd",
+    },
+    {
+      saved: {
+        id: "billing",
+        name: "billing",
+        pluginId: "oracle",
+        config: withoutPassword(ORACLE_CONFIG),
+        secretModes: { password: "never" },
+      },
+      glyph: "oracle",
+      product: "Oracle",
+    },
+    {
+      saved: {
+        id: "payroll",
+        name: "payroll",
+        pluginId: "mssql",
+        config: withoutPassword(MSSQL_CONFIG),
+        secretModes: { password: "never" },
+      },
+      glyph: "microsoftsqlserver",
+      product: "SQL Server",
     },
   ];
 }
