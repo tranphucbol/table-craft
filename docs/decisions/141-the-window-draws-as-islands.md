@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Decision
 
-The window has two styles, `appearance.windowStyle`: `classic`, the default, and `islands`. With
+The window has two styles, `appearance.windowStyle`: `islands`, the default, and `classic`. With
 Islands, after JetBrains' Islands theme, the editor area and the Database, Log, Watch and Services
 tool windows are rounded cards of the editor's surface (`canvas`), with no border, set apart by a
 gap on a window frame; the main toolbar, the stripes and the status bar sit on the frame without
@@ -38,14 +38,17 @@ to 1.20:1 would make the toolbar and status bar text fail; readability wins, and
 separate the islands.
 
 A setting, not a replacement, because the islands cost 10 px of width and height at the
-comfortable density and some users prefer the denser flat window. Classic stays the default so an
-update does not change the window under anyone; Islands is one choice away in Settings.
+comfortable density and some users prefer the denser flat window. Islands is the default, as it is
+in JetBrains' IDEs; 1.20 shipped Classic as the default while the style settled, and the default
+moved to Islands once it had.
 
 ## Consequences
 
-- Nobody sees a new look on update; Islands is opt-in under Settings › Appearance › Window style.
-- The README and guide GIFs show the Classic window, the default, so they need no new recording.
+- A window that never chose a style draws as islands on update. `settings.json` is written whole,
+  so one saved by 1.20 names `classic` and keeps the flat window; Settings › Appearance › Window
+  style switches either way.
+- The README and guide GIFs show the classic window until `bun run readme:media` records them again.
 - The editor tabs keep the accent underline; JetBrains' filled tab pill and the dimming of an
   unfocused window are not part of this.
 - A theme cannot choose its frame colour; adding a token later only adds an optional override.
-- End-to-end suites that read the toolbar's colour keep reading `panel` under the default style.
+- End-to-end suites that read the toolbar's colour read the frame under the default style.
