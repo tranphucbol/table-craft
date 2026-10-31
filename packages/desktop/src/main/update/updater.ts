@@ -11,6 +11,7 @@ import { access, chmod, mkdir, open, readdir, rename, rm, writeFile } from "node
 import { basename, dirname, join } from "node:path";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import {
+  APP_MANAGEMENT_HINT,
   eligibility,
   INELIGIBLE_MESSAGES,
   type InstallFacts,
@@ -27,6 +28,7 @@ import {
   type UpdateAsset,
   type UpdateManifest,
 } from "@table-craft/desktop/main/update/manifest.js";
+import type { SwapFailure } from "@table-craft/desktop/main/update/memory.js";
 import { SWAP_SCRIPT_FILE, swapScript } from "@table-craft/desktop/main/update/swap.js";
 import type { UpdateRelease, UpdateState } from "@table-craft/desktop/preload/bridge.js";
 import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
@@ -78,6 +80,8 @@ export interface UpdaterOptions {
   readonly onState: (state: UpdateState) => void;
   readonly log: Logger;
   readonly newId: () => string;
+  /** The swap that gave up at the last Restart to Update, told once at the next offer. */
+  readonly lastSwapFailure?: SwapFailure | null;
 }
 
 export interface Updater {
@@ -131,6 +135,13 @@ const REJECTED =
 const UNPACKABLE = "The downloaded update could not be unpacked. Try again, or download the release from GitHub.";
 const NOT_STAGEABLE =
   "The update could not be prepared next to TableCraft. Try again, or download the release from GitHub.";
+
+const NOT_INSTALLED = "The last update was not installed";
+
+function swapFailureMessage(failure: SwapFailure): string {
+  if (failure.denied) return `${NOT_INSTALLED}: macOS would not let TableCraft replace itself. ${APP_MANAGEMENT_HINT}`;
+  return `${NOT_INSTALLED}: ${failure.reason}. Try again, or download the release from GitHub.`;
+}
 
 /** Origin and path only: a signed asset redirect carries its token in the query (plan 017). */
 export function loggableUrl(value: string): string {
@@ -190,6 +201,7 @@ export function createUpdater(options: UpdaterOptions): Updater {
   let staged: { readonly path: string; readonly directory: string | null } | null = null;
   let checking: Promise<UpdateState> | null = null;
   let downloadAbort: AbortController | null = null;
+  let swapFailure = options.lastSwapFailure ?? null;
 
   function set(next: UpdateState): void {
     state = next;
@@ -275,6 +287,8 @@ export function createUpdater(options: UpdaterOptions): Updater {
       return state;
     }
     const fields = { target: offered.version, targetChannel: offered.channel };
+    const failedSwap = swapFailure;
+    swapFailure = null;
     if (compareVersions(offered.version, current) <= 0) {
       checkLog.info("up to date", fields);
       manifest = null;
@@ -302,6 +316,17 @@ export function createUpdater(options: UpdaterOptions): Updater {
     }
     target = verdictHere.target;
     checkLog.info("update available", { ...fields, size: offered.assets[key]?.size, install: target.kind });
+    if (failedSwap !== null) {
+      checkLog.warn("the last update was not installed", { reason: failedSwap.reason, denied: failedSwap.denied });
+      set({
+        phase: "error",
+        current,
+        release: releaseOf(offered),
+        message: swapFailureMessage(failedSwap),
+        retryable: true,
+      });
+      return state;
+    }
     set({ phase: "available", current, release: releaseOf(offered) });
     return state;
   }

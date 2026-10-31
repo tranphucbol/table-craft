@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir, release } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -164,6 +164,8 @@ const HISTORY_FILE = "history.sqlite";
  */
 const DEVELOPMENT_VERSION = "0.0.0";
 const MAC_PLATFORM = "darwin";
+const BUNDLE_CONTENTS = "Contents";
+const BUNDLE_PROBE_PREFIX = ".table-craft-update-probe-";
 const MCP_SERVICE_NAME = "table-craft-mcp";
 
 // Electron reads the name from the package.json beside the entry, and `dist/main` has none; without
@@ -657,6 +659,22 @@ function writableDirectory(directory: string): boolean {
   }
 }
 
+/**
+ * Makes and removes an empty directory inside the bundle: macOS App Management denies that the
+ * same way it denies the swap's `mv`, while `access(W_OK)` on the bundle still says yes.
+ */
+function modifiableBundle(bundlePath: string): boolean {
+  const probe = join(bundlePath, BUNDLE_CONTENTS, `${BUNDLE_PROBE_PREFIX}${String(process.pid)}`);
+  try {
+    mkdirSync(probe);
+  } catch (cause) {
+    updateLog.warn("the app bundle cannot be modified", { bundlePath, err: cause });
+    return false;
+  }
+  rmSync(probe, { recursive: true, force: true });
+  return true;
+}
+
 function runToCompletion(command: string, args: readonly string[]): Promise<{ code: number | null; output: string }> {
   return new Promise((resolve) => {
     execFile(command, [...args], (error, stdout, stderr) => {
@@ -668,7 +686,11 @@ function runToCompletion(command: string, args: readonly string[]): Promise<{ co
 
 /** The updater and its schedule (plan 020); its state goes to every window on `CHANNELS.updateState`. */
 async function startUpdater(directory: string, settings: SettingsService): Promise<Updater> {
-  await drainSwapLog(join(directory, SWAP_LOG_FILE), files, updateLog.child(UPDATE_SCOPE, { step: "swap" }));
+  const lastSwapFailure = await drainSwapLog(
+    join(directory, SWAP_LOG_FILE),
+    files,
+    updateLog.child(UPDATE_SCOPE, { step: "swap" }),
+  );
   const endpoint = updateEndpoint(process.env, !app.isPackaged || UPDATE_TEST_BUILD, (path) =>
     readFileSync(path, UTF8),
   );
@@ -687,6 +709,7 @@ async function startUpdater(directory: string, settings: SettingsService): Promi
     executablePath: process.execPath,
     appImagePath: process.env.APPIMAGE,
     writable: writableDirectory,
+    bundleModifiable: modifiableBundle,
   };
   const statePath = join(directory, UPDATE_STATE_FILE);
   const created = createUpdater({
@@ -709,6 +732,7 @@ async function startUpdater(directory: string, settings: SettingsService): Promi
     onState: (state) => broadcast(CHANNELS.updateState, state),
     log: updateLog,
     newId: randomUUID,
+    lastSwapFailure,
   });
   const bundlePath = process.platform === MAC_PLATFORM && app.isPackaged ? bundlePathFrom(process.execPath) : null;
   if (bundlePath !== null) await removeLeftovers({ kind: "macBundle", bundlePath }, updateLog);
