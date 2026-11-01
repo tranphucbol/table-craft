@@ -1,4 +1,6 @@
+import type { TreeItemRef } from "@table-craft/desktop/datasourceTree/arrange.js";
 import type { Capability } from "@table-craft/desktop/engine/protocol.js";
+import { selectedItems } from "@table-craft/desktop/renderer/model/treeSelection.js";
 import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
 import { useWatch } from "@table-craft/desktop/renderer/watch/store.js";
 import { useAdminSecret } from "@table-craft/desktop/renderer/keyAdmin/SecretPrompt.js";
@@ -21,6 +23,7 @@ import {
   connectionOf,
   datasourceById,
   selectedDatasourceId,
+  treeSelectionOf,
   useDatasources,
   type Connection,
   type TreeSelection,
@@ -82,6 +85,13 @@ export interface ActionContext {
   readonly result: ResultTab | null;
   readonly datasources: readonly DatasourceView[];
   readonly selection: TreeSelection | null;
+  /**
+   * What Move to Folder… and Delete act on (plan 136): every selected datasource and folder while
+   * the Database pane has focus, otherwise `datasource`.
+   */
+  readonly items: readonly TreeItemRef[];
+  /** Every folder in the stored order. */
+  readonly folders: readonly string[];
   /**
    * What "the datasource" means to an action: the tree's selection while the Database pane has
    * focus, otherwise the active console's datasource, otherwise the tree's selection.
@@ -168,6 +178,9 @@ export function currentContext(tabId?: string): ActionContext {
       : undefined;
   const targetId = inTree ? selected : (watchSource ?? tabDatasourceId ?? selected);
   const target = datasourceById(datasources, targetId);
+  const treeItems = inTree ? selectedItems(treeSelectionOf(datasources)) : [];
+  const items: readonly TreeItemRef[] =
+    treeItems.length > 0 ? treeItems : target === undefined ? [] : [{ kind: "datasource", id: target.id }];
   return {
     tabs: strip.tabs,
     activeTab: active,
@@ -180,6 +193,8 @@ export function currentContext(tabId?: string): ActionContext {
     result: console === null ? (table?.result ?? keyTab?.result ?? null) : (activeResultOf(console) ?? null),
     datasources: datasources.datasources,
     selection: datasources.selection,
+    items,
+    folders: datasources.folders,
     datasource:
       target === undefined
         ? null

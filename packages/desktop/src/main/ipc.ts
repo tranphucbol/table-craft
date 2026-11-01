@@ -1,6 +1,7 @@
 import type { QueryHistory } from "@table-craft/core";
 import { z } from "@table-craft/plugin-api";
 import { ConsoleFileError, type ConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
+import type { MoveRequest } from "@table-craft/desktop/datasourceTree/arrange.js";
 import { draftSchema, serverSeenSchema } from "@table-craft/desktop/main/datasources.js";
 import { logWriteRequest } from "@table-craft/desktop/main/log/schema.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
@@ -31,6 +32,7 @@ import {
   type InvokeResult,
   type MenuPoint,
   type PluginsState,
+  type DeleteDatasourcesRequest,
   type SaveDatasourceRequest,
   type UpdateState,
   type WindowState,
@@ -64,6 +66,20 @@ const saveRequest = z.strictObject({
 }) satisfies z.ZodType<SaveDatasourceRequest>;
 
 const idRequest = z.strictObject({ id: z.string().min(1) });
+const treeItem = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("datasource"), id: z.string().min(1) }),
+  z.strictObject({ kind: z.literal("folder"), path: z.string().min(1) }),
+]);
+const moveRequest = z.strictObject({
+  items: z.array(treeItem).min(1),
+  folder: z.string().min(1).nullable(),
+  before: treeItem.nullable(),
+}) satisfies z.ZodType<MoveRequest>;
+const deleteRequest = z.strictObject({
+  ids: z.array(z.string().min(1)),
+  folders: z.array(z.string().min(1)),
+}) satisfies z.ZodType<DeleteDatasourcesRequest>;
+const folderRequest = z.strictObject({ path: z.string() });
 const parseUrlRequest = z.strictObject({ pluginId: z.string().min(1), url: z.string() });
 const connectRequest = z.strictObject({
   datasourceId: z.string().min(1),
@@ -304,10 +320,12 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.installPluginFile, noRequest, (_request, sender) => plugins.installFile(sender));
   handle(INVOKE_CHANNELS.removePlugin, pluginRequest, ({ pluginId }) => plugins.remove(pluginId));
   handle(INVOKE_CHANNELS.saveDatasource, saveRequest, (request) => service.save(request));
-  handle(INVOKE_CHANNELS.deleteDatasource, idRequest, async ({ id }) => {
-    await service.delete(id);
+  handle(INVOKE_CHANNELS.deleteDatasources, deleteRequest, async (request) => {
+    await service.delete(request);
     return null;
   });
+  handle(INVOKE_CHANNELS.moveDatasources, moveRequest, (request) => service.move(request));
+  handle(INVOKE_CHANNELS.createDatasourceFolder, folderRequest, ({ path }) => service.createFolder(path));
   handle(INVOKE_CHANNELS.testDatasource, saveRequest, (request) => service.test(request));
   handle(INVOKE_CHANNELS.parseDatasourceUrl, parseUrlRequest, ({ pluginId, url }) => service.parseUrl(pluginId, url));
   handle(INVOKE_CHANNELS.datasourceUrl, idRequest, ({ id }) => service.url(id));

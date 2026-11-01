@@ -50,6 +50,7 @@ function list(): DatasourceList {
     datasources: [view({ id: "kv", name: "kv", pluginId: "redis" })],
     warning: null,
     encryption: { available: true, reason: null },
+    folders: [],
   };
 }
 

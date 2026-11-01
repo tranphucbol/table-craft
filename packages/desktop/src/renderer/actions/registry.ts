@@ -117,6 +117,8 @@ export interface Action<A = void> {
    * look idle, as Run spins while its console runs (plan 112); absent means never.
    */
   readonly busy?: (context: ActionContext) => boolean;
+  /** False keeps it out of Find Action: it needs arguments only a gesture supplies, as a drop does. */
+  readonly inPalette?: boolean;
   readonly run: (context: ActionContext, args: A) => void | Promise<void>;
 }
 

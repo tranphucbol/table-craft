@@ -25,6 +25,10 @@ export interface CatalogState {
   readonly speedSearch: string | null;
   readonly setSpeedSearch: (query: string | null) => void;
   readonly toggleFolder: (path: string) => void;
+  /** Opens a collapsed folder, as a drag hovering on it does. */
+  readonly expandFolder: (path: string) => void;
+  /** Keeps folders a move renamed collapsed under their new paths. */
+  readonly renameFolders: (renamed: ReadonlyMap<string, string>) => void;
   readonly setExpanded: (key: string, expanded: boolean) => void;
   /** Expands the datasource, connecting it first; the first listing also opens the current namespace. */
   readonly expandDatasource: (datasourceId: string) => Promise<void>;
@@ -148,6 +152,18 @@ export function createCatalogStore(dependencies: CatalogDependencies) {
         if (collapsedFolders.has(path)) collapsedFolders.delete(path);
         else collapsedFolders.add(path);
         set({ collapsedFolders });
+      },
+
+      expandFolder(path) {
+        if (!get().collapsedFolders.has(path)) return;
+        const collapsedFolders = new Set(get().collapsedFolders);
+        collapsedFolders.delete(path);
+        set({ collapsedFolders });
+      },
+
+      renameFolders(renamed) {
+        if (renamed.size === 0) return;
+        set({ collapsedFolders: new Set([...get().collapsedFolders].map((path) => renamed.get(path) ?? path)) });
       },
 
       setExpanded(key, expanded) {

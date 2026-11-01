@@ -1,5 +1,11 @@
 import { join } from "node:path";
 import { BRAND_ID, z } from "@table-craft/plugin-api";
+import {
+  compareFolderPaths,
+  NAME_ORDER,
+  normalizeFolder,
+  normalizeFolders,
+} from "@table-craft/desktop/datasourceTree/arrange.js";
 import { writeAtomically, type FileSystem } from "@table-craft/desktop/main/files.js";
 import {
   DATASOURCE_COLORS,
@@ -22,9 +28,8 @@ import {
 
 export const DATASOURCES_FILE = "datasources.json";
 /** Bumped with a migration in `migrate` whenever the file's shape changes (decision 010). */
-export const DATASOURCES_VERSION = 1;
+export const DATASOURCES_VERSION = 2;
 const BACKUP_SUFFIX = ".corrupt-";
-const FOLDER_SEPARATOR = "/";
 const JSON_INDENT = 2;
 
 const configValue = z.union([z.string(), z.number(), z.boolean()]);
@@ -105,18 +110,25 @@ export const draftSchema = datasourceSchema.extend({
 
 const fileSchema = z.strictObject({
   version: z.literal(DATASOURCES_VERSION),
+  /** Every folder path, empty ones included, in the order the tree shows siblings (decision 145). */
+  folders: z.array(z.string().min(1)),
   datasources: z.array(datasourceSchema),
 });
 
-export interface LoadedDatasources {
+/** The list as it is kept: the tree shows both arrays in their order. */
+export interface StoredDatasources {
+  readonly folders: readonly string[];
   readonly datasources: readonly Datasource[];
+}
+
+export interface LoadedDatasources extends StoredDatasources {
   /** Why the file was set aside, for the one-time warning; null when it read cleanly. */
   readonly warning: string | null;
 }
 
 export interface DatasourceStore {
   load(): Promise<LoadedDatasources>;
-  save(datasources: readonly Datasource[]): Promise<void>;
+  save(stored: StoredDatasources): Promise<void>;
 }
 
 export interface DatasourceStoreOptions {
@@ -125,11 +137,35 @@ export interface DatasourceStoreOptions {
   readonly now?: () => number;
 }
 
+type Migration = (file: Record<string, unknown>) => Record<string, unknown>;
+
 /**
- * Each older version's upgrade to the next, keyed by the version it reads. Empty while version 1
- * is the only one; a file from a newer TableCraft fails validation and is set aside.
+ * Version 1 had no stored order and the tree sorted every level by name, so version 2 starts from
+ * that order and nobody's tree moves on upgrade (decision 145).
  */
-const MIGRATIONS: ReadonlyMap<number, (file: Record<string, unknown>) => Record<string, unknown>> = new Map();
+const toVersion2: Migration = (file) => {
+  const listed = Array.isArray(file.datasources) ? (file.datasources as unknown[]) : [];
+  const nameOf = (entry: unknown) =>
+    typeof entry === "object" && entry !== null && typeof (entry as { name?: unknown }).name === "string"
+      ? (entry as { name: string }).name
+      : "";
+  const folderOf = (entry: unknown) =>
+    typeof entry === "object" && entry !== null && typeof (entry as { folder?: unknown }).folder === "string"
+      ? (entry as { folder: string }).folder
+      : null;
+  const datasources = [...listed].sort((a, b) => NAME_ORDER.compare(nameOf(a), nameOf(b)));
+  const folders = normalizeFolders(
+    [],
+    datasources.map((entry) => ({ folder: folderOf(entry) })),
+  ).sort(compareFolderPaths);
+  return { ...file, version: 2, folders, datasources };
+};
+
+/**
+ * Each older version's upgrade to the next, keyed by the version it reads; a file from a newer
+ * TableCraft fails validation and is set aside.
+ */
+const MIGRATIONS: ReadonlyMap<number, Migration> = new Map([[1, toVersion2]]);
 
 function migrate(json: unknown): unknown {
   let file = json as Record<string, unknown> | null;
@@ -137,15 +173,6 @@ function migrate(json: unknown): unknown {
     file = MIGRATIONS.get(file.version)?.(file) ?? file;
   }
   return file;
-}
-
-/** `/`-separated, trimmed, without empty segments; null for the top level. */
-export function normalizeFolder(folder: string | null): string | null {
-  const segments = (folder ?? "")
-    .split(FOLDER_SEPARATOR)
-    .map((segment) => segment.trim())
-    .filter((segment) => segment !== "");
-  return segments.length === 0 ? null : segments.join(FOLDER_SEPARATOR);
 }
 
 /**
@@ -213,6 +240,7 @@ export function createDatasourceStore(options: DatasourceStoreOptions): Datasour
     const backup = `${path}${BACKUP_SUFFIX}${String(now())}`;
     await options.files.rename(path, backup);
     return {
+      folders: [],
       datasources: [],
       warning: `${DATASOURCES_FILE} could not be read (${reason}). It was moved to ${backup}, and the data source list starts empty.`,
     };
@@ -221,7 +249,7 @@ export function createDatasourceStore(options: DatasourceStoreOptions): Datasour
   return {
     async load() {
       const text = await options.files.readText(path);
-      if (text === null) return { datasources: [], warning: null };
+      if (text === null) return { folders: [], datasources: [], warning: null };
       let json: unknown;
       try {
         json = JSON.parse(text);
@@ -233,10 +261,11 @@ export function createDatasourceStore(options: DatasourceStoreOptions): Datasour
         const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`);
         return setAside(issues.join("; "));
       }
-      return { datasources: parsed.data.datasources, warning: null };
+      const { datasources } = parsed.data;
+      return { folders: normalizeFolders(parsed.data.folders, datasources), datasources, warning: null };
     },
-    async save(datasources) {
-      const file = { version: DATASOURCES_VERSION, datasources };
+    async save({ folders, datasources }) {
+      const file = { version: DATASOURCES_VERSION, folders, datasources };
       await writeAtomically(options.files, path, `${JSON.stringify(file, null, JSON_INDENT)}\n`);
     },
   };

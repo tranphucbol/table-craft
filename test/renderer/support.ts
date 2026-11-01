@@ -13,6 +13,8 @@ export const IDLE_CONTEXT: ActionContext = {
   result: null,
   datasources: [],
   selection: null,
+  items: [],
+  folders: [],
   datasource: null,
   capabilities: ["sql"],
   focus: "editor",

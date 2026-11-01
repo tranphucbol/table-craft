@@ -78,6 +78,7 @@ function wired() {
     datasources: [PG_VIEW],
     warning: null,
     encryption: { available: true, reason: null },
+    folders: [],
   });
   const catalog = createCatalogStore({ connect: (id) => datasources.getState().connect(id) });
   const consoles = createConsolesStore({ connect: (id) => datasources.getState().connect(id), now: () => 0 });
