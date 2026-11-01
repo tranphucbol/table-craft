@@ -56,6 +56,12 @@ See [Shell and actions](../design/specification.md#shell-and-actions).
 | Query History…            | `⌥⌘E`   | `Ctrl+Alt+E`           |
 | Preview Pending Changes   | `⇧⌘P`   | `Ctrl+Shift+P`         |
 | Submit                    | `⌘↩`    | `Ctrl+Enter`           |
+| Find in Console           | `⌘F`    | `Ctrl+F`               |
+| Replace in Console        | `⌘R`    | `Ctrl+R`               |
+| Find Next Occurrence      | `⌘G`    | `Ctrl+G`               |
+| Find Previous Occurrence  | `⇧⌘G`   | `Ctrl+Shift+G`         |
+| Replace All               | `⌥⌘↩`   | `Ctrl+Alt+Enter`       |
+| Select All Occurrences    | `⌥⇧⌘J`  | `Ctrl+Alt+Shift+J`     |
 | Find in Result            | `⌘F`    | `Ctrl+F`               |
 | Transpose                 | `⌥⌘T`   | `Ctrl+Alt+T`           |
 | Toggle JSON View          | `⌥⌘J`   | `Ctrl+Alt+J`           |

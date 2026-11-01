@@ -1,38 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { chipLabel, GRID_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridActions.js";
-import { invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
+import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import type { GridHost } from "@table-craft/desktop/renderer/grid/ResultGrid.js";
 import { findStatusText, searchedScopeText, type ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { CloseIcon } from "@table-craft/desktop/renderer/ui/icons.js";
-import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
+import { OptionToggle } from "@table-craft/desktop/renderer/ui/OptionToggle.js";
 
 /** Typing waits this long before the engine searches, so a word costs one pass, not one per key. */
 const TYPING_SETTLE_MS = 120;
 const BAR = "flex h-row shrink-0 items-center gap-1 border-b border-line bg-panel px-1";
-
-/** A find option toggle drawn as its short label, as DataGrip draws Cc, .* and W. */
-function OptionToggle({ actionId, label, pressed }: { actionId: string; label: string; pressed: boolean }) {
-  const enabled = useActionEnabled(actionId);
-  const title = registry.get(actionId)?.title ?? label;
-  return (
-    <Tooltip label={title} side="bottom">
-      <button
-        type="button"
-        aria-label={title}
-        aria-pressed={pressed}
-        disabled={!enabled}
-        className="h-row shrink-0 rounded px-1 font-grid text-ink hover:bg-raised disabled:opacity-50 aria-pressed:bg-selection"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => invoke(actionId)}
-      >
-        {label}
-      </button>
-    </Tooltip>
-  );
-}
 
 /**
  * The grid's find bar (plan 023): the query, its options, the match count, next and previous, and
