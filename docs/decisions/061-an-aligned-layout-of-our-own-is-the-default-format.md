@@ -1,6 +1,6 @@
 # 061: An aligned layout of our own is the default format
 
-Status: Accepted
+Status: Accepted. Amended by 147.
 
 ## Decision
 
@@ -8,7 +8,7 @@ Reformat Code (⌥⌘L) lays DML out in an **aligned** style written in
 `@table-craft/plugin-api/sql` (`sql/layout*.ts`): the clause keyword, one space and the first item on
 one line; the rest of a list lined up under the first item; `AS` in a select list lined up in one
 column; further `AND`/`OR` right-aligned to the end of `WHERE`, `HAVING` or `ON`; calls and value
-lists kept whole; subqueries and CTE bodies laid out by the same rules at the column after `(`.
+lists kept whole (an `IN` list goes one value per line since decision 147); subqueries and CTE bodies laid out by the same rules at the column after `(`.
 
 It parses the tokens of the existing dialect `Lexer` (`tokens.ts`), not text, so quoting, comments,
 placeholders and `@var` stay exactly as each dialect reads them. `FormatOptions` gains
