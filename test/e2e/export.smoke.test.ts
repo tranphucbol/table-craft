@@ -251,7 +251,9 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
       await resultTab(page, "Output").click();
       await expect
         .poll(() => output(page).textContent())
-        .toMatch(/The server sent nothing for 10 seconds.*rows were written before it stopped\./);
+        .toMatch(
+          /The server sent nothing for 10 seconds.*rows were exported before it stopped; the partial file was removed\./,
+        );
       await captureWindow(page, "export-stalled");
 
       proxy.resume();

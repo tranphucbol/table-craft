@@ -3,6 +3,7 @@ import {
   type Column,
   type ExecutedStatement,
   type ExplainedPlan,
+  type ExportTaskState,
   type FilterChip,
   type FindQuery,
   type FoundMatch,
@@ -73,6 +74,8 @@ export interface ResultTab extends ResultState {
   readonly layout: ColumnLayout;
   readonly selection: GridSelection | null;
   readonly fetching: ResultFetch | null;
+  /** How the export that drained its cursor ended, so the row count says why fetching stopped. */
+  readonly exportEnded?: ExportTaskState;
   /** Its engine went away: the rows shown are all there will be until a rerun (plan 007 decision 18). */
   readonly stale: boolean;
   /** A pinned tab survives the next run; the others are replaced and their handles released. */

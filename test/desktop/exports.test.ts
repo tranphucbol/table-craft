@@ -237,6 +237,7 @@ describe("engine exports", () => {
       path,
     });
     await finished(task.taskId);
+    const firstEnded = Date.now();
 
     const again = resultOf<ExportTask>(
       await connection.handle({ id: 8, type: "export.retry", taskId: task.taskId, stallSeconds: STALL_SECONDS }),
@@ -247,5 +248,25 @@ describe("engine exports", () => {
     expect(again.taskId).not.toBe(task.taskId);
     expect(done).toMatchObject({ state: "done", rows: 2, sheets: 1 });
     expect(listed.map((entry) => entry.taskId)).toEqual([task.taskId, again.taskId]);
+    expect(again.startedAt).toBeGreaterThanOrEqual(firstEnded);
+  });
+
+  it("givenStart_whenTask_thenStartedAtFromClockAndKeptToTheEnd", async () => {
+    const directory = await folder();
+    const { connection, finished } = open(":memory:");
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(connection, sessionId, "SELECT 1");
+    const before = Date.now();
+
+    const task = await start(connection, {
+      source: { kind: "result", handle, columns: [0] },
+      format: "csv",
+      path: join(directory, "one.csv"),
+    });
+    const done = await finished(task.taskId);
+
+    expect(task.startedAt).toBeGreaterThanOrEqual(before);
+    expect(task.startedAt).toBeLessThanOrEqual(Date.now());
+    expect(done.startedAt).toBe(task.startedAt);
   });
 });

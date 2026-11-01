@@ -14,6 +14,8 @@ import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 export interface ExportEntry {
   readonly datasourceId: string;
   readonly task: ExportTask;
+  /** When this window first heard the task end, by its own clock; null while it runs. */
+  readonly finishedAt: number | null;
 }
 
 export interface ExportRequest {
@@ -25,6 +27,13 @@ export interface ExportRequest {
 export interface ExportsState {
   /** Oldest first. */
   readonly entries: readonly ExportEntry[];
+  /** Tasks asked to stop whose final event has not come yet. */
+  readonly cancelling: ReadonlySet<string>;
+  /** Failed tasks the user has seen in the popover, so the chip lets them go. */
+  readonly seen: ReadonlySet<string>;
+  readonly popoverOpen: boolean;
+  readonly setPopover: (open: boolean) => void;
+  readonly markSeen: (taskIds: readonly string[]) => void;
   /** Rejects when the engine refuses the request; a task that fails later reports through events. */
   readonly start: (datasourceId: string, request: ExportRequest) => Promise<ExportTask>;
   readonly received: (datasourceId: string, event: ExportEvent) => void;
@@ -45,6 +54,8 @@ export interface ExportsDependencies {
   readonly client: (datasourceId: string) => Promise<EngineClient>;
   /** `data.exportStallSeconds`, read when a task starts. */
   readonly stallSeconds: () => number;
+  /** The clock `finishedAt` reads; `Date.now` when absent. */
+  readonly now?: () => number;
 }
 
 const STOPPED_TEXT = "The export stopped and no file was written.";
@@ -55,8 +66,16 @@ export function isRunning(entry: ExportEntry): boolean {
   return entry.task.state === "running";
 }
 
+function without(set: ReadonlySet<string>, taskId: string): ReadonlySet<string> {
+  if (!set.has(taskId)) return set;
+  const next = new Set(set);
+  next.delete(taskId);
+  return next;
+}
+
 export function createExportsStore(dependencies: ExportsDependencies) {
   const waiting = new Map<string, ((task: ExportTask) => void)[]>();
+  const now = dependencies.now ?? Date.now;
 
   return create<ExportsState>()((set, get) => {
     function entryOf(taskId: string): ExportEntry | undefined {
@@ -68,12 +87,13 @@ export function createExportsStore(dependencies: ExportsDependencies) {
       const current = entryOf(task.taskId);
       // A late progress event must not undo a final state.
       if (current !== undefined && current.task.state !== "running" && task.state === "running") return;
-      const entry = { datasourceId, task };
+      const finishedAt = task.state === "running" ? null : (current?.finishedAt ?? now());
+      const entry: ExportEntry = { datasourceId, task, finishedAt };
       const entries =
         current === undefined
           ? [...get().entries, entry]
           : get().entries.map((existing) => (existing.task.taskId === task.taskId ? entry : existing));
-      set({ entries });
+      set(task.state === "running" ? { entries } : { entries, cancelling: without(get().cancelling, task.taskId) });
       if (task.state === "running") return;
       const resolvers = waiting.get(task.taskId) ?? [];
       waiting.delete(task.taskId);
@@ -91,6 +111,15 @@ export function createExportsStore(dependencies: ExportsDependencies) {
 
     return {
       entries: [],
+      cancelling: new Set(),
+      seen: new Set(),
+      popoverOpen: false,
+      setPopover: (popoverOpen) => set({ popoverOpen }),
+      markSeen(taskIds) {
+        const seen = get().seen;
+        if (taskIds.every((taskId) => seen.has(taskId))) return;
+        set({ seen: new Set([...seen, ...taskIds]) });
+      },
       start: (datasourceId, request) =>
         begin(datasourceId, (client) =>
           client.call("export.start", { ...request, stallSeconds: dependencies.stallSeconds() }),
@@ -119,8 +148,14 @@ export function createExportsStore(dependencies: ExportsDependencies) {
       async cancel(taskId) {
         const entry = entryOf(taskId);
         if (entry === undefined || !isRunning(entry)) return;
-        const client = await dependencies.client(entry.datasourceId);
-        await client.call("export.cancel", { taskId });
+        set({ cancelling: new Set([...get().cancelling, taskId]) });
+        try {
+          const client = await dependencies.client(entry.datasourceId);
+          await client.call("export.cancel", { taskId });
+        } catch (cause) {
+          set({ cancelling: without(get().cancelling, taskId) });
+          throw cause;
+        }
       },
       async retry(taskId) {
         const entry = entryOf(taskId);

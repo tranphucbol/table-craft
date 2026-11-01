@@ -6,7 +6,6 @@ import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importA
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { hasFailedStatement, located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { SESSIONS_ACTION_IDS, showableInSessions } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
-import type { ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import {
@@ -19,6 +18,7 @@ import {
   type ServiceState,
 } from "@table-craft/desktop/renderer/model/format.js";
 import {
+  EXPORT_OUTCOME,
   EXPORT_STATE_TEXT,
   exportNotes,
   exportPercent,
@@ -43,11 +43,7 @@ import {
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { connectionOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { DatasourceGlyph, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
-import {
-  useExecutions,
-  type Execution,
-  type ExecutionOutcome,
-} from "@table-craft/desktop/renderer/state/executions.js";
+import { useExecutions, type Execution } from "@table-craft/desktop/renderer/state/executions.js";
 import { useExports, type ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
 import { useKeyDeletes } from "@table-craft/desktop/renderer/state/keyDeletes.js";
 import {
@@ -136,14 +132,6 @@ interface MenuEntry {
   readonly actionId: string;
   readonly args: unknown;
 }
-
-/** An export's state as the outcome glyph Services draws for an execution. */
-const EXPORT_OUTCOME: Readonly<Record<ExportTaskState, ExecutionOutcome>> = {
-  running: "running",
-  done: "success",
-  failed: "error",
-  cancelled: "cancelled",
-};
 
 /** What an export line offers, in its context menu and as its buttons. */
 function exportActionsOf(entry: ExportEntry): readonly string[] {

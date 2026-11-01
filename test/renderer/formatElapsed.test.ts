@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatElapsed } from "@table-craft/desktop/renderer/model/format.js";
+import { formatClock, formatElapsed } from "@table-craft/desktop/renderer/model/format.js";
 
 describe("formatElapsed", () => {
   it("givenUnderASecond_whenFormatElapsed_thenMilliseconds", () => {
@@ -22,5 +22,19 @@ describe("formatElapsed", () => {
 
   it("givenNegative_whenFormatElapsed_thenZero", () => {
     expect(formatElapsed(-5)).toBe("0 ms");
+  });
+});
+
+describe("formatClock", () => {
+  it("givenSeconds_whenFormatClock_thenMinutesSeconds", () => {
+    expect(formatClock(0)).toBe("0:00");
+    expect(formatClock(7_999)).toBe("0:07");
+    expect(formatClock(230_000)).toBe("3:50");
+    expect(formatClock(-5)).toBe("0:00");
+  });
+
+  it("givenOverAnHour_whenFormatClock_thenHoursMinutesSeconds", () => {
+    expect(formatClock(3_735_000)).toBe("1:02:15");
+    expect(formatClock(36_000_000)).toBe("10:00:00");
   });
 });
