@@ -382,7 +382,8 @@ than reflowed, and so is a script holding a `GO` or `/` separator line. The dial
 `postgresql`, `mysql`, `sqlite`, `plsql` and `transactsql`. `style` picks the layout. `aligned` (decision 061, `sql/layout.ts`) parses the
 dialect lexer's tokens: the first item on the clause keyword's line, the rest lined up under it,
 `AS` in a select list in one column when `alignAliases` is on, `AND`/`OR` right-aligned to the end
-of `WHERE`/`HAVING`/`ON`, calls and lists kept whole, subqueries at the column after `(`. It covers
+of `WHERE`/`HAVING`/`ON`, calls and lists kept whole but an `IN` list of two or more values one
+value per line under the first (decision 147), subqueries at the column after `(`. It covers
 `SELECT`, set operators, `WITH`, `INSERT`, `UPDATE`, `DELETE` and `EXPLAIN` before them; any other
 statement, or one whose tokens the layout would change, gets the `standard` layout (decision 062),
 which is `sql-formatter` (decision 042).

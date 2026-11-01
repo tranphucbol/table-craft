@@ -699,13 +699,13 @@ export class AlignedPrinter {
     }
   }
 
-  #rows(writer: Writer, nodes: readonly Node[], column: number): void {
+  #rows(writer: Writer, nodes: readonly Node[], column: number, leadSpace = true): void {
     const { parts, commas } = splitTop(nodes, COMMA);
     const saved = writer.indent;
     writer.indent = column;
     parts.forEach((part, at) => {
       if (at > 0) writer.newline(column);
-      this.inline(writer, part, at === 0);
+      this.inline(writer, part, at === 0 && leadSpace);
       const comma = commas[at];
       if (comma !== undefined) writer.tok(comma, comma.text, false);
     });
@@ -746,7 +746,11 @@ export class AlignedPrinter {
     let previous: Node | null = null;
     for (const node of nodes) {
       const space = previous === null ? leadSpace : this.#spaceBetween(previous, node, options);
-      this.node(writer, node, space, options);
+      if (isWord(previous ?? undefined, "IN") && node.type === "group" && options.preserve !== true) {
+        this.#inList(writer, node, space);
+      } else {
+        this.node(writer, node, space, options);
+      }
       previous = node;
     }
   }
@@ -764,6 +768,17 @@ export class AlignedPrinter {
     } else {
       this.inline(writer, group.children, false, { preserve: options.preserve ?? false });
     }
+    writer.tok(group.close, group.close.text, false);
+  }
+
+  /** Two or more values after `IN` go one per line under the first, whatever the width (decision 147). */
+  #inList(writer: Writer, group: Group, space: boolean): void {
+    if (isSubquery(group) || splitTop(group.children, COMMA).parts.length < 2) {
+      this.#group(writer, group, space, {});
+      return;
+    }
+    writer.tok(group.open, group.open.text, space);
+    this.#rows(writer, group.children, writer.column, false);
     writer.tok(group.close, group.close.text, false);
   }
 
