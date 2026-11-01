@@ -12,6 +12,7 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { EngineRequestError, type EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { executedText, namespaceLabel, serviceState } from "@table-craft/desktop/renderer/model/format.js";
+import { CONSOLE_TIMEOUT_HINT } from "@table-craft/desktop/renderer/model/runSettings.js";
 import {
   createConsolesStore,
   OUTPUT_TAB,
@@ -150,8 +151,8 @@ function fakeEngine() {
           columns: reads ? [{ name: "n", type: "int4" }] : [],
           typeClasses: reads ? ["integer"] : [],
           rowCount: reads ? 1 : 0,
-          complete: true,
-          cursorOpen: false,
+          complete: !sql.includes("MANY"),
+          cursorOpen: sql.includes("MANY"),
           rowsAffected: reads ? null : 1,
           firstWindow: { offset: 0, rows: reads ? [[sql]] : [] },
           transactionOpen: open,
@@ -177,6 +178,8 @@ function fakeEngine() {
       case "result.release":
         released.push(String(params.handle));
         return Promise.resolve(null);
+      case "result.fetchMore":
+        return Promise.resolve({ rowCount: params.all === true ? 5000 : 2, complete: true, cursorOpen: false });
       default:
         return Promise.resolve(null);
     }
@@ -490,6 +493,86 @@ describe("console connection health", () => {
     await store.getState().run("c1", "all");
 
     expect(call).toHaveBeenCalledWith("statement.execute", expect.objectContaining({ timeoutSeconds: 30 }));
+  });
+
+  it("givenConsoleTimeout_whenDatasourceHasOwn_thenConsoleTimeoutSent", async () => {
+    const { store, call } = await opened("SELECT 1;", { statementTimeout: 30 });
+    store.getState().setRunSettings("c1", { timeout: { kind: "seconds", seconds: 5 } });
+
+    await store.getState().run("c1", "all");
+
+    expect(call).toHaveBeenCalledWith("statement.execute", expect.objectContaining({ timeoutSeconds: 5 }));
+  });
+
+  it("givenConsoleNoTimeout_whenRun_thenNoneSent", async () => {
+    const { store, call } = await opened("SELECT 1;", { statementTimeout: 30, serverEnforced: true });
+    store.getState().setRunSettings("c1", { timeout: { kind: "none" } });
+
+    await store.getState().run("c1", "all");
+
+    const params = call.mock.calls.find(([type]) => type === "statement.execute")?.[1];
+    expect(params).not.toHaveProperty("timeoutSeconds");
+  });
+
+  it.each([
+    [{ kind: "seconds", seconds: 5 } as const, CONSOLE_TIMEOUT_HINT],
+    [{ kind: "default" } as const, "Run it again."],
+  ])("givenConsoleTimeout_%o_whenStatementTimesOut_thenHint_%s", async (timeout, hint) => {
+    const { store, session } = await opened("SELECT FLAKY;");
+    store.getState().setRunSettings("c1", { timeout });
+
+    await store.getState().run("c1", "all");
+
+    expect(session().error?.hint).toBe(hint);
+  });
+
+  it("givenCustomRows_whenRun_thenPageSizeSentAndKeptByTheResult", async () => {
+    const { store, call, session } = await opened("SELECT 1;");
+    store.getState().setRunSettings("c1", { rows: { kind: "page", pageRows: 2000 } });
+
+    await store.getState().run("c1", "all");
+
+    const { pageRows, fetchAllCap } = useSettings.getState().settings.data;
+    expect(pageRows).not.toBe(2000);
+    expect(call).toHaveBeenCalledWith(
+      "statement.execute",
+      expect.objectContaining({ pageRows: 2000, fetchAllCap: Math.max(fetchAllCap, 2000) }),
+    );
+    const tab = session().results[0];
+    expect(tab?.kind === "rows" ? tab.paging.pageRows : null).toBe(2000);
+  });
+
+  it("givenAllRows_whenRunOpensCursor_thenFetchesTheRest", async () => {
+    const { store, call, session } = await opened("SELECT MANY;");
+    store.getState().setRunSettings("c1", { rows: { kind: "all" } });
+
+    await store.getState().run("c1", "all");
+
+    expect(call).toHaveBeenCalledWith("result.fetchMore", expect.objectContaining({ all: true }));
+    const tab = session().results[0];
+    expect(tab?.kind === "rows" ? [tab.rowCount, tab.cursorOpen] : null).toEqual([5000, false]);
+  });
+
+  it("givenDefaultRows_whenRunOpensCursor_thenFetchesNothingMore", async () => {
+    const { store, call } = await opened("SELECT MANY;");
+
+    await store.getState().run("c1", "all");
+
+    expect(call).not.toHaveBeenCalledWith("result.fetchMore", expect.anything());
+  });
+
+  it("givenRunSettingsOnOneConsole_whenAnotherRuns_thenItSendsDefaults", async () => {
+    const { store, call } = await opened("SELECT 1;", { statementTimeout: 30 });
+    await store.getState().open("c2", "pg", { sql: "SELECT 2;" });
+    store.getState().setRunSettings("c1", { rows: { kind: "page", pageRows: 2000 }, timeout: { kind: "none" } });
+
+    await store.getState().run("c2", "all");
+
+    const { pageRows } = useSettings.getState().settings.data;
+    expect(call).toHaveBeenCalledWith(
+      "statement.execute",
+      expect.objectContaining({ sql: "SELECT 2", pageRows, timeoutSeconds: 30 }),
+    );
   });
 
   it("givenEnforceOnServer_whenRun_thenServerEnforcedSent", async () => {

@@ -28,6 +28,7 @@ import type { AnyAction } from "@table-craft/desktop/renderer/actions/registry.j
 import { MCP_ACTIONS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { LOG_ACTIONS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { ROUTINE_ACTIONS } from "@table-craft/desktop/renderer/actions/routineActions.js";
+import { RUN_SETTINGS_ACTIONS } from "@table-craft/desktop/renderer/actions/runSettingsActions.js";
 import { SERVICES_ACTIONS } from "@table-craft/desktop/renderer/actions/servicesActions.js";
 import { SESSIONS_ACTIONS } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import { SETTINGS_ACTIONS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
@@ -62,6 +63,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...SERVICES_ACTIONS,
   ...ROUTINE_ACTIONS,
   ...NAMESPACE_ACTIONS,
+  ...RUN_SETTINGS_ACTIONS,
   ...NODE_ACTIONS,
   ...SERVER_ACTIONS,
   ...KEY_ACTIONS,

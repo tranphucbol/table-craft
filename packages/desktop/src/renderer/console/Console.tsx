@@ -14,6 +14,7 @@ import { Editor } from "@table-craft/desktop/renderer/console/Editor.js";
 import { NamespaceSwitcher } from "@table-craft/desktop/renderer/console/NamespaceSwitcher.js";
 import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js";
 import { RunOnPicker } from "@table-craft/desktop/renderer/console/RunOnPicker.js";
+import { RunSettingsButton } from "@table-craft/desktop/renderer/console/RunSettings.js";
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
@@ -238,6 +239,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         <div className="flex shrink-0 items-center gap-1">
           <ActionButton actionId={HISTORY_ACTION_IDS.show} compact />
           {capabilities.includes("sql") ? <ActionButton actionId={ACTION_IDS.reformat} compact /> : null}
+          <RunSettingsButton consoleId={consoleId} session={session} timeouts={capabilities.includes("cancel")} />
         </div>
         {capabilities.includes("transactions") ? (
           <>

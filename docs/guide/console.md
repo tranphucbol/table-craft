@@ -8,8 +8,8 @@ PostgreSQL's `RAISE NOTICE`); the result tab shows how many warnings there were.
 anything runs. Switch
 **Tx: Auto** to **Tx: Manual** to work in a transaction, then **Commit** or **Rollback**; while a
 transaction is open the mode turns amber with a dot. The console toolbar groups Run, Run All,
-Explain and Cancel, then Query History and Reformat Code, then the transaction controls; the
-schema switcher and the data source sit at its right. While a statement runs, the title bar shows
+Explain and Cancel, then Query History, Reformat Code and Run Settings, then the transaction
+controls; the schema switcher and the data source sit at its right. While a statement runs, the title bar shows
 its elapsed time, to the millisecond, beside **Cancel** where the database can cancel it; with a transaction open, it shows **Tx open** with **Commit**
 and **Rollback**, so you can end it from any tab layout. Consoles
 are saved as files as you type. Drag the line between the editor and its results to give either
@@ -105,6 +105,17 @@ caret is off a match, or `0/0` in red; counting stops at 10,000 (`1/10,000+`).
 - **Select All Occurrences** (`⌥⇧⌘J`) puts a cursor on every match and returns to the editor.
 - The magnifier, or `⌥↓` in a field, lists the last 20 searches or replacements of this session.
 - `Esc` closes the bar and returns to the editor. Switching tabs keeps each console's bar and query.
+
+## Run settings for one console
+
+The gear on the console toolbar, **Run Settings…**, sets how this console runs without touching
+Settings. **Rows** is **Default** (the page size in Settings → Data Editor), **Custom** (a page size
+of 10 to 10,000 rows) or **All**, which reads the whole result as soon as it opens, as **Fetch All**
+does, up to the Fetch All limit. **Statement timeout** is **Default** (the data source's own
+timeout, else Settings → Advanced), **Custom** (1 to 86,400 seconds) or **None**; a console's
+timeout wins over the data source's. Changes apply from the next statement and stay with the
+console until you close it; a dot on the gear says the console has its own settings, and its
+tooltip names them. **Reset to Defaults** goes back to Settings.
 
 ## Explain
 

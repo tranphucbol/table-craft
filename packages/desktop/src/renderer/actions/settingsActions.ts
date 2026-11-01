@@ -2,7 +2,7 @@ import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/acti
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
-import { useSettingsDialog } from "@table-craft/desktop/renderer/state/settingsDialog.js";
+import { useSettingsDialog, type SettingsPage } from "@table-craft/desktop/renderer/state/settingsDialog.js";
 import { DEFAULT_SETTINGS, zoomEditorFont } from "@table-craft/desktop/settings/settings.js";
 
 export const SETTINGS_ACTION_IDS = {
@@ -13,6 +13,11 @@ export const SETTINGS_ACTION_IDS = {
   zoomReset: "editor.zoomReset",
   toggleBrandIcons: "appearance.toggleBrandIcons",
 } as const;
+
+/** The page to open on, as a console's Run Settings opens the one its default comes from. */
+export interface ShowSettingsArgs {
+  readonly page: SettingsPage;
+}
 
 const ZOOM_STEP_PX = 1;
 const ABOUT_TITLE = "About TableCraft";
@@ -46,13 +51,13 @@ function zoom(steps: number): Promise<void> {
  * console follows and the size survives a relaunch; there is no per-tab zoom.
  */
 export const SETTINGS_ACTIONS: readonly AnyAction[] = [
-  defineAction({
+  defineAction<ShowSettingsArgs | undefined>({
     id: SETTINGS_ACTION_IDS.show,
     title: "Settings…",
     category: "App",
     icon: "settings",
     shortcut: "Mod+,",
-    run: () => useSettingsDialog.getState().show(),
+    run: (_context, args) => useSettingsDialog.getState().show(args?.page),
   }),
   defineAction({
     id: SETTINGS_ACTION_IDS.about,

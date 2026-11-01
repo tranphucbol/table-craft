@@ -114,6 +114,14 @@ import {
 } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import {
+  DEFAULT_RUN_SETTINGS,
+  fetchesAll,
+  pagingWith,
+  timeoutWith,
+  withRunSettingsHint,
+  type RunSettings,
+} from "@table-craft/desktop/renderer/model/runSettings.js";
+import {
   currentFormatOptions,
   currentFormats,
   currentPaging,
@@ -290,6 +298,8 @@ export interface ConsoleSession {
   readonly question: ErrorQuestion | null;
   /** Where commands run on a `nodes` datasource (decision 114): `NODE_AUTO`, `NODE_ALL_PRIMARIES` or a node id. */
   readonly node: string;
+  /** This console's row limit and timeout over Settings' (decision 148); never written to disk. */
+  readonly runSettings: RunSettings;
 }
 
 export interface Insertion {
@@ -456,6 +466,7 @@ export interface ConsolesState extends ConsoleEdits {
   /** False when the engine refused, which the Output log then explains. */
   readonly setTransactionMode: (id: string, mode: TransactionMode) => Promise<boolean>;
   readonly setNode: (id: string, node: string) => void;
+  readonly setRunSettings: (id: string, change: Partial<RunSettings>) => void;
   readonly commit: (id: string) => Promise<boolean>;
   readonly rollback: (id: string) => Promise<boolean>;
 }
@@ -590,6 +601,7 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
     output: [],
     txMode: "auto",
     node: NODE_AUTO,
+    runSettings: DEFAULT_RUN_SETTINGS,
     transactionOpen: false,
     namespace: null,
     lastRun: null,
@@ -762,9 +774,35 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
 
     /** The limit a console statement sends; nothing when the console has no limit. */
     function limitOf(id: string): StatementLimit {
-      const datasourceId = get().consoles[id]?.datasourceId;
-      if (datasourceId === undefined) return {};
-      return statementLimit(statementTimeout(datasourceId), serverEnforced(datasourceId));
+      const current = get().consoles[id];
+      if (current === undefined) return {};
+      const { datasourceId, runSettings } = current;
+      return statementLimit(
+        timeoutWith(statementTimeout(datasourceId), runSettings.timeout),
+        serverEnforced(datasourceId),
+      );
+    }
+
+    function statementError(id: string, cause: unknown): EngineError {
+      return withRunSettingsHint(
+        toError(cause),
+        get().consoles[id]?.runSettings.timeout ?? DEFAULT_RUN_SETTINGS.timeout,
+      );
+    }
+
+    /** The paging a console statement sends: Settings', or the console's own page size. */
+    function pagingFor(id: string): ResultPaging {
+      return pagingWith(currentPaging(), get().consoles[id]?.runSettings.rows ?? DEFAULT_RUN_SETTINGS.rows);
+    }
+
+    /**
+     * A console set to All rows reads the rest of a result once it opens, as Fetch All does. Awaited
+     * by the run, so the next statement never runs on the session while the cursor drains.
+     */
+    async function fetchRestIfAll(id: string, tab: ResultTab): Promise<void> {
+      const runSettings = get().consoles[id]?.runSettings;
+      if (runSettings === undefined || !fetchesAll(runSettings) || !tab.cursorOpen) return;
+      await windows.fetchMore(id, tab.id, true);
     }
 
     /** The Run on choice, sent only when it is not the plugin's own routing. */
@@ -1198,7 +1236,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         const startedAt = dependencies.now();
         try {
           cursorsClosed(id);
-          const paging = currentPaging();
+          const paging = pagingFor(id);
           const { transactionOpen, namespace, reconnected, ...executed } = await client.call("statement.execute", {
             sessionId,
             sql: statement.sql,
@@ -1244,6 +1282,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             );
             producedBy.set(tab.id, ended.executionId);
             patch(id, { results: [...current.results, tab], activeResult: tab.id, transactionOpen, ...moved });
+            await fetchRestIfAll(id, tab);
           } else {
             patch(id, { transactionOpen, ...moved });
           }
@@ -1258,7 +1297,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
           }
           index++;
         } catch (cause) {
-          const thrown = toError(cause);
+          const thrown = statementError(id, cause);
           const error = label === null ? thrown : privateError(thrown);
           ended(failureEnd(error, dependencies.now() - startedAt));
           const cancelled = error.code === "cancelled";
@@ -1634,7 +1673,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         }
         return "succeeded";
       } catch (cause) {
-        const error = toError(cause);
+        const error = statementError(id, cause);
         ended(failureEnd(error, dependencies.now() - startedAt));
         const cancelled = error.code === "cancelled";
         if (cancelled) log(id, { sql, message: cancelledText(error), tone: "warning" });
@@ -2084,7 +2123,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             ended = started(id, tab.sql, sql, parameters ?? null);
             producedBy.set(resultId, ended.executionId);
             statementStartedAt = dependencies.now();
-            const paging = currentPaging();
+            const paging = pagingFor(id);
             const { transactionOpen, namespace, reconnected, ...executed } = await client.call("statement.execute", {
               sessionId,
               sql: tab.sql,
@@ -2142,6 +2181,8 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
                 search: kept ? { ...latest.search, current: null } : fresh.search,
               }));
               if (kept) await windows.applyView(id, resultId);
+              const refreshed = resultOf(id, resultId);
+              if (refreshed !== undefined) await fetchRestIfAll(id, refreshed);
             }
             patch(id, {
               transactionOpen,
@@ -2150,7 +2191,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             outcome = "succeeded";
           }
         } catch (cause) {
-          const error = toError(cause);
+          const error = statementError(id, cause);
           ended?.(failureEnd(error, dependencies.now() - statementStartedAt));
           if (error.code === "cancelled") log(id, { sql, message: cancelledText(error), tone: "warning" });
           else logError(id, sql, error);
@@ -2235,6 +2276,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
 
       setNode(id, node) {
         patch(id, { node });
+      },
+
+      setRunSettings(id, change) {
+        const current = get().consoles[id];
+        if (current === undefined) return;
+        patch(id, { runSettings: { ...current.runSettings, ...change } });
       },
 
       async setTransactionMode(id, mode) {
