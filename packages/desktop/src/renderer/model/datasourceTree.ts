@@ -1,3 +1,4 @@
+import { compareFolderPaths, FOLDER_SEPARATOR } from "@table-craft/desktop/datasourceTree/arrange.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 
 export interface FolderNode {
@@ -22,16 +23,14 @@ interface MutableFolder {
   readonly datasources: DatasourceView[];
 }
 
-const byName = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
-
 function folder(path: string, name: string): MutableFolder {
   return { path, name, folders: new Map(), datasources: [] };
 }
 
 function ensure(root: MutableFolder, path: string): MutableFolder {
   let current = root;
-  for (const part of path.split("/")) {
-    const childPath = current.path === "" ? part : `${current.path}/${part}`;
+  for (const part of path.split(FOLDER_SEPARATOR)) {
+    const childPath = current.path === "" ? part : `${current.path}${FOLDER_SEPARATOR}${part}`;
     let child = current.folders.get(part);
     if (child === undefined) {
       child = folder(childPath, part);
@@ -43,22 +42,26 @@ function ensure(root: MutableFolder, path: string): MutableFolder {
 }
 
 function freeze(node: MutableFolder): readonly TreeNode[] {
-  const folders = [...node.folders.values()]
-    .sort((a, b) => byName.compare(a.name, b.name))
-    .map((child): FolderNode => ({ kind: "folder", path: child.path, name: child.name, children: freeze(child) }));
-  const datasources = [...node.datasources]
-    .sort((a, b) => byName.compare(a.name, b.name))
-    .map((datasource): DatasourceNode => ({ kind: "datasource", datasource }));
+  const folders = [...node.folders.values()].map((child): FolderNode => ({
+    kind: "folder",
+    path: child.path,
+    name: child.name,
+    children: freeze(child),
+  }));
+  const datasources = node.datasources.map((datasource): DatasourceNode => ({ kind: "datasource", datasource }));
   return [...folders, ...datasources];
 }
 
-/** The Database pane's tree: folders from the paths, folders before datasources, each by name. */
+/**
+ * The Database pane's tree in the stored order (plan 136): each level its folders, then its
+ * datasources, both in the order `folders` and `datasources` list them.
+ */
 export function buildTree(
   datasources: readonly DatasourceView[],
-  emptyFolders: readonly string[] = [],
+  folders: readonly string[] = [],
 ): readonly TreeNode[] {
   const root = folder("", "");
-  for (const path of emptyFolders) ensure(root, path);
+  for (const path of folders) ensure(root, path);
   for (const datasource of datasources) {
     (datasource.folder === null ? root : ensure(root, datasource.folder)).datasources.push(datasource);
   }
@@ -89,13 +92,13 @@ export function visibleRows(
   });
 }
 
-/** Every folder path the datasources use, for the folder field's suggestions. */
-export function folderPaths(datasources: readonly DatasourceView[], emptyFolders: readonly string[] = []): string[] {
-  const paths = new Set<string>(emptyFolders);
+/** Every folder path the datasources use, A–Z, for the folder field's suggestions. */
+export function folderPaths(datasources: readonly DatasourceView[], folders: readonly string[] = []): string[] {
+  const paths = new Set<string>(folders);
   for (const { folder: path } of datasources) {
     if (path === null) continue;
-    const parts = path.split("/");
-    parts.forEach((_, index) => paths.add(parts.slice(0, index + 1).join("/")));
+    const parts = path.split(FOLDER_SEPARATOR);
+    parts.forEach((_, index) => paths.add(parts.slice(0, index + 1).join(FOLDER_SEPARATOR)));
   }
-  return [...paths].sort((a, b) => byName.compare(a, b));
+  return [...paths].sort(compareFolderPaths);
 }

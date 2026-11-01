@@ -732,125 +732,128 @@ of the stores; a disabled action shows greyed and does not run. An action whose 
 is false, because the plugin lacks the capability it needs, is left out of the palette and does not
 run either.
 
-| Action id                                | Title                                 | macOS    | Windows / Linux        |
-| ---------------------------------------- | ------------------------------------- | -------- | ---------------------- |
-| `console.run`                            | Run                                   | `⌘↩`     | `Ctrl+Enter`           |
-| `console.runAll`                         | Run All                               | `⇧⌘↩`    | `Ctrl+Shift+Enter`     |
-| `console.cancel`                         | Cancel                                |          |                        |
-| `console.gotoError`                      | Next Error                            | `F2`     | `F2`                   |
-| `console.gotoPreviousError`              | Previous Error                        | `⇧F2`    | `Shift+F2`             |
-| `console.showError`                      | Go to Error                           |          |                        |
-| `console.errorSkip`, `…SkipAll`          | Skip, Skip All Failed Statements      |          |                        |
-| `console.errorStop`, `…Retry`            | Stop at, Retry Failed Statement       |          |                        |
-| `console.explain`                        | Explain Plan                          | `⇧⌘E`    | `Ctrl+Shift+E`         |
-| `console.explainAnalyze`                 | Explain Analyse                       |          |                        |
-| `plan.rerun`, `plan.copy`                | Explain Again, Copy Raw Plan          |          |                        |
-| `plan.showTree`, `plan.showRaw`          | Show Plan Tree, Show Raw Plan         |          |                        |
-| `console.new`                            | New Console                           | `⇧⌘L`    | `Ctrl+Shift+L`         |
-| `file.open`                              | Open File…                            | `⌘O`     | `Ctrl+O`               |
-| `file.openRecent`                        | Recent Files…                         |          |                        |
-| `file.save`                              | Save                                  | `⌘S`     | `Ctrl+S`               |
-| `file.saveAs`                            | Save As…                              | `⇧⌘S`    | `Ctrl+Shift+S`         |
-| `console.rename`                         | Rename File…                          |          |                        |
-| `file.reload`, `file.keepMine`           | Reload from Disk, Keep My Changes     |          |                        |
-| `database.runSqlScript`                  | Run SQL Script…                       |          |                        |
-| `script.cancel`                          | Cancel SQL Script                     |          |                        |
-| `script.goTo`                            | Go to Failed Script Statement         |          |                        |
-| `script.dismiss`                         | Remove Finished SQL Script            |          |                        |
-| `script.skip`, `script.skipAll`          | Skip, Skip All Failed Script Stmts    |          |                        |
-| `script.stop`, `script.retry`            | Stop at, Retry Failed Script Stmt     |          |                        |
-| `transaction.commit`                     | Commit                                | `⌥⇧⌘↩`   | `Ctrl+Alt+Shift+Enter` |
-| `transaction.rollback`                   | Rollback                              |          |                        |
-| `transaction.toggleMode`                 | Toggle Transaction Mode (Auto/Manual) |          |                        |
-| `result.pin`                             | Pin Result Tab                        |          |                        |
-| `grid.fetchNextPage`                     | Fetch Next Page                       |          |                        |
-| `grid.fetchAll`                          | Fetch All                             |          |                        |
-| `grid.cancelFetch`                       | Cancel Fetch                          |          |                        |
-| `grid.rerun`                             | Rerun                                 | `⌘R` ²   | `Ctrl+R` ²             |
-| `grid.copy`                              | Copy                                  | `⌘C` ²   | `Ctrl+C` ²             |
-| `grid.selectAll`                         | Select All Rows                       | `⌘A` ²   | `Ctrl+A` ²             |
-| `grid.export`                            | Export Data…                          |          |                        |
-| `grid.toggleValuePanel`                  | Value Panel                           | `⇧↵` ²   | `Shift+Enter` ²        |
-| `grid.toggleJsonView`                    | Toggle JSON View                      | `⌥⌘J` ⁸  | `Ctrl+Alt+J` ⁸         |
-| `grid.setExtractor`                      | Choose Extractor                      |          |                        |
-| `grid.sort`, `grid.clearSort`            | Sort, Clear Sort                      |          |                        |
-| `grid.hideColumn`, `grid.showAllColumns` | Hide Column, Show All Columns         |          |                        |
-| `grid.copyColumnName`                    | Copy Column Name                      |          |                        |
-| `grid.find`                              | Find in Result                        | `⌘F` ⁵   | `Ctrl+F` ⁵             |
-| `grid.findNext`                          | Find Next                             | `↩` ⁶    | `Enter` ⁶              |
-| `grid.findPrevious`                      | Find Previous                         | `⇧↩` ⁶   | `Shift+Enter` ⁶        |
-| `grid.closeFind`                         | Close Find                            | `⎋` ⁶    | `Escape` ⁶             |
-| `grid.findMatchCase`                     | Match Case                            |          |                        |
-| `grid.findRegex`                         | Regular Expression                    |          |                        |
-| `grid.findWholeCell`                     | Whole Cell                            |          |                        |
-| `grid.filterRows`                        | Filter Rows                           |          |                        |
-| `grid.searchAll`                         | Search All Rows                       |          |                        |
-| `grid.filterByValue`                     | Local Filter: This Value              |          |                        |
-| `grid.excludeValue`                      | Local Filter: Exclude This Value      |          |                        |
-| `grid.filterIsNull`                      | Local Filter: Is NULL                 |          |                        |
-| `grid.filterIsNotNull`                   | Local Filter: Is Not NULL             |          |                        |
-| `grid.removeFilter`                      | Remove Local Filter                   |          |                        |
-| `grid.clearFilters`                      | Clear Local Filters                   |          |                        |
-| `tab.close`                              | Close Tab                             | `⌘W`     | `Ctrl+W`               |
-| `tab.closeOthers`                        | Close Other Tabs                      |          |                        |
-| `tab.closeAll`                           | Close All Tabs                        |          |                        |
-| `tab.next`                               | Select Next Tab                       | `⇧⌘]`    | `Ctrl+Shift+]`         |
-| `tab.previous`                           | Select Previous Tab                   | `⇧⌘[`    | `Ctrl+Shift+[`         |
-| `toolWindow.database.toggle`             | Database                              | `⌘1`     | `Ctrl+1`               |
-| `toolWindow.services.toggle`             | Services                              | `⌘8`     | `Ctrl+8`               |
-| `toolWindow.hideAll`                     | Hide All Tool Windows                 | `⇧⌘F12`  | `Ctrl+Shift+F12`       |
-| `focus.editor`                           | Back to Editor                        | `⎋`      | `Esc`                  |
-| `palette.findAction`                     | Find Action…                          | `⇧⌘A`    | `Ctrl+Shift+A`         |
-| `palette.searchEverywhere`               | Search Everywhere                     | `⇧⇧`     | Double Shift           |
-| `datasource.new`                         | New Data Source…                      | `⌘N` ¹   | `Ctrl+N` ¹             |
-| `datasource.import`                      | Import Data Sources…                  |          |                        |
-| `datasource.properties`                  | Data Source Properties…               | `⌘;`     | `Ctrl+;`               |
-| `datasource.switchTo`                    | Switch to Data Source                 |          |                        |
-| `datasource.duplicate`                   | Duplicate Data Source                 | `⌘D` ¹   | `Ctrl+D` ¹             |
-| `datasource.copyUrl`                     | Copy as URL                           |          |                        |
-| `datasource.delete`                      | Delete Data Source                    | `⌦` ¹    | `Delete` ¹             |
-| `datasource.connect`                     | Connect                               |          |                        |
-| `datasource.disconnect`                  | Disconnect                            | `⌘F2`    | `Ctrl+F2`              |
-| `datasource.newFolder`                   | New Folder…                           |          |                        |
-| `datasource.moveToFolder`                | Move to Folder…                       |          |                        |
-| `database.synchronize`                   | Synchronize                           | `⌥⌘Y`    | `Ctrl+Alt+Y`           |
-| `explorer.collapseAll`                   | Collapse All                          | `⌘-` ¹   | `Ctrl+-` ¹             |
-| `explorer.toggleSystemSchemas`           | Show System Schemas                   |          |                        |
-| `explorer.copyName`                      | Copy Qualified Name                   | `⌥⇧⌘C` ¹ | `Ctrl+Alt+Shift+C` ¹   |
-| `explorer.reveal`                        | Select in Database View               |          |                        |
-| `explorer.export`                        | Export Data…                          |          |                        |
-| `explorer.importIntoTable`               | Import Data from File…                |          |                        |
-| `explorer.importNewTable`                | Import Data into New Table…           |          |                        |
-| `explorer.newTable`                      | New Table…                            |          |                        |
-| `explorer.newSchema`                     | New Schema…                           |          |                        |
-| `explorer.newDatabase`                   | New Database…                         |          |                        |
-| `explorer.modifyTable`                   | Modify Table…                         | `⌘F6`    | `Ctrl+F6`              |
-| `explorer.renameObject`                  | Rename…                               | `⇧F6`    | `Shift+F6`             |
-| `explorer.truncateTable`                 | Truncate…                             |          |                        |
-| `explorer.dropObject`                    | Drop…                                 | `⌘⌫`     | `Ctrl+Backspace`       |
-| `history.show`                           | Query History…                        | `⌥⌘E`    | `Ctrl+Alt+E`           |
-| `history.clear`                          | Clear Query History…                  |          |                        |
-| `console.reopen`                         | Open Closed Console…                  |          |                        |
-| `services.cancel`                        | Cancel Running Statement              |          |                        |
-| `export.cancel`                          | Cancel Export                         |          |                        |
-| `export.retry`                           | Retry Export                          |          |                        |
-| `export.reveal`                          | Reveal Exported File                  |          |                        |
-| `export.dismiss`                         | Remove Finished Export                |          |                        |
-| `import.cancel`                          | Cancel Import                         |          |                        |
-| `import.resume`                          | Resume or Retry Import                |          |                        |
-| `import.revealRejected`                  | Reveal Rejected Rows                  |          |                        |
-| `import.dismiss`                         | Remove Finished Import                |          |                        |
-| `services.clearExecutions`               | Clear Executions                      |          |                        |
-| `services.copySql`                       | Copy Execution SQL                    |          |                        |
-| `services.openInConsole`                 | Open Execution in Console             |          |                        |
-| `services.expandAll`                     | Expand All                            | `⌘=` ⁷   | `Ctrl+=` ⁷             |
-| `services.collapseAll`                   | Collapse All                          | `⌘-` ⁷   | `Ctrl+-` ⁷             |
-| `settings.show`                          | Settings…                             | `⌘,`     | `Ctrl+,`               |
-| `editor.zoomIn`                          | Increase Editor Font Size             | `⌘=` ³   | `Ctrl+=` ³             |
-| `editor.zoomOut`                         | Decrease Editor Font Size             | `⌘-` ³   | `Ctrl+-` ³             |
-| `editor.zoomReset`                       | Reset Editor Font Size                | `⌘0` ³   | `Ctrl+0` ³             |
-| `app.mainMenu`                           | Main Menu                             |          | Alt alone ⁴            |
-| `app.relaunch`                           | Restart Now                           |          |                        |
+| Action id                                | Title                                 | macOS    | Windows / Linux         |
+| ---------------------------------------- | ------------------------------------- | -------- | ----------------------- |
+| `console.run`                            | Run                                   | `⌘↩`     | `Ctrl+Enter`            |
+| `console.runAll`                         | Run All                               | `⇧⌘↩`    | `Ctrl+Shift+Enter`      |
+| `console.cancel`                         | Cancel                                |          |                         |
+| `console.gotoError`                      | Next Error                            | `F2`     | `F2`                    |
+| `console.gotoPreviousError`              | Previous Error                        | `⇧F2`    | `Shift+F2`              |
+| `console.showError`                      | Go to Error                           |          |                         |
+| `console.errorSkip`, `…SkipAll`          | Skip, Skip All Failed Statements      |          |                         |
+| `console.errorStop`, `…Retry`            | Stop at, Retry Failed Statement       |          |                         |
+| `console.explain`                        | Explain Plan                          | `⇧⌘E`    | `Ctrl+Shift+E`          |
+| `console.explainAnalyze`                 | Explain Analyse                       |          |                         |
+| `plan.rerun`, `plan.copy`                | Explain Again, Copy Raw Plan          |          |                         |
+| `plan.showTree`, `plan.showRaw`          | Show Plan Tree, Show Raw Plan         |          |                         |
+| `console.new`                            | New Console                           | `⇧⌘L`    | `Ctrl+Shift+L`          |
+| `file.open`                              | Open File…                            | `⌘O`     | `Ctrl+O`                |
+| `file.openRecent`                        | Recent Files…                         |          |                         |
+| `file.save`                              | Save                                  | `⌘S`     | `Ctrl+S`                |
+| `file.saveAs`                            | Save As…                              | `⇧⌘S`    | `Ctrl+Shift+S`          |
+| `console.rename`                         | Rename File…                          |          |                         |
+| `file.reload`, `file.keepMine`           | Reload from Disk, Keep My Changes     |          |                         |
+| `database.runSqlScript`                  | Run SQL Script…                       |          |                         |
+| `script.cancel`                          | Cancel SQL Script                     |          |                         |
+| `script.goTo`                            | Go to Failed Script Statement         |          |                         |
+| `script.dismiss`                         | Remove Finished SQL Script            |          |                         |
+| `script.skip`, `script.skipAll`          | Skip, Skip All Failed Script Stmts    |          |                         |
+| `script.stop`, `script.retry`            | Stop at, Retry Failed Script Stmt     |          |                         |
+| `transaction.commit`                     | Commit                                | `⌥⇧⌘↩`   | `Ctrl+Alt+Shift+Enter`  |
+| `transaction.rollback`                   | Rollback                              |          |                         |
+| `transaction.toggleMode`                 | Toggle Transaction Mode (Auto/Manual) |          |                         |
+| `result.pin`                             | Pin Result Tab                        |          |                         |
+| `grid.fetchNextPage`                     | Fetch Next Page                       |          |                         |
+| `grid.fetchAll`                          | Fetch All                             |          |                         |
+| `grid.cancelFetch`                       | Cancel Fetch                          |          |                         |
+| `grid.rerun`                             | Rerun                                 | `⌘R` ²   | `Ctrl+R` ²              |
+| `grid.copy`                              | Copy                                  | `⌘C` ²   | `Ctrl+C` ²              |
+| `grid.selectAll`                         | Select All Rows                       | `⌘A` ²   | `Ctrl+A` ²              |
+| `grid.export`                            | Export Data…                          |          |                         |
+| `grid.toggleValuePanel`                  | Value Panel                           | `⇧↵` ²   | `Shift+Enter` ²         |
+| `grid.toggleJsonView`                    | Toggle JSON View                      | `⌥⌘J` ⁸  | `Ctrl+Alt+J` ⁸          |
+| `grid.setExtractor`                      | Choose Extractor                      |          |                         |
+| `grid.sort`, `grid.clearSort`            | Sort, Clear Sort                      |          |                         |
+| `grid.hideColumn`, `grid.showAllColumns` | Hide Column, Show All Columns         |          |                         |
+| `grid.copyColumnName`                    | Copy Column Name                      |          |                         |
+| `grid.find`                              | Find in Result                        | `⌘F` ⁵   | `Ctrl+F` ⁵              |
+| `grid.findNext`                          | Find Next                             | `↩` ⁶    | `Enter` ⁶               |
+| `grid.findPrevious`                      | Find Previous                         | `⇧↩` ⁶   | `Shift+Enter` ⁶         |
+| `grid.closeFind`                         | Close Find                            | `⎋` ⁶    | `Escape` ⁶              |
+| `grid.findMatchCase`                     | Match Case                            |          |                         |
+| `grid.findRegex`                         | Regular Expression                    |          |                         |
+| `grid.findWholeCell`                     | Whole Cell                            |          |                         |
+| `grid.filterRows`                        | Filter Rows                           |          |                         |
+| `grid.searchAll`                         | Search All Rows                       |          |                         |
+| `grid.filterByValue`                     | Local Filter: This Value              |          |                         |
+| `grid.excludeValue`                      | Local Filter: Exclude This Value      |          |                         |
+| `grid.filterIsNull`                      | Local Filter: Is NULL                 |          |                         |
+| `grid.filterIsNotNull`                   | Local Filter: Is Not NULL             |          |                         |
+| `grid.removeFilter`                      | Remove Local Filter                   |          |                         |
+| `grid.clearFilters`                      | Clear Local Filters                   |          |                         |
+| `tab.close`                              | Close Tab                             | `⌘W`     | `Ctrl+W`                |
+| `tab.closeOthers`                        | Close Other Tabs                      |          |                         |
+| `tab.closeAll`                           | Close All Tabs                        |          |                         |
+| `tab.next`                               | Select Next Tab                       | `⇧⌘]`    | `Ctrl+Shift+]`          |
+| `tab.previous`                           | Select Previous Tab                   | `⇧⌘[`    | `Ctrl+Shift+[`          |
+| `toolWindow.database.toggle`             | Database                              | `⌘1`     | `Ctrl+1`                |
+| `toolWindow.services.toggle`             | Services                              | `⌘8`     | `Ctrl+8`                |
+| `toolWindow.hideAll`                     | Hide All Tool Windows                 | `⇧⌘F12`  | `Ctrl+Shift+F12`        |
+| `focus.editor`                           | Back to Editor                        | `⎋`      | `Esc`                   |
+| `palette.findAction`                     | Find Action…                          | `⇧⌘A`    | `Ctrl+Shift+A`          |
+| `palette.searchEverywhere`               | Search Everywhere                     | `⇧⇧`     | Double Shift            |
+| `datasource.new`                         | New Data Source…                      | `⌘N` ¹   | `Ctrl+N` ¹              |
+| `datasource.import`                      | Import Data Sources…                  |          |                         |
+| `datasource.properties`                  | Data Source Properties…               | `⌘;`     | `Ctrl+;`                |
+| `datasource.switchTo`                    | Switch to Data Source                 |          |                         |
+| `datasource.duplicate`                   | Duplicate Data Source                 | `⌘D` ¹   | `Ctrl+D` ¹              |
+| `datasource.copyUrl`                     | Copy as URL                           |          |                         |
+| `datasource.delete`                      | Delete Data Source                    | `⌦` ¹    | `Delete` ¹              |
+| `datasource.connect`                     | Connect                               |          |                         |
+| `datasource.disconnect`                  | Disconnect                            | `⌘F2`    | `Ctrl+F2`               |
+| `datasource.newFolder`                   | New Folder…                           |          |                         |
+| `datasource.moveToFolder`                | Move to Folder…                       |          |                         |
+| `datasource.moveUp`                      | Move Up                               | `⌥⇧↑` ¹  | `Alt+Shift+ArrowUp` ¹   |
+| `datasource.moveDown`                    | Move Down                             | `⌥⇧↓` ¹  | `Alt+Shift+ArrowDown` ¹ |
+| `datasource.move` ⁹                      | Move Data Sources                     |          |                         |
+| `database.synchronize`                   | Synchronize                           | `⌥⌘Y`    | `Ctrl+Alt+Y`            |
+| `explorer.collapseAll`                   | Collapse All                          | `⌘-` ¹   | `Ctrl+-` ¹              |
+| `explorer.toggleSystemSchemas`           | Show System Schemas                   |          |                         |
+| `explorer.copyName`                      | Copy Qualified Name                   | `⌥⇧⌘C` ¹ | `Ctrl+Alt+Shift+C` ¹    |
+| `explorer.reveal`                        | Select in Database View               |          |                         |
+| `explorer.export`                        | Export Data…                          |          |                         |
+| `explorer.importIntoTable`               | Import Data from File…                |          |                         |
+| `explorer.importNewTable`                | Import Data into New Table…           |          |                         |
+| `explorer.newTable`                      | New Table…                            |          |                         |
+| `explorer.newSchema`                     | New Schema…                           |          |                         |
+| `explorer.newDatabase`                   | New Database…                         |          |                         |
+| `explorer.modifyTable`                   | Modify Table…                         | `⌘F6`    | `Ctrl+F6`               |
+| `explorer.renameObject`                  | Rename…                               | `⇧F6`    | `Shift+F6`              |
+| `explorer.truncateTable`                 | Truncate…                             |          |                         |
+| `explorer.dropObject`                    | Drop…                                 | `⌘⌫`     | `Ctrl+Backspace`        |
+| `history.show`                           | Query History…                        | `⌥⌘E`    | `Ctrl+Alt+E`            |
+| `history.clear`                          | Clear Query History…                  |          |                         |
+| `console.reopen`                         | Open Closed Console…                  |          |                         |
+| `services.cancel`                        | Cancel Running Statement              |          |                         |
+| `export.cancel`                          | Cancel Export                         |          |                         |
+| `export.retry`                           | Retry Export                          |          |                         |
+| `export.reveal`                          | Reveal Exported File                  |          |                         |
+| `export.dismiss`                         | Remove Finished Export                |          |                         |
+| `import.cancel`                          | Cancel Import                         |          |                         |
+| `import.resume`                          | Resume or Retry Import                |          |                         |
+| `import.revealRejected`                  | Reveal Rejected Rows                  |          |                         |
+| `import.dismiss`                         | Remove Finished Import                |          |                         |
+| `services.clearExecutions`               | Clear Executions                      |          |                         |
+| `services.copySql`                       | Copy Execution SQL                    |          |                         |
+| `services.openInConsole`                 | Open Execution in Console             |          |                         |
+| `services.expandAll`                     | Expand All                            | `⌘=` ⁷   | `Ctrl+=` ⁷              |
+| `services.collapseAll`                   | Collapse All                          | `⌘-` ⁷   | `Ctrl+-` ⁷              |
+| `settings.show`                          | Settings…                             | `⌘,`     | `Ctrl+,`                |
+| `editor.zoomIn`                          | Increase Editor Font Size             | `⌘=` ³   | `Ctrl+=` ³              |
+| `editor.zoomOut`                         | Decrease Editor Font Size             | `⌘-` ³   | `Ctrl+-` ³              |
+| `editor.zoomReset`                       | Reset Editor Font Size                | `⌘0` ³   | `Ctrl+0` ³              |
+| `app.mainMenu`                           | Main Menu                             |          | Alt alone ⁴             |
+| `app.relaunch`                           | Restart Now                           |          |                         |
 
 ¹ Only with focus in the Database tool window (`shortcutRegion`); elsewhere the key reaches the
 focused element. ² Only with focus in a result grid (region `grid`); in the editor and
@@ -866,6 +869,7 @@ stays CodeMirror's search.
 ⁷ Only with focus in the Services tool window (region `services`), so `⌘=` and `⌘-` still zoom the
 SQL editor and `⌘-` is still the Database tool window's Collapse All.
 ⁸ Only with focus in a result grid or its value panel (regions `grid`, `valuePanel`).
+⁹ Run by a drop in the Database tool window with a `MoveRequest`; not listed in Find Action.
 
 Shortcuts are declared as platform-neutral chords (`Mod+Shift+A`, `Shift Shift`) and dispatched by
 one capture-phase `keydown` listener on the window. A chord whose action is disabled reaches the
@@ -1992,7 +1996,8 @@ and changes them over `ipcRenderer.invoke`; main stays out of the request path.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
+  "folders": ["Docker", "Docker/Main"],
   "datasources": [
     {
       "id": "0b7c…",
@@ -2017,8 +2022,12 @@ and changes them over `ipcRenderer.invoke`; main stays out of the request path.
 
 `id` is a UUID. `folder` is a `/`-separated path or `null`. `color` is one of `red`, `orange`,
 `yellow`, `green`, `blue`, `violet` or `null`; the values are design tokens. `config` holds only
-the manifest's non-secret fields; a secret value is never in this file. An older `version` is
-migrated on load. A file that is not JSON, fails the schema, or has an unknown version is renamed to
+the manifest's non-secret fields; a secret value is never in this file. The Database tool window's
+order is stored (decision 145): `folders` lists every folder, empty ones too, each after its parent
+and in the order its level shows them, and the order of `datasources` is the order within each
+folder. Load adds any folder a datasource names and is missing, after the ones listed. An older
+`version` is migrated on load; version 1, which had no `folders`, becomes version 2 with each level
+sorted by name, the order it showed before. A file that is not JSON, fails the schema, or has an unknown version is renamed to
 `datasources.json.corrupt-<epoch ms>`, the list starts empty, and the Database tool window shows
 the reason once. Two optional keys sit beside `readOnly` (decision 054): `keepAliveSeconds`
 (0–7,200; absent means 30, 0 turns keepalive off) and `statementTimeoutSeconds` (0–86,400; absent
@@ -2214,7 +2223,19 @@ log child records counts only.
 
 ### Database tool window
 
-Datasources sit in folders, folders first, each level sorted by name. A node shows the plugin
+Datasources sit in folders, folders first, each level in the order the user arranged it
+(decision 145); a new datasource, folder or moved-in item goes last in its folder, and the
+`TABLE_CRAFT_DATASOURCE` one is pinned first and cannot move. Dragging a datasource or a folder
+moves it: the top or bottom half of a datasource row drops before or after it; a folder row's top
+and bottom quarter drop before and after it (or first inside when it is expanded), its middle half
+drops into it, last; below the last row drops at the end of the top level. A 2px accent line
+indented to the landing depth, or the folder highlighted, shows the target, a folder hovered for
+700 ms opens, and dragging near an edge scrolls. A folder never moves into itself, and a move that
+would land two folders of one name side by side is refused. Click selects one row, Mod+click adds
+or removes one, Shift+click and Shift+↑/↓ select a range of datasources and folders, Escape keeps
+only the lead; dragging a selected row drags the whole selection. Move to Folder… and Delete act
+on the selection, one confirmation for all of it; a folder deletes only with everything inside it
+selected. Move Up and Move Down (`Alt+Shift+↑/↓`) step the selection within its folder. A node shows the plugin
 icon, the name, the colour swatch, a lock when read-only, and its state: disconnected,
 connecting, connected, failed with the error, or "failed: engine exited". A toolbar carries New
 Data Source, Properties, Synchronize, Connect, Disconnect, New Console and Collapse All; each node's

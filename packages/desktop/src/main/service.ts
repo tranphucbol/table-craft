@@ -2,6 +2,14 @@ import { keyNeedsPassphrase, type QueryHistory } from "@table-craft/core";
 import { ConnectionUrlError, formatConnectionUrl, parseConnectionUrl } from "@table-craft/plugin-api";
 import type { ConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
 import type { DatasourceConfig, ProbeResult, SshTunnelConfig } from "@table-craft/desktop/engine/protocol.js";
+import {
+  arrange,
+  ArrangeError,
+  folderKeepingContent,
+  normalizeFolder,
+  normalizeFolders,
+  type MoveRequest,
+} from "@table-craft/desktop/datasourceTree/arrange.js";
 import { toDatasource, type DatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import type { HostRegistry } from "@table-craft/desktop/main/hosts.js";
 import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
@@ -13,6 +21,7 @@ import type {
   Datasource,
   DatasourceDraft,
   DatasourceList,
+  DeleteDatasourcesRequest,
   DatasourceView,
   LastServer,
   ParsedUrl,
@@ -67,7 +76,12 @@ export interface DatasourceService<Target> {
   save(request: SaveDatasourceRequest): Promise<DatasourceView>;
   /** Adds imported datasources in one write (plan 035); secret values go straight to the store. */
   importMany(items: readonly ImportedDatasource[]): Promise<string[]>;
-  delete(id: string): Promise<void>;
+  /** Deletes datasources and folders in one write; refuses a folder that would keep anything not deleted. */
+  delete(request: DeleteDatasourcesRequest): Promise<void>;
+  /** Applies one move in one write (plan 136); answers with each renamed folder, old path to new. */
+  move(request: MoveRequest): Promise<readonly (readonly [string, string])[]>;
+  /** Adds an empty folder last at its level and answers with its normalized path. */
+  createFolder(path: string): Promise<string>;
   test(request: SaveDatasourceRequest): Promise<ProbeResult>;
   /** Reads a pasted URL for the plugin's form; the password comes back only to fill the field it was pasted for. */
   parseUrl(pluginId: string, url: string): ParsedUrl;
@@ -202,6 +216,7 @@ export async function createDatasourceService<Target>(
   const { store, secrets, hosts } = options;
   const loaded = await store.load();
   let datasources: Datasource[] = [...loaded.datasources];
+  let folders: string[] = normalizeFolders(loaded.folders, loaded.datasources);
   let warning = loaded.warning;
   /** Secrets typed at the prompt for a connection not yet known to work, by datasource. */
   const unconfirmed = new Map<string, Readonly<Record<string, string>>>();
@@ -224,9 +239,24 @@ export async function createDatasourceService<Target>(
     const views = datasources.map((datasource) => view(datasource, false));
     return {
       datasources: ephemeral === null ? views : [view(ephemeral, true), ...views],
+      folders,
       warning,
       encryption: secrets.encryption(),
     };
+  }
+
+  /** Every write keeps each datasource's folder and its ancestors in `folders` (decision 145). */
+  async function write(): Promise<void> {
+    folders = normalizeFolders(folders, datasources);
+    await store.save({ folders, datasources });
+  }
+
+  function refuseEphemeral(id: string, action: "moved" | "deleted"): void {
+    if (ephemeral?.id !== id) return;
+    throw new DatasourceError(
+      `This data source comes from TABLE_CRAFT_DATASOURCE and cannot be ${action}.`,
+      action === "moved" ? "It stays first; move the others around it." : "Unset the variable and restart.",
+    );
   }
 
   function changed(): void {
@@ -354,8 +384,12 @@ export async function createDatasourceService<Target>(
     for (const key of Object.keys(previous?.secretModes ?? {})) {
       if (modes[key] === undefined) await secrets.clear(id, key);
     }
-    datasources = previous === undefined ? [...datasources, next] : datasources.map((d) => (d.id === id ? next : d));
-    await store.save(datasources);
+    // A new datasource, or one given another folder in the dialog, goes last in its folder.
+    datasources =
+      previous !== undefined && previous.folder === next.folder
+        ? datasources.map((d) => (d.id === id ? next : d))
+        : [...datasources.filter((d) => d.id !== id), next];
+    await write();
     changed();
     return view(next, false);
   }
@@ -375,27 +409,69 @@ export async function createDatasourceService<Target>(
     }
     if (added.length === 0) return [];
     datasources = [...datasources, ...added];
-    await store.save(datasources);
+    await write();
     changed();
     return added.map((datasource) => datasource.id);
   }
 
-  async function remove(id: string): Promise<void> {
-    if (ephemeral?.id === id) {
-      throw new DatasourceError(
-        "This data source comes from TABLE_CRAFT_DATASOURCE and cannot be deleted.",
-        "Unset the variable and restart.",
-      );
+  async function remove(request: DeleteDatasourcesRequest): Promise<void> {
+    for (const id of request.ids) {
+      refuseEphemeral(id, "deleted");
+      find(id);
     }
-    find(id);
-    unconfirmed.delete(id);
-    await hosts.stop(id);
-    await secrets.clearAll(id);
-    datasources = datasources.filter((datasource) => datasource.id !== id);
-    await store.save(datasources);
-    await options.consoles.deleteAll(id);
-    options.history.clear(id);
+    for (const path of request.folders) {
+      if (!folders.includes(path))
+        throw new DatasourceError(`No folder "${path}".`, "It may have been deleted; try again.");
+    }
+    const kept = folderKeepingContent({ folders, datasources }, request.ids, request.folders);
+    if (kept !== null) {
+      throw new DatasourceError(`Folder "${kept}" is not empty.`, "Select what is in it too, or move it out first.");
+    }
+    for (const id of request.ids) {
+      unconfirmed.delete(id);
+      await hosts.stop(id);
+      await secrets.clearAll(id);
+    }
+    const ids = new Set(request.ids);
+    const gone = new Set(request.folders);
+    datasources = datasources.filter((datasource) => !ids.has(datasource.id));
+    folders = folders.filter((path) => !gone.has(path));
+    await write();
+    for (const id of request.ids) {
+      await options.consoles.deleteAll(id);
+      options.history.clear(id);
+    }
     changed();
+  }
+
+  async function move(request: MoveRequest): Promise<readonly (readonly [string, string])[]> {
+    for (const item of request.items) if (item.kind === "datasource") refuseEphemeral(item.id, "moved");
+    if (request.before?.kind === "datasource") refuseEphemeral(request.before.id, "moved");
+    let arranged;
+    try {
+      arranged = arrange({ folders, datasources }, request);
+    } catch (cause) {
+      if (cause instanceof ArrangeError) throw new DatasourceError(cause.message, cause.hint);
+      throw cause;
+    }
+    if (!arranged.changed) return [];
+    folders = [...arranged.folders];
+    datasources = [...arranged.datasources];
+    await write();
+    changed();
+    return [...arranged.renamed];
+  }
+
+  async function createFolder(path: string): Promise<string> {
+    const normalized = normalizeFolder(path);
+    if (normalized === null) {
+      throw new DatasourceError("Give the folder a name.", "Type a name, or / to nest one, as in Docker/Main.");
+    }
+    if (folders.includes(normalized)) return normalized;
+    folders = [...folders, normalized];
+    await write();
+    changed();
+    return normalized;
   }
 
   function checkTunnel(ssh: SshSettings | undefined): void {
@@ -563,7 +639,7 @@ export async function createDatasourceService<Target>(
     const { agentAccess: _previous, ...rest } = previous;
     const next: Datasource = access === "off" ? rest : { ...rest, agentAccess: access };
     datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
-    await store.save(datasources);
+    await write();
     changed();
   }
 
@@ -576,7 +652,7 @@ export async function createDatasourceService<Target>(
       ...(policy.timeoutSeconds === null ? {} : { agentTimeoutSeconds: policy.timeoutSeconds }),
     };
     datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
-    await store.save(datasources);
+    await write();
     changed();
   }
 
@@ -597,7 +673,7 @@ export async function createDatasourceService<Target>(
     }
     const next: Datasource = { ...previous, ...(brand === undefined ? {} : { brand }), lastServer: seen.lastServer };
     datasources = datasources.map((datasource) => (datasource.id === datasourceId ? next : datasource));
-    await store.save(datasources);
+    await write();
     changed();
   }
 
@@ -607,6 +683,8 @@ export async function createDatasourceService<Target>(
     save,
     importMany,
     delete: remove,
+    move,
+    createFolder,
     test,
     parseUrl,
     url: urlOf,

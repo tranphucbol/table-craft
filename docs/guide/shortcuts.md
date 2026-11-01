@@ -40,6 +40,8 @@ See [Shell and actions](../design/specification.md#shell-and-actions).
 | New Data Source…          | `⌘N`    | `Ctrl+N`               |
 | Data Source Properties…   | `⌘;`    | `Ctrl+;`               |
 | Disconnect                | `⌘F2`   | `Ctrl+F2`              |
+| Move Up                   | `⌥⇧↑`   | `Alt+Shift+ArrowUp`    |
+| Move Down                 | `⌥⇧↓`   | `Alt+Shift+ArrowDown`  |
 | Synchronize               | `⌥⌘Y`   | `Ctrl+Alt+Y`           |
 | Modify Table…             | `⌘F6`   | `Ctrl+F6`              |
 | Rename…                   | `⇧F6`   | `Shift+F6`             |

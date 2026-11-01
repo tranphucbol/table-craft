@@ -17,7 +17,9 @@ import {
   type PluginInfo,
   type PluginsState,
 } from "@table-craft/desktop/preload/bridge.js";
+import type { TreeItemRef } from "@table-craft/desktop/datasourceTree/arrange.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { itemOf, remapSelection, type TreeSelectionState } from "@table-craft/desktop/renderer/model/treeSelection.js";
 import {
   connectEngine,
   EngineRequestError,
@@ -75,14 +77,21 @@ export interface DatasourcesState {
   readonly encryption: DatasourceList["encryption"];
   readonly warning: string | null;
   readonly connections: Readonly<Record<string, Connection>>;
+  /** The lead of the Database pane's selection: what single-target actions and the keyboard follow. */
   readonly selection: TreeSelection | null;
-  /** Folders made with New Folder that hold no datasource yet; they live until restart. */
-  readonly emptyFolders: readonly string[];
+  /** Every selected datasource and folder while more than one is (plan 136); empty otherwise. */
+  readonly multi: readonly TreeItemRef[];
+  readonly anchor: TreeItemRef | null;
+  /** Every folder in the stored order, ancestors first, empty ones included. */
+  readonly folders: readonly string[];
   readonly applyList: (list: DatasourceList) => void;
   readonly setPlugins: (plugins: readonly PluginInfo[]) => void;
   readonly applyPlugins: (state: PluginsState) => void;
+  /** Selects one row, dropping any other. */
   readonly select: (selection: TreeSelection | null) => void;
-  readonly addFolder: (path: string) => void;
+  readonly setTreeSelection: (next: TreeSelectionState) => void;
+  /** Makes the selection follow folders a move renamed. */
+  readonly renameFolders: (renamed: ReadonlyMap<string, string>) => void;
   /** Starts the engine if needed, checks it with one session, and resolves with its client. */
   readonly connect: (id: string) => Promise<EngineClient>;
   readonly disconnect: (id: string) => Promise<void>;
@@ -232,7 +241,9 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       warning: null,
       connections: {},
       selection: null,
-      emptyFolders: [],
+      multi: [],
+      anchor: null,
+      folders: [],
 
       applyList(list) {
         const known = new Set(list.datasources.map((datasource) => datasource.id));
@@ -240,16 +251,20 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
           .datasources.map((datasource) => datasource.id)
           .filter((id) => !known.has(id));
         const connections = Object.fromEntries(Object.entries(get().connections).filter(([id]) => known.has(id)));
-        const usedFolders = new Set(list.datasources.flatMap((datasource) => folderAncestors(datasource.folder)));
-        const { selection } = get();
+        const folders = new Set(list.folders);
+        const { lead, multi, anchor } = remapSelection(treeSelectionOf(get()), new Map(), (item) =>
+          item.kind === "folder" ? folders.has(item.path) : known.has(item.id),
+        );
         set({
           loaded: true,
           datasources: list.datasources,
+          folders: list.folders,
           encryption: list.encryption,
           warning: list.warning ?? get().warning,
           connections,
-          emptyFolders: get().emptyFolders.filter((path) => !usedFolders.has(path)),
-          selection: selection !== null && selection.kind !== "folder" && !known.has(selection.id) ? null : selection,
+          selection: lead,
+          multi,
+          anchor,
         });
         for (const id of removed) detach(id, null);
         if (removed.length > 0) for (const listener of removedListeners) listener(removed);
@@ -264,12 +279,17 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       },
 
       select(selection) {
-        set({ selection });
+        set({ selection, multi: [], anchor: itemOf(selection) });
       },
 
-      addFolder(path) {
-        if (get().emptyFolders.includes(path)) return;
-        set({ emptyFolders: [...get().emptyFolders, path] });
+      setTreeSelection({ lead, multi, anchor }) {
+        set({ selection: lead, multi, anchor });
+      },
+
+      renameFolders(renamed) {
+        if (renamed.size === 0) return;
+        const { lead, multi, anchor } = remapSelection(treeSelectionOf(get()), renamed, () => true);
+        set({ selection: lead, multi, anchor });
       },
 
       connect(id) {
@@ -356,11 +376,8 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
 
 export type DatasourcesStore = ReturnType<typeof createDatasourcesStore>;
 
-/** `Docker/Main` → `Docker`, `Docker/Main`. */
-export function folderAncestors(folder: string | null): readonly string[] {
-  if (folder === null) return [];
-  const parts = folder.split("/");
-  return parts.map((_, index) => parts.slice(0, index + 1).join("/"));
+export function treeSelectionOf(state: Pick<DatasourcesState, "selection" | "multi" | "anchor">): TreeSelectionState {
+  return { lead: state.selection, multi: state.multi, anchor: state.anchor };
 }
 
 export const useDatasources = createDatasourcesStore({

@@ -12,10 +12,17 @@ import {
   settleTransactions,
 } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import {
+  folderKeepingContent,
+  type MoveRequest,
+  type TreeItemRef,
+} from "@table-craft/desktop/datasourceTree/arrange.js";
+import {
   askMoveToFolder,
   askNewFolder,
-  deleteDatasource,
+  deleteItems,
+  moveItems,
 } from "@table-craft/desktop/renderer/actions/datasourceCommands.js";
+import { arrangeTreeOf, stepRequest, type StepDirection } from "@table-craft/desktop/renderer/model/treeDrop.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
@@ -78,6 +85,9 @@ export const ACTION_IDS = {
   disconnect: "datasource.disconnect",
   newFolder: "datasource.newFolder",
   moveToFolder: "datasource.moveToFolder",
+  moveItems: "datasource.move",
+  moveUp: "datasource.moveUp",
+  moveDown: "datasource.moveDown",
   manageShownSchemas: "datasource.manageShownSchemas",
   synchronize: "database.synchronize",
   collapseAll: "explorer.collapseAll",
@@ -120,6 +130,26 @@ const listsNamespaces = (context: ActionContext) =>
   isSaved(context) && context.datasource?.capabilities.includes("schemaTree") === true;
 const isLive = (context: ActionContext) =>
   context.datasource?.connection.status === "connected" || context.datasource?.connection.status === "connecting";
+
+function isEphemeral(context: ActionContext, item: TreeItemRef): boolean {
+  return item.kind === "datasource" && context.datasources.some((view) => view.id === item.id && view.ephemeral);
+}
+/** Something selected, and none of it the datasource from the environment, which never moves (decision 018). */
+const canMoveItems = (context: ActionContext) =>
+  context.items.length > 0 && !context.items.some((item) => isEphemeral(context, item));
+/** As `canMoveItems`, and no selected folder would keep something left out of the selection. */
+const canDeleteItems = (context: ActionContext) =>
+  canMoveItems(context) &&
+  folderKeepingContent(
+    arrangeTreeOf(context.datasources, context.folders),
+    context.items.flatMap((item) => (item.kind === "datasource" ? [item.id] : [])),
+    context.items.flatMap((item) => (item.kind === "folder" ? [item.path] : [])),
+  ) === null;
+
+function stepOf(context: ActionContext, direction: StepDirection): MoveRequest | null {
+  if (!context.inDatabasePane || !canMoveItems(context)) return null;
+  return stepRequest(arrangeTreeOf(context.datasources, context.folders), context.items, direction);
+}
 
 /** The folder New Folder and New Data Source put things in: the selected one, or the selected datasource's. */
 function selectedFolder(context: ActionContext): string | null {
@@ -458,7 +488,9 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     category: "Navigation",
     shortcut: "Escape",
     shortcutRegion: ["database", "services", "log"],
-    when: (context) => inToolWindow(context) && !context.speedSearching,
+    // A first Escape in the Database pane drops a multiple selection to its lead (plan 136).
+    when: (context) =>
+      inToolWindow(context) && !context.speedSearching && !(context.focus === "database" && context.items.length > 1),
     run: () => focusRegion("editor"),
   }),
   defineAction({
@@ -546,10 +578,8 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     icon: "delete",
     shortcut: "Delete",
     shortcutRegion: "database",
-    when: isSaved,
-    run: async (context) => {
-      if (context.datasource !== null) await deleteDatasource(context.datasource.view);
-    },
+    when: canDeleteItems,
+    run: (context) => deleteItems(context.items),
   }),
   defineAction({
     id: ACTION_IDS.connect,
@@ -589,9 +619,40 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     id: ACTION_IDS.moveToFolder,
     title: "Move to Folder…",
     category: "Database",
-    when: isSaved,
+    when: canMoveItems,
+    run: (context) => askMoveToFolder(context.items),
+  }),
+  defineAction<MoveRequest>({
+    id: ACTION_IDS.moveItems,
+    title: "Move Data Sources",
+    category: "Database",
+    inPalette: false,
+    run: async (_context, request) => {
+      await moveItems(request);
+    },
+  }),
+  defineAction({
+    id: ACTION_IDS.moveUp,
+    title: "Move Up",
+    category: "Database",
+    shortcut: "Alt+Shift+ArrowUp",
+    shortcutRegion: "database",
+    when: (context) => stepOf(context, "up") !== null,
     run: async (context) => {
-      if (context.datasource !== null) await askMoveToFolder(context.datasource.view);
+      const request = stepOf(context, "up");
+      if (request !== null) await moveItems(request);
+    },
+  }),
+  defineAction({
+    id: ACTION_IDS.moveDown,
+    title: "Move Down",
+    category: "Database",
+    shortcut: "Alt+Shift+ArrowDown",
+    shortcutRegion: "database",
+    when: (context) => stepOf(context, "down") !== null,
+    run: async (context) => {
+      const request = stepOf(context, "down");
+      if (request !== null) await moveItems(request);
     },
   }),
   defineAction({

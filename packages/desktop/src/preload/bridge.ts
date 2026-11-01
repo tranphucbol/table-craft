@@ -4,6 +4,7 @@
  * their originals by `test/desktop/protocol.test.ts`.
  */
 import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
+import type { MoveRequest } from "@table-craft/desktop/datasourceTree/arrange.js";
 import type {
   Capability,
   HostKeyOffer,
@@ -68,7 +69,9 @@ export const INVOKE_CHANNELS = {
   applyAccessSecret: "table-craft:access-secret.apply",
   listDatasources: "table-craft:datasources.list",
   saveDatasource: "table-craft:datasources.save",
-  deleteDatasource: "table-craft:datasources.delete",
+  deleteDatasources: "table-craft:datasources.delete",
+  moveDatasources: "table-craft:datasources.move",
+  createDatasourceFolder: "table-craft:datasources.create-folder",
   testDatasource: "table-craft:datasources.test",
   parseDatasourceUrl: "table-craft:datasources.parse-url",
   datasourceUrl: "table-craft:datasources.url",
@@ -472,7 +475,10 @@ export interface DatasourceView extends Datasource {
 }
 
 export interface DatasourceList {
+  /** Saved datasources in their stored order, after the ephemeral one when there is one. */
   readonly datasources: readonly DatasourceView[];
+  /** Every folder path, empty ones included; siblings in the order the tree shows them (decision 145). */
+  readonly folders: readonly string[];
   /** Set once when `datasources.json` could not be read and was backed up. */
   readonly warning: string | null;
   /** Whether Forever can be offered; when not, why (decision 020). */
@@ -485,6 +491,12 @@ export type SecretChange =
 
 /** A datasource from the dialog; `id` is absent for a new one. */
 export type DatasourceDraft = Omit<Datasource, "id"> & { readonly id?: string | undefined };
+
+/** Datasources and folders deleted together; a folder goes only when nothing else is left in it. */
+export interface DeleteDatasourcesRequest {
+  readonly ids: readonly string[];
+  readonly folders: readonly string[];
+}
 
 export interface SaveDatasourceRequest {
   readonly datasource: DatasourceDraft;
@@ -655,7 +667,11 @@ export interface TableCraftBridge {
   applyAccessSecret(request: AccessSecretRequest): Promise<InvokeResult<null>>;
   listDatasources(): Promise<InvokeResult<DatasourceList>>;
   saveDatasource(request: SaveDatasourceRequest): Promise<InvokeResult<DatasourceView>>;
-  deleteDatasource(id: string): Promise<InvokeResult<null>>;
+  deleteDatasources(request: DeleteDatasourcesRequest): Promise<InvokeResult<null>>;
+  /** Moves datasources and folders in one write (plan 136); answers with the folders it renamed, old path to new. */
+  moveDatasources(request: MoveRequest): Promise<InvokeResult<readonly (readonly [string, string])[]>>;
+  /** Adds an empty folder last at its level; a path that exists already is left as it is. */
+  createDatasourceFolder(path: string): Promise<InvokeResult<string>>;
   /** Test Connection: a throwaway engine connects once; stored secrets are merged in main. */
   testDatasource(request: SaveDatasourceRequest): Promise<InvokeResult<ProbeResult>>;
   /** Reads a pasted connection URL with the plugin's manifest (decision 055); fails with what it expected. */

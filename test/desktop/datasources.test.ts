@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  createDatasourceStore,
-  DATASOURCES_FILE,
-  normalizeFolder,
-  toDatasource,
-} from "@table-craft/desktop/main/datasources.js";
+import { normalizeFolder } from "@table-craft/desktop/datasourceTree/arrange.js";
+import { createDatasourceStore, DATASOURCES_FILE, toDatasource } from "@table-craft/desktop/main/datasources.js";
 import type { Datasource } from "@table-craft/desktop/preload/bridge.js";
 import { POSTGRES_MANIFEST } from "../support/manifests.js";
 import { memoryFiles } from "../support/memoryFiles.js";
@@ -31,23 +27,23 @@ function store(files = memoryFiles()) {
 
 describe("datasource store", () => {
   it("givenNoFile_whenLoaded_thenEmptyWithoutWarning", async () => {
-    expect(await store().store.load()).toEqual({ datasources: [], warning: null });
+    expect(await store().store.load()).toEqual({ folders: [], datasources: [], warning: null });
   });
 
-  it("givenDatasourcesFileV1_whenLoaded_thenRoundTrips", async () => {
+  it("givenDatasourcesFile_whenSavedAndLoaded_thenRoundTrips", async () => {
     const { files, store: first } = store();
-    await first.save([LOCAL_PG]);
+    await first.save({ folders: [], datasources: [LOCAL_PG] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
-    expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({ version: 1 });
-    expect(reloaded).toEqual({ datasources: [LOCAL_PG], warning: null });
+    expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({ version: 2 });
+    expect(reloaded).toEqual({ folders: ["Docker", "Docker/Main"], datasources: [LOCAL_PG], warning: null });
   });
 
   it("givenKeepAliveAndTimeout_whenSavedAndLoaded_thenRoundTrip", async () => {
     const { files, store: first } = store();
     const tuned = { ...LOCAL_PG, keepAliveSeconds: 0, statementTimeoutSeconds: 120 };
-    await first.save([tuned]);
+    await first.save({ folders: [], datasources: [tuned] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -63,7 +59,7 @@ describe("datasource store", () => {
       agentAccess: "read" as const,
       agentTimeoutSeconds: 15,
     };
-    await first.save([tuned]);
+    await first.save({ folders: [], datasources: [tuned] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -77,7 +73,7 @@ describe("datasource store", () => {
   it("givenLoadKeysOnDemand_whenSaveAndLoad_thenRoundTrips", async () => {
     const { files, store: first } = store();
     const onDemand = { ...LOCAL_PG, loadKeysOnDemand: true as const };
-    await first.save([onDemand]);
+    await first.save({ folders: [], datasources: [onDemand] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -89,7 +85,7 @@ describe("datasource store", () => {
 
   it("givenFileWithoutLoadKeysOnDemand_whenLoad_thenAbsent", async () => {
     const { files, store: first } = store();
-    await first.save([LOCAL_PG]);
+    await first.save({ folders: [], datasources: [LOCAL_PG] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -102,12 +98,12 @@ describe("datasource store", () => {
   it("givenAskReads_whenSavedAndReloaded_thenKept", async () => {
     const { files, store: first } = store();
     const asking = { ...LOCAL_PG, agentAccess: "askReads" as const };
-    await first.save([asking]);
+    await first.save({ folders: [], datasources: [asking] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
     expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({ datasources: [{ agentAccess: "askReads" }] });
-    expect(reloaded).toEqual({ datasources: [asking], warning: null });
+    expect(reloaded).toEqual({ folders: ["Docker", "Docker/Main"], datasources: [asking], warning: null });
     expect(toDatasource(asking, LOCAL_PG.id, POSTGRES_MANIFEST.connection.fields)).toMatchObject({
       agentAccess: "askReads",
     });
@@ -116,7 +112,7 @@ describe("datasource store", () => {
   it("givenShownNamespaces_whenSavedAndLoaded_thenRoundTrip", async () => {
     const { files, store: first } = store();
     const filtered = { ...LOCAL_PG, shownNamespaces: ["table_craft", "shop"] };
-    await first.save([filtered, LOCAL_PG]);
+    await first.save({ folders: [], datasources: [filtered, LOCAL_PG] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -136,7 +132,7 @@ describe("datasource store", () => {
   it("givenBrand_whenDatasourcesSavedAndLoaded_thenKept", async () => {
     const { files, store: first } = store();
     const tidb = { ...LOCAL_PG, pluginId: "mysql", brand: "tidb" };
-    await first.save([tidb, LOCAL_PG]);
+    await first.save({ folders: [], datasources: [tidb, LOCAL_PG] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -157,7 +153,7 @@ describe("datasource store", () => {
       },
     } as const satisfies Datasource;
     const sqlite = { ...LOCAL_PG, id: "lite", lastServer: { version: "3.46.0", seenAt: NOW } };
-    await first.save([seen, sqlite, LOCAL_PG]);
+    await first.save({ folders: [], datasources: [seen, sqlite, LOCAL_PG] });
 
     const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
 
@@ -206,7 +202,7 @@ describe("datasource store", () => {
   });
 
   it("givenFileFromNewerVersion_whenLoaded_thenSetAsideRatherThanMisread", async () => {
-    const newer = JSON.stringify({ version: 2, datasources: [] });
+    const newer = JSON.stringify({ version: 3, folders: [], datasources: [] });
     const loaded = await store(memoryFiles({ [PATH]: newer })).store.load();
 
     expect(loaded.warning).toContain("version");
@@ -214,14 +210,65 @@ describe("datasource store", () => {
 
   it("givenSaveWrite_whenProcessDiesMidWrite_thenPreviousFileIntact", async () => {
     const { files, store: saving } = store();
-    await saving.save([LOCAL_PG]);
+    await saving.save({ folders: [], datasources: [LOCAL_PG] });
     const before = files.contents.get(PATH);
     files.dieDuringNextWrite();
 
-    await expect(saving.save([])).rejects.toThrow("killed mid-write");
+    await expect(saving.save({ folders: [], datasources: [] })).rejects.toThrow("killed mid-write");
 
     expect(files.contents.get(PATH)).toBe(before);
     expect((await saving.load()).datasources).toEqual([LOCAL_PG]);
+  });
+});
+
+describe("datasource order (plan 136)", () => {
+  const named = (name: string, folder: string | null): Datasource => ({ ...LOCAL_PG, id: name, name, folder });
+  const VERSION_1 = JSON.stringify({
+    version: 1,
+    datasources: [
+      named("prod 10", "Prod/EU"),
+      named("dev", null),
+      named("prod 2", "Prod/EU"),
+      named("Alpha", "Archive"),
+    ],
+  });
+
+  it("givenVersion1File_whenLoaded_thenDatasourcesAreInNameOrderAndFoldersAreAToZ", async () => {
+    const loaded = await store(memoryFiles({ [PATH]: VERSION_1 })).store.load();
+
+    expect(loaded.warning).toBeNull();
+    expect(loaded.datasources.map((datasource) => datasource.name)).toEqual(["Alpha", "dev", "prod 2", "prod 10"]);
+    expect(loaded.folders).toEqual(["Archive", "Prod", "Prod/EU"]);
+  });
+
+  it("givenVersion1File_whenLoadedAndSaved_thenTheFileIsVersion2", async () => {
+    const { files, store: upgrading } = store(memoryFiles({ [PATH]: VERSION_1 }));
+
+    await upgrading.save(await upgrading.load());
+
+    expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({
+      version: 2,
+      folders: ["Archive", "Prod", "Prod/EU"],
+    });
+  });
+
+  it("givenVersion2File_whenRoundTripped_thenFolderAndDatasourceOrderSurvive", async () => {
+    const { store: first, files } = store();
+    const datasources = [named("b", "Z"), named("a", "Y"), named("c", null)];
+    await first.save({ folders: ["Z", "Y"], datasources });
+
+    const reloaded = await createDatasourceStore({ directory: DIRECTORY, files }).load();
+
+    expect(reloaded.folders).toEqual(["Z", "Y"]);
+    expect(reloaded.datasources).toEqual(datasources);
+  });
+
+  it("givenVersion2FileMissingAFolder_whenLoaded_thenTheFolderIsAppended", async () => {
+    const file = JSON.stringify({ version: 2, folders: ["Z"], datasources: [named("a", "Y/Deep")] });
+
+    const loaded = await store(memoryFiles({ [PATH]: file })).store.load();
+
+    expect(loaded.folders).toEqual(["Z", "Y", "Y/Deep"]);
   });
 });
 

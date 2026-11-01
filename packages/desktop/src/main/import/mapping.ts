@@ -1,5 +1,5 @@
 import { ConnectionUrlError, parseConnectionUrl, type ConnectionForm } from "@table-craft/plugin-api";
-import { normalizeFolder } from "@table-craft/desktop/main/datasources.js";
+import { normalizeFolder } from "@table-craft/desktop/datasourceTree/arrange.js";
 import { pluginUrl, urlScheme } from "@table-craft/desktop/main/import/jdbc.js";
 import { catalogEntryForScheme } from "@table-craft/desktop/main/pluginStore/catalog.js";
 import type { ForeignApp, ForeignConnection, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
