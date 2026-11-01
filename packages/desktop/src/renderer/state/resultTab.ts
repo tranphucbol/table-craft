@@ -82,6 +82,8 @@ export interface ResultTab extends ResultState {
   readonly pinned: boolean;
   /** The page size and cap it ran with; a settings change applies to the next statement (decision 032). */
   readonly paging: ResultPaging;
+  /** Its page size came from the console's Run Settings, not Settings (plan 141). */
+  readonly pagedByConsole?: boolean;
   readonly search: ResultSearch;
   /** The engine's view of the rows while a find query or a chip is set; null shows every held row. */
   readonly view: ViewState | null;
