@@ -90,8 +90,8 @@ See [SQL console](../design/specification.md#sql-console).
 **Find in Console** (`⌘F`) opens a find bar above the console's text, as DataGrip does; **Replace
 in Console** (`⌘R`) adds a replace row under it. A short selection becomes the query, and a
 selection over several lines turns on **In Selection**, so the search and Replace All stay inside
-it, shaded in the text. Typing selects the nearest match from the caret, and the counter reads `2/7`, `7 results`, or
-`0 results` in red; counting stops at 10,000.
+it, shaded in the text. Typing selects the nearest match from the caret, and the counter reads `2/7`, `?/7` while the
+caret is off a match, or `0/0` in red; counting stops at 10,000 (`1/10,000+`).
 
 - `Cc`, `W` and `.*` inside the field (`⌥C`, `⌥W`, `⌥X`) turn on Match Case, whole Words and Regex. The query is
   literal until `.*` is on, so `\n` finds a backslash and an `n`; with Regex on it finds a line
