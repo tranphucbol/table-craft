@@ -5,6 +5,10 @@
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/030 bun run test:smoke:db
  *
+ * Plan 140's `IN` list scenarios capture into their own folder:
+ *
+ *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/140 bun run test:smoke:db:headless test/e2e/alignedFormat.smoke.test.ts
+ *
  * The MySQL scenarios create the empty table the reference query explains and drop it afterwards.
  */
 import type { Page } from "playwright-core";
@@ -37,6 +41,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("030");
+const captureInList = evidenceFor("140");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -61,6 +66,8 @@ const MIXED_SCRIPT =
 const ALIASES = "select c.id as id, c.name as customer_name from customers c";
 const SELECTION_FIRST = "SELECT 1 AS untouched;";
 const SELECTION_SECOND = "select id, name from customers where id = 1 and name like 'G%';";
+const IN_LIST = "select * from orders where order_id in (1001, 1002, 1003);";
+const NOT_IN_AND_SINGLE = "select * from orders where status not in ('NEW', 'PAID', 'SHIPPED') and order_id in (1001);";
 
 function languageOf(plugin: DatasourcePlugin): SqlLanguage {
   if (plugin.language === undefined) throw new Error(`the plugin has no language`);
@@ -242,6 +249,37 @@ describe.runIf(DATABASES_ENABLED)("Aligned Reformat Code live test", () => {
       await closeSettings(page);
       await reformat(page, "SELECT c.id AS id,\n       c.name AS customer_name\nFROM customers c");
       await captureWindow(page, "aligned-settings-no-padding");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenAnInList_onMysql_whenModAltL_thenOneValuePerLineUnderTheFirst",
+    async () => {
+      const page = await launch(MYSQL);
+      await typeStatement(page, IN_LIST);
+
+      await reformat(
+        page,
+        "SELECT *\nFROM orders\nWHERE order_id IN (1001,\n                   1002,\n                   1003);",
+      );
+      await captureInList(page, "01-in-list");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenNotInAndASingleValueIn_onSqlite_whenModAltL_thenTheListChopsAndTheSingleValueStaysInline",
+    async () => {
+      const page = await launch(SCRATCH);
+      await typeStatement(page, NOT_IN_AND_SINGLE);
+
+      await reformat(
+        page,
+        "SELECT *\nFROM orders\nWHERE status NOT IN ('NEW',\n" +
+          "                     'PAID',\n                     'SHIPPED')\n  AND order_id IN (1001);",
+      );
+      await captureInList(page, "02-not-in-single");
     },
     SCENARIO_TIMEOUT_MS,
   );

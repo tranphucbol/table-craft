@@ -26,8 +26,21 @@ export const GOLDEN = lines(
   "  AND created_at < '2026-07-09 03:45:00'",
   "  AND status NOT IN ('DELIVERED')",
   "  AND (",
-  "    JSON_EXTRACT(payload, '$.items[0].category') IN ('BOOK', 'TOY', 'GAME', 'FOOD', 'HOME', 'BABY', 'PETS', 'TECH') OR",
-  "    JSON_EXTRACT(payload, '$.shipments[0].carrier') IN ('DHL', 'UPS', 'USPS', 'FEDEX', 'TNT', 'GLS', 'DPD'));",
+  "    JSON_EXTRACT(payload, '$.items[0].category') IN ('BOOK',",
+  "                                                     'TOY',",
+  "                                                     'GAME',",
+  "                                                     'FOOD',",
+  "                                                     'HOME',",
+  "                                                     'BABY',",
+  "                                                     'PETS',",
+  "                                                     'TECH') OR",
+  "    JSON_EXTRACT(payload, '$.shipments[0].carrier') IN ('DHL',",
+  "                                                        'UPS',",
+  "                                                        'USPS',",
+  "                                                        'FEDEX',",
+  "                                                        'TNT',",
+  "                                                        'GLS',",
+  "                                                        'DPD'));",
 );
 
 /** The golden squashed onto one line with lower-case keywords; function names stay as written. */
