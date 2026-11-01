@@ -2,7 +2,7 @@ import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirro
 import { defaultKeymap, history, historyField, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { MSSQL, MySQL, PLSQL, PostgreSQL, sql, SQLite, StandardSQL, type SQLDialect } from "@codemirror/lang-sql";
 import { bracketMatching, indentOnInput } from "@codemirror/language";
-import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
+import { highlightSelectionMatches, search } from "@codemirror/search";
 import {
   Compartment,
   EditorState,
@@ -25,7 +25,8 @@ import {
   type DecorationSet,
 } from "@codemirror/view";
 import * as ContextMenu from "@radix-ui/react-context-menu";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
@@ -35,6 +36,16 @@ import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
+import {
+  FIND_KEYMAP,
+  restoreFind,
+  savedFindOf,
+  type SavedFind,
+} from "@table-craft/desktop/renderer/console/find/commands.js";
+import { EditorFindBar } from "@table-craft/desktop/renderer/console/find/EditorFindBar.js";
+import { findDecorations } from "@table-craft/desktop/renderer/console/find/findDecorations.js";
+import { findPanel, type FindHost } from "@table-craft/desktop/renderer/console/find/findPanel.js";
+import { findScopeField } from "@table-craft/desktop/renderer/console/find/findState.js";
 import { scrubEditorState } from "@table-craft/desktop/renderer/console/editorPrivacy.js";
 import { etcdLanguage } from "@table-craft/desktop/renderer/console/highlighters/etcd.js";
 import { redisLanguage } from "@table-craft/desktop/renderer/console/highlighters/redis.js";
@@ -91,7 +102,13 @@ const CodeIcon = ACTION_ICONS.generate;
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
 
 const NO_MARKS: readonly ErrorMark[] = [];
-const savedEditors = new Map<string, { readonly state: EditorState; readonly privacyReset: number }>();
+interface SavedEditor {
+  readonly state: EditorState;
+  readonly privacyReset: number;
+  readonly find: SavedFind;
+}
+
+const savedEditors = new Map<string, SavedEditor>();
 useConsoles.subscribe((state, before) => {
   for (const id of savedEditors.keys()) {
     if (state.consoles[id]?.privacyReset !== before.consoles[id]?.privacyReset) savedEditors.delete(id);
@@ -220,6 +237,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const selection = useConsoles((state) => state.consoles[consoleId]?.selection);
   const hasSelection = selection !== undefined && selection.from !== selection.to;
   const txnPending = useCommandTxn((state) => state.drafts[consoleId]?.pending ?? null);
+  const [findHost, setFindHost] = useState<FindHost | null>(null);
 
   useEffect(() => {
     useCommandTxn.getState().observe(consoleId, text);
@@ -238,7 +256,8 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
     }
     const cached = savedEditors.get(consoleId);
     const privacyReset = store.consoles[consoleId]?.privacyReset ?? 0;
-    const saved = cached?.privacyReset === privacyReset ? cached.state : undefined;
+    const restored = cached?.privacyReset === privacyReset ? cached : undefined;
+    const saved = restored?.state;
     savedEditors.delete(consoleId);
     const datasourceId = () => useConsoles.getState().consoles[consoleId]?.datasourceId;
     const view = new EditorView({
@@ -278,7 +297,9 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
               }),
             }),
             highlightSelectionMatches(),
-            search({ top: false }),
+            search({ top: true, literal: true, createPanel: findPanel(setFindHost) }),
+            findScopeField,
+            findDecorations,
             languageRef.current.of([highlighterOf(plugin), placeholder(placeholderText(plugin))]),
             flashField,
             errorMarks,
@@ -294,7 +315,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
               ...completionKeymap,
               ...closeBracketsKeymap,
               ...defaultKeymap.filter((binding) => binding.key === undefined || !REGISTRY_KEYS.has(binding.key)),
-              ...searchKeymap,
+              ...FIND_KEYMAP,
               ...historyKeymap,
               indentWithTab,
             ]),
@@ -336,6 +357,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
       ),
     });
     viewRef.current = view;
+    if (restored !== undefined) restoreFind(view, restored.find);
     const untrack = trackEditor(consoleId, view);
     const stopPrivacy = useConsoles.subscribe((state, before) => {
       if (state.consoles[consoleId]?.privacyReset === before.consoles[consoleId]?.privacyReset) return;
@@ -347,7 +369,13 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
       untrack();
       stopPrivacy();
       const current = useConsoles.getState().consoles[consoleId];
-      if (current !== undefined) savedEditors.set(consoleId, { state: view.state, privacyReset: current.privacyReset });
+      if (current !== undefined) {
+        savedEditors.set(consoleId, {
+          state: view.state,
+          privacyReset: current.privacyReset,
+          find: savedFindOf(view.state),
+        });
+      }
       view.destroy();
       viewRef.current = null;
     };
@@ -450,6 +478,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
       <ContextMenu.Trigger asChild>
         <div ref={hostRef} data-testid="sql-editor" className="h-full min-h-0 overflow-hidden" />
       </ContextMenu.Trigger>
+      {findHost === null ? null : createPortal(<EditorFindBar host={findHost} />, findHost.dom)}
       <ContextMenu.Portal>
         <ContextMenu.Content
           className="z-50 min-w-56 rounded border border-line bg-panel p-1 text-ui text-ink shadow-lg"

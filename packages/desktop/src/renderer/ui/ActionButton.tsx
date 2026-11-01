@@ -3,7 +3,7 @@ import { invoke, registry, useActionBusy, useActionEnabled } from "@table-craft/
 import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS, CopiedIcon, SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
-import { FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
+import { FILLED_PRESS, PRESSED_TOGGLE, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 import { COPIED_LABEL, useCopyConfirmation } from "@table-craft/desktop/renderer/ui/useCopyConfirmation.js";
 import { useDelayedFlag } from "@table-craft/desktop/renderer/ui/useDelayedFlag.js";
@@ -14,8 +14,7 @@ const BUSY_SPINNER_DELAY_MS = 300;
 export type ActionTone = "warning" | "success" | "danger";
 
 const PRIMARY_CLASS = `${FILLED_PRESS} flex h-row shrink-0 items-center gap-1 rounded bg-accent px-gap whitespace-nowrap text-accent-ink disabled:not-aria-busy:opacity-50`;
-const COMPACT_CLASS =
-  "press flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-raised disabled:not-aria-busy:opacity-50 aria-pressed:bg-selection";
+const COMPACT_CLASS = `press flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-raised disabled:not-aria-busy:opacity-50 ${PRESSED_TOGGLE}`;
 const TEXT_CLASS = `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-line px-gap whitespace-nowrap text-ink hover:bg-raised disabled:not-aria-busy:opacity-50`;
 const WARNING_COMPACT_CLASS =
   "press flex h-row shrink-0 items-center rounded border border-warning px-1 text-warning hover:bg-raised disabled:not-aria-busy:opacity-50";

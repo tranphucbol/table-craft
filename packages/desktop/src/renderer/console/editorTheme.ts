@@ -24,6 +24,12 @@ export const ERROR_GUTTER_CLASS = "tc-error-gutter";
 export const ERROR_GUTTER_MARKER_CLASS = "tc-error-gutter-marker";
 export const ERROR_TOOLTIP_CLASS = "tc-error-tooltip";
 export const ERROR_HINT_CLASS = "tc-error-hint";
+/** Set on the editor while its find bar is open (plan 139). */
+export const FIND_OPEN_CLASS = "tc-find-open";
+/** The In Selection range and the excluded matches of the find bar; `find/findDecorations.ts` draws them. */
+export const FIND_SCOPE_CLASS = "tc-find-scope";
+export const FIND_EXCLUDED_CLASS = "tc-find-excluded";
+const EXCLUDED_STRIKE = "line-through var(--tc-ink-muted)";
 /** Live problems' underlines (plan 108 decision 7); an error looks as the server's mark does. */
 export const PROBLEM_MARK_CLASSES = {
   error: "tc-problem-error",
@@ -103,6 +109,10 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
   ".cm-selectionMatch": { backgroundColor: SELECTION_MATCH_FILL },
   ".cm-searchMatch": { backgroundColor: "var(--tc-search-match)" },
   ".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: SELECTION_FILL },
+  // Only find results are marked while the bar is open; the selection's echoes would read as matches.
+  [`&.${FIND_OPEN_CLASS} .cm-selectionMatch`]: { backgroundColor: "transparent" },
+  [`.${FIND_SCOPE_CLASS}`]: { backgroundColor: "var(--tc-raised)" },
+  [`.${FIND_EXCLUDED_CLASS}`]: { textDecoration: EXCLUDED_STRIKE, textDecorationSkipInk: "none" },
   "&.cm-focused .cm-matchingBracket": { backgroundColor: "var(--tc-syntax-bracket-match)", color: "inherit" },
   "&.cm-focused .cm-nonmatchingBracket": { color: "var(--tc-danger)" },
   [`.${FLASH_CLASS}`]: { backgroundColor: "var(--tc-statement-flash)", transition: FLASH_FADE },
@@ -194,8 +204,8 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
   },
   [`.${ERROR_HINT_CLASS}`]: { color: "var(--tc-ink-muted)" },
   ".cm-panels": { backgroundColor: "var(--tc-panel)", color: "var(--tc-ink)" },
+  ".cm-panels.cm-panels-top": { borderBottom: "1px solid var(--tc-border)" },
   ".cm-panels.cm-panels-bottom": { borderTop: "1px solid var(--tc-border)" },
-  ".cm-search": { padding: PANEL_PADDING, fontFamily: "var(--tc-font-ui)", fontSize: "var(--tc-font-ui-size)" },
   ".cm-textfield": {
     backgroundColor: "var(--tc-canvas)",
     border: "1px solid var(--tc-border)",

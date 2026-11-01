@@ -54,7 +54,7 @@ so every scroller, the editor's included, follows a theme switch with no token o
 | `colors.success`               | `--tc-success`              | `#5fb865` | `#1f7a35` | `#5bf15b`     |
 | `colors.warning`               | `--tc-warning`              | `#e0a84a` | `#8a5a00` | `#ffd23f`     |
 | `colors.selection`             | `--tc-selection`            | `#2e436e` | `#dfe1e5` | `#1f3a66`     |
-| `colors.searchMatch`           | `--tc-search-match`         | `#6b5a1e` | `#f6e39a` | `#6b5a00`     |
+| `colors.searchMatch`           | `--tc-search-match`         | `#544617` | `#f6e39a` | `#4f4300`     |
 | `colors.keyIcon`               | `--tc-key-icon`             | `#d9a343` | `#b07d14` | `#ffd23f`     |
 | `colors.gridStripe`            | `--tc-grid-stripe`          | `#26282b` | `#f5f6f8` | `#0f0f0f`     |
 | `colors.gridSelection`         | `--tc-grid-selection`       | `#214283` | `#c9dafc` | `#0f3d8c`     |
@@ -437,7 +437,7 @@ tokens.
 
 | Token (`appearance/themes.ts`) | CSS variable        | Tailwind          | Dark / comfortable | Light / compact | Used by                                          |
 | ------------------------------ | ------------------- | ----------------- | ------------------ | --------------- | ------------------------------------------------ |
-| `colors.searchMatch`           | `--tc-search-match` | `bg-search-match` | `#6b5a1e`          | `#f6e39a`       | The characters speed search matched, as `<mark>` |
+| `colors.searchMatch`           | `--tc-search-match` | `bg-search-match` | `#544617`          | `#f6e39a`       | The characters speed search matched, as `<mark>` |
 | `colors.keyIcon`               | `--tc-key-icon`     | `text-key-icon`   | `#d9a343`          | `#b07d14`       | A primary-key column, a key node                 |
 
 Node icons are Phosphor glyphs named in `renderer/ui/icons.ts`, drawn by `panes/explorerLabels.tsx`:
@@ -512,6 +512,24 @@ colours are their own tokens, read by the `HighlightStyle` through the CSS varia
 | `colors.syntax.bracketMatch`   | `--tc-syntax-bracket-match` |                              | `#43454a`          | `#d3e1fb`       | The matching bracket's background                        |
 | `colors.statementFlash`        | `--tc-statement-flash`      |                              | `#2c3427`          | `#e1f1d3`       | The statement just run, for 900 ms                       |
 | `colors.warning`               | `--tc-warning`              | `text-warning`, `bg-warning` | `#e0a84a`          | `#8a5a00`       | Output warnings (skipped, cancelled), `transaction open` |
+
+The find bar (plan 139) is a CodeMirror top panel drawn in React (`console/find/EditorFindBar.tsx`)
+and adds no token. It sits on `bg-panel` with a `border-line` rule under it, in `font-ui` at
+`text-ui`; each row is `h-row`. A field is a `rounded` `h-row` frame on `bg-canvas` with a
+`border-line` edge that turns `border-accent` on focus and `border-danger` while the query finds
+nothing or does not compile, focused or not; the query is in `font-grid`, its placeholder
+`text-ink-muted`. The option toggles (`ui/OptionToggle.tsx`, shared with the grid's find bar) are
+their short labels (`Cc`, `W`, `.*`, `Aa`) in `font-grid`, inset from the field's edge. A pressed
+toggle, here and on every compact `ActionButton`, is `bg-selection` with `text-accent` and a 1 px
+inset `accent` ring (`PRESSED_TOGGLE` in `ui/pressClasses.ts`): the fill alone is about 1.3:1 on
+the Light canvas. The counter is `text-ink-muted` in tabular figures, `text-danger` on failure,
+sized to its short text (`2/7`, `?/7`, `0/0`, `1/10,000+`) so no empty slot sits before the arrows;
+icon buttons are compact `ActionButton`s and Replace, Replace All and Exclude are text ones. The
+current match takes the editor's selection fill over the `colors.searchMatch` of the others, and
+`colors.searchMatch` is dark enough in Dark and High contrast that keyword-coloured text on it
+keeps 3:1. While the bar is open only find results are marked: the selection's echoes lose their
+fill, the In Selection range is a `--tc-raised` band, and an excluded match is struck through in
+`--tc-ink-muted`.
 
 Live problems (plan 108) reuse these tokens, no new ones. An error is a `--tc-danger` wavy
 underline, as the server's error mark; a warning is a `--tc-warning` wavy underline; a weak problem
