@@ -166,7 +166,7 @@ mediaSuite("README recent feature media", () => {
       await pause(page, READ_PAUSE_MS);
       await clickVisibly(page, keyButton(page, "History"));
       const history = keyTab(page).getByTestId("key-history");
-      const versions = history.getByRole("complementary", { name: "Key versions" }).getByRole("button");
+      const versions = history.getByRole("complementary", { name: "Key versions" }).locator('button[title^="PUT · "]');
       await expect.poll(() => versions.count(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(DB_JSON_VERSIONS);
       await pause(page);
       await clickVisibly(page, history.locator('button[title^="PUT · v1 "]'));
