@@ -101,8 +101,8 @@ export const EXPLORER_ACTIONS: readonly AnyAction[] = [
     shortcut: "Mod+-",
     shortcutRegion: "database",
     run: (context) => {
-      const { datasources, emptyFolders } = useDatasources.getState();
-      useCatalog.getState().collapseAll(folderPaths(datasources, emptyFolders));
+      const { datasources, folders } = useDatasources.getState();
+      useCatalog.getState().collapseAll(folderPaths(datasources, folders));
       useDatasources.getState().select(collapsedSelection(context.selection));
     },
   }),

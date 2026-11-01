@@ -63,13 +63,14 @@ const NATIVE_SELECT_RULE =
   "The OS menu ignores the theme and density. Use Dropdown from @table-craft/desktop/renderer/ui/Dropdown.js (decision 140).";
 
 /**
- * Theme, settings and log-record modules that main and the renderer both import (decision 032,
+ * Theme, settings, log-record and datasource-tree modules that main and the renderer both import (decision 032,
  * plan 017): each must load in either process, so it touches neither Node, electron, zod nor the DOM.
  */
 const SHARED_FILES = [
   "packages/desktop/src/appearance/**/*.ts",
   "packages/desktop/src/settings/**/*.ts",
   "packages/desktop/src/log/**/*.ts",
+  "packages/desktop/src/datasourceTree/**/*.ts",
 ];
 const SHARED_PURITY_IMPORTS = [
   ...CORE_IMPORTS,

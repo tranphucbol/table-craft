@@ -18,7 +18,7 @@ export function actionsProvider(registry: ActionRegistry): SearchProvider {
     search(query) {
       return registry.all().flatMap((action): SearchItem[] => {
         const matched = score(query, action.title);
-        if (matched === null || !registry.isAvailable(action.id)) return [];
+        if (matched === null || action.inPalette === false || !registry.isAvailable(action.id)) return [];
         return [
           {
             key: `${ACTION_KEY_PREFIX}${action.id}`,

@@ -37,6 +37,23 @@ TABLE` cannot make.
 
 See [Database explorer](../design/specification.md#database-explorer).
 
+## Arranging data sources
+
+The tree keeps data sources and folders in the order you put them; folders come first in each
+level. Drag one to move it: drop on the top or bottom half of a data source to put it before or
+after, on the middle of a folder to put it inside, last, or below the last row to put it at the end
+of the top level. A blue line shows where it lands, a folder you hover over opens after a moment,
+and dragging near the top or bottom edge scrolls. Folders drag too, with everything in them.
+
+`⌘`-click (`Ctrl`-click) adds or removes a row from the selection, `⇧`-click or `⇧↑`/`⇧↓` select a
+range, and `Esc` keeps only the row you are on. Dragging a selected row moves the whole selection.
+**Move to Folder…** and **Delete** act on everything selected and ask once; a folder can be deleted
+only with everything inside it selected too. **Move Up** and **Move Down** (`⌥⇧↑`/`⌥⇧↓`) step the
+selection within its folder.
+
+New data sources and folders go last in their folder. Folders you create stay after a restart, even
+empty. A data source from `TABLE_CRAFT_DATASOURCE` stays first and does not move.
+
 ## DDL and SQL generation
 
 `⌘B` on a table or view opens its definition, read from the database, in a DDL tab you can copy or

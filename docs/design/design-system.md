@@ -214,6 +214,12 @@ targets use `border-accent`, a translucent `bg-selection`, and a `bg-panel` labe
 target strengthens the selection fill. Splits, moves and resizing do not animate. Narrow groups
 keep their own scrolling tab strip and console toolbar instead of overflowing into their neighbor.
 
+A drag in the Database tool window draws where the items will land: a 2 px `bg-accent` line
+indented to the landing depth between rows, or a translucent `bg-selection` fill with a 1 px
+`outline-accent` on a folder they would drop into. Every row of a multiple selection is
+`bg-selection` while the tree is focused and `bg-raised` otherwise, like a single one. Nothing
+animates.
+
 Pressed and confirmed (plans 110, 114): every enabled `<button>` takes an inset `--tc-press-tint`
 (14 % `--tc-ink`) while held, from one `@layer base` rule in `app.css`, so a press reads on any
 background. The press lands on its first frame (`transition-duration: 0s` while `:active`) and
@@ -335,7 +341,7 @@ and Fonts and density sections above hold every value.
 | `colors.panel`                 | `--tc-panel`               | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
 | `colors.canvas`                | `--tc-canvas`              | `bg-canvas`                  | `#1e1f22`          | `#ffffff`       | The editor area and the active tab                                                 |
 | `colors.raised`                | `--tc-raised`              | `bg-raised`                  | `#393b40`          | `#ebecf0`       | Hovered tabs and buttons, the pressed stripe button, an unfocused tree's selection |
-| `colors.accent`                | `--tc-accent`              | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle                                |
+| `colors.accent`                | `--tc-accent`              | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle, the tree's drop line          |
 | `colors.border`                | `--tc-border`              | `border-line`, `bg-line`     | `#43454a`          | `#d3d5db`       | Dividers and resize handles at rest                                                |
 | `density.dialogWidthPx`        | `--tc-dialog-width`        | `w-dialog`                   | 1040 px            | 1040 px         | The Data Sources and Settings dialogs                                              |
 | `density.dialogHeightPx`       | `--tc-dialog-height`       | `h-dialog-height`            | 720 px             | 720 px          | The Data Sources and Settings dialogs                                              |

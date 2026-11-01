@@ -1,7 +1,7 @@
 # Connections
 
 The **Data Sources** dialog lists your data sources on the left and edits one on the right: name,
-folder, comment, the plugin's connection fields, read-only mode and a colour that tints its tabs.
+folder ([arranged](explorer.md#arranging-data-sources) in the Database tree), comment, the plugin's connection fields, read-only mode and a colour that tints its tabs.
 **Test Connection** reports the server version and round trip before you save. Each password has a
 save mode: _Forever_ keeps it encrypted by the operating system's keychain, _Until restart_ keeps it
 in memory, and _Never_ asks on every connect. A _Forever_ or _Until restart_ password left blank is
