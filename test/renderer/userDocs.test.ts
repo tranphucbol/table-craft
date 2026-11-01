@@ -45,6 +45,11 @@ const WORKFLOWS = [
 const CI_WORKFLOW = ".github/workflows/ci.yml";
 const RELEASE_NOTES_CONFIG = ".github/release.yml";
 const RELEASE_NOTES_CATCH_ALL = "*";
+const RELEASE_NOTES_INSTALL = ".github/release-notes-install.md";
+const REPOSITORY_BLOB_URL = "https://github.com/tranphucbol/table-craft/blob/main/";
+const INSTALL_GUIDE = "docs/guide/install.md";
+const UNSIGNED_MAC_ANCHOR = "running-the-unsigned-macos-app";
+const QUARANTINE_COMMAND = "xattr -dr com.apple.quarantine /Applications/TableCraft.app";
 const CREATE_PR_SKILL = ".agents/skills/create-pr/SKILL.md";
 const GUIDE_DIRECTORY = "docs/guide";
 const README_LINE_BUDGET = 200;
@@ -417,6 +422,23 @@ describe("user docs", () => {
 
     const byLabel = (a: NotesCategory, b: NotesCategory) => a.label.localeCompare(b.label);
     expect(described.sort(byLabel)).toEqual(releaseNotesCategories().sort(byLabel));
+  });
+
+  it("givenReleaseNotesInstall_whenCiDraftsARelease_thenTheNotesCarryTheMacOsFirstLaunchStep", () => {
+    const install = read(RELEASE_NOTES_INSTALL);
+    const links = [...install.matchAll(/\]\(([^)\s]+)\)/g)].map((match) => match[1] ?? "");
+
+    expect(read(CI_WORKFLOW)).toContain(`--notes-file ${RELEASE_NOTES_INSTALL}`);
+    expect(read(INSTALL_GUIDE)).toContain(QUARANTINE_COMMAND);
+    expect(install).toContain(QUARANTINE_COMMAND);
+    expect(links).toContain(`${REPOSITORY_BLOB_URL}${INSTALL_GUIDE}#${UNSIGNED_MAC_ANCHOR}`);
+    for (const link of links) {
+      expect(link, `${RELEASE_NOTES_INSTALL}: a release page needs full URLs`).toMatch(/^https:/);
+      if (!link.startsWith(REPOSITORY_BLOB_URL)) continue;
+      const [path = "", anchor] = link.slice(REPOSITORY_BLOB_URL.length).split("#");
+      expect(existsSync(join(ROOT, path)), `${link} points at a file`).toBe(true);
+      if (anchor !== undefined) expect(headingSlugs(read(path)), `${link} matches a heading`).toContain(anchor);
+    }
   });
 
   it("givenReleaseNotesLabels_whenContributingAndCreatePrRead_thenEachNamesEveryLabel", () => {
