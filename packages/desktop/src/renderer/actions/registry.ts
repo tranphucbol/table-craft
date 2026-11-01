@@ -88,7 +88,8 @@ export type ActionIcon =
   | "loadFile"
   | "reformat"
   | "more"
-  | "tabs";
+  | "tabs"
+  | "runSettings";
 
 export interface Action<A = void> {
   readonly id: string;

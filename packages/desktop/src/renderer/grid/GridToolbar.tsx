@@ -109,6 +109,7 @@ export function GridToolbar({
           fetchAllCap: result.paging.fetchAllCap,
           shown: result.view?.filtered === true ? result.view.shown : null,
           exportEnded: result.exportEnded ?? null,
+          pagedByConsole: result.pagedByConsole === true,
         })}
       </span>
       {result.fetching === null ? null : result.fetching === "export" ? (

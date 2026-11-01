@@ -795,6 +795,11 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       return pagingWith(currentPaging(), get().consoles[id]?.runSettings.rows ?? DEFAULT_RUN_SETTINGS.rows);
     }
 
+    /** Marks a tab whose page size the console chose, so its row count says so. */
+    function pagedBy(tab: ResultTab): ResultTab {
+      return tab.paging.pageRows === currentPaging().pageRows ? tab : { ...tab, pagedByConsole: true };
+    }
+
     /**
      * A console set to All rows reads the rest of a result once it opens, as Fetch All does. Awaited
      * by the run, so the next statement never runs on the session while the cursor drains.
@@ -1273,12 +1278,14 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             }
             patch(id, { transactionOpen, ...moved });
           } else if (opensTab(executed)) {
-            const tab = resultTabOf(
-              executed,
-              { id: `${id}/result-${++resultIds}`, title: nextResultTitle(current.results) },
-              statement.sql,
-              paging,
-              currentFormats(),
+            const tab = pagedBy(
+              resultTabOf(
+                executed,
+                { id: `${id}/result-${++resultIds}`, title: nextResultTitle(current.results) },
+                statement.sql,
+                paging,
+                currentFormats(),
+              ),
             );
             producedBy.set(tab.id, ended.executionId);
             patch(id, { results: [...current.results, tab], activeResult: tab.id, transactionOpen, ...moved });
@@ -2156,12 +2163,8 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             } else {
               if (!latest.stale) void client.call("result.release", { handle: latest.handle }).catch(() => undefined);
               invalidateWindows(resultId);
-              const fresh = resultTabOf(
-                executed,
-                { id: latest.id, title: latest.title },
-                latest.sql,
-                paging,
-                currentFormats(),
+              const fresh = pagedBy(
+                resultTabOf(executed, { id: latest.id, title: latest.title }, latest.sql, paging, currentFormats()),
               );
               const names = (columns: readonly Column[]) => columns.map((column) => column.name);
               const layout = carriedLayout(latest.layout, names(latest.columns), names(fresh.columns));

@@ -539,7 +539,16 @@ describe("console connection health", () => {
       expect.objectContaining({ pageRows: 2000, fetchAllCap: Math.max(fetchAllCap, 2000) }),
     );
     const tab = session().results[0];
-    expect(tab?.kind === "rows" ? tab.paging.pageRows : null).toBe(2000);
+    expect(tab?.kind === "rows" ? [tab.paging.pageRows, tab.pagedByConsole] : null).toEqual([2000, true]);
+  });
+
+  it("givenDefaultRows_whenRun_thenResultNotMarkedPagedByConsole", async () => {
+    const { store, session } = await opened("SELECT 1;");
+
+    await store.getState().run("c1", "all");
+
+    const tab = session().results[0];
+    expect(tab?.kind === "rows" ? tab.pagedByConsole : null).toBeUndefined();
   });
 
   it("givenAllRows_whenRunOpensCursor_thenFetchesTheRest", async () => {

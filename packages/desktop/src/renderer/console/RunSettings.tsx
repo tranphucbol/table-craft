@@ -8,6 +8,7 @@ import { NumberField } from "@table-craft/desktop/renderer/dialogs/settingsParts
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
 import {
   DEFAULT_RUN_SETTINGS,
+  effectiveRunSettings,
   isDefaultRunSettings,
   RUN_ROWS_RANGE,
   RUN_TIMEOUT_RANGE,
@@ -24,6 +25,7 @@ import { statementTimeoutOf, useSettings } from "@table-craft/desktop/renderer/s
 import type { SettingsPage } from "@table-craft/desktop/renderer/state/settingsDialog.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import { TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
@@ -31,6 +33,7 @@ import { TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 const FIRST_CUSTOM_TIMEOUT_SECONDS = 30;
 const POPOVER_LABEL = "Run settings for this console";
 const LINK_CLASS = "text-accent hover:underline";
+const NO_TIMEOUT_TEXT = "This data source cannot cancel a statement, so it has no timeout.";
 
 type RowsKind = RowsChoice["kind"];
 type TimeoutKind = TimeoutChoice["kind"];
@@ -56,29 +59,30 @@ function openSettings(page: SettingsPage): void {
   void invoke(SETTINGS_ACTION_IDS.show, { page } satisfies ShowSettingsArgs);
 }
 
-/** Radios drawn as one segmented row; the native inputs keep arrow keys and focus. */
+/**
+ * Radios drawn as one segmented row, as SQL Generator's; the native inputs keep arrow keys and
+ * focus, and the enclosing fieldset names the group.
+ */
 function Choice<K extends string>({
   name,
-  label,
   options,
   value,
   onPick,
 }: {
   readonly name: string;
-  readonly label: string;
   readonly options: readonly { readonly kind: K; readonly label: string }[];
   readonly value: K;
   readonly onPick: (kind: K) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className="flex rounded border border-line bg-panel p-px">
+    <div className="flex self-start rounded border border-line">
       {options.map((option) => (
         <label
           key={option.kind}
           className={cn(
             TEXT_PRESS,
-            "flex h-row flex-1 cursor-default items-center justify-center rounded px-gap whitespace-nowrap has-focus-visible:outline-2 has-focus-visible:outline-accent",
-            value === option.kind ? "bg-selection text-ink" : "text-ink-muted hover:bg-raised hover:text-ink",
+            "flex h-row cursor-default items-center px-gap whitespace-nowrap text-ink first:rounded-l last:rounded-r has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-accent",
+            value === option.kind ? "bg-selection ring-1 ring-accent ring-inset" : "hover:bg-raised",
           )}
         >
           <input
@@ -104,8 +108,21 @@ function Group({ title, children }: { readonly title: string; readonly children:
   );
 }
 
-function Note({ tone, children }: { readonly tone?: "warning"; readonly children: ReactNode }) {
-  return <p className={cn("whitespace-normal", tone === "warning" ? "text-warning" : "text-ink-muted")}>{children}</p>;
+function Note({ children }: { readonly children: ReactNode }) {
+  return <p className="whitespace-normal text-ink-muted">{children}</p>;
+}
+
+function Warning({ children }: { readonly children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-1 whitespace-normal text-warning">
+      <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
+
+function keptText(value: string): string {
+  return `Runs keep ${value} until it is fixed.`;
 }
 
 function RowsGroup({ rows }: { readonly rows: RowsChoice }) {
@@ -114,7 +131,6 @@ function RowsGroup({ rows }: { readonly rows: RowsChoice }) {
     <Group title="Rows">
       <Choice
         name="run-settings-rows"
-        label="Rows"
         options={ROWS_OPTIONS}
         value={rows.kind}
         onPick={(kind) => {
@@ -133,16 +149,17 @@ function RowsGroup({ rows }: { readonly rows: RowsChoice }) {
       {rows.kind === "page" ? (
         <div className={FIELD_GRID_CLASS}>
           <NumberField
-            label="Rows a page"
+            label="Page size"
             value={rows.pageRows}
             range={RUN_ROWS_RANGE}
             check={runRowsError}
+            kept={keptText(formatCount(rows.pageRows))}
             onValid={(next) => change({ rows: { kind: "page", pageRows: next } })}
           />
         </div>
       ) : null}
       {rows.kind === "all" ? (
-        <Note tone="warning">Reads every row, up to the Fetch All limit of {formatCount(fetchAllCap)}.</Note>
+        <Warning>Reads every row, up to the Fetch All limit of {formatCount(fetchAllCap)}.</Warning>
       ) : null}
     </Group>
   );
@@ -158,7 +175,6 @@ function TimeoutGroup({ consoleId, timeout }: { readonly consoleId: string; read
     <Group title="Statement timeout">
       <Choice
         name="run-settings-timeout"
-        label="Statement timeout"
         options={TIMEOUT_OPTIONS}
         value={timeout.kind}
         onPick={(kind) => {
@@ -186,6 +202,7 @@ function TimeoutGroup({ consoleId, timeout }: { readonly consoleId: string; read
             value={timeout.seconds}
             range={RUN_TIMEOUT_RANGE}
             check={runTimeoutError}
+            kept={keptText(`${formatCount(timeout.seconds)} s`)}
             onValid={(seconds) => change({ timeout: { kind: "seconds", seconds } })}
           />
         </div>
@@ -213,13 +230,20 @@ function RunSettingsPopover({
       label={POPOVER_LABEL}
       testId="run-settings"
       onClose={() => useRunSettingsPopover.getState().hide()}
+      focusSelf
     >
       <div className="flex w-status-popover max-w-full flex-col gap-gap overflow-y-auto p-gap">
-        <p className="text-ink-muted">For this console only, from its next run.</p>
         <RowsGroup rows={runSettings.rows} />
-        {timeouts ? <TimeoutGroup consoleId={consoleId} timeout={runSettings.timeout} /> : null}
+        {timeouts ? (
+          <TimeoutGroup consoleId={consoleId} timeout={runSettings.timeout} />
+        ) : (
+          <Group title="Statement timeout">
+            <Note>{NO_TIMEOUT_TEXT}</Note>
+          </Group>
+        )}
       </div>
-      <div className="flex shrink-0 justify-end border-t border-line bg-panel px-gap py-1">
+      <div className="flex shrink-0 items-center gap-gap border-t border-line px-gap py-1">
+        <p className="min-w-0 flex-1 text-ink-muted">For this console only, from its next run.</p>
         <button
           type="button"
           data-testid="run-settings-reset"
@@ -227,7 +251,7 @@ function RunSettingsPopover({
           className={cn(TEXT_PRESS, "rounded px-1 text-accent enabled:hover:bg-raised disabled:opacity-50")}
           onClick={() => change(DEFAULT_RUN_SETTINGS)}
         >
-          Reset to Defaults
+          Restore Defaults
         </button>
       </div>
     </Popover>
@@ -251,8 +275,13 @@ export function RunSettingsButton({
   const open = useRunSettingsPopover((state) => state.consoleId === consoleId);
   const holder = useRef<HTMLSpanElement>(null);
   const [anchor, setAnchor] = useState<PopoverAnchor | null>(null);
-  const shown: RunSettings = timeouts ? session.runSettings : { ...session.runSettings, timeout: { kind: "default" } };
-  const summary = runSettingsSummary(shown);
+  const pageRows = useSettings((state) => state.settings.data.pageRows);
+  const datasource = useConsoleDatasource(consoleId);
+  useSettings((state) => state.settings.console.statementTimeoutSeconds);
+  const own: RunSettings = timeouts ? session.runSettings : { ...session.runSettings, timeout: { kind: "default" } };
+  const summary = runSettingsSummary(
+    effectiveRunSettings(own, { pageRows, timeoutSeconds: statementTimeoutOf(datasource) }),
+  );
 
   useLayoutEffect(() => {
     if (!open || holder.current === null) {
@@ -276,14 +305,14 @@ export function RunSettingsButton({
         <ActionButton
           actionId={RUN_SETTINGS_ACTION_IDS.show}
           compact
-          pressed={open}
-          {...(summary === null ? {} : { hint: `Run Settings: ${summary}` })}
+          expanded={open}
+          {...(summary === null ? {} : { hint: `Run Settings: ${summary}`, label: `Run Settings… (${summary})` })}
         />
         {summary === null ? null : (
           <span
             aria-hidden
             data-testid="run-settings-dot"
-            className="pointer-events-none absolute top-0.5 right-0.5 size-1.5 rounded-full bg-accent"
+            className="pointer-events-none absolute top-0 right-0 size-2 rounded-full bg-accent"
           />
         )}
       </span>

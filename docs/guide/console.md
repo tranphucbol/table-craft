@@ -115,7 +115,10 @@ does, up to the Fetch All limit. **Statement timeout** is **Default** (the data 
 timeout, else Settings → Advanced), **Custom** (1 to 86,400 seconds) or **None**; a console's
 timeout wins over the data source's. Changes apply from the next statement and stay with the
 console until you close it; a dot on the gear says the console has its own settings, and its
-tooltip names them. **Reset to Defaults** goes back to Settings.
+tooltip names them. A result read with the console's page size says so beside its row count, and a
+statement stopped by the console's timeout offers **Run Settings…** beside **Run Again**. A data
+source that cannot cancel a statement has no timeout to set. **Restore Defaults** goes back to
+Settings.
 
 ## Explain
 

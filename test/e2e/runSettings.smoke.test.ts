@@ -35,12 +35,15 @@ import {
 const captureWindow = evidenceFor("141");
 const ROWS = 1000;
 const NUMBERS = `WITH RECURSIVE g(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM g WHERE n < ${String(ROWS)}) SELECT n FROM g`;
+/** Evaluated in the page, where the DOM exists; the popover, not its first radio, takes focus on open. */
+const FOCUSED_TEST_ID = "document.activeElement?.getAttribute('data-testid') ?? null";
 const CUSTOM_ROWS = 20;
+const INVALID_ROWS = 5;
 const TIMEOUT_SECONDS = 1;
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
 
 function gear(page: Page) {
-  return consoleToolbar(page).getByRole("button", { name: "Run Settings…", exact: true });
+  return consoleToolbar(page).getByRole("button", { name: /^Run Settings…/ });
 }
 
 function popover(page: Page) {
@@ -52,7 +55,7 @@ function resultState(page: Page) {
 }
 
 async function pick(page: Page, group: string, choice: string): Promise<void> {
-  await popover(page).getByRole("radiogroup", { name: group }).locator("label", { hasText: choice }).click();
+  await popover(page).getByRole("group", { name: group }).locator("label", { hasText: choice }).click();
 }
 
 async function closePopover(page: Page): Promise<void> {
@@ -69,9 +72,9 @@ describe.runIf(SMOKE_ENABLED)("console run settings", () => {
     await closeApp(current?.app);
   }, CLOSE_HOOK_TIMEOUT_MS);
 
-  async function launch(datasource: Datasource): Promise<Page> {
+  async function launch(datasource: Datasource, theme: "light" | "dark" = "light"): Promise<Page> {
     const userDataDir = newProfile();
-    seedSettings(userDataDir, { version: 1, appearance: { motion: "off" } });
+    seedSettings(userDataDir, { version: 1, appearance: { motion: "off", theme } });
     running = await launchApp(datasource, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
@@ -86,15 +89,27 @@ describe.runIf(SMOKE_ENABLED)("console run settings", () => {
       await gear(page).click();
       await expect.poll(() => popover(page).isVisible()).toBe(true);
       expect(await popover(page).getByRole("radio", { name: "Default" }).isChecked()).toBe(true);
+      expect(await gear(page).getAttribute("aria-expanded")).toBe("true");
+      expect(await page.evaluate(FOCUSED_TEST_ID)).toBe("run-settings");
+      expect(await popover(page).textContent()).toContain("cannot cancel a statement, so it has no timeout");
       await captureWindow(page, "01-popover-default");
 
       await pick(page, "Rows", "Custom");
-      await popover(page).getByLabel("Rows a page").fill(String(CUSTOM_ROWS));
+      await popover(page).getByLabel("Page size").fill(String(CUSTOM_ROWS));
       await captureWindow(page, "02-custom-rows-popover");
+      await popover(page).getByLabel("Page size").fill(String(INVALID_ROWS));
+      await expect
+        .poll(() => popover(page).getByRole("alert").textContent())
+        .toContain(`Runs keep ${String(CUSTOM_ROWS)} until it is fixed.`);
+      await captureWindow(page, "10-invalid-page-size");
+      await popover(page).getByLabel("Page size").fill(String(CUSTOM_ROWS));
       await closePopover(page);
       await runStatement(page, NUMBERS);
-      await expect.poll(() => resultState(page).textContent()).toBe(`${String(CUSTOM_ROWS)}+ rows`);
+      await expect
+        .poll(() => resultState(page).textContent())
+        .toBe(`${String(CUSTOM_ROWS)}+ rows · page size from Run Settings`);
       expect(await page.getByTestId("run-settings-dot").isVisible()).toBe(true);
+      expect(await gear(page).getAttribute("aria-label")).toBe(`Run Settings… (Page size ${String(CUSTOM_ROWS)})`);
       await page.keyboard.press("Escape");
       await captureWindow(page, "03-custom-rows-result");
 
@@ -109,8 +124,8 @@ describe.runIf(SMOKE_ENABLED)("console run settings", () => {
       await captureWindow(page, "05-all-rows-result");
 
       await gear(page).click();
-      await popover(page).getByRole("button", { name: "Reset to Defaults" }).click();
-      expect(await popover(page).getByRole("button", { name: "Reset to Defaults" }).isDisabled()).toBe(true);
+      await popover(page).getByRole("button", { name: "Restore Defaults" }).click();
+      expect(await popover(page).getByRole("button", { name: "Restore Defaults" }).isDisabled()).toBe(true);
       await closePopover(page);
       await runStatement(page, NUMBERS);
       await expect.poll(() => resultState(page).textContent()).toBe("500+ rows");
@@ -123,7 +138,7 @@ describe.runIf(SMOKE_ENABLED)("console run settings", () => {
   it.runIf(DATABASES_ENABLED && databaseEnabled("mysql"))(
     "givenConsoleTimeout_whenStatementOverruns_thenCancelledAtTheConsoleLimit",
     async () => {
-      const page = await launch(MYSQL);
+      const page = await launch(MYSQL, "dark");
 
       await gear(page).click();
       await pick(page, "Statement timeout", "Custom");
@@ -142,6 +157,11 @@ describe.runIf(SMOKE_ENABLED)("console run settings", () => {
         .toContain(`timed out after ${String(TIMEOUT_SECONDS)} s`);
       expect(await consoleAlert(page).first().textContent()).toContain("raise it in Run Settings");
       await captureWindow(page, "09-timed-out");
+
+      await consoleAlert(page).first().getByRole("button", { name: "Run Settings…" }).click();
+      await expect.poll(() => popover(page).isVisible()).toBe(true);
+      expect(await popover(page).getByLabel("Seconds").inputValue()).toBe(String(TIMEOUT_SECONDS));
+      await captureWindow(page, "11-run-settings-from-error");
     },
     SCENARIO_TIMEOUT_MS,
   );

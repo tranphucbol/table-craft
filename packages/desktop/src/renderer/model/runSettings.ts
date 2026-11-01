@@ -76,12 +76,33 @@ export function withRunSettingsHint<E extends { readonly code: string; readonly 
   return { ...error, hint: CONSOLE_TIMEOUT_HINT };
 }
 
+/** Whether a failure carries the hint `withRunSettingsHint` gave it, so it can offer Run Settings. */
+export function causedByRunSettings(error: { readonly hint: string | null }): boolean {
+  return error.hint === CONSOLE_TIMEOUT_HINT;
+}
+
 export function isDefaultRunSettings(settings: RunSettings): boolean {
   return settings.rows.kind === "default" && settings.timeout.kind === "default";
 }
 
+/**
+ * The settings as they act: a custom value equal to what Default gives changes nothing, so the
+ * gear marks no override for it.
+ */
+export function effectiveRunSettings(
+  settings: RunSettings,
+  defaults: { readonly pageRows: number; readonly timeoutSeconds: number },
+): RunSettings {
+  const { rows, timeout } = settings;
+  const sameTimeout = timeoutWith(defaults.timeoutSeconds, timeout) === defaults.timeoutSeconds;
+  return {
+    rows: rows.kind === "page" && rows.pageRows === defaults.pageRows ? { kind: "default" } : rows,
+    timeout: sameTimeout ? { kind: "default" } : timeout,
+  };
+}
+
 function rowsText(rows: RowsChoice): string | null {
-  if (rows.kind === "page") return `${formatCount(rows.pageRows)} rows a page`;
+  if (rows.kind === "page") return `Page size ${formatCount(rows.pageRows)}`;
   if (rows.kind === "all") return "All rows";
   return null;
 }
