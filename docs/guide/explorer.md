@@ -2,6 +2,8 @@
 
 The Database tool window (`⌘1`) is a lazy tree: data source, schemas, then `tables`, `views` and
 their columns, keys, foreign keys and indexes. Expanding a disconnected data source connects it.
+A connected data source's green dot pulses while one of its consoles runs a statement, as it does
+in the status bar and the title bar.
 Typing in the tree starts speed search, `F1` shows Quick Documentation for the selected object, and
 `⌘B` opens its DDL. **Synchronize** (`⌥⌘Y`) reloads the tree from the database.
 

@@ -11,7 +11,7 @@ included, on the clipboard; the window never shows the token.
 Each data source starts **Off** for agents. **Read only** lets an agent list schemas and tables,
 describe a table, read its DDL, run `SELECT`s, explain and format SQL; its statements run in a
 read-only session, and anything else is refused. **Ask before writes** also lets it propose one
-change at a time: the MCP chip in the status bar turns amber, and nothing runs until you open the
+change at a time: the MCP chip in the status bar turns amber, its dot pulsing, and nothing runs until you open the
 request, read the statement and the agent's reason, and choose **Allow once**. Unanswered for a
 minute, a request is denied. **Ask before reads** sits between Off and Read only: agents still
 browse schemas, tables, columns and key names, but every query that returns rows, and every key
