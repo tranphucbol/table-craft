@@ -138,7 +138,7 @@ describe.runIf(SMOKE_ENABLED)("console find and replace", () => {
         await statusIs(page, "1/3");
         await barButton(page, "Match Case").click();
         await findInput(page).fill("CUSTOMER_ID");
-        await statusIs(page, "0 results");
+        await statusIs(page, "0/0");
         await page.keyboard.press("Alt+KeyC");
         await statusIs(page, "1/3");
         expect(await barButton(page, "Match Case").getAttribute("aria-pressed")).toBe("false");
@@ -159,7 +159,7 @@ describe.runIf(SMOKE_ENABLED)("console find and replace", () => {
 
       await findInput(page).pressSequentially("invoice");
 
-      await statusIs(page, "0 results");
+      await statusIs(page, "0/0");
       expect(await findStatus(page).getAttribute("class")).toContain("text-danger");
       expect(await focused(findInput(page))).toBe(true);
       expect(await findInput(page).locator("..").getAttribute("class")).toContain("border-danger");
@@ -369,7 +369,7 @@ describe.runIf(SMOKE_ENABLED)("console find and replace", () => {
 
       await findInput(page).pressSequentially("e");
 
-      await statusIs(page, "10,000+ results");
+      await statusIs(page, "1/10,000+");
       await capture(page, "10-large-doc");
     },
     SCENARIO_TIMEOUT_MS,

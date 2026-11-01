@@ -58,22 +58,28 @@ export function countMatches(state: EditorState, query: SearchQuery): MatchCount
 
 const CAP_TEXT = `${MATCH_COUNT_CAP.toLocaleString("en-US")}+`;
 
-/** The bar's counter, as DataGrip words it. */
+/** Stands for the current match while the caret is on none, as VS Code's "? of 12". */
+const NO_CURRENT = "?";
+
+/**
+ * The bar's counter, kept short so it sits sized to its text right before the arrows: `3/12`,
+ * `?/12` off a match, `0/0`, `1/10,000+`.
+ */
 export function counterText(count: MatchCount | "invalid" | null): string {
   if (count === null) return "";
   if (count === "invalid") return "Bad pattern";
-  if (count.capped) return `${CAP_TEXT} results`;
-  if (count.total === 0) return "0 results";
-  if (count.current !== null) return `${String(count.current)}/${String(count.total)}`;
-  return count.total === 1 ? "1 result" : `${String(count.total)} results`;
+  const total = count.capped ? CAP_TEXT : String(count.total);
+  const current = count.total === 0 ? "0" : count.current === null ? NO_CURRENT : String(count.current);
+  return `${current}/${total}`;
 }
 
 /** The counter as a screen reader should say it: "2 of 3 matches" where the bar shows "2/3". */
 export function counterSpoken(count: MatchCount | "invalid" | null): string {
-  if (count === null || count === "invalid" || count.capped || count.total === 0 || count.current === null) {
-    return counterText(count);
-  }
-  return `${String(count.current)} of ${String(count.total)} ${count.total === 1 ? "match" : "matches"}`;
+  if (count === null || count === "invalid") return counterText(count);
+  if (count.total === 0) return "No matches";
+  const total = count.capped ? `more than ${MATCH_COUNT_CAP.toLocaleString("en-US")}` : String(count.total);
+  const noun = !count.capped && count.total === 1 ? "match" : "matches";
+  return count.current === null ? `${total} ${noun}` : `${String(count.current)} of ${total} ${noun}`;
 }
 
 /** Whether the counter should read as a failure: no match, or a pattern that does not compile. */

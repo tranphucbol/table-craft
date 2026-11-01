@@ -246,7 +246,7 @@ export function EditorFindBar({ host }: { readonly host: FindHost }) {
         <span
           aria-hidden
           data-testid="editor-find-status"
-          className={cn("ml-1 min-w-14 whitespace-nowrap tabular-nums", failed ? "text-danger" : "text-ink-muted")}
+          className={cn("ml-1 whitespace-nowrap tabular-nums", failed ? "text-danger" : "text-ink-muted")}
         >
           {counterText(count)}
         </span>

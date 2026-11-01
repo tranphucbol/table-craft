@@ -36,18 +36,19 @@ describe("console find counter", () => {
 
     expect(counterSpoken(count(stateOf(TWELVE_IDS, third, third + 3), { search: "id_" }))).toBe("3 of 12 matches");
     expect(counterSpoken(count(stateOf("id_1", 0, 3), { search: "id_" }))).toBe("1 of 1 match");
-    expect(counterSpoken(count(stateOf(TWELVE_IDS), { search: "customer" }))).toBe("0 results");
+    expect(counterSpoken(count(stateOf(TWELVE_IDS), { search: "customer" }))).toBe("No matches");
+    expect(counterSpoken(count(stateOf(TWELVE_IDS), { search: "id_" }))).toBe("12 matches");
   });
 
-  it("givenCaretOffAMatch_whenCounted_thenShowsTotal", () => {
-    expect(counterText(count(stateOf(TWELVE_IDS), { search: "id_" }))).toBe("12 results");
-    expect(counterText(count(stateOf("one id_1"), { search: "id_" }))).toBe("1 result");
+  it("givenCaretOffAMatch_whenCounted_thenShowsQuestionMarkOfTotal", () => {
+    expect(counterText(count(stateOf(TWELVE_IDS), { search: "id_" }))).toBe("?/12");
+    expect(counterText(count(stateOf("one id_1"), { search: "id_" }))).toBe("?/1");
   });
 
-  it("givenNoMatches_whenCounted_thenShowsZeroResults", () => {
+  it("givenNoMatches_whenCounted_thenShowsZeroOfZero", () => {
     const result = count(stateOf(TWELVE_IDS), { search: "customer" });
 
-    expect(counterText(result)).toBe("0 results");
+    expect(counterText(result)).toBe("0/0");
     expect(countFailed(result)).toBe(true);
   });
 
@@ -68,14 +69,15 @@ describe("console find counter", () => {
   it("givenMoreThanCap_whenCounted_thenShowsCappedPlus", () => {
     const result = count(stateOf("x".repeat(MATCH_COUNT_CAP + 1)), { search: "x" });
 
-    expect(counterText(result)).toBe("10,000+ results");
+    expect(counterText(result)).toBe("?/10,000+");
+    expect(counterSpoken(result)).toBe("more than 10,000 matches");
   });
 
   it("givenLiteralBackslashN_whenRegexOff_thenNewlinesNotMatched", () => {
     const doc = "a\nb\\nc";
 
-    expect(counterText(count(stateOf(doc), { search: "\\n" }))).toBe("1 result");
-    expect(counterText(count(stateOf(doc), { search: "\\n", regexp: true }))).toBe("1 result");
-    expect(counterText(count(stateOf("a\nb\nc"), { search: "\\n", regexp: true }))).toBe("2 results");
+    expect(counterText(count(stateOf(doc), { search: "\\n" }))).toBe("?/1");
+    expect(counterText(count(stateOf(doc), { search: "\\n", regexp: true }))).toBe("?/1");
+    expect(counterText(count(stateOf("a\nb\nc"), { search: "\\n", regexp: true }))).toBe("?/2");
   });
 });

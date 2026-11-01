@@ -522,7 +522,8 @@ nothing or does not compile, focused or not; the query is in `font-grid`, its pl
 their short labels (`Cc`, `W`, `.*`, `Aa`) in `font-grid`, inset from the field's edge. A pressed
 toggle, here and on every compact `ActionButton`, is `bg-selection` with `text-accent` and a 1 px
 inset `accent` ring (`PRESSED_TOGGLE` in `ui/pressClasses.ts`): the fill alone is about 1.3:1 on
-the Light canvas. The counter is `text-ink-muted` in tabular figures, `text-danger` on failure;
+the Light canvas. The counter is `text-ink-muted` in tabular figures, `text-danger` on failure,
+sized to its short text (`2/7`, `?/7`, `0/0`, `1/10,000+`) so no empty slot sits before the arrows;
 icon buttons are compact `ActionButton`s and Replace, Replace All and Exclude are text ones. The
 current match takes the editor's selection fill over the `colors.searchMatch` of the others, and
 `colors.searchMatch` is dark enough in Dark and High contrast that keyword-coloured text on it
