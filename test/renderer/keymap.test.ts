@@ -6,7 +6,8 @@ import { GRID_ACTION_IDS } from "@table-craft/desktop/renderer/actions/gridActio
 import { NAVIGATION_ACTION_IDS } from "@table-craft/desktop/renderer/actions/navigationActions.js";
 import { createActionRegistry, defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowActions.js";
-import { EDITOR_CHORDS, FIELD_CHORDS } from "@table-craft/desktop/renderer/console/editorKeys.js";
+import { EDITOR_FIND_ACTION_IDS } from "@table-craft/desktop/renderer/actions/editorFindActions.js";
+import { EDITOR_CHORDS, FIELD_CHORDS, FIND_FIELD_CHORDS } from "@table-craft/desktop/renderer/console/editorKeys.js";
 import { IDLE_CONTEXT, keydown } from "./support.js";
 
 function dispatcherWith(enabled: boolean, paletteOpen = false) {
@@ -317,7 +318,7 @@ describe("grid keymap", () => {
     expect(holders).toEqual([GRID_ACTION_IDS.toggleJsonView]);
   });
 
-  it("givenFindInResult_whenFocusInEditorOrGrid_thenEditorKeepsModFAndGridOpensFind", () => {
+  it("givenFindInResult_whenFocusInEditorOrGrid_thenOnlyTheGridOpensIt", () => {
     let region: FocusRegion = "editor";
     const ran: string[] = [];
     const find = ALL_ACTIONS.find((action) => action.id === GRID_ACTION_IDS.find);
@@ -340,6 +341,95 @@ describe("grid keymap", () => {
 
     expect(ran).toEqual(["find", "find"]);
     expect(findReservedClashes(ALL_ACTIONS, FIELD_CHORDS, "gridFind")).toEqual([]);
+  });
+});
+
+describe("console find keymap", () => {
+  const findIds: readonly string[] = Object.values(EDITOR_FIND_ACTION_IDS);
+
+  function dispatcherIn(region: () => FocusRegion) {
+    const ran: string[] = [];
+    const registry = createActionRegistry(() => ({
+      ...IDLE_CONTEXT,
+      activeTab: { id: "console-0", kind: "console", title: "console" },
+    }));
+    registry.register(
+      ALL_ACTIONS.map((action) => ({ ...action, when: undefined, run: () => void ran.push(action.id) })),
+    );
+    const dispatch = createKeyDispatcher({
+      registry,
+      platform: "mac",
+      paletteOpen: () => false,
+      focusedRegion: region,
+    });
+    return { dispatch, ran };
+  }
+
+  it("givenEditorChords_whenModFRemoved_thenConsoleFindOwnsIt", () => {
+    expect(EDITOR_CHORDS).not.toContain("Mod+F");
+    expect(EDITOR_CHORDS).toEqual(expect.arrayContaining(["F3", "Shift+F3", "Escape"]));
+    expect(ALL_ACTIONS.filter((action) => action.shortcut === "Mod+F").map((action) => action.id)).toEqual(
+      expect.arrayContaining([EDITOR_FIND_ACTION_IDS.find, GRID_ACTION_IDS.find]),
+    );
+  });
+
+  it("givenFindChords_whenListed_thenAllScopedToTheEditorOrItsFindBar", () => {
+    const chords = ALL_ACTIONS.filter((action) => findIds.includes(action.id) && action.shortcut !== undefined);
+
+    expect(chords.map((action) => [action.shortcut, action.shortcutRegion])).toEqual([
+      ["Mod+F", ["editor", "editorFind", "editorReplace"]],
+      ["Mod+R", ["editor", "editorFind", "editorReplace"]],
+      ["Mod+G", ["editor", "editorFind", "editorReplace"]],
+      ["Shift+Mod+G", ["editor", "editorFind", "editorReplace"]],
+      ["Enter", "editorFind"],
+      ["Shift+Enter", "editorFind"],
+      ["Enter", "editorReplace"],
+      ["Mod+Alt+Enter", ["editorFind", "editorReplace"]],
+      ["Mod+Alt+Shift+J", ["editor", "editorFind", "editorReplace"]],
+      ["Alt+C", ["editorFind", "editorReplace"]],
+      ["Alt+W", ["editorFind", "editorReplace"]],
+      ["Alt+X", ["editorFind", "editorReplace"]],
+      ["Alt+P", ["editorFind", "editorReplace"]],
+    ]);
+  });
+
+  it("givenFindBarFields_whenComparedWithKeymap_thenNoClash", () => {
+    expect(findReservedClashes(ALL_ACTIONS, FIND_FIELD_CHORDS, "editorFind")).toEqual([]);
+    expect(findReservedClashes(ALL_ACTIONS, FIND_FIELD_CHORDS, "editorReplace")).toEqual([]);
+  });
+
+  it("givenModFAndModR_whenPressedInEditorThenGrid_thenConsoleFindThenGridActions", () => {
+    let region: FocusRegion = "editor";
+    const { dispatch, ran } = dispatcherIn(() => region);
+
+    dispatch(keydown({ key: "f", code: "KeyF", metaKey: true }));
+    dispatch(keydown({ key: "r", code: "KeyR", metaKey: true }));
+    region = "grid";
+    dispatch(keydown({ key: "f", code: "KeyF", metaKey: true }));
+    dispatch(keydown({ key: "r", code: "KeyR", metaKey: true }));
+
+    expect(ran).toEqual([
+      EDITOR_FIND_ACTION_IDS.find,
+      EDITOR_FIND_ACTION_IDS.replace,
+      GRID_ACTION_IDS.find,
+      GRID_ACTION_IDS.rerun,
+    ]);
+  });
+
+  it("givenEnter_whenPressedInFindThenReplaceRow_thenFindNextThenReplace", () => {
+    let region: FocusRegion = "editorFind";
+    const { dispatch, ran } = dispatcherIn(() => region);
+
+    dispatch(keydown({ key: "Enter", code: "Enter" }));
+    dispatch(keydown({ key: "Enter", code: "Enter", shiftKey: true }));
+    region = "editorReplace";
+    dispatch(keydown({ key: "Enter", code: "Enter" }));
+
+    expect(ran).toEqual([
+      EDITOR_FIND_ACTION_IDS.findNextInField,
+      EDITOR_FIND_ACTION_IDS.findPreviousInField,
+      EDITOR_FIND_ACTION_IDS.replaceOne,
+    ]);
   });
 });
 

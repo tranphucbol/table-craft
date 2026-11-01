@@ -1,6 +1,6 @@
 /**
  * Performance benchmark of a user's 100k-id lookup on the 1M-row `perf_test.users`: copy 100k
- * ids (one per line), paste them into a console, Find/Replace regexp `\n` with `,`, wrap them in
+ * ids (one per line), paste them into a console, Replace regexp `\n` with `,`, wrap them in
  * `SELECT ... IN (...)`, run, fetch all and scroll to the last row, sampling the CPU and memory of
  * every app process. Writes `docs/evidence/perf-in-list/workflow.json` and screenshots. Load
  * `test/perf/seed.sql` first, then:
@@ -72,21 +72,21 @@ describe.runIf(PERF_ENABLED)("100k ids paste workflow", () => {
       });
       await screenshot("01-pasted");
 
-      const panel = page.locator(".cm-search");
+      const panel = page.getByRole("search", { name: "Find in console" });
       await step("2-openFindAndTypeRegex", async () => {
-        await pressChord(page, "F");
-        await panel.locator('input[name="search"]').waitFor({ timeout: STEP_TIMEOUT_MS });
-        await panel.locator('input[name="search"]').pressSequentially("\\n", { delay: PATTERN_TYPING_DELAY_MS });
-        await panel.locator('input[name="re"]').check();
+        await pressChord(page, "R");
+        await panel.getByTestId("editor-find-input").waitFor({ timeout: STEP_TIMEOUT_MS });
+        await panel.getByTestId("editor-find-input").pressSequentially("\\n", { delay: PATTERN_TYPING_DELAY_MS });
+        await panel.getByRole("button", { name: "Regex" }).click();
       });
       await screenshot("02-find-regexp");
 
       await step(
         "3-replaceAll",
         async () => {
-          await panel.locator('input[name="replace"]').pressSequentially(",", { delay: TYPING_DELAY_MS });
+          await panel.getByTestId("editor-replace-input").pressSequentially(",", { delay: TYPING_DELAY_MS });
           const clicked = Date.now();
-          await panel.locator('button[name="replaceAll"]').click();
+          await panel.getByRole("button", { name: "Replace All" }).click();
           await waitDoc(page, (doc) => doc.lines === 1);
           return { replaceAllMs: Date.now() - clicked, doc: await editorDoc(page) };
         },

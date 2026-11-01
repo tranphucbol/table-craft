@@ -1,5 +1,8 @@
 import {
   ArrowCircleUp,
+  ArrowsLeftRight,
+  Selection,
+  SelectionAll,
   DownloadSimple,
   FileZip,
   Scroll,
@@ -225,6 +228,9 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   download: DownloadSimple,
   findNext: CaretDown,
   findPrevious: CaretUp,
+  replace: ArrowsLeftRight,
+  selectAll: SelectionAll,
+  inSelection: Selection,
   sessions: Pulse,
   terminate: Power,
   quickFix: Lightbulb,

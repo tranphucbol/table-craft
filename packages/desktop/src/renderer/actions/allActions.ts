@@ -4,6 +4,7 @@ import { WATCH_ACTIONS } from "@table-craft/desktop/renderer/watch/actions.js";
 import { CONSOLE_INTENT_ACTIONS } from "@table-craft/desktop/renderer/keyAdmin/consoleIntents.js";
 import { COMMAND_TXN_ACTIONS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { DDL_ACTIONS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
+import { EDITOR_FIND_ACTIONS } from "@table-craft/desktop/renderer/actions/editorFindActions.js";
 import { ERROR_ACTIONS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { HISTORY_ACTIONS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import { EXPORT_ACTIONS } from "@table-craft/desktop/renderer/actions/exportActions.js";
@@ -43,6 +44,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...CONSOLE_INTENT_ACTIONS,
   ...COMMAND_TXN_ACTIONS,
   ...ERROR_ACTIONS,
+  ...EDITOR_FIND_ACTIONS,
   ...FILE_ACTIONS,
   ...GRID_ACTIONS,
   ...GRID_HELPER_ACTIONS,
