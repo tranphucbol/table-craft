@@ -781,6 +781,22 @@ run either.
 | `grid.findNext`                          | Find Next                             | `↩` ⁶    | `Enter` ⁶               |
 | `grid.findPrevious`                      | Find Previous                         | `⇧↩` ⁶   | `Shift+Enter` ⁶         |
 | `grid.closeFind`                         | Close Find                            | `⎋` ⁶    | `Escape` ⁶              |
+| `editor.find`                            | Find in Console                       | `⌘F` ¹⁰  | `Ctrl+F` ¹⁰             |
+| `editor.replace`                         | Replace in Console                    | `⌘R` ¹⁰  | `Ctrl+R` ¹⁰             |
+| `editor.findNext`                        | Find Next Occurrence                  | `⌘G` ¹⁰  | `Ctrl+G` ¹⁰             |
+| `editor.findPrevious`                    | Find Previous Occurrence              | `⇧⌘G` ¹⁰ | `Ctrl+Shift+G` ¹⁰       |
+| `editor.findNextInField`                 | Find Next                             | `↩` ¹¹   | `Enter` ¹¹              |
+| `editor.findPreviousInField`             | Find Previous                         | `⇧↩` ¹¹  | `Shift+Enter` ¹¹        |
+| `editor.replaceOne`                      | Replace                               | `↩` ¹¹   | `Enter` ¹¹              |
+| `editor.replaceAll`                      | Replace All                           | `⌥⌘↩` ¹¹ | `Ctrl+Alt+Enter` ¹¹     |
+| `editor.selectAllOccurrences`            | Select All Occurrences                | `⌥⇧⌘J`   | `Ctrl+Alt+Shift+J`      |
+| `editor.excludeOccurrence`               | Exclude                               |          |                         |
+| `editor.findMatchCase`                   | Match Case                            | `⌥C` ¹²  | `Alt+C` ¹²              |
+| `editor.findWords`                       | Words                                 | `⌥W` ¹²  | `Alt+W` ¹²              |
+| `editor.findRegex`                       | Regex                                 | `⌥X` ¹²  | `Alt+X` ¹²              |
+| `editor.findPreserveCase`                | Preserve Case                         | `⌥P` ¹²  | `Alt+P` ¹²              |
+| `editor.findInSelection`                 | In Selection                          |          |                         |
+| `editor.closeFind`                       | Close Find                            |          |                         |
 | `grid.findMatchCase`                     | Match Case                            |          |                         |
 | `grid.findRegex`                         | Regular Expression                    |          |                         |
 | `grid.findWholeCell`                     | Whole Cell                            |          |                         |
@@ -865,12 +881,19 @@ Collapse All (decision 027).
 ⁴ Not a keymap chord: main watches a lone Alt press in `before-input-event` and pops the menu
 itself. Main Menu is available on Windows and Linux with the custom title bar only.
 ⁵ With focus in a result grid or its find bar (regions `grid`, `gridFind`); in the SQL editor ⌘F
-stays CodeMirror's search.
+is Find in Console.
 ⁶ Only with focus in the find bar (region `gridFind`), so `⇧↩` in the grid is still Value Panel.
 ⁷ Only with focus in the Services tool window (region `services`), so `⌘=` and `⌘-` still zoom the
 SQL editor and `⌘-` is still the Database tool window's Collapse All.
 ⁸ Only with focus in a result grid or its value panel (regions `grid`, `valuePanel`).
 ⁹ Run by a drop in the Database tool window with a `MoveRequest`; not listed in Find Action.
+¹⁰ With focus in the SQL editor or its find bar (regions `editor`, `editorFind`, `editorReplace`;
+plan 139, decision 146), so ⌘F and ⌘R in a result grid are still Find in Result and Rerun. Select
+All Occurrences is scoped the same way.
+¹¹ Only with focus in the console's find row (`editorFind`) or replace row (`editorReplace`): `↩`
+is Find Next in the find row and Replace in the replace row; Find Next and Find Previous are not
+listed in Find Action.
+¹² With focus in either row of the console's find bar, IntelliJ's mnemonics for its options.
 
 Shortcuts are declared as platform-neutral chords (`Mod+Shift+A`, `Shift Shift`) and dispatched by
 one capture-phase `keydown` listener on the window. A chord whose action is disabled reaches the
@@ -878,8 +901,10 @@ focused element; no two actions share a chord (a unit test checks the registry).
 is open the keymap stands aside. Hide All Tool Windows restores what it hid when pressed again with
 nothing open. Back to Editor applies only with focus in a tool window; `shortcutRegion` may name
 several regions. With focus in the SQL editor the keymap also stands aside for the chords CodeMirror
-owns, `EDITOR_CHORDS` in `renderer/console/editorKeys.ts` (`⌘Z`, `⇧⌘Z`, `⌘A`, `⌘F`, `⌘/`, `⌘D`,
-`Esc`, `⌃Space`); a unit test fails when an action that can fire in the editor takes one of them.
+owns, `EDITOR_CHORDS` in `renderer/console/editorKeys.ts` (`⌘Z`, `⇧⌘Z`, `⌘A`, `⌘/`, `⌘D`,
+`Esc`, `⌃Space`, `F3`, `⇧F3`); a unit test fails when an action that can fire in the editor takes one
+of them. In the console's find bar fields it stands aside for the field chords plus `Esc`, `F3` and
+`⇧F3` (`FIND_FIELD_CHORDS`).
 
 Find Action (`⇧⌘A`) and Search Everywhere (`⇧⇧`) are one palette. Search Everywhere has scope tabs,
 `All`, `Actions` and `Tables`, fed by `SearchProvider`s (`renderer/palette/providers.ts`); `Tab` moves between
@@ -961,7 +986,7 @@ region, and Windows and Linux show their menu bar.
 
 A console is a CodeMirror 6 editor (`renderer/console/Editor.tsx`) above its result tabs. The
 plugin's manifest `highlight` picks the `lang-sql` dialect (`postgresql`, `mysql`, `sqlite`,
-`plsql`, `mssql`, else standard SQL). It has line numbers, bracket matching, line comments (`⌘/`), search (`⌘F`), multiple
+`plsql`, `mssql`, else standard SQL). It has line numbers, bracket matching, line comments (`⌘/`), find and replace (`⌘F`, `⌘R`, plan 139), multiple
 cursors, undo and completion (see Completion and navigation); its colours and font are the editor and syntax tokens, read
 as CSS variables (`renderer/console/editorTheme.ts`). The datasource colour tints the editor's
 border. The editor's accessible name is `SQL console`.

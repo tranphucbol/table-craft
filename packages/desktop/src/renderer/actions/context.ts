@@ -42,10 +42,23 @@ import { useWindowState } from "@table-craft/desktop/renderer/state/windowState.
 
 /** The regions focus can be in; each is a `data-region` attribute on its container. */
 export type FocusRegion =
-  "editor" | "tableEditor" | "grid" | "gridFind" | "valuePanel" | "database" | "services" | "log" | "watch" | "other";
+  | "editor"
+  | "editorFind"
+  | "editorReplace"
+  | "tableEditor"
+  | "grid"
+  | "gridFind"
+  | "valuePanel"
+  | "database"
+  | "services"
+  | "log"
+  | "watch"
+  | "other";
 
 const REGIONS: readonly FocusRegion[] = [
   "editor",
+  "editorFind",
+  "editorReplace",
   "tableEditor",
   "grid",
   "gridFind",
