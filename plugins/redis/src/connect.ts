@@ -116,6 +116,7 @@ export function parseNodeAddressMap(text: string): ReadonlyMap<string, Address> 
 }
 
 function credentials(config: RedisConfig): { username?: string; password?: string } {
+  if (config.authMode === "none") return {};
   return {
     ...(config.user === "" ? {} : { username: config.user }),
     ...(config.password === "" ? {} : { password: config.password }),
@@ -195,7 +196,7 @@ async function openNegotiated(
     return { client: await openStandalone(config, options, host, port, tls, database, RESP3), resp: RESP3 };
   } catch (cause) {
     if (!NO_HELLO.test(errorMessage(cause))) throw cause;
-    if (config.user !== "") throw new PluginError("connectionFailed", NO_ACL_USERS, { cause });
+    if (credentials(config).username !== undefined) throw new PluginError("connectionFailed", NO_ACL_USERS, { cause });
     return { client: await openStandalone(config, options, host, port, tls, database, RESP2), resp: RESP2 };
   }
 }
@@ -356,7 +357,12 @@ async function openSentinel(
   address: Address,
   tls: ConnectionOptions | false,
 ): Promise<Client> {
-  const login = { ...config, user: config.sentinelUser, password: config.sentinelPassword };
+  const login: RedisConfig = {
+    ...config,
+    authMode: "password",
+    user: config.sentinelUser,
+    password: config.sentinelPassword,
+  };
   try {
     return (await openNegotiated(login, options, address.host, address.port, tls, 0)).client;
   } catch (cause) {

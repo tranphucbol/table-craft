@@ -4,7 +4,9 @@ The Redis plugin connects to Redis 5.0 or later, **Standalone**, **Sentinel** or
 the Mode in the connection form; a `redis://` or `rediss://` URL fills a standalone one). A cluster
 is reached from its seed node; when its nodes announce addresses you cannot reach, map each one in
 **Node address map** (`10.0.1.5:6379=127.0.0.1:7001, …`). A cluster cannot go through an SSH
-tunnel. Redis 5.0 has no ACL users: leave Username empty and give the password alone.
+tunnel. **Authentication** is _User & Password_ or _No auth_; pick No auth for a server without
+`requirepass`, and TableCraft stops asking for a password at every connect. Redis 5.0 has no ACL
+users: leave Username empty and give the password alone.
 
 In **Sentinel** mode, Host and Port name one Sentinel (usually port 26379) and **Other sentinels**
 the rest (`10.0.1.6:26379, 10.0.1.7:26379`); **Master name** is the name the Sentinels monitor.

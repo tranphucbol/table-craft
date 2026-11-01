@@ -116,6 +116,21 @@ function secretFields(plugin: PluginInfo | undefined): ConnectionField[] {
   return (plugin?.fields ?? []).filter((field) => field.secret === true);
 }
 
+/** The form's rule (`fieldVisible`): a field hidden by `visibleWhen` is never sent, so never required. */
+function shown(plugin: PluginInfo, field: ConnectionField, config: Readonly<Record<string, ConfigValue>>): boolean {
+  const rule = field.visibleWhen;
+  if (rule === undefined) return true;
+  const value = config[rule.key] ?? plugin.fields.find((other) => other.key === rule.key)?.default;
+  return visibleWhenHolds(rule.equals, value);
+}
+
+/** The secrets the form shows: one hidden by `visibleWhen`, such as a password under No auth, is neither kept nor asked for. */
+function shownSecretKeys(plugin: PluginInfo, config: Readonly<Record<string, ConfigValue>>): string[] {
+  return secretFields(plugin)
+    .filter((field) => shown(plugin, field, config))
+    .map((field) => field.key);
+}
+
 const SSH_KEYS: readonly string[] = Object.values(SSH_SECRET_KEYS);
 
 /** The tunnel the data source goes through; undefined when it has none or its plugin offers none. */
@@ -141,9 +156,9 @@ function storedKeysOf(
   config: Readonly<Record<string, ConfigValue>>,
 ): string[] {
   const passphrase = plugin.tls?.keyPassphrase;
-  const own = secretFields(plugin)
-    .map((field) => field.key)
-    .filter((key) => key !== passphrase || keyPassphraseOf(plugin, config) !== undefined);
+  const own = shownSecretKeys(plugin, config).filter(
+    (key) => key !== passphrase || keyPassphraseOf(plugin, config) !== undefined,
+  );
   return plugin.network !== null && ssh !== undefined ? [...own, ...SSH_KEYS] : own;
 }
 
@@ -242,14 +257,6 @@ export async function createDatasourceService<Target>(
     return plugin;
   }
 
-  /** The form's rule (`fieldVisible`): a field hidden by `visibleWhen` is never sent, so never required. */
-  function shown(plugin: PluginInfo, field: ConnectionField, config: Readonly<Record<string, ConfigValue>>): boolean {
-    const rule = field.visibleWhen;
-    if (rule === undefined) return true;
-    const value = config[rule.key] ?? plugin.fields.find((other) => other.key === rule.key)?.default;
-    return visibleWhenHolds(rule.equals, value);
-  }
-
   function checkRequired(plugin: PluginInfo, config: Readonly<Record<string, ConfigValue>>): void {
     for (const field of plugin.fields) {
       if (field.secret === true || field.required !== true || !shown(plugin, field, config)) continue;
@@ -283,15 +290,16 @@ export async function createDatasourceService<Target>(
     return [];
   }
 
-  /** The plugin's secrets connecting needs: all but the client key passphrase, which only an encrypted key needs. */
+  /**
+   * The plugin's secrets connecting needs: the shown ones but the client key passphrase, which only
+   * an encrypted key needs.
+   */
   async function pluginKeysNeeded(
     plugin: PluginInfo,
     config: Readonly<Record<string, ConfigValue>>,
   ): Promise<string[]> {
     const passphrase = keyPassphraseOf(plugin, config);
-    const own = secretFields(plugin)
-      .map((field) => field.key)
-      .filter((key) => key !== plugin.tls?.keyPassphrase);
+    const own = shownSecretKeys(plugin, config).filter((key) => key !== plugin.tls?.keyPassphrase);
     if (passphrase === undefined || plugin.tls?.keyFile === undefined) return own;
     const encrypted = await keyIsEncrypted(String(config[plugin.tls.keyFile]));
     return encrypted ? [...own, passphrase] : own;
@@ -343,13 +351,8 @@ export async function createDatasourceService<Target>(
     if (previous?.ssh !== undefined && next.ssh === undefined) {
       for (const key of SSH_KEYS) await secrets.clear(id, key);
     }
-    const passphrase = plugin.tls?.keyPassphrase;
-    if (
-      passphrase !== undefined &&
-      previous?.secretModes[passphrase] !== undefined &&
-      modes[passphrase] === undefined
-    ) {
-      await secrets.clear(id, passphrase);
+    for (const key of Object.keys(previous?.secretModes ?? {})) {
+      if (modes[key] === undefined) await secrets.clear(id, key);
     }
     datasources = previous === undefined ? [...datasources, next] : datasources.map((d) => (d.id === id ? next : d));
     await store.save(datasources);

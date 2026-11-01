@@ -142,6 +142,26 @@ describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", 
   });
 });
 
+describe.runIf(databaseEnabled("redis"))("redis without authentication", () => {
+  it("givenNoAuthWithLeftoverCredentials_whenConnected_thenSessionIsTheDefaultUser", async () => {
+    await withRedis({ ...REDIS_CONFIG, authMode: "none" }, async (session) => {
+      expect((await session.execute("ACL WHOAMI")).reply?.text).toBe('"default"');
+    });
+  });
+
+  it("givenNoAuth_whenServerRequiresPassword_thenAuthenticationFailed", async () => {
+    const config = redis.connectionSchema.parse({ ...REDIS5_CONFIG, authMode: "none" });
+    const error: unknown = await redis.connect(config, { readOnly: true }).then(
+      async (session) => {
+        await session.execute("PING").finally(() => session.close());
+        return null;
+      },
+      (cause: unknown) => cause,
+    );
+    expect(error).toBeInstanceOf(PluginError);
+  });
+});
+
 describe.runIf(databaseEnabled("redis"))("redis tls server", () => {
   it("givenVerifyFull_whenConnected_thenCommandsRun", async () => {
     const session = await redis.connect(redis.connectionSchema.parse(REDIS_TLS_CONFIG), { readOnly: true });
