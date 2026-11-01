@@ -137,3 +137,4 @@ started, not when it is merged.
 | 142 | [Redis Sentinel is asked at connect; a failover is a lost connection](142-redis-sentinel-is-asked-at-connect.md)                                                       |
 | 143 | [A waiting agent posts a system notification while TableCraft is in the background](143-waiting-agents-notify-while-in-the-background.md)                              |
 | 144 | [The key tree loads on demand as a host option](144-key-tree-loads-on-demand-as-a-host-option.md)                                                                      |
+| 145 | [The Database tree's order is stored; datasources.json v2 holds the folders](145-the-database-tree-order-is-stored.md)                                                 |

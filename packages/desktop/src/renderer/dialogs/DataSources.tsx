@@ -576,7 +576,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   const datasources = useDatasources((state) => state.datasources);
   const plugins = useDatasources((state) => state.plugins);
   const catalog = useDatasources((state) => state.catalog);
-  const emptyFolders = useDatasources((state) => state.emptyFolders);
+  const storedFolders = useDatasources((state) => state.folders);
   const encryption = useDatasources((state) => state.encryption);
   const defaultMode: SecretMode = encryption.available ? "forever" : "untilRestart";
   const hide = useDataSourcesDialog((state) => state.hide);
@@ -585,7 +585,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
   const testGenerations = useRef(new Map<string, number>());
   const [failure, setFailure] = useState<BridgeFailure | null>(null);
   const [saving, setSaving] = useState(false);
-  const folders = useMemo(() => folderPaths(datasources, emptyFolders), [datasources, emptyFolders]);
+  const folders = useMemo(() => folderPaths(datasources, storedFolders), [datasources, storedFolders]);
 
   function draftOf(key: string): FormDraft | undefined {
     const edited = state.edits[key];

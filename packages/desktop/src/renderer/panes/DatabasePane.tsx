@@ -1,6 +1,14 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useMemo, useRef, useSyncExternalStore, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+  type DragEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
 import { DDL_ACTION_IDS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
@@ -29,11 +37,19 @@ import { DRAG_OBJECT_TYPE, draggedObjectOf } from "@table-craft/desktop/renderer
 import {
   datasourceKey,
   explorerRows,
-  objectNameOf,
   shownNamespaceCount,
   type ExplorerNode,
   type ExplorerRow,
 } from "@table-craft/desktop/renderer/model/explorerTree.js";
+import { arrangeTreeOf } from "@table-craft/desktop/renderer/model/treeDrop.js";
+import {
+  isRowSelected,
+  nextSelection,
+  rowItem,
+  rowSelection,
+  type SelectGesture,
+} from "@table-craft/desktop/renderer/model/treeSelection.js";
+import { DropLine, useTreeDrag } from "@table-craft/desktop/renderer/panes/useTreeDrag.js";
 import { connectionText } from "@table-craft/desktop/renderer/model/format.js";
 import { keyIdentity, undescribedKeys } from "@table-craft/desktop/renderer/model/keyTree.js";
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
@@ -61,6 +77,7 @@ import {
   connectionOf,
   DISCONNECTED,
   pluginOf,
+  treeSelectionOf,
   useDatasources,
   type TreeSelection,
 } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -117,7 +134,14 @@ const DATASOURCE_MENU = [
   null,
   ACTION_IDS.deleteDatasource,
 ] as const;
-const FOLDER_MENU = [ACTION_IDS.newDatasource, ACTION_IDS.newFolder] as const;
+const FOLDER_MENU = [
+  ACTION_IDS.newDatasource,
+  ACTION_IDS.newFolder,
+  null,
+  ACTION_IDS.moveToFolder,
+  null,
+  ACTION_IDS.deleteDatasource,
+] as const;
 const CATALOG_MENU = [
   TABLE_ACTION_IDS.openData,
   ACTION_IDS.newConsole,
@@ -195,6 +219,7 @@ const DOT_CLASS = {
 const INDENT_PX = 16;
 const OVERSCAN_ROWS = 20;
 const NO_POSITIONS: readonly number[] = [];
+const LEFT_BUTTON = 0;
 
 function shortcutOf(actionId: string): string | undefined {
   const shortcut = registry.get(actionId)?.shortcut;
@@ -290,22 +315,8 @@ function Menu({ items }: { readonly items: readonly (string | null)[] }) {
   );
 }
 
-function selectionOf(row: ExplorerRow): TreeSelection | null {
-  const { node } = row;
-  switch (node.kind) {
-    case "folder":
-      return { kind: "folder", path: node.path };
-    case "datasource":
-      return { kind: "datasource", id: node.datasource.id };
-    case "loading":
-    case "error":
-      return null;
-    default:
-      return { kind: "catalog", id: node.datasourceId, key: row.key, path: node.path, name: objectNameOf(node) };
-  }
-}
-
-function isSelected(selection: TreeSelection | null, row: ExplorerRow): boolean {
+/** Whether the row is the selection's lead, the one focus and the keyboard sit on. */
+function isLead(selection: TreeSelection | null, row: ExplorerRow): boolean {
   if (selection === null) return false;
   const { node } = row;
   if (node.kind === "folder") return selection.kind === "folder" && selection.path === node.path;
@@ -406,16 +417,42 @@ function DatasourceLabel({
 
 interface RowProps {
   readonly row: ExplorerRow;
+  readonly index: number;
   readonly selected: boolean;
+  /** The lead of the selection, which takes focus. */
+  readonly lead: boolean;
+  /** A drag hovers on this folder and would drop into it. */
+  readonly dropInto: boolean;
   readonly positions: readonly number[];
   /** `keepFocus` selects the row and leaves focus where it is, in the row's own field say. */
   readonly onSelect: (row: ExplorerRow, keepFocus?: boolean) => void;
+  readonly onPress: (row: ExplorerRow, event: MouseEvent<HTMLLIElement>) => void;
+  readonly onClick: (row: ExplorerRow, event: MouseEvent<HTMLLIElement>) => void;
+  readonly onMenu: (row: ExplorerRow) => void;
   readonly onToggle: (row: ExplorerRow) => void;
   readonly onActivate: (row: ExplorerRow) => void;
+  readonly onItemDragStart: (row: ExplorerRow, event: DragEvent<HTMLLIElement>) => void;
+  readonly onItemDragEnd: () => void;
   readonly register: (key: string, element: HTMLLIElement | null) => void;
 }
 
-function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, register }: RowProps) {
+function TreeRow({
+  row,
+  index,
+  selected,
+  lead,
+  dropInto,
+  positions,
+  onSelect,
+  onPress,
+  onClick,
+  onMenu,
+  onToggle,
+  onActivate,
+  onItemDragStart,
+  onItemDragEnd,
+  register,
+}: RowProps) {
   const { node, depth } = row;
   const connection = useDatasources((state) =>
     node.kind === "datasource" ? connectionOf(state, node.datasource.id) : null,
@@ -438,6 +475,7 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
         : `${connection.error.message} ${connection.error.hint}`
       : nodeTitle(node);
   const dragged = draggedObjectOf(node);
+  const movable = rowItem(row) !== null && !(node.kind === "datasource" && node.datasource.ephemeral);
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger asChild>
@@ -450,7 +488,9 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
           aria-selected={selected}
           aria-expanded={row.expandable ? row.expanded : undefined}
           title={title}
-          tabIndex={selected ? 0 : -1}
+          tabIndex={lead ? 0 : -1}
+          data-index={index}
+          data-drop={dropInto ? "into" : undefined}
           data-state={connection?.status ?? (failedNamespace ? "failed" : undefined)}
           data-kind={node.kind}
           style={{
@@ -467,18 +507,25 @@ function TreeRow({ row, selected, positions, onSelect, onToggle, onActivate, reg
             // Selection blue only while the tree has focus; elsewhere the row stays marked in grey, as
             // DataGrip draws an inactive selection (plan 130 decision 24).
             selected && "bg-raised group-focus-within/tree:bg-selection",
+            dropInto && "bg-selection/50 outline outline-1 -outline-offset-1 outline-accent",
             (failedNamespace || node.kind === "error") && "text-danger",
           )}
-          onMouseDown={() => onSelect(row)}
-          onContextMenu={() => onSelect(row)}
+          onMouseDown={(event) => onPress(row, event)}
+          onClick={(event) => onClick(row, event)}
+          onContextMenu={() => onMenu(row)}
           onDoubleClick={() => onActivate(row)}
-          draggable={dragged !== null}
+          draggable={dragged !== null || movable}
           onDragStart={(event) => {
+            if (movable) {
+              onItemDragStart(row, event);
+              return;
+            }
             if (dragged === null) return;
             event.dataTransfer.setData(DRAG_OBJECT_TYPE, JSON.stringify(dragged));
             event.dataTransfer.setData(PLAIN_TEXT_TYPE, dragged.name);
             event.dataTransfer.effectAllowed = "copy";
           }}
+          onDragEnd={movable ? onItemDragEnd : undefined}
         >
           {row.expandable ? (
             <button
@@ -612,10 +659,13 @@ export function DatabasePane() {
   const islands = useIslands();
   const datasources = useDatasources((state) => state.datasources);
   const plugins = useDatasources((state) => state.plugins);
-  const emptyFolders = useDatasources((state) => state.emptyFolders);
+  const folders = useDatasources((state) => state.folders);
   const loaded = useDatasources((state) => state.loaded);
   const selection = useDatasources((state) => state.selection);
+  const multi = useDatasources((state) => state.multi);
+  const anchor = useDatasources((state) => state.anchor);
   const select = useDatasources((state) => state.select);
+  const setTreeSelection = useDatasources((state) => state.setTreeSelection);
   const catalogs = useCatalog((state) => state.catalogs);
   const expanded = useCatalog((state) => state.expanded);
   const collapsedFolders = useCatalog((state) => state.collapsedFolders);
@@ -628,7 +678,9 @@ export function DatabasePane() {
   const elements = useRef(new Map<string, HTMLLIElement>());
   const scrollRef = useRef<HTMLDivElement>(null);
   const pendingFocus = useRef<string | null>(null);
-  const tree = useMemo(() => buildTree(datasources, emptyFolders), [datasources, emptyFolders]);
+  const tree = useMemo(() => buildTree(datasources, folders), [datasources, folders]);
+  const arrangeTree = useMemo(() => arrangeTreeOf(datasources, folders), [datasources, folders]);
+  const treeSelection = useMemo(() => ({ lead: selection, multi, anchor }), [selection, multi, anchor]);
   const rows = useMemo(
     () =>
       explorerRows({
@@ -658,7 +710,7 @@ export function DatabasePane() {
     [rows, query],
   );
   const positionsByIndex = useMemo(() => new Map(matches.map((found) => [found.index, found.positions])), [matches]);
-  const selectedIndex = rows.findIndex((row) => isSelected(selection, row));
+  const selectedIndex = rows.findIndex((row) => isLead(selection, row));
   const rowHeightPx = useRowHeightPx();
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -667,6 +719,7 @@ export function DatabasePane() {
     overscan: OVERSCAN_ROWS,
   });
   useEffect(() => virtualizer.measure(), [virtualizer, rowHeightPx]);
+  const { drop, startDrag, endDrag, dropHandlers } = useTreeDrag({ rows, tree: arrangeTree, scrollRef, rowHeightPx });
   const virtualItems = virtualizer.getVirtualItems();
   const undescribed = undescribedKeys(virtualItems.map((item) => rows[item.index]));
   const undescribedSignature = undescribed.map(({ datasourceId, database, keys }) =>
@@ -758,21 +811,46 @@ export function DatabasePane() {
     requestAnimationFrame(() => element.focus());
   });
 
-  function selectIndex(index: number): void {
-    const row = rows[Math.max(0, Math.min(rows.length - 1, index))];
-    if (row === undefined) return;
-    const next = selectionOf(row);
-    if (next === null) return;
-    select(next);
+  function selectIndex(index: number, gesture: SelectGesture = "click"): void {
+    const at = Math.max(0, Math.min(rows.length - 1, index));
+    const row = rows[at];
+    if (row === undefined || rowSelection(row) === null) return;
+    setTreeSelection(nextSelection(treeSelectionOf(useDatasources.getState()), rows, at, gesture));
     pendingFocus.current = row.key;
-    virtualizer.scrollToIndex(rows.indexOf(row), { align: "auto" });
+    virtualizer.scrollToIndex(at, { align: "auto" });
   }
 
-  function selectRow(row: ExplorerRow, keepFocus = false): void {
-    const next = selectionOf(row);
-    if (next === null) return;
-    select(next);
+  function selectRow(row: ExplorerRow, keepFocus = false, gesture: SelectGesture = "click"): void {
+    if (rowSelection(row) === null) return;
+    setTreeSelection(nextSelection(treeSelectionOf(useDatasources.getState()), rows, rows.indexOf(row), gesture));
     if (!keepFocus) elements.current.get(row.key)?.focus();
+  }
+
+  function gestureOf(event: MouseEvent<HTMLLIElement>): SelectGesture {
+    if (event.button !== LEFT_BUTTON) return "pressKeep";
+    if (event.shiftKey) return "range";
+    if (currentPlatform() === "mac" ? event.metaKey : event.ctrlKey) return "toggle";
+    return "pressKeep";
+  }
+
+  function press(row: ExplorerRow, event: MouseEvent<HTMLLIElement>): void {
+    setQuery(null);
+    const gesture = gestureOf(event);
+    // Shift and Mod clicks would otherwise select the text between rows.
+    if (gesture === "range" || gesture === "toggle") event.preventDefault();
+    selectRow(row, false, gesture);
+  }
+
+  /** A plain click on a row of a multiple selection that did not start a drag keeps only that row. */
+  function click(row: ExplorerRow, event: MouseEvent<HTMLLIElement>): void {
+    if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (useDatasources.getState().multi.length > 0) selectRow(row);
+  }
+
+  /** A right click inside the selection keeps it for the menu; outside, it selects the row alone. */
+  function menu(row: ExplorerRow): void {
+    setQuery(null);
+    selectRow(row, false, isRowSelected(treeSelectionOf(useDatasources.getState()), row) ? "pressKeep" : "click");
   }
 
   function toggle(row: ExplorerRow): void {
@@ -865,7 +943,11 @@ export function DatabasePane() {
       return;
     }
     const current = rows[selectedIndex];
-    if (event.key === "ArrowDown") selectIndex(selectedIndex + 1);
+    const rangeKey = event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
+    if (rangeKey && event.key === "ArrowDown") selectIndex(selectedIndex + 1, "range");
+    else if (rangeKey && event.key === "ArrowUp") selectIndex(Math.max(0, selectedIndex - 1), "range");
+    else if (event.key === "Escape" && multi.length > 0) select(selection);
+    else if (event.key === "ArrowDown") selectIndex(selectedIndex + 1);
     else if (event.key === "ArrowUp") selectIndex(selectedIndex === -1 ? 0 : selectedIndex - 1);
     else if (event.key === "Home") selectIndex(0);
     else if (event.key === "End") selectIndex(rows.length - 1);
@@ -915,10 +997,16 @@ export function DatabasePane() {
               {query}
             </div>
           )}
-          <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-1">
+          <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto py-1" {...dropHandlers}>
             {/* Long names scroll sideways by trackpad, Shift+wheel or focus, with no bar: the
                 tree's own height never overflows here, so the vertical bar stays the outer one's. */}
-            <div data-testid="database-tree-scroll" className="@container overflow-x-auto scrollbar-none">
+            <div data-testid="database-tree-scroll" className="relative @container overflow-x-auto scrollbar-none">
+              <DropLine
+                drop={drop}
+                rowHeightPx={rowHeightPx}
+                totalPx={virtualizer.getTotalSize()}
+                indentPx={INDENT_PX}
+              />
               <ul
                 role="tree"
                 aria-label="Datasources"
@@ -942,14 +1030,22 @@ export function DatabasePane() {
                     <TreeRow
                       key={row.key}
                       row={row}
-                      selected={item.index === selectedIndex}
+                      index={item.index}
+                      selected={isRowSelected(treeSelection, row)}
+                      lead={item.index === selectedIndex}
+                      dropInto={drop?.indicator.kind === "into" && drop.indicator.index === item.index}
                       positions={positionsByIndex.get(item.index) ?? NO_POSITIONS}
                       onSelect={(clicked, keepFocus) => {
                         setQuery(null);
                         selectRow(clicked, keepFocus);
                       }}
+                      onPress={press}
+                      onClick={click}
+                      onMenu={menu}
                       onToggle={toggle}
                       onActivate={activate}
+                      onItemDragStart={startDrag}
+                      onItemDragEnd={endDrag}
                       register={(key, element) => {
                         if (element === null) elements.current.delete(key);
                         else elements.current.set(key, element);

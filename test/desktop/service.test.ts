@@ -446,7 +446,7 @@ describe("datasource service", () => {
     const saved = await datasources.save(saving(PG_DRAFT, SECRET));
     await datasources.connect(saved.id, {}, WINDOW);
 
-    const deleting = datasources.delete(saved.id);
+    const deleting = datasources.delete({ ids: [saved.id], folders: [] });
     dependencies.forked[0]?.exit(0);
     await deleting;
 
@@ -461,7 +461,7 @@ describe("datasource service", () => {
     await consoles.write(saved.id, "console", "SELECT 1");
     await consoles.write("other", "console", "SELECT 2");
 
-    await datasources.delete(saved.id);
+    await datasources.delete({ ids: [saved.id], folders: [] });
 
     expect(await consoles.list(saved.id)).toEqual([]);
     expect(await consoles.list("other")).toEqual(["console"]);
@@ -482,7 +482,7 @@ describe("datasource service", () => {
     history.record({ ...run, datasourceId: saved.id });
     history.record({ ...run, datasourceId: "other" });
 
-    await datasources.delete(saved.id);
+    await datasources.delete({ ids: [saved.id], folders: [] });
 
     expect(history.search(saved.id, "")).toEqual([]);
     expect(history.search("other", "")).toHaveLength(1);
@@ -785,5 +785,106 @@ describe("datasource service client key", () => {
     expect(saved.storedSecrets).toEqual(["password", "sslKeyPassphrase"]);
     expect(cleared.storedSecrets).toEqual(["password"]);
     expect(restored.storedSecrets).toEqual(["password"]);
+  });
+});
+
+describe("datasource tree order (plan 136)", () => {
+  const PATH = `${DIRECTORY}/${DATASOURCES_FILE}`;
+  const stored = (files: ReturnType<typeof memoryFiles>) =>
+    JSON.parse(files.contents.get(PATH) ?? "{}") as { folders: string[]; datasources: { id: string }[] };
+
+  it("givenEmptyFolderCreated_whenServiceRestarts_thenTheFolderIsStillListed", async () => {
+    const { files, service: datasources } = await service();
+
+    await expect(datasources.createFolder(" Archive / Old ")).resolves.toBe("Archive/Old");
+
+    expect(stored(files).folders).toEqual(["Archive", "Archive/Old"]);
+    expect(datasources.list().folders).toEqual(["Archive", "Archive/Old"]);
+  });
+
+  it("givenBlankFolderName_whenCreated_thenDatasourceErrorAsksForAName", async () => {
+    const { service: datasources } = await service();
+
+    await expect(datasources.createFolder(" / ")).rejects.toThrow("Give the folder a name.");
+  });
+
+  it("givenDraftWithNewFolderPath_whenSaved_thenFoldersGainsThePathAndItsAncestors", async () => {
+    const { files, service: datasources } = await service();
+
+    await datasources.save(saving(PG_DRAFT));
+
+    expect(stored(files).folders).toEqual(["Docker", "Docker/Main"]);
+  });
+
+  it("givenNewDatasource_whenSaved_thenItIsLastInItsFolder", async () => {
+    const { service: datasources } = await service();
+    await datasources.save(saving({ ...PG_DRAFT, name: "b" }));
+    await datasources.save(saving({ ...PG_DRAFT, name: "a" }));
+
+    expect(datasources.list().datasources.map((datasource) => datasource.name)).toEqual(["b", "a"]);
+  });
+
+  it("givenMove_whenApplied_thenOneWriteAndOneBroadcast", async () => {
+    const { files, changes, service: datasources } = await service();
+    const first = await datasources.save(saving({ ...PG_DRAFT, name: "first" }));
+    const second = await datasources.save(saving({ ...PG_DRAFT, name: "second" }));
+    const before = changes.length;
+
+    await datasources.move({
+      items: [{ kind: "datasource", id: second.id }],
+      folder: "Docker/Main",
+      before: { kind: "datasource", id: first.id },
+    });
+
+    expect(changes.length).toBe(before + 1);
+    expect(stored(files).datasources.map((datasource) => datasource.id)).toEqual([second.id, first.id]);
+  });
+
+  it("givenFolderMovedIntoAnother_whenApplied_thenRenamesComeBack", async () => {
+    const { service: datasources } = await service();
+    await datasources.save(saving(PG_DRAFT));
+    await datasources.createFolder("Archive");
+
+    const renamed = await datasources.move({
+      items: [{ kind: "folder", path: "Docker" }],
+      folder: "Archive",
+      before: null,
+    });
+
+    expect(renamed).toEqual([
+      ["Docker", "Archive/Docker"],
+      ["Docker/Main", "Archive/Docker/Main"],
+    ]);
+    expect(datasources.list().datasources[0]?.folder).toBe("Archive/Docker/Main");
+  });
+
+  it("givenEphemeralDatasourceInMove_whenMoved_thenDatasourceErrorSaysItCannotBeMoved", async () => {
+    const { service: datasources } = await service({ ephemeral: { id: "env", pluginId: "sqlite", config: {} } });
+
+    await expect(
+      datasources.move({ items: [{ kind: "datasource", id: "env" }], folder: null, before: null }),
+    ).rejects.toThrow("cannot be moved");
+  });
+
+  it("givenTwoDatasourcesAndTheirFolder_whenDeletedTogether_thenOneWriteRemovesAllThree", async () => {
+    const { files, changes, service: datasources } = await service();
+    const one = await datasources.save(saving({ ...PG_DRAFT, folder: "Old" }));
+    const two = await datasources.save(saving({ ...PG_DRAFT, folder: "Old" }));
+    const before = changes.length;
+
+    await datasources.delete({ ids: [one.id, two.id], folders: ["Old"] });
+
+    expect(changes.length).toBe(before + 1);
+    expect(stored(files)).toMatchObject({ folders: [], datasources: [] });
+  });
+
+  it("givenNonEmptyFolder_whenDeletedAlone_thenDatasourceErrorSaysItIsNotEmpty", async () => {
+    const { service: datasources } = await service();
+    await datasources.save(saving({ ...PG_DRAFT, folder: "Old" }));
+
+    const deleting = datasources.delete({ ids: [], folders: ["Old"] });
+
+    await expect(deleting).rejects.toThrow(DatasourceError);
+    await expect(deleting).rejects.toThrow('Folder "Old" is not empty.');
   });
 });

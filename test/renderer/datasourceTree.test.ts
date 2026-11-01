@@ -26,17 +26,34 @@ const DATASOURCES: readonly DatasourceView[] = [
 ];
 
 describe("datasource tree", () => {
-  it("givenFolderPaths_whenTreeBuilt_thenNestsAndSortsFoldersFirst", () => {
+  it("givenFolderPaths_whenTreeBuilt_thenNestsWithFoldersFirst", () => {
     expect(outline(buildTree(DATASOURCES))).toEqual([
       "Docker/",
       "  Main/",
-      "    mysql",
       "    pg",
+      "    mysql",
       "  legacy",
       "Local/",
       "  sqlite",
-      "Alpha",
       "zeta",
+      "Alpha",
+    ]);
+  });
+
+  it("givenStoredOrder_whenBuilt_thenEachLevelShowsFoldersThenDatasourcesInStoredOrder", () => {
+    const tree = buildTree(DATASOURCES, ["Local", "Docker", "Docker/Main", "Archive"]);
+
+    expect(outline(tree)).toEqual([
+      "Local/",
+      "  sqlite",
+      "Docker/",
+      "  Main/",
+      "    pg",
+      "    mysql",
+      "  legacy",
+      "Archive/",
+      "zeta",
+      "Alpha",
     ]);
   });
 
@@ -51,8 +68,8 @@ describe("datasource tree", () => {
       "folder:Docker",
       "folder:Local",
       "datasource:5",
-      "datasource:3",
       "datasource:1",
+      "datasource:3",
     ]);
     expect(rows.map((row) => row.depth)).toEqual([0, 0, 1, 0, 0]);
   });

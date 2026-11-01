@@ -33,7 +33,7 @@ const LITE = view({ id: "lite", name: "lite", pluginId: "sqlite" });
 const SEEN_AT = 1_800_000_000_000;
 
 function list(datasources: readonly DatasourceView[]): DatasourceList {
-  return { datasources, warning: null, encryption: { available: true, reason: null } };
+  return { datasources, folders: [], warning: null, encryption: { available: true, reason: null } };
 }
 
 interface FakeClient extends EngineClient {
