@@ -17,6 +17,8 @@ export const EXPORT_ACTION_IDS = {
   retry: "export.retry",
   reveal: "export.reveal",
   dismiss: "export.dismiss",
+  show: "export.show",
+  cancelAll: "export.cancelAll",
 } as const;
 
 export const EXPORT_FORMAT_LABELS: Readonly<Record<ExportFormat, string>> = {
@@ -122,6 +124,8 @@ const cancellable = (entry: ExportEntry) => isRunning(entry);
 const retryable = (entry: ExportEntry) => !isRunning(entry) && entry.task.state !== "done" && entry.task.retryable;
 const revealable = (entry: ExportEntry) => entry.task.state === "done";
 const dismissable = (entry: ExportEntry) => !isRunning(entry);
+/** With one export running, its own Cancel says the same thing. */
+const CANCEL_ALL_MIN = 2;
 
 /** The selected table or view with the columns the catalog knows for it. */
 function relationToExport(context: ActionContext) {
@@ -214,6 +218,25 @@ export const EXPORT_ACTIONS: readonly AnyAction[] = [
     run: (_context, args) => {
       const entry = entryFor(args, dismissable);
       if (entry !== null) useExports.getState().dismiss(entry.task.taskId);
+    },
+  }),
+  defineAction({
+    id: EXPORT_ACTION_IDS.show,
+    title: "Show Exports",
+    category: "Tool Windows",
+    icon: "export",
+    when: () => useExports.getState().entries.length > 0,
+    run: () => useExports.getState().setPopover(!useExports.getState().popoverOpen),
+  }),
+  defineAction({
+    id: EXPORT_ACTION_IDS.cancelAll,
+    title: "Cancel All Exports",
+    category: "Tool Windows",
+    icon: "cancel",
+    when: () => useExports.getState().entries.filter(cancellable).length >= CANCEL_ALL_MIN,
+    run: async () => {
+      const { entries, cancel } = useExports.getState();
+      await Promise.all(entries.filter(cancellable).map((entry) => cancel(entry.task.taskId)));
     },
   }),
 ];

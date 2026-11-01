@@ -236,6 +236,14 @@ describe("result grid text", () => {
     expect(resultStateText({ ...base, rowCount: 1, complete: true })).toBe("1 row");
   });
 
+  it("givenExportDrainedTheCursor_whenLabelled_thenSaysHowTheExportEnded", () => {
+    const drained = { ...base, rowCount: 500, cursorOpen: false };
+
+    expect(resultStateText({ ...drained, exportEnded: "cancelled" })).toBe("500+ rows · export cancelled");
+    expect(resultStateText({ ...drained, exportEnded: "failed" })).toBe("500+ rows · export failed");
+    expect(resultStateText({ ...drained, exportEnded: "done" })).toBe("500+ rows · rest exported");
+  });
+
   it("givenExport_whenLogged_thenRowsPathSizeAndTime", () => {
     expect(exportedText({ path: "/tmp/a.csv", rows: 50_000, bytes: 1_468_006, elapsedMs: 1_200 })).toBe(
       "50,000 rows exported to /tmp/a.csv (1.4 MB) in 1.2 s",

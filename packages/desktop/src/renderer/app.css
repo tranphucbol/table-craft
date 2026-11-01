@@ -52,6 +52,8 @@
   --spacing-title-bar: var(--tc-title-bar-height);
   --spacing-traffic-lights: var(--tc-traffic-light-inset);
   --spacing-status-bar: var(--tc-status-bar-height);
+  --spacing-status-chip: var(--tc-status-chip-max);
+  --spacing-status-popover: var(--tc-status-popover-width);
   --spacing-icon: var(--tc-icon);
   --spacing-palette: var(--tc-palette-width);
   --spacing-dialog: var(--tc-dialog-width);
@@ -81,6 +83,17 @@
   --animate-overlay-in: tc-fade-in var(--tc-motion-base) linear both;
   --animate-spin: spin 1s linear infinite var(--tc-motion-progress);
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite var(--tc-motion-ambient);
+  /* The negative delay starts mid-sweep, so a paused loop (motion Off) still shows the stripe. */
+  --animate-indeterminate: tc-indeterminate 1.4s linear -0.7s infinite var(--tc-motion-progress);
+
+  @keyframes tc-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(250%);
+    }
+  }
 
   /* `transform`, not `translate`: the palette and dialogs centre themselves with `translate`, and
      the two compose. `--tc-motion-dx`/`-dy` are the side's sign, set by `ui/motion.ts`. */

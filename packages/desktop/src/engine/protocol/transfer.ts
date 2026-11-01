@@ -55,6 +55,8 @@ export interface ExportTask {
   readonly rows: number;
   readonly bytes: number;
   readonly elapsedMs: number;
+  /** Epoch ms the task started; the clock the renderer runs from between progress events. */
+  readonly startedAt: number;
   /** Rows expected, when known: only a memory export knows. */
   readonly estimate: number | null;
   /** XLSX sheets written; 0 for text formats. */

@@ -153,6 +153,8 @@ live row height.
 | `density.stripeWidthPx`        | `--tc-stripe-width`          | 36 px       | 36 px   |
 | `density.tabHeightPx`          | `--tc-tab-height`            | 32 px       | 32 px   |
 | `density.statusBarHeightPx`    | `--tc-status-bar-height`     | 24 px       | 24 px   |
+| `density.statusChipMaxPx`      | `--tc-status-chip-max`       | 240 px      | 240 px  |
+| `density.statusPopoverWidthPx` | `--tc-status-popover-width`  | 360 px      | 360 px  |
 | `density.iconPx`               | `--tc-icon`                  | 16 px       | 16 px   |
 | `density.paletteWidthPx`       | `--tc-palette-width`         | 576 px      | 576 px  |
 | `density.dialogWidthPx`        | `--tc-dialog-width`          | 1040 px     | 1040 px |
@@ -202,6 +204,7 @@ progress. No springs, bounce or overshoot.
 | Tooltips                                   | `TOOLTIP_MOTION`                                 | fast fade, on the delayed open only |
 | Dialogs (`CONTENT_CLASS`, `OVERLAY_CLASS`) | `DIALOG_MOTION`, `OVERLAY_MOTION`                | slow fade and scale 0.98 → 1        |
 | Spinners, the connecting pulse             | none (`animate-spin`, `animate-pulse` redefined) | loop, play state per level          |
+| An indeterminate progress bar              | none (`animate-indeterminate`)                   | loop, paused mid-sweep at Off       |
 
 Never animated: typing, the caret, CodeMirror's completion and hover tooltips, grid scroll,
 selection, sort, edits and results arriving, tree expand and collapse, pane resizing, tab
@@ -328,27 +331,29 @@ components write (`app.css` maps one to the other). In this and the later tables
 compact column gives a colour token's Light value and a density token's compact one; the Themes
 and Fonts and density sections above hold every value.
 
-| Token (`appearance/themes.ts`) | CSS variable               | Tailwind                     | Dark / comfortable | Light / compact | Used by                                                                            |
-| ------------------------------ | -------------------------- | ---------------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
-| `density.stripeWidthPx`        | `--tc-stripe-width`        | `w-stripe`                   | 36 px              | 36 px           | The left and right tool-window stripes                                             |
-| `density.tabHeightPx`          | `--tc-tab-height`          | `h-tab`, `size-tab`          | 32 px              | 32 px           | Editor tabs, tool-window headers with Islands, stripe buttons, palette input       |
-| `density.statusBarHeightPx`    | `--tc-status-bar-height`   | `h-status-bar`               | 24 px              | 24 px           | The status bar                                                                     |
-| `density.iconPx`               | `--tc-icon`                | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
-| `density.paletteWidthPx`       | `--tc-palette-width`       | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
-| `colors.selection`             | `--tc-selection`           | `bg-selection`               | `#2e436e`          | `#dfe1e5`       | Selected palette and Services rows, the focused tree's selection                   |
-| `colors.success`               | `--tc-success`             | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                                     |
-| `colors.danger`                | `--tc-danger`              | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                                    |
-| `colors.panel`                 | `--tc-panel`               | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
-| `colors.canvas`                | `--tc-canvas`              | `bg-canvas`                  | `#1e1f22`          | `#ffffff`       | The editor area and the active tab                                                 |
-| `colors.raised`                | `--tc-raised`              | `bg-raised`                  | `#393b40`          | `#ebecf0`       | Hovered tabs and buttons, the pressed stripe button, an unfocused tree's selection |
-| `colors.accent`                | `--tc-accent`              | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle, the tree's drop line          |
-| `colors.border`                | `--tc-border`              | `border-line`, `bg-line`     | `#43454a`          | `#d3d5db`       | Dividers and resize handles at rest                                                |
-| `density.dialogWidthPx`        | `--tc-dialog-width`        | `w-dialog`                   | 1040 px            | 1040 px         | The Data Sources and Settings dialogs                                              |
-| `density.dialogHeightPx`       | `--tc-dialog-height`       | `h-dialog-height`            | 720 px             | 720 px          | The Data Sources and Settings dialogs                                              |
-| `density.dialogListWidthPx`    | `--tc-dialog-list-width`   | `w-dialog-list`              | 240 px             | 240 px          | The datasource list, the Settings page list                                        |
-| `density.dialogLabelMaxPx`     | `--tc-dialog-label-max`    | `max-w-dialog-label`         | 200 px             | 200 px          | A form label's widest; a longer one wraps                                          |
-| `density.titleBarHeightPx`     | `--tc-title-bar-height`    | `h-title-bar`                | 40 px              | 32 px           | The main toolbar; the native controls' height                                      |
-| `TRAFFIC_LIGHT_INSET_PX`       | `--tc-traffic-light-inset` | `pl-traffic-lights`          | 76 px              | 76 px           | The main toolbar's left inset for the macOS traffic lights                         |
+| Token (`appearance/themes.ts`) | CSS variable                | Tailwind                     | Dark / comfortable | Light / compact | Used by                                                                            |
+| ------------------------------ | --------------------------- | ---------------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
+| `density.stripeWidthPx`        | `--tc-stripe-width`         | `w-stripe`                   | 36 px              | 36 px           | The left and right tool-window stripes                                             |
+| `density.tabHeightPx`          | `--tc-tab-height`           | `h-tab`, `size-tab`          | 32 px              | 32 px           | Editor tabs, tool-window headers with Islands, stripe buttons, palette input       |
+| `density.statusBarHeightPx`    | `--tc-status-bar-height`    | `h-status-bar`               | 24 px              | 24 px           | The status bar                                                                     |
+| `density.statusChipMaxPx`      | `--tc-status-chip-max`      | `max-w-status-chip`          | 240 px             | 240 px          | The Exports chip's label at its widest; the file name truncates                    |
+| `density.statusPopoverWidthPx` | `--tc-status-popover-width` | `w-status-popover`           | 360 px             | 360 px          | The Exports popover, fixed so it does not jump as its counts grow                  |
+| `density.iconPx`               | `--tc-icon`                 | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
+| `density.paletteWidthPx`       | `--tc-palette-width`        | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
+| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#dfe1e5`       | Selected palette and Services rows, the focused tree's selection                   |
+| `colors.success`               | `--tc-success`              | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                                     |
+| `colors.danger`                | `--tc-danger`               | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                                    |
+| `colors.panel`                 | `--tc-panel`                | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
+| `colors.canvas`                | `--tc-canvas`               | `bg-canvas`                  | `#1e1f22`          | `#ffffff`       | The editor area and the active tab                                                 |
+| `colors.raised`                | `--tc-raised`               | `bg-raised`                  | `#393b40`          | `#ebecf0`       | Hovered tabs and buttons, the pressed stripe button, an unfocused tree's selection |
+| `colors.accent`                | `--tc-accent`               | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle, the tree's drop line          |
+| `colors.border`                | `--tc-border`               | `border-line`, `bg-line`     | `#43454a`          | `#d3d5db`       | Dividers and resize handles at rest                                                |
+| `density.dialogWidthPx`        | `--tc-dialog-width`         | `w-dialog`                   | 1040 px            | 1040 px         | The Data Sources and Settings dialogs                                              |
+| `density.dialogHeightPx`       | `--tc-dialog-height`        | `h-dialog-height`            | 720 px             | 720 px          | The Data Sources and Settings dialogs                                              |
+| `density.dialogListWidthPx`    | `--tc-dialog-list-width`    | `w-dialog-list`              | 240 px             | 240 px          | The datasource list, the Settings page list                                        |
+| `density.dialogLabelMaxPx`     | `--tc-dialog-label-max`     | `max-w-dialog-label`         | 200 px             | 200 px          | A form label's widest; a longer one wraps                                          |
+| `density.titleBarHeightPx`     | `--tc-title-bar-height`     | `h-title-bar`                | 40 px              | 32 px           | The main toolbar; the native controls' height                                      |
+| `TRAFFIC_LIGHT_INSET_PX`       | `--tc-traffic-light-inset`  | `pl-traffic-lights`          | 76 px              | 76 px           | The main toolbar's left inset for the macOS traffic lights                         |
 
 The main toolbar (plan 015) is the window's title bar: `h-title-bar`, `bg-panel`, a
 `border-line` bottom edge, `px-gap` with `gap-gap` between items. Its buttons are the compact
