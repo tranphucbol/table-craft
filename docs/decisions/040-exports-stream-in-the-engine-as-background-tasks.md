@@ -20,7 +20,7 @@ Where the rows come from:
   plugin whose sessions cannot see each other's data (`Session.privateDatabase`, SQLite's
   `:memory:`) is never re-run elsewhere.
 - Otherwise a result that has read every row exports what the engine holds, and one with an open
-  cursor drains it; the grid shows Exporting… until that task ends.
+  cursor drains it; the grid shows the task's rows, clock and Cancel until it ends.
 - A table or view from the explorer reads `SELECT <chosen columns> FROM <relation>` on its own
   session, the same way as a re-run.
 
@@ -65,7 +65,8 @@ timer per open window and late cancels.
   when it re-runs; the statement's own `ORDER BY` decides the order.
 - The engine has push events; the renderer's engine client dispatches messages with no `id` to
   listeners, and the Services tree shows them under an Exports node, with the status bar's
-  `Exporting N`.
+  Exports chip (plan 138): name, rows or percent, a clock from `ExportTask.startedAt`, Cancel and a
+  popover of the session's exports.
 - The plugin contract is 0.12.0: `Session.execute(sql, params?, options?)` with `fullBytes`,
   `ConnectOptions.keepAliveInitialDelayMs`, `Session.privateDatabase` and a bounded `close()`. A
   plugin that ignores `fullBytes` still exports, with previews counted on the task.
