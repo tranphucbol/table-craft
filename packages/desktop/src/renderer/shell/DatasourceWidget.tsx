@@ -4,7 +4,7 @@ import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { WINDOW_ACTION_IDS, type SwitchToArgs } from "@table-craft/desktop/renderer/actions/windowActions.js";
-import { DOT_CLASS, useActiveDatasourceId } from "@table-craft/desktop/renderer/shell/statusItems.js";
+import { ConnectionDot, useActiveDatasourceId } from "@table-craft/desktop/renderer/shell/statusItems.js";
 import { connectionOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { DropdownIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -103,7 +103,7 @@ export function DatasourceWidget() {
             <>
               <Swatch datasource={active} />
               <span className="min-w-0 truncate font-semibold">{active.name}</span>
-              <span aria-hidden className={cn("size-2 shrink-0 rounded-full", DOT_CLASS[status])} />
+              <ConnectionDot datasourceId={datasourceId} status={status} />
             </>
           )}
           <DropdownIcon aria-hidden className="size-3 shrink-0 text-ink-muted" />

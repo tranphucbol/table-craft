@@ -170,6 +170,7 @@ export function McpStatusChip() {
   const status = useMcp((state) => state.status);
   const open = useMcp((state) => state.popoverOpen);
   const view = mcpChip(status);
+  const waiting = status.approvals.length > 0;
   const button = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<PopoverAnchor | null>(null);
 
@@ -196,7 +197,11 @@ export function McpStatusChip() {
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => invoke(status.approvals.length > 0 && !open ? MCP_ACTION_IDS.approvals : MCP_ACTION_IDS.show)}
       >
-        <span aria-hidden className={cn("size-2 shrink-0 rounded-full", DOT_CLASSES[view.tone])} />
+        <span
+          aria-hidden
+          data-waiting={waiting || undefined}
+          className={cn("size-2 shrink-0 rounded-full", DOT_CLASSES[view.tone], waiting && "halo")}
+        />
         {view.label}
       </button>
       {open && anchor !== null ? <McpPopover anchor={anchor} /> : null}

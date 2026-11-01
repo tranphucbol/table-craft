@@ -2374,6 +2374,17 @@ export function consolesOf(consoles: ConsolesState["consoles"], datasourceId: st
     .map(([id]) => id);
 }
 
+/** Whether a console on the datasource is running a statement, which its connection dot shows. */
+export function isRunningOn(
+  consoles: Readonly<Record<string, Pick<ConsoleSession, "datasourceId" | "status">>>,
+  datasourceId: string | undefined,
+): boolean {
+  if (datasourceId === undefined) return false;
+  return Object.values(consoles).some(
+    (session) => session.datasourceId === datasourceId && session.status === "running",
+  );
+}
+
 /** The consoles holding an open transaction, by console id. */
 export function openTransactions(consoles: ConsolesState["consoles"]): readonly string[] {
   return Object.entries(consoles)

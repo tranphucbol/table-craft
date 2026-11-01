@@ -6,7 +6,7 @@ import { keyspaceStatusText } from "@table-craft/desktop/renderer/model/keyTree.
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { useServer } from "@table-craft/desktop/renderer/state/server.js";
-import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import { isRunningOn, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { exportingText } from "@table-craft/desktop/renderer/model/exportText.js";
 import { isRunning, useExports } from "@table-craft/desktop/renderer/state/exports.js";
 import { importingText } from "@table-craft/desktop/renderer/model/importText.js";
@@ -43,6 +43,24 @@ export const DOT_CLASS = {
   failed: "bg-danger",
 } as const;
 
+/** The connection dot, with a halo while a console runs a statement on the datasource. */
+export function ConnectionDot({
+  datasourceId,
+  status,
+}: {
+  readonly datasourceId: string | undefined;
+  readonly status: keyof typeof DOT_CLASS;
+}) {
+  const running = useConsoles((state) => status === "connected" && isRunningOn(state.consoles, datasourceId));
+  return (
+    <span
+      aria-hidden
+      data-running={running || undefined}
+      className={cn("size-2 shrink-0 rounded-full", DOT_CLASS[status], running && "halo")}
+    />
+  );
+}
+
 /** The active console's datasource, or the tree's selection when no console is active. */
 export function useActiveDatasourceId(): string | undefined {
   const activeId = useTabs((state) => activeTab(state)?.id ?? null);
@@ -65,7 +83,7 @@ function DatasourceStatus() {
       title={connection.error?.hint}
       className={cn("flex min-w-0 items-center gap-cell", connection.status === "failed" && "text-danger")}
     >
-      <span aria-hidden className={cn("size-2 shrink-0 rounded-full", DOT_CLASS[connection.status])} />
+      <ConnectionDot datasourceId={datasourceId} status={connection.status} />
       <span className="truncate">
         {datasourceText(datasource, pluginName, connection)}
         {keys === null ? "" : ` · ${keys}`}
