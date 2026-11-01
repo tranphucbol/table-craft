@@ -205,7 +205,9 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
 
       await exportRows(page, "running").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await expect.poll(() => exportedRows(page), { timeout: LAUNCH_TIMEOUT_MS }).toBeGreaterThan(SHOWN_PROGRESS_ROWS);
-      await expect(exportingStatus(page).textContent()).resolves.toMatch(/^Exporting 1/);
+      await expect(page.getByTestId("status-exporting-label").textContent()).resolves.toMatch(
+        /^series\.csv · [\d,]+ rows$/,
+      );
       // The console is free while the export re-runs its statement on a session of its own.
       await expect(runAllButton(page).isEnabled()).resolves.toBe(true);
       await captureWindow(page, "export-running");
@@ -251,7 +253,9 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
       await resultTab(page, "Output").click();
       await expect
         .poll(() => output(page).textContent())
-        .toMatch(/The server sent nothing for 10 seconds.*rows were written before it stopped\./);
+        .toMatch(
+          /The server sent nothing for 10 seconds.*rows were exported before it stopped; the partial file was removed\./,
+        );
       await captureWindow(page, "export-stalled");
 
       proxy.resume();

@@ -247,6 +247,7 @@ export function exportTasks(options: ExportTasksOptions = {}): ExportTasks {
         rows: 0,
         bytes: 0,
         elapsedMs: 0,
+        startedAt: clock.now(),
         estimate: job.estimate,
         sheets: 0,
         truncatedCells: 0,

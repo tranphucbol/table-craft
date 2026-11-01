@@ -100,6 +100,10 @@ export interface DensityTokens {
   /** The main toolbar, which is the window's title bar; the macOS traffic lights centre in it. */
   readonly titleBarHeightPx: number;
   readonly statusBarHeightPx: number;
+  /** A status-bar chip's label at its widest; the Exports chip's file name truncates there. */
+  readonly statusChipMaxPx: number;
+  /** A status-bar chip's popover, as wide whatever its rows say, so it does not jump as counts grow. */
+  readonly statusPopoverWidthPx: number;
   readonly iconPx: number;
   readonly paletteWidthPx: number;
   /** The Data Sources and Settings dialogs. */
@@ -338,6 +342,8 @@ export const COMFORTABLE_DENSITY: DensityTokens = {
   tabHeightPx: 32,
   titleBarHeightPx: 40,
   statusBarHeightPx: 24,
+  statusChipMaxPx: 240,
+  statusPopoverWidthPx: 360,
   iconPx: 16,
   paletteWidthPx: 576,
   dialogWidthPx: 1040,

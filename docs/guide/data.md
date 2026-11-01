@@ -11,9 +11,14 @@ edge to widen it, and it keeps that width. **Copy** on one
 cell copies its bare value; on more it uses the chosen extractor: CSV, TSV, JSON, SQL Inserts or
 Markdown. **Export Data…**, on a result or on a
 table in the Database pane, writes any of those or Excel (XLSX) in the background: it streams
-straight to disk, so a multi-gigabyte export uses flat memory, shows its progress under **Exports**
-in Services, and never leaves a half-written file behind when the network drops, the disk fills or
-you cancel.
+straight to disk, so a multi-gigabyte export uses flat memory and never leaves a half-written file
+behind when the network drops, the disk fills or you cancel. While it runs, the status bar's
+**Exports** chip shows the file name, the rows written (or the percent, when the row count is known),
+a bar and a clock, with a red stop button to cancel it. Click the chip for every export of the session: rows
+of the total, size, rows a second, time left when it can be told, and Cancel, Reveal, Retry or
+Remove; **Cancel All Exports** stops several at once. A finished export stays on the chip for a few
+seconds, and a failed one turns it red until you open it. The grid an export drains shows its rows,
+clock and a **Cancel** of its own, and Services lists the same tasks under **Exports**.
 
 ![Result grid](../media/grid.gif)
 

@@ -110,7 +110,7 @@ describe("export runner", () => {
     expect(failed.reason).toBe("stalled");
     expect(failed.rows).toBe(2);
     expect(failed.message).toBe(
-      "The server sent nothing for 2 minutes; the network or the server stalled. 2 rows were written before it stopped.",
+      "The server sent nothing for 2 minutes; the network or the server stalled. 2 rows were exported before it stopped; the partial file was removed.",
     );
     expect(stalled).toBe(true);
     await settle();
@@ -187,7 +187,7 @@ describe("export runner", () => {
 
     expect(failed.reason).toBe("source");
     expect(failed.message).toBe(
-      "The export stopped: Connection terminated unexpectedly. 1 row was written before it stopped.",
+      "The export stopped: Connection terminated unexpectedly. 1 row was exported before it stopped; the partial file was removed.",
     );
     expect(await readdir(folder)).toEqual([]);
   });

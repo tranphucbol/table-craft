@@ -63,6 +63,8 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-title-bar-height": `${density.titleBarHeightPx}px`,
     "--tc-traffic-light-inset": `${TRAFFIC_LIGHT_INSET_PX}px`,
     "--tc-status-bar-height": `${density.statusBarHeightPx}px`,
+    "--tc-status-chip-max": `${density.statusChipMaxPx}px`,
+    "--tc-status-popover-width": `${density.statusPopoverWidthPx}px`,
     "--tc-icon": `${density.iconPx}px`,
     "--tc-palette-width": `${density.paletteWidthPx}px`,
     "--tc-dialog-width": `${density.dialogWidthPx}px`,

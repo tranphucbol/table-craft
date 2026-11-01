@@ -2,6 +2,7 @@ import {
   STATEMENT_CANCELLED_MESSAGE,
   type CurrentNamespace,
   type EngineError,
+  type ExportTaskState,
   type Reconnection,
   type ServerTimeout,
   type StatementKind,
@@ -30,6 +31,18 @@ export function formatElapsed(ms: number): string {
   const minutes = Math.floor(whole / MS_PER_MINUTE);
   const seconds = ((whole % MS_PER_MINUTE) / MS_PER_SECOND).toFixed(ELAPSED_DECIMALS);
   return `${minutes}:${seconds.padStart(SECONDS_WIDTH + 1 + ELAPSED_DECIMALS, "0")}`;
+}
+
+const MS_PER_HOUR = 3_600_000;
+
+/** A clock for long work, to the second: `0:07`, `3:50`, `1:02:15`. */
+export function formatClock(ms: number): string {
+  const seconds = Math.floor(Math.max(0, ms) / MS_PER_SECOND);
+  const hours = Math.floor((seconds * MS_PER_SECOND) / MS_PER_HOUR);
+  const minutes = Math.floor(((seconds * MS_PER_SECOND) % MS_PER_HOUR) / MS_PER_MINUTE);
+  const rest = String(seconds % (MS_PER_MINUTE / MS_PER_SECOND)).padStart(SECONDS_WIDTH, "0");
+  if (hours === 0) return `${minutes}:${rest}`;
+  return `${hours}:${String(minutes).padStart(SECONDS_WIDTH, "0")}:${rest}`;
 }
 
 /** What an agent call's time leaves out: `Waited 23.9 s for approval, not counted`, or null when it did not wait. */
@@ -113,6 +126,14 @@ export function exportedText(exported: {
   return `${count} exported to ${exported.path} (${formatBytes(exported.bytes)}) in ${formatDuration(exported.elapsedMs)}`;
 }
 
+/** Why the grid holds no more rows once an export took its cursor (plan 138). */
+const DRAINED_TEXT: Readonly<Record<ExportTaskState, string>> = {
+  running: "exporting",
+  done: "rest exported",
+  failed: "export failed",
+  cancelled: "export cancelled",
+};
+
 /**
  * The grid toolbar's row count (plan 007 decision 2): `5,000 rows` when all are fetched,
  * `500+ rows` while the cursor holds more, and why fetching ended when it ended early. While a
@@ -125,20 +146,25 @@ export function resultStateText(result: {
   readonly sorted: boolean;
   readonly fetchAllCap: number;
   readonly shown?: number | null;
+  readonly exportEnded?: ExportTaskState | null;
 }): string {
   const count = formatCount(result.rowCount);
   const shown = result.shown ?? null;
+  const stopped =
+    result.exportEnded == null
+      ? result.rowCount >= result.fetchAllCap
+        ? "fetch cap reached"
+        : "fetching stopped"
+      : DRAINED_TEXT[result.exportEnded];
   if (shown !== null) {
     const parts = [`${formatCount(shown)} of ${count}${result.complete ? "" : "+"} rows`, "filtered locally"];
-    if (!result.complete && !result.cursorOpen) {
-      parts.push(result.rowCount >= result.fetchAllCap ? "fetch cap reached" : "fetching stopped");
-    }
+    if (!result.complete && !result.cursorOpen) parts.push(stopped);
     if (result.sorted) parts.push("sorted locally");
     return parts.join(" · ");
   }
   if (result.complete) return result.rowCount === 1 ? "1 row" : `${count} rows`;
   const parts = [`${count}+ rows`];
-  if (!result.cursorOpen) parts.push(result.rowCount >= result.fetchAllCap ? "fetch cap reached" : "fetching stopped");
+  if (!result.cursorOpen) parts.push(stopped);
   if (result.sorted) parts.push("sorted locally");
   return parts.join(" · ");
 }
