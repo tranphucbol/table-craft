@@ -69,6 +69,7 @@ import { ICON_BUTTON_ROW_INSET } from "@table-craft/desktop/renderer/shell/islan
 import { themeOf, useIslands, useRowHeightPx, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { DatasourceGlyph, useBrandLogo, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { isRunningOn, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import {
@@ -352,6 +353,9 @@ function DatasourceLabel({
   );
   const brand = useDatasourceBrand(datasource);
   const logo = useBrandLogo(brand);
+  const running = useConsoles(
+    (state) => connection.status === "connected" && isRunningOn(state.consoles, datasource.id),
+  );
   const dot = DOT_CLASS[connection.status];
   const failed = connection.status === "failed";
   return (
@@ -380,7 +384,13 @@ function DatasourceLabel({
           {shown}
         </span>
       )}
-      {dot === null ? null : <span aria-hidden className={cn("size-2 shrink-0 rounded-full", dot)} />}
+      {dot === null ? null : (
+        <span
+          aria-hidden
+          data-running={running || undefined}
+          className={cn("size-2 shrink-0 rounded-full", dot, running && "halo")}
+        />
+      )}
       {connection.status === "disconnected" || connection.status === "connected" ? null : (
         <span className={cn("truncate", failed ? "text-danger" : "text-ink-muted")}>{connectionText(connection)}</span>
       )}

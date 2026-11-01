@@ -203,6 +203,44 @@ body {
   scrollbar-width: none;
 }
 
+/* A sonar halo around a connection dot while a statement runs on it: two waves of the dot's own
+   colour, a second apart. The negative delays start each wave mid-flight, so when the motion level
+   pauses the loops the dot still wears a visible ring rather than two waves hidden under it. */
+@utility halo {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    pointer-events: none;
+    animation: tc-halo var(--tc-halo-period) ease-out infinite var(--tc-motion-progress);
+    animation-delay: calc(var(--tc-halo-period) * -0.3);
+  }
+
+  &::after {
+    animation-delay: calc(var(--tc-halo-period) * -0.8);
+  }
+}
+
+:root {
+  --tc-halo-period: 2s;
+}
+
+@keyframes tc-halo {
+  from {
+    opacity: 0.55;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 2.5;
+  }
+}
+
 .app-drag {
   app-region: drag;
   -webkit-app-region: drag;
