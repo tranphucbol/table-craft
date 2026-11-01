@@ -138,3 +138,4 @@ started, not when it is merged.
 | 143 | [A waiting agent posts a system notification while TableCraft is in the background](143-waiting-agents-notify-while-in-the-background.md)                              |
 | 144 | [The key tree loads on demand as a host option](144-key-tree-loads-on-demand-as-a-host-option.md)                                                                      |
 | 145 | [The Database tree's order is stored; datasources.json v2 holds the folders](145-the-database-tree-order-is-stored.md)                                                 |
+| 147 | [An IN value list goes one value per line](147-in-value-lists-chop-one-per-line.md)                                                                                    |

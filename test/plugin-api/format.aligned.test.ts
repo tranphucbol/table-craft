@@ -112,9 +112,58 @@ describe("format (aligned style): the rules", () => {
     );
   });
 
-  it("givenCallsAndLists_whenFormatted_thenNeverBrokenAndNormalised", () => {
+  it("givenCallsAndLists_whenFormatted_thenCallsStayWholeAndInListsChop", () => {
     expect(aligned(mysql, "select f( a ,b ,  g(c) ) from t where x in ( 1,2 , 3 )")).toBe(
-      "SELECT f(a, b, g(c))\nFROM t\nWHERE x IN (1, 2, 3)",
+      lines("SELECT f(a, b, g(c))", "FROM t", "WHERE x IN (1,", "            2,", "            3)"),
+    );
+  });
+
+  it("givenAnInList_whenFormatted_thenOneValuePerLineUnderTheFirst", () => {
+    expect(aligned(mysql, "select * from orders where order_id in (1001, 1002, 1003);")).toBe(
+      lines(
+        "SELECT *",
+        "FROM orders",
+        "WHERE order_id IN (1001,",
+        "                   1002,",
+        "                   1003);",
+      ),
+    );
+  });
+
+  it("givenANotInListAfterAnOperator_whenFormatted_thenChoppedUnderTheFirstValue", () => {
+    expect(aligned(postgres, "select a from t where a = 1 and status not in ('NEW', 'PAID')")).toBe(
+      lines("SELECT a", "FROM t", "WHERE a = 1", "  AND status NOT IN ('NEW',", "                     'PAID')"),
+    );
+  });
+
+  it("givenASingleValueIn_whenFormatted_thenInline", () => {
+    expect(aligned(sqlite, "select a from t where status not in ('DONE') and b in (?)")).toBe(
+      lines("SELECT a", "FROM t", "WHERE status NOT IN ('DONE')", "  AND b IN (?)"),
+    );
+  });
+
+  it("givenATupleInList_whenFormatted_thenOneTuplePerLine", () => {
+    expect(aligned(mysql, "select * from t where (a, b) in ((1, 2), (3, 4))")).toBe(
+      lines("SELECT *", "FROM t", "WHERE (a, b) IN ((1, 2),", "                 (3, 4))"),
+    );
+  });
+
+  it("givenAnInListWithALineComment_whenFormatted_thenTheCommentStaysAndValuesAlign", () => {
+    expect(aligned(mysql, "select * from t where x in (1, -- first\n2, 3)")).toBe(
+      lines("SELECT *", "FROM t", "WHERE x IN (1, -- first", "            2,", "            3)"),
+    );
+  });
+
+  it("givenAnInListInsideCase_whenFormatted_thenTheCaseExpands", () => {
+    expect(aligned(postgres, "select case when a in (1, 2) then 'x' else 'y' end as k from t")).toBe(
+      lines(
+        "SELECT CASE",
+        "         WHEN a IN (1,",
+        "                    2) THEN 'x'",
+        "         ELSE 'y'",
+        "       END AS k",
+        "FROM t",
+      ),
     );
   });
 
@@ -164,8 +213,8 @@ describe("format (aligned style): the rules", () => {
   });
 
   it("givenALongGroup_whenFormattedWithIndentFour_thenInnerConditionsIndentFourAndTheOperatorTrails", () => {
-    const left = `a_rather_long_column_name IN (${Array.from({ length: 8 }, (_, i) => `'value_${i}'`).join(", ")})`;
-    const right = `another_long_column_name IN (${Array.from({ length: 8 }, (_, i) => `'other_${i}'`).join(", ")})`;
+    const left = `a_rather_long_column_name = CONCAT(${Array.from({ length: 8 }, (_, i) => `'value_${i}'`).join(", ")})`;
+    const right = `another_long_column_name = CONCAT(${Array.from({ length: 8 }, (_, i) => `'other_${i}'`).join(", ")})`;
     expect(aligned(mysql, `select a from t where x = 1 and (${left} or ${right})`, { indentWidth: 4 })).toBe(
       lines("SELECT a", "FROM t", "WHERE x = 1", "  AND (", `      ${left} OR`, `      ${right})`),
     );
