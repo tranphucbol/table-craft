@@ -25,8 +25,19 @@
     "fields": [
       { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
       { "key": "port", "label": "Port", "kind": "number", "default": 2379, "required": true },
-      { "key": "user", "label": "Username", "kind": "text" },
-      { "key": "password", "label": "Password", "kind": "password", "secret": true },
+      {
+        "key": "user",
+        "label": "Username",
+        "kind": "text",
+        "visibleWhen": { "key": "authMode", "equals": ["password", "auto"] }
+      },
+      {
+        "key": "password",
+        "label": "Password",
+        "kind": "password",
+        "secret": true,
+        "visibleWhen": { "key": "authMode", "equals": ["password", "auto"] }
+      },
       { "key": "endpoints", "label": "Endpoints (host:port, comma-separated)", "kind": "text", "group": "advanced" },
       { "key": "namespace", "label": "Namespace prefix", "kind": "text", "group": "advanced" },
       {

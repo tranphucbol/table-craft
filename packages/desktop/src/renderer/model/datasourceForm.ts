@@ -19,7 +19,6 @@ import {
 import type { AgentAccess } from "@table-craft/desktop/settings/mcp.js";
 import { keepAliveSecondsError, statementTimeoutSecondsError } from "@table-craft/desktop/settings/settings.js";
 import {
-  connectionFieldVisible,
   connectionProblems,
   offersEndpointConnection,
 } from "@table-craft/desktop/renderer/model/datasourceConnection.js";
@@ -166,6 +165,18 @@ function secondsInput(seconds: number | undefined): string {
   return seconds === undefined ? "" : String(seconds);
 }
 
+/**
+ * A saved select or checkbox always holds a value, so a missing one is a field the plugin added
+ * later, which applies its default; a text field cleared by the user is missing too, and stays blank.
+ */
+function savedInputOf(field: ConnectionField, config: Readonly<Record<string, ConfigValue>>): string | boolean {
+  const value = config[field.key];
+  return inputOf(
+    field,
+    value === undefined && (field.kind === "select" || field.kind === "checkbox") ? field.default : value,
+  );
+}
+
 function inputOf(field: ConnectionField, value: ConfigValue | undefined): string | boolean {
   if (field.kind === "checkbox") return value === true;
   return value === undefined ? "" : String(value);
@@ -200,7 +211,7 @@ function withLaterModes(
 
 export function draftFromView(view: DatasourceView, plugin: PluginInfo | undefined): FormDraft {
   const values: Record<string, string | boolean> = {};
-  for (const field of plainFieldsOf(plugin)) values[field.key] = inputOf(field, view.config[field.key]);
+  for (const field of plainFieldsOf(plugin)) values[field.key] = savedInputOf(field, view.config);
   const secrets: Record<string, SecretChange> = {};
   for (const key of secretKeysOf(plugin)) secrets[key] = KEEP;
   return {
@@ -317,7 +328,6 @@ export function draftProblems(draft: FormDraft, plugin: PluginInfo | undefined):
   if (draft.name.trim() === "") problems.push("Name is required.");
   for (const field of plainFieldsOf(plugin)) {
     if (!fieldVisible(field, draft)) continue;
-    if (!connectionFieldVisible(field, draft, plugin)) continue;
     if (
       offersEndpointConnection(plugin) &&
       typeof draft.values.endpoints === "string" &&
@@ -397,19 +407,19 @@ export function toSaveRequest(draft: FormDraft, plugin: PluginInfo | undefined):
   const config: Record<string, ConfigValue> = {};
   for (const field of plainFieldsOf(plugin)) {
     if (!fieldVisible(field, draft)) continue;
-    if (!connectionFieldVisible(field, draft, plugin)) continue;
     const value = configValue(field, draft.values[field.key]);
     if (value !== undefined) config[field.key] = value;
   }
   const folder = draft.folder.trim();
   const tunnel = offersSshTunnel(plugin) && sshTouched(draft.ssh);
   const clientKey = namesClientKey(draft, plugin);
+  const hidden = new Set(
+    secretFieldsOf(plugin)
+      .filter((field) => !fieldVisible(field, draft))
+      .map((field) => field.key),
+  );
   const kept = (key: string): boolean =>
-    (tunnel || !SSH_KEYS.includes(key)) &&
-    (clientKey || key !== keyPassphraseOf(plugin)) &&
-    (!offersEndpointConnection(plugin) ||
-      key !== "password" ||
-      (draft.values.authMode !== "none" && draft.values.authMode !== "clientCN"));
+    (tunnel || !SSH_KEYS.includes(key)) && (clientKey || key !== keyPassphraseOf(plugin)) && !hidden.has(key);
   return {
     datasource: {
       id: draft.id,
@@ -463,8 +473,8 @@ export function applyParsedUrl(
     const host = String(values[plugin.network.host] ?? "");
     const port = String(values[plugin.network.port] ?? "");
     values.endpoints = `${host.includes(":") && !host.startsWith("[") ? `[${host}]` : host}:${port}`;
-    if (Object.keys(parsed.secrets).length > 0 || parsed.values.user !== undefined) values.authMode = "password";
   }
+  revealFilled(values, plugin, parsed);
   const secrets = { ...draft.secrets };
   const filled: string[] = [];
   for (const field of secretFieldsOf(plugin)) {
@@ -481,6 +491,26 @@ export function applyParsedUrl(
     urlNote: { kind: "applied", secrets: filled, ignored: parsed.ignored },
     dirty: true,
   };
+}
+
+/**
+ * A URL that names a field the draft hides, such as a password under No auth, means that field:
+ * the select or checkbox hiding it takes the first value its rule lists. A rule the URL itself set
+ * stays as the URL set it.
+ */
+function revealFilled(
+  values: Record<string, string | boolean>,
+  plugin: PluginInfo | undefined,
+  parsed: ParsedUrl,
+): void {
+  for (const field of plugin?.fields ?? []) {
+    const rule = field.visibleWhen;
+    const filled = (field.secret === true ? parsed.secrets : parsed.values)[field.key] !== undefined;
+    if (rule === undefined || !filled || parsed.values[rule.key] !== undefined) continue;
+    if (visibleWhenHolds(rule.equals, values[rule.key])) continue;
+    const shown = typeof rule.equals === "object" ? rule.equals[0] : rule.equals;
+    if (shown !== undefined) values[rule.key] = shown;
+  }
 }
 
 const USERINFO_PASSWORD = /^([a-z][a-z0-9+.-]*:\/\/[^:@/?#]*):[^@/?#]*@/i;

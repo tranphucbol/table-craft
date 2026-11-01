@@ -37,6 +37,24 @@ const PG_DRAFT: DatasourceDraft = {
   secretModes: { password: "forever" },
 };
 
+const REDIS_DRAFT: DatasourceDraft = {
+  name: "Local Redis",
+  pluginId: "redis",
+  folder: null,
+  color: null,
+  readOnly: false,
+  comment: "",
+  config: { mode: "standalone", host: "127.0.0.1", port: 6379, database: 0, authMode: "none" },
+  secretModes: {},
+};
+
+const ETCD_DRAFT: DatasourceDraft = {
+  ...REDIS_DRAFT,
+  name: "Local etcd",
+  pluginId: "etcd",
+  config: { host: "127.0.0.1", port: 2379, authMode: "auto" },
+};
+
 const SEEN_AT = 1_800_000_000_000;
 const PG_TIMEOUT = { setting: "statement_timeout", covers: "all", counts: "statement" } as const;
 
@@ -253,6 +271,55 @@ describe("datasource service", () => {
 
     expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
     expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+  });
+
+  it("givenRedisNoAuth_whenConnecting_thenNoSecretAskedOrSent", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(REDIS_DRAFT));
+
+    expect(saved.secretModes).toEqual({});
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
+    expect(bootedConfig(dependencies)).toMatchObject({ config: { authMode: "none" } });
+    expect(bootedConfig(dependencies)).not.toHaveProperty("config.password");
+  });
+
+  it("givenRedisSavedBeforeAuthentication_whenConnecting_thenPasswordStillAsked", async () => {
+    const { service: datasources } = await service();
+    const legacy = { ...REDIS_DRAFT, config: { mode: "standalone", host: "127.0.0.1", port: 6379, database: 0 } };
+    const saved = await datasources.save(saving({ ...legacy, secretModes: { password: "never" } }));
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+  });
+
+  it("givenStoredPassword_whenSwitchedToNoAuth_thenPasswordCleared", async () => {
+    const { service: datasources } = await service();
+    const withPassword = { ...REDIS_DRAFT, config: { ...REDIS_DRAFT.config, authMode: "password" } };
+    const saved = await datasources.save(saving({ ...withPassword, secretModes: { password: "forever" } }, SECRET));
+    expect(saved.storedSecrets).toEqual(["password"]);
+
+    const next = await datasources.save(saving({ ...REDIS_DRAFT, id: saved.id, secretModes: { password: "forever" } }));
+
+    expect(next.secretModes).toEqual({});
+    const back = await datasources.save(
+      saving({ ...withPassword, id: saved.id, secretModes: { password: "forever" } }),
+    );
+    expect(back.storedSecrets).toEqual([]);
+  });
+
+  it("givenStandaloneRedis_whenConnecting_thenSentinelPasswordNotAsked", async () => {
+    const { service: datasources } = await service();
+    const withPassword = { ...REDIS_DRAFT, config: { ...REDIS_DRAFT.config, authMode: "password" } };
+    const saved = await datasources.save(saving({ ...withPassword, secretModes: { password: "never" } }));
+
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+  });
+
+  it.each(["none", "clientCN"])("givenEtcdAuthMode_%s_whenConnecting_thenPasswordNotAsked", async (authMode) => {
+    const { service: datasources } = await service();
+    const saved = await datasources.save(saving({ ...ETCD_DRAFT, config: { ...ETCD_DRAFT.config, authMode } }));
+
+    expect(saved.secretModes).toEqual({});
+    expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
   });
 
   it("givenKeychainUnavailable_whenForeverSecretTypedAndConnectionWorks_thenConnectedWithoutKeeping", async () => {
