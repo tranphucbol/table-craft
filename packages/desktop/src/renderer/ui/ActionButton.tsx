@@ -50,6 +50,8 @@ export function ActionButton({
   primary = false,
   compact = false,
   pressed,
+  expanded,
+  label,
   reason,
   hint,
   tone,
@@ -59,6 +61,10 @@ export function ActionButton({
   readonly primary?: boolean;
   readonly compact?: boolean;
   readonly pressed?: boolean;
+  /** Set on a button that opens a popover: whether it is open now. */
+  readonly expanded?: boolean;
+  /** A compact button's accessible name, when it says more than the title, as a state the icon marks. */
+  readonly label?: string;
   readonly reason?: string | null;
   readonly hint?: string;
   /**
@@ -87,8 +93,10 @@ export function ActionButton({
     >
       <button
         type="button"
-        aria-label={compact ? action.title : undefined}
+        aria-label={compact ? (label ?? action.title) : undefined}
         aria-pressed={pressed}
+        aria-haspopup={expanded === undefined ? undefined : "dialog"}
+        aria-expanded={expanded}
         aria-busy={busy ? true : undefined}
         data-copied={copied ? "" : undefined}
         // A disabled button gets no pointer events, so Radix never opens; the native tooltip still does.

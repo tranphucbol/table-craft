@@ -15,6 +15,8 @@ import { NamespaceSwitcher } from "@table-craft/desktop/renderer/console/Namespa
 import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js";
 import { RunOnPicker } from "@table-craft/desktop/renderer/console/RunOnPicker.js";
 import { RunSettingsButton } from "@table-craft/desktop/renderer/console/RunSettings.js";
+import { causedByRunSettings } from "@table-craft/desktop/renderer/model/runSettings.js";
+import { RUN_SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/runSettingsActions.js";
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
@@ -172,6 +174,15 @@ function RunError({ error, located }: { readonly error: EngineError; readonly lo
       >
         Show in Log
       </button>
+      {causedByRunSettings(error) ? (
+        <button
+          type="button"
+          className="shrink-0 text-accent hover:underline"
+          onClick={() => void invoke(RUN_SETTINGS_ACTION_IDS.show)}
+        >
+          Run Settings…
+        </button>
+      ) : null}
       <button
         type="button"
         className="shrink-0 text-accent hover:underline"

@@ -71,6 +71,7 @@ import {
   Plug,
   PlugsConnected,
   SlidersHorizontal,
+  FadersHorizontal,
   Stack,
   Table,
   Trash,
@@ -240,4 +241,5 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   reformat: TextIndent,
   more: DotsThreeVertical,
   tabs: CaretDown,
+  runSettings: FadersHorizontal,
 };

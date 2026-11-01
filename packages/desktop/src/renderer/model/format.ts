@@ -127,6 +127,8 @@ export function exportedText(exported: {
 }
 
 /** Why the grid holds no more rows once an export took its cursor (plan 138). */
+export const PAGED_BY_CONSOLE_TEXT = "page size from Run Settings";
+
 const DRAINED_TEXT: Readonly<Record<ExportTaskState, string>> = {
   running: "exporting",
   done: "rest exported",
@@ -147,6 +149,8 @@ export function resultStateText(result: {
   readonly fetchAllCap: number;
   readonly shown?: number | null;
   readonly exportEnded?: ExportTaskState | null;
+  /** The console's Run Settings chose the page size, so a short page says where it came from. */
+  readonly pagedByConsole?: boolean;
 }): string {
   const count = formatCount(result.rowCount);
   const shown = result.shown ?? null;
@@ -164,6 +168,7 @@ export function resultStateText(result: {
   }
   if (result.complete) return result.rowCount === 1 ? "1 row" : `${count} rows`;
   const parts = [`${count}+ rows`];
+  if (result.pagedByConsole === true) parts.push(PAGED_BY_CONSOLE_TEXT);
   if (!result.cursorOpen) parts.push(stopped);
   if (result.sorted) parts.push("sorted locally");
   return parts.join(" · ");

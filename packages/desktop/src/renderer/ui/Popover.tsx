@@ -23,6 +23,7 @@ export function Popover({
   testId,
   onClose,
   onOutside,
+  focusSelf,
   children,
 }: {
   readonly anchor: PopoverAnchor;
@@ -31,6 +32,11 @@ export function Popover({
   readonly onClose: () => void;
   /** A pointer down or focus outside, before `onClose`: what was pressed or focused. */
   readonly onOutside?: (target: EventTarget | null) => void;
+  /**
+   * Focus the popover itself on open rather than its first control, which a press from outside
+   * would otherwise draw with a focus ring; Tab still reaches the controls.
+   */
+  readonly focusSelf?: boolean;
   readonly children: ReactNode;
 }) {
   // The anchor is no trigger Radix could hand focus back to, so focus returns where it was.
@@ -57,6 +63,14 @@ export function Popover({
           aria-label={label}
           data-testid={testId}
           onInteractOutside={(event) => onOutside?.(event.target)}
+          {...(focusSelf === true
+            ? {
+                onOpenAutoFocus: (event: Event) => {
+                  event.preventDefault();
+                  if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+                },
+              }
+            : {})}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (returnTo instanceof HTMLElement) returnTo.focus();

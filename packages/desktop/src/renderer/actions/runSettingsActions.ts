@@ -15,7 +15,7 @@ export const RUN_SETTINGS_ACTIONS: readonly AnyAction[] = [
     id: RUN_SETTINGS_ACTION_IDS.show,
     title: "Run Settings…",
     category: "Console",
-    icon: "settings",
+    icon: "runSettings",
     tabKind: "console",
     run: (context) => {
       const consoleId = context.activeTab?.id;

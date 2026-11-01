@@ -236,6 +236,13 @@ describe("result grid text", () => {
     expect(resultStateText({ ...base, rowCount: 1, complete: true })).toBe("1 row");
   });
 
+  it("givenPageSizeFromRunSettings_whenLabelled_thenSaysWhereItCameFrom", () => {
+    expect(resultStateText({ ...base, rowCount: 20, pagedByConsole: true })).toBe(
+      "20+ rows · page size from Run Settings",
+    );
+    expect(resultStateText({ ...base, rowCount: 20, complete: true, pagedByConsole: true })).toBe("20 rows");
+  });
+
   it("givenExportDrainedTheCursor_whenLabelled_thenSaysHowTheExportEnded", () => {
     const drained = { ...base, rowCount: 500, cursorOpen: false };
 
