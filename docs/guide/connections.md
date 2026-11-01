@@ -5,7 +5,9 @@ folder, comment, the plugin's connection fields, read-only mode and a colour tha
 **Test Connection** reports the server version and round trip before you save. Each password has a
 save mode: _Forever_ keeps it encrypted by the operating system's keychain, _Until restart_ keeps it
 in memory, and _Never_ asks on every connect. A _Forever_ or _Until restart_ password left blank is
-asked for when you connect, and kept in its mode once the connection works.
+asked for when you connect, and kept in its mode once the connection works. For a server without a
+password, pick **No auth** (Redis) or **None** (etcd) in Authentication: TableCraft then never
+asks for one, and forgets a password it had kept.
 
 Paste a connection URL such as `postgresql://alice:secret@db.example.com:5432/sales?sslmode=require`
 into the URL row, or into Host, and the fields fill themselves; the password goes to its save mode,

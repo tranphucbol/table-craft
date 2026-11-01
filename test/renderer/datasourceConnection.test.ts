@@ -20,7 +20,13 @@ const PLUGIN: PluginInfo = {
   ...POSTGRES_PLUGIN,
   id: "endpoint-capable-example",
   fields: [
-    ...POSTGRES_PLUGIN.fields.filter((field) => field.key !== "database"),
+    ...POSTGRES_PLUGIN.fields
+      .filter((field) => field.key !== "database")
+      .map((field) =>
+        field.key === "user" || field.key === "password"
+          ? { ...field, visibleWhen: { key: "authMode", equals: ["password", "auto"] } }
+          : field,
+      ),
     { key: "endpoints", label: "Endpoints", kind: "text", default: "" },
     {
       key: "authMode",

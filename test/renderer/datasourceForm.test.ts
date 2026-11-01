@@ -371,3 +371,86 @@ describe("datasource form certificates", () => {
     expect(request.secrets).not.toHaveProperty("sslKeyPassphrase");
   });
 });
+
+const REDIS_AUTH_PLUGIN = {
+  ...REDIS_PLUGIN,
+  fields: [
+    ...REDIS_PLUGIN.fields,
+    {
+      key: "authMode",
+      label: "Authentication",
+      kind: "select" as const,
+      default: "password",
+      options: [
+        { value: "password", label: "User & Password" },
+        { value: "none", label: "No auth" },
+      ],
+    },
+    { key: "user", label: "Username", kind: "text" as const, visibleWhen: { key: "authMode", equals: "password" } },
+    {
+      key: "password",
+      label: "Password",
+      kind: "password" as const,
+      secret: true,
+      visibleWhen: { key: "authMode", equals: "password" },
+    },
+  ],
+};
+
+describe("datasource form authentication", () => {
+  it("givenNoAuth_whenSaved_thenNoUsernamePasswordModeOrValueSent", () => {
+    const blank = newDraft("new-0", REDIS_AUTH_PLUGIN, [], "forever");
+    const draft = {
+      ...blank,
+      values: { ...blank.values, authMode: "none", user: "old-user" },
+      secrets: { ...blank.secrets, password: { action: "set" as const, value: "never-sent" } },
+    };
+
+    const request = toSaveRequest(draft, REDIS_AUTH_PLUGIN);
+
+    expect(request.datasource.config).toMatchObject({ authMode: "none" });
+    expect(request.datasource.config).not.toHaveProperty("user");
+    expect(request.datasource.secretModes).not.toHaveProperty("password");
+    expect(JSON.stringify(request)).not.toContain("never-sent");
+  });
+
+  it("givenRecordSavedBeforeAuthentication_whenOpened_thenUserAndPasswordShown", () => {
+    const saved = view({ id: "r", name: "r", pluginId: "redis", config: { host: "cache", user: "app" } });
+
+    const draft = draftFromView(saved, REDIS_AUTH_PLUGIN);
+    const password = REDIS_AUTH_PLUGIN.fields.find((field) => field.key === "password");
+
+    expect(draft.values.authMode).toBe("password");
+    expect(password !== undefined && fieldVisible(password, draft)).toBe(true);
+    expect(toSaveRequest(draft, REDIS_AUTH_PLUGIN).datasource.config).toMatchObject({ user: "app" });
+  });
+
+  it("givenNoAuth_whenUrlWithPasswordPasted_thenAuthenticationShowsIt", () => {
+    const blank = newDraft("new-0", REDIS_AUTH_PLUGIN, [], "forever");
+    const draft = { ...blank, values: { ...blank.values, authMode: "none" } };
+
+    const next = applyParsedUrl(
+      draft,
+      REDIS_AUTH_PLUGIN,
+      { values: { host: "cache" }, secrets: { password: "s3cret" }, ignored: [] },
+      "redis://:s3cret@cache",
+    );
+
+    expect(next.values.authMode).toBe("password");
+    expect(next.secrets.password).toEqual({ action: "set", value: "s3cret" });
+  });
+
+  it("givenNoAuth_whenUrlWithoutCredentialsPasted_thenNoAuthKept", () => {
+    const blank = newDraft("new-0", REDIS_AUTH_PLUGIN, [], "forever");
+    const draft = { ...blank, values: { ...blank.values, authMode: "none" } };
+
+    const next = applyParsedUrl(
+      draft,
+      REDIS_AUTH_PLUGIN,
+      { values: { host: "cache" }, secrets: {}, ignored: [] },
+      "redis://cache",
+    );
+
+    expect(next.values.authMode).toBe("none");
+  });
+});
