@@ -205,7 +205,9 @@ describe.runIf(SMOKE_ENABLED)("streaming export live test", () => {
 
       await exportRows(page, "running").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await expect.poll(() => exportedRows(page), { timeout: LAUNCH_TIMEOUT_MS }).toBeGreaterThan(SHOWN_PROGRESS_ROWS);
-      await expect(exportingStatus(page).textContent()).resolves.toMatch(/^Exporting 1/);
+      await expect(page.getByTestId("status-exporting-label").textContent()).resolves.toMatch(
+        /^series\.csv · [\d,]+ rows$/,
+      );
       // The console is free while the export re-runs its statement on a session of its own.
       await expect(runAllButton(page).isEnabled()).resolves.toBe(true);
       await captureWindow(page, "export-running");
