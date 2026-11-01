@@ -195,7 +195,7 @@ for (const target of TARGETS) {
         expect(done).toMatchObject({ state: "failed", error: { code: "timedOut", reason: "stalled" } });
         expect(done.rows).toBeGreaterThan(0);
         expect(done.rows).toBeLessThan(ROWS);
-        expect(done.error?.message).toContain(`${done.rows.toLocaleString("en-US")} rows were written`);
+        expect(done.error?.message).toContain(`${done.rows.toLocaleString("en-US")} rows were exported`);
         expect(await readdir(directory)).toEqual([]);
       });
 

@@ -3,16 +3,25 @@ import type { EngineMethod, ExportTask, ResultOf } from "@table-craft/desktop/en
 import { withExtension } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import {
-  exportingText,
+  ETA_MIN_ELAPSED_MS,
+  EXPORT_DONE_FLASH_MS,
+  exportChip,
+  exportDetailText,
+  exportFlashEndsAt,
   exportNotes,
   exportPercent,
+  exportPopoverEntries,
   exportProgressText,
+  exportRate,
+  exportTimeLeft,
   fileNameOf,
+  type ExportChipState,
 } from "@table-craft/desktop/renderer/model/exportText.js";
 import { EXPORTS_ROW_KEY, movedInTree, serviceRows } from "@table-craft/desktop/renderer/model/servicesTree.js";
-import { createExportsStore } from "@table-craft/desktop/renderer/state/exports.js";
+import { createExportsStore, type ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
 
 const DATASOURCE = "pg";
+const STARTED_AT = 1_000_000;
 
 function taskOf(overrides: Partial<ExportTask> = {}): ExportTask {
   return {
@@ -24,6 +33,7 @@ function taskOf(overrides: Partial<ExportTask> = {}): ExportTask {
     rows: 0,
     bytes: 0,
     elapsedMs: 0,
+    startedAt: STARTED_AT,
     estimate: null,
     sheets: 0,
     truncatedCells: 0,
@@ -71,7 +81,7 @@ describe("exports store", () => {
     });
 
     expect(calls[0]).toMatchObject({ type: "export.start", params: { stallSeconds: 90, format: "csv" } });
-    expect(exports.getState().entries).toEqual([{ datasourceId: DATASOURCE, task: taskOf() }]);
+    expect(exports.getState().entries).toEqual([{ datasourceId: DATASOURCE, task: taskOf(), finishedAt: null }]);
   });
 
   it("givenFinalEvent_whenLateProgressArrives_thenFinalStateKept", () => {
@@ -142,8 +152,6 @@ describe("export text", () => {
 
     expect(exportProgressText(task)).toBe("12,345 of 50,000 rows · 4.1 MB · 3.2 s");
     expect(exportPercent(task)).toBe(24);
-    expect(exportingText([task])).toBe("Exporting 1 · 24%");
-    expect(exportingText([task, task])).toBe("Exporting 2");
   });
 
   it("givenDoneTask_whenDescribed_thenNotesSayWhatWasCut", () => {
@@ -175,10 +183,198 @@ describe("export text", () => {
   });
 });
 
+function entryOf(overrides: Partial<ExportTask> = {}, finishedAt: number | null = null): ExportEntry {
+  return { datasourceId: DATASOURCE, task: taskOf(overrides), finishedAt };
+}
+
+const NONE: ExportChipState = { cancelling: new Set(), seen: new Set() };
+const SECOND = 1000;
+const MINUTE = 60 * SECOND;
+
+describe("exports chip", () => {
+  it("givenNoExports_whenChip_thenNull", () => {
+    expect(exportChip([], NONE, STARTED_AT)).toBeNull();
+  });
+
+  it("givenOneRunningWithoutEstimate_whenChip_thenNameRowsAndClockIndeterminate", () => {
+    const chip = exportChip([entryOf({ rows: 412_300 })], NONE, STARTED_AT + MINUTE);
+
+    expect(chip).toMatchObject({
+      tone: "running",
+      label: "orders.csv · 412,300 rows",
+      percent: null,
+      startedAt: STARTED_AT,
+      cancelTaskId: "export-1",
+      cancelling: false,
+    });
+    expect(chip?.tooltip).toContain("/tmp/out/orders.csv");
+  });
+
+  it("givenOneRunningWithEstimate_whenChip_thenPercentDeterminate", () => {
+    const chip = exportChip([entryOf({ rows: 41, estimate: 100 })], NONE, STARTED_AT);
+
+    expect(chip).toMatchObject({ label: "orders.csv · 41%", percent: 41 });
+  });
+
+  it("givenTwoRunningOneWithoutEstimate_whenChip_thenCountAndIndeterminate", () => {
+    const chip = exportChip(
+      [entryOf({ estimate: 10 }), entryOf({ taskId: "export-2", startedAt: STARTED_AT - MINUTE })],
+      NONE,
+      STARTED_AT,
+    );
+
+    expect(chip).toMatchObject({
+      label: "2 exports",
+      percent: null,
+      startedAt: STARTED_AT - MINUTE,
+      cancelTaskId: null,
+    });
+  });
+
+  it("givenTwoRunningWithEstimates_whenChip_thenCombinedPercent", () => {
+    const chip = exportChip(
+      [entryOf({ rows: 10, estimate: 100 }), entryOf({ taskId: "export-2", rows: 50, estimate: 100 })],
+      NONE,
+      STARTED_AT,
+    );
+
+    expect(chip).toMatchObject({ label: "2 exports · 30%", percent: 30 });
+  });
+
+  it("givenCancelClicked_whenChip_thenCancelling", () => {
+    const chip = exportChip([entryOf()], { ...NONE, cancelling: new Set(["export-1"]) }, STARTED_AT);
+
+    expect(chip).toMatchObject({ label: "Cancelling orders.csv…", cancelling: true });
+  });
+
+  it("givenDoneWithinFlash_whenChip_thenDoneTone", () => {
+    const finishedAt = STARTED_AT + MINUTE;
+    const done = entryOf({ state: "done", rows: 790_644, elapsedMs: 230 * SECOND }, finishedAt);
+
+    expect(exportChip([done], NONE, finishedAt + SECOND)).toMatchObject({
+      tone: "done",
+      label: "orders.csv · 790,644 rows · 230.0 s",
+      startedAt: null,
+      cancelTaskId: null,
+    });
+    expect(exportFlashEndsAt([done])).toBe(finishedAt + EXPORT_DONE_FLASH_MS);
+  });
+
+  it("givenDoneAfterFlash_whenChip_thenNull", () => {
+    const done = entryOf({ state: "done" }, STARTED_AT);
+
+    expect(exportChip([done], NONE, STARTED_AT + EXPORT_DONE_FLASH_MS)).toBeNull();
+  });
+
+  it("givenFailedUnseen_whenChip_thenFailedTone", () => {
+    const failed = entryOf({ state: "failed" }, STARTED_AT);
+
+    expect(exportChip([failed], NONE, STARTED_AT + MINUTE)).toMatchObject({
+      tone: "failed",
+      label: "Export failed · orders.csv",
+    });
+  });
+
+  it("givenFailedSeen_whenChip_thenNull", () => {
+    const failed = entryOf({ state: "failed" }, STARTED_AT);
+
+    expect(exportChip([failed], { ...NONE, seen: new Set(["export-1"]) }, STARTED_AT)).toBeNull();
+  });
+
+  it("givenCancelled_whenChip_thenNull", () => {
+    expect(exportChip([entryOf({ state: "cancelled" }, STARTED_AT)], NONE, STARTED_AT)).toBeNull();
+  });
+
+  it("givenRunningAndFinished_whenPopoverEntries_thenRunningFirstThenNewestFinished", () => {
+    const entries = [
+      entryOf({ taskId: "old", state: "done" }, 1),
+      entryOf({ taskId: "run" }),
+      entryOf({ taskId: "new", state: "failed" }, 2),
+    ];
+
+    expect(exportPopoverEntries(entries).map((entry) => entry.task.taskId)).toEqual(["run", "new", "old"]);
+  });
+});
+
+describe("export rate and time left", () => {
+  it("givenEstimateBeforeThreeSeconds_whenTimeLeft_thenNull", () => {
+    const task = taskOf({ rows: 1000, estimate: 10_000 });
+
+    expect(exportTimeLeft(task, STARTED_AT + ETA_MIN_ELAPSED_MS - 1)).toBeNull();
+  });
+
+  it("givenEstimateAndRate_whenTimeLeft_thenAboutMinutes", () => {
+    const task = taskOf({ rows: 10_000, estimate: 100_000 });
+
+    expect(exportRate(task, STARTED_AT + 10 * SECOND)).toBe(1000);
+    expect(exportTimeLeft(task, STARTED_AT + 10 * SECOND)).toBe("about 2 min left");
+    expect(exportTimeLeft(taskOf({ rows: 90_000, estimate: 100_000 }), STARTED_AT + 10 * SECOND)).toBe(
+      "less than a minute left",
+    );
+  });
+
+  it("givenNoEstimate_whenTimeLeft_thenNull", () => {
+    expect(exportTimeLeft(taskOf({ rows: 10 }), STARTED_AT + MINUTE)).toBeNull();
+  });
+
+  it("givenRunningTask_whenDetail_thenRowsSizeRateClockAndTimeLeft", () => {
+    const task = taskOf({ rows: 412_300, estimate: 1_000_000, bytes: 118 * 1024 * 1024 });
+
+    expect(exportDetailText(task, STARTED_AT + 102 * SECOND)).toBe(
+      "412,300 of 1,000,000 rows · 118.0 MB · 4,042 rows/s · 1:42 · about 2 min left",
+    );
+  });
+});
+
+describe("exports store cancel", () => {
+  function storeAt(call: (type: string) => Promise<unknown>, now = () => STARTED_AT) {
+    const client: EngineClient = {
+      call: <M extends EngineMethod>(type: M) => call(type) as Promise<ResultOf<M>>,
+      fail: () => undefined,
+      onEvent: () => () => undefined,
+    };
+    return createExportsStore({ client: () => Promise.resolve(client), stallSeconds: () => 90, now });
+  }
+
+  it("givenCancelRejects_whenCancel_thenCancellingCleared", async () => {
+    const exports = storeAt(() => Promise.reject(new Error("gone")));
+    exports.getState().received(DATASOURCE, { id: null, type: "export.progress", task: taskOf() });
+
+    await expect(exports.getState().cancel("export-1")).rejects.toThrow("gone");
+
+    expect(exports.getState().cancelling.size).toBe(0);
+  });
+
+  it("givenFinalEvent_whenCancelling_thenCancellingClearedAndFinishedAtStamped", async () => {
+    const exports = storeAt(
+      () => Promise.resolve(null),
+      () => STARTED_AT + MINUTE,
+    );
+    exports.getState().received(DATASOURCE, { id: null, type: "export.progress", task: taskOf() });
+
+    await exports.getState().cancel("export-1");
+    expect(exports.getState().cancelling.has("export-1")).toBe(true);
+    exports
+      .getState()
+      .received(DATASOURCE, { id: null, type: "export.cancelled", task: taskOf({ state: "cancelled" }) });
+
+    expect(exports.getState().cancelling.size).toBe(0);
+    expect(exports.getState().entries[0]?.finishedAt).toBe(STARTED_AT + MINUTE);
+  });
+
+  it("givenFailedTask_whenMarkedSeen_thenSeen", () => {
+    const exports = storeAt(() => Promise.resolve(null));
+
+    exports.getState().markSeen(["export-1"]);
+
+    expect(exports.getState().seen.has("export-1")).toBe(true);
+  });
+});
+
 describe("services exports node", () => {
   const entries = [
-    { datasourceId: DATASOURCE, task: taskOf({ taskId: "a" }) },
-    { datasourceId: DATASOURCE, task: taskOf({ taskId: "b", state: "done" }) },
+    { datasourceId: DATASOURCE, task: taskOf({ taskId: "a" }), finishedAt: null },
+    { datasourceId: DATASOURCE, task: taskOf({ taskId: "b", state: "done" }), finishedAt: 1 },
   ];
 
   it("givenExports_whenRowsBuilt_thenNodeAfterDatasourcesNewestFirst", () => {

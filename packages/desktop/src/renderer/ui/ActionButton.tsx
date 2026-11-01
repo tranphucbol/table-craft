@@ -26,6 +26,12 @@ const ICON_TONE: Readonly<Record<Exclude<ActionTone, "warning">, string>> = {
   danger: "enabled:text-danger",
 };
 
+/** A text button's icon carries the tone, its label stays ink. */
+const TEXT_ICON_TONE: Readonly<Record<Exclude<ActionTone, "warning">, string>> = {
+  success: "text-success",
+  danger: "text-danger",
+};
+
 function buttonClass(primary: boolean, compact: boolean, tone: ActionTone | undefined): string {
   if (primary) return PRIMARY_CLASS;
   if (tone === "warning") return compact ? WARNING_COMPACT_CLASS : WARNING_TEXT_CLASS;
@@ -58,7 +64,7 @@ export function ActionButton({
   readonly hint?: string;
   /**
    * `warning` marks an action that does more than it looks, as Explain Analyse runs its statement;
-   * `success` and `danger` colour a compact icon that starts or ends work, as Run and Cancel.
+   * `success` and `danger` colour the icon of a button that starts or ends work, as Run and Cancel.
    */
   readonly tone?: ActionTone;
   /** Draws another glyph than the action's own, as the tab strip's New Console reads as `+`. */
@@ -100,7 +106,12 @@ export function ActionButton({
           <Icon
             aria-hidden
             weight={copied || busy ? "bold" : compact ? "regular" : "fill"}
-            className={cn("size-icon", copied && "text-success", busy && "animate-spin")}
+            className={cn(
+              "size-icon",
+              !compact && enabled && tone !== undefined && tone !== "warning" && TEXT_ICON_TONE[tone],
+              copied && "text-success",
+              busy && "animate-spin",
+            )}
           />
         )}
         {compact ? null : action.title}

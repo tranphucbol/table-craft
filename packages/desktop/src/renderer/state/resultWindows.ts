@@ -288,8 +288,13 @@ export function createResultWindows(owner: ResultOwner) {
       });
       if (task.origin === "cursor") {
         owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: "export" }));
-        void owner.exports.finished(task.taskId).then(() => {
-          owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: null, cursorOpen: false }));
+        void owner.exports.finished(task.taskId).then((ended) => {
+          owner.update(ownerId, resultId, (latest) => ({
+            ...latest,
+            fetching: null,
+            cursorOpen: false,
+            exportEnded: ended.state,
+          }));
         });
       }
       return task;

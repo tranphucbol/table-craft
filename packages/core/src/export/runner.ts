@@ -70,9 +70,9 @@ export interface RunExportOptions {
   readonly onStall?: () => void;
 }
 
-/** `12,345 rows were written before it stopped.` */
-function writtenBefore(rows: number): string {
-  return `${rows.toLocaleString("en-US")} ${rows === 1 ? "row was" : "rows were"} written before it stopped.`;
+/** `12,345 rows were exported before it stopped; the partial file was removed.` */
+function stoppedAfter(rows: number): string {
+  return `${rows.toLocaleString("en-US")} ${rows === 1 ? "row was" : "rows were"} exported before it stopped; the partial file was removed.`;
 }
 
 /** `2 minutes`, `45 seconds`. */
@@ -104,7 +104,7 @@ class Interrupted extends Error {
  * Streams `rows` through `encoder` into `sink` (decision 040). Each row is read only after the
  * previous one is accepted by the sink, so a slow disk slows the read; every wait on the source is
  * raced against the stall watchdog and `signal`. On any failure the sink is aborted and the error
- * is an `ExportError` saying how many rows were written.
+ * is an `ExportError` saying how many rows were exported.
  */
 export async function runExport(options: RunExportOptions): Promise<ExportOutcome> {
   const clock = options.clock ?? systemClock;
@@ -204,17 +204,17 @@ function failure(cause: unknown, rows: number, options: RunExportOptions): Expor
     options.onStall?.();
     return new ExportError(
       "stalled",
-      `The server sent nothing for ${durationText(options.stallMs)}; the network or the server stalled. ${writtenBefore(rows)}`,
+      `The server sent nothing for ${durationText(options.stallMs)}; the network or the server stalled. ${stoppedAfter(rows)}`,
       STALL_HINT,
       rows,
     );
   }
   if (cause instanceof Interrupted) {
-    return new ExportError("cancelled", `Export cancelled. ${writtenBefore(rows)}`, CANCEL_HINT, rows);
+    return new ExportError("cancelled", `Export cancelled. ${stoppedAfter(rows)}`, CANCEL_HINT, rows);
   }
   if (cause instanceof ExportError) {
-    return new ExportError(cause.reason, `${cause.message} ${writtenBefore(rows)}`, cause.hint, rows, cause.cause);
+    return new ExportError(cause.reason, `${cause.message} ${stoppedAfter(rows)}`, cause.hint, rows, cause.cause);
   }
   const message = (cause instanceof Error ? cause.message : String(cause)).replace(TRAILING_STOP, "");
-  return new ExportError("source", `The export stopped: ${message}. ${writtenBefore(rows)}`, SOURCE_HINT, rows, cause);
+  return new ExportError("source", `The export stopped: ${message}. ${stoppedAfter(rows)}`, SOURCE_HINT, rows, cause);
 }

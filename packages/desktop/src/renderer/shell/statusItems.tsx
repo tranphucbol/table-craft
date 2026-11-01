@@ -7,8 +7,7 @@ import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { useServer } from "@table-craft/desktop/renderer/state/server.js";
 import { isRunningOn, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
-import { exportingText } from "@table-craft/desktop/renderer/model/exportText.js";
-import { isRunning, useExports } from "@table-craft/desktop/renderer/state/exports.js";
+import { ExportsChip } from "@table-craft/desktop/renderer/shell/ExportsChip.js";
 import { importingText } from "@table-craft/desktop/renderer/model/importText.js";
 import { isImporting, useImports } from "@table-craft/desktop/renderer/state/imports.js";
 import { scriptsRunningText } from "@table-craft/desktop/renderer/model/scriptText.js";
@@ -149,21 +148,6 @@ function RunningIndicator() {
   );
 }
 
-/** Background exports still writing (decision 040); Services lists each with Cancel. */
-function ExportingIndicator() {
-  const text = useExports((state) => {
-    const running = state.entries.filter(isRunning).map((entry) => entry.task);
-    return running.length === 0 ? null : exportingText(running);
-  });
-  if (text === null) return null;
-  return (
-    <span data-testid="status-exporting" className="flex items-center gap-cell">
-      <SpinnerIcon aria-hidden className="size-icon animate-spin text-accent" />
-      {text}
-    </span>
-  );
-}
-
 /** Background imports still writing (plan 021); Services lists each with Cancel. */
 function ImportingIndicator() {
   const text = useImports((state) => {
@@ -198,7 +182,7 @@ export const STATUS_ITEMS: readonly StatusItem[] = [
   { id: "datasource", side: "left", Component: DatasourceStatus },
   { id: "sync", side: "left", Component: SyncStatus },
   { id: "running", side: "right", Component: RunningIndicator },
-  { id: "exporting", side: "right", Component: ExportingIndicator },
+  { id: "exporting", side: "right", Component: ExportsChip },
   { id: "importing", side: "right", Component: ImportingIndicator },
   { id: "scripts", side: "right", Component: ScriptsIndicator },
   { id: "mcp", side: "right", Component: McpStatusChip },
