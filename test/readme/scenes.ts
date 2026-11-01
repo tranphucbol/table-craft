@@ -80,10 +80,14 @@ function shopSqlite(path: string): SavedDatasource {
 }
 
 /**
- * The GIFs pin Dark (plan 016, Consequences) and full motion (plan 061 decision 10), whatever the
- * recording Mac's appearance and accessibility settings are.
+ * The GIFs pin One Dark Pro Dark and full motion (plan 061 decision 10), whatever the recording
+ * Mac's appearance and accessibility settings are, and stripe the grid's rows.
  */
-const APPEARANCE = { version: 1, appearance: { theme: "dark", motion: "full" } };
+const PINNED_SETTINGS = {
+  version: 1,
+  appearance: { theme: "onedarkpro-dark", motion: "full" },
+  data: { stripedRows: true },
+};
 
 export interface Scene {
   readonly app: ElectronApplication;
@@ -135,7 +139,7 @@ export function scene(name: string, script: SceneScript) {
       const sqlite = shopSqlite(join(sqliteDirectory, SHOP_FILE));
       const saved = { ...SHOP_POSTGRES, ...shop };
       seedDatasources(profile, [...(withoutShop ? [sqlite] : [saved, sqlite]), ...alsoSaved]);
-      seedSettings(profile, { ...APPEARANCE, ...settings?.() });
+      seedSettings(profile, { ...PINNED_SETTINGS, ...settings?.() });
       const { app, page } = await launchApp(null, { userDataDir: profile, env: env?.() ?? {} });
       running = app;
       await setWindowSize(app, EVIDENCE_WINDOW);
