@@ -52,7 +52,6 @@ import { serverLimitText, serverTimeoutText } from "@table-craft/desktop/rendere
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import {
   connectionFieldHelp,
-  connectionFieldVisible,
   endpointTestDrafts,
   offersEndpointConnection,
 } from "@table-craft/desktop/renderer/model/datasourceConnection.js";
@@ -217,7 +216,7 @@ function PlainField({ field, draft, onChange, onPasteUrl, hint }: FieldProps & {
 function Fields(props: Omit<FieldProps, "field"> & { readonly fields: readonly ConnectionField[] }) {
   const { fields, ...rest } = props;
   return fields
-    .filter((field) => fieldVisible(field, rest.draft) && connectionFieldVisible(field, rest.draft, rest.plugin))
+    .filter((field) => fieldVisible(field, rest.draft))
     .map((field) =>
       field.secret === true ? (
         <SecretField key={field.key} field={field} {...rest} />

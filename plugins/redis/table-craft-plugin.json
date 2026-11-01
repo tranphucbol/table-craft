@@ -23,8 +23,29 @@
       },
       { "key": "host", "label": "Host", "kind": "text", "default": "localhost", "required": true },
       { "key": "port", "label": "Port", "kind": "number", "default": 6379, "required": true },
-      { "key": "user", "label": "Username", "kind": "text" },
-      { "key": "password", "label": "Password", "kind": "password", "secret": true },
+      {
+        "key": "authMode",
+        "label": "Authentication",
+        "kind": "select",
+        "default": "password",
+        "options": [
+          { "value": "password", "label": "User & Password" },
+          { "value": "none", "label": "No auth" }
+        ]
+      },
+      {
+        "key": "user",
+        "label": "Username",
+        "kind": "text",
+        "visibleWhen": { "key": "authMode", "equals": "password" }
+      },
+      {
+        "key": "password",
+        "label": "Password",
+        "kind": "password",
+        "secret": true,
+        "visibleWhen": { "key": "authMode", "equals": "password" }
+      },
       {
         "key": "masterName",
         "label": "Master name",

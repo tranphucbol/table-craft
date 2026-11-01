@@ -2,6 +2,7 @@ import { z } from "@table-craft/plugin-api";
 import { TLS_MODES } from "./tls.js";
 
 export const MODES = ["standalone", "sentinel", "cluster"] as const;
+export const AUTH_MODES = ["password", "none"] as const;
 
 const DEFAULT_PORT = 6379;
 const DEFAULT_SCAN_BATCH = 1000;
@@ -18,6 +19,7 @@ export const connectionSchema = z.strictObject({
   mode: z.enum(MODES).default("standalone"),
   host: z.string().min(1).default("localhost"),
   port: z.number().int().positive().default(DEFAULT_PORT),
+  authMode: z.enum(AUTH_MODES).default("password"),
   user: z.string().default(""),
   password: z.string().default(""),
   masterName: z.string().min(1).default(DEFAULT_MASTER_NAME),

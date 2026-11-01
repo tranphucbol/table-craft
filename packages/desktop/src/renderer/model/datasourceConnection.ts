@@ -1,4 +1,4 @@
-import type { ConnectionField, PluginInfo } from "@table-craft/desktop/preload/bridge.js";
+import type { PluginInfo } from "@table-craft/desktop/preload/bridge.js";
 import type { FormDraft } from "@table-craft/desktop/renderer/model/datasourceForm.js";
 
 const ENDPOINT_SEPARATOR = /[,\n]/;
@@ -112,19 +112,6 @@ export function connectionProblems(draft: FormDraft, plugin: PluginInfo): readon
     }
   }
   return problems;
-}
-
-/** Password fields are disclosed only when the authentication mode can use them. */
-export function connectionFieldVisible(
-  field: ConnectionField,
-  draft: FormDraft,
-  plugin: PluginInfo | undefined,
-): boolean {
-  if (!offersEndpointConnection(plugin)) return true;
-  if (field.key === "user" || field.key === "password") {
-    return draft.values.authMode !== "none" && draft.values.authMode !== "clientCN";
-  }
-  return true;
 }
 
 /** Help describes the implemented configured-target policy, not automatic member discovery. */
