@@ -48,6 +48,26 @@ const SECRET = "fixture-secret-9431";
 const MYSQL = { host: "mysql.test", port: 3307 };
 const POSTGRES = { host: "pg.test", port: 5433 };
 
+const FOREIGN_BASE: ForeignConnection = {
+  app: "tablepro",
+  id: "base",
+  name: "Base",
+  folder: null,
+  driver: "mysql",
+  url: null,
+  host: "db.internal",
+  port: 3306,
+  database: null,
+  user: "app",
+  path: null,
+  ssh: null,
+  ssl: null,
+  color: null,
+  comment: "",
+  readOnly: false,
+  password: { kind: "none" },
+};
+
 const homes: string[] = [];
 
 afterEach(() => {
@@ -126,7 +146,7 @@ async function setup(
     service,
     log,
   });
-  return { files, service, importer, logs };
+  return { files, service, importer, logs, plugins };
 }
 
 function ready(preview: ImportPreview) {
@@ -158,7 +178,6 @@ describe("DataGrip reader", () => {
     expect(shop?.password).toEqual({
       kind: "store",
       service: dataGripService(DATAGRIP_IDS.shopMysql),
-      user: "table_craft",
     });
     const file = scan.connections.find((connection) => connection.id === DATAGRIP_IDS.localFile);
     expect(file).toMatchObject({
@@ -339,6 +358,22 @@ describe("credential readers", () => {
     expect(splitJoinedSecret("a\\\\b@p")).toEqual({ user: "a\\b", password: "p" });
   });
 
+  it("givenAccount_whenLookedUpOnMacOs_thenSecurityNarrowsByAccount", async () => {
+    const { run, calls } = runner({ stderr: `password: "${SECRET}"\n` });
+    const reader = createCredentialReader({ platform: "darwin", run });
+
+    expect(await reader.lookup("Mysql@db:3306", "app")).toEqual({ status: "found", value: SECRET });
+    expect(calls[0]?.args).toEqual(["find-generic-password", "-s", "Mysql@db:3306", "-a", "app", "-g"]);
+  });
+
+  it("givenAccount_whenLookedUpOnLinux_thenTheBarePasswordIsReturned", async () => {
+    const { run, calls } = runner({ stdout: `me@${SECRET}` });
+    const reader = createCredentialReader({ platform: "linux", run });
+
+    expect(await reader.lookup("Mysql@db:3306", "app")).toEqual({ status: "found", value: `me@${SECRET}` });
+    expect(calls[0]?.args).toEqual(["lookup", "service", "Mysql@db:3306", "account", "app"]);
+  });
+
   it("givenNoSecretTool_whenLookedUp_thenLockedWithInstallHint", async () => {
     const reader = createCredentialReader({ platform: "linux", run: runner({ code: null, startError: "ENOENT" }).run });
 
@@ -456,16 +491,43 @@ describe("importer", () => {
     expect(mapped.row.warnings).toEqual([`No installed plugin reads ${scheme}: URLs.`]);
   });
 
-  it("givenSsh_whenMapped_thenWarnedAndUnticked", async () => {
+  it("givenDataGripSshConfig_whenImporting_thenTunnelIsKept", async () => {
     const { home } = fixture();
-    const { importer } = await setup(home, fakeCredentials(new Map()).reader);
+    const { importer, service } = await setup(home, fakeCredentials(new Map()).reader);
 
-    const { rows } = ready(await importer.preview({ source: "datagrip" }));
-
-    expect(row(rows, "Prod via bastion")).toMatchObject({ status: "sshTunnel", selected: false });
-    expect(row(rows, "Prod via bastion").warnings[0]).toBe(
-      "SSH tunnel through bastion.example:22 was not imported; TableCraft has no SSH tunnels yet.",
+    const preview = ready(await importer.preview({ source: "datagrip" }));
+    const bastion = row(preview.rows, "Prod via bastion");
+    expect(bastion).toMatchObject({ status: "ready", selected: true });
+    expect(bastion.target).toMatch(/ via bastion\.example$/);
+    await importer.run(
+      { previewId: preview.previewId, keys: [bastion.key], importPasswords: false, topFolder: false },
+      () => undefined,
     );
+
+    const imported = service.list().datasources.find((datasource) => datasource.name === "Prod via bastion");
+    expect(imported?.ssh).toEqual({
+      enabled: true,
+      host: "bastion.example",
+      port: 22,
+      user: "ops",
+      auth: "password",
+      keyPath: "",
+    });
+  });
+
+  it("givenTunnelWithoutUser_whenMapped_thenWarnedAndUnticked", async () => {
+    const { plugins } = await setup(fixture().home, fakeCredentials(new Map()).reader);
+    const mapped = mapConnection(
+      {
+        ...FOREIGN_BASE,
+        ssh: { host: "jump.test", port: null, user: null, auth: null, keyPath: null, password: { kind: "none" } },
+      },
+      { plugins, existing: [], availability: () => "none" },
+    );
+
+    expect(mapped.row).toMatchObject({ status: "sshTunnel", selected: false });
+    expect(mapped.row.warnings[0]).toMatch(/^The SSH tunnel through jump\.test:22 was not imported/);
+    expect(mapped.draft?.ssh).toBeUndefined();
   });
 
   it("givenKeePass_whenImported_thenPasswordsSavedWithoutAskingTheKeychain", async () => {
@@ -482,7 +544,7 @@ describe("importer", () => {
     );
 
     expect(asked).toEqual([]);
-    expect(summary).toMatchObject({ imported: 5, withPasswords: 3, skipped: 0, cancelled: false });
+    expect(summary).toMatchObject({ imported: 6, withPasswords: 3, skipped: 0, cancelled: false });
     const list = service.list().datasources;
     const shop = list.find((datasource) => datasource.name === "Shop MySQL");
     expect(shop).toMatchObject({

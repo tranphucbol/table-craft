@@ -85,7 +85,11 @@ const datasourceSchema = z.strictObject({
   comment: z.string(),
   config: z.record(z.string(), configValue),
   secretModes: z.record(z.string(), z.enum(SECRET_MODES)),
-  origin: z.strictObject({ app: z.enum(IMPORT_APPS), id: z.string().min(1) }).optional(),
+  // An origin from an app a later build imports is dropped, not a reason to reject the whole file.
+  origin: z
+    .strictObject({ app: z.enum(IMPORT_APPS), id: z.string().min(1) })
+    .optional()
+    .catch(undefined),
   ssh: sshSchema.optional(),
   shownNamespaces: z.array(z.string()).readonly().optional(),
   agentAccess: z.enum(AGENT_ACCESS_LEVELS).optional(),

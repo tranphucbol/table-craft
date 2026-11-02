@@ -61,3 +61,26 @@ its export, not from its code. IntelliJ's formats come from its Apache-2.0 sourc
   connect until the user saves one in the Data Sources dialog.
 - SSH tunnels and SSL certificate files are not imported; such rows say so. Amended by decision 072:
   certificate file paths now fill the plugin's SSL fields, and Verify CA maps to `verify-ca`.
+  Amended by plan 143: a tunnel whose host, user and sign-in method the source names (a DataGrip
+  SSH configuration, a Workbench SSH connection) now fills the data source's SSH settings when its
+  plugin offers tunnels; any other tunnel still leaves its row unticked with a warning.
+
+## Amendment: MySQL Workbench (plan 143)
+
+**MySQL Workbench** (format learned from its GPL-2.0 source, `mysql/mysql-workbench`, described
+here and not copied) joins the sources:
+
+- `connections.xml` in its user data folder (`~/Library/Application Support/MySQL/Workbench`,
+  `%APPDATA%\MySQL\Workbench`, `~/.mysql/workbench`), a GRT XML list of `db.mgmt.Connection`
+  objects whose `parameterValues` dictionary holds the address, `useSSL` (0 to 4: off, if
+  available, require, verify CA, verify identity) and the SSH fields. **Backup Connections** writes
+  the same file into a `.zip`, read with a small ZIP reader over `node:zlib` (stored and deflate
+  entries, 16 MiB cap). A file picked from disk is told apart from DataGrip's `dataSources.xml` by
+  its `<data grt_format>` root.
+- Passwords are keychain items with service the connection's `hostIdentifier`
+  (`Mysql@host:port`, `…@sshHost` over SSH) and account its user, the bare password as value;
+  the SSH password is service `ssh@<sshHost>`, account the SSH user. TableCraft looks them up as
+  DataGrip's, adding `-a <account>` to `security` and `account <account>` to `secret-tool`. The
+  Windows vault (`workbench_user_data.dat`, DPAPI) is not read.
+- Socket and named-pipe connections are not supported; the oldest files' cleartext `password`
+  parameter is imported as found in the file.

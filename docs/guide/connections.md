@@ -54,22 +54,26 @@ close; one that cannot close within 5 seconds costs a reconnect, which Output re
 
 See [Datasources and secrets](../design/specification.md#datasources-and-secrets).
 
-## Import from DataGrip or TablePro
+## Import from DataGrip, TablePro or MySQL Workbench
 
 **File → Import Data Sources…**, or the import button beside Add in the Data Sources dialog, brings
-your connections over from DataGrip or TablePro. TableCraft only reads their files; it never
-changes them. The first step shows what it found on this computer and where it looked; **From a
-file…** reads a DataGrip `dataSources.xml` or a TablePro `.tablepro` export instead.
+your connections over from DataGrip, TablePro or MySQL Workbench. TableCraft only reads their
+files; it never changes them. The first step shows what it found on this computer and where it
+looked; **From a file…** reads a DataGrip `dataSources.xml`, a TablePro `.tablepro` export, or a
+MySQL Workbench `connections.xml` or **Backup Connections** `.zip` instead.
 
 The next step lists every connection with its type, address, user, folder and where its password
 comes from. MySQL, MariaDB and TiDB open in the MySQL plugin, PostgreSQL in the PostgreSQL plugin,
 SQLite in the SQLite plugin and Oracle in the Oracle plugin (a `jdbc:oracle:thin:@//host:1521/service`
 URL or its `@host:1521:SID` form); anything else is listed as not supported. A PostgreSQL or Oracle
 connection found before its plugin is installed offers **Install** in its row and maps once the
-plugin arrives. A connection that needs an
-SSH tunnel, or one already in TableCraft, starts unticked; ticking a duplicate imports a copy named
-`<name> (2)`, never overwriting the one you have. Folders and colours come along, under a
-`DataGrip` or `TablePro` folder unless you turn that off.
+plugin arrives. An SSH tunnel comes along when its host, user and sign-in method can be read (a
+DataGrip SSH configuration, a Workbench **Standard TCP/IP over SSH** connection). Workbench's SSH
+password comes from the keychain like the database one; any other SSH password or key passphrase
+is asked for on connect. A tunnel TableCraft
+cannot read fully, or one already in TableCraft, starts unticked; ticking a duplicate imports a
+copy named `<name> (2)`, never overwriting the one you have. Folders and colours come along, under
+a `DataGrip`, `TablePro` or `MySQL Workbench` folder unless you turn that off.
 
 ![Import from DataGrip](../media/import-datasources.gif)
 
@@ -83,6 +87,14 @@ Passwords:
 - **TablePro** keeps them in its own keychain items, which TableCraft does not read. Export the
   connections from TablePro as an encrypted `.tablepro` file with its passwords, then import that
   file and type the passphrase; it is used once and never stored.
+- **MySQL Workbench** keeps them in the system keychain on macOS and in the Secret Service on
+  Linux, read the same way as DataGrip's. On Windows they sit in Workbench's own encrypted vault,
+  which TableCraft does not read: such a data source asks on connect.
+
+A Workbench connection's group (the text before the first `/` of its name) becomes its folder.
+**Local Socket/Pipe** connections are listed as not supported, since TableCraft's MySQL connects
+over TCP/IP; LDAP and Kerberos ones import their address with a warning, and options TableCraft
+has no field for, such as an SSL cipher or `SQL_MODE`, are named in the row's warning.
 
 Untick **Import passwords** to bring none: such a data source asks on connect, and you save its
 password in the Data Sources dialog.

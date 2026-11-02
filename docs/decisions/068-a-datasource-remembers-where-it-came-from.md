@@ -26,4 +26,7 @@ version 1.
 - Nothing but the import reads `origin`; it never reaches a plugin or the engine.
 - An older build's strict schema rejects the key, so opening a profile with imported datasources
   in an older build sets `datasources.json` aside as corrupt, as it would any newer file.
+- Amended by plan 143: `app` gains `"workbench"`, and an `origin` whose app this build does not
+  know is dropped on read instead of failing the file, so a later app in the list costs an older
+  build only the duplicate check, from this build on.
 - Deleting an imported datasource forgets its origin, so the next import offers it again.

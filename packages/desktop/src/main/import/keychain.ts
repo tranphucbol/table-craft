@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 
 /**
- * Looks a password up in the operating system's credential store the way IntelliJ saved it: by
+ * Looks a password up in the operating system's credential store the way IntelliJ saved it, by
  * service name (`platform/credential-store-impl/src/credentialStore/macOsKeychainLibrary.kt` and
- * `linuxSecretLibrary.kt`, Apache-2.0). It runs the system's own tool, never a shell, so the user
- * sees the system's prompt naming that tool.
+ * `linuxSecretLibrary.kt`, Apache-2.0), or the way MySQL Workbench did, by service and account
+ * (`library/forms/cocoa/MFUtilities.mm`, `library/forms/gtk/src/lf_utilities.cpp`, GPL-2.0, read
+ * for the format only). It runs the system's own tool, never a shell, so the user sees the
+ * system's prompt naming that tool.
  */
 export type SecretLookup =
   | { readonly status: "found"; readonly value: string }
@@ -99,7 +101,11 @@ export interface CredentialReader {
   readonly available: boolean;
   /** What the dialog calls the store, e.g. "macOS Keychain". */
   readonly label: string;
-  lookup(service: string): Promise<SecretLookup>;
+  /**
+   * With an `account`, the item for that account, whose secret is the bare password; without, an
+   * IntelliJ item, whose Secret Service value joins user and password.
+   */
+  lookup(service: string, account?: string): Promise<SecretLookup>;
 }
 
 export interface CredentialReaderOptions {
@@ -114,8 +120,9 @@ export function createCredentialReader(options: CredentialReaderOptions): Creden
     return {
       available: true,
       label: "macOS Keychain",
-      async lookup(service) {
-        const args = ["find-generic-password", "-s", service, "-g", ...(options.keychains ?? [])];
+      async lookup(service, account) {
+        const byAccount = account === undefined ? [] : ["-a", account];
+        const args = ["find-generic-password", "-s", service, ...byAccount, "-g", ...(options.keychains ?? [])];
         const result = await options.run(SECURITY_TOOL, args);
         if (result.code === 0) {
           const value = securityPassword(result.stderr);
@@ -135,12 +142,14 @@ export function createCredentialReader(options: CredentialReaderOptions): Creden
     return {
       available: true,
       label: "Secret Service",
-      async lookup(service) {
-        const result = await options.run(SECRET_TOOL, ["lookup", "service", service]);
+      async lookup(service, account) {
+        const byAccount = account === undefined ? [] : ["account", account];
+        const result = await options.run(SECRET_TOOL, ["lookup", "service", service, ...byAccount]);
         if (result.startError !== null) {
           return { status: "locked", reason: "secret-tool is not installed (package libsecret-tools)." };
         }
         if (result.code !== 0 || result.stdout === "") return { status: "notFound" };
+        if (account !== undefined) return { status: "found", value: result.stdout };
         const { password } = splitJoinedSecret(result.stdout);
         return password === null ? { status: "notFound" } : { status: "found", value: password };
       },

@@ -370,12 +370,12 @@ export interface Datasource {
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035). */
-export const IMPORT_APPS = ["datagrip", "tablepro"] as const;
+export const IMPORT_APPS = ["datagrip", "tablepro", "workbench"] as const;
 export type ImportApp = (typeof IMPORT_APPS)[number];
 
 export interface DatasourceOrigin {
   readonly app: ImportApp;
-  /** The other app's id for it: a DataGrip uuid, a TablePro connection id or bundle ref. */
+  /** The other app's id for it: a DataGrip uuid, a TablePro connection id or bundle ref, a Workbench id. */
   readonly id: string;
 }
 
@@ -385,7 +385,7 @@ export type ImportPasswordState =
   | "keychain"
   /** Read already, from DataGrip's KeePass file. */
   | "found"
-  /** In the decrypted `.tablepro` bundle. */
+  /** In the decrypted `.tablepro` bundle, or in clear in an old Workbench file. */
   | "inFile"
   | "notSaved"
   | "locked"
@@ -410,7 +410,10 @@ export interface ImportRow {
   readonly folder: string | null;
   readonly password: ImportPasswordState;
   readonly warnings: readonly string[];
-  /** `unsupported` cannot be ticked; `duplicate` and `sshTunnel` start unticked. */
+  /**
+   * `unsupported` cannot be ticked; `duplicate` and `sshTunnel`, a tunnel whose user or sign-in
+   * could not be read, start unticked.
+   */
   readonly status: "ready" | "duplicate" | "sshTunnel" | "unsupported";
   readonly selected: boolean;
 }
@@ -429,7 +432,10 @@ export interface ImportSource {
 
 export type ImportPreviewRequest =
   | { readonly source: ImportApp }
-  /** A `.tablepro` bundle or a `dataSources.xml` the user picked; the passphrase is used once. */
+  /**
+   * A `.tablepro` bundle, a `dataSources.xml`, or a Workbench `connections.xml` or Backup
+   * Connections `.zip` the user picked; the passphrase is used once.
+   */
   | { readonly source: "file"; readonly path: string; readonly passphrase?: string | undefined };
 
 export type ImportPreview =
@@ -810,7 +816,7 @@ export interface TableCraftBridge {
   updateDismiss(): Promise<InvokeResult<null>>;
   /** Opens the offered release's notes page in the browser. */
   updateOpenNotes(): Promise<InvokeResult<null>>;
-  /** Looks for DataGrip and TablePro on this machine (plan 035); reads files, asks no keychain. */
+  /** Looks for DataGrip, TablePro and MySQL Workbench on this machine (plans 035, 143); reads files, asks no keychain. */
   importScan(): Promise<InvokeResult<readonly ImportSource[]>>;
   importPreview(request: ImportPreviewRequest): Promise<InvokeResult<ImportPreview>>;
   /** Imports the ticked rows; progress arrives through `onImportProgress`. */
