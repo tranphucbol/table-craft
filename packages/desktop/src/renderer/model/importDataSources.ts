@@ -18,7 +18,7 @@ export const PASSWORD_LABELS: Readonly<Record<ImportPasswordState, string>> = {
 export const STATUS_LABELS: Readonly<Record<ImportRow["status"], string | null>> = {
   ready: null,
   duplicate: "Already in TableCraft",
-  sshTunnel: "Needs an SSH tunnel",
+  sshTunnel: "SSH tunnel not imported",
   unsupported: "Not supported",
 };
 

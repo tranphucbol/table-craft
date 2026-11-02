@@ -1,3 +1,4 @@
+import type { SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
 import type { ImportApp } from "@table-craft/desktop/preload/bridge.js";
 
 export type ForeignApp = ImportApp;
@@ -18,21 +19,35 @@ export interface ForeignSsl {
  */
 export type PasswordSource =
   | { readonly kind: "none" }
-  /** In the other app's credential store, looked up by this service name when importing. */
-  | { readonly kind: "store"; readonly service: string; readonly user: string | null }
+  /**
+   * In the other app's credential store, looked up by this service name when importing. With an
+   * `account`, the item is the one for that account and holds the bare password (MySQL Workbench);
+   * without, IntelliJ's format.
+   */
+  | { readonly kind: "store"; readonly service: string; readonly account?: string }
   | { readonly kind: "bundle"; readonly value: string }
   /** Kept by the other app in a store TableCraft does not read; the user types it on connect. */
   | { readonly kind: "elsewhere" };
 
+/** The SSH tunnel a connection goes through; it imports only when the user and sign-in are known. */
+export interface ForeignSsh {
+  readonly host: string;
+  readonly port: number | null;
+  readonly user: string | null;
+  readonly auth: SshAuthMethod | null;
+  readonly keyPath: string | null;
+  readonly password: PasswordSource;
+}
+
 /** One saved connection as another app describes it, before mapping to a TableCraft datasource. */
 export interface ForeignConnection {
   readonly app: ForeignApp;
-  /** The other app's own id: a DataGrip data source uuid, a TablePro connection id. */
+  /** The other app's own id: a DataGrip data source uuid, a TablePro connection id, a Workbench object id. */
   readonly id: string;
   readonly name: string;
   /** A `/`-separated path within the other app, or null at its top level. */
   readonly folder: string | null;
-  /** DataGrip's driver-ref or TablePro's database type. */
+  /** DataGrip's driver-ref, TablePro's database type, or the database type a Workbench driver speaks. */
   readonly driver: string | null;
   /** A JDBC or plain connection URL with macros expanded; null when given as separate fields. */
   readonly url: string | null;
@@ -42,12 +57,16 @@ export interface ForeignConnection {
   readonly user: string | null;
   /** A database file, for file databases given as separate fields. */
   readonly path: string | null;
-  readonly ssh: { readonly host: string; readonly port: number | null } | null;
+  readonly ssh: ForeignSsh | null;
   readonly ssl: ForeignSsl | null;
   readonly color: string | null;
   readonly comment: string;
   readonly readOnly: boolean;
   readonly password: PasswordSource;
+  /** Why the reader knows it cannot be imported, shown on its unsupported row. */
+  readonly problem?: string;
+  /** What the reader had to leave out, shown on its row. */
+  readonly warnings?: readonly string[];
 }
 
 /**

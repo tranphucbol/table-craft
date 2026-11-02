@@ -427,8 +427,10 @@ export async function createDatasourceService<Target>(
     for (const item of items) {
       const plugin = availablePlugin(item.draft.pluginId);
       const id = options.newId();
-      const modes = modesFor(plugin, undefined, item.draft.config, {});
-      const next = toDatasource({ ...item.draft, secretModes: modes }, id, plugin.fields);
+      const offersTunnel = plugin.network !== null;
+      const ssh = offersTunnel ? item.draft.ssh : undefined;
+      const modes = modesFor(plugin, ssh, item.draft.config, {});
+      const next = toDatasource({ ...item.draft, secretModes: modes }, id, plugin.fields, offersTunnel);
       for (const [key, value] of Object.entries(item.secrets)) {
         const mode = modes[key];
         if (mode !== undefined) await secrets.set(id, key, mode, value);

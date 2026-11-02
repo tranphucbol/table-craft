@@ -87,7 +87,7 @@ plugins. The [specification](docs/design/specification.md) describes the whole o
 - [Install](docs/guide/install.md): the installers, opening the unsigned macOS app, updates, and
   building from source.
 - [Connections](docs/guide/connections.md): data sources, SSH tunnels, SSL, and importing them from
-  DataGrip or TablePro.
+  DataGrip, TablePro or MySQL Workbench.
 - [Database explorer](docs/guide/explorer.md): the tree, DDL and SQL generation, and running a
   routine.
 - [SQL console](docs/guide/console.md): running statements, transactions, inspections and Explain.
