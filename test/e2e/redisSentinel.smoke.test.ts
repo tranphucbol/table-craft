@@ -78,7 +78,7 @@ async function testResult(page: Page, trustBastion = false): Promise<string> {
   const dialog = dataSourcesDialog(page);
   await dialog.getByRole("button", { name: "Test Connection" }).click();
   if (trustBastion) {
-    const prompt = page.getByRole("dialog", { name: "Unknown SSH host key" });
+    const prompt = page.getByRole("dialog", { name: "Unknown SSH Host Key" });
     await prompt.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
     await prompt.getByRole("button", { name: "Trust", exact: true }).click();
     await prompt.waitFor({ state: "detached" });
@@ -114,7 +114,7 @@ describe.runIf(DATABASES_ENABLED)("redis sentinel live test", () => {
     "givenSentinelMode_whenWrongMasterNameOrSsh_thenFormShowsSentinelFieldsAndNamesTheFix",
     async () => {
       const page = await launch(null);
-      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const dialog = dataSourcesDialog(page);
       await dialog.getByRole("list", { name: "Database kinds" }).getByRole("button", { name: "Redis" }).click();
       await chooseOption(field(page, "Mode"), "sentinel");

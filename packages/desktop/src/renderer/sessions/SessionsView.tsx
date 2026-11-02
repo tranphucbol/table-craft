@@ -175,7 +175,7 @@ export function SessionsView({ sessionsId }: { readonly sessionsId: string }) {
                   data-session={key}
                   data-tone={tone ?? undefined}
                   className={cn(
-                    "h-row cursor-default hover:bg-raised",
+                    "h-row cursor-default hover:bg-hover",
                     tone !== null && TONE_CLASS[tone],
                     isSelected && "bg-grid-selection hover:bg-grid-selection",
                   )}

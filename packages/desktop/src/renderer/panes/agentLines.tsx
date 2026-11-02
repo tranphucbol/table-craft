@@ -104,7 +104,7 @@ export function AgentRunLine({ run, now }: { readonly run: McpRunView; readonly 
             type="button"
             tabIndex={-1}
             data-action={MCP_ACTION_IDS.cancel}
-            className="rounded px-1 text-accent hover:bg-raised"
+            className="rounded px-1 text-accent hover:bg-hover"
             onClick={(event) => {
               event.stopPropagation();
               invoke(MCP_ACTION_IDS.cancel, run.id);

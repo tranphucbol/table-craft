@@ -172,7 +172,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
       const { app, page } = await launchSaved([]);
       expect(await app.evaluate(({ app: electron }) => electron.isPackaged)).toBe(true);
 
-      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
 
       const list = dataSourcesDialog(page).getByRole("list", { name: "Database kinds" });
       const kinds = list.locator("button:not([data-download])");
@@ -305,7 +305,7 @@ describe.runIf(SMOKE_ENABLED && APP_EXECUTABLE !== undefined)("packaged app", ()
       await prompt.getByLabel("Password", { exact: true }).fill(PASSWORD);
       await prompt.getByLabel("SSH password", { exact: true }).fill(SSH_BASTION.password);
       await prompt.getByRole("button", { name: "Connect", exact: true }).click();
-      const hostKey = page.getByRole("dialog", { name: "Unknown SSH host key" });
+      const hostKey = page.getByRole("dialog", { name: "Unknown SSH Host Key" });
       await hostKey.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       expect(await hostKey.getByTestId("host-key-fingerprint").textContent()).toBe(SSH_BASTION.fingerprint);
       await hostKey.getByRole("button", { name: "Trust", exact: true }).click();

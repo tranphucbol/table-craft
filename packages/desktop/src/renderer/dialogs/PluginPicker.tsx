@@ -14,7 +14,7 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 
 const ROW_CLASS =
-  "flex min-h-row w-full min-w-0 items-center gap-cell rounded px-gap py-1 text-left hover:bg-raised disabled:opacity-50";
+  "flex min-h-row w-full min-w-0 items-center gap-cell rounded px-gap py-1 text-left hover:bg-hover disabled:opacity-50";
 
 function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; readonly onDownload: () => void }) {
   const DownloadIcon = ACTION_ICONS.download;
@@ -80,7 +80,7 @@ export function PluginPicker({
 
   return (
     <div className="flex flex-col gap-gap p-gap">
-      <h3 className="font-semibold">New data source</h3>
+      <h3 className="font-semibold">New Data Source</h3>
       <p className="text-ink-muted">Choose the kind of database.</p>
       <ul aria-label="Database kinds" className="grid grid-cols-2 gap-1">
         {pickerEntries(plugins, catalog).map((item) =>

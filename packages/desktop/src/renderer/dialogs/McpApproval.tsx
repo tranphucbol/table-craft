@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import { useId, useState } from "react";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS, type ApprovalAnswerArgs } from "@table-craft/desktop/renderer/actions/mcpActions.js";
@@ -81,7 +82,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
         <FieldRow label="Kind">
           <span
             className={cn(
-              "rounded-sm border px-1 font-ui font-semibold",
+              "rounded border px-1 font-ui font-semibold",
               leading !== null && CAP_CENTRED,
               badgeTone(approval),
             )}
@@ -110,18 +111,13 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
         </FieldRow>
       </div>
       {explainable ? (
-        <div
-          role="group"
-          aria-label="Statement view"
-          data-testid="mcp-approval-view"
-          className="flex self-start overflow-hidden rounded border border-line"
-        >
+        <div role="group" aria-label="Statement view" data-testid="mcp-approval-view" className={SEGMENT_GROUP}>
           {STATEMENT_VIEWS.map(({ view: shown, label }) => (
             <button
               key={shown}
               type="button"
               aria-pressed={view === shown}
-              className="px-gap text-ink aria-pressed:bg-selection"
+              className={SEGMENT}
               onClick={() => {
                 setView(shown);
                 if (shown === "plan") void invoke(MCP_ACTION_IDS.explainRequest, approval.id);

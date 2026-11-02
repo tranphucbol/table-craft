@@ -53,7 +53,7 @@ export function KeyDeleteLine({ task }: { readonly task: KeyDeleteTask }) {
             type="button"
             tabIndex={-1}
             data-action={actionId}
-            className="rounded px-1 text-accent hover:bg-raised"
+            className="rounded px-1 text-accent hover:bg-hover"
             onClick={(event) => {
               event.stopPropagation();
               invoke(actionId, { taskId: task.taskId });

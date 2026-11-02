@@ -14,11 +14,11 @@ const BUSY_SPINNER_DELAY_MS = 300;
 export type ActionTone = "warning" | "success" | "danger";
 
 const PRIMARY_CLASS = `${FILLED_PRESS} flex h-row shrink-0 items-center gap-1 rounded bg-accent px-gap whitespace-nowrap text-accent-ink disabled:not-aria-busy:opacity-50`;
-const COMPACT_CLASS = `press flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-raised disabled:not-aria-busy:opacity-50 ${PRESSED_TOGGLE}`;
-const TEXT_CLASS = `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-line px-gap whitespace-nowrap text-ink hover:bg-raised disabled:not-aria-busy:opacity-50`;
+const COMPACT_CLASS = `press flex h-row shrink-0 items-center rounded px-1 text-ink hover:bg-hover disabled:not-aria-busy:opacity-50 ${PRESSED_TOGGLE}`;
+const TEXT_CLASS = `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-line px-gap whitespace-nowrap text-ink hover:bg-hover disabled:not-aria-busy:opacity-50`;
 const WARNING_COMPACT_CLASS =
-  "press flex h-row shrink-0 items-center rounded border border-warning px-1 text-warning hover:bg-raised disabled:not-aria-busy:opacity-50";
-const WARNING_TEXT_CLASS = `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-warning px-gap whitespace-nowrap text-warning hover:bg-raised disabled:not-aria-busy:opacity-50`;
+  "press flex h-row shrink-0 items-center rounded border border-warning px-1 text-warning hover:bg-hover disabled:not-aria-busy:opacity-50";
+const WARNING_TEXT_CLASS = `${TEXT_PRESS} flex h-row shrink-0 items-center gap-1 rounded border border-warning px-gap whitespace-nowrap text-warning hover:bg-hover disabled:not-aria-busy:opacity-50`;
 /** Success and danger colour a compact icon only while it can be pressed, so an idle toolbar stays quiet. */
 const ICON_TONE: Readonly<Record<Exclude<ActionTone, "warning">, string>> = {
   success: "enabled:text-success",

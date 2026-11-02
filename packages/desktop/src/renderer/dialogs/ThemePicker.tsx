@@ -14,7 +14,7 @@ import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Po
 import type { ThemeChoice } from "@table-craft/desktop/settings/settings.js";
 
 const BUNDLED = Object.values(BUNDLED_THEMES);
-const ROW_CLASS = "flex h-row cursor-default items-center gap-cell px-cell whitespace-nowrap";
+const ROW_CLASS = "flex h-row cursor-default items-center gap-cell rounded px-gap whitespace-nowrap";
 const SWATCH_TOKENS: readonly (keyof Pick<ColorTokens, "canvas" | "panel" | "ink" | "accent">)[] = [
   "canvas",
   "panel",
@@ -31,7 +31,7 @@ function Swatch({ option }: { readonly option: ThemePickerOption }) {
   const { colors } = option;
   if (option.choice === FOLLOW_SYSTEM) {
     return (
-      <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
+      <span aria-hidden className="flex shrink-0 overflow-hidden rounded border border-line">
         {FOLLOW_SYSTEM_HALVES.map((color) => (
           <span key={color} className="h-2.5 w-5" style={{ backgroundColor: color }} />
         ))}
@@ -40,7 +40,7 @@ function Swatch({ option }: { readonly option: ThemePickerOption }) {
   }
   if (colors === null) return <span aria-hidden className="w-10 shrink-0" />;
   return (
-    <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
+    <span aria-hidden className="flex shrink-0 overflow-hidden rounded border border-line">
       {SWATCH_TOKENS.map((token) => (
         <span key={token} className="size-2.5" style={{ backgroundColor: colors[token] }} />
       ))}
@@ -93,7 +93,11 @@ function Row({
       aria-disabled={broken}
       data-theme={option.choice}
       title={option.licence === null ? undefined : `${option.source ?? ""} (${option.licence})`}
-      className={cn(ROW_CLASS, highlighted ? "bg-selection" : !broken && "hover:bg-panel", broken && "text-ink-muted")}
+      className={cn(
+        ROW_CLASS,
+        highlighted ? "bg-selection" : !broken && "hover:bg-selection",
+        broken && "text-ink-muted",
+      )}
       onMouseEnter={onHover}
       onMouseDown={(event) => event.preventDefault()}
       onClick={onPick}
@@ -182,12 +186,12 @@ function ThemeList({
             onKeyDown={onKeyDown}
           />
         </div>
-        <div role="listbox" aria-label="Themes" className="min-h-0 flex-1 overflow-y-auto">
+        <div role="listbox" aria-label="Themes" className="min-h-0 flex-1 overflow-y-auto p-1">
           {groups.map((group, groupIndex) => {
             const start = starts[groupIndex] ?? 0;
             return (
               <div key={group.label} role="group" aria-label={group.label}>
-                <div role="presentation" className="px-cell pt-1 font-semibold text-ink-muted">
+                <div role="presentation" className="px-gap pt-1 font-semibold text-ink-muted">
                   {group.label}
                 </div>
                 {group.options.map((option, position) => (
@@ -247,7 +251,7 @@ export function ThemePicker() {
         aria-label={`Theme: ${chosen.name}`}
         data-testid="theme-picker-trigger"
         data-theme={chosen.choice}
-        className="flex h-row w-full max-w-popover items-center gap-cell rounded border border-line bg-canvas px-cell text-left hover:bg-raised"
+        className="flex h-row w-full max-w-popover items-center gap-cell rounded border border-line bg-canvas px-cell text-left hover:bg-hover"
         onClick={() => setOpen((value) => !value)}
       >
         <Swatch option={chosen} />

@@ -11,7 +11,14 @@ import type {
   InvokeResult,
 } from "@table-craft/desktop/preload/bridge.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
-import { Button, Check, CONTENT_CLASS, OVERLAY_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import {
+  Button,
+  Check,
+  CONTENT_CLASS,
+  DialogHeader,
+  OVERLAY_CLASS,
+  TextInput,
+} from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
   PASSWORD_LABELS,
   STATUS_LABELS,
@@ -56,7 +63,7 @@ function SourceCard({
       type="button"
       data-testid={`import-source-${source.app}`}
       disabled={!source.found || busy}
-      className="flex min-w-0 flex-col items-start gap-1 rounded border border-line bg-canvas p-gap text-left hover:bg-raised disabled:opacity-50 disabled:hover:bg-canvas"
+      className="flex min-w-0 flex-col items-start gap-1 rounded border border-line bg-canvas p-gap text-left hover:bg-hover disabled:opacity-50 disabled:hover:bg-canvas"
       onClick={onPick}
     >
       <span className="font-semibold">{source.label}</span>
@@ -282,9 +289,7 @@ function Wizard() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <Dialog.Title className="shrink-0 border-b border-line px-gap py-cell font-semibold">
-        Import Data Sources
-      </Dialog.Title>
+      <DialogHeader title="Import Data Sources" dialog="Import Data Sources" />
       <div className="flex min-h-0 flex-1 flex-col gap-gap p-gap">
         {step.kind === "source" ? (
           <>

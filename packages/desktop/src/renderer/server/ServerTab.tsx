@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import type { ServerInfo, ServerNode, SlowCommand } from "@table-craft/desktop/engine/protocol.js";
 import { SERVER_ACTION_IDS, type SlowCommandArgs } from "@table-craft/desktop/renderer/actions/serverActions.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
@@ -73,14 +74,14 @@ export function ServerTab({ tabId }: { readonly tabId: string }) {
     >
       <div className="flex h-tab shrink-0 items-center gap-gap border-b border-line bg-panel px-gap text-ink-muted">
         <ActionButton actionId={SERVER_ACTION_IDS.refresh} compact />
-        <div role="group" aria-label="Server view" className="flex">
+        <div role="group" aria-label="Server view" className={cn(SEGMENT_GROUP, "self-center")}>
           {SERVER_VIEWS.map((view) => (
             <button
               key={view}
               type="button"
               aria-pressed={tab.view === view}
               data-testid={`server-view-${view}`}
-              className={cn("px-cell", tab.view === view ? "bg-selection text-ink" : "hover:bg-raised")}
+              className={SEGMENT}
               onClick={() => void setView(tabId, view)}
             >
               {VIEW_LABELS[view]}
@@ -148,11 +149,7 @@ function Cards({ info }: { readonly info: ServerInfo }) {
 
 function Card({ card }: { readonly card: ServerCard }) {
   return (
-    <section
-      aria-label={card.title}
-      data-testid="server-card"
-      className="min-w-0 rounded border border-line bg-panel p-gap"
-    >
+    <section aria-label={card.title} data-testid="server-card" className="min-w-0 rounded bg-panel p-gap">
       <h3 className="pb-1 font-semibold text-ink">{card.title}</h3>
       <dl className="grid grid-cols-[auto_1fr] gap-x-gap">
         {card.headline.map((figure) => (
@@ -207,7 +204,7 @@ function Overview({
       </thead>
       <tbody>
         {overviewRows(nodes, infos).map((row) => (
-          <tr key={row.node.id} data-node={row.node.address} className="h-row hover:bg-raised">
+          <tr key={row.node.id} data-node={row.node.address} className="h-row hover:bg-hover">
             <td className={TD}>{row.node.address}</td>
             <td className={TD}>{row.role}</td>
             <td className={TD}>{row.slots === "" ? NOT_REPORTED : row.slots}</td>
@@ -246,7 +243,7 @@ function SlowLog({ tabId, tab, cluster }: { readonly tabId: string; readonly tab
                 key={key}
                 aria-selected={key === tab.selectedSlow}
                 className={cn(
-                  "h-row cursor-default hover:bg-raised",
+                  "h-row cursor-default hover:bg-hover",
                   key === tab.selectedSlow && "bg-grid-selection hover:bg-grid-selection",
                 )}
                 onMouseDown={() => select(tabId, key)}

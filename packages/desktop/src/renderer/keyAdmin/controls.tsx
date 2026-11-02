@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
+import { buttonClass } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { FIELD_CLASS } from "@table-craft/desktop/renderer/ui/fieldClasses.js";
+import { PRESSED_TOGGLE } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { ADMIN_ACTION_IDS, type AdminCommand } from "./actions.js";
 
-export const INPUT =
-  "h-row min-w-0 rounded border border-line bg-canvas px-cell text-ink outline-none focus:border-accent";
-export const BUTTON =
-  "h-row shrink-0 rounded border border-line px-cell text-ink hover:bg-raised focus-visible:outline-accent disabled:opacity-50 aria-pressed:bg-selection";
+export const INPUT = FIELD_CLASS;
+export const BUTTON = cn(buttonClass(), PRESSED_TOGGLE);
 export const CELL = "border-b border-line px-gap py-cell text-left whitespace-nowrap";
 export function CommandButton({
   source,

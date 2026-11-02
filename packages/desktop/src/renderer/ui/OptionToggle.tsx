@@ -34,7 +34,7 @@ export function OptionToggle({
         // A disabled button gets no pointer events, so Radix never opens; the native tooltip still does.
         title={!enabled && reason !== undefined ? reason : undefined}
         className={cn(
-          "shrink-0 rounded px-1 font-grid text-ink hover:bg-raised disabled:opacity-50",
+          "shrink-0 rounded px-1 font-grid text-ink hover:bg-hover disabled:opacity-50",
           PRESSED_TOGGLE,
           className ?? "h-row",
         )}

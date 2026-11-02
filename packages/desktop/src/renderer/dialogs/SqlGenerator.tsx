@@ -1,6 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import { useEffect, useState } from "react";
-import { Button } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { Button, DialogFooter } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
   generatorAnswer,
   steppedStatement,
@@ -8,7 +9,6 @@ import {
   type ModalRequest,
 } from "@table-craft/desktop/renderer/state/modal.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
-import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { SqlView } from "@table-craft/desktop/renderer/ui/SqlView.js";
 
 type GeneratorRequest = Extract<ModalRequest, { kind: "generator" }>;
@@ -50,7 +50,7 @@ export function SqlGenerator({ request }: { readonly request: GeneratorRequest }
       <div
         role="radiogroup"
         aria-label="Statement"
-        className="flex self-start rounded border border-line"
+        className={SEGMENT_GROUP}
         onKeyDown={(event) => {
           const ids = request.statements.map((choice) => choice.id);
           const next = steppedStatement(ids, statement, event.key);
@@ -69,10 +69,7 @@ export function SqlGenerator({ request }: { readonly request: GeneratorRequest }
             aria-checked={choice.id === statement}
             autoFocus={choice.id === request.initial}
             tabIndex={choice.id === statement ? 0 : -1}
-            className={cn(
-              "h-row px-gap text-ink first:rounded-l last:rounded-r",
-              choice.id === statement ? "bg-selection" : "hover:bg-raised",
-            )}
+            className={SEGMENT}
             onClick={() => setStatement(choice.id)}
           >
             {choice.label}
@@ -91,7 +88,7 @@ export function SqlGenerator({ request }: { readonly request: GeneratorRequest }
         testId="generator-preview"
         className="h-60 rounded border border-line bg-canvas"
       />
-      <div className="flex justify-end gap-gap">
+      <DialogFooter>
         <Button onClick={() => answer(null)}>Close</Button>
         {request.choices.map((choice) => (
           <Button
@@ -103,7 +100,7 @@ export function SqlGenerator({ request }: { readonly request: GeneratorRequest }
             {choice.label}
           </Button>
         ))}
-      </div>
+      </DialogFooter>
     </div>
   );
 }

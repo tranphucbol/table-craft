@@ -143,7 +143,10 @@ describe.runIf(DATABASES_ENABLED)("datasources live test", () => {
 
       expect(await contentSize(app)).toEqual(EVIDENCE_WINDOW);
       await expect.poll(() => page.getByText("No data sources.").isVisible()).toBe(true);
-      expect(await page.getByRole("button", { name: /^New Data Source \(/ }).isVisible()).toBe(true);
+      const emptyStateButton = toolWindow(page, "Database")
+        .getByRole("button", { name: "New Data Source…", exact: true })
+        .filter({ hasText: "New Data Source…" });
+      expect(await emptyStateButton.isVisible()).toBe(true);
       expect(await editorTabs(page).count()).toBe(0);
       await captureWindow(page, "empty-state");
     },

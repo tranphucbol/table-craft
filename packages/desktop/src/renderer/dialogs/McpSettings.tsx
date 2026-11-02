@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { MCP_ACTION_IDS, type AgentPolicyArgs } from "@table-craft/desktop/renderer/actions/mcpActions.js";
@@ -188,7 +189,7 @@ function AccessRow({
               aria-label={`Why ${datasource.name} stays at Read only`}
               title={PRODUCTION_NOTE}
               data-testid="mcp-production-note-show"
-              className="shrink-0 rounded text-warning hover:bg-raised"
+              className="shrink-0 rounded text-warning hover:bg-hover"
               onClick={() => showProductionNote(true)}
             >
               <InfoIcon aria-hidden className="size-icon" />
@@ -285,7 +286,7 @@ function ProductionNote({ datasources }: { readonly datasources: readonly Dataso
       data-testid="mcp-production-note"
       className="flex items-start gap-cell rounded border border-warning p-cell"
     >
-      <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0 text-warning" />
+      <WarningIcon aria-hidden weight="fill" className="mt-0.5 size-icon shrink-0 text-warning" />
       <span>
         {NAMES.format(capped.map((datasource) => datasource.name))} {capped.length === 1 ? "is" : "are"} coloured red.
         Red data sources cannot go above <strong>Read only</strong> unless you allow it on its page in the Data Sources
@@ -296,7 +297,7 @@ function ProductionNote({ datasources }: { readonly datasources: readonly Dataso
         aria-label="Hide this warning"
         title="Hide this warning; the (i) beside a red data source shows it again"
         data-testid="mcp-production-note-close"
-        className="ml-auto shrink-0 rounded text-ink-muted hover:bg-raised hover:text-ink"
+        className="ml-auto shrink-0 rounded text-ink-muted hover:bg-hover hover:text-ink"
         onClick={() => showProductionNote(false)}
       >
         <CloseIcon aria-hidden className="size-icon" />
@@ -367,18 +368,20 @@ function ClientSnippet({ port }: { readonly port: number }) {
   const confirmation = useCopyConfirmation();
   return (
     <>
-      <div className="col-span-2 flex items-center gap-1" role="group" aria-label="MCP client">
-        {MCP_CLIENTS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            aria-pressed={id === client}
-            className={cn("h-row rounded px-gap", id === client ? "bg-selection" : "hover:bg-raised")}
-            onClick={() => setClient(id)}
-          >
-            {MCP_CLIENT_LABELS[id]}
-          </button>
-        ))}
+      <div className="col-span-2 flex">
+        <div className={SEGMENT_GROUP} role="group" aria-label="MCP client">
+          {MCP_CLIENTS.map((id) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={id === client}
+              className={SEGMENT}
+              onClick={() => setClient(id)}
+            >
+              {MCP_CLIENT_LABELS[id]}
+            </button>
+          ))}
+        </div>
       </div>
       <pre
         data-testid="mcp-client-config"
@@ -430,7 +433,7 @@ function KnownClients({ clients }: { readonly clients: readonly McpKnownClient[]
           />
           <button
             type="button"
-            className="rounded px-1 text-accent hover:bg-raised"
+            className="rounded px-1 text-accent hover:bg-hover"
             data-testid="mcp-forget-client"
             onClick={() => invoke(MCP_ACTION_IDS.forgetClient, client.name)}
           >

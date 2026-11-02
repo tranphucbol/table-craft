@@ -1,6 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Button, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { Button, DialogFooter, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
 /** A footer button; it acts on the selected item, and is disabled while there is none unless `always`. */
@@ -26,6 +26,11 @@ export function steppedIndex(length: number, index: number, key: string): number
  * ↑ and ↓ move the selection, Enter chooses it, and the preview shows the selected item whole.
  * Query History and Open Closed Console share it.
  */
+/** Destructive buttons sit apart at the footer's start, away from the primary. */
+function isDestructive<T>(button: PickerButton<T>): boolean {
+  return button.variant === "danger";
+}
+
 export function ListPicker<T>({
   title,
   searchLabel,
@@ -83,6 +88,16 @@ export function ListPicker<T>({
     }
   }
 
+  const pickerButton = (button: PickerButton<T>) => (
+    <Button
+      key={button.label}
+      variant={button.variant ?? "secondary"}
+      disabled={button.always !== true && selected === null}
+      onClick={() => button.onClick(selected)}
+    >
+      {button.label}
+    </Button>
+  );
   return (
     <div className="flex flex-col gap-gap p-gap">
       <Dialog.Title className="font-semibold">{title}</Dialog.Title>
@@ -113,7 +128,7 @@ export function ListPicker<T>({
         onKeyDown={onKeyDown}
         autoFocus={onQuery === undefined}
         aria-activedescendant={onQuery === undefined && selected !== null ? optionId(index) : undefined}
-        className="h-picker-list overflow-auto rounded border border-line bg-canvas py-1 outline-none focus:border-accent"
+        className="h-picker-list overflow-auto rounded border border-line bg-canvas p-1 outline-none focus:border-accent"
       >
         {items.length === 0 ? (
           <li className="px-cell text-ink-muted">{empty}</li>
@@ -127,8 +142,8 @@ export function ListPicker<T>({
               aria-label={labelOf(item)}
               aria-selected={at === index}
               className={cn(
-                "flex h-row cursor-default items-center gap-cell px-cell",
-                at === index ? "bg-selection" : "hover:bg-raised",
+                "flex h-row cursor-default items-center gap-cell rounded px-gap",
+                at === index ? "bg-selection" : "hover:bg-hover",
               )}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setSelectedKey(keyOf(item))}
@@ -140,19 +155,10 @@ export function ListPicker<T>({
         )}
       </ul>
       {preview(selected)}
-      <div className="flex justify-end gap-gap">
-        {buttons.map((button) => (
-          <Button
-            key={button.label}
-            variant={button.variant ?? "secondary"}
-            disabled={button.always !== true && selected === null}
-            onClick={() => button.onClick(selected)}
-          >
-            {button.label}
-          </Button>
-        ))}
+      <DialogFooter start={buttons.filter(isDestructive).map(pickerButton)}>
         <Button onClick={onClose}>Close</Button>
-      </div>
+        {buttons.filter((button) => !isDestructive(button)).map(pickerButton)}
+      </DialogFooter>
     </div>
   );
 }

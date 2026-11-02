@@ -1,6 +1,9 @@
 import { fillShades, shadeColor } from "@table-craft/desktop/appearance/press.js";
 import {
-  EDITOR_TOOLTIP_RADIUS_PX,
+  CLASSIC_DIALOG_RADIUS_PX,
+  CLASSIC_POPOVER_RADIUS_PX,
+  ISLANDS_POPOVER_RADIUS_PX,
+  TOOLTIP_RADIUS_PX,
   TRAFFIC_LIGHT_INSET_PX,
   type Appearance,
   type ColorScheme,
@@ -12,7 +15,7 @@ function kebab(name: string): string {
 
 /** The CSS variables `app.css` maps onto Tailwind's theme. */
 export function appearanceVariables(appearance: Appearance): Readonly<Record<string, string>> {
-  const { colors, fonts, density, motion, frame, windowStyle } = appearance;
+  const { colors, fonts, density, motion, frame, windowStyle, elevation } = appearance;
   const accentShades = fillShades(colors.accent, colors.accentInk);
   const dangerShades = fillShades(colors.danger, colors.accentInk);
   const islands = windowStyle === "islands";
@@ -21,7 +24,6 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-frame": frame.frame,
     "--tc-frame-raised": frame.frameRaised,
     "--tc-island-edge": frame.islandEdge,
-    "--tc-editor-tooltip-radius": `${EDITOR_TOOLTIP_RADIUS_PX}px`,
     "--tc-panel": colors.panel,
     "--tc-raised": colors.raised,
     "--tc-border": colors.border,
@@ -80,6 +82,11 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-plan-bar-height": `${density.planBarHeightPx}px`,
     "--tc-island-gap": `${density.islandGapPx}px`,
     "--tc-island-radius": `${islands ? density.islandRadiusPx : 0}px`,
+    "--tc-dialog-radius": `${islands ? density.islandRadiusPx : CLASSIC_DIALOG_RADIUS_PX}px`,
+    "--tc-popover-radius": `${islands ? ISLANDS_POPOVER_RADIUS_PX : CLASSIC_POPOVER_RADIUS_PX}px`,
+    "--tc-tooltip-radius": `${TOOLTIP_RADIUS_PX}px`,
+    "--tc-popover-shadow": elevation.popover,
+    "--tc-dialog-shadow": elevation.dialog,
     "--tc-pane-inset": `${islands ? density.islandRadiusPx : density.gapPx}px`,
     "--tc-tool-header-height": `${islands ? density.tabHeightPx : density.rowHeightPx}px`,
     "--tc-motion-fast": `${motion.fastMs}ms`,

@@ -260,7 +260,7 @@ function Stream({ entry }: { readonly entry: WatchEntry }) {
                 <tr
                   key={sequence}
                   aria-selected={selected === sequence}
-                  className={selected === sequence ? "bg-grid-selection" : "hover:bg-raised"}
+                  className={selected === sequence ? "bg-grid-selection" : "hover:bg-hover"}
                 >
                   <td className={CELL}>
                     <button type="button" onClick={() => setSelected(sequence)}>
@@ -290,7 +290,7 @@ function Stream({ entry }: { readonly entry: WatchEntry }) {
         {newer <= 0n ? null : (
           <button
             type="button"
-            className="absolute top-gap left-gap rounded bg-accent px-gap py-cell text-accent-ink"
+            className="absolute top-gap left-gap rounded bg-accent px-gap py-cell text-accent-ink shadow-popover"
             onClick={() => {
               setAnchor(null);
               scroller.current?.scrollTo({ top: 0 });

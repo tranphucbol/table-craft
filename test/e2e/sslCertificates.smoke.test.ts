@@ -46,7 +46,7 @@ async function text(locator: Locator): Promise<string> {
 }
 
 async function newDatasource(page: Page, kind: string, name: string): Promise<void> {
-  await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+  await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
   const dialog = dataSourcesDialog(page);
   await dialog.getByRole("list", { name: "Database kinds" }).getByRole("button", { name: kind }).click();
   await dialog.getByLabel("Name", { exact: true }).fill(name);

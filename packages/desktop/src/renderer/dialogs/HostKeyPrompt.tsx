@@ -14,7 +14,7 @@ function Body({ prompt }: { readonly prompt: Prompt }) {
   const { offer } = prompt;
   return (
     <div className="flex flex-col gap-gap p-gap">
-      <Dialog.Title className="font-semibold">Unknown SSH host key</Dialog.Title>
+      <Dialog.Title className="font-semibold">Unknown SSH Host Key</Dialog.Title>
       <Dialog.Description className="text-ink-muted">
         This is the first connection to {sshServerName(offer.host, offer.port)}. Check the fingerprint with the
         server&apos;s administrator before trusting it; TableCraft remembers it and refuses the server if it ever
@@ -52,7 +52,7 @@ export function HostKeyPrompt() {
     >
       <Dialog.Portal>
         <Dialog.Overlay className={OVERLAY_CLASS} />
-        <Dialog.Content className={cn(CONTENT_CLASS, "w-96 max-w-[90vw]")}>
+        <Dialog.Content className={cn(CONTENT_CLASS, "w-96 max-w-[95vw]")}>
           {prompt === null ? null : <Body key={prompt.requestId} prompt={prompt} />}
         </Dialog.Content>
       </Dialog.Portal>

@@ -88,7 +88,7 @@ export function LeasesView({
                   key={item.id}
                   ref={item.id === initialLease ? requested : undefined}
                   aria-selected={selected === item.id}
-                  className={selected === item.id ? "bg-grid-selection" : "hover:bg-raised"}
+                  className={selected === item.id ? "bg-grid-selection" : "hover:bg-hover"}
                 >
                   <td className={CELL}>
                     <button
@@ -162,7 +162,7 @@ export function LeasesView({
               <li key={key.hex ?? key.text}>
                 <button
                   type="button"
-                  className="h-row max-w-full truncate font-grid hover:bg-raised"
+                  className="h-row max-w-full truncate font-grid hover:bg-hover"
                   onClick={() => invoke(KEY_ACTION_IDS.open, { datasourceId: source, database: 0, key })}
                 >
                   {bytesLabel(key)}
