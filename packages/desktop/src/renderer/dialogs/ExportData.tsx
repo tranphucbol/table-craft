@@ -82,7 +82,7 @@ export function ExportData({ request }: { readonly request: ExportRequest }) {
                 tabIndex={choice.id === format ? 0 : -1}
                 className={cn(
                   "h-row px-gap text-ink first:rounded-l last:rounded-r",
-                  choice.id === format ? "bg-selection" : "hover:bg-raised",
+                  choice.id === format ? "bg-selection" : "hover:bg-hover",
                 )}
                 onClick={() => choose(choice.id)}
               >

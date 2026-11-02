@@ -119,7 +119,7 @@ function BannerButton({
     <button
       type="button"
       data-testid={testId}
-      className="shrink-0 rounded px-cell hover:bg-raised hover:text-ink"
+      className="shrink-0 rounded px-cell hover:bg-hover hover:text-ink"
       onClick={onClick}
     >
       {children}
@@ -409,7 +409,7 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
                   <button
                     type="button"
                     aria-pressed={tab.history?.mode !== "history"}
-                    className="rounded px-gap text-ink-muted hover:bg-raised aria-pressed:bg-selection aria-pressed:text-ink"
+                    className="rounded px-gap text-ink-muted hover:bg-hover aria-pressed:bg-selection aria-pressed:text-ink"
                     onClick={() => {
                       if (tab.history?.mode === "history") void invoke(KEY_ACTION_IDS.history);
                     }}
@@ -419,7 +419,7 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
                   <button
                     type="button"
                     aria-pressed={tab.history?.mode === "history"}
-                    className="rounded px-gap text-ink-muted hover:bg-raised aria-pressed:bg-selection aria-pressed:text-ink"
+                    className="rounded px-gap text-ink-muted hover:bg-hover aria-pressed:bg-selection aria-pressed:text-ink"
                     onClick={() => {
                       if (tab.history?.mode !== "history") void invoke(KEY_ACTION_IDS.history);
                     }}

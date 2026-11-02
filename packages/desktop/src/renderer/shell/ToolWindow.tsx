@@ -38,7 +38,7 @@ export function ToolWindow({ id, title, toggleActionId, switchingActions, childr
           <button
             type="button"
             aria-label={`Hide ${title}`}
-            className="flex size-row items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink"
+            className="flex size-row items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
             onClick={() => invoke(toggleActionId)}
           >
             <HideIcon aria-hidden className="size-icon" />

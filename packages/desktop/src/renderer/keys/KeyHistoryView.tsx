@@ -110,7 +110,7 @@ export function KeyHistoryView({ tab }: { readonly tab: KeyTab }) {
               aria-pressed={historyEventId(event) === history.selected}
               title={`${event.kind} · v${event.version} · rev ${event.modRevision} · lease ${event.lease}`}
               className={cn(
-                "flex w-full flex-col px-gap py-1 text-left hover:bg-raised",
+                "flex w-full flex-col px-gap py-1 text-left hover:bg-hover",
                 historyEventId(event) === history.selected && "bg-grid-selection",
               )}
               onClick={() => void invoke(KEY_ACTION_IDS.selectHistory, { eventId: historyEventId(event) })}

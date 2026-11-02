@@ -58,7 +58,7 @@ function TabButton({
       data-testid={`design-tab-${tab}`}
       className={cn(
         "h-row px-gap text-ink first:rounded-l last:rounded-r",
-        tab === current ? "bg-selection" : "hover:bg-raised",
+        tab === current ? "bg-selection" : "hover:bg-hover",
       )}
       onClick={() => onSelect(tab)}
     >
@@ -73,7 +73,7 @@ function RowButton({ label, onClick, children }: { label: string; onClick: () =>
       type="button"
       aria-label={label}
       title={label}
-      className="flex size-row items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink"
+      className="flex size-row items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
       onClick={onClick}
     >
       {children}

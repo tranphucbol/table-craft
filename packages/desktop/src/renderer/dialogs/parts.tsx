@@ -12,11 +12,12 @@ export const OVERLAY_CLASS = `fixed inset-0 z-40 bg-canvas/60 ${OVERLAY_MOTION}`
 export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-dialog border border-line bg-panel text-ui text-ink shadow-2xl outline-none ${DIALOG_MOTION}`;
 export const INPUT_CLASS = FIELD_CLASS;
 
-type ButtonVariant = "primary" | "secondary" | "danger" | "dangerOutline";
+type ButtonVariant = "primary" | "secondary" | "warning" | "danger" | "dangerOutline";
 
 export const BUTTON_CLASS: Readonly<Record<ButtonVariant, string>> = {
   primary: `${FILLED_PRESS} bg-accent text-accent-ink`,
-  secondary: `${TEXT_PRESS} border border-line text-ink hover:bg-raised`,
+  secondary: `${TEXT_PRESS} border border-line text-ink hover:bg-hover`,
+  warning: `${TEXT_PRESS} border border-warning text-warning hover:bg-hover`,
   danger: `${FILLED_DANGER_PRESS} bg-danger text-accent-ink`,
   dangerOutline: `${TEXT_PRESS} border border-danger bg-raised text-danger enabled:hover:bg-danger/10 disabled:cursor-not-allowed`,
 };
@@ -47,7 +48,7 @@ export function DialogCloseButton({ dialog }: { readonly dialog: string }) {
       aria-label={`Close ${dialog}`}
       title={`Close ${dialog}`}
       className={cn(
-        "absolute top-cell right-gap rounded p-0.5 text-ink-muted hover:bg-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
+        "absolute top-cell right-gap rounded p-0.5 text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
         TEXT_PRESS,
       )}
     >

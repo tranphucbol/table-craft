@@ -260,7 +260,7 @@ function Stream({ entry }: { readonly entry: WatchEntry }) {
                 <tr
                   key={sequence}
                   aria-selected={selected === sequence}
-                  className={selected === sequence ? "bg-grid-selection" : "hover:bg-raised"}
+                  className={selected === sequence ? "bg-grid-selection" : "hover:bg-hover"}
                 >
                   <td className={CELL}>
                     <button type="button" onClick={() => setSelected(sequence)}>

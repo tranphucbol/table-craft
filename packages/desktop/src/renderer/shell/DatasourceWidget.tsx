@@ -8,12 +8,13 @@ import { ConnectionDot, useActiveDatasourceId } from "@table-craft/desktop/rende
 import { connectionOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { DropdownIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { MENU_BUTTON_ITEM, MENU_SEPARATOR } from "@table-craft/desktop/renderer/ui/menu.js";
 import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const SIDE_OFFSET_PX = 4;
 const NO_DATASOURCE = "No data source";
-const ROW_CLASS = "app-no-drag flex h-row w-full items-center gap-cell rounded px-cell text-left hover:bg-selection";
+const ROW_CLASS = cn("app-no-drag", MENU_BUTTON_ITEM);
 
 function Swatch({ datasource }: { readonly datasource: DatasourceView }) {
   return (
@@ -94,7 +95,7 @@ export function DatasourceWidget() {
         <button
           type="button"
           aria-label="Data source"
-          className="app-no-drag flex h-row max-w-64 min-w-0 shrink-0 items-center gap-cell rounded px-cell text-ink hover:bg-raised"
+          className="app-no-drag flex h-row max-w-64 min-w-0 shrink-0 items-center gap-cell rounded px-cell text-ink hover:bg-hover"
           onMouseDown={(event) => event.preventDefault()}
         >
           {active === undefined ? (
@@ -117,14 +118,14 @@ export function DatasourceWidget() {
           collisionPadding={SIDE_OFFSET_PX}
           aria-label="Switch data source"
           className={cn(
-            "app-no-drag z-50 flex max-h-popover-height w-max max-w-popover min-w-56 flex-col overflow-y-auto rounded-popover border border-line bg-raised p-1 text-ui text-ink shadow-lg outline-none",
+            "app-no-drag z-50 flex max-h-popover-height w-max max-w-popover min-w-56 flex-col overflow-y-auto rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-lg outline-none",
             SURFACE_MOTION,
           )}
         >
           {datasources.map((datasource) => (
             <DatasourceRow key={datasource.id} datasource={datasource} onChosen={close} />
           ))}
-          {datasources.length > 0 ? <hr className="my-1 border-line" /> : null}
+          {datasources.length > 0 ? <hr className={cn("border-0", MENU_SEPARATOR)} /> : null}
           <ActionRow actionId={ACTION_IDS.newDatasource} label="New Data Source…" onChosen={close} />
           <ActionRow actionId={ACTION_IDS.datasourceProperties} label="Data Sources…" onChosen={close} />
         </Primitive.Content>

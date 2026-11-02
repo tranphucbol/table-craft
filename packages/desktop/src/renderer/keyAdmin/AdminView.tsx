@@ -73,7 +73,7 @@ export function AdminView({ tabId }: { readonly tabId: string }) {
         {cluster && hasServerInfo ? (
           <button
             type="button"
-            className="h-row rounded border border-line px-cell hover:bg-raised"
+            className="h-row rounded border border-line px-cell hover:bg-hover"
             title="Version, storage and connection information"
             onClick={() => invoke(SERVER_ACTION_IDS.details, { datasourceId: tab.datasourceId })}
           >

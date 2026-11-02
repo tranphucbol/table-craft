@@ -5,7 +5,7 @@ import { ADMIN_ACTION_IDS, type AdminCommand } from "./actions.js";
 export const INPUT =
   "h-row min-w-0 rounded border border-line bg-canvas px-cell text-ink outline-none focus:border-accent";
 export const BUTTON =
-  "h-row shrink-0 rounded border border-line px-cell text-ink hover:bg-raised focus-visible:outline-accent disabled:opacity-50 aria-pressed:bg-selection";
+  "h-row shrink-0 rounded border border-line px-cell text-ink hover:bg-hover focus-visible:outline-accent disabled:opacity-50 aria-pressed:bg-selection";
 export const CELL = "border-b border-line px-gap py-cell text-left whitespace-nowrap";
 export function CommandButton({
   source,

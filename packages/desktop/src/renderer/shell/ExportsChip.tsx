@@ -96,7 +96,7 @@ export function ExportsChip() {
         aria-haspopup="dialog"
         aria-expanded={open}
         className={cn(
-          "flex h-full min-w-0 items-center gap-1.5 rounded px-1 whitespace-nowrap hover:bg-raised",
+          "flex h-full min-w-0 items-center gap-1.5 rounded px-1 whitespace-nowrap hover:bg-hover",
           open && "bg-raised",
           TONE_CLASSES[view.tone],
         )}
@@ -122,7 +122,7 @@ export function ExportsChip() {
           data-testid="status-exporting-cancel"
           aria-label="Cancel Export"
           title="Cancel Export"
-          className="press flex h-full shrink-0 items-center rounded px-1 text-danger hover:bg-raised"
+          className="press flex h-full shrink-0 items-center rounded px-1 text-danger hover:bg-hover"
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => invoke(EXPORT_ACTION_IDS.cancel, { taskId: cancelTaskId })}
         >

@@ -227,7 +227,7 @@ export const LIGHT_COLORS: ColorTokens = {
   editModified: "#dce8fc",
   editInserted: "#dcf2df",
   editDeleted: "#fbe0e2",
-  selection: "#dfe1e5",
+  selection: "#d4e2ff",
   searchMatch: "#f6e39a",
   keyIcon: "#b07d14",
   warning: "#8a5a00",

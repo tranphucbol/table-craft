@@ -80,7 +80,7 @@ export function ServerTab({ tabId }: { readonly tabId: string }) {
               type="button"
               aria-pressed={tab.view === view}
               data-testid={`server-view-${view}`}
-              className={cn("px-cell", tab.view === view ? "bg-selection text-ink" : "hover:bg-raised")}
+              className={cn("px-cell", tab.view === view ? "bg-selection text-ink" : "hover:bg-hover")}
               onClick={() => void setView(tabId, view)}
             >
               {VIEW_LABELS[view]}
@@ -207,7 +207,7 @@ function Overview({
       </thead>
       <tbody>
         {overviewRows(nodes, infos).map((row) => (
-          <tr key={row.node.id} data-node={row.node.address} className="h-row hover:bg-raised">
+          <tr key={row.node.id} data-node={row.node.address} className="h-row hover:bg-hover">
             <td className={TD}>{row.node.address}</td>
             <td className={TD}>{row.role}</td>
             <td className={TD}>{row.slots === "" ? NOT_REPORTED : row.slots}</td>
@@ -246,7 +246,7 @@ function SlowLog({ tabId, tab, cluster }: { readonly tabId: string; readonly tab
                 key={key}
                 aria-selected={key === tab.selectedSlow}
                 className={cn(
-                  "h-row cursor-default hover:bg-raised",
+                  "h-row cursor-default hover:bg-hover",
                   key === tab.selectedSlow && "bg-grid-selection hover:bg-grid-selection",
                 )}
                 onMouseDown={() => select(tabId, key)}

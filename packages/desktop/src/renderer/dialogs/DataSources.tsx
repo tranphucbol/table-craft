@@ -750,7 +750,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               type="button"
               aria-label="Add data source"
               title="Add data source"
-              className="flex size-tab items-center justify-center rounded hover:bg-raised"
+              className="flex size-tab items-center justify-center rounded hover:bg-hover"
               onClick={() => setState((previous) => ({ ...previous, choosingPlugin: true }))}
             >
               <AddIcon aria-hidden className="size-icon" />
@@ -759,7 +759,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               type="button"
               aria-label="Import data sources"
               title="Import from DataGrip, TablePro or MySQL Workbench…"
-              className="flex size-tab items-center justify-center rounded hover:bg-raised"
+              className="flex size-tab items-center justify-center rounded hover:bg-hover"
               onClick={() => void invoke(ACTION_IDS.importDatasources)}
             >
               <ImportIcon aria-hidden className="size-icon" />
@@ -769,7 +769,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               aria-label="Duplicate data source"
               title="Duplicate data source"
               disabled={current === undefined}
-              className="flex size-tab items-center justify-center rounded hover:bg-raised disabled:opacity-40"
+              className="flex size-tab items-center justify-center rounded hover:bg-hover disabled:opacity-40"
               onClick={() => {
                 const view = datasources.find((datasource) => datasource.id === current?.id);
                 if (view !== undefined) {
@@ -784,7 +784,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               aria-label="Remove data source"
               title="Remove data source"
               disabled={current === undefined || current.ephemeral}
-              className="flex size-tab items-center justify-center rounded hover:bg-raised disabled:opacity-40"
+              className="flex size-tab items-center justify-center rounded hover:bg-hover disabled:opacity-40"
               onClick={() => {
                 if (current !== undefined) void remove(current);
               }}
@@ -799,7 +799,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                 role="option"
                 aria-selected={draft.key === current?.key}
                 className={cn(
-                  "flex h-row cursor-default items-center gap-cell rounded px-cell hover:bg-raised",
+                  "flex h-row cursor-default items-center gap-cell rounded px-cell hover:bg-hover",
                   draft.key === current?.key && "bg-selection hover:bg-selection",
                 )}
                 onClick={() => select(draft.key)}

@@ -55,7 +55,7 @@ function operationOptions(depth: number): readonly DropdownOption[] {
   ];
 }
 
-const BUTTON = "rounded px-cell py-1 text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40";
+const BUTTON = "rounded px-cell py-1 text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40";
 
 function BytesInput({
   label,

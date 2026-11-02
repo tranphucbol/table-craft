@@ -27,7 +27,7 @@ export function MissingPlugin({ pluginId }: { readonly pluginId: string }) {
       {entry.install.status === "installing" ? null : (
         <button
           type="button"
-          className="shrink-0 rounded border border-line px-1 text-ink hover:bg-raised"
+          className="shrink-0 rounded border border-line px-1 text-ink hover:bg-hover"
           onMouseDown={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onClick={(event) => {

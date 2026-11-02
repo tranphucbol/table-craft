@@ -219,7 +219,7 @@ export function ClusterView({
                 <button
                   key={String(keep)}
                   type="button"
-                  className="h-row rounded border border-line px-cell hover:bg-raised"
+                  className="h-row rounded border border-line px-cell hover:bg-hover"
                   onClick={() => setRevision(String(BigInt(current) > keep ? BigInt(current) - keep : 1n))}
                 >
                   Keep last {String(keep)}

@@ -83,7 +83,7 @@ import { useServicesTree } from "@table-craft/desktop/renderer/state/servicesTre
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
+import { MENU_ITEM, WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import {
   CollapsedIcon,
   ConsoleIcon,
@@ -219,7 +219,7 @@ function Menu({ entries }: { readonly entries: readonly MenuEntry[] }) {
         {entries.map((entry) => (
           <ContextMenu.Item
             key={entry.actionId}
-            className="flex h-row cursor-default items-center rounded px-gap outline-none data-[highlighted]:bg-selection"
+            className={MENU_ITEM}
             onSelect={() => invoke(entry.actionId, entry.args)}
           >
             {registry.get(entry.actionId)?.title ?? entry.actionId}
@@ -343,7 +343,7 @@ function ExportLine({ entry }: { readonly entry: ExportEntry }) {
               type="button"
               tabIndex={-1}
               data-action={actionId}
-              className="rounded px-1 text-accent hover:bg-raised"
+              className="rounded px-1 text-accent hover:bg-hover"
               onClick={(event) => {
                 event.stopPropagation();
                 invoke(actionId, { taskId: task.taskId });
@@ -371,7 +371,7 @@ function TaskButtons({
       type="button"
       tabIndex={-1}
       data-action={actionId}
-      className="rounded px-1 text-accent hover:bg-raised"
+      className="rounded px-1 text-accent hover:bg-hover"
       onClick={(event) => {
         event.stopPropagation();
         invoke(actionId, { taskId });
@@ -668,7 +668,7 @@ export function ServicesPane() {
               }
               style={{ paddingLeft: `calc(var(--spacing-pane-inset) + ${String(row.depth * INDENT_PX)}px)` }}
               className={cn(
-                "flex h-row cursor-default items-center gap-cell pr-pane-inset outline-none hover:bg-raised",
+                "flex h-row cursor-default items-center gap-cell pr-pane-inset outline-none hover:bg-hover",
                 isSelected && "bg-selection hover:bg-selection",
                 !isSelected && active && "bg-raised",
               )}

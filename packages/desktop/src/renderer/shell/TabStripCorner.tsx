@@ -15,6 +15,7 @@ import { useIslands } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS, CurrentIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { MENU_BUTTON_ITEM, MENU_SEPARATOR } from "@table-craft/desktop/renderer/ui/menu.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 
@@ -23,9 +24,8 @@ const TAB_ACTIONS_LABEL = "Tab Actions";
 const OpenTabsIcon = ACTION_ICONS.tabs;
 const TabActionsIcon = ACTION_ICONS.more;
 const CORNER_BUTTON_CLASS =
-  "press flex h-row shrink-0 items-center rounded px-1 text-ink-muted hover:bg-raised hover:text-ink aria-expanded:bg-raised aria-expanded:text-ink";
-const ROW_CLASS =
-  "flex h-row w-full cursor-default items-center gap-cell rounded px-gap text-left whitespace-nowrap outline-none hover:bg-selection focus-visible:bg-selection disabled:text-ink-muted disabled:hover:bg-transparent";
+  "press flex h-row shrink-0 items-center rounded px-1 text-ink-muted hover:bg-hover hover:text-ink aria-expanded:bg-raised aria-expanded:text-ink";
+const ROW_CLASS = MENU_BUTTON_ITEM;
 const MENU_ITEM_SELECTOR = '[role^="menuitem"]:not(:disabled)';
 
 type MenuKind = "tabs" | "actions";
@@ -232,7 +232,7 @@ export function TabStripCorner({ groupId }: { readonly groupId: EditorGroupId })
         <CornerMenu label={TAB_ACTIONS_LABEL} anchor={menu.anchor} onClose={close}>
           {groups.map((group, index) => (
             <Fragment key={group[0]?.actionId}>
-              {index === 0 ? null : <div role="separator" className="my-1 h-px bg-line" />}
+              {index === 0 ? null : <div role="separator" className={MENU_SEPARATOR} />}
               {group.map((entry) => (
                 <ActionRow key={entry.actionId} entry={entry} facts={facts} args={args} onPick={close} />
               ))}

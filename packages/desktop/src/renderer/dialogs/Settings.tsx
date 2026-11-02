@@ -857,7 +857,7 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
               autoFocus={id === page}
               className={cn(
                 "flex h-row items-center rounded px-cell text-left outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
-                id === page ? "bg-selection" : "hover:bg-raised",
+                id === page ? "bg-selection" : "hover:bg-hover",
               )}
               onClick={() => useSettingsDialog.getState().show(id)}
             >

@@ -47,7 +47,7 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
         className={cn(
           "flex size-tab items-center justify-center",
           buttonShape(islands),
-          open ? (islands ? OPEN_ON_FRAME : "bg-raised text-ink") : "text-ink-muted hover:bg-raised hover:text-ink",
+          open ? (islands ? OPEN_ON_FRAME : "bg-raised text-ink") : "text-ink-muted hover:bg-hover hover:text-ink",
         )}
         onClick={() => invoke(actionId)}
       >
@@ -71,7 +71,7 @@ function ActionButton2({ actionId }: StripeAction) {
         aria-label={action.title}
         disabled={!enabled}
         className={cn(
-          "flex size-tab items-center justify-center text-ink-muted hover:bg-raised hover:text-ink",
+          "flex size-tab items-center justify-center text-ink-muted hover:bg-hover hover:text-ink",
           buttonShape(islands),
         )}
         onClick={() => invoke(actionId)}

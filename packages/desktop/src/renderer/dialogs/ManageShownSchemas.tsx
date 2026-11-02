@@ -42,7 +42,7 @@ function Row({
     <li
       className={cn(
         "flex h-row items-center gap-cell px-cell has-[:focus-visible]:bg-selection",
-        all ? "text-ink-muted" : "hover:bg-raised",
+        all ? "text-ink-muted" : "hover:bg-hover",
       )}
     >
       <label className="flex h-full min-w-0 flex-1 items-center gap-cell">
