@@ -52,3 +52,23 @@ describe("floating surface radius tokens", () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/** Drift the design system's Controls and Dialogs sections settled on one value for. */
+const CONTROL_DRIFT: Record<string, RegExp> = {
+  "rounded-sm, which is rounded under another name": /\brounded-sm\b/,
+  "a disabled opacity other than 50": /disabled:(?:[\w-]+:)*opacity-(?!50\b)\d+/,
+  "a dialog clamp other than 95vw / 95vh": /max-[wh]-\[90v[wh]\]/,
+  "a literal dialog width instead of its token": /\bw-\[\d+rem\]/,
+};
+
+describe("control consistency", () => {
+  it("givenRendererSources_whenScanned_thenNoControlDriftsFromTheDesignSystem", () => {
+    const offenders = sourceLines().flatMap(({ where, line }) =>
+      Object.entries(CONTROL_DRIFT)
+        .filter(([, pattern]) => pattern.test(line))
+        .map(([rule]) => `${where} ${rule}`),
+    );
+
+    expect(offenders).toEqual([]);
+  });
+});

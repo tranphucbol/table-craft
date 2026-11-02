@@ -36,8 +36,8 @@ const INITIAL_STATEMENT: GeneratorStatement = "select";
 const OPEN_IN_CONSOLE = "console";
 const COPY = "copy";
 const GENERATOR_CHOICES: readonly ModalChoice[] = [
-  { id: OPEN_IN_CONSOLE, label: "Open in Console", variant: "primary" },
   { id: COPY, label: "Copy" },
+  { id: OPEN_IN_CONSOLE, label: "Open in Console", variant: "primary" },
 ];
 const SELECTED_ROW = `[${REGION_ATTRIBUTE}="database"] [role="treeitem"][aria-selected="true"]`;
 

@@ -1,4 +1,5 @@
 import { useCallback, type ReactNode } from "react";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import type { EngineError } from "@table-craft/desktop/engine/protocol.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
@@ -401,31 +402,29 @@ export function KeyTab({ tabId }: { readonly tabId: string }) {
           <div className="flex min-h-0 flex-1">
             <div className="flex min-w-0 flex-1 flex-col">
               {tab.historyAvailable ? (
-                <div
-                  className="flex h-row shrink-0 items-center gap-1 border-b border-line bg-canvas px-gap"
-                  role="group"
-                  aria-label="Key view"
-                >
-                  <button
-                    type="button"
-                    aria-pressed={tab.history?.mode !== "history"}
-                    className="rounded px-gap text-ink-muted hover:bg-hover aria-pressed:bg-selection aria-pressed:text-ink"
-                    onClick={() => {
-                      if (tab.history?.mode === "history") void invoke(KEY_ACTION_IDS.history);
-                    }}
-                  >
-                    Value
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={tab.history?.mode === "history"}
-                    className="rounded px-gap text-ink-muted hover:bg-hover aria-pressed:bg-selection aria-pressed:text-ink"
-                    onClick={() => {
-                      if (tab.history?.mode !== "history") void invoke(KEY_ACTION_IDS.history);
-                    }}
-                  >
-                    History
-                  </button>
+                <div className="flex h-tab shrink-0 items-center border-b border-line bg-canvas px-gap">
+                  <div className={SEGMENT_GROUP} role="group" aria-label="Key view">
+                    <button
+                      type="button"
+                      aria-pressed={tab.history?.mode !== "history"}
+                      className={SEGMENT}
+                      onClick={() => {
+                        if (tab.history?.mode === "history") void invoke(KEY_ACTION_IDS.history);
+                      }}
+                    >
+                      Value
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={tab.history?.mode === "history"}
+                      className={SEGMENT}
+                      onClick={() => {
+                        if (tab.history?.mode !== "history") void invoke(KEY_ACTION_IDS.history);
+                      }}
+                    >
+                      History
+                    </button>
+                  </div>
                 </div>
               ) : null}
               <div className={cn("min-h-0 flex-1 flex-col", tab.history?.mode === "history" ? "hidden" : "flex")}>

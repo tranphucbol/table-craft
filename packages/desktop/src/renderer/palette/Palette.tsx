@@ -195,7 +195,7 @@ export function Palette() {
         <Dialog.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed top-24 left-1/2 z-50 w-palette max-w-[90vw] -translate-x-1/2 overflow-hidden rounded-dialog border border-line bg-panel text-ui text-ink shadow-dialog",
+            "fixed top-24 left-1/2 z-50 w-palette max-w-[95vw] -translate-x-1/2 overflow-hidden rounded-dialog border border-line bg-panel text-ui text-ink shadow-dialog",
             SURFACE_MOTION,
           )}
           onOpenAutoFocus={() => {

@@ -282,14 +282,15 @@ highlighted one and `CurrentIcon` in `text-accent` before the chosen one, group 
 | Variant  | Where                                | Look                                               |
 | -------- | ------------------------------------ | -------------------------------------------------- |
 | `field`  | A form or dialog                     | `INPUT_CLASS` (`ui/fieldClasses.ts`), `rounded`    |
-| `inline` | A toolbar or header line             | No fill, square, `border-line` only on hover       |
+| `inline` | A toolbar or header line             | No fill, square, `bg-hover` on hover               |
 | `cell`   | A grid cell being edited (a boolean) | Fills the cell, `border-accent` frame, `font-grid` |
 
 The flush rule: a control that fills the height of the strip it sits in (an `h-row` toolbar, a
 header line, a chip in a bar, a tag inside a trigger) is square, with no radius, so its edges meet
 the strip's lines. A control standing free in a form or a dialog keeps `rounded`. The extractor,
-Transaction mode, the value panel's format picker, the plan view's Tree / Raw group, the result
-search field and its filter chips, and the Theme trigger's scheme tag follow it.
+Transaction mode, the value panel's format picker, the result search field and its filter chips,
+and the Theme trigger's scheme tag follow it. A segmented group stands free inside its strip (`h-segment`, a row less 2 px), so it
+keeps `rounded`.
 
 ## Hints
 
@@ -304,12 +305,59 @@ Only three kinds of text stay on the form: a warning or error (`text-danger`, `r
 result of something the user just did (a pasted URL), and, where a choice changes what the form
 asks for, one short muted line beside the (i). Form labels wrap rather than run into the next row.
 
+## Controls
+
+Each control has one build, and a component takes it rather than writing its own classes.
+
+| Control         | Build                                                            | Look                                                                                                                        |
+| --------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Action button   | `ui/ActionButton.tsx`                                            | Runs a registry action; title and chord come from the registry, the chord only in the tooltip                               |
+| Dialog button   | `Button` / `buttonClass(variant)` (`dialogs/parts.tsx`)          | `h-row rounded px-gap`; `primary` filled accent, `secondary` bordered, `warning`, `danger`, `dangerOutline`                 |
+| Icon button     | `ICON_BUTTON` (`ui/iconButtonClasses.ts`)                        | `size-row`, `rounded`, `text-ink-muted`, `hover:bg-hover hover:text-ink`; toolbars, list headers, close X                   |
+| Link            | `INLINE_LINK` / `LINK_BUTTON` (`ui/linkClasses.ts`)              | Accent text: underlined on hover inside a sentence, `bg-hover` as a free-standing button                                    |
+| Text field      | `FIELD_CLASS` (`ui/fieldClasses.ts`)                             | `h-row rounded border-line bg-canvas`, `focus:border-accent`, `aria-invalid:border-danger`                                  |
+| Segmented group | `Segmented`, or `SEGMENT_GROUP` + `SEGMENT` (`ui/Segmented.tsx`) | One `rounded border-line` frame of `h-segment` buttons; the chosen one `bg-selection text-accent` with an accent inset ring |
+| Checkbox, radio | Native, inside a label                                           | `accent-color: var(--tc-accent)` on `:root` draws them in the theme's accent                                                |
+| Switch          | `ui/Switch.tsx`                                                  | An on/off setting that takes effect at once, in a table row                                                                 |
+
+- A segmented group is for two to five mutually exclusive views or values that stay visible: a
+  radiogroup (`aria-checked`), a toggle (`aria-pressed`) or a tablist (`aria-selected`) all wear
+  the same chosen state. A longer list is a `Dropdown`; a list of things to select is a list.
+- Disabled is `opacity-50` everywhere (`DISABLED_CLASS`); disabled text in a menu row is
+  `text-ink-muted` instead, since the row stays highlightable.
+- Focus is the global `:focus-visible` ring in `app.css`, 2 px `--tc-accent`; a control draws its
+  own only where the ring would be clipped (a row inside a scroller insets it with
+  `-outline-offset-2`).
+- A well (a list or preview framed inside a dialog) is drawn like a field: `bg-canvas`,
+  `border-line`, `rounded`. It is the one place a tone step and a border appear together.
+- A card at rest inside a view is a tone step only, `rounded bg-panel`, with no border.
+- The stripe buttons keep `rounded-island` under Islands (decision 141): they are tiles of the
+  frame, not controls inside an island.
+
+Labels follow one copy rule: Title Case for titles, buttons, menu items and actions ("Run on Next
+Node", short prepositions and articles lower case); an ellipsis when the command asks for more
+before it acts ("New Data Source…"); no chord inside a label, since the tooltip and the menu show
+it; no abbreviations a user must decode ("Transaction Builder", not "Txn Builder").
+
+## Dialogs
+
+A dialog is `Dialog.Content` with `CONTENT_CLASS`, clamped to `max-h-[95vh] max-w-[95vw]`, its
+width a token (`w-dialog`, `w-generator`, …), never a literal.
+
+- A large dialog (`h-dialog-height`: Settings, Data Sources, Snippets, Import Data Sources, Manage
+  Shown Schemas) opens with `DialogHeader`: an `h-tab` bar, the title in semibold, a `border-line`
+  rule under it and an `ICON_BUTTON` X named "Close …". A small dialog (`Modal`) puts its title
+  inline with no X; Escape closes both.
+- The footer is `DialogFooter`: secondary actions that do something else (Test Connection, a
+  destructive Clear…) start it on the left, then a spacer, then Cancel or Close, Apply where it
+  applies, and the primary button last, rightmost and filled. Enter submits a `Modal` form.
+
 ## Settings dialog
 
 Plan 013. `⌘,` (Settings… in the macOS app menu, File elsewhere) opens a modal the size of Data
 Sources (`w-dialog`, `h-dialog-height`): a `w-dialog-list` page list behind a `border-line` edge
 on the left, the chosen page `bg-selection`, the rest `hover:bg-hover`, and the page on the right
-as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink-muted` over a
+as a two-column form (`FIELD_GRID_CLASS`), section titles semibold `text-ink-muted` over a
 `border-line` rule. Pages:
 
 - **Appearance**: Theme, a dropdown (plan 032, decision 065, `dialogs/ThemePicker.tsx`): the
@@ -366,7 +414,7 @@ and Fonts and density sections above hold every value.
 | `density.statusPopoverWidthPx` | `--tc-status-popover-width` | `w-status-popover`           | 360 px             | 360 px          | The Exports popover, fixed so it does not jump as its counts grow                  |
 | `density.iconPx`               | `--tc-icon`                 | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
 | `density.paletteWidthPx`       | `--tc-palette-width`        | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
-| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#d4e2ff`       | Selected palette and Services rows, the focused tree's selection                   |
+| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#d4e2ff`       | Selected palette rows, the focused tree's selection                                |
 | `colors.success`               | `--tc-success`              | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                                     |
 | `colors.danger`                | `--tc-danger`               | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                                    |
 | `colors.panel`                 | `--tc-panel`                | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
@@ -517,7 +565,7 @@ Phosphor `ArrowsClockwise`, `ArrowsInLineVertical` and `CopySimple` glyphs.
 ### Key tree
 
 Plan 058. A `keyValue` datasource's rows add no tokens. A key's type badge (`ui/KeyTypeBadge.tsx`)
-stands where a catalog row draws its icon: a `w-9` `rounded-sm` box, `font-ui font-semibold` in `text-canvas` on a
+stands where a catalog row draws its icon: a `w-9` `rounded` box, `font-ui font-semibold` in `text-canvas` on a
 datasource tint, invisible until the key is described.
 
 | Type        | Badge                                        | Background     |
@@ -767,7 +815,8 @@ console's row is `ConsoleIcon` in `text-ink-muted` and its name. The actions' ic
 | `density.pickerListHeightPx`   | `--tc-picker-list-height` | `h-picker-list` | 220 px             | 220 px          | The picker's list and its preview             |
 
 The Services tree reuses the Database tool window's rows (`h-row`, 16 px indent per level, a caret
-for expandable rows, `bg-selection` selected, `hover:bg-hover`). A datasource row is `DatabaseIcon`
+for expandable rows, the selected row `bg-raised` and `bg-selection` while the tree has focus,
+`hover:bg-hover`). A datasource row is `DatabaseIcon`
 in `text-accent` (`text-danger` failed), the name and its connection state muted. A session row is
 the `Terminal` or `Table` glyph in `text-ink-muted`, a spinning `SpinnerIcon` in `text-accent`
 while running, the tab's title, its state
@@ -781,9 +830,8 @@ aligned in `text-ink-muted tabular-nums`. The session's context menu is the tab 
 
 Plan 012. A plan tab (`console/PlanView.tsx`) fills the result area. An analysed plan starts with
 a banner: `bg-analysed-banner`, a `border-line` rule under it, a filled `WarningIcon` in
-`text-warning`, then the text in `text-ink`. Under it an `h-row` toolbar on `bg-panel`: a segmented
-Tree / Raw group that fills the strip from its left edge, the strip's own lines above and below and
-a `border-line` divider after it (the flush rule; the shown view `bg-selection`), icon-only
+`text-warning`, then the text in `text-ink`. Under it an `h-tab` toolbar on `bg-panel`: a
+segmented Tree / Raw group (`SEGMENT_GROUP`, see [Controls](#controls)), icon-only
 `ArrowClockwise` Explain Again and `CopySimple` Copy Raw Plan, then the summary (`Planning Time: 1.0 ms ·
 Execution Time: 0.1 ms`) in `text-ink-muted`, truncated.
 

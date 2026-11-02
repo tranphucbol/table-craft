@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import { useId, useMemo, useRef, useState } from "react";
 import {
   probeSeenOf,
@@ -24,7 +25,8 @@ import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import {
   Button,
   CONTENT_CLASS,
-  DialogCloseButton,
+  DialogFooter,
+  DialogHeader,
   FIELD_GRID_CLASS,
   FieldRow,
   OVERLAY_CLASS,
@@ -742,7 +744,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <Dialog.Title className="shrink-0 border-b border-line px-gap py-cell font-semibold">Data Sources</Dialog.Title>
+      <DialogHeader title="Data Sources" dialog="Data Sources" />
       <div className="flex min-h-0 flex-1">
         <div className="flex w-dialog-list shrink-0 flex-col border-r border-line">
           <div role="toolbar" aria-label="Data source list" className="flex gap-1 p-1">
@@ -750,7 +752,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               type="button"
               aria-label="Add data source"
               title="Add data source"
-              className="flex size-tab items-center justify-center rounded hover:bg-hover"
+              className={ICON_BUTTON}
               onClick={() => setState((previous) => ({ ...previous, choosingPlugin: true }))}
             >
               <AddIcon aria-hidden className="size-icon" />
@@ -759,7 +761,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               type="button"
               aria-label="Import data sources"
               title="Import from DataGrip, TablePro or MySQL Workbench…"
-              className="flex size-tab items-center justify-center rounded hover:bg-hover"
+              className={ICON_BUTTON}
               onClick={() => void invoke(ACTION_IDS.importDatasources)}
             >
               <ImportIcon aria-hidden className="size-icon" />
@@ -769,7 +771,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               aria-label="Duplicate data source"
               title="Duplicate data source"
               disabled={current === undefined}
-              className="flex size-tab items-center justify-center rounded hover:bg-hover disabled:opacity-40"
+              className={ICON_BUTTON}
               onClick={() => {
                 const view = datasources.find((datasource) => datasource.id === current?.id);
                 if (view !== undefined) {
@@ -784,7 +786,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               aria-label="Remove data source"
               title="Remove data source"
               disabled={current === undefined || current.ephemeral}
-              className="flex size-tab items-center justify-center rounded hover:bg-hover disabled:opacity-40"
+              className={ICON_BUTTON}
               onClick={() => {
                 if (current !== undefined) void remove(current);
               }}
@@ -810,7 +812,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
                   {draft.dirty ? " *" : ""}
                 </span>
                 {draft.color === null ? null : (
-                  <span aria-hidden className={cn("size-2.5 shrink-0 rounded-sm", TINT_SWATCH[draft.color])} />
+                  <span aria-hidden className={cn("size-2.5 shrink-0 rounded", TINT_SWATCH[draft.color])} />
                 )}
                 {draft.folder === "" ? null : <span className="ml-auto truncate text-ink-muted">{draft.folder}</span>}
               </li>
@@ -856,24 +858,27 @@ function Editor({ target }: { readonly target: DialogTarget }) {
           {failure.message} <span className="text-ink-muted">{failure.hint}</span>
         </p>
       )}
-      <div className="flex shrink-0 items-center gap-gap border-t border-line p-gap">
-        {current === undefined ? null : (
-          <>
-            <Button disabled={current.ephemeral || test?.kind === "testing"} onClick={() => void runTest(current)}>
-              Test Connection
-            </Button>
-            <TestResult state={test} brands={plugin?.brands} />
-          </>
-        )}
-        <span className="flex-1" />
-        <Button variant="primary" disabled={saving} onClick={() => void saveAll(true)}>
-          OK
-        </Button>
+      <DialogFooter
+        className="border-t border-line p-gap"
+        start={
+          current === undefined ? null : (
+            <>
+              <Button disabled={current.ephemeral || test?.kind === "testing"} onClick={() => void runTest(current)}>
+                Test Connection
+              </Button>
+              <TestResult state={test} brands={plugin?.brands} />
+            </>
+          )
+        }
+      >
         <Button onClick={hide}>Cancel</Button>
         <Button disabled={saving || current?.dirty !== true || current.ephemeral} onClick={() => void saveAll(false)}>
           Apply
         </Button>
-      </div>
+        <Button variant="primary" disabled={saving} onClick={() => void saveAll(true)}>
+          OK
+        </Button>
+      </DialogFooter>
     </div>
   );
 }
@@ -958,7 +963,6 @@ export function DataSourcesDialog() {
           )}
         >
           {target === null ? null : <Editor key={JSON.stringify(target)} target={target} />}
-          <DialogCloseButton dialog="Data Sources" />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

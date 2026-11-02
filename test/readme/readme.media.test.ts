@@ -98,7 +98,7 @@ mediaSuite("README media", () => {
     withoutShop: true,
     setup: () => Promise.resolve(),
     run: async ({ page }) => {
-      await clickVisibly(page, toolWindow(page, "Database").getByRole("button", { name: "New Data Source…" }));
+      await clickVisibly(page, toolWindow(page, "Database").getByRole("button", { name: "New Data Source…" }).first());
       const dialog = dataSourcesDialog(page);
       await pause(page);
       await clickVisibly(

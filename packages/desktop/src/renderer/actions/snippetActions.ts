@@ -207,7 +207,7 @@ export const SNIPPET_ACTIONS: readonly AnyAction[] = [
         if (draft === null || dialog.original === null) return;
         const answer = await useModal.getState().ask({
           kind: "confirm",
-          title: "Delete snippet",
+          title: "Delete Snippet",
           message: `Delete “${draft.name || "Untitled snippet"}”? This cannot be undone.`,
           confirm: "Delete",
           destructive: true,

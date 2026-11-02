@@ -278,7 +278,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       const page = await launch();
       const text = 'txn\nif: version("built") = "0"\nthen: put built before\nelse: get built\nend';
       await sqlEditor(page).fill(text);
-      await findAction(page, "Txn Builder");
+      await findAction(page, "Transaction Builder");
       const builder = page.getByRole("region", { name: "Transaction builder", exact: true });
       const then = builder.getByRole("region", { name: "Then", exact: true });
       await then.getByLabel("Value", { exact: true }).fill("after");

@@ -103,7 +103,7 @@ function currentVersion(userDataDir: string): unknown {
 }
 
 async function openNewDatasource(page: Page): Promise<void> {
-  await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+  await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
   await kinds(page).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
 }
 

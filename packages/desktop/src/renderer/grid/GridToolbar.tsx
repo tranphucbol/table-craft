@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { buttonClass } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { EXTRACTOR_KINDS, type ExtractorKind } from "@table-craft/desktop/engine/protocol.js";
 import {
   copyBlockedReason,
@@ -15,10 +16,8 @@ import { isRunning, useExports } from "@table-craft/desktop/renderer/state/expor
 import type { ResultTab } from "@table-craft/desktop/renderer/state/resultTab.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { Clock } from "@table-craft/desktop/renderer/ui/Clock.js";
-import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { SpinnerIcon } from "@table-craft/desktop/renderer/ui/icons.js";
-import { TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
 const EXTRACTOR_OPTIONS = EXTRACTOR_KINDS.map((kind) => ({ value: kind, label: EXTRACTOR_LABELS[kind] }));
 
@@ -58,10 +57,7 @@ function DrainingExport({ handle }: { readonly handle: string }) {
             type="button"
             data-testid="result-exporting-cancel"
             disabled={cancelling}
-            className={cn(
-              "flex h-row shrink-0 items-center rounded border border-line px-gap text-ink hover:bg-hover disabled:opacity-50",
-              TEXT_PRESS,
-            )}
+            className={buttonClass()}
             onMouseDown={(event) => event.preventDefault()}
             onClick={() => invoke(EXPORT_ACTION_IDS.cancel, { taskId: task.taskId })}
           >

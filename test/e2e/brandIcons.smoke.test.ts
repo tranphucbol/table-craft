@@ -341,7 +341,7 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
     "givenPicker_whenTidbPicked_thenDraftNamedTidbWithItsLogo",
     async () => {
       const page = await launch(newProfile());
-      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const dialog = dataSourcesDialog(page);
       const kinds = dialog.getByRole("list", { name: "Database kinds" });
       await kinds.waitFor();
@@ -371,7 +371,7 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
     async () => {
       const tidb = tidbConfigFromEnv();
       const page = await launch(newProfile());
-      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const dialog = dataSourcesDialog(page);
       await dialog.getByRole("list", { name: "Database kinds" }).locator('button[data-brand="mysql"]').click();
       await expect.poll(() => dialog.getByTestId("draft-product").textContent()).toBe("MySQL");
@@ -415,7 +415,7 @@ describe.runIf(DATABASES_ENABLED)("datasource brand icons live test", () => {
       }
       await captureWindow(page, "10-services");
 
-      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const list = dataSourcesDialog(page).getByRole("listbox", { name: "Data sources" });
       for (const row of rows) {
         const option = list.getByRole("option").filter({ has: page.getByText(row.saved.name, { exact: true }) });

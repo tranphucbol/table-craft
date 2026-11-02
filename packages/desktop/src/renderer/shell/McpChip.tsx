@@ -116,6 +116,7 @@ function McpPopover({ anchor }: { readonly anchor: PopoverAnchor }) {
       anchor={anchor}
       label="MCP server"
       testId="mcp-popover"
+      focusSelf
       onClose={() => useMcp.getState().setPopover(false)}
     >
       <div className={POPOVER_PANEL}>

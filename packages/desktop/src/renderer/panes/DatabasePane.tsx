@@ -87,6 +87,8 @@ import { themeOf, useIslands, useRowHeightPx, useSettings } from "@table-craft/d
 import { DatasourceGlyph, useBrandLogo, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { isRunningOn, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import { MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT, WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import {
@@ -237,7 +239,7 @@ function ToolbarButton({ actionId }: { readonly actionId: string }) {
         type="button"
         aria-label={action.title}
         disabled={!enabled}
-        className="press flex size-tab items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
+        className={cn(ICON_BUTTON, "disabled:hover:bg-transparent")}
         onClick={() => invoke(actionId)}
       >
         <Icon aria-hidden className="size-icon" />
@@ -376,7 +378,7 @@ function DatasourceLabel({
         <Highlighted text={datasource.name} positions={positions} />
       </span>
       {datasource.color === null ? null : (
-        <span aria-hidden data-swatch className={cn("size-2.5 shrink-0 rounded-sm", TINT_SWATCH[datasource.color])} />
+        <span aria-hidden data-swatch className={cn("size-2.5 shrink-0 rounded", TINT_SWATCH[datasource.color])} />
       )}
       {datasource.readOnly ? (
         <ReadOnlyIcon aria-label="read-only" className="size-icon shrink-0 text-ink-muted" />
@@ -564,17 +566,10 @@ function TreeRow({
 }
 
 function EmptyState() {
-  const shortcut = shortcutOf(ACTION_IDS.newDatasource);
   return (
     <div className="flex flex-col items-start gap-gap px-pane-inset py-gap text-ink-muted">
       <p>No data sources.</p>
-      <button
-        type="button"
-        className="rounded border border-line px-gap py-1 text-ink hover:bg-hover"
-        onClick={() => invoke(ACTION_IDS.newDatasource)}
-      >
-        New Data Source{shortcut === undefined ? "" : ` (${shortcut})`}
-      </button>
+      <ActionButton actionId={ACTION_IDS.newDatasource} />
     </div>
   );
 }
@@ -588,7 +583,7 @@ function LoadWarning() {
       role="alert"
       className="mx-pane-inset mb-gap flex items-start gap-cell rounded border border-danger p-cell text-ink"
     >
-      <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0 text-danger" />
+      <WarningIcon aria-hidden weight="fill" className="mt-0.5 size-icon shrink-0 text-danger" />
       <span className="min-w-0 flex-1">{warning}</span>
       <button type="button" className="text-ink-muted hover:text-ink" onClick={dismiss}>
         Dismiss
@@ -609,7 +604,7 @@ function SettingsNotice() {
       data-testid="settings-notice"
       className="mx-pane-inset mb-gap flex items-start gap-cell rounded border border-warning p-cell text-ink"
     >
-      <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0 text-warning" />
+      <WarningIcon aria-hidden weight="fill" className="mt-0.5 size-icon shrink-0 text-warning" />
       <span className="flex min-w-0 flex-1 flex-col gap-1 break-words">
         {notice === null ? null : <span>{notice}</span>}
         {themeNotice === null ? null : <span>{themeNotice}</span>}

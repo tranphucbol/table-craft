@@ -31,7 +31,7 @@ function Swatch({ option }: { readonly option: ThemePickerOption }) {
   const { colors } = option;
   if (option.choice === FOLLOW_SYSTEM) {
     return (
-      <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
+      <span aria-hidden className="flex shrink-0 overflow-hidden rounded border border-line">
         {FOLLOW_SYSTEM_HALVES.map((color) => (
           <span key={color} className="h-2.5 w-5" style={{ backgroundColor: color }} />
         ))}
@@ -40,7 +40,7 @@ function Swatch({ option }: { readonly option: ThemePickerOption }) {
   }
   if (colors === null) return <span aria-hidden className="w-10 shrink-0" />;
   return (
-    <span aria-hidden className="flex shrink-0 overflow-hidden rounded-sm border border-line">
+    <span aria-hidden className="flex shrink-0 overflow-hidden rounded border border-line">
       {SWATCH_TOKENS.map((token) => (
         <span key={token} className="size-2.5" style={{ backgroundColor: colors[token] }} />
       ))}

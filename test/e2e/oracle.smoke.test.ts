@@ -330,7 +330,7 @@ describe.runIf(DATABASES_ENABLED)("oracle live test", () => {
       seedSettings(userDataDir, { version: 1, plugins: { registryUrl: registry.url } });
       const page = await launch(null, { userDataDir, env: NO_OPTIONAL_ROOT });
 
-      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const form = dataSourcesDialog(page);
       await form.locator('button[data-download="oracle"]').click();
       await form.getByLabel("Service", { exact: true }).waitFor({ timeout: LAUNCH_TIMEOUT_MS });

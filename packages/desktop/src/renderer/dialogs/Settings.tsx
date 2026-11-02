@@ -11,7 +11,7 @@ import { WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowA
 import {
   Button,
   CONTENT_CLASS,
-  DialogCloseButton,
+  DialogHeader,
   FIELD_GRID_CLASS,
   FieldRow,
   OVERLAY_CLASS,
@@ -829,7 +829,7 @@ function SettingsEditor({ page }: { readonly page: SettingsPage }) {
   const Page = PAGES[page];
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <Dialog.Title className="shrink-0 border-b border-line px-gap py-cell font-semibold">Settings</Dialog.Title>
+      <DialogHeader title="Settings" dialog="Settings" />
       <div className="flex min-h-0 flex-1">
         <div
           role="tablist"
@@ -909,7 +909,6 @@ export function SettingsDialog() {
           )}
         >
           {page === null ? null : <SettingsEditor page={page} />}
-          <DialogCloseButton dialog="Settings" />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

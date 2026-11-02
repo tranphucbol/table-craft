@@ -87,7 +87,7 @@ export function SecretPrompt() {
     >
       <Dialog.Portal>
         <Dialog.Overlay className={OVERLAY_CLASS} />
-        <Dialog.Content className={cn(CONTENT_CLASS, "w-96 max-w-[90vw]")}>
+        <Dialog.Content className={cn(CONTENT_CLASS, "w-96 max-w-[95vw]")}>
           {pending === null ? null : <Body key={pending.request.datasource.id} request={pending.request} />}
         </Dialog.Content>
       </Dialog.Portal>

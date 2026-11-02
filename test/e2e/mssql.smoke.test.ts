@@ -258,7 +258,7 @@ describe.runIf(DATABASES_ENABLED)("sql server live test", () => {
       await setWindowSize(running.app, EVIDENCE_WINDOW);
       const page = running.page;
 
-      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const form = dataSourcesDialog(page);
       await form.locator('button[data-download="mssql"]').click();
       await form.getByLabel("Instance", { exact: true }).waitFor({ timeout: LAUNCH_TIMEOUT_MS });

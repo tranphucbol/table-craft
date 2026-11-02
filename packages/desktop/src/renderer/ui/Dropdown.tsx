@@ -10,7 +10,7 @@ const SIDE_OFFSET_PX = 4;
 /** The flush rule (plan 129 decision 8): a control filling the strip it sits in has no radius. */
 const VARIANT_CLASS = {
   inline:
-    "h-row min-w-0 border border-transparent bg-transparent px-1 outline-none hover:border-line focus-visible:border-accent disabled:opacity-50",
+    "h-row min-w-0 border border-transparent bg-transparent px-1 outline-none hover:bg-hover focus-visible:border-accent disabled:opacity-50",
   field: FIELD_CLASS,
   cell: "absolute inset-0 w-full border border-accent bg-canvas px-cell font-grid text-grid outline-none",
 } as const;

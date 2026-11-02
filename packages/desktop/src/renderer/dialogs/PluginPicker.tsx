@@ -80,7 +80,7 @@ export function PluginPicker({
 
   return (
     <div className="flex flex-col gap-gap p-gap">
-      <h3 className="font-semibold">New data source</h3>
+      <h3 className="font-semibold">New Data Source</h3>
       <p className="text-ink-muted">Choose the kind of database.</p>
       <ul aria-label="Database kinds" className="grid grid-cols-2 gap-1">
         {pickerEntries(plugins, catalog).map((item) =>

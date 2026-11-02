@@ -1,4 +1,5 @@
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import { FIELD_CLASS } from "@table-craft/desktop/renderer/ui/fieldClasses.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import {
   rangeFields,
@@ -8,7 +9,7 @@ import {
 } from "@table-craft/desktop/renderer/state/keyTabs.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
-const INPUT_CLASS = "h-row min-w-0 flex-1 rounded border bg-canvas px-cell font-grid text-ink outline-none";
+const INPUT_CLASS = cn(FIELD_CLASS, "flex-1 font-grid");
 
 function Field({
   tabId,
@@ -32,7 +33,8 @@ function Field({
         aria-label={label}
         data-testid={`key-range-${name}`}
         spellCheck={false}
-        className={cn(INPUT_CLASS, invalid ? "border-danger" : "border-line focus:border-accent")}
+        aria-invalid={invalid}
+        className={INPUT_CLASS}
         value={value}
         placeholder={placeholder}
         onChange={(event) => useKeyTabs.getState().setDraft(tabId, { [name]: event.target.value })}
