@@ -47,10 +47,14 @@ const COMPLETION = ".cm-tooltip-autocomplete";
 const COMPLETION_SQL = "SELECT * FROM ";
 const SEEDED_SQLITE: Datasource = { id: "lite", pluginId: "sqlite", config: { path: seededSqliteFile() } };
 const TOOLTIP_SURFACE = ".rounded-tooltip";
+/** `editorTheme.ts` sizes the completion list to ten rows; the seeded file offers fewer, so none scroll. */
+const COMPLETION_VISIBLE_ROWS = 10;
 const NEW_CONSOLE = "New Console";
 
 /** The few DOM members the evaluation touches; the e2e program is compiled without the DOM lib. */
 interface Padded {
+  readonly scrollHeight: number;
+  readonly clientHeight: number;
   readonly ownerDocument: {
     readonly defaultView: {
       getComputedStyle(element: Padded): { readonly paddingTop: string; readonly boxShadow: string };
@@ -64,6 +68,10 @@ function px(value: number): string {
 
 async function paddingOf(locator: Locator): Promise<string> {
   return locator.evaluate((element: Padded) => element.ownerDocument.defaultView.getComputedStyle(element).paddingTop);
+}
+
+async function scrolls(locator: Locator): Promise<boolean> {
+  return locator.evaluate((element: Padded) => element.scrollHeight > element.clientHeight);
 }
 
 async function shadowOf(locator: Locator): Promise<string> {
@@ -194,6 +202,12 @@ describe.runIf(SMOKE_ENABLED)("floating surface radius live test", () => {
 
       await expect.poll(() => cornerRadius(completion)).toBe(px(ISLANDS_POPOVER_RADIUS_PX));
       await expectShadow(completion, ELEVATION.dark.popover);
+      const list = completion.locator("ul");
+      const selected = list.locator("li[aria-selected]");
+      const inset = Number.parseFloat(await paddingOf(list));
+      expect(inset + Number.parseFloat(await cornerRadius(selected))).toBe(ISLANDS_POPOVER_RADIUS_PX);
+      expect(await list.getByRole("option").count()).toBeLessThanOrEqual(COMPLETION_VISIBLE_ROWS);
+      expect(await scrolls(list)).toBe(false);
       await captureWindow(page, "05-completion");
 
       await page.keyboard.press("Escape");
