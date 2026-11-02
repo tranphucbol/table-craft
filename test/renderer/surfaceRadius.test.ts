@@ -1,0 +1,44 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const RENDERER = resolve(import.meta.dirname, "../../packages/desktop/src/renderer");
+const SOURCE = /\.tsx?$/;
+/** A dialog-sized surface rounds through the token so Islands can follow the island (plan 144). */
+const DIALOG_SHADOW = "shadow-2xl";
+const DIALOG_RADIUS = "rounded-dialog";
+const LITERAL_DIALOG_RADIUS = /\brounded-lg\b/;
+
+function sources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return sources(path);
+    return SOURCE.test(entry.name) ? [path] : [];
+  });
+}
+
+function sourceLines(): { where: string; line: string }[] {
+  return sources(RENDERER).flatMap((path) =>
+    readFileSync(path, "utf8")
+      .split("\n")
+      .map((line, index) => ({ where: `${relative(RENDERER, path)}:${String(index + 1)}`, line })),
+  );
+}
+
+describe("floating surface radius tokens", () => {
+  it("givenRendererSources_whenScanned_thenNoSurfaceHardCodesRoundedLg", () => {
+    const offenders = sourceLines()
+      .filter(({ line }) => LITERAL_DIALOG_RADIUS.test(line))
+      .map(({ where }) => where);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("givenRendererSources_whenScanned_thenEveryShadow2xlSurfaceIsRoundedDialog", () => {
+    const surfaces = sourceLines().filter(({ line }) => line.includes(DIALOG_SHADOW));
+    const offenders = surfaces.filter(({ line }) => !line.includes(DIALOG_RADIUS)).map(({ where }) => where);
+
+    expect(surfaces.length).toBeGreaterThan(0);
+    expect(offenders).toEqual([]);
+  });
+});

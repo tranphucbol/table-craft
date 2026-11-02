@@ -222,8 +222,11 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
   ".cm-tooltip": {
     backgroundColor: "var(--tc-raised)",
     border: "1px solid var(--tc-border)",
-    borderRadius: "var(--tc-editor-tooltip-radius)",
+    borderRadius: "var(--tc-tooltip-radius)",
     color: "var(--tc-ink)",
+  },
+  [`.cm-tooltip.cm-tooltip-autocomplete, .cm-tooltip.${INTENTIONS_CLASS}`]: {
+    borderRadius: "var(--tc-popover-radius)",
   },
   ".cm-tooltip-autocomplete > ul": {
     fontFamily: "var(--tc-font-editor)",

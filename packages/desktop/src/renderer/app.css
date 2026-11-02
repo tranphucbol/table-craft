@@ -72,6 +72,9 @@
   --spacing-tool-header: var(--tc-tool-header-height);
 
   --radius-island: var(--tc-island-radius);
+  --radius-dialog: var(--tc-dialog-radius);
+  --radius-popover: var(--tc-popover-radius);
+  --radius-tooltip: var(--tc-tooltip-radius);
 
   /* Open animations only: Radix holds a closing surface until its exit animation ends, which
      delays the focus return, so nothing here runs on `data-state=closed` (decision 120). The

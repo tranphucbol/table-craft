@@ -174,3 +174,51 @@ describe("island variables", () => {
     });
   });
 });
+
+const DENSITY_IDS: readonly DensityId[] = ["comfortable", "compact"];
+const WINDOW_STYLES: readonly WindowStyle[] = ["islands", "classic"];
+
+function radiiOf(windowStyle: WindowStyle, density: DensityId) {
+  const variables = appearanceVariables(
+    appearanceOf(withWindowStyle(windowStyle, density), BUILT_IN_THEMES.dark, NO_PREFERENCE),
+  );
+  const px = (name: string) => Number.parseFloat(variables[name] ?? "");
+  return {
+    dialog: px("--tc-dialog-radius"),
+    popover: px("--tc-popover-radius"),
+    tooltip: px("--tc-tooltip-radius"),
+  };
+}
+
+describe("floating surface radii", () => {
+  it("givenIslands_whenVariablesBuilt_thenDialogRadiusIsTheIslandRadius", () => {
+    expect(radiiOf("islands", "comfortable").dialog).toBe(10);
+    expect(radiiOf("islands", "compact").dialog).toBe(8);
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenDialogRadiusStaysEight", () => {
+    for (const density of DENSITY_IDS) expect(radiiOf("classic", density).dialog).toBe(8);
+  });
+
+  it("givenIslands_whenVariablesBuilt_thenPopoverRadiusIsEightAndTooltipFour", () => {
+    for (const density of DENSITY_IDS) {
+      expect(radiiOf("islands", density)).toMatchObject({ popover: 8, tooltip: 4 });
+    }
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenPopoverAndTooltipRadiiStayFour", () => {
+    for (const density of DENSITY_IDS) {
+      expect(radiiOf("classic", density)).toMatchObject({ popover: 4, tooltip: 4 });
+    }
+  });
+
+  it("givenEveryDensityAndWindowStyle_whenVariablesBuilt_thenDialogNeverRoundsLessThanPopoverOrPopoverLessThanTooltip", () => {
+    for (const windowStyle of WINDOW_STYLES) {
+      for (const density of DENSITY_IDS) {
+        const { dialog, popover, tooltip } = radiiOf(windowStyle, density);
+        expect(dialog).toBeGreaterThanOrEqual(popover);
+        expect(popover).toBeGreaterThanOrEqual(tooltip);
+      }
+    }
+  });
+});

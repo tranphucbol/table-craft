@@ -40,7 +40,7 @@ import {
 export const CELL = "truncate border-r border-line px-cell leading-(--spacing-row)";
 const MENU_ITEM =
   "flex h-row cursor-default items-center justify-between gap-gap rounded px-gap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection";
-const MENU_CONTENT = `z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg ${MENU_MOTION}`;
+const MENU_CONTENT = `z-50 min-w-48 rounded-popover border border-line bg-raised p-1 text-ui text-ink shadow-lg ${MENU_MOTION}`;
 const READ_ONLY_COLUMN_TITLE = " (read-only: not a column of the table)";
 
 /** What the grid asks of the store that owns its result: a console's or a table tab's. */

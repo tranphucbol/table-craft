@@ -1,6 +1,6 @@
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { EDITOR_TOOLTIP_RADIUS_PX } from "@table-craft/desktop/appearance/themes.js";
+import { ISLANDS_POPOVER_RADIUS_PX, TOOLTIP_RADIUS_PX } from "@table-craft/desktop/appearance/themes.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
   CLOSE_HOOK_TIMEOUT_MS,
@@ -43,7 +43,7 @@ interface Geometry {
   readonly radii: readonly string[];
 }
 
-async function expectRoundedBelow(page: Page, selector: string, anchor: string): Promise<void> {
+async function expectRoundedBelow(page: Page, selector: string, anchor: string, radiusPx: number): Promise<void> {
   await page.locator(selector).waitFor();
   await expect
     .poll(async () => {
@@ -63,7 +63,7 @@ async function expectRoundedBelow(page: Page, selector: string, anchor: string):
       return (
         geometry.top >= geometry.anchorBottom &&
         geometry.bottom > geometry.top &&
-        geometry.radii.every((radius) => radius === `${String(EDITOR_TOOLTIP_RADIUS_PX)}px`)
+        geometry.radii.every((radius) => radius === `${String(radiusPx)}px`)
       );
     })
     .toBe(true);
@@ -95,12 +95,12 @@ describe.runIf(SMOKE_ENABLED)("SQL tooltip geometry", () => {
       await page.keyboard.press("Escape");
       await page.keyboard.press("Control+Space");
       await page.locator(COMPLETION).getByRole("option").first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-      await expectRoundedBelow(page, COMPLETION, '[data-testid="sql-editor"] .cm-line');
+      await expectRoundedBelow(page, COMPLETION, '[data-testid="sql-editor"] .cm-line', ISLANDS_POPOVER_RADIUS_PX);
       await expect
         .poll(() =>
           page.evaluate<string>(`getComputedStyle(document.querySelector('${COMPLETION} > ul')).borderTopLeftRadius`),
         )
-        .toBe(`${String(EDITOR_TOOLTIP_RADIUS_PX)}px`);
+        .toBe(`${String(ISLANDS_POPOVER_RADIUS_PX)}px`);
       await capture(page, "completion-rounded-below");
     },
     SCENARIO_TIMEOUT_MS,
@@ -140,12 +140,12 @@ describe.runIf(SMOKE_ENABLED)("SQL tooltip geometry", () => {
       await mark.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await page.keyboard.press("Escape");
       await mark.hover();
-      await expectRoundedBelow(page, INSPECTION_TOOLTIP, PROBLEM);
+      await expectRoundedBelow(page, INSPECTION_TOOLTIP, PROBLEM, TOOLTIP_RADIUS_PX);
       await capture(page, "inspection-rounded-below");
       await mark.click();
       await page.mouse.move(0, 0);
       await page.keyboard.press("Alt+Enter");
-      await expectRoundedBelow(page, CONTEXT_ACTIONS, PROBLEM);
+      await expectRoundedBelow(page, CONTEXT_ACTIONS, PROBLEM, ISLANDS_POPOVER_RADIUS_PX);
       await capture(page, "context-actions-rounded-below");
     },
     SCENARIO_TIMEOUT_MS,
@@ -160,7 +160,7 @@ describe.runIf(SMOKE_ENABLED)("SQL tooltip geometry", () => {
       const mark = sqlEditor(page).locator(ERROR).first();
       await mark.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await mark.hover();
-      await expectRoundedBelow(page, ERROR_TOOLTIP, ERROR);
+      await expectRoundedBelow(page, ERROR_TOOLTIP, ERROR, TOOLTIP_RADIUS_PX);
       await capture(page, "error-rounded-below");
     },
     SCENARIO_TIMEOUT_MS,
