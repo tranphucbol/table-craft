@@ -9,7 +9,7 @@ const DIALOG_SHADOW = "shadow-dialog";
 const DIALOG_RADIUS = "rounded-dialog";
 const LITERAL_DIALOG_RADIUS = /\brounded-lg\b/;
 /** Tailwind's own shadow scale is one 10-25 % black for every theme; floating surfaces cast the elevation tokens. */
-const LITERAL_SHADOW = /(?<![\w-])shadow(?:-(?:2xs|xs|sm|md|lg|xl|2xl))?(?![\w-])|rgb\(0 0 0/;
+const LITERAL_SHADOW = /(?<![\w-])shadow(?:-(?:2xs|xs|sm|md|lg|xl|2xl))?(?![\w-])|shadow-\[|drop-shadow|rgb\(0 0 0/;
 
 function sources(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

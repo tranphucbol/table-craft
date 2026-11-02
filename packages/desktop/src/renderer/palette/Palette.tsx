@@ -22,7 +22,8 @@ import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/st
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
 import { usePalette } from "@table-craft/desktop/renderer/state/palette.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { OVERLAY_MOTION, SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
+import { OVERLAY_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 
 const PROVIDERS: readonly SearchProvider[] = [
   actionsProvider(registry),
@@ -190,7 +191,7 @@ export function Palette() {
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className={cn("fixed inset-0 z-40 bg-canvas/50", OVERLAY_MOTION)} />
+        <Dialog.Overlay className={OVERLAY_CLASS} />
         <Dialog.Content
           aria-describedby={undefined}
           className={cn(
