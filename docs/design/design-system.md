@@ -249,7 +249,7 @@ equivalents; Full, Reduced and Off override it. It applies live.
 Decision 140. Every choice list is `ui/Dropdown.tsx` (Radix Select), never a native `<select>`,
 whose OS menu ignores the theme and the density; ESLint refuses `<select>` in the renderer. The
 list opens under its trigger as a `SURFACE_MOTION` popover: `bg-raised`, a `border-line` frame,
-`rounded-popover`, `shadow-lg`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
+`rounded-popover`, `shadow-popover`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
 highlighted one and `CurrentIcon` in `text-accent` before the chosen one, group headings in
 `text-ink-muted`. The keyboard is a native select's: arrows, type-ahead, Enter, Escape.
 
@@ -270,7 +270,7 @@ search field and its filter chips, and the Theme trigger's scheme tag follow it.
 Help that explains a field lives behind an (i), not under it. `ui/InfoHint.tsx` is an `InfoIcon`
 button in `text-ink-muted` (`text-ink` on hover or focus), named "About …", that shows its text
 as a tooltip after 150 ms of hover or on keyboard focus: `bg-raised`, a `border-line` frame,
-`rounded-tooltip`, `shadow-lg`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
+`rounded-tooltip`, `shadow-popover`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
 takes `hint` and puts one after the control. Help longer than a few sentences, or with a table or
 a button, is a `ui/Popover` behind the same (i) instead (the MCP Timeout cell).
 
@@ -392,6 +392,8 @@ sizes are the Classic ones.
 | (derived)                   | `--tc-dialog-radius`      | `rounded-dialog`                  | 10 px              | 8 px            | Dialogs and the palette: `islandRadiusPx`; 8 px with Classic       |
 | `ISLANDS_POPOVER_RADIUS_PX` | `--tc-popover-radius`     | `rounded-popover`                 | 8 px               | 8 px            | Menus, popovers, dropdown lists, SQL completion; 4 px with Classic |
 | `TOOLTIP_RADIUS_PX`         | `--tc-tooltip-radius`     | `rounded-tooltip`                 | 4 px               | 4 px            | Tooltips, (i) hints, the speed search badge, editor tooltips       |
+| `ELEVATION[scheme].popover` | `--tc-popover-shadow`     | `shadow-popover`                  | 50 % black         | 16 % black      | Menus, popovers, dropdown lists, completion, tooltips              |
+| `ELEVATION[scheme].dialog`  | `--tc-dialog-shadow`      | `shadow-dialog`                   | 70 % black         | 30 % black      | Dialogs and the palette                                            |
 | (derived)                   | `--tc-pane-inset`         | `px-pane-inset`, `mx-pane-inset`  | 10 px              | 8 px            | Pane content's inset from the island edge; `gap` with Classic      |
 | (derived)                   | `--tc-tool-header-height` | `h-tool-header`                   | 32 px              | 32 px           | A tool window's header, `tabHeightPx`; `rowHeightPx` with Classic  |
 
@@ -439,6 +441,12 @@ a dialog or the palette (`rounded-dialog`) is never squarer than the island unde
 8 px, and a tooltip (`rounded-tooltip`) stays at 4 px. A surface that holds a list of choices is a
 popover, one that holds only text a tooltip. Classic keeps 8, 4 and 4. Controls (buttons, fields,
 triggers, chips) keep `rounded` and the flush rule.
+
+They cast two shadows, `shadow-popover` and `shadow-dialog`, picked by the theme's colour scheme
+(`ELEVATION` in `appearance/themes.ts`), so every bundled, ported and user theme gets them. A dark
+scheme casts three to five times as dark as a light one: Tailwind's `shadow-lg`, 10 % black, does
+not show on a dark canvas. Each is a wide soft layer over a tight contact one. Nothing at rest casts
+a shadow, and the renderer uses no other (`test/renderer/surfaceRadius.test.ts`).
 
 ## Database explorer
 
@@ -691,7 +699,7 @@ an error sits under it in `text-danger` with the hint muted. The body is a read-
 with the SQL Generator's preview.
 
 Quick Documentation (`Info`) is a `ui/Popover.tsx`: `bg-raised`, a `border-line` frame, `rounded`,
-`shadow-lg`, `text-ui`, below the anchor with a 4 px offset. Its header (`border-b border-line`)
+`shadow-popover`, `text-ui`, below the anchor with a 4 px offset. Its header (`border-b border-line`)
 holds the kind in `text-ink-muted` and the qualified name and comment; section titles are
 `text-ink-muted`, names and types `font-grid text-grid`. Columns use the explorer's marks: a filled
 `KeyIcon` for the primary key, an outlined one for a foreign key, both `text-key-icon`, else a muted

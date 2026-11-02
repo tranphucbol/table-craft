@@ -4,9 +4,9 @@ import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 // that floats draws from these, so a row is as tall, as inset and as highlighted wherever it opens.
 
 /** A context menu's surface: a 4 px inset, so a `rounded` row nests in `rounded-popover`. */
-export const MENU_CONTENT = `z-50 min-w-48 rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-lg ${MENU_MOTION}`;
+export const MENU_CONTENT = `z-50 min-w-48 rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-popover ${MENU_MOTION}`;
 /** The explorer's, the Services pane's and the editor's context menus, whose titles run longer. */
-export const WIDE_MENU_CONTENT = `z-50 min-w-56 rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-lg ${MENU_MOTION}`;
+export const WIDE_MENU_CONTENT = `z-50 min-w-56 rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-popover ${MENU_MOTION}`;
 /** A Radix menu item: its title, then its shortcut pushed to the right edge. */
 export const MENU_ITEM =
   "flex h-row cursor-default items-center justify-between gap-gap rounded px-gap whitespace-nowrap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection";

@@ -1,7 +1,7 @@
 /**
  * Plan 144's live test: dialogs and the palette round like the islands, menus, popovers and the SQL
  * completion list round to one popover radius with their rows nested inside, tooltips stay tight,
- * and Classic keeps its radii. SQLite only (the seeded file for completion), so it needs only a
+ * Classic keeps its radii, and each casts its scheme's elevation shadow. SQLite only (the seeded file for completion), so it needs only a
  * display and a fresh build:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/144 bun run test:smoke:headless test/e2e/surfaceRadius.smoke.test.ts
@@ -13,6 +13,7 @@ import {
   CLASSIC_POPOVER_RADIUS_PX,
   COMFORTABLE_DENSITY,
   COMPACT_DENSITY,
+  ELEVATION,
   ISLANDS_POPOVER_RADIUS_PX,
   TOOLTIP_RADIUS_PX,
 } from "@table-craft/desktop/appearance/themes.js";
@@ -51,7 +52,9 @@ const NEW_CONSOLE = "New Console";
 /** The few DOM members the evaluation touches; the e2e program is compiled without the DOM lib. */
 interface Padded {
   readonly ownerDocument: {
-    readonly defaultView: { getComputedStyle(element: Padded): { readonly paddingTop: string } };
+    readonly defaultView: {
+      getComputedStyle(element: Padded): { readonly paddingTop: string; readonly boxShadow: string };
+    };
   };
 }
 
@@ -61,6 +64,20 @@ function px(value: number): string {
 
 async function paddingOf(locator: Locator): Promise<string> {
   return locator.evaluate((element: Padded) => element.ownerDocument.defaultView.getComputedStyle(element).paddingTop);
+}
+
+async function shadowOf(locator: Locator): Promise<string> {
+  return locator.evaluate((element: Padded) => element.ownerDocument.defaultView.getComputedStyle(element).boxShadow);
+}
+
+/** The black layers of an `ELEVATION` shadow as Chromium computes them, `rgb(0 0 0 / a)` to `rgba(0, 0, 0, a)`. */
+function computedLayers(shadow: string): string[] {
+  return [...shadow.matchAll(/rgb\(0 0 0 \/ ([\d.]+)\)/g)].map(([, alpha]) => `rgba(0, 0, 0, ${String(alpha)})`);
+}
+
+async function expectShadow(locator: Locator, shadow: string): Promise<void> {
+  const cast = await shadowOf(locator);
+  for (const layer of computedLayers(shadow)) expect(cast).toContain(layer);
 }
 
 function settingsDialog(page: Page) {
@@ -116,6 +133,7 @@ describe.runIf(SMOKE_ENABLED)("floating surface radius live test", () => {
       const dialog = await openSettings(page);
 
       await expect.poll(() => cornerRadius(dialog)).toBe(px(COMFORTABLE_DENSITY.islandRadiusPx));
+      await expectShadow(dialog, ELEVATION.dark.dialog);
       await captureWindow(page, "01-settings-comfortable");
     },
     SCENARIO_TIMEOUT_MS,
@@ -158,6 +176,7 @@ describe.runIf(SMOKE_ENABLED)("floating surface radius live test", () => {
       const inset = Number.parseFloat(await paddingOf(menu));
       const rowRadius = Number.parseFloat(await cornerRadius(row));
       expect(inset + rowRadius).toBe(ISLANDS_POPOVER_RADIUS_PX);
+      await expectShadow(menu, ELEVATION.dark.popover);
       await captureWindow(page, "04-context-menu");
     },
     SCENARIO_TIMEOUT_MS,
@@ -174,6 +193,7 @@ describe.runIf(SMOKE_ENABLED)("floating surface radius live test", () => {
       await completion.getByRole("option").first().waitFor({ timeout: LAUNCH_TIMEOUT_MS });
 
       await expect.poll(() => cornerRadius(completion)).toBe(px(ISLANDS_POPOVER_RADIUS_PX));
+      await expectShadow(completion, ELEVATION.dark.popover);
       await captureWindow(page, "05-completion");
 
       await page.keyboard.press("Escape");
@@ -238,6 +258,8 @@ describe.runIf(SMOKE_ENABLED)("floating surface radius live test", () => {
 
       await expect.poll(() => cornerRadius(dialog)).toBe(px(COMFORTABLE_DENSITY.islandRadiusPx));
       expect(await cornerRadius(page.getByTestId("theme-picker"))).toBe(px(ISLANDS_POPOVER_RADIUS_PX));
+      await expectShadow(dialog, ELEVATION.light.dialog);
+      await expectShadow(page.getByTestId("theme-picker"), ELEVATION.light.popover);
       await captureWindow(page, "09-light");
     },
     SCENARIO_TIMEOUT_MS,

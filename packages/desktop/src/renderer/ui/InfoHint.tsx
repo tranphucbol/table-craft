@@ -48,7 +48,7 @@ export function InfoHint({
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}
           className={cn(
-            "z-50 max-w-popover rounded-tooltip border border-line bg-raised px-cell py-1 text-ui whitespace-normal text-ink shadow-lg",
+            "z-50 max-w-popover rounded-tooltip border border-line bg-raised px-cell py-1 text-ui whitespace-normal text-ink shadow-popover",
             TOOLTIP_MOTION,
           )}
         >

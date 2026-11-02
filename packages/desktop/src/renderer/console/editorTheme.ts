@@ -59,8 +59,6 @@ const LIST_ROW_PADDING = "0 var(--tc-gap)";
 const LIST_SEPARATOR_MARGIN = "4px 0";
 /** Ten rows and the inset; CodeMirror's own `10em` shows five once a row is as tall as a menu's. */
 const COMPLETION_MAX_HEIGHT = `calc(var(--tc-row-height) * 10 + 2 * ${LIST_INSET})`;
-/** Tailwind's `shadow-lg`, which the window's own popovers and tooltips float on. */
-const FLOATING_SHADOW = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
 const ERROR_UNDERLINE_OFFSET = "3px";
 const ERROR_DOT_SIZE = "7px";
 const ERROR_GUTTER_PADDING = "0 2px 0 4px";
@@ -236,7 +234,7 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
     backgroundColor: "var(--tc-raised)",
     border: "1px solid var(--tc-border)",
     borderRadius: "var(--tc-tooltip-radius)",
-    boxShadow: FLOATING_SHADOW,
+    boxShadow: "var(--tc-popover-shadow)",
     color: "var(--tc-ink)",
   },
   [`.cm-tooltip.cm-tooltip-autocomplete, .cm-tooltip.${INTENTIONS_CLASS}`]: {

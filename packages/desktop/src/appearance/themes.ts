@@ -138,6 +138,15 @@ export interface Appearance {
   readonly motion: MotionTokens;
   readonly windowStyle: WindowStyle;
   readonly frame: FrameColors;
+  readonly elevation: ElevationShadows;
+}
+
+/** The drop shadows of what floats over the window, by how far it floats. */
+export interface ElevationShadows {
+  /** Menus, popovers, dropdown lists, completion, tooltips. */
+  readonly popover: string;
+  /** Dialogs and Search Everywhere. */
+  readonly dialog: string;
 }
 
 /** TableCraft's own themes, the ones Follow system chooses between. */
@@ -386,6 +395,23 @@ export const CLASSIC_POPOVER_RADIUS_PX = 4;
 /** Tooltips, hints and badges that hold text, not choices, in either window style. */
 export const TOOLTIP_RADIUS_PX = 4;
 
+/**
+ * By the theme's scheme, so every bundled, ported and user theme gets them without a token. A
+ * dark canvas swallows a light shadow (Tailwind's `shadow-lg` is 10 % black, invisible on
+ * `#1e1f22`), so a dark scheme casts three to five times as dark; each pairs a wide soft layer
+ * with a tight contact one, so the edge still reads where the surface meets a darker island.
+ */
+export const ELEVATION: Readonly<Record<ColorScheme, ElevationShadows>> = {
+  light: {
+    popover: "0 4px 16px -2px rgb(0 0 0 / 0.16), 0 1px 4px rgb(0 0 0 / 0.08)",
+    dialog: "0 24px 48px -12px rgb(0 0 0 / 0.3), 0 2px 8px rgb(0 0 0 / 0.08)",
+  },
+  dark: {
+    popover: "0 6px 20px -2px rgb(0 0 0 / 0.5), 0 1px 4px rgb(0 0 0 / 0.4)",
+    dialog: "0 24px 64px -12px rgb(0 0 0 / 0.7), 0 2px 8px rgb(0 0 0 / 0.4)",
+  },
+};
+
 export type DensityId = "comfortable" | "compact";
 
 export const DENSITIES: Readonly<Record<DensityId, DensityTokens>> = {
@@ -400,6 +426,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   motion: MOTION.full,
   windowStyle: "islands",
   frame: frameColors(BUILT_IN_THEMES.dark),
+  elevation: ELEVATION[BUILT_IN_THEMES.dark.colorScheme],
 };
 
 /** Every colour token a user theme may override; `syntax` and `datasource` are partial in turn. */
