@@ -1,29 +1,29 @@
 {
   "schema": 1,
-  "version": "1.25.0-beta.2",
+  "version": "1.26.0-beta.1",
   "channel": "beta",
-  "notesUrl": "https://github.com/tranphucbol/table-craft/releases/tag/v1.25.0-beta.2",
+  "notesUrl": "https://github.com/tranphucbol/table-craft/releases/tag/v1.26.0-beta.1",
   "minimumVersion": null,
   "assets": {
     "darwin-arm64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.25.0-beta.2/TableCraft-1.25.0-beta.2-arm64.zip",
-      "size": 126919610,
-      "sha256": "38256b7e981450f54531882e559b48a8dad75cbaa42c93c3948f0df27ec1bb0b"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.26.0-beta.1/TableCraft-1.26.0-beta.1-arm64.zip",
+      "size": 126919886,
+      "sha256": "d14ac5e3e61d297ffdcc5b3214400c4dd492085d564c8631198d841128904759"
     },
     "win32-x64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.25.0-beta.2/TableCraft-1.25.0-beta.2-x64.exe",
-      "size": 106876147,
-      "sha256": "e6091a9cff83150f8b57812cfb5ca731328eaee6a77358a0c199f953fca56be6"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.26.0-beta.1/TableCraft-1.26.0-beta.1-x64.exe",
+      "size": 106877173,
+      "sha256": "9d672d70d00835c1809f2c2a97c0fa716ae0ea998de19947e3e2f065090115a2"
     },
     "darwin-x64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.25.0-beta.2/TableCraft-1.25.0-beta.2-x64.zip",
-      "size": 132582928,
-      "sha256": "f52321e03ea20de9af028dc1d8879337658515753ef60bb19d429fa81f4ab7e5"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.26.0-beta.1/TableCraft-1.26.0-beta.1-x64.zip",
+      "size": 132583201,
+      "sha256": "124f7c36462f9cb1658e6896fd4bfe5c9fd4a802a9350ead1bed0f44f91e1309"
     },
     "linux-x64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.25.0-beta.2/TableCraft-1.25.0-beta.2-x86_64.AppImage",
-      "size": 132241710,
-      "sha256": "c7f9bf9576b2c623bbfaa1a2221eafd516287e2076abc853d6657d53abb62732"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.26.0-beta.1/TableCraft-1.26.0-beta.1-x86_64.AppImage",
+      "size": 132245861,
+      "sha256": "c9f339e123497c944659ebf09628b4eb24d7520213e142bed44bf92fdacf19e0"
     }
   }
 }
