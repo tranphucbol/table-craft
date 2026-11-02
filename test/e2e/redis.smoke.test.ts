@@ -128,7 +128,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       await setWindowSize(running.app, EVIDENCE_WINDOW);
       const page = running.page;
 
-      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const form = dataSourcesDialog(page);
       await form.locator('button[data-download="redis"]').click();
       await form.getByLabel("Mode", { exact: true }).waitFor({ timeout: LAUNCH_TIMEOUT_MS });

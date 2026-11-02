@@ -1,4 +1,5 @@
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import { buttonClass } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { PLUGIN_ACTION_IDS, type PluginArgs } from "@table-craft/desktop/renderer/actions/pluginActions.js";
 import { missingPlugin, missingText } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -27,7 +28,7 @@ export function MissingPlugin({ pluginId }: { readonly pluginId: string }) {
       {entry.install.status === "installing" ? null : (
         <button
           type="button"
-          className="shrink-0 rounded border border-line px-1 text-ink hover:bg-hover"
+          className={buttonClass()}
           onMouseDown={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
           onClick={(event) => {

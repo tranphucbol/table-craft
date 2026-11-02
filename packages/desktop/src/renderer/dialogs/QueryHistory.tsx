@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import type { HistoryStatement } from "@table-craft/desktop/preload/bridge.js";
 import { firstLine, formatDuration, historyTime, rowsText } from "@table-craft/desktop/renderer/model/format.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
@@ -10,7 +11,6 @@ import {
 } from "@table-craft/desktop/renderer/state/modal.js";
 import { ListPicker } from "@table-craft/desktop/renderer/ui/ListPicker.js";
 import { OutcomeDot } from "@table-craft/desktop/renderer/ui/Outcome.js";
-import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { SqlView } from "@table-craft/desktop/renderer/ui/SqlView.js";
 
 type HistoryRequest = Extract<ModalRequest, { kind: "history" }>;
@@ -37,14 +37,14 @@ function fromOrigin(statement: HistoryStatement, origin: Origin): boolean {
 
 function OriginFilter({ origin, onOrigin }: { readonly origin: Origin; readonly onOrigin: (next: Origin) => void }) {
   return (
-    <div role="group" aria-label="Who ran it" className="flex shrink-0 rounded border border-line">
+    <div role="group" aria-label="Who ran it" className={SEGMENT_GROUP}>
       {ORIGINS.map((id) => (
         <button
           key={id}
           type="button"
           aria-pressed={id === origin}
           data-testid={`history-origin-${id}`}
-          className={cn("h-row px-cell", id === origin ? "bg-selection" : "hover:bg-hover")}
+          className={SEGMENT}
           onClick={() => onOrigin(id)}
         >
           {ORIGIN_LABELS[id]}
@@ -63,7 +63,7 @@ function Entry({ statement, now }: { readonly statement: HistoryStatement; reado
         <span
           data-testid="history-agent"
           title={statement.lastClient === null ? AGENT_HINT : `${AGENT_HINT}: ${statement.lastClient}`}
-          className="max-w-40 shrink-0 truncate rounded-sm border border-line px-1 text-ink-muted"
+          className="max-w-40 shrink-0 truncate rounded border border-line px-1 text-ink-muted"
         >
           {statement.lastClient ?? AGENT_LABEL}
         </span>

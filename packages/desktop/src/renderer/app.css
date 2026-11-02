@@ -43,6 +43,8 @@
   --text-grid: var(--tc-font-grid-size);
 
   --spacing-row: var(--tc-row-height);
+  /* A segment inside its group's 1px border, so the group stands one row tall like a Button. */
+  --spacing-segment: calc(var(--tc-row-height) - 2px);
   --spacing-cell: var(--tc-cell-padding);
   --spacing-gap: var(--tc-gap);
   --spacing-column-max: var(--tc-grid-column-max-width);
@@ -179,6 +181,11 @@
   :focus-visible {
     outline: 2px solid var(--tc-accent);
     outline-offset: -1px;
+  }
+
+  /* Native checkboxes, radios and range thumbs otherwise draw in the OS blue on every theme. */
+  :root {
+    accent-color: var(--tc-accent);
   }
 }
 

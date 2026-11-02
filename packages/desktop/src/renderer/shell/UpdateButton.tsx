@@ -52,7 +52,13 @@ function UpdatePopover({ anchor }: { readonly anchor: PopoverAnchor }) {
   const view = updatePopover(state, currentPlatform() === "mac");
   const percent = state.phase === "downloading" ? (updateButton(state)?.percent ?? 0) : null;
   return (
-    <Popover anchor={anchor} label="Update" testId="update-popover" onClose={() => useUpdate.getState().setOpen(false)}>
+    <Popover
+      anchor={anchor}
+      label="Update"
+      testId="update-popover"
+      focusSelf
+      onClose={() => useUpdate.getState().setOpen(false)}
+    >
       <div className={POPOVER_PANEL}>
         <div className={POPOVER_HEADER}>{view.title}</div>
         <div className={POPOVER_BODY}>

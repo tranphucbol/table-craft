@@ -22,17 +22,17 @@ const MODAL_WIDTHS: Readonly<Record<ModalRequest["kind"], string>> = {
   text: "w-96",
   notice: "w-96",
   choice: "w-96",
-  statements: "w-[40rem]",
+  statements: "w-generator",
   generator: "w-generator",
   history: "w-picker",
   closedConsoles: "w-picker",
   pick: "w-picker",
-  parameters: "w-[40rem]",
+  parameters: "w-generator",
   export: "w-generator",
   import: "w-dialog",
   tableDesign: "w-dialog",
-  objectChange: "w-[40rem]",
-  routine: "w-[40rem]",
+  objectChange: "w-generator",
+  routine: "w-generator",
 };
 
 type PickerKind =
@@ -181,7 +181,7 @@ export function Modal() {
         <Dialog.Overlay className={OVERLAY_CLASS} />
         <Dialog.Content
           aria-describedby={undefined}
-          className={cn(CONTENT_CLASS, MODAL_WIDTHS[pending?.request.kind ?? "confirm"], "max-w-[90vw]")}
+          className={cn(CONTENT_CLASS, MODAL_WIDTHS[pending?.request.kind ?? "confirm"], "max-w-[95vw]")}
         >
           {pending === null ? null : pending.request.kind === "generator" ? (
             <SqlGenerator request={pending.request} />

@@ -623,7 +623,7 @@ export function ServicesPane() {
         role="tree"
         aria-label="Services"
         tabIndex={selectedIndex === -1 ? 0 : -1}
-        className="py-1 outline-none"
+        className="group/tree py-1 outline-none"
         onKeyDown={onKeyDown}
         onFocus={(event) => {
           if (event.target === event.currentTarget && selectedIndex === -1 && rows[0] !== undefined)
@@ -669,7 +669,7 @@ export function ServicesPane() {
               style={{ paddingLeft: `calc(var(--spacing-pane-inset) + ${String(row.depth * INDENT_PX)}px)` }}
               className={cn(
                 "flex h-row cursor-default items-center gap-cell pr-pane-inset outline-none hover:bg-hover",
-                isSelected && "bg-selection hover:bg-selection",
+                isSelected && "bg-raised group-focus-within/tree:bg-selection",
                 !isSelected && active && "bg-raised",
               )}
               onMouseDown={() => select(row.key)}

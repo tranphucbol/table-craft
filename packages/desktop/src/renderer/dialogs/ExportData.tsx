@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import { useState } from "react";
 import { Button, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
@@ -7,7 +8,6 @@ import {
   useModal,
   type ModalRequest,
 } from "@table-craft/desktop/renderer/state/modal.js";
-import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
 type ExportRequest = Extract<ModalRequest, { kind: "export" }>;
 
@@ -62,7 +62,7 @@ export function ExportData({ request }: { readonly request: ExportRequest }) {
           <div
             role="radiogroup"
             aria-label="Format"
-            className="flex flex-wrap rounded border border-line"
+            className={SEGMENT_GROUP}
             onKeyDown={(event) => {
               const ids = request.formats.map((choice) => choice.id);
               const next = steppedStatement(ids, format, event.key);
@@ -80,10 +80,7 @@ export function ExportData({ request }: { readonly request: ExportRequest }) {
                 data-format={choice.id}
                 aria-checked={choice.id === format}
                 tabIndex={choice.id === format ? 0 : -1}
-                className={cn(
-                  "h-row px-gap text-ink first:rounded-l last:rounded-r",
-                  choice.id === format ? "bg-selection" : "hover:bg-hover",
-                )}
+                className={SEGMENT}
                 onClick={() => choose(choice.id)}
               >
                 {choice.label}

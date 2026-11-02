@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type SyntheticEvent, type WheelEvent } from "react";
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import {
   DAYS_PER_WEEK,
   MONTHS_PER_YEAR,
@@ -39,10 +40,8 @@ const MIDNIGHT: PickerTime = { hour: 0, minute: 0, second: 0 };
 const SEGMENT_DIGITS = 2;
 const DIGIT = /^\d$/u;
 
-const ICON_BUTTON =
-  "flex size-row items-center justify-center rounded text-ink-muted hover:bg-selection hover:text-ink";
 const DAY_BUTTON =
-  "flex size-row items-center justify-center rounded outline-none focus:outline-solid focus:outline-1 focus:outline-offset-1 focus:outline-accent";
+  "flex size-row items-center justify-center rounded outline-none focus:outline-solid focus:outline-2 focus:-outline-offset-1 focus:outline-accent";
 const SEGMENT_FIELD =
   "flex h-row cursor-default px-1 items-center justify-center rounded border border-line bg-canvas font-grid text-grid text-ink outline-none focus:border-accent";
 

@@ -153,7 +153,7 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
         )
         .toBe(true);
       await dialog(reopened).getByRole("button", { name: "Delete…", exact: true }).click();
-      const confirm = reopened.getByRole("dialog", { name: "Delete snippet" });
+      const confirm = reopened.getByRole("dialog", { name: "Delete Snippet" });
       await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect
         .poll(() =>
@@ -164,7 +164,7 @@ describe.runIf(process.env["TABLE_CRAFT_SMOKE"] === "1")("snippets smoke", () =>
         .toBe(true);
       await dialog(reopened).getByRole("button", { name: "Delete…", exact: true }).click();
       await reopened
-        .getByRole("dialog", { name: "Delete snippet" })
+        .getByRole("dialog", { name: "Delete Snippet" })
         .getByRole("button", { name: "Delete", exact: true })
         .click();
       await expect.poll(() => dialog(reopened).getByText("No snippets yet.").isVisible()).toBe(true);

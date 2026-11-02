@@ -54,6 +54,8 @@ const dropdownEvidence = evidenceFor("129");
 const PLAN_SCROLL_PX = 40;
 /** The header's bottom line, where a time bar hangs from its cell. */
 const HEADER_EDGE_PX = 2;
+/** The Plan view switch is a segmented group, rounded like every control. */
+const SEGMENT_RADIUS = "4px";
 
 /** The members the plan header check touches; the e2e program has no DOM lib. */
 interface Scrollable {
@@ -319,7 +321,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
           await page.evaluate(`document.elementFromPoint(${String(x)}, ${String(y)})?.closest("thead") != null`),
         ).toBe(true);
       }
-      expect(await cornerRadius(page.getByRole("group", { name: "Plan view" }))).toBe("0px");
+      expect(await cornerRadius(page.getByRole("group", { name: "Plan view" }))).toBe(SEGMENT_RADIUS);
       await dropdownEvidence(page, "01-plan-header");
     },
     SCENARIO_TIMEOUT_MS,

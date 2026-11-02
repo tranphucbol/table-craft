@@ -1,3 +1,4 @@
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import { useEffect } from "react";
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
@@ -22,8 +23,7 @@ import { POPOVER_FOOTER, POPOVER_HEADER, POPOVER_PANEL } from "@table-craft/desk
 import { ProgressBar } from "@table-craft/desktop/renderer/ui/ProgressBar.js";
 import { useClock } from "@table-craft/desktop/renderer/ui/useClock.js";
 
-const ROW_BUTTON =
-  "press flex size-row shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-50";
+const ROW_BUTTON = ICON_BUTTON;
 /** Cancel ends work, so it reads red while it can be pressed, as the console's Cancel does. */
 const CANCEL_BUTTON = cn(ROW_BUTTON, "enabled:text-danger");
 const CANCELLING_LABEL = "Cancelling…";
@@ -159,6 +159,7 @@ export function ExportsPopover({ anchor }: { readonly anchor: PopoverAnchor }) {
       anchor={anchor}
       label="Exports"
       testId="exports-popover"
+      focusSelf
       onClose={() => useExports.getState().setPopover(false)}
     >
       <div className={POPOVER_PANEL}>

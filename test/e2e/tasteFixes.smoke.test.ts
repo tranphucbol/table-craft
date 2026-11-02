@@ -253,7 +253,7 @@ describe.runIf(DATABASES_ENABLED)("plan 130 UI fixes live test", () => {
     async () => {
       const page = await launch();
 
-      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const dialog = dataSourcesDialog(page);
       const kinds = dialog.getByRole("list", { name: "Database kinds" });
       await kinds.waitFor();
@@ -289,7 +289,7 @@ describe.runIf(DATABASES_ENABLED)("plan 130 UI fixes live test", () => {
       }
       await captureWindow(page, "15-logos-tree");
 
-      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+      await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
       const dialog = dataSourcesDialog(page);
       const kinds = dialog.getByRole("list", { name: "Database kinds" });
       for (const row of LOGO_ROWS) {

@@ -183,7 +183,7 @@ export function ImportData({ request }: { readonly request: ImportRequest }) {
 
   return (
     <form
-      className="flex max-h-[90vh] flex-col gap-gap overflow-auto p-gap"
+      className="flex max-h-[95vh] flex-col gap-gap overflow-auto p-gap"
       onSubmit={(event) => {
         event.preventDefault();
         if (!ready || (every && commitRows === null) || (skip && rejectLimit === null)) return;

@@ -39,7 +39,7 @@ export function Highlighted({ text, positions }: { readonly text: string; readon
     const piece = text.slice(start, index);
     parts.push(
       marked.has(start) ? (
-        <mark key={start} data-match className="rounded-sm bg-search-match text-ink">
+        <mark key={start} data-match className="rounded bg-search-match text-ink">
           {piece}
         </mark>
       ) : (
@@ -122,7 +122,7 @@ export function NodeIcon({ node }: { readonly node: ExplorerNode }) {
     case "loading":
       return <SpinnerIcon aria-hidden className={cn(ICON_CLASS, "animate-spin text-ink-muted")} />;
     case "error":
-      return <WarningIcon aria-hidden className={cn(ICON_CLASS, "text-danger")} />;
+      return <WarningIcon aria-hidden weight="fill" className={cn(ICON_CLASS, "text-danger")} />;
     case "keyDatabase":
       return <DatabaseIcon aria-hidden className={cn(ICON_CLASS, "text-ink-muted")} />;
     case "keyFolder":

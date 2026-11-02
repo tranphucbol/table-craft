@@ -21,7 +21,7 @@ function Swatch({ datasource }: { readonly datasource: DatasourceView }) {
     <span
       aria-hidden
       className={cn(
-        "size-2.5 shrink-0 rounded-sm",
+        "size-2.5 shrink-0 rounded",
         datasource.color === null ? "border border-ink-muted" : TINT_SWATCH[datasource.color],
       )}
     />

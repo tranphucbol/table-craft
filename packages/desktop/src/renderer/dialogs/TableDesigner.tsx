@@ -1,4 +1,6 @@
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import * as Dialog from "@radix-ui/react-dialog";
+import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import { useState, type ReactNode } from "react";
 import type { ForeignKeyDesign } from "@table-craft/desktop/engine/protocol.js";
 import { ScriptView, useScriptPreview } from "@table-craft/desktop/renderer/dialogs/ObjectChange.js";
@@ -56,10 +58,7 @@ function TabButton({
       role="tab"
       aria-selected={tab === current}
       data-testid={`design-tab-${tab}`}
-      className={cn(
-        "h-row px-gap text-ink first:rounded-l last:rounded-r",
-        tab === current ? "bg-selection" : "hover:bg-hover",
-      )}
+      className={SEGMENT}
       onClick={() => onSelect(tab)}
     >
       {label}
@@ -69,13 +68,7 @@ function TabButton({
 
 function RowButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      title={label}
-      className="flex size-row items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink"
-      onClick={onClick}
-    >
+    <button type="button" aria-label={label} title={label} className={ICON_BUTTON} onClick={onClick}>
       {children}
     </button>
   );
@@ -153,7 +146,7 @@ export function TableDesigner({ request }: { readonly request: TableDesignReques
           </FieldRow>
         ) : null}
       </div>
-      <div role="tablist" aria-label="Design" className="flex self-start rounded border border-line">
+      <div role="tablist" aria-label="Design" className={SEGMENT_GROUP}>
         <TabButton tab="columns" current={tab} label={`Columns (${String(design.columns.length)})`} onSelect={setTab} />
         <TabButton tab="indexes" current={tab} label={`Indexes (${String(design.indexes.length)})`} onSelect={setTab} />
         <TabButton

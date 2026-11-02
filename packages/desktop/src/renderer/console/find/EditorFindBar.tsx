@@ -96,7 +96,7 @@ function HistoryList({
           type="button"
           role="option"
           aria-selected={false}
-          className="flex h-row shrink-0 items-center rounded-sm px-cell text-left font-grid text-grid whitespace-pre outline-none hover:bg-selection focus:bg-selection focus:outline-1 focus:-outline-offset-1 focus:outline-accent"
+          className="flex h-row shrink-0 items-center rounded px-cell text-left font-grid text-grid whitespace-pre outline-none hover:bg-selection focus:bg-selection focus:outline-2 focus:-outline-offset-2 focus:outline-accent"
           onKeyDown={step}
           onClick={() => onChoose(item)}
         >
