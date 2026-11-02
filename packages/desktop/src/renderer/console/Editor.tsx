@@ -481,7 +481,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
       {findHost === null ? null : createPortal(<EditorFindBar host={findHost} />, findHost.dom)}
       <ContextMenu.Portal>
         <ContextMenu.Content
-          className="z-50 min-w-56 rounded border border-line bg-panel p-1 text-ui text-ink shadow-lg"
+          className="z-50 min-w-56 rounded-popover border border-line bg-panel p-1 text-ui text-ink shadow-lg"
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (!useSnippetsDialog.getState().open) viewRef.current?.focus();

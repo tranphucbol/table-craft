@@ -990,7 +990,7 @@ export function DatabasePane() {
               aria-label="Speed search"
               data-state={noMatch ? "noMatch" : "match"}
               className={cn(
-                "absolute top-1 right-gap z-10 max-w-[80%] truncate rounded border bg-raised px-cell leading-(--spacing-row) shadow-lg",
+                "absolute top-1 right-gap z-10 max-w-[80%] truncate rounded-tooltip border bg-raised px-cell leading-(--spacing-row) shadow-lg",
                 noMatch ? "border-danger text-danger" : "border-line text-ink",
               )}
             >

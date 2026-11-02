@@ -152,7 +152,7 @@ export function Dropdown({
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}
           className={cn(
-            "z-50 max-h-popover-height max-w-popover min-w-(--radix-select-trigger-width) overflow-hidden rounded border border-line bg-raised text-ui text-ink shadow-lg outline-none",
+            "z-50 max-h-popover-height max-w-popover min-w-(--radix-select-trigger-width) overflow-hidden rounded-popover border border-line bg-raised text-ui text-ink shadow-lg outline-none",
             SURFACE_MOTION,
           )}
         >

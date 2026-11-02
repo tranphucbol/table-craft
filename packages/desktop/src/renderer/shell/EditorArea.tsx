@@ -235,7 +235,7 @@ function TabButton({
       <ContextMenu.Portal>
         <ContextMenu.Content
           className={cn(
-            "z-50 min-w-48 rounded border border-line bg-raised p-1 text-ui text-ink shadow-lg",
+            "z-50 min-w-48 rounded-popover border border-line bg-raised p-1 text-ui text-ink shadow-lg",
             MENU_MOTION,
           )}
         >

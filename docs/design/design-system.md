@@ -249,7 +249,7 @@ equivalents; Full, Reduced and Off override it. It applies live.
 Decision 140. Every choice list is `ui/Dropdown.tsx` (Radix Select), never a native `<select>`,
 whose OS menu ignores the theme and the density; ESLint refuses `<select>` in the renderer. The
 list opens under its trigger as a `SURFACE_MOTION` popover: `bg-raised`, a `border-line` frame,
-`rounded`, `shadow-lg`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
+`rounded-popover`, `shadow-lg`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
 highlighted one and `CurrentIcon` in `text-accent` before the chosen one, group headings in
 `text-ink-muted`. The keyboard is a native select's: arrows, type-ahead, Enter, Escape.
 
@@ -270,7 +270,7 @@ search field and its filter chips, and the Theme trigger's scheme tag follow it.
 Help that explains a field lives behind an (i), not under it. `ui/InfoHint.tsx` is an `InfoIcon`
 button in `text-ink-muted` (`text-ink` on hover or focus), named "About …", that shows its text
 as a tooltip after 150 ms of hover or on keyboard focus: `bg-raised`, a `border-line` frame,
-`rounded`, `shadow-lg`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
+`rounded-tooltip`, `shadow-lg`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
 takes `hint` and puts one after the control. Help longer than a few sentences, or with a table or
 a button, is a `ui/Popover` behind the same (i) instead (the MCP Timeout cell).
 
@@ -382,15 +382,18 @@ windows are islands, `rounded-island` cards of `bg-canvas`, set `p-island-gap`
 inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
 sizes are the Classic ones.
 
-| Token                    | CSS variable              | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                           |
-| ------------------------ | ------------------------- | --------------------------------- | ------------------ | --------------- | ----------------------------------------------------------------- |
-| `frame` (`frameColors`)  | `--tc-frame`              | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar      |
-| `frameRaised`            | `--tc-frame-raised`       | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                          |
-| `islandEdge`             | `--tc-island-edge`        | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame      |
-| `density.islandGapPx`    | `--tc-island-gap`         | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles       |
-| `density.islandRadiusPx` | `--tc-island-radius`      | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                            |
-| (derived)                | `--tc-pane-inset`         | `px-pane-inset`, `mx-pane-inset`  | 10 px              | 8 px            | Pane content's inset from the island edge; `gap` with Classic     |
-| (derived)                | `--tc-tool-header-height` | `h-tool-header`                   | 32 px              | 32 px           | A tool window's header, `tabHeightPx`; `rowHeightPx` with Classic |
+| Token                       | CSS variable              | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                            |
+| --------------------------- | ------------------------- | --------------------------------- | ------------------ | --------------- | ------------------------------------------------------------------ |
+| `frame` (`frameColors`)     | `--tc-frame`              | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar       |
+| `frameRaised`               | `--tc-frame-raised`       | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                           |
+| `islandEdge`                | `--tc-island-edge`        | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame       |
+| `density.islandGapPx`       | `--tc-island-gap`         | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles        |
+| `density.islandRadiusPx`    | `--tc-island-radius`      | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                             |
+| (derived)                   | `--tc-dialog-radius`      | `rounded-dialog`                  | 10 px              | 8 px            | Dialogs and the palette: `islandRadiusPx`; 8 px with Classic       |
+| `ISLANDS_POPOVER_RADIUS_PX` | `--tc-popover-radius`     | `rounded-popover`                 | 8 px               | 8 px            | Menus, popovers, dropdown lists, SQL completion; 4 px with Classic |
+| `TOOLTIP_RADIUS_PX`         | `--tc-tooltip-radius`     | `rounded-tooltip`                 | 4 px               | 4 px            | Tooltips, (i) hints, the speed search badge, editor tooltips       |
+| (derived)                   | `--tc-pane-inset`         | `px-pane-inset`, `mx-pane-inset`  | 10 px              | 8 px            | Pane content's inset from the island edge; `gap` with Classic      |
+| (derived)                   | `--tc-tool-header-height` | `h-tool-header`                   | 32 px              | 32 px           | A tool window's header, `tabHeightPx`; `rowHeightPx` with Classic  |
 
 The frame is no theme token: `appearance/islands.ts` derives it from `panel`, stepped in 1 %
 mixes toward white in a dark scheme and black in a light one, as JetBrains' frames are, until it
@@ -429,6 +432,13 @@ starts that much earlier and its first glyph lines up with the title: the Databa
 (`ICON_BUTTON_ROW_INSET`), the Watch tabs and the editor tabs (`TEXT_TAB_ROW_INSET`), and the tab
 strip's corner buttons on the right (`CORNER_ISLAND_INSET`). The status bar lines up with
 `pane-inset` as well. Rows inside a tab, such as the console toolbar, keep `gap`.
+
+Plan 144, decision 150. What floats above the islands rounds on the same ladder, outer to inner:
+a dialog or the palette (`rounded-dialog`) is never squarer than the island under it, a popover
+(`rounded-popover`) holds 4 px rows in a `p-1` inset so their corners are concentric with its
+8 px, and a tooltip (`rounded-tooltip`) stays at 4 px. A surface that holds a list of choices is a
+popover, one that holds only text a tooltip. Classic keeps 8, 4 and 4. Controls (buttons, fields,
+triggers, chips) keep `rounded` and the flush rule.
 
 ## Database explorer
 

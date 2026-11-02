@@ -376,7 +376,15 @@ export const COMPACT_DENSITY: DensityTokens = {
 
 /** The width the macOS traffic lights take at x = 12 (they end near 72 px), plus a margin. */
 export const TRAFFIC_LIGHT_INSET_PX = 76;
-export const EDITOR_TOOLTIP_RADIUS_PX = 6;
+
+/** A dialog's corners with Classic, Tailwind's `rounded-lg`; Islands rounds it like an island. */
+export const CLASSIC_DIALOG_RADIUS_PX = 8;
+/** Menus, popovers and lists with Islands: a 4 px row in a 4 px inset nests in 8. */
+export const ISLANDS_POPOVER_RADIUS_PX = 8;
+/** Menus, popovers and lists with Classic, Tailwind's `rounded`. */
+export const CLASSIC_POPOVER_RADIUS_PX = 4;
+/** Tooltips, hints and badges that hold text, not choices, in either window style. */
+export const TOOLTIP_RADIUS_PX = 4;
 
 export type DensityId = "comfortable" | "compact";
 
