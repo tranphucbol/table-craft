@@ -3,6 +3,7 @@ import {
   IMPORT_EVENT_TYPES,
   SCRIPT_EVENT_TYPES,
   type EngineCalls,
+  type EngineConnectMode,
   type EngineError,
   type EngineErrorCode,
   type EngineEvent,
@@ -126,6 +127,7 @@ function isPortMessage(data: unknown, datasourceId: string): data is EnginePortW
 export async function connectEngine(
   datasourceId: string,
   secrets?: Readonly<Record<string, string>>,
+  mode?: EngineConnectMode,
 ): Promise<EngineConnection> {
   let receive: ((event: MessageEvent) => void) | undefined;
   const port = new Promise<MessagePort>((resolve) => {
@@ -137,7 +139,7 @@ export async function connectEngine(
     window.addEventListener("message", receive);
   });
   try {
-    const answer = await bridge().connectEngine(datasourceId, secrets);
+    const answer = await bridge().connectEngine(datasourceId, secrets, mode);
     if (!answer.ok) return { status: "failed", error: { code: "connectionFailed", ...answer.error } };
     const result = answer.value;
     if (result.status === "needsSecrets") return result;
@@ -148,4 +150,24 @@ export async function connectEngine(
   } finally {
     if (receive !== undefined) window.removeEventListener("message", receive);
   }
+}
+
+export type EngineAuthorization =
+  | { readonly status: "authorized" }
+  | { readonly status: "needsSecrets"; readonly keys: readonly string[] }
+  | { readonly status: "failed"; readonly error: EngineError };
+
+/** Readies a running engine reached for `language` for a login (decision 149); its port stays. */
+export async function authorizeEngine(
+  datasourceId: string,
+  secrets?: Readonly<Record<string, string>>,
+): Promise<EngineAuthorization> {
+  const answer = await bridge().authorizeEngine(datasourceId, secrets);
+  if (!answer.ok) return { status: "failed", error: { code: "connectionFailed", ...answer.error } };
+  const result = answer.value;
+  if (result.status === "needsSecrets") return result;
+  if (result.status === "failed") {
+    return { status: "failed", error: { code: "connectionFailed", message: result.message, hint: result.hint } };
+  }
+  return { status: "authorized" };
 }

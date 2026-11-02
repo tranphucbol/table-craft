@@ -18,6 +18,10 @@ export const ENGINE_SHUTDOWN_MESSAGE = "engine.shutdown";
 export const ENGINE_PROBED_MESSAGE = "engine.probed";
 /** What an engine posts on its parent port for each log record; main alone writes the log (plan 017). */
 export const ENGINE_LOG_MESSAGE = "engine.log";
+/** What main posts on a running engine's parent port with the secrets it booted without (decision 149). */
+export const ENGINE_CREDENTIALS_MESSAGE = "engine.credentials";
+/** What an engine posts back once later sessions use the credentials. */
+export const ENGINE_CREDENTIALS_APPLIED_MESSAGE = "engine.credentials-applied";
 /**
  * A plain cancel's message. A `cancelled` error with any other message says what else the cancel
  * did, such as resetting the session on a server that cannot stop a statement (decision 058).
@@ -165,6 +169,28 @@ export interface EngineProbed {
   readonly kind: typeof ENGINE_PROBED_MESSAGE;
   readonly result: ProbeResult;
 }
+
+/**
+ * The datasource's whole config, secrets included, for an engine booted without some of them; it
+ * names the same datasource and plugin as the boot. Sessions opened before keep their login.
+ */
+export interface EngineCredentials {
+  readonly kind: typeof ENGINE_CREDENTIALS_MESSAGE;
+  readonly requestId: number;
+  readonly datasource: DatasourceConfig;
+}
+
+export interface EngineCredentialsApplied {
+  readonly kind: typeof ENGINE_CREDENTIALS_APPLIED_MESSAGE;
+  readonly requestId: number;
+}
+
+/**
+ * Why a window wants an engine port: `session` to log in, which needs every secret; `language` for
+ * calls such as `sql.format` that only need the plugin, so main starts the engine with the secrets
+ * it has and never asks for more (decision 149).
+ */
+export type EngineConnectMode = "session" | "language";
 
 /**
  * The user's paging preferences, sent with every call that reads rows, because the engine keeps no

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
   serverSeenOf,
   type Capability,
+  type EngineConnectMode,
   type EngineError,
   type EngineEvent,
   type OpenedSession,
@@ -21,8 +22,10 @@ import type { TreeItemRef } from "@table-craft/desktop/datasourceTree/arrange.js
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { itemOf, remapSelection, type TreeSelectionState } from "@table-craft/desktop/renderer/model/treeSelection.js";
 import {
+  authorizeEngine,
   connectEngine,
   EngineRequestError,
+  type EngineAuthorization,
   type EngineClient,
   type EngineConnection,
 } from "@table-craft/desktop/renderer/engine/client.js";
@@ -94,13 +97,25 @@ export interface DatasourcesState {
   readonly renameFolders: (renamed: ReadonlyMap<string, string>) => void;
   /** Starts the engine if needed, checks it with one session, and resolves with its client. */
   readonly connect: (id: string) => Promise<EngineClient>;
+  /**
+   * A client for calls that need only the plugin, such as `sql.format` (decision 149): starts the
+   * engine without logging in or asking for secrets and leaves `connections` alone. Once
+   * connected, the datasource's one client.
+   */
+  readonly engine: (id: string) => Promise<EngineClient>;
   readonly disconnect: (id: string) => Promise<void>;
   readonly engineExited: (exited: EngineExited) => void;
   readonly dismissWarning: () => void;
 }
 
 export interface DatasourcesDependencies {
-  readonly connectEngine: (id: string, secrets?: Readonly<Record<string, string>>) => Promise<EngineConnection>;
+  readonly connectEngine: (
+    id: string,
+    secrets?: Readonly<Record<string, string>>,
+    mode?: EngineConnectMode,
+  ) => Promise<EngineConnection>;
+  /** Readies an engine started by `engine` for a login, without a new port. */
+  readonly authorizeEngine: (id: string, secrets?: Readonly<Record<string, string>>) => Promise<EngineAuthorization>;
   readonly disconnectEngine: (id: string) => Promise<void>;
   /** Asks the user for secrets kept Never; null when they cancel. */
   readonly promptSecrets: (request: SecretRequest) => Promise<Readonly<Record<string, string>> | null>;
@@ -157,6 +172,8 @@ export function capabilitiesOf(plugins: readonly PluginInfo[], pluginId: string)
 export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
   /** Live clients by datasource; not state, because nothing renders a port. */
   const clients = new Map<string, Promise<EngineClient>>();
+  /** Clients `engine` started and no connect has verified: nothing the user sees depends on them. */
+  const languageOnly = new Set<string>();
   /** Disconnects in flight, which a new connect waits out so it gets a fresh engine. */
   const stopping = new Map<string, Promise<void>>();
   const detachedListeners = new Set<DetachedListener>();
@@ -180,18 +197,38 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       return found;
     }
 
-    async function open(id: string): Promise<EngineClient> {
+    async function ask(datasource: DatasourceView, keys: readonly string[]): Promise<Readonly<Record<string, string>>> {
+      const fields = promptFields(pluginOf(get().plugins, datasource.pluginId), keys);
+      const typed = await dependencies.promptSecrets({ datasource, fields });
+      if (typed === null) throw new EngineRequestError(CANCELLED);
+      return typed;
+    }
+
+    async function open(id: string, mode: EngineConnectMode): Promise<EngineClient> {
       await stopping.get(id);
       const datasource = find(id);
       let secrets: Readonly<Record<string, string>> | undefined;
       for (;;) {
-        const connection = await dependencies.connectEngine(id, secrets);
-        if (connection.status === "connected") return connection.client;
+        const connection = await dependencies.connectEngine(id, secrets, mode);
         if (connection.status === "failed") throw new EngineRequestError(connection.error);
-        const fields = promptFields(pluginOf(get().plugins, datasource.pluginId), connection.keys);
-        const typed = await dependencies.promptSecrets({ datasource, fields });
-        if (typed === null) throw new EngineRequestError(CANCELLED);
-        secrets = typed;
+        if (connection.status === "connected") {
+          connection.client.onEvent((event) => {
+            for (const listener of eventListeners) listener(id, event);
+          });
+          return connection.client;
+        }
+        secrets = await ask(datasource, connection.keys);
+      }
+    }
+
+    async function authorize(id: string): Promise<void> {
+      const datasource = find(id);
+      let secrets: Readonly<Record<string, string>> | undefined;
+      for (;;) {
+        const answer = await dependencies.authorizeEngine(id, secrets);
+        if (answer.status === "authorized") return;
+        if (answer.status === "failed") throw new EngineRequestError(answer.error);
+        secrets = await ask(datasource, answer.keys);
       }
     }
 
@@ -221,6 +258,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
 
     function detach(id: string, error: EngineError | null): void {
       const client = clients.get(id);
+      const silent = languageOnly.delete(id);
       clients.delete(id);
       if (client !== undefined) {
         void client
@@ -229,6 +267,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
           )
           .catch(() => undefined);
       }
+      if (silent) return;
       for (const listener of detachedListeners) listener(id, error);
     }
 
@@ -294,16 +333,16 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
 
       connect(id) {
         const existing = clients.get(id);
-        if (existing !== undefined) return existing;
+        if (existing !== undefined && !languageOnly.has(id)) return existing;
+        languageOnly.delete(id);
         const previous = get().connections[id] ?? DISCONNECTED;
         setConnection(id, { ...previous, status: "connecting", error: null });
         // Started on a later tick so it can compare itself with the map: a disconnect or a crash
         // mid-connect leaves this attempt stale.
         const connecting = Promise.resolve().then(async () => {
-          const client = await open(id);
-          client.onEvent((event) => {
-            for (const listener of eventListeners) listener(id, event);
-          });
+          const started = existing === undefined ? null : await existing.catch(() => null);
+          if (started !== null) await authorize(id);
+          const client = started ?? (await open(id, "session"));
           try {
             const opened = await verify(client);
             if (clients.get(id) === connecting) {
@@ -329,8 +368,22 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
         return connecting;
       },
 
+      engine(id) {
+        const existing = clients.get(id);
+        if (existing !== undefined) return existing;
+        const starting = Promise.resolve().then(() => open(id, "language"));
+        clients.set(id, starting);
+        languageOnly.add(id);
+        starting.catch(() => {
+          if (clients.get(id) !== starting) return;
+          clients.delete(id);
+          languageOnly.delete(id);
+        });
+        return starting;
+      },
+
       async disconnect(id) {
-        const wasLive = clients.has(id);
+        const wasLive = clients.has(id) && !languageOnly.has(id);
         detach(id, null);
         if (wasLive || get().connections[id]?.status === "connected") {
           const last = get().connections[id] ?? DISCONNECTED;
@@ -341,6 +394,10 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
 
       engineExited(exited) {
         if (!clients.has(exited.datasourceId)) return;
+        if (languageOnly.has(exited.datasourceId)) {
+          detach(exited.datasourceId, null);
+          return;
+        }
         const error = exited.clean ? null : engineExitedError(exited.code);
         detach(exited.datasourceId, error);
         setConnection(exited.datasourceId, {
@@ -382,6 +439,7 @@ export function treeSelectionOf(state: Pick<DatasourcesState, "selection" | "mul
 
 export const useDatasources = createDatasourcesStore({
   connectEngine,
+  authorizeEngine,
   async disconnectEngine(id) {
     await bridge().disconnectEngine(id);
   },

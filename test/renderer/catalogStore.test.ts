@@ -69,6 +69,7 @@ function wired() {
   const { client } = catalogClient();
   const datasources = createDatasourcesStore({
     connectEngine: () => Promise.resolve({ status: "connected", client }),
+    authorizeEngine: () => Promise.resolve({ status: "authorized" }),
     disconnectEngine: () => Promise.resolve(),
     promptSecrets: () => Promise.resolve(null),
     rememberServer: () => Promise.resolve(),

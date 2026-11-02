@@ -83,6 +83,7 @@ describe("plugin catalog", () => {
   it("givenPluginsState_whenApplied_thenPluginsAndCatalogTogether", () => {
     const store = createDatasourcesStore({
       connectEngine: () => Promise.reject(new Error("unused")),
+      authorizeEngine: () => Promise.resolve({ status: "authorized" }),
       disconnectEngine: () => Promise.resolve(),
       promptSecrets: () => Promise.resolve(null),
       rememberServer: () => Promise.resolve(),
