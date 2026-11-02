@@ -10,6 +10,12 @@ const SECURITY = "/usr/bin/security";
 const KEYCHAIN_PASSWORD = "table-craft-test";
 const SECRET = "p@ss w\u00f6rd";
 const PLAIN_SECRET = "deadbeef";
+/** Workbench keys an item by its connection's host identifier and the user (plan 143). */
+const WORKBENCH_SERVICE = "Mysql@db.test:3306";
+const WORKBENCH_ACCOUNTS = [
+  ["root", "root-secret"],
+  ["app", "app@secret"],
+] as const;
 
 /**
  * The macOS reader against a real keychain: a temporary one made for this suite, searched by path
@@ -57,6 +63,20 @@ describe.runIf(process.platform === "darwin")("macOS keychain import", () => {
       SECURITY,
       keychain,
     );
+    for (const [account, password] of WORKBENCH_ACCOUNTS) {
+      security(
+        "add-generic-password",
+        "-s",
+        WORKBENCH_SERVICE,
+        "-a",
+        account,
+        "-w",
+        password,
+        "-T",
+        SECURITY,
+        keychain,
+      );
+    }
   });
 
   afterAll(() => {
@@ -83,6 +103,14 @@ describe.runIf(process.platform === "darwin")("macOS keychain import", () => {
       status: "found",
       value: PLAIN_SECRET,
     });
+  });
+
+  it("givenItemsWithAccounts_whenLookedUpByAccount_thenTheAccountNarrowsTheMatch", async () => {
+    const reader = createCredentialReader({ platform: "darwin", run: runCommand, keychains: [keychain] });
+
+    expect(await reader.lookup(WORKBENCH_SERVICE, "app")).toEqual({ status: "found", value: "app@secret" });
+    expect(await reader.lookup(WORKBENCH_SERVICE, "root")).toEqual({ status: "found", value: "root-secret" });
+    expect(await reader.lookup(WORKBENCH_SERVICE, "nobody")).toEqual({ status: "notFound" });
   });
 
   it("givenMissingItem_whenLookedUp_thenNotFound", async () => {
