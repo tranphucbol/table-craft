@@ -758,7 +758,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
             <button
               type="button"
               aria-label="Import data sources"
-              title="Import from DataGrip or TablePro…"
+              title="Import from DataGrip, TablePro or MySQL Workbench…"
               className="flex size-tab items-center justify-center rounded hover:bg-raised"
               onClick={() => void invoke(ACTION_IDS.importDatasources)}
             >

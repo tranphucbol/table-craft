@@ -181,6 +181,18 @@ describe("datasource store", () => {
     expect(loaded.warning).not.toBeNull();
   });
 
+  it("givenUnknownOriginApp_whenLoaded_thenTheFileLoadsWithoutThatOrigin", async () => {
+    const file = JSON.stringify({
+      version: 1,
+      datasources: [{ ...LOCAL_PG, origin: { app: "some-later-app", id: "x" } }],
+    });
+
+    const loaded = await store(memoryFiles({ [PATH]: file })).store.load();
+
+    expect(loaded.warning).toBeNull();
+    expect(loaded.datasources).toEqual([LOCAL_PG]);
+  });
+
   it("givenKeepAliveOutOfRange_whenLoaded_thenNotMisread", async () => {
     const file = JSON.stringify({ version: 1, datasources: [{ ...LOCAL_PG, keepAliveSeconds: 99_999 }] });
 

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type {
   ForeignConnection,
+  ForeignSsh,
   ForeignSslMode,
   ImportEnvironment,
   PasswordSource,
@@ -80,6 +81,18 @@ function text(value: unknown): string | null {
 function port(value: unknown): number | null {
   const number = typeof value === "string" ? Number(value) : value;
   return typeof number === "number" && Number.isInteger(number) && number > 0 ? number : null;
+}
+
+/** The tunnel's address only: its user and sign-in are not read, so it is set up after import. */
+function tunnel(host: unknown, sshPort: unknown): ForeignSsh {
+  return {
+    host: text(host) ?? "",
+    port: port(sshPort),
+    user: null,
+    auth: null,
+    keyPath: null,
+    password: { kind: "none" },
+  };
 }
 
 function sslMode(value: unknown): ForeignSslMode {
@@ -170,7 +183,7 @@ export async function scanTablePro(
     toConnection({
       id: text(entry.id) ?? String(index),
       entry,
-      ssh: entry.sshEnabled === true ? { host: text(entry.sshHost) ?? "", port: port(entry.sshPort) } : null,
+      ssh: entry.sshEnabled === true ? tunnel(entry.sshHost, entry.sshPort) : null,
       ssl: ssl(entry.sslMode, entry.sslCaCertificatePath, entry.sslClientCertificatePath, entry.sslClientKeyPath),
       folder: groupPath(text(entry.groupId), byId),
       password: { kind: "elsewhere" },
@@ -296,7 +309,7 @@ export async function readTableProBundle(
     return toConnection({
       id: ref ?? `${source}#${String(index)}`,
       entry,
-      ssh: sshConfig.enabled === true ? { host: text(sshConfig.host) ?? "", port: port(sshConfig.port) } : null,
+      ssh: sshConfig.enabled === true ? tunnel(sshConfig.host, sshConfig.port) : null,
       ssl: ssl(sslConfig.mode, sslConfig.caCertificatePath, sslConfig.clientCertificatePath, sslConfig.clientKeyPath),
       folder: groupPath(groupId, groups),
       password: value === null ? { kind: "none" } : { kind: "bundle", value },

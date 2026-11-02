@@ -2,9 +2,10 @@ import { ConnectionUrlError, parseConnectionUrl, type ConnectionForm } from "@ta
 import { normalizeFolder } from "@table-craft/desktop/datasourceTree/arrange.js";
 import { pluginUrl, urlScheme } from "@table-craft/desktop/main/import/jdbc.js";
 import { catalogEntryForScheme } from "@table-craft/desktop/main/pluginStore/catalog.js";
-import type { ForeignApp, ForeignConnection, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
+import type { ForeignApp, ForeignConnection, ForeignSsh, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
 import {
   DATASOURCE_COLORS,
+  DEFAULT_SSH_PORT,
   type ConfigValue,
   type Datasource,
   type DatasourceColor,
@@ -12,10 +13,15 @@ import {
   type ImportPasswordState,
   type ImportRow,
   type PluginInfo,
+  type SshSettings,
 } from "@table-craft/desktop/preload/bridge.js";
 
 /** The folder an app's imports go under when the dialog's top-level folder option is on. */
-export const TOP_FOLDERS: Readonly<Record<ForeignApp, string>> = { datagrip: "DataGrip", tablepro: "TablePro" };
+export const TOP_FOLDERS: Readonly<Record<ForeignApp, string>> = {
+  datagrip: "DataGrip",
+  tablepro: "TablePro",
+  workbench: "MySQL Workbench",
+};
 
 /**
  * TablePro names a database type rather than a URL; this is the URL scheme each type speaks, so the
@@ -47,7 +53,6 @@ const NEAREST_COLOR: Readonly<Record<string, DatasourceColor>> = {
   violet: "violet",
 };
 
-const DEFAULT_SSH_PORT = 22;
 const SSL_DISABLE = "disable";
 const SSL_REQUIRE = "require";
 const SSL_VERIFY_CA = "verify-ca";
@@ -167,10 +172,39 @@ function applyCertificateFiles(
   }
 }
 
-function comparable(config: Readonly<Record<string, ConfigValue>>, plugin: PluginInfo): string {
+/** The same database through another bastion is another datasource, so the tunnel host counts. */
+function comparable(
+  config: Readonly<Record<string, ConfigValue>>,
+  plugin: PluginInfo,
+  ssh: SshSettings | undefined,
+): string {
   const parts = plugin.url?.parts ?? {};
   const keys = [parts.host, parts.port, parts.database, parts.user, parts.path];
-  return [plugin.id, ...keys.map((key) => (key === undefined ? "" : String(config[key] ?? "")))].join("\u0000");
+  const tunnelHost = ssh?.enabled === true ? ssh.host : "";
+  return [plugin.id, ...keys.map((key) => (key === undefined ? "" : String(config[key] ?? ""))), tunnelHost].join(
+    "\u0000",
+  );
+}
+
+/** The tunnel to save, or why it is left for the user to set up. */
+function sshOf(ssh: ForeignSsh, plugin: PluginInfo): { ssh: SshSettings } | { ssh: undefined; warning: string } {
+  const port = ssh.port ?? DEFAULT_SSH_PORT;
+  const address = `${ssh.host}:${String(port)}`;
+  if (plugin.network === null) {
+    return {
+      ssh: undefined,
+      warning: `${plugin.name} has no SSH tunnel; the tunnel through ${address} was not imported.`,
+    };
+  }
+  if (ssh.host === "" || ssh.user === null || ssh.auth === null) {
+    return {
+      ssh: undefined,
+      warning: `The SSH tunnel through ${address} was not imported: its user or sign-in method could not be read. Set it up in the data source's SSH settings.`,
+    };
+  }
+  return {
+    ssh: { enabled: true, host: ssh.host, port, user: ssh.user, auth: ssh.auth, keyPath: ssh.keyPath ?? "" },
+  };
 }
 
 /** Where the connection points, for the preview: `host:port/database`, or the file. */
@@ -224,6 +258,22 @@ export function mapConnection(connection: ForeignConnection, context: MappingCon
     user: connection.user,
     folder: connection.folder,
   };
+  if (plugin !== undefined && connection.problem !== undefined) {
+    return {
+      row: {
+        ...base,
+        pluginId: plugin.id,
+        pluginName: plugin.name,
+        target: "",
+        password: "notNeeded",
+        warnings: [connection.problem],
+        status: "unsupported",
+        selected: false,
+      },
+      draft: null,
+      passwordKey: null,
+    };
+  }
   if (plugin === undefined) {
     const scheme = schemeOf(connection);
     return {
@@ -271,9 +321,10 @@ export function mapConnection(connection: ForeignConnection, context: MappingCon
     Object.assign(config, separateFields(connection, plugin));
   }
   applySsl(connection, plugin, config, warnings);
+  warnings.push(...(connection.warnings ?? []));
   const passwordKey = plugin.url?.parts.password ?? plugin.fields.find((field) => field.secret === true)?.key ?? null;
   const color = NEAREST_COLOR[(connection.color ?? "").toLowerCase()] ?? null;
-  const draft: DatasourceDraft = {
+  let draft: DatasourceDraft = {
     name: connection.name,
     pluginId: plugin.id,
     folder: normalizeFolder(connection.folder),
@@ -285,18 +336,20 @@ export function mapConnection(connection: ForeignConnection, context: MappingCon
     origin: { app: connection.app, id: connection.id },
   };
   let status: ImportRow["status"] = "ready";
-  if (connection.ssh !== null) {
-    const port = connection.ssh.port ?? DEFAULT_SSH_PORT;
-    warnings.unshift(
-      `SSH tunnel through ${connection.ssh.host}:${String(port)} was not imported; TableCraft has no SSH tunnels yet.`,
-    );
+  let target = targetOf(config, plugin);
+  const tunnel = connection.ssh === null ? { ssh: undefined } : sshOf(connection.ssh, plugin);
+  if (tunnel.ssh !== undefined) {
+    draft = { ...draft, ssh: tunnel.ssh };
+    target = `${target} via ${tunnel.ssh.host}`;
+  } else if ("warning" in tunnel) {
+    warnings.unshift(tunnel.warning);
     status = "sshTunnel";
   }
-  const key = comparable(config, plugin);
+  const key = comparable(config, plugin, tunnel.ssh);
   const duplicate = context.existing.some(
     (existing) =>
       (existing.origin?.app === connection.app && existing.origin.id === connection.id) ||
-      (existing.pluginId === plugin.id && comparable(existing.config, plugin) === key),
+      (existing.pluginId === plugin.id && comparable(existing.config, plugin, existing.ssh) === key),
   );
   if (duplicate) status = "duplicate";
   return {
@@ -305,7 +358,7 @@ export function mapConnection(connection: ForeignConnection, context: MappingCon
       user: plugin.url?.parts.user === undefined ? null : String(config[plugin.url.parts.user] ?? "") || null,
       pluginId: plugin.id,
       pluginName: plugin.name,
-      target: targetOf(config, plugin),
+      target,
       password: passwordState(context.availability(connection), passwordKey !== null),
       warnings,
       status,

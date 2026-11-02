@@ -1,7 +1,9 @@
 import { basename, join } from "node:path";
+import type { SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
 import { expandMacros } from "@table-craft/desktop/main/import/jdbc.js";
 import type {
   ForeignConnection,
+  ForeignSsh,
   ForeignSslMode,
   ImportEnvironment,
   PasswordSource,
@@ -126,18 +128,31 @@ async function passwordStore(environment: ImportEnvironment, configDir: string):
   return { kind: "native" };
 }
 
-interface SshConfig {
-  readonly host: string;
-  readonly port: number | null;
-}
+type SshConfig = ForeignSsh;
+
+/** DataGrip's `authType`; any other type keeps the tunnel out of the import. */
+const SSH_AUTH_TYPES: Readonly<Record<string, SshAuthMethod>> = {
+  PASSWORD: "password",
+  KEY_PAIR: "key",
+  OPEN_SSH: "agent",
+  OPENSSH_CONFIG: "agent",
+};
 
 async function sshConfigs(environment: ImportEnvironment, configDir: string): Promise<Map<string, SshConfig>> {
   const configs = new Map<string, SshConfig>();
   const document = await readXml(environment, join(configDir, OPTIONS, SSH_CONFIGS));
   for (const config of document === null ? [] : descendants(document, "sshConfig")) {
-    const { id, host, port } = config.attributes;
+    const { id, host, port, username, authType, keyPath } = config.attributes;
     if (id === undefined || host === undefined) continue;
-    configs.set(id, { host, port: parsePort(port) });
+    configs.set(id, {
+      host,
+      port: parsePort(port),
+      user: username === undefined || username === "" ? null : username,
+      auth: SSH_AUTH_TYPES[(authType ?? "").toUpperCase()] ?? null,
+      keyPath: keyPath === undefined || keyPath === "" ? null : keyPath,
+      // IntelliJ keeps it under a service TableCraft does not derive; it is asked for on connect.
+      password: { kind: "elsewhere" },
+    });
   }
   return configs;
 }
@@ -200,19 +215,23 @@ function ssh(
   if (properties === undefined || childText(properties, "enabled") !== "true") return null;
   const id = childText(properties, "ssh-config-id");
   const config = id === null ? undefined : configs.get(id);
-  return config ?? { host: childText(properties, "host") ?? "", port: parsePort(childText(properties, "port")) };
+  return (
+    config ?? {
+      host: childText(properties, "host") ?? "",
+      port: parsePort(childText(properties, "port")),
+      user: null,
+      auth: null,
+      keyPath: null,
+      password: { kind: "none" },
+    }
+  );
 }
 
-function password(
-  local: XmlElement | undefined,
-  shared: XmlElement | undefined,
-  uuid: string,
-  user: string | null,
-): PasswordSource {
+function password(local: XmlElement | undefined, shared: XmlElement | undefined, uuid: string): PasswordSource {
   const storage = (field(local, shared, "secret-storage") ?? "").toLowerCase();
   const auth = (field(local, shared, "auth-provider") ?? "").toLowerCase();
   if (auth === NO_AUTH || NOT_SAVED.has(storage)) return { kind: "none" };
-  return { kind: "store", service: `${DB_SERVICE_PREFIX}${uuid}`, user };
+  return { kind: "store", service: `${DB_SERVICE_PREFIX}${uuid}` };
 }
 
 function normalizeGroup(group: string | null): string | null {
@@ -265,7 +284,7 @@ function toConnection(
     color: null,
     comment: field(local, shared, "comment") ?? "",
     readOnly: attribute(local, shared, "read-only") === "true",
-    password: password(local, shared, uuid, user),
+    password: password(local, shared, uuid),
   };
 }
 

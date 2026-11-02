@@ -163,7 +163,7 @@ function Failure({ failure }: { readonly failure: BridgeFailure | null }) {
 }
 
 /**
- * Import Data Sources (plan 035): pick DataGrip, TablePro or a file, tick the connections, then
+ * Import Data Sources (plans 035, 143): pick DataGrip, TablePro, MySQL Workbench or a file, tick the connections, then
  * import them. Main reads the other apps' files and secrets; this view only sees rows.
  */
 function Wizard() {
@@ -311,7 +311,8 @@ function Wizard() {
               }}
             >
               <label htmlFor={FILE_FIELD_ID} className="text-ink-muted">
-                From a file: a TablePro export (.tablepro) or a DataGrip dataSources.xml
+                From a file: a TablePro export (.tablepro), a DataGrip dataSources.xml, or a MySQL Workbench
+                connections.xml or Backup Connections .zip
               </label>
               <div className="flex items-center gap-cell">
                 <TextInput
