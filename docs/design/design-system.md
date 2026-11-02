@@ -244,6 +244,32 @@ The level is the **Motion** setting (`appearance.motion`): System (default) foll
 `prefers-reduced-motion`, which Chromium reads from macOS Reduce Motion and its Windows and GNOME
 equivalents; Full, Reduced and Off override it. It applies live.
 
+## Elevation
+
+Decision 150. A surface sits at one of three levels, and its level sets its fill, edge, corners
+and shadow together. A component picks a level; it never picks a shadow.
+
+| Level   | Surfaces                                                                                                                                                                                    | Fill                                       | Edge                                          | Corners                                                             | Shadow           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------- | ---------------- |
+| Rest    | Islands, tool windows, tab strips, toolbars, the grid, and the cards, wells and banners inside them                                                                                         | `bg-canvas` or `bg-panel`                  | A tone step or `border-line`, not both        | `rounded-island`; controls `rounded` or flush                       | None             |
+| Popover | Menus, popovers, dropdown lists, SQL completion and context actions, tooltips, (i) hints, the speed search badge, the split drop label, a button floating over content (Watch's newer rows) | `bg-raised` (`surface-raised` around rows) | `border-line`                                 | `rounded-popover` for a list of choices, `rounded-tooltip` for text | `shadow-popover` |
+| Dialog  | Dialogs and the palette                                                                                                                                                                     | `bg-panel`                                 | `border-line`, over the `OVERLAY_CLASS` scrim | `rounded-dialog`                                                    | `shadow-dialog`  |
+
+- Only what floats over other content casts a shadow, and only its level's token: no Tailwind
+  `shadow-*` step, no `shadow-[…]`, no `drop-shadow`, no `rgb(0 0 0 …)` in a component
+  (`test/renderer/surfaceRadius.test.ts`). The values live in `ELEVATION` (`appearance/themes.ts`),
+  one pair per colour scheme, so every bundled, ported and user theme casts them; the Islands table
+  below lists them.
+- A level keeps its shadow wherever it opens: a popover inside a dialog is still `shadow-popover`.
+- Corners step down as the levels do: a dialog is never squarer than a popover, a popover never
+  squarer than a tooltip, and rows inside a popover are `rounded` in a `p-1` inset.
+- `surface-raised` re-points `bg-hover` to `bg-selection` inside a `bg-raised` surface, where a
+  `raised` hover would vanish.
+- A dialog dims what is under it with the one scrim, `OVERLAY_CLASS` (`bg-canvas/60`); a popover
+  dims nothing.
+- The tree's drag image rounds like a tooltip but casts nothing: Chromium snapshots it clipped to
+  its box.
+
 ## Dropdowns
 
 Decision 140. Every choice list is `ui/Dropdown.tsx` (Radix Select), never a native `<select>`,
@@ -442,11 +468,9 @@ a dialog or the palette (`rounded-dialog`) is never squarer than the island unde
 popover, one that holds only text a tooltip. Classic keeps 8, 4 and 4. Controls (buttons, fields,
 triggers, chips) keep `rounded` and the flush rule.
 
-They cast two shadows, `shadow-popover` and `shadow-dialog`, picked by the theme's colour scheme
-(`ELEVATION` in `appearance/themes.ts`), so every bundled, ported and user theme gets them. A dark
+They cast two shadows, `shadow-popover` and `shadow-dialog` ([Elevation](#elevation)). A dark
 scheme casts three to five times as dark as a light one: Tailwind's `shadow-lg`, 10 % black, does
-not show on a dark canvas. Each is a wide soft layer over a tight contact one. Nothing at rest casts
-a shadow, and the renderer uses no other (`test/renderer/surfaceRadius.test.ts`).
+not show on a dark canvas. Each is a wide soft layer over a tight contact one.
 
 ## Database explorer
 

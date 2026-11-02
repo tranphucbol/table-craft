@@ -406,7 +406,7 @@ export function EditorArea() {
                 onDrag(null);
               }}
             >
-              <span className="pointer-events-none rounded border border-accent bg-panel px-gap py-cell text-ink">
+              <span className="pointer-events-none rounded-tooltip border border-accent bg-panel px-gap py-cell text-ink shadow-popover">
                 {split ? `Move ${side}` : `Split ${side}`}
               </span>
             </div>
