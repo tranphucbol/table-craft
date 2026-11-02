@@ -1061,6 +1061,26 @@ describe("reformat", () => {
     expect(messages()).toEqual(["Could not reformat: Parse error at line 1"]);
   });
 
+  it("givenEngineCannotStart_whenReformatted_thenNotConnectedTextKeptAndOutputSaysWhy", async () => {
+    const connect = vi.fn(() => Promise.reject(new Error("must not connect")));
+    const failure = { code: "connectionFailed" as const, message: "No plugin is installed.", hint: "Install it." };
+    const store = createConsolesStore({
+      connect,
+      engine: () => Promise.reject(new EngineRequestError(failure)),
+      now: () => 0,
+      clock: () => 0,
+    });
+    await store.getState().open("c1", "pg", { sql: "select 1", connect: false });
+
+    await store.getState().reformat("c1");
+
+    expect(connect).not.toHaveBeenCalled();
+    expect(store.getState().consoles.c1?.replacement).toBeNull();
+    expect(store.getState().consoles.c1?.output.map((entry) => [entry.message, entry.hint])).toEqual([
+      ["Could not reformat: No plugin is installed.", "Install it."],
+    ]);
+  });
+
   it("givenReplacementApplied_whenAcknowledged_thenCleared", async () => {
     const { store } = await opened("SELECT a FROM t");
     await store.getState().reformat("c1");

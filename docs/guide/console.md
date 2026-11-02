@@ -68,7 +68,8 @@ check, or all of them, off. The checks know your tables once the data source is 
 ![Inspections and a failing statement](../media/inspections.gif)
 
 **Reformat Code** (`⌥⌘L`) lays out the selection, or the whole console, and one `⌘Z` takes it
-back. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
+back. It works while the data source is disconnected or its server is down, and never asks for a
+password. Queries get the aligned layout: the first item on the keyword's line, the rest of a list
 under it, `AS` lined up, `AND`/`OR` under `WHERE`, the values of an `IN (...)` list one per line under
 the first; other statements keep the standard layout. A statement with `:name`, `?` or (on PostgreSQL) `$1` placeholders asks for their values
 before it runs; they are bound by the driver, never pasted into the SQL, and the next run starts

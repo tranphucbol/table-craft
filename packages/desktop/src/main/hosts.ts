@@ -6,6 +6,8 @@
  */
 import {
   ENGINE_BOOT_MESSAGE,
+  ENGINE_CREDENTIALS_APPLIED_MESSAGE,
+  ENGINE_CREDENTIALS_MESSAGE,
   ENGINE_HOST_KEY_ANSWER_MESSAGE,
   ENGINE_HOST_KEY_MESSAGE,
   ENGINE_LOG_MESSAGE,
@@ -13,6 +15,8 @@ import {
   ENGINE_SHUTDOWN_MESSAGE,
   type DatasourceConfig,
   type EngineBoot,
+  type EngineCredentials,
+  type EngineCredentialsApplied,
   type EngineHostKeyAnswer,
   type EngineHostKeyRequest,
   type EngineLog,
@@ -76,9 +80,20 @@ export interface HostLog {
 }
 
 export interface HostRegistry<Target> {
-  /** Starts the host for `datasource` if needed and gives `target` a fresh port to it. */
-  open(datasource: DatasourceConfig, target: Target): void;
+  /**
+   * Starts the host for `datasource` if needed and gives `target` a fresh port to it. `complete`
+   * says whether the config holds every secret a login needs; it counts only when this starts
+   * the host (decision 149).
+   */
+  open(datasource: DatasourceConfig, target: Target, complete?: boolean): void;
   isRunning(datasourceId: string): boolean;
+  /** Whether the running host has every secret; false when none runs. */
+  isComplete(datasourceId: string): boolean;
+  /**
+   * Hands a running host the secrets it started without; resolves true once its later sessions
+   * use them, false when no host runs or it exited first.
+   */
+  supply(datasource: DatasourceConfig): Promise<boolean>;
   /** Asks the host to close its sessions and exit; resolves once it has. */
   stop(datasourceId: string): Promise<void>;
   /** Test Connection in a throwaway engine that never serves a port. Never rejects. */
@@ -90,6 +105,7 @@ interface RunningHost {
   readonly process: EngineProcess;
   readonly exited: Promise<void>;
   stopping: boolean;
+  complete: boolean;
 }
 
 function boot(mode: EngineMode, datasource: DatasourceConfig, pluginRoots: readonly PluginRoot[]): EngineBoot {
@@ -108,6 +124,10 @@ function isHostKeyRequest(message: unknown): message is EngineHostKeyRequest {
   return (message as { kind?: unknown } | null)?.kind === ENGINE_HOST_KEY_MESSAGE;
 }
 
+function isCredentialsApplied(message: unknown): message is EngineCredentialsApplied {
+  return (message as { kind?: unknown } | null)?.kind === ENGINE_CREDENTIALS_APPLIED_MESSAGE;
+}
+
 /** While the user reads a fingerprint; a probe's timeout must not run meanwhile. */
 interface Asking {
   asked(): void;
@@ -122,6 +142,8 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
   const probeTimeoutMs = options.probeTimeoutMs ?? PROBE_TIMEOUT_MS;
   const now = options.now ?? Date.now;
   const log = options.log?.logger.child("engine");
+  const credentialsApplied = new Map<number, () => void>();
+  let nextCredentials = 1;
 
   function answerHostKey(process: EngineProcess, request: EngineHostKeyRequest, asking?: Asking): void {
     asking?.asked();
@@ -147,11 +169,15 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
     process.on("message", (message) => {
       if (isEngineLog(message)) options.log?.forward(message.record, logProcess);
       else if (isHostKeyRequest(message)) answerHostKey(process, message, asking);
+      else if (isCredentialsApplied(message)) {
+        credentialsApplied.get(message.requestId)?.();
+        credentialsApplied.delete(message.requestId);
+      }
     });
     return process;
   }
 
-  function spawn(datasource: DatasourceConfig): RunningHost {
+  function spawn(datasource: DatasourceConfig, complete: boolean): RunningHost {
     const startedAt = now();
     const fields = { datasourceId: datasource.id, pluginId: datasource.pluginId };
     const process = fork(`${SERVICE_NAME_PREFIX}${datasource.id}`, `${ENGINE_LOG_PROCESS}${datasource.id}`);
@@ -168,7 +194,7 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
         resolve();
       });
     });
-    host = { process, exited, stopping: false };
+    host = { process, exited, stopping: false, complete };
     process.postMessage(boot("serve", datasource, options.pluginRoots()));
     hosts.set(datasource.id, host);
     return host;
@@ -250,12 +276,27 @@ export function createHostRegistry<Target>(options: HostRegistryOptions<Target>)
   }
 
   return {
-    open(datasource, target) {
+    open(datasource, target, complete = true) {
       options.log?.protect(datasource);
-      const host = hosts.get(datasource.id) ?? spawn(datasource);
+      const host = hosts.get(datasource.id) ?? spawn(datasource, complete);
       dependencies.connectPort(host.process, datasource.id, target);
     },
     isRunning: (datasourceId) => hosts.has(datasourceId),
+    isComplete: (datasourceId) => hosts.get(datasourceId)?.complete === true,
+    async supply(datasource) {
+      const host = hosts.get(datasource.id);
+      if (host === undefined || host.stopping) return false;
+      options.log?.protect(datasource);
+      const requestId = nextCredentials++;
+      const applied = new Promise<boolean>((resolve) => credentialsApplied.set(requestId, () => resolve(true)));
+      const message: EngineCredentials = { kind: ENGINE_CREDENTIALS_MESSAGE, requestId, datasource };
+      host.process.postMessage(message);
+      const done = await Promise.race([applied, host.exited.then(() => false)]);
+      credentialsApplied.delete(requestId);
+      const supplied = done && hosts.get(datasource.id) === host;
+      if (supplied) host.complete = true;
+      return supplied;
+    },
     stop,
     probe,
     closeAll() {

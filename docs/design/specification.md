@@ -1094,6 +1094,8 @@ PostgreSQL among them, refuse every later statement until it is rolled back.
 `console.reformat` (Reformat Code, ⌥⌘L) sends the selection, or the whole text when there is none,
 to `sql.format` with the `editor.format` settings and replaces it in one undoable edit; the caret
 stays on the token it was on. A failure is logged to Output with the reason and leaves the text.
+It needs only the plugin, so on a disconnected datasource it starts the engine without logging in
+or asking for a password, and the datasource stays Disconnected (decision 149).
 
 While the destructive, Parameters or Explain Analyse dialog is open the console's status reads `Waiting for confirmation…`,
 and the run's timer starts when it is answered. Run on a disconnected console connects first
