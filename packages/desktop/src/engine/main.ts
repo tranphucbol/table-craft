@@ -10,6 +10,8 @@ import { createLifetime } from "@table-craft/desktop/engine/lifetime.js";
 import { filesForPort } from "@table-craft/desktop/engine/portAuthority.js";
 import {
   ENGINE_BOOT_MESSAGE,
+  ENGINE_CREDENTIALS_APPLIED_MESSAGE,
+  ENGINE_CREDENTIALS_MESSAGE,
   ENGINE_HOST_KEY_ANSWER_MESSAGE,
   ENGINE_HOST_KEY_MESSAGE,
   ENGINE_LOG_MESSAGE,
@@ -17,6 +19,8 @@ import {
   ENGINE_PROBED_MESSAGE,
   ENGINE_SHUTDOWN_MESSAGE,
   type EngineBoot,
+  type EngineCredentials,
+  type EngineCredentialsApplied,
   type EngineEvent,
   type EngineHostKeyAnswer,
   type EngineHostKeyRequest,
@@ -197,6 +201,18 @@ parentPort.on("message", (event) => {
     const answer = data as EngineHostKeyAnswer;
     hostKeyAnswers.get(answer.requestId)?.(answer);
     hostKeyAnswers.delete(answer.requestId);
+    return;
+  }
+  if (data?.kind === ENGINE_CREDENTIALS_MESSAGE && booted !== null) {
+    const message = data as EngineCredentials;
+    const applied: EngineCredentialsApplied = {
+      kind: ENGINE_CREDENTIALS_APPLIED_MESSAGE,
+      requestId: message.requestId,
+    };
+    void booted
+      .then(() => engine?.supply(message.datasource))
+      .catch((cause: unknown) => log.error("credentials ignored", { err: cause }))
+      .finally(() => parentPort.postMessage(applied));
     return;
   }
   if (data?.kind === ENGINE_SHUTDOWN_MESSAGE) {

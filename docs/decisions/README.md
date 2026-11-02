@@ -141,3 +141,4 @@ started, not when it is merged.
 | 146 | [Console find runs in the renderer on CodeMirror's search](146-console-find-runs-in-the-renderer-on-codemirror-search.md)                                              |
 | 147 | [An IN value list goes one value per line](147-in-value-lists-chop-one-per-line.md)                                                                                    |
 | 148 | [A console can override its run limits](148-a-console-can-override-its-run-limits.md)                                                                                  |
+| 149 | [An engine runs before its datasource connects](149-an-engine-runs-before-its-datasource-connects.md)                                                                  |

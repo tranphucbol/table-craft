@@ -430,6 +430,46 @@ describe("engine", () => {
   });
 });
 
+describe("engine credentials (decision 149)", () => {
+  const UNREACHABLE = { ...DATASOURCE, config: { path: "/nonexistent-table-craft-directory/db.sqlite" } };
+
+  it("givenBootWithoutReachableConfig_whenFormatCalled_thenFormatsWithoutASession", async () => {
+    const connection = createEngine({ datasource: UNREACHABLE, plugins: [LOADED_SQLITE] }).connect();
+
+    const response = await connection.handle({ id: 1, type: "sql.format", text: "select 1", options: FORMAT_OPTIONS });
+
+    expect(resultOf<string>(response)).toBe("SELECT 1");
+  });
+
+  it("givenBootWithoutReachableConfig_whenCredentialsArrive_thenNextSessionUsesThem", async () => {
+    const engine = createEngine({ datasource: UNREACHABLE, plugins: [LOADED_SQLITE] });
+    const connection = engine.connect();
+    expect(await connection.handle({ id: 1, type: "session.open" })).toMatchObject({ type: "engine.error" });
+
+    engine.supply(DATASOURCE);
+
+    expect(await connection.handle({ id: 2, type: "session.open" })).toMatchObject({ type: "session.open" });
+  });
+
+  it("givenOpenSession_whenCredentialsArrive_thenOpenSessionKeepsItsLogin", async () => {
+    const engine = createEngine({ datasource: DATASOURCE, plugins: [LOADED_SQLITE] });
+    const connection = engine.connect();
+    const sessionId = await openSession(connection);
+
+    engine.supply(UNREACHABLE);
+
+    const kept = await connection.handle({ id: 2, type: "statement.execute", ...PAGING, sessionId, sql: "SELECT 7" });
+    expect(resultOf<ExecutedStatement>(kept).firstWindow.rows).toEqual([[7]]);
+    expect(await connection.handle({ id: 3, type: "session.open" })).toMatchObject({ type: "engine.error" });
+  });
+
+  it("givenCredentialsForAnotherPlugin_whenSupplied_thenRefused", () => {
+    const engine = createEngine({ datasource: DATASOURCE, plugins: [LOADED_SQLITE] });
+
+    expect(() => engine.supply({ ...DATASOURCE, pluginId: "postgres" })).toThrow(/reached the engine of scratch/);
+  });
+});
+
 /** The seeded fixture, through a plugin that counts the sessions it opens and closes. */
 function countingSqlite(brokenSessions = 0): {
   engine: ReturnType<typeof createEngine>;

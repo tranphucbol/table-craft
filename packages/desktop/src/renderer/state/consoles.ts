@@ -542,6 +542,8 @@ export function explainLabel(sql: string, analyze: boolean): string {
 export interface ConsolesDependencies {
   /** The datasource's engine, connected on first use; one port per datasource per window. */
   readonly connect: (datasourceId: string) => Promise<EngineClient>;
+  /** The datasource's engine for calls that need no login, such as Reformat Code (decision 149); absent, `connect`. */
+  readonly engine?: (datasourceId: string) => Promise<EngineClient>;
   readonly now: () => number;
   /** Wall-clock time for Output entries; defaults to `Date.now`. */
   readonly clock?: () => number;
@@ -1842,7 +1844,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         const before = sql.slice(from, to);
         if (before.trim() === "") return;
         try {
-          const client = await dependencies.connect(current.datasourceId);
+          const client = await (dependencies.engine ?? dependencies.connect)(current.datasourceId);
           const text = await client.call("sql.format", { text: before, options: currentFormatOptions() });
           if (text === before || get().consoles[id] === undefined) return;
           const caret = from + caretAfterReformat(before, text, selection.to - from);
@@ -2398,6 +2400,7 @@ export async function chooseDatasourceInDialog(title = CHOOSE_DATASOURCE_TITLE):
 
 export const useConsoles = createConsolesStore({
   connect: (datasourceId) => useDatasources.getState().connect(datasourceId),
+  engine: (datasourceId) => useDatasources.getState().engine(datasourceId),
   chooseDatasource: () => chooseDatasourceInDialog(),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),

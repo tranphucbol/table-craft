@@ -66,7 +66,9 @@ const bridge: TableCraftBridge = {
   installPluginFile: () => invoke(INVOKE_CHANNELS.installPluginFile),
   removePlugin: (pluginId) => invoke(INVOKE_CHANNELS.removePlugin, { pluginId }),
   onPluginsChanged: (listener) => subscribe<PluginsState>(CHANNELS.pluginsChanged, listener),
-  connectEngine: (datasourceId, secrets) => invoke(INVOKE_CHANNELS.connectEngine, { datasourceId, secrets }),
+  connectEngine: (datasourceId, secrets, mode) =>
+    invoke(INVOKE_CHANNELS.connectEngine, { datasourceId, secrets, mode }),
+  authorizeEngine: (datasourceId, secrets) => invoke(INVOKE_CHANNELS.authorizeEngine, { datasourceId, secrets }),
   disconnectEngine: (datasourceId) => invoke(INVOKE_CHANNELS.disconnectEngine, { datasourceId }),
   chooseFile: (title) => invoke(INVOKE_CHANNELS.chooseFile, { title }),
   openFile: (title) => invoke(INVOKE_CHANNELS.openFile, { title }),
