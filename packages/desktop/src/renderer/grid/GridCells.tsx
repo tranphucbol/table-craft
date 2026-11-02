@@ -27,7 +27,7 @@ import type { ResultWindows } from "@table-craft/desktop/renderer/state/resultWi
 import { currentFormats } from "@table-craft/desktop/renderer/state/settings.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
-import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
+import { MENU_CONTENT, MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT } from "@table-craft/desktop/renderer/ui/menu.js";
 import type { PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import {
   CalendarIcon,
@@ -38,9 +38,6 @@ import {
 } from "@table-craft/desktop/renderer/ui/icons.js";
 
 export const CELL = "truncate border-r border-line px-cell leading-(--spacing-row)";
-const MENU_ITEM =
-  "flex h-row cursor-default items-center justify-between gap-gap rounded px-gap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection";
-const MENU_CONTENT = `z-50 min-w-48 rounded-popover border border-line bg-raised p-1 text-ui text-ink shadow-lg ${MENU_MOTION}`;
 const READ_ONLY_COLUMN_TITLE = " (read-only: not a column of the table)";
 
 /** What the grid asks of the store that owns its result: a console's or a table tab's. */
@@ -113,7 +110,7 @@ export function CellMenu({
         <ContextMenu.Content className={MENU_CONTENT}>
           {entries.map((actionId, index) =>
             actionId === null ? (
-              <ContextMenu.Separator key={`separator-${String(index)}`} className="my-1 h-px bg-line" />
+              <ContextMenu.Separator key={`separator-${String(index)}`} className={MENU_SEPARATOR} />
             ) : (
               <MenuItem key={actionId} actionId={actionId} />
             ),
@@ -495,15 +492,15 @@ export function HeaderCell({ ownerId, host, result, column, position, bounds, se
           <MenuItem actionId={GRID_ACTION_IDS.sort} label="Sort Ascending" args={{ column, direction: "asc" }} />
           <MenuItem actionId={GRID_ACTION_IDS.sort} label="Sort Descending" args={{ column, direction: "desc" }} />
           <MenuItem actionId={GRID_ACTION_IDS.clearSort} />
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
+          <ContextMenu.Separator className={MENU_SEPARATOR} />
           <MenuItem actionId={GRID_ACTION_IDS.hideColumn} args={{ column }} />
           <MenuItem actionId={GRID_ACTION_IDS.showAllColumns} />
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
+          <ContextMenu.Separator className={MENU_SEPARATOR} />
           <ContextMenu.Label className="px-gap text-ink-muted">Local filter</ContextMenu.Label>
           {LOCAL_FILTER_MENU.map((actionId) => (
             <MenuItem key={actionId} actionId={actionId} label={LOCAL_FILTER_LABELS[actionId]} args={{ column }} />
           ))}
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
+          <ContextMenu.Separator className={MENU_SEPARATOR} />
           <MenuItem actionId={GRID_ACTION_IDS.copyColumnName} args={{ column }} />
         </ContextMenu.Content>
       </ContextMenu.Portal>
@@ -527,7 +524,7 @@ export function MenuItem({
     <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId, args)}>
       <span>{label ?? action.title}</span>
       {action.shortcut === undefined ? null : (
-        <span className="text-ink-muted">{formatChord(action.shortcut, currentPlatform())}</span>
+        <span className={MENU_SHORTCUT}>{formatChord(action.shortcut, currentPlatform())}</span>
       )}
     </ContextMenu.Item>
   );

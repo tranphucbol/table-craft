@@ -46,7 +46,7 @@ function ActivityRow({ entry, now }: { readonly entry: McpActivityView; readonly
     <tr
       data-testid="mcp-activity-row"
       data-outcome={entry.outcome}
-      className={cn("border-b border-line", request !== null && "cursor-default hover:bg-raised")}
+      className={cn("border-b border-line", request !== null && "cursor-default hover:bg-hover")}
       title={request === null ? (entry.message ?? undefined) : "Double-click to open in a console"}
       onDoubleClick={() => {
         if (request !== null) invoke(MCP_ACTION_IDS.openInConsole, request);

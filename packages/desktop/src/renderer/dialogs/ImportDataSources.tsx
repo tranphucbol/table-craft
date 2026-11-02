@@ -56,7 +56,7 @@ function SourceCard({
       type="button"
       data-testid={`import-source-${source.app}`}
       disabled={!source.found || busy}
-      className="flex min-w-0 flex-col items-start gap-1 rounded border border-line bg-canvas p-gap text-left hover:bg-raised disabled:opacity-50 disabled:hover:bg-canvas"
+      className="flex min-w-0 flex-col items-start gap-1 rounded border border-line bg-canvas p-gap text-left hover:bg-hover disabled:opacity-50 disabled:hover:bg-canvas"
       onClick={onPick}
     >
       <span className="font-semibold">{source.label}</span>

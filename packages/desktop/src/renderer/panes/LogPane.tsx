@@ -142,7 +142,7 @@ export function LogPane() {
               onClick={() => select(record === selected ? null : record)}
               onDoubleClick={() => void invoke(LOG_ACTION_IDS.copyRecord, { record })}
               title={`${record.process}/${record.scope} ${record.msg} ${fieldsText(record)}`}
-              className="flex w-full min-w-0 items-baseline gap-gap px-pane-inset text-left leading-(--spacing-row) hover:bg-raised aria-pressed:bg-selection"
+              className="flex w-full min-w-0 items-baseline gap-gap px-pane-inset text-left leading-(--spacing-row) hover:bg-hover aria-pressed:bg-selection"
             >
               <span className="shrink-0 text-ink-muted">{timeOf(record)}</span>
               <span className={cn("w-10 shrink-0 uppercase", LEVEL_CLASS[record.level])}>{record.level}</span>

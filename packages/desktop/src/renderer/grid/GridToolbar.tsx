@@ -59,7 +59,7 @@ function DrainingExport({ handle }: { readonly handle: string }) {
             data-testid="result-exporting-cancel"
             disabled={cancelling}
             className={cn(
-              "flex h-row shrink-0 items-center rounded border border-line px-gap text-ink hover:bg-raised disabled:opacity-50",
+              "flex h-row shrink-0 items-center rounded border border-line px-gap text-ink hover:bg-hover disabled:opacity-50",
               TEXT_PRESS,
             )}
             onMouseDown={(event) => event.preventDefault()}

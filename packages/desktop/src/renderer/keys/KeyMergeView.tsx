@@ -96,7 +96,7 @@ export function KeyMergeView({
               </span>
               <button
                 type="button"
-                className="rounded px-cell hover:bg-raised disabled:opacity-50"
+                className="rounded px-cell hover:bg-hover disabled:opacity-50"
                 disabled={merge.manual || !editable}
                 title={conflict.theirs}
                 onClick={() => void invoke(KEY_ACTION_IDS.chooseMerge, { path: conflict.path, side: "theirs" })}
@@ -105,7 +105,7 @@ export function KeyMergeView({
               </button>
               <button
                 type="button"
-                className="rounded px-cell hover:bg-raised disabled:opacity-50"
+                className="rounded px-cell hover:bg-hover disabled:opacity-50"
                 disabled={merge.manual || !editable}
                 title={conflict.yours}
                 onClick={() => void invoke(KEY_ACTION_IDS.chooseMerge, { path: conflict.path, side: "yours" })}

@@ -32,7 +32,7 @@ import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { Handle } from "@table-craft/desktop/renderer/ui/Handle.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { TAB_FOCUS_RING } from "@table-craft/desktop/renderer/ui/focusRing.js";
-import { MENU_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
+import { MENU_CONTENT, MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { TableEditor } from "@table-craft/desktop/renderer/table/TableEditor.js";
 import { ACTION_ICONS, CloseIcon, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { TabIcon, labelOfTab } from "@table-craft/desktop/renderer/shell/TabIcon.js";
@@ -100,14 +100,10 @@ function TabMenuItem({
   if (action === undefined) return null;
   const args: TabArgs = { tabId };
   return (
-    <ContextMenu.Item
-      disabled={!enabled}
-      className="flex h-row cursor-default items-center justify-between gap-gap rounded px-gap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection"
-      onSelect={() => invoke(actionId, args)}
-    >
+    <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId, args)}>
       <span>{entry.label?.(facts) ?? action.title}</span>
       {action.shortcut === undefined ? null : (
-        <span className="text-ink-muted">{formatChord(action.shortcut, currentPlatform())}</span>
+        <span className={MENU_SHORTCUT}>{formatChord(action.shortcut, currentPlatform())}</span>
       )}
     </ContextMenu.Item>
   );
@@ -180,7 +176,7 @@ function TabButton({
           className={cn(
             "group flex h-tab shrink-0 items-center gap-cell border-r border-b-2 border-r-line px-gap",
             TAB_FOCUS_RING,
-            active ? "border-b-accent text-ink" : "border-b-transparent text-ink-muted hover:bg-raised",
+            active ? "border-b-accent text-ink" : "border-b-transparent text-ink-muted hover:bg-hover",
             tint ?? (active ? "bg-canvas" : null),
           )}
         >
@@ -223,7 +219,7 @@ function TabButton({
             aria-label={`Close ${label}`}
             tabIndex={-1}
             className={cn(
-              "flex size-icon items-center justify-center rounded hover:bg-raised hover:text-ink",
+              "flex size-icon items-center justify-center rounded hover:bg-hover hover:text-ink",
               !active && "invisible group-hover:visible",
             )}
             onClick={() => invoke(ACTION_IDS.closeTab, args)}
@@ -233,15 +229,10 @@ function TabButton({
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Content
-          className={cn(
-            "z-50 min-w-48 rounded-popover border border-line bg-raised p-1 text-ui text-ink shadow-lg",
-            MENU_MOTION,
-          )}
-        >
+        <ContextMenu.Content className={MENU_CONTENT}>
           {groups.map((group, index) => (
             <Fragment key={group[0]?.actionId}>
-              {index === 0 ? null : <ContextMenu.Separator className="my-1 h-px bg-line" />}
+              {index === 0 ? null : <ContextMenu.Separator className={MENU_SEPARATOR} />}
               {group.map((entry) => (
                 <TabMenuItem key={entry.actionId} entry={entry} facts={facts} tabId={tab.id} />
               ))}

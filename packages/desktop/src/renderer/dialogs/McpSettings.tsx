@@ -188,7 +188,7 @@ function AccessRow({
               aria-label={`Why ${datasource.name} stays at Read only`}
               title={PRODUCTION_NOTE}
               data-testid="mcp-production-note-show"
-              className="shrink-0 rounded text-warning hover:bg-raised"
+              className="shrink-0 rounded text-warning hover:bg-hover"
               onClick={() => showProductionNote(true)}
             >
               <InfoIcon aria-hidden className="size-icon" />
@@ -296,7 +296,7 @@ function ProductionNote({ datasources }: { readonly datasources: readonly Dataso
         aria-label="Hide this warning"
         title="Hide this warning; the (i) beside a red data source shows it again"
         data-testid="mcp-production-note-close"
-        className="ml-auto shrink-0 rounded text-ink-muted hover:bg-raised hover:text-ink"
+        className="ml-auto shrink-0 rounded text-ink-muted hover:bg-hover hover:text-ink"
         onClick={() => showProductionNote(false)}
       >
         <CloseIcon aria-hidden className="size-icon" />
@@ -373,7 +373,7 @@ function ClientSnippet({ port }: { readonly port: number }) {
             key={id}
             type="button"
             aria-pressed={id === client}
-            className={cn("h-row rounded px-gap", id === client ? "bg-selection" : "hover:bg-raised")}
+            className={cn("h-row rounded px-gap", id === client ? "bg-selection" : "hover:bg-hover")}
             onClick={() => setClient(id)}
           >
             {MCP_CLIENT_LABELS[id]}
@@ -430,7 +430,7 @@ function KnownClients({ clients }: { readonly clients: readonly McpKnownClient[]
           />
           <button
             type="button"
-            className="rounded px-1 text-accent hover:bg-raised"
+            className="rounded px-1 text-accent hover:bg-hover"
             data-testid="mcp-forget-client"
             onClick={() => invoke(MCP_ACTION_IDS.forgetClient, client.name)}
           >

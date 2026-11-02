@@ -53,7 +53,7 @@ so every scroller, the editor's included, follows a theme switch with no token o
 | `colors.danger`                | `--tc-danger`               | `#fa6675` | `#c7222d` | `#ff7070`     |
 | `colors.success`               | `--tc-success`              | `#5fb865` | `#1f7a35` | `#5bf15b`     |
 | `colors.warning`               | `--tc-warning`              | `#e0a84a` | `#8a5a00` | `#ffd23f`     |
-| `colors.selection`             | `--tc-selection`            | `#2e436e` | `#dfe1e5` | `#1f3a66`     |
+| `colors.selection`             | `--tc-selection`            | `#2e436e` | `#d4e2ff` | `#1f3a66`     |
 | `colors.searchMatch`           | `--tc-search-match`         | `#544617` | `#f6e39a` | `#4f4300`     |
 | `colors.keyIcon`               | `--tc-key-icon`             | `#d9a343` | `#b07d14` | `#ffd23f`     |
 | `colors.gridStripe`            | `--tc-grid-stripe`          | `#26282b` | `#f5f6f8` | `#0f0f0f`     |
@@ -235,7 +235,7 @@ on hover and `--tc-fill-press-shade` (16 %) while held, because ink barely moves
 at half the press; `press-fill-danger` swaps in the danger fill's `--tc-danger-*-shade`. Icon
 buttons add `press` and shrink to `--tc-motion-press-scale`; text buttons add `press-text`
 (`TEXT_PRESS`) and shrink less, to `--tc-motion-press-scale-text`, so a wide label moves about
-2 px. Bordered text buttons take `hover:bg-raised`. The tint and shade are state and stay at every
+2 px. Bordered text buttons take `hover:bg-hover`. The tint and shade are state and stay at every
 motion level; the shrink is motion and stops at Reduced and Off. A copy button swaps its glyph for a bold `Check` in `text-success` and its tooltip for "Copied" for
 1.5 s after the clipboard write it caused (`ui/useCopyConfirmation.ts`); a failed copy never
 confirms.
@@ -282,7 +282,7 @@ asks for, one short muted line beside the (i). Form labels wrap rather than run 
 
 Plan 013. `⌘,` (Settings… in the macOS app menu, File elsewhere) opens a modal the size of Data
 Sources (`w-dialog`, `h-dialog-height`): a `w-dialog-list` page list behind a `border-line` edge
-on the left, the chosen page `bg-selection`, the rest `hover:bg-raised`, and the page on the right
+on the left, the chosen page `bg-selection`, the rest `hover:bg-hover`, and the page on the right
 as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink-muted` over a
 `border-line` rule. Pages:
 
@@ -340,7 +340,7 @@ and Fonts and density sections above hold every value.
 | `density.statusPopoverWidthPx` | `--tc-status-popover-width` | `w-status-popover`           | 360 px             | 360 px          | The Exports popover, fixed so it does not jump as its counts grow                  |
 | `density.iconPx`               | `--tc-icon`                 | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
 | `density.paletteWidthPx`       | `--tc-palette-width`        | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
-| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#dfe1e5`       | Selected palette and Services rows, the focused tree's selection                   |
+| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#d4e2ff`       | Selected palette and Services rows, the focused tree's selection                   |
 | `colors.success`               | `--tc-success`              | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                                     |
 | `colors.danger`                | `--tc-danger`               | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                                    |
 | `colors.panel`                 | `--tc-panel`                | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
@@ -699,7 +699,7 @@ holds the kind in `text-ink-muted` and the qualified name and comment; section t
 body scrolls inside the popover's maximum.
 
 The SQL Generator (`Code`) is a modal like the others, wider: the statements are a segmented radio
-group in a `border-line` frame, the chosen one `bg-selection`, the rest `hover:bg-raised`; the
+group in a `border-line` frame, the chosen one `bg-selection`, the rest `hover:bg-hover`; the
 preview is `h-60` on `bg-canvas`; Open in Console is the primary button.
 
 | Token (`appearance/themes.ts`) | CSS variable           | Tailwind               | Dark / comfortable | Light / compact | Used by                              |
@@ -721,7 +721,7 @@ Plan 011. An outcome is drawn in one of two sizes from `ui/Outcome.tsx`, on the 
 
 `ui/ListPicker.tsx` draws Query History and Open Closed Console as a modal like the others, wider:
 the title, a search field, a `listbox` of `h-row` options on `bg-canvas` in a `border-line` frame
-(the selected one `bg-selection`, the rest `hover:bg-raised`), the preview, then the buttons right
+(the selected one `bg-selection`, the rest `hover:bg-hover`), the preview, then the buttons right
 aligned with the primary last before Close and a destructive one (`Clear History…`, `Delete…`) in
 the danger style. A history row reads the outcome dot, the first line in `font-editor text-editor`,
 then `×3`, rows, duration and time in `text-ink-muted tabular-nums`; the preview is the read-only
@@ -735,7 +735,7 @@ console's row is `ConsoleIcon` in `text-ink-muted` and its name. The actions' ic
 | `density.pickerListHeightPx`   | `--tc-picker-list-height` | `h-picker-list` | 220 px             | 220 px          | The picker's list and its preview             |
 
 The Services tree reuses the Database tool window's rows (`h-row`, 16 px indent per level, a caret
-for expandable rows, `bg-selection` selected, `hover:bg-raised`). A datasource row is `DatabaseIcon`
+for expandable rows, `bg-selection` selected, `hover:bg-hover`). A datasource row is `DatabaseIcon`
 in `text-accent` (`text-danger` failed), the name and its connection state muted. A session row is
 the `Terminal` or `Table` glyph in `text-ink-muted`, a spinning `SpinnerIcon` in `text-accent`
 while running, the tab's title, its state
@@ -763,7 +763,7 @@ truncates, with the whole text as the tooltip; it indents 16 px per level with t
 as their content, right-aligned, empty for a value the database did not give. The Cost cell, or
 the Time cell when analysed, carries an `h-plan-bar` `bg-plan-bar` bar along its bottom edge, as
 wide as the node's share of the root's. The selected row is `bg-selection`, the rest
-`hover:bg-raised`. To the right a `w-plan-details` strip on `bg-panel` behind a `border-line` edge
+`hover:bg-hover`. To the right a `w-plan-details` strip on `bg-panel` behind a `border-line` edge
 lists the selected node: the operation in semibold with its target muted, then `Detail` and each
 property as a two-column list, names in `text-ink-muted`, values in `font-grid`, wrapping. Raw is
 the read-only `ui/SqlView.tsx` on `bg-canvas`, unhighlighted.

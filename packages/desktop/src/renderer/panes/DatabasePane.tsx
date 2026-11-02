@@ -87,7 +87,7 @@ import { themeOf, useIslands, useRowHeightPx, useSettings } from "@table-craft/d
 import { DatasourceGlyph, useBrandLogo, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { isRunningOn, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
-import { WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
+import { MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT, WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import {
   ACTION_ICONS,
@@ -237,7 +237,7 @@ function ToolbarButton({ actionId }: { readonly actionId: string }) {
         type="button"
         aria-label={action.title}
         disabled={!enabled}
-        className="press flex size-tab items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
+        className="press flex size-tab items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent"
         onClick={() => invoke(actionId)}
       >
         <Icon aria-hidden className="size-icon" />
@@ -270,13 +270,9 @@ function MenuItem({ actionId }: { readonly actionId: string }) {
   if (action === undefined) return null;
   const shortcut = shortcutOf(actionId);
   return (
-    <ContextMenu.Item
-      disabled={!enabled}
-      className="flex h-row cursor-default items-center justify-between gap-gap rounded px-gap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection"
-      onSelect={() => invoke(actionId)}
-    >
+    <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId)}>
       <span>{action.title}</span>
-      {shortcut === undefined ? null : <span className="text-ink-muted">{shortcut}</span>}
+      {shortcut === undefined ? null : <span className={MENU_SHORTCUT}>{shortcut}</span>}
     </ContextMenu.Item>
   );
 }
@@ -298,7 +294,7 @@ function MenuItems({ items }: { readonly items: readonly (string | null)[] }) {
   useSyncExternalStore(subscribeToActions, () => shownItems(items).join("\n"));
   return shownItems(items).map((actionId, index) =>
     actionId === null ? (
-      <ContextMenu.Separator key={`separator-${String(index)}`} className="my-1 h-px bg-line" />
+      <ContextMenu.Separator key={`separator-${String(index)}`} className={MENU_SEPARATOR} />
     ) : (
       <MenuItem key={actionId} actionId={actionId} />
     ),
@@ -500,7 +496,7 @@ function TreeRow({
                 : `calc(var(--spacing-pane-inset) + ${String(depth * INDENT_PX)}px)`,
           }}
           className={cn(
-            "flex h-row cursor-default items-center gap-cell pr-pane-inset whitespace-nowrap outline-none hover:bg-raised",
+            "flex h-row cursor-default items-center gap-cell pr-pane-inset whitespace-nowrap outline-none hover:bg-hover",
             // The filter row is as wide as the pane and pinned there: sized by its controls it
             // would widen the whole tree and let the pane scroll sideways off its own fields.
             node.kind === "keyFilter" ? "sticky left-0 w-[100cqw]" : "w-full",
@@ -574,7 +570,7 @@ function EmptyState() {
       <p>No data sources.</p>
       <button
         type="button"
-        className="rounded border border-line px-gap py-1 text-ink hover:bg-raised"
+        className="rounded border border-line px-gap py-1 text-ink hover:bg-hover"
         onClick={() => invoke(ACTION_IDS.newDatasource)}
       >
         New Data Source{shortcut === undefined ? "" : ` (${shortcut})`}

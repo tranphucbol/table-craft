@@ -242,7 +242,7 @@ function SnippetsEditor() {
                 disabled={disabled}
                 className={cn(
                   "flex w-full flex-col rounded px-cell py-1 text-left outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-60",
-                  snippet.id === draft?.id ? "bg-selection" : "hover:bg-raised",
+                  snippet.id === draft?.id ? "bg-selection" : "hover:bg-hover",
                 )}
                 onClick={() => invoke(SNIPPET_ACTION_IDS.select, snippet.id)}
               >

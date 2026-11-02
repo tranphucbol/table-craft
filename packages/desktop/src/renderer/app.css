@@ -21,6 +21,7 @@
   --color-edit-inserted: var(--tc-edit-inserted);
   --color-edit-deleted: var(--tc-edit-deleted);
   --color-selection: var(--tc-selection);
+  --color-hover: var(--tc-hover);
   --color-search-match: var(--tc-search-match);
   --color-key-icon: var(--tc-key-icon);
   --color-warning: var(--tc-warning);
@@ -147,6 +148,17 @@
   --tc-press-tint: color-mix(in oklab, var(--tc-ink) 14%, transparent);
 }
 
+/* A hovered control steps one tone above the surface it sits on. On a panel that step is `raised`;
+   on a raised menu or popover, `raised` is the surface itself and the hover would vanish, so those
+   surfaces carry `surface-raised` and their controls hover with `selection`, as their rows do. */
+:root {
+  --tc-hover: var(--tc-raised);
+}
+
+@utility surface-raised {
+  --tc-hover: var(--tc-selection);
+}
+
 @layer base {
   button:enabled {
     transition:
@@ -157,6 +169,13 @@
   button:enabled:active {
     box-shadow: inset 0 0 0 100vmax var(--tc-press-tint);
     transition-duration: 0s;
+  }
+
+  /* One keyboard focus ring in the theme's accent; Chromium's own differs per control and theme.
+     Fields and rows that mark focus themselves set `outline-none`, which a utility wins over this. */
+  :focus-visible {
+    outline: 2px solid var(--tc-accent);
+    outline-offset: -1px;
   }
 }
 

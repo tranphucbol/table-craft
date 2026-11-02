@@ -8,13 +8,20 @@ import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
+import {
+  POPOVER_BODY,
+  POPOVER_FOOTER,
+  POPOVER_HEADER,
+  POPOVER_PANEL,
+} from "@table-craft/desktop/renderer/ui/popoverParts.js";
 import { FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
+import { ProgressBar } from "@table-craft/desktop/renderer/ui/ProgressBar.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 
 export const TONE_CLASSES: Readonly<Record<UpdateButtonTone, string>> = {
   accent: `${FILLED_PRESS} bg-accent text-accent-ink`,
-  neutral: `${TEXT_PRESS} border border-line text-ink hover:bg-raised`,
-  danger: `${TEXT_PRESS} border border-danger text-danger hover:bg-raised`,
+  neutral: `${TEXT_PRESS} border border-line text-ink hover:bg-hover`,
+  danger: `${TEXT_PRESS} border border-danger text-danger hover:bg-hover`,
 };
 
 /** The popover's actions, primary first; each shows only while main's state allows it. */
@@ -46,23 +53,21 @@ function UpdatePopover({ anchor }: { readonly anchor: PopoverAnchor }) {
   const percent = state.phase === "downloading" ? (updateButton(state)?.percent ?? 0) : null;
   return (
     <Popover anchor={anchor} label="Update" testId="update-popover" onClose={() => useUpdate.getState().setOpen(false)}>
-      <div className="flex flex-col gap-gap p-gap">
-        <div className="font-semibold">{view.title}</div>
-        <div data-testid="update-versions" className="font-grid text-ink-muted">
-          {view.versions}
-          {view.size === null ? null : <span> · {view.size}</span>}
-        </div>
-        {percent === null ? null : (
-          <div className="h-1 w-full overflow-hidden rounded bg-panel" role="progressbar" aria-valuenow={percent}>
-            <div className="h-full bg-accent" style={{ width: `${String(percent)}%` }} />
+      <div className={POPOVER_PANEL}>
+        <div className={POPOVER_HEADER}>{view.title}</div>
+        <div className={POPOVER_BODY}>
+          <div data-testid="update-versions" className="font-grid text-ink-muted">
+            {view.versions}
+            {view.size === null ? null : <span> · {view.size}</span>}
           </div>
-        )}
-        {view.message === null ? null : (
-          <p data-testid="update-message" className="max-w-popover whitespace-normal wrap-anywhere text-ink-muted">
-            {view.message}
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-1">
+          {percent === null ? null : <ProgressBar percent={percent} className="w-full" />}
+          {view.message === null ? null : (
+            <p data-testid="update-message" className="whitespace-normal wrap-anywhere text-ink-muted">
+              {view.message}
+            </p>
+          )}
+        </div>
+        <div className={POPOVER_FOOTER}>
           {POPOVER_ACTIONS.map((id) => (
             <PopoverAction key={id} actionId={id} />
           ))}

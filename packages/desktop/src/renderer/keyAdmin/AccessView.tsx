@@ -161,7 +161,7 @@ export function AccessView({
                 <button
                   type="button"
                   aria-pressed={user?.name === item.name}
-                  className="h-row w-full rounded px-cell text-left hover:bg-raised aria-pressed:bg-selection"
+                  className="h-row w-full rounded px-cell text-left hover:bg-hover aria-pressed:bg-selection"
                   onClick={() => setSelected({ kind: "user", name: item.name })}
                 >
                   {item.name}
@@ -182,7 +182,7 @@ export function AccessView({
                 <button
                   type="button"
                   aria-pressed={role?.name === item.name}
-                  className="h-row w-full rounded px-cell text-left hover:bg-raised aria-pressed:bg-selection"
+                  className="h-row w-full rounded px-cell text-left hover:bg-hover aria-pressed:bg-selection"
                   onClick={() => setSelected({ kind: "role", name: item.name })}
                 >
                   {item.name}

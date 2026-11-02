@@ -198,7 +198,7 @@ export function TimeoutInfo({
         data-testid="mcp-timeout-info"
         data-tone={explanation.tone}
         className={cn(
-          "shrink-0 hover:bg-raised",
+          "shrink-0 hover:bg-hover",
           explanation.tone !== "unseen" && "rounded",
           TONE_CLASSES[explanation.tone],
         )}

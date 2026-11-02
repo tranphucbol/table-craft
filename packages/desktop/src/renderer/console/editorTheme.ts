@@ -51,10 +51,16 @@ const ERROR_UNDERLINE = "underline wavy var(--tc-danger)";
 const WARNING_UNDERLINE = "underline wavy var(--tc-warning)";
 const WEAK_UNDERLINE = "underline dotted var(--tc-ink-muted)";
 const INTENTIONS_MIN_WIDTH = "220px";
-const INTENTION_PADDING = "2px var(--tc-cell-padding)";
-const INTENTION_SEPARATOR_MARGIN = "2px 0";
 const TOOLTIP_ROW_GAP = "2px";
-const INTENTION_RADIUS = "3px";
+/** `ui/menu.ts`'s list: a 4 px inset round `rounded` rows, a row tall, so they nest in the popover. */
+const LIST_INSET = "4px";
+const LIST_ROW_RADIUS = "4px";
+const LIST_ROW_PADDING = "0 var(--tc-gap)";
+const LIST_SEPARATOR_MARGIN = "4px 0";
+/** Ten rows and the inset; CodeMirror's own `10em` shows five once a row is as tall as a menu's. */
+const COMPLETION_MAX_HEIGHT = `calc(var(--tc-row-height) * 10 + 2 * ${LIST_INSET})`;
+/** Tailwind's `shadow-lg`, which the window's own popovers and tooltips float on. */
+const FLOATING_SHADOW = "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)";
 const ERROR_UNDERLINE_OFFSET = "3px";
 const ERROR_DOT_SIZE = "7px";
 const ERROR_GUTTER_PADDING = "0 2px 0 4px";
@@ -177,7 +183,7 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
   [`.${INTENTIONS_CLASS}`]: {
     minWidth: INTENTIONS_MIN_WIDTH,
     maxWidth: ERROR_TOOLTIP_WIDTH,
-    padding: TOOLTIP_ROW_GAP,
+    padding: LIST_INSET,
     fontFamily: "var(--tc-font-ui)",
     fontSize: "var(--tc-font-ui-size)",
     outline: "none",
@@ -186,15 +192,22 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
     display: "flex",
     alignItems: "center",
     gap: GLYPH_GAP,
-    padding: INTENTION_PADDING,
-    borderRadius: INTENTION_RADIUS,
+    minHeight: "var(--tc-row-height)",
+    padding: LIST_ROW_PADDING,
+    borderRadius: LIST_ROW_RADIUS,
     whiteSpace: "nowrap",
     cursor: "default",
   },
   [`.${INTENTION_CLASS}[aria-selected=true]`]: { backgroundColor: "var(--tc-selection)" },
   [`.${INTENTION_GLYPH_CLASS}`]: { display: "inline-flex", flexShrink: "0" },
-  [`.${INTENTION_SEPARATOR_CLASS}`]: { margin: INTENTION_SEPARATOR_MARGIN, borderTop: "1px solid var(--tc-border)" },
-  [`.${INTENTION_EMPTY_CLASS}`]: { padding: INTENTION_PADDING, color: "var(--tc-ink-muted)" },
+  [`.${INTENTION_SEPARATOR_CLASS}`]: { margin: LIST_SEPARATOR_MARGIN, borderTop: "1px solid var(--tc-border)" },
+  [`.${INTENTION_EMPTY_CLASS}`]: {
+    display: "flex",
+    alignItems: "center",
+    minHeight: "var(--tc-row-height)",
+    padding: LIST_ROW_PADDING,
+    color: "var(--tc-ink-muted)",
+  },
   [`.${ERROR_TOOLTIP_CLASS}`]: {
     maxWidth: ERROR_TOOLTIP_WIDTH,
     padding: PANEL_PADDING,
@@ -223,17 +236,28 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
     backgroundColor: "var(--tc-raised)",
     border: "1px solid var(--tc-border)",
     borderRadius: "var(--tc-tooltip-radius)",
+    boxShadow: FLOATING_SHADOW,
     color: "var(--tc-ink)",
   },
   [`.cm-tooltip.cm-tooltip-autocomplete, .cm-tooltip.${INTENTIONS_CLASS}`]: {
     borderRadius: "var(--tc-popover-radius)",
   },
   ".cm-tooltip-autocomplete > ul": {
+    maxHeight: COMPLETION_MAX_HEIGHT,
+    padding: LIST_INSET,
     fontFamily: "var(--tc-font-editor)",
     fontSize: "var(--tc-font-editor-size)",
     borderRadius: "inherit",
   },
-  ".cm-tooltip-autocomplete > ul > li": { display: "flex", alignItems: "center", gap: GLYPH_GAP },
+  ".cm-tooltip-autocomplete > ul > li": {
+    display: "flex",
+    alignItems: "center",
+    gap: GLYPH_GAP,
+    height: "var(--tc-row-height)",
+    padding: LIST_ROW_PADDING,
+    borderRadius: LIST_ROW_RADIUS,
+    cursor: "default",
+  },
   ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--tc-selection)",
     color: "var(--tc-ink)",

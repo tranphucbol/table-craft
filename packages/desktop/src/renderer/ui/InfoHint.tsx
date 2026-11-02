@@ -32,7 +32,7 @@ export function InfoHint({
           aria-label={label}
           data-testid={testId}
           className={cn(
-            "flex shrink-0 items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink focus-visible:text-ink",
+            "flex shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink focus-visible:text-ink",
             className,
           )}
           // A click would close the tooltip; the hint stays up while the pointer is on it.

@@ -71,7 +71,7 @@ export function SqlGenerator({ request }: { readonly request: GeneratorRequest }
             tabIndex={choice.id === statement ? 0 : -1}
             className={cn(
               "h-row px-gap text-ink first:rounded-l last:rounded-r",
-              choice.id === statement ? "bg-selection" : "hover:bg-raised",
+              choice.id === statement ? "bg-selection" : "hover:bg-hover",
             )}
             onClick={() => setStatement(choice.id)}
           >

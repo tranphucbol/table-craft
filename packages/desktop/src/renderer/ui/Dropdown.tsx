@@ -53,7 +53,7 @@ function item({ option, at }: Indexed) {
       value={String(at)}
       data-value={option.value}
       disabled={option.disabled}
-      className="flex h-row cursor-default items-center gap-cell rounded-sm px-cell whitespace-nowrap outline-none data-disabled:text-ink-muted data-highlighted:bg-selection"
+      className="flex h-row cursor-default items-center gap-cell rounded px-gap whitespace-nowrap outline-none data-disabled:text-ink-muted data-highlighted:bg-selection"
     >
       <span className="flex size-icon shrink-0 items-center">
         <Primitive.ItemIndicator>
@@ -152,7 +152,7 @@ export function Dropdown({
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}
           className={cn(
-            "z-50 max-h-popover-height max-w-popover min-w-(--radix-select-trigger-width) overflow-hidden rounded-popover border border-line bg-raised text-ui text-ink shadow-lg outline-none",
+            "z-50 max-h-popover-height max-w-popover min-w-(--radix-select-trigger-width) overflow-hidden rounded-popover border border-line bg-raised surface-raised text-ui text-ink shadow-lg outline-none",
             SURFACE_MOTION,
           )}
         >
@@ -162,7 +162,7 @@ export function Dropdown({
                 <Fragment key={section.items[0]?.at}>{section.items.map(item)}</Fragment>
               ) : (
                 <Primitive.Group key={section.group}>
-                  <Primitive.Label className="flex h-row items-center px-cell text-ink-muted">
+                  <Primitive.Label className="flex h-row items-center px-gap text-ink-muted">
                     {section.group}
                   </Primitive.Label>
                   {section.items.map(item)}

@@ -28,7 +28,7 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SNIPPET_ACTION_IDS } from "@table-craft/desktop/renderer/actions/snippetActions.js";
-import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
+import { MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT, WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
@@ -95,9 +95,6 @@ const DIALECTS: Readonly<Record<string, SQLDialect>> = {
 
 export const EDITOR_LABEL = "SQL console";
 const FLASH_MS = 900;
-const EDITOR_MENU_ITEM =
-  "flex cursor-default items-center gap-gap rounded px-gap py-1 outline-none data-[highlighted]:bg-raised data-[disabled]:opacity-40";
-const CodeIcon = ACTION_ICONS.generate;
 /** CodeMirror's `Mod-Enter` inserts a blank line; here it is Run, which the registry owns. */
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
 
@@ -481,7 +478,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
       {findHost === null ? null : createPortal(<EditorFindBar host={findHost} />, findHost.dom)}
       <ContextMenu.Portal>
         <ContextMenu.Content
-          className="z-50 min-w-56 rounded-popover border border-line bg-panel p-1 text-ui text-ink shadow-lg"
+          className={WIDE_MENU_CONTENT}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             if (!useSnippetsDialog.getState().open) viewRef.current?.focus();
@@ -491,22 +488,22 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
             <ContextMenu.Item
               key={command}
               disabled={command !== "paste" && !hasSelection}
-              className={EDITOR_MENU_ITEM}
+              className={MENU_ITEM}
               onSelect={() => invoke(SNIPPET_ACTION_IDS[command])}
             >
               {command === "cut" ? "Cut" : command === "copy" ? "Copy" : "Paste"}
-              <span className="ml-auto text-ink-muted">
+              <span className={MENU_SHORTCUT}>
                 {formatChord(`Mod+${command === "cut" ? "X" : command === "copy" ? "C" : "V"}`, currentPlatform())}
               </span>
             </ContextMenu.Item>
           ))}
-          <ContextMenu.Separator className="my-1 h-px bg-line" />
+          <ContextMenu.Separator className={MENU_SEPARATOR} />
           <ContextMenu.Item
             disabled={!hasSelection}
-            className={EDITOR_MENU_ITEM}
+            className={MENU_ITEM}
             onSelect={() => invoke(SNIPPET_ACTION_IDS.importSelection)}
           >
-            <CodeIcon aria-hidden className="size-icon text-ink-muted" /> Import into Snippet…
+            Import into Snippet…
           </ContextMenu.Item>
         </ContextMenu.Content>
       </ContextMenu.Portal>

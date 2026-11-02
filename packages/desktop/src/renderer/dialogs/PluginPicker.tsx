@@ -14,7 +14,7 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 
 const ROW_CLASS =
-  "flex min-h-row w-full min-w-0 items-center gap-cell rounded px-gap py-1 text-left hover:bg-raised disabled:opacity-50";
+  "flex min-h-row w-full min-w-0 items-center gap-cell rounded px-gap py-1 text-left hover:bg-hover disabled:opacity-50";
 
 function DownloadRow({ entry, onDownload }: { readonly entry: CatalogPlugin; readonly onDownload: () => void }) {
   const DownloadIcon = ACTION_ICONS.download;

@@ -19,7 +19,7 @@ import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 
 const UNKNOWN_NAMESPACE = "—";
 const SWITCH_TOOLTIP = "Switch database or schema";
-const ROW_CLASS = "flex h-row cursor-default items-center gap-cell px-cell whitespace-nowrap";
+const ROW_CLASS = "flex h-row cursor-default items-center gap-cell rounded px-gap whitespace-nowrap";
 
 function pick(namespace: Namespace): void {
   void invoke(NAMESPACE_ACTION_IDS.switchNamespace, { path: namespace.path });
@@ -32,7 +32,11 @@ function Row({ row, selected, onHover }: { row: SwitcherRow; selected: boolean; 
       aria-selected={selected}
       aria-current={row.current}
       data-testid="namespace-switcher-option"
-      className={cn(ROW_CLASS, selected ? "bg-selection" : "hover:bg-panel", row.namespace.system && "text-ink-muted")}
+      className={cn(
+        ROW_CLASS,
+        selected ? "bg-selection" : "hover:bg-selection",
+        row.namespace.system && "text-ink-muted",
+      )}
       onMouseEnter={onHover}
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => pick(row.namespace)}
@@ -86,7 +90,7 @@ function SwitcherList({ session, anchor }: { readonly session: ConsoleSession; r
           onKeyDown={onKeyDown}
         />
       </div>
-      <div role="listbox" aria-label="Databases and schemas" className="min-h-0 flex-1 overflow-y-auto">
+      <div role="listbox" aria-label="Databases and schemas" className="min-h-0 flex-1 overflow-y-auto p-1">
         {groups.regular.map((row, index) => rowOf(row, index))}
         {groups.system.length > 0 && groups.regular.length > 0 ? (
           <div role="separator" className="my-1 border-t border-line" />
@@ -102,11 +106,11 @@ function SwitcherList({ session, anchor }: { readonly session: ConsoleSession; r
           </div>
         )}
       </div>
-      <div className="border-t border-line">
+      <div className="border-t border-line p-1">
         <button
           type="button"
           data-testid="namespace-switcher-refresh"
-          className={cn(ROW_CLASS, "w-full text-accent hover:bg-panel")}
+          className={cn(ROW_CLASS, "w-full text-accent hover:bg-selection")}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => void load(true)}
         >
@@ -152,7 +156,7 @@ export function NamespaceSwitcher({ consoleId, session }: { consoleId: string; s
           aria-disabled={blocked !== null}
           className={cn(
             "flex min-w-0 items-center gap-1 rounded px-1 text-ink",
-            blocked === null ? "hover:bg-raised" : "cursor-default opacity-50",
+            blocked === null ? "hover:bg-hover" : "cursor-default opacity-50",
           )}
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {

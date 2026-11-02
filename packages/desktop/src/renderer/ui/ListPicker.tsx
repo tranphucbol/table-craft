@@ -128,7 +128,7 @@ export function ListPicker<T>({
               aria-selected={at === index}
               className={cn(
                 "flex h-row cursor-default items-center gap-cell px-cell",
-                at === index ? "bg-selection" : "hover:bg-raised",
+                at === index ? "bg-selection" : "hover:bg-hover",
               )}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => setSelectedKey(keyOf(item))}

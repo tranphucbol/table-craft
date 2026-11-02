@@ -44,7 +44,7 @@ function OriginFilter({ origin, onOrigin }: { readonly origin: Origin; readonly 
           type="button"
           aria-pressed={id === origin}
           data-testid={`history-origin-${id}`}
-          className={cn("h-row px-cell", id === origin ? "bg-selection" : "hover:bg-raised")}
+          className={cn("h-row px-cell", id === origin ? "bg-selection" : "hover:bg-hover")}
           onClick={() => onOrigin(id)}
         >
           {ORIGIN_LABELS[id]}

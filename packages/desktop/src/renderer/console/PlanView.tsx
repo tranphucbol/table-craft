@@ -170,7 +170,7 @@ function Tree({ consoleId, plan }: { readonly consoleId: string; readonly plan: 
                 aria-selected={isSelected}
                 tabIndex={isSelected || (plan.selected === null && row.key === rows[0]?.key) ? 0 : -1}
                 className={cn(
-                  "h-row cursor-default outline-none hover:bg-raised",
+                  "h-row cursor-default outline-none hover:bg-hover",
                   isSelected && "bg-selection hover:bg-selection",
                 )}
                 onMouseDown={() => select(row.key)}
