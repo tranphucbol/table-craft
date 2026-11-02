@@ -240,14 +240,16 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
   [`.cm-tooltip.cm-tooltip-autocomplete, .cm-tooltip.${INTENTIONS_CLASS}`]: {
     borderRadius: "var(--tc-popover-radius)",
   },
-  ".cm-tooltip-autocomplete > ul": {
+  // CodeMirror's base theme styles `.cm-tooltip.cm-tooltip-autocomplete > ul` (10em, no padding);
+  // a shorter selector loses to it.
+  ".cm-tooltip.cm-tooltip-autocomplete > ul": {
     maxHeight: COMPLETION_MAX_HEIGHT,
     padding: LIST_INSET,
     fontFamily: "var(--tc-font-editor)",
     fontSize: "var(--tc-font-editor-size)",
     borderRadius: "inherit",
   },
-  ".cm-tooltip-autocomplete > ul > li": {
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
     display: "flex",
     alignItems: "center",
     gap: GLYPH_GAP,
@@ -256,7 +258,7 @@ export const EDITOR_THEME_SPEC: ThemeSpec = {
     borderRadius: LIST_ROW_RADIUS,
     cursor: "default",
   },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
     backgroundColor: "var(--tc-selection)",
     color: "var(--tc-ink)",
   },
