@@ -1,3 +1,4 @@
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import { useEffect } from "react";
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
@@ -18,11 +19,11 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { OutcomeGlyph } from "@table-craft/desktop/renderer/ui/Outcome.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
+import { POPOVER_FOOTER, POPOVER_HEADER, POPOVER_PANEL } from "@table-craft/desktop/renderer/ui/popoverParts.js";
 import { ProgressBar } from "@table-craft/desktop/renderer/ui/ProgressBar.js";
 import { useClock } from "@table-craft/desktop/renderer/ui/useClock.js";
 
-const ROW_BUTTON =
-  "press flex size-row shrink-0 items-center justify-center rounded text-ink-muted hover:bg-line hover:text-ink disabled:opacity-50";
+const ROW_BUTTON = ICON_BUTTON;
 /** Cancel ends work, so it reads red while it can be pressed, as the console's Cancel does. */
 const CANCEL_BUTTON = cn(ROW_BUTTON, "enabled:text-danger");
 const CANCELLING_LABEL = "Cancelling…";
@@ -80,7 +81,7 @@ function ExportRow({ entry, now }: { readonly entry: ExportEntry; readonly now: 
     <li
       data-testid="exports-popover-row"
       data-state={cancelling ? "cancelling" : task.state}
-      className="flex min-w-0 flex-col gap-1 border-b border-line p-gap"
+      className="flex min-w-0 flex-col gap-1 border-b border-line p-gap last:border-b-0"
     >
       <div className="flex min-w-0 items-center gap-gap">
         <OutcomeGlyph outcome={EXPORT_OUTCOME[task.state]} />
@@ -158,10 +159,11 @@ export function ExportsPopover({ anchor }: { readonly anchor: PopoverAnchor }) {
       anchor={anchor}
       label="Exports"
       testId="exports-popover"
+      focusSelf
       onClose={() => useExports.getState().setPopover(false)}
     >
-      <div className="flex min-h-0 w-status-popover max-w-full min-w-0 flex-col">
-        <div className="border-b border-line p-gap font-semibold">{summaryOf(entries, running)}</div>
+      <div className={POPOVER_PANEL}>
+        <div className={POPOVER_HEADER}>{summaryOf(entries, running)}</div>
         {rows.length === 0 ? null : (
           <ul aria-label="Exports" className="flex min-h-0 min-w-0 flex-col overflow-y-auto">
             {rows.map((entry) => (
@@ -169,7 +171,7 @@ export function ExportsPopover({ anchor }: { readonly anchor: PopoverAnchor }) {
             ))}
           </ul>
         )}
-        <div className="flex items-center gap-1 px-gap py-cell">
+        <div className={POPOVER_FOOTER}>
           {running >= CANCEL_ALL_MIN ? <ActionButton actionId={EXPORT_ACTION_IDS.cancelAll} tone="danger" /> : null}
           <span className="ml-auto">
             <ActionButton actionId={ACTION_IDS.toggleServices} />

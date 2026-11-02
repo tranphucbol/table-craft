@@ -13,9 +13,16 @@ import {
 import { approvalWaitText } from "@table-craft/desktop/renderer/model/format.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
+import { Button } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
+import {
+  POPOVER_BODY,
+  POPOVER_FOOTER,
+  POPOVER_HEADER,
+  POPOVER_PANEL,
+} from "@table-craft/desktop/renderer/ui/popoverParts.js";
 import type {
   McpCallView,
   McpClientView,
@@ -23,13 +30,11 @@ import type {
   McpPendingClient,
 } from "@table-craft/desktop/settings/mcp.js";
 
-const ROW_BUTTON = "h-row shrink-0 rounded border border-line px-gap hover:bg-raised";
-
 const TONE_CLASSES: Readonly<Record<McpChipTone, string>> = {
-  off: "text-ink-muted hover:bg-raised",
-  running: "text-ink hover:bg-raised",
-  waiting: "border border-warning text-warning hover:bg-raised",
-  failed: "border border-danger text-danger hover:bg-raised",
+  off: "text-ink-muted hover:bg-hover",
+  running: "text-ink hover:bg-hover",
+  waiting: "border border-warning text-warning hover:bg-hover",
+  failed: "border border-danger text-danger hover:bg-hover",
 };
 
 const DOT_CLASSES: Readonly<Record<McpChipTone, string>> = {
@@ -73,9 +78,7 @@ function ClientRow({ client, now }: { readonly client: McpClientView; readonly n
           <LastCall call={client.lastCall} />
         )}
       </div>
-      <button type="button" className={ROW_BUTTON} onClick={() => invoke(MCP_ACTION_IDS.disconnect, client.id)}>
-        Disconnect
-      </button>
+      <Button onClick={() => invoke(MCP_ACTION_IDS.disconnect, client.id)}>Disconnect</Button>
     </li>
   );
 }
@@ -92,17 +95,12 @@ function PendingClientRow({ client, now }: { readonly client: McpPendingClient; 
         </span>
         <span className="text-ink-muted">Refused automatically in {countdown(client.deadline, now)}</span>
       </div>
-      <button type="button" data-testid="mcp-block-client" className={ROW_BUTTON} onClick={() => decide(false)}>
+      <Button data-testid="mcp-block-client" onClick={() => decide(false)}>
         Block
-      </button>
-      <button
-        type="button"
-        data-testid="mcp-allow-client"
-        className="h-row shrink-0 rounded bg-accent px-gap text-accent-ink"
-        onClick={() => decide(true)}
-      >
+      </Button>
+      <Button variant="primary" data-testid="mcp-allow-client" onClick={() => decide(true)}>
         Allow
-      </button>
+      </Button>
     </li>
   );
 }
@@ -111,45 +109,52 @@ function McpPopover({ anchor }: { readonly anchor: PopoverAnchor }) {
   const status = useMcp((state) => state.status);
   const waiting = status.approvals.length;
   const now = useClock();
+  const hasBody =
+    status.message !== null || waiting > 0 || status.pendingClients.length > 0 || status.clients.length > 0;
   return (
     <Popover
       anchor={anchor}
       label="MCP server"
       testId="mcp-popover"
+      focusSelf
       onClose={() => useMcp.getState().setPopover(false)}
     >
-      <div className="flex min-w-0 flex-col gap-gap p-gap">
-        <div className="font-semibold">{mcpStatusText(status)}</div>
-        {status.message === null ? null : (
-          <p className="max-w-popover whitespace-normal wrap-anywhere text-danger">{status.message}</p>
-        )}
-        {waiting === 0 ? null : (
-          <button
-            type="button"
-            data-testid="mcp-review"
-            className="h-row rounded border border-warning px-gap text-left text-warning hover:bg-raised"
-            onClick={() => invoke(MCP_ACTION_IDS.approvals)}
-          >
-            {waiting === 1
-              ? "1 agent request is waiting: review"
-              : `${String(waiting)} agent requests are waiting: review`}
-          </button>
-        )}
-        {status.pendingClients.length === 0 ? null : (
-          <ul aria-label="Clients asking to connect" className="flex min-w-0 flex-col gap-cell">
-            {status.pendingClients.map((client) => (
-              <PendingClientRow key={client.name} client={client} now={now} />
-            ))}
-          </ul>
-        )}
-        {status.clients.length === 0 ? null : (
-          <ul aria-label="Connected clients" className="flex min-w-0 flex-col gap-cell">
-            {status.clients.map((client) => (
-              <ClientRow key={client.id} client={client} now={now} />
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap items-center gap-1">
+      <div className={POPOVER_PANEL}>
+        <div className={POPOVER_HEADER}>{mcpStatusText(status)}</div>
+        {hasBody ? (
+          <div className={POPOVER_BODY}>
+            {status.message === null ? null : (
+              <p className="whitespace-normal wrap-anywhere text-danger">{status.message}</p>
+            )}
+            {waiting === 0 ? null : (
+              <Button
+                variant="warning"
+                data-testid="mcp-review"
+                className="text-left"
+                onClick={() => invoke(MCP_ACTION_IDS.approvals)}
+              >
+                {waiting === 1
+                  ? "1 agent request is waiting: review"
+                  : `${String(waiting)} agent requests are waiting: review`}
+              </Button>
+            )}
+            {status.pendingClients.length === 0 ? null : (
+              <ul aria-label="Clients asking to connect" className="flex min-w-0 flex-col gap-cell">
+                {status.pendingClients.map((client) => (
+                  <PendingClientRow key={client.name} client={client} now={now} />
+                ))}
+              </ul>
+            )}
+            {status.clients.length === 0 ? null : (
+              <ul aria-label="Connected clients" className="flex min-w-0 flex-col gap-cell">
+                {status.clients.map((client) => (
+                  <ClientRow key={client.id} client={client} now={now} />
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
+        <div className={POPOVER_FOOTER}>
           {status.state === "running" ? null : <ActionButton actionId={MCP_ACTION_IDS.toggle} />}
           <PopoverAction actionId={MCP_ACTION_IDS.pause} />
           <PopoverAction actionId={MCP_ACTION_IDS.resume} />

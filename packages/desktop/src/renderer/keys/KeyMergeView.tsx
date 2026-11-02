@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { buttonClass } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { diffText } from "@table-craft/desktop/renderer/model/keyDiff.js";
@@ -96,21 +97,21 @@ export function KeyMergeView({
               </span>
               <button
                 type="button"
-                className="rounded px-cell hover:bg-raised disabled:opacity-50"
+                className={buttonClass()}
                 disabled={merge.manual || !editable}
                 title={conflict.theirs}
                 onClick={() => void invoke(KEY_ACTION_IDS.chooseMerge, { path: conflict.path, side: "theirs" })}
               >
-                Use theirs
+                Use Theirs
               </button>
               <button
                 type="button"
-                className="rounded px-cell hover:bg-raised disabled:opacity-50"
+                className={buttonClass()}
                 disabled={merge.manual || !editable}
                 title={conflict.yours}
                 onClick={() => void invoke(KEY_ACTION_IDS.chooseMerge, { path: conflict.path, side: "yours" })}
               >
-                Use yours
+                Use Yours
               </button>
               <span className="w-full break-all font-editor text-ink-muted">
                 Theirs: {conflict.theirs} · Yours: {conflict.yours}

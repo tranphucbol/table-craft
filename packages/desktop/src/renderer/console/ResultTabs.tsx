@@ -49,7 +49,7 @@ function TabButton({
       className={cn(
         "flex h-full shrink-0 cursor-default items-center gap-1 border-r border-b-2 border-r-line px-gap",
         TAB_FOCUS_RING,
-        selected ? "border-b-accent bg-canvas text-ink" : "border-b-transparent text-ink-muted hover:bg-raised",
+        selected ? "border-b-accent bg-canvas text-ink" : "border-b-transparent text-ink-muted hover:bg-hover",
       )}
       onMouseDown={onSelect}
       onKeyDown={(event) => {

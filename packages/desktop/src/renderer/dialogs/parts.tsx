@@ -1,4 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from "react";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
@@ -9,50 +10,71 @@ import { DIALOG_MOTION, OVERLAY_MOTION } from "@table-craft/desktop/renderer/ui/
 import { FILLED_DANGER_PRESS, FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
 export const OVERLAY_CLASS = `fixed inset-0 z-40 bg-canvas/60 ${OVERLAY_MOTION}`;
-export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-lg border border-line bg-panel text-ui text-ink shadow-2xl outline-none ${DIALOG_MOTION}`;
+export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-dialog border border-line bg-panel text-ui text-ink shadow-dialog outline-none ${DIALOG_MOTION}`;
 export const INPUT_CLASS = FIELD_CLASS;
 
-type ButtonVariant = "primary" | "secondary" | "danger" | "dangerOutline";
+type ButtonVariant = "primary" | "secondary" | "warning" | "danger" | "dangerOutline";
 
 export const BUTTON_CLASS: Readonly<Record<ButtonVariant, string>> = {
   primary: `${FILLED_PRESS} bg-accent text-accent-ink`,
-  secondary: `${TEXT_PRESS} border border-line text-ink hover:bg-raised`,
+  secondary: `${TEXT_PRESS} border border-line text-ink hover:bg-hover`,
+  warning: `${TEXT_PRESS} border border-warning text-warning hover:bg-hover`,
   danger: `${FILLED_DANGER_PRESS} bg-danger text-accent-ink`,
   dangerOutline: `${TEXT_PRESS} border border-danger bg-raised text-danger enabled:hover:bg-danger/10 disabled:cursor-not-allowed`,
 };
+
+/** A dialog button's classes, for a control that must render its own element (a Radix trigger). */
+export function buttonClass(variant: ButtonVariant = "secondary"): string {
+  return cn("h-row shrink-0 rounded px-gap", DISABLED_CLASS, BUTTON_CLASS[variant]);
+}
 
 export function Button({
   variant = "secondary",
   className,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { readonly variant?: ButtonVariant }) {
+  return <button type="button" className={cn(buttonClass(variant), className)} {...props} />;
+}
+
+/** How every disabled control dims; fields, buttons and icon buttons alike. */
+export const DISABLED_CLASS = "disabled:opacity-50";
+
+/**
+ * A big dialog's title bar: the title over a rule, with the X at its right end (plan 130 decision
+ * 14). Big dialogs (`h-dialog-height`) take it; small ones put their title inline and close with
+ * Escape or their footer.
+ */
+export function DialogHeader({ title, dialog }: { readonly title: ReactNode; readonly dialog: string }) {
   return (
-    <button
-      type="button"
-      className={cn(
-        "h-row shrink-0 rounded px-gap",
-        variant === "dangerOutline" ? "disabled:opacity-40" : "disabled:opacity-50",
-        BUTTON_CLASS[variant],
-        className,
-      )}
-      {...props}
-    />
+    <div className="flex h-tab shrink-0 items-center gap-gap border-b border-line pr-1 pl-gap">
+      <Dialog.Title className="min-w-0 flex-1 truncate font-semibold">{title}</Dialog.Title>
+      <Dialog.Close aria-label={`Close ${dialog}`} title={`Close ${dialog}`} className={ICON_BUTTON}>
+        <CloseIcon aria-hidden className="size-icon" />
+      </Dialog.Close>
+    </div>
   );
 }
 
-/** The X in a big dialog's top-right corner, over its title row (plan 130 decision 14). */
-export function DialogCloseButton({ dialog }: { readonly dialog: string }) {
+/**
+ * A dialog's button row. `start` holds actions on the dialog's content (Test Connection…,
+ * Clear…), left-aligned; `children` are the closing buttons in this order: Cancel or Close, then
+ * Apply where it applies, then the primary rightmost, as macOS and the JetBrains IDEs order them.
+ */
+export function DialogFooter({
+  start,
+  className,
+  children,
+}: {
+  readonly start?: ReactNode;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
   return (
-    <Dialog.Close
-      aria-label={`Close ${dialog}`}
-      title={`Close ${dialog}`}
-      className={cn(
-        "absolute top-cell right-gap rounded p-0.5 text-ink-muted hover:bg-raised hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
-        TEXT_PRESS,
-      )}
-    >
-      <CloseIcon aria-hidden className="size-icon" />
-    </Dialog.Close>
+    <div className={cn("flex shrink-0 items-center gap-gap", className)}>
+      {start}
+      <span className="flex-1" />
+      {children}
+    </div>
   );
 }
 

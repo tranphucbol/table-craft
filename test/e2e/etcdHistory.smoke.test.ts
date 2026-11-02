@@ -257,7 +257,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("etcd History, Restore and Me
           expect((await fixture.current()).value).toBe(RACED);
           expect(await merge.getByRole("button", { name: "Save Merged", exact: true }).isEnabled()).toBe(false);
           await captureWindow(page, "15-merge-repeated-conflict-result-retained");
-          const useYours = merge.getByRole("button", { name: "Use yours", exact: true });
+          const useYours = merge.getByRole("button", { name: "Use Yours", exact: true });
           const conflicts = await useYours.count();
           expect(conflicts).toBeGreaterThan(0);
           expect(conflicts).toBeLessThanOrEqual(MAX_MERGE_CONFLICTS);
@@ -307,7 +307,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("etcd History, Restore and Me
           expect(await save.isEnabled()).toBe(false);
           await captureWindow(page, "19-merge-deleted-by-theirs");
 
-          await merge.getByRole("button", { name: "Use yours", exact: true }).first().click();
+          await merge.getByRole("button", { name: "Use Yours", exact: true }).first().click();
           await expect.poll(() => save.isEnabled()).toBe(true);
           await fixture.save(RACED);
           await save.click();
@@ -319,7 +319,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("etcd History, Restore and Me
           expect(await save.isEnabled()).toBe(false);
           await captureWindow(page, "20-merge-recreated-differently");
 
-          const useYours = merge.getByRole("button", { name: "Use yours", exact: true });
+          const useYours = merge.getByRole("button", { name: "Use Yours", exact: true });
           const conflicts = await useYours.count();
           expect(conflicts).toBeGreaterThan(0);
           expect(conflicts).toBeLessThanOrEqual(MAX_MERGE_CONFLICTS);

@@ -1,3 +1,5 @@
+import { FIELD_CLASS } from "@table-craft/desktop/renderer/ui/fieldClasses.js";
+import { TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 import type {
   CommandTransaction,
   CommandTransactionCompare,
@@ -22,8 +24,7 @@ import {
   newOperation,
 } from "./model.js";
 
-const FIELD =
-  "h-row min-w-0 rounded border border-line bg-canvas px-cell text-ink outline-none focus:border-accent disabled:opacity-50";
+const FIELD = FIELD_CLASS;
 const SELECT_CLASS = "max-w-full shrink-0";
 const ENCODING_OPTIONS: readonly DropdownOption[] = [
   { value: "text", label: "Text" },
@@ -55,7 +56,7 @@ function operationOptions(depth: number): readonly DropdownOption[] {
   ];
 }
 
-const BUTTON = "rounded px-cell py-1 text-ink-muted hover:bg-raised hover:text-ink disabled:opacity-40";
+const BUTTON = `${TEXT_PRESS} h-row rounded px-cell text-ink-muted hover:bg-hover hover:text-ink disabled:opacity-50`;
 
 function BytesInput({
   label,
@@ -296,7 +297,7 @@ function TransactionRows({
       <section aria-label="If all are true" className="min-w-0 space-y-1">
         <h3 className="font-semibold text-ink-muted">If all are true</h3>
         {value.compare.map((compare, index) => (
-          <div key={index} className="rounded border border-line bg-panel p-cell">
+          <div key={index} className="rounded bg-panel p-cell">
             <CompareRow
               value={compare}
               change={(next) =>
@@ -316,14 +317,14 @@ function TransactionRows({
           className={BUTTON}
           onClick={() => change({ ...value, compare: [...value.compare, newCompare()] })}
         >
-          + Add check
+          + Add Check
         </button>
       </section>
       {(["success", "failure"] as const).map((branch) => (
         <section key={branch} aria-label={branch === "success" ? "Then" : "Else"} className="min-w-0 space-y-1">
           <h3 className="font-semibold text-ink-muted">{branch === "success" ? "Then" : "Else"}</h3>
           {value[branch].map((operation, index) => (
-            <div key={index} className="rounded border border-line bg-panel p-cell">
+            <div key={index} className="rounded bg-panel p-cell">
               <OperationRow
                 operation={operation}
                 depth={depth}
@@ -344,7 +345,7 @@ function TransactionRows({
             className={BUTTON}
             onClick={() => change({ ...value, [branch]: [...value[branch], newOperation("get")] })}
           >
-            + Add operation
+            + Add Operation
           </button>
         </section>
       ))}
@@ -362,7 +363,7 @@ export function TransactionBuilder({ consoleId }: { readonly consoleId: string }
       className="max-h-dialog-height shrink-0 space-y-gap overflow-auto border-b border-line bg-canvas p-gap text-ui"
     >
       <header className="flex flex-wrap items-center gap-gap">
-        <h2 className="font-semibold">Txn Builder</h2>
+        <h2 className="font-semibold">Transaction Builder</h2>
         <span
           className="mr-auto text-ink-muted"
           title="Counts checks and operations across both branches and nested transactions. This is not a measured server setting."

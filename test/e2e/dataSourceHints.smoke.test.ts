@@ -45,7 +45,7 @@ describe.runIf(SMOKE_ENABLED)("Data Sources form scroll and hints", () => {
     await setWindowSize(running.app, size);
     const { page } = running;
     await toolWindow(page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
-    await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).click();
+    await toolWindow(page, "Database").getByRole("button", { name: "New Data Source…", exact: true }).first().click();
     await dataSourcesDialog(page)
       .getByRole("list", { name: "Database kinds" })
       .getByRole("button", { name: kind })

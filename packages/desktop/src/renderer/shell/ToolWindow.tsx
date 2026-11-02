@@ -1,3 +1,4 @@
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
 import type { ReactNode } from "react";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { invoke, useFirstEnabledAction } from "@table-craft/desktop/renderer/actions/index.js";
@@ -38,7 +39,7 @@ export function ToolWindow({ id, title, toggleActionId, switchingActions, childr
           <button
             type="button"
             aria-label={`Hide ${title}`}
-            className="flex size-row items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink"
+            className={ICON_BUTTON}
             onClick={() => invoke(toggleActionId)}
           >
             <HideIcon aria-hidden className="size-icon" />

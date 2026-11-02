@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_THEMES,
   COMPACT_DENSITY,
+  ELEVATION,
   frameColors,
   type Appearance,
   type DensityId,
+  type Theme,
   type WindowStyle,
 } from "@table-craft/desktop/appearance/themes.js";
 import { appearanceVariables } from "@table-craft/desktop/renderer/appearance/apply.js";
@@ -172,5 +174,86 @@ describe("island variables", () => {
       "--tc-pane-inset": `${String(COMPACT_DENSITY.gapPx)}px`,
       "--tc-tool-header-height": `${String(COMPACT_DENSITY.rowHeightPx)}px`,
     });
+  });
+});
+
+const DENSITY_IDS: readonly DensityId[] = ["comfortable", "compact"];
+const WINDOW_STYLES: readonly WindowStyle[] = ["islands", "classic"];
+
+function radiiOf(windowStyle: WindowStyle, density: DensityId) {
+  const variables = appearanceVariables(
+    appearanceOf(withWindowStyle(windowStyle, density), BUILT_IN_THEMES.dark, NO_PREFERENCE),
+  );
+  const px = (name: string) => Number.parseFloat(variables[name] ?? "");
+  return {
+    dialog: px("--tc-dialog-radius"),
+    popover: px("--tc-popover-radius"),
+    tooltip: px("--tc-tooltip-radius"),
+  };
+}
+
+describe("floating surface radii", () => {
+  it("givenIslands_whenVariablesBuilt_thenDialogRadiusIsTheIslandRadius", () => {
+    expect(radiiOf("islands", "comfortable").dialog).toBe(10);
+    expect(radiiOf("islands", "compact").dialog).toBe(8);
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenDialogRadiusStaysEight", () => {
+    for (const density of DENSITY_IDS) expect(radiiOf("classic", density).dialog).toBe(8);
+  });
+
+  it("givenIslands_whenVariablesBuilt_thenPopoverRadiusIsEightAndTooltipFour", () => {
+    for (const density of DENSITY_IDS) {
+      expect(radiiOf("islands", density)).toMatchObject({ popover: 8, tooltip: 4 });
+    }
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenPopoverAndTooltipRadiiStayFour", () => {
+    for (const density of DENSITY_IDS) {
+      expect(radiiOf("classic", density)).toMatchObject({ popover: 4, tooltip: 4 });
+    }
+  });
+
+  it("givenEveryDensityAndWindowStyle_whenVariablesBuilt_thenDialogNeverRoundsLessThanPopoverOrPopoverLessThanTooltip", () => {
+    for (const windowStyle of WINDOW_STYLES) {
+      for (const density of DENSITY_IDS) {
+        const { dialog, popover, tooltip } = radiiOf(windowStyle, density);
+        expect(dialog).toBeGreaterThanOrEqual(popover);
+        expect(popover).toBeGreaterThanOrEqual(tooltip);
+      }
+    }
+  });
+});
+
+function shadowsOf(theme: Theme) {
+  const variables = appearanceVariables(appearanceOf(DEFAULT_SETTINGS, theme, NO_PREFERENCE));
+  return { popover: variables["--tc-popover-shadow"], dialog: variables["--tc-dialog-shadow"] };
+}
+
+/** The darkest layer's alpha: what decides whether the shadow shows on the canvas. */
+function peakAlpha(shadow: string | undefined): number {
+  return Math.max(...[...(shadow ?? "").matchAll(/\/ ([\d.]+)\)/g)].map(([, alpha]) => Number(alpha)));
+}
+
+describe("floating surface shadows", () => {
+  it("givenEachScheme_whenVariablesBuilt_thenShadowsAreThatSchemesElevation", () => {
+    expect(shadowsOf(BUILT_IN_THEMES.light)).toEqual(ELEVATION.light);
+    expect(shadowsOf(BUILT_IN_THEMES.dark)).toEqual(ELEVATION.dark);
+    expect(shadowsOf(BUILT_IN_THEMES.highContrast)).toEqual(ELEVATION.dark);
+  });
+
+  it("givenDarkAndLight_whenVariablesBuilt_thenDarkCastsTheDarkerShadow", () => {
+    const dark = shadowsOf(BUILT_IN_THEMES.dark);
+    const light = shadowsOf(BUILT_IN_THEMES.light);
+
+    expect(peakAlpha(dark.popover)).toBeGreaterThan(peakAlpha(light.popover));
+    expect(peakAlpha(dark.dialog)).toBeGreaterThan(peakAlpha(light.dialog));
+  });
+
+  it("givenEachScheme_whenVariablesBuilt_thenADialogCastsDarkerThanAPopover", () => {
+    for (const theme of [BUILT_IN_THEMES.light, BUILT_IN_THEMES.dark]) {
+      const { popover, dialog } = shadowsOf(theme);
+      expect(peakAlpha(dialog)).toBeGreaterThan(peakAlpha(popover));
+    }
   });
 });

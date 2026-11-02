@@ -325,7 +325,7 @@ mediaSuite("README recent feature media", () => {
     },
     setup: () => Promise.resolve(),
     run: async ({ page }) => {
-      await clickVisibly(page, toolWindow(page, "Database").getByRole("button", { name: "New Data Source…" }));
+      await clickVisibly(page, toolWindow(page, "Database").getByRole("button", { name: "New Data Source…" }).first());
       const kinds = dataSourcesDialog(page).getByRole("list", { name: "Database kinds" });
       const download = kinds.locator(`button[data-download="${POSTGRES}"]`);
       await expect.poll(() => download.textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toMatch(/Download \(about .+\)/);

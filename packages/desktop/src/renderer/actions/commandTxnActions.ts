@@ -22,7 +22,7 @@ function available(context: ActionContext): boolean {
 export const COMMAND_TXN_ACTIONS: readonly AnyAction[] = [
   defineAction({
     id: COMMAND_TXN_ACTION_IDS.toggle,
-    title: "Txn Builder",
+    title: "Transaction Builder",
     category: "Console",
     icon: "generate",
     tabKind: "console",

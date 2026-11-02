@@ -3,7 +3,13 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import type { Namespace } from "@table-craft/desktop/engine/protocol.js";
 import { setShownNamespaces } from "@table-craft/desktop/renderer/actions/datasourceCommands.js";
-import { Button, Check, CONTENT_CLASS, OVERLAY_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import {
+  Button,
+  Check,
+  CONTENT_CLASS,
+  DialogHeader,
+  OVERLAY_CLASS,
+} from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { EMPTY_CATALOG, topLevelNamespaces } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import {
   matchingNamespaces,
@@ -22,7 +28,7 @@ import { steppedIndex } from "@table-craft/desktop/renderer/ui/ListPicker.js";
 
 const SEARCH_FIELD_ID = "manage-shown-schemas-search";
 const ROW_CHECKBOX = "input[type=checkbox]:not(:disabled)";
-const BADGE_CLASS = "shrink-0 rounded-sm bg-raised px-1 text-ink-muted";
+const BADGE_CLASS = "shrink-0 rounded bg-raised px-1 text-ink-muted";
 
 function Row({
   namespace,
@@ -42,7 +48,7 @@ function Row({
     <li
       className={cn(
         "flex h-row items-center gap-cell px-cell has-[:focus-visible]:bg-selection",
-        all ? "text-ink-muted" : "hover:bg-raised",
+        all ? "text-ink-muted" : "hover:bg-hover",
       )}
     >
       <label className="flex h-full min-w-0 flex-1 items-center gap-cell">
@@ -162,9 +168,7 @@ function Editor({ view }: { readonly view: DatasourceView }) {
         if (!noneSelected && !saving) void save();
       }}
     >
-      <Dialog.Title className="shrink-0 border-b border-line px-gap py-cell font-semibold">
-        Manage Shown Schemas — {view.name}
-      </Dialog.Title>
+      <DialogHeader title={`Manage Shown Schemas — ${view.name}`} dialog="Manage Shown Schemas" />
       <div className="flex min-h-0 flex-1 flex-col gap-cell p-gap">
         <div className="flex h-row items-center gap-cell rounded border border-line bg-canvas px-cell focus-within:border-accent">
           <SearchIcon aria-hidden className="size-icon shrink-0 text-ink-muted" />

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ClusterStatus } from "@table-craft/desktop/engine/protocol.js";
 import { memberLag, removalBlocked, type AdminData, type AdminView } from "./store.js";
-import { CELL, CommandButton, Fact, INPUT } from "./controls.js";
+import { BUTTON, CELL, CommandButton, Fact, INPUT } from "./controls.js";
 import { TaskRows } from "./TaskRows.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
@@ -208,7 +208,7 @@ export function ClusterView({
       ) : null}
       {view === "maintenance" ? (
         <div className="grid gap-gap p-gap lg:grid-cols-2">
-          <section className="rounded border border-line bg-panel p-gap">
+          <section className="rounded bg-panel p-gap">
             <h3 className="pb-gap font-semibold">Compact cluster history</h3>
             <p className="pb-gap text-ink-muted">
               Permanent, global history removal. Current revision {current}. Last compaction is unknown until
@@ -219,10 +219,10 @@ export function ClusterView({
                 <button
                   key={String(keep)}
                   type="button"
-                  className="h-row rounded border border-line px-cell hover:bg-raised"
+                  className={BUTTON}
                   onClick={() => setRevision(String(BigInt(current) > keep ? BigInt(current) - keep : 1n))}
                 >
-                  Keep last {String(keep)}
+                  Keep Last {String(keep)}
                 </button>
               ))}
             </div>
@@ -249,7 +249,7 @@ export function ClusterView({
               Compact History…
             </CommandButton>
           </section>
-          <section className="rounded border border-line bg-panel p-gap">
+          <section className="rounded bg-panel p-gap">
             <h3 className="pb-gap font-semibold">Defragment</h3>
             <p className="pb-gap text-warning">
               A member blocks reads and writes while it defragments. Only configured endpoints run, sequentially,
@@ -268,7 +268,7 @@ export function ClusterView({
               Defragment Configured Members…
             </CommandButton>
           </section>
-          <section className="rounded border border-line bg-panel p-gap">
+          <section className="rounded bg-panel p-gap">
             <h3 className="pb-gap font-semibold">Full sensitive backend snapshot</h3>
             <p className="pb-gap text-ink-muted">
               Contains every namespace and authentication data. The host streams to a private temporary file, checks
@@ -292,7 +292,7 @@ export function ClusterView({
               Save Snapshot…
             </CommandButton>
           </section>
-          <section className="rounded border border-line bg-panel p-gap">
+          <section className="rounded bg-panel p-gap">
             <h3 className="pb-gap font-semibold">Check consistency</h3>
             <p className="pb-gap text-ink-muted">
               Hash every configured endpoint at the explicit revision entered in Compact. This does not write. A

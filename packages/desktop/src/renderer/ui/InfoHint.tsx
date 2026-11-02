@@ -32,7 +32,7 @@ export function InfoHint({
           aria-label={label}
           data-testid={testId}
           className={cn(
-            "flex shrink-0 items-center justify-center rounded text-ink-muted hover:bg-raised hover:text-ink focus-visible:text-ink",
+            "flex shrink-0 items-center justify-center rounded text-ink-muted hover:bg-hover hover:text-ink focus-visible:text-ink",
             className,
           )}
           // A click would close the tooltip; the hint stays up while the pointer is on it.
@@ -48,7 +48,7 @@ export function InfoHint({
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}
           className={cn(
-            "z-50 max-w-popover rounded border border-line bg-raised px-cell py-1 text-ui whitespace-normal text-ink shadow-lg",
+            "z-50 max-w-popover rounded-tooltip border border-line bg-raised px-cell py-1 text-ui whitespace-normal text-ink shadow-popover",
             TOOLTIP_MOTION,
           )}
         >

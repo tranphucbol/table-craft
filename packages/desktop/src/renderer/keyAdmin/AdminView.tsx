@@ -5,7 +5,7 @@ import { SERVER_ACTION_IDS } from "@table-craft/desktop/renderer/actions/serverA
 import { pluginOf } from "@table-craft/desktop/renderer/state/datasources.js";
 import { ADMIN_ACTION_IDS } from "./actions.js";
 import { EMPTY_ADMIN, useKeyAdmin } from "./store.js";
-import { CommandButton } from "./controls.js";
+import { BUTTON, CommandButton } from "./controls.js";
 import { LeasesView } from "./LeasesView.js";
 import { AccessView } from "./AccessView.js";
 import { ClusterView } from "./ClusterView.js";
@@ -73,7 +73,7 @@ export function AdminView({ tabId }: { readonly tabId: string }) {
         {cluster && hasServerInfo ? (
           <button
             type="button"
-            className="h-row rounded border border-line px-cell hover:bg-raised"
+            className={BUTTON}
             title="Version, storage and connection information"
             onClick={() => invoke(SERVER_ACTION_IDS.details, { datasourceId: tab.datasourceId })}
           >

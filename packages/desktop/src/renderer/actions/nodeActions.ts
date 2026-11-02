@@ -16,7 +16,7 @@ export interface RunOnArgs {
 export const NODE_ACTIONS: readonly AnyAction[] = [
   defineAction<RunOnArgs | undefined>({
     id: NODE_ACTION_IDS.runOn,
-    title: "Run On Next Node",
+    title: "Run on Next Node",
     category: "Console",
     tabKind: "console",
     available: (context) => context.capabilities.includes("nodes"),

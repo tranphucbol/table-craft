@@ -441,7 +441,7 @@ export const TABLE_ACTIONS: readonly AnyAction[] = [
       }));
       const answer = await useModal.getState().ask({
         kind: "choice",
-        title: "Show referencing rows",
+        title: "Show Referencing Rows",
         message: `Open the rows that point at the selected ${heldRows(session).length === 1 ? "row" : "rows"} of ${session.relation}.`,
         choices,
       });

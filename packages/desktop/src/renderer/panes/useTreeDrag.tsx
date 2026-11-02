@@ -16,7 +16,7 @@ import { treeSelectionOf, useDatasources } from "@table-craft/desktop/renderer/s
 
 /** The drop line's thickness, as `h-0.5` draws it; it centres on the boundary between rows. */
 const DROP_LINE_PX = 2;
-const DRAG_IMAGE_CLASS = "fixed -top-96 left-0 rounded border border-line bg-raised px-cell py-1 text-ink";
+const DRAG_IMAGE_CLASS = "fixed -top-96 left-0 rounded-tooltip border border-line bg-raised px-cell py-1 text-ink";
 
 interface TreeDragInput {
   readonly rows: readonly ExplorerRow[];

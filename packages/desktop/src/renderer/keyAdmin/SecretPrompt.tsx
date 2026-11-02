@@ -80,7 +80,7 @@ export function AdminSecretPrompt() {
     >
       <Dialog.Portal>
         <Dialog.Overlay className={OVERLAY_CLASS} />
-        <Dialog.Content className={`${CONTENT_CLASS} w-dialog max-w-[90vw]`}>
+        <Dialog.Content className={`${CONTENT_CLASS} w-dialog max-w-[95vw]`}>
           {pending === null ? null : <Body key={`${pending.kind}-${pending.user}`} request={pending} />}
         </Dialog.Content>
       </Dialog.Portal>

@@ -53,7 +53,7 @@ so every scroller, the editor's included, follows a theme switch with no token o
 | `colors.danger`                | `--tc-danger`               | `#fa6675` | `#c7222d` | `#ff7070`     |
 | `colors.success`               | `--tc-success`              | `#5fb865` | `#1f7a35` | `#5bf15b`     |
 | `colors.warning`               | `--tc-warning`              | `#e0a84a` | `#8a5a00` | `#ffd23f`     |
-| `colors.selection`             | `--tc-selection`            | `#2e436e` | `#dfe1e5` | `#1f3a66`     |
+| `colors.selection`             | `--tc-selection`            | `#2e436e` | `#d4e2ff` | `#1f3a66`     |
 | `colors.searchMatch`           | `--tc-search-match`         | `#544617` | `#f6e39a` | `#4f4300`     |
 | `colors.keyIcon`               | `--tc-key-icon`             | `#d9a343` | `#b07d14` | `#ffd23f`     |
 | `colors.gridStripe`            | `--tc-grid-stripe`          | `#26282b` | `#f5f6f8` | `#0f0f0f`     |
@@ -235,7 +235,7 @@ on hover and `--tc-fill-press-shade` (16 %) while held, because ink barely moves
 at half the press; `press-fill-danger` swaps in the danger fill's `--tc-danger-*-shade`. Icon
 buttons add `press` and shrink to `--tc-motion-press-scale`; text buttons add `press-text`
 (`TEXT_PRESS`) and shrink less, to `--tc-motion-press-scale-text`, so a wide label moves about
-2 px. Bordered text buttons take `hover:bg-raised`. The tint and shade are state and stay at every
+2 px. Bordered text buttons take `hover:bg-hover`. The tint and shade are state and stay at every
 motion level; the shrink is motion and stops at Reduced and Off. A copy button swaps its glyph for a bold `Check` in `text-success` and its tooltip for "Copied" for
 1.5 s after the clipboard write it caused (`ui/useCopyConfirmation.ts`); a failed copy never
 confirms.
@@ -244,33 +244,60 @@ The level is the **Motion** setting (`appearance.motion`): System (default) foll
 `prefers-reduced-motion`, which Chromium reads from macOS Reduce Motion and its Windows and GNOME
 equivalents; Full, Reduced and Off override it. It applies live.
 
+## Elevation
+
+Decision 150. A surface sits at one of three levels, and its level sets its fill, edge, corners
+and shadow together. A component picks a level; it never picks a shadow.
+
+| Level   | Surfaces                                                                                                                                                                                    | Fill                                       | Edge                                          | Corners                                                             | Shadow           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------- | ---------------- |
+| Rest    | Islands, tool windows, tab strips, toolbars, the grid, and the cards, wells and banners inside them                                                                                         | `bg-canvas` or `bg-panel`                  | A tone step or `border-line`, not both        | `rounded-island`; controls `rounded` or flush                       | None             |
+| Popover | Menus, popovers, dropdown lists, SQL completion and context actions, tooltips, (i) hints, the speed search badge, the split drop label, a button floating over content (Watch's newer rows) | `bg-raised` (`surface-raised` around rows) | `border-line`                                 | `rounded-popover` for a list of choices, `rounded-tooltip` for text | `shadow-popover` |
+| Dialog  | Dialogs and the palette                                                                                                                                                                     | `bg-panel`                                 | `border-line`, over the `OVERLAY_CLASS` scrim | `rounded-dialog`                                                    | `shadow-dialog`  |
+
+- Only what floats over other content casts a shadow, and only its level's token: no Tailwind
+  `shadow-*` step, no `shadow-[…]`, no `drop-shadow`, no `rgb(0 0 0 …)` in a component
+  (`test/renderer/surfaceRadius.test.ts`). The values live in `ELEVATION` (`appearance/themes.ts`),
+  one pair per colour scheme, so every bundled, ported and user theme casts them; the Islands table
+  below lists them.
+- A level keeps its shadow wherever it opens: a popover inside a dialog is still `shadow-popover`.
+- Corners step down as the levels do: a dialog is never squarer than a popover, a popover never
+  squarer than a tooltip, and rows inside a popover are `rounded` in a `p-1` inset.
+- `surface-raised` re-points `bg-hover` to `bg-selection` inside a `bg-raised` surface, where a
+  `raised` hover would vanish.
+- A dialog dims what is under it with the one scrim, `OVERLAY_CLASS` (`bg-canvas/60`); a popover
+  dims nothing.
+- The tree's drag image rounds like a tooltip but casts nothing: Chromium snapshots it clipped to
+  its box.
+
 ## Dropdowns
 
 Decision 140. Every choice list is `ui/Dropdown.tsx` (Radix Select), never a native `<select>`,
 whose OS menu ignores the theme and the density; ESLint refuses `<select>` in the renderer. The
 list opens under its trigger as a `SURFACE_MOTION` popover: `bg-raised`, a `border-line` frame,
-`rounded`, `shadow-lg`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
+`rounded-popover`, `shadow-popover`, at least as wide as the trigger, `h-row` items with `bg-selection` on the
 highlighted one and `CurrentIcon` in `text-accent` before the chosen one, group headings in
 `text-ink-muted`. The keyboard is a native select's: arrows, type-ahead, Enter, Escape.
 
 | Variant  | Where                                | Look                                               |
 | -------- | ------------------------------------ | -------------------------------------------------- |
 | `field`  | A form or dialog                     | `INPUT_CLASS` (`ui/fieldClasses.ts`), `rounded`    |
-| `inline` | A toolbar or header line             | No fill, square, `border-line` only on hover       |
+| `inline` | A toolbar or header line             | No fill, square, `bg-hover` on hover               |
 | `cell`   | A grid cell being edited (a boolean) | Fills the cell, `border-accent` frame, `font-grid` |
 
 The flush rule: a control that fills the height of the strip it sits in (an `h-row` toolbar, a
 header line, a chip in a bar, a tag inside a trigger) is square, with no radius, so its edges meet
 the strip's lines. A control standing free in a form or a dialog keeps `rounded`. The extractor,
-Transaction mode, the value panel's format picker, the plan view's Tree / Raw group, the result
-search field and its filter chips, and the Theme trigger's scheme tag follow it.
+Transaction mode, the value panel's format picker, the result search field and its filter chips,
+and the Theme trigger's scheme tag follow it. A segmented group stands free inside its strip (`h-segment`, a row less 2 px), so it
+keeps `rounded`.
 
 ## Hints
 
 Help that explains a field lives behind an (i), not under it. `ui/InfoHint.tsx` is an `InfoIcon`
 button in `text-ink-muted` (`text-ink` on hover or focus), named "About …", that shows its text
 as a tooltip after 150 ms of hover or on keyboard focus: `bg-raised`, a `border-line` frame,
-`rounded`, `shadow-lg`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
+`rounded-tooltip`, `shadow-popover`, at most `max-w-popover` wide, wrapping. A click keeps it open. `FieldRow`
 takes `hint` and puts one after the control. Help longer than a few sentences, or with a table or
 a button, is a `ui/Popover` behind the same (i) instead (the MCP Timeout cell).
 
@@ -278,12 +305,59 @@ Only three kinds of text stay on the form: a warning or error (`text-danger`, `r
 result of something the user just did (a pasted URL), and, where a choice changes what the form
 asks for, one short muted line beside the (i). Form labels wrap rather than run into the next row.
 
+## Controls
+
+Each control has one build, and a component takes it rather than writing its own classes.
+
+| Control         | Build                                                            | Look                                                                                                                        |
+| --------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Action button   | `ui/ActionButton.tsx`                                            | Runs a registry action; title and chord come from the registry, the chord only in the tooltip                               |
+| Dialog button   | `Button` / `buttonClass(variant)` (`dialogs/parts.tsx`)          | `h-row rounded px-gap`; `primary` filled accent, `secondary` bordered, `warning`, `danger`, `dangerOutline`                 |
+| Icon button     | `ICON_BUTTON` (`ui/iconButtonClasses.ts`)                        | `size-row`, `rounded`, `text-ink-muted`, `hover:bg-hover hover:text-ink`; toolbars, list headers, close X                   |
+| Link            | `INLINE_LINK` / `LINK_BUTTON` (`ui/linkClasses.ts`)              | Accent text: underlined on hover inside a sentence, `bg-hover` as a free-standing button                                    |
+| Text field      | `FIELD_CLASS` (`ui/fieldClasses.ts`)                             | `h-row rounded border-line bg-canvas`, `focus:border-accent`, `aria-invalid:border-danger`                                  |
+| Segmented group | `Segmented`, or `SEGMENT_GROUP` + `SEGMENT` (`ui/Segmented.tsx`) | One `rounded border-line` frame of `h-segment` buttons; the chosen one `bg-selection text-accent` with an accent inset ring |
+| Checkbox, radio | Native, inside a label                                           | `accent-color: var(--tc-accent)` on `:root` draws them in the theme's accent                                                |
+| Switch          | `ui/Switch.tsx`                                                  | An on/off setting that takes effect at once, in a table row                                                                 |
+
+- A segmented group is for two to five mutually exclusive views or values that stay visible: a
+  radiogroup (`aria-checked`), a toggle (`aria-pressed`) or a tablist (`aria-selected`) all wear
+  the same chosen state. A longer list is a `Dropdown`; a list of things to select is a list.
+- Disabled is `opacity-50` everywhere (`DISABLED_CLASS`); disabled text in a menu row is
+  `text-ink-muted` instead, since the row stays highlightable.
+- Focus is the global `:focus-visible` ring in `app.css`, 2 px `--tc-accent`; a control draws its
+  own only where the ring would be clipped (a row inside a scroller insets it with
+  `-outline-offset-2`).
+- A well (a list or preview framed inside a dialog) is drawn like a field: `bg-canvas`,
+  `border-line`, `rounded`. It is the one place a tone step and a border appear together.
+- A card at rest inside a view is a tone step only, `rounded bg-panel`, with no border.
+- The stripe buttons keep `rounded-island` under Islands (decision 141): they are tiles of the
+  frame, not controls inside an island.
+
+Labels follow one copy rule: Title Case for titles, buttons, menu items and actions ("Run on Next
+Node", short prepositions and articles lower case); an ellipsis when the command asks for more
+before it acts ("New Data Source…"); no chord inside a label, since the tooltip and the menu show
+it; no abbreviations a user must decode ("Transaction Builder", not "Txn Builder").
+
+## Dialogs
+
+A dialog is `Dialog.Content` with `CONTENT_CLASS`, clamped to `max-h-[95vh] max-w-[95vw]`, its
+width a token (`w-dialog`, `w-generator`, …), never a literal.
+
+- A large dialog (`h-dialog-height`: Settings, Data Sources, Snippets, Import Data Sources, Manage
+  Shown Schemas) opens with `DialogHeader`: an `h-tab` bar, the title in semibold, a `border-line`
+  rule under it and an `ICON_BUTTON` X named "Close …". A small dialog (`Modal`) puts its title
+  inline with no X; Escape closes both.
+- The footer is `DialogFooter`: secondary actions that do something else (Test Connection, a
+  destructive Clear…) start it on the left, then a spacer, then Cancel or Close, Apply where it
+  applies, and the primary button last, rightmost and filled. Enter submits a `Modal` form.
+
 ## Settings dialog
 
 Plan 013. `⌘,` (Settings… in the macOS app menu, File elsewhere) opens a modal the size of Data
 Sources (`w-dialog`, `h-dialog-height`): a `w-dialog-list` page list behind a `border-line` edge
-on the left, the chosen page `bg-selection`, the rest `hover:bg-raised`, and the page on the right
-as a two-column form (`grid-cols-[8rem_1fr]`), section titles semibold `text-ink-muted` over a
+on the left, the chosen page `bg-selection`, the rest `hover:bg-hover`, and the page on the right
+as a two-column form (`FIELD_GRID_CLASS`), section titles semibold `text-ink-muted` over a
 `border-line` rule. Pages:
 
 - **Appearance**: Theme, a dropdown (plan 032, decision 065, `dialogs/ThemePicker.tsx`): the
@@ -340,7 +414,7 @@ and Fonts and density sections above hold every value.
 | `density.statusPopoverWidthPx` | `--tc-status-popover-width` | `w-status-popover`           | 360 px             | 360 px          | The Exports popover, fixed so it does not jump as its counts grow                  |
 | `density.iconPx`               | `--tc-icon`                 | `size-icon`                  | 16 px              | 16 px           | Every Phosphor icon and the tab close button                                       |
 | `density.paletteWidthPx`       | `--tc-palette-width`        | `w-palette`                  | 576 px             | 576 px          | Find Action / Search Everywhere                                                    |
-| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#dfe1e5`       | Selected palette and Services rows, the focused tree's selection                   |
+| `colors.selection`             | `--tc-selection`            | `bg-selection`               | `#2e436e`          | `#d4e2ff`       | Selected palette rows, the focused tree's selection                                |
 | `colors.success`               | `--tc-success`              | `text-success`, `bg-success` | `#5fb865`          | `#1f7a35`       | The connected datasource's dot                                                     |
 | `colors.danger`                | `--tc-danger`               | `text-danger`, `bg-danger`   | `#fa6675`          | `#c7222d`       | A failed datasource, console or connect message                                    |
 | `colors.panel`                 | `--tc-panel`                | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
@@ -382,15 +456,20 @@ windows are islands, `rounded-island` cards of `bg-canvas`, set `p-island-gap`
 inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
 sizes are the Classic ones.
 
-| Token                    | CSS variable              | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                           |
-| ------------------------ | ------------------------- | --------------------------------- | ------------------ | --------------- | ----------------------------------------------------------------- |
-| `frame` (`frameColors`)  | `--tc-frame`              | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar      |
-| `frameRaised`            | `--tc-frame-raised`       | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                          |
-| `islandEdge`             | `--tc-island-edge`        | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame      |
-| `density.islandGapPx`    | `--tc-island-gap`         | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles       |
-| `density.islandRadiusPx` | `--tc-island-radius`      | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                            |
-| (derived)                | `--tc-pane-inset`         | `px-pane-inset`, `mx-pane-inset`  | 10 px              | 8 px            | Pane content's inset from the island edge; `gap` with Classic     |
-| (derived)                | `--tc-tool-header-height` | `h-tool-header`                   | 32 px              | 32 px           | A tool window's header, `tabHeightPx`; `rowHeightPx` with Classic |
+| Token                       | CSS variable              | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                            |
+| --------------------------- | ------------------------- | --------------------------------- | ------------------ | --------------- | ------------------------------------------------------------------ |
+| `frame` (`frameColors`)     | `--tc-frame`              | `bg-frame`                        | `#2d2f32`          | `#e8e9eb`       | Behind the islands, the main toolbar, stripes and status bar       |
+| `frameRaised`               | `--tc-frame-raised`       | (as `bg-raised` on the frame)     | `#3c3e40`          | `#dcdddf`       | A hovered or pressed button on the frame                           |
+| `islandEdge`                | `--tc-island-edge`        | `border-island-edge`              | `#1e1f22`          | `#ffffff`       | An island's 1 px edge: `canvas`, or `border` on a weak frame       |
+| `density.islandGapPx`       | `--tc-island-gap`         | `p-island-gap`, `w-/h-island-gap` | 5 px               | 4 px            | Between islands and around them; the shell's resize handles        |
+| `density.islandRadiusPx`    | `--tc-island-radius`      | `rounded-island`                  | 10 px              | 8 px            | An island's corners; 0 px with Classic                             |
+| (derived)                   | `--tc-dialog-radius`      | `rounded-dialog`                  | 10 px              | 8 px            | Dialogs and the palette: `islandRadiusPx`; 8 px with Classic       |
+| `ISLANDS_POPOVER_RADIUS_PX` | `--tc-popover-radius`     | `rounded-popover`                 | 8 px               | 8 px            | Menus, popovers, dropdown lists, SQL completion; 4 px with Classic |
+| `TOOLTIP_RADIUS_PX`         | `--tc-tooltip-radius`     | `rounded-tooltip`                 | 4 px               | 4 px            | Tooltips, (i) hints, the speed search badge, editor tooltips       |
+| `ELEVATION[scheme].popover` | `--tc-popover-shadow`     | `shadow-popover`                  | 50 % black         | 16 % black      | Menus, popovers, dropdown lists, completion, tooltips              |
+| `ELEVATION[scheme].dialog`  | `--tc-dialog-shadow`      | `shadow-dialog`                   | 70 % black         | 30 % black      | Dialogs and the palette                                            |
+| (derived)                   | `--tc-pane-inset`         | `px-pane-inset`, `mx-pane-inset`  | 10 px              | 8 px            | Pane content's inset from the island edge; `gap` with Classic      |
+| (derived)                   | `--tc-tool-header-height` | `h-tool-header`                   | 32 px              | 32 px           | A tool window's header, `tabHeightPx`; `rowHeightPx` with Classic  |
 
 The frame is no theme token: `appearance/islands.ts` derives it from `panel`, stepped in 1 %
 mixes toward white in a dark scheme and black in a light one, as JetBrains' frames are, until it
@@ -429,6 +508,17 @@ starts that much earlier and its first glyph lines up with the title: the Databa
 (`ICON_BUTTON_ROW_INSET`), the Watch tabs and the editor tabs (`TEXT_TAB_ROW_INSET`), and the tab
 strip's corner buttons on the right (`CORNER_ISLAND_INSET`). The status bar lines up with
 `pane-inset` as well. Rows inside a tab, such as the console toolbar, keep `gap`.
+
+Plan 144, decision 150. What floats above the islands rounds on the same ladder, outer to inner:
+a dialog or the palette (`rounded-dialog`) is never squarer than the island under it, a popover
+(`rounded-popover`) holds 4 px rows in a `p-1` inset so their corners are concentric with its
+8 px, and a tooltip (`rounded-tooltip`) stays at 4 px. A surface that holds a list of choices is a
+popover, one that holds only text a tooltip. Classic keeps 8, 4 and 4. Controls (buttons, fields,
+triggers, chips) keep `rounded` and the flush rule.
+
+They cast two shadows, `shadow-popover` and `shadow-dialog` ([Elevation](#elevation)). A dark
+scheme casts three to five times as dark as a light one: Tailwind's `shadow-lg`, 10 % black, does
+not show on a dark canvas. Each is a wide soft layer over a tight contact one.
 
 ## Database explorer
 
@@ -475,7 +565,7 @@ Phosphor `ArrowsClockwise`, `ArrowsInLineVertical` and `CopySimple` glyphs.
 ### Key tree
 
 Plan 058. A `keyValue` datasource's rows add no tokens. A key's type badge (`ui/KeyTypeBadge.tsx`)
-stands where a catalog row draws its icon: a `w-9` `rounded-sm` box, `font-ui font-semibold` in `text-canvas` on a
+stands where a catalog row draws its icon: a `w-9` `rounded` box, `font-ui font-semibold` in `text-canvas` on a
 datasource tint, invisible until the key is described.
 
 | Type        | Badge                                        | Background     |
@@ -681,7 +771,7 @@ an error sits under it in `text-danger` with the hint muted. The body is a read-
 with the SQL Generator's preview.
 
 Quick Documentation (`Info`) is a `ui/Popover.tsx`: `bg-raised`, a `border-line` frame, `rounded`,
-`shadow-lg`, `text-ui`, below the anchor with a 4 px offset. Its header (`border-b border-line`)
+`shadow-popover`, `text-ui`, below the anchor with a 4 px offset. Its header (`border-b border-line`)
 holds the kind in `text-ink-muted` and the qualified name and comment; section titles are
 `text-ink-muted`, names and types `font-grid text-grid`. Columns use the explorer's marks: a filled
 `KeyIcon` for the primary key, an outlined one for a foreign key, both `text-key-icon`, else a muted
@@ -689,7 +779,7 @@ holds the kind in `text-ink-muted` and the qualified name and comment; section t
 body scrolls inside the popover's maximum.
 
 The SQL Generator (`Code`) is a modal like the others, wider: the statements are a segmented radio
-group in a `border-line` frame, the chosen one `bg-selection`, the rest `hover:bg-raised`; the
+group in a `border-line` frame, the chosen one `bg-selection`, the rest `hover:bg-hover`; the
 preview is `h-60` on `bg-canvas`; Open in Console is the primary button.
 
 | Token (`appearance/themes.ts`) | CSS variable           | Tailwind               | Dark / comfortable | Light / compact | Used by                              |
@@ -711,7 +801,7 @@ Plan 011. An outcome is drawn in one of two sizes from `ui/Outcome.tsx`, on the 
 
 `ui/ListPicker.tsx` draws Query History and Open Closed Console as a modal like the others, wider:
 the title, a search field, a `listbox` of `h-row` options on `bg-canvas` in a `border-line` frame
-(the selected one `bg-selection`, the rest `hover:bg-raised`), the preview, then the buttons right
+(the selected one `bg-selection`, the rest `hover:bg-hover`), the preview, then the buttons right
 aligned with the primary last before Close and a destructive one (`Clear History…`, `Delete…`) in
 the danger style. A history row reads the outcome dot, the first line in `font-editor text-editor`,
 then `×3`, rows, duration and time in `text-ink-muted tabular-nums`; the preview is the read-only
@@ -725,7 +815,8 @@ console's row is `ConsoleIcon` in `text-ink-muted` and its name. The actions' ic
 | `density.pickerListHeightPx`   | `--tc-picker-list-height` | `h-picker-list` | 220 px             | 220 px          | The picker's list and its preview             |
 
 The Services tree reuses the Database tool window's rows (`h-row`, 16 px indent per level, a caret
-for expandable rows, `bg-selection` selected, `hover:bg-raised`). A datasource row is `DatabaseIcon`
+for expandable rows, the selected row `bg-raised` and `bg-selection` while the tree has focus,
+`hover:bg-hover`). A datasource row is `DatabaseIcon`
 in `text-accent` (`text-danger` failed), the name and its connection state muted. A session row is
 the `Terminal` or `Table` glyph in `text-ink-muted`, a spinning `SpinnerIcon` in `text-accent`
 while running, the tab's title, its state
@@ -739,9 +830,8 @@ aligned in `text-ink-muted tabular-nums`. The session's context menu is the tab 
 
 Plan 012. A plan tab (`console/PlanView.tsx`) fills the result area. An analysed plan starts with
 a banner: `bg-analysed-banner`, a `border-line` rule under it, a filled `WarningIcon` in
-`text-warning`, then the text in `text-ink`. Under it an `h-row` toolbar on `bg-panel`: a segmented
-Tree / Raw group that fills the strip from its left edge, the strip's own lines above and below and
-a `border-line` divider after it (the flush rule; the shown view `bg-selection`), icon-only
+`text-warning`, then the text in `text-ink`. Under it an `h-tab` toolbar on `bg-panel`: a
+segmented Tree / Raw group (`SEGMENT_GROUP`, see [Controls](#controls)), icon-only
 `ArrowClockwise` Explain Again and `CopySimple` Copy Raw Plan, then the summary (`Planning Time: 1.0 ms ·
 Execution Time: 0.1 ms`) in `text-ink-muted`, truncated.
 
@@ -753,7 +843,7 @@ truncates, with the whole text as the tooltip; it indents 16 px per level with t
 as their content, right-aligned, empty for a value the database did not give. The Cost cell, or
 the Time cell when analysed, carries an `h-plan-bar` `bg-plan-bar` bar along its bottom edge, as
 wide as the node's share of the root's. The selected row is `bg-selection`, the rest
-`hover:bg-raised`. To the right a `w-plan-details` strip on `bg-panel` behind a `border-line` edge
+`hover:bg-hover`. To the right a `w-plan-details` strip on `bg-panel` behind a `border-line` edge
 lists the selected node: the operation in semibold with its target muted, then `Detail` and each
 property as a two-column list, names in `text-ink-muted`, values in `font-grid`, wrapping. Raw is
 the read-only `ui/SqlView.tsx` on `bg-canvas`, unhighlighted.

@@ -116,7 +116,7 @@ function kindButton(page: Page, name: string) {
 }
 
 async function openKindPicker(page: Page): Promise<void> {
-  await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).click();
+  await explorer(page).getByRole("button", { name: "New Data Source…", exact: true }).first().click();
   await dataSourcesDialog(page).getByRole("list", { name: "Database kinds" }).waitFor();
 }
 

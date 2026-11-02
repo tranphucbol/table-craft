@@ -10,7 +10,7 @@ const SIDE_OFFSET_PX = 4;
 /** The flush rule (plan 129 decision 8): a control filling the strip it sits in has no radius. */
 const VARIANT_CLASS = {
   inline:
-    "h-row min-w-0 border border-transparent bg-transparent px-1 outline-none hover:border-line focus-visible:border-accent disabled:opacity-50",
+    "h-row min-w-0 border border-transparent bg-transparent px-1 outline-none hover:bg-hover focus-visible:border-accent disabled:opacity-50",
   field: FIELD_CLASS,
   cell: "absolute inset-0 w-full border border-accent bg-canvas px-cell font-grid text-grid outline-none",
 } as const;
@@ -53,7 +53,7 @@ function item({ option, at }: Indexed) {
       value={String(at)}
       data-value={option.value}
       disabled={option.disabled}
-      className="flex h-row cursor-default items-center gap-cell rounded-sm px-cell whitespace-nowrap outline-none data-disabled:text-ink-muted data-highlighted:bg-selection"
+      className="flex h-row cursor-default items-center gap-cell rounded px-gap whitespace-nowrap outline-none data-disabled:text-ink-muted data-highlighted:bg-selection"
     >
       <span className="flex size-icon shrink-0 items-center">
         <Primitive.ItemIndicator>
@@ -152,7 +152,7 @@ export function Dropdown({
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}
           className={cn(
-            "z-50 max-h-popover-height max-w-popover min-w-(--radix-select-trigger-width) overflow-hidden rounded border border-line bg-raised text-ui text-ink shadow-lg outline-none",
+            "z-50 max-h-popover-height max-w-popover min-w-(--radix-select-trigger-width) overflow-hidden rounded-popover border border-line bg-raised surface-raised text-ui text-ink shadow-popover outline-none",
             SURFACE_MOTION,
           )}
         >
@@ -162,7 +162,7 @@ export function Dropdown({
                 <Fragment key={section.items[0]?.at}>{section.items.map(item)}</Fragment>
               ) : (
                 <Primitive.Group key={section.group}>
-                  <Primitive.Label className="flex h-row items-center px-cell text-ink-muted">
+                  <Primitive.Label className="flex h-row items-center px-gap text-ink-muted">
                     {section.group}
                   </Primitive.Label>
                   {section.items.map(item)}

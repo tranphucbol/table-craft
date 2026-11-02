@@ -24,30 +24,36 @@ import { useRunSettingsPopover } from "@table-craft/desktop/renderer/state/runSe
 import { statementTimeoutOf, useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import type { SettingsPage } from "@table-craft/desktop/renderer/state/settingsDialog.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
-import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { WarningIcon } from "@table-craft/desktop/renderer/ui/icons.js";
+import { INLINE_LINK, LINK_BUTTON } from "@table-craft/desktop/renderer/ui/linkClasses.js";
 import { Popover, type PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
-import { TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
+import {
+  POPOVER_BODY,
+  POPOVER_FOOTER,
+  POPOVER_HEADER,
+  POPOVER_PANEL,
+} from "@table-craft/desktop/renderer/ui/popoverParts.js";
+import { Segmented, type SegmentedOption } from "@table-craft/desktop/renderer/ui/Segmented.js";
 
 /** What Custom starts at when the default is no timeout at all. */
 const FIRST_CUSTOM_TIMEOUT_SECONDS = 30;
 const POPOVER_LABEL = "Run settings for this console";
-const LINK_CLASS = "text-accent hover:underline";
+const POPOVER_TITLE = "Run Settings";
 const NO_TIMEOUT_TEXT = "This data source cannot cancel a statement, so it has no timeout.";
 
 type RowsKind = RowsChoice["kind"];
 type TimeoutKind = TimeoutChoice["kind"];
 
-const ROWS_OPTIONS: readonly { readonly kind: RowsKind; readonly label: string }[] = [
-  { kind: "default", label: "Default" },
-  { kind: "page", label: "Custom" },
-  { kind: "all", label: "All" },
+const ROWS_OPTIONS: readonly SegmentedOption<RowsKind>[] = [
+  { value: "default", label: "Default" },
+  { value: "page", label: "Custom" },
+  { value: "all", label: "All" },
 ];
 
-const TIMEOUT_OPTIONS: readonly { readonly kind: TimeoutKind; readonly label: string }[] = [
-  { kind: "default", label: "Default" },
-  { kind: "seconds", label: "Custom" },
-  { kind: "none", label: "None" },
+const TIMEOUT_OPTIONS: readonly SegmentedOption<TimeoutKind>[] = [
+  { value: "default", label: "Default" },
+  { value: "seconds", label: "Custom" },
+  { value: "none", label: "None" },
 ];
 
 function change(next: Partial<RunSettings>): void {
@@ -59,50 +65,10 @@ function openSettings(page: SettingsPage): void {
   void invoke(SETTINGS_ACTION_IDS.show, { page } satisfies ShowSettingsArgs);
 }
 
-/**
- * Radios drawn as one segmented row, as SQL Generator's; the native inputs keep arrow keys and
- * focus, and the enclosing fieldset names the group.
- */
-function Choice<K extends string>({
-  name,
-  options,
-  value,
-  onPick,
-}: {
-  readonly name: string;
-  readonly options: readonly { readonly kind: K; readonly label: string }[];
-  readonly value: K;
-  readonly onPick: (kind: K) => void;
-}) {
-  return (
-    <div className="flex self-start rounded border border-line">
-      {options.map((option) => (
-        <label
-          key={option.kind}
-          className={cn(
-            TEXT_PRESS,
-            "flex h-row cursor-default items-center px-gap whitespace-nowrap text-ink first:rounded-l last:rounded-r has-focus-visible:outline-2 has-focus-visible:-outline-offset-2 has-focus-visible:outline-accent",
-            value === option.kind ? "bg-selection ring-1 ring-accent ring-inset" : "hover:bg-raised",
-          )}
-        >
-          <input
-            type="radio"
-            name={name}
-            className="sr-only"
-            checked={value === option.kind}
-            onChange={() => onPick(option.kind)}
-          />
-          {option.label}
-        </label>
-      ))}
-    </div>
-  );
-}
-
 function Group({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   return (
     <fieldset className="flex min-w-0 flex-col gap-1">
-      <legend className="mb-1 font-semibold">{title}</legend>
+      <legend className="mb-1 font-semibold text-ink-muted">{title}</legend>
       {children}
     </fieldset>
   );
@@ -115,7 +81,7 @@ function Note({ children }: { readonly children: ReactNode }) {
 function Warning({ children }: { readonly children: ReactNode }) {
   return (
     <p className="flex items-start gap-1 whitespace-normal text-warning">
-      <WarningIcon aria-hidden className="mt-0.5 size-icon shrink-0" />
+      <WarningIcon aria-hidden weight="fill" className="mt-0.5 size-icon shrink-0" />
       <span>{children}</span>
     </p>
   );
@@ -129,11 +95,11 @@ function RowsGroup({ rows }: { readonly rows: RowsChoice }) {
   const { pageRows, fetchAllCap } = useSettings((state) => state.settings.data);
   return (
     <Group title="Rows">
-      <Choice
+      <Segmented
         name="run-settings-rows"
         options={ROWS_OPTIONS}
         value={rows.kind}
-        onPick={(kind) => {
+        onChange={(kind) => {
           if (kind === "page") change({ rows: { kind, pageRows } });
           else change({ rows: { kind } });
         }}
@@ -141,7 +107,7 @@ function RowsGroup({ rows }: { readonly rows: RowsChoice }) {
       {rows.kind === "default" ? (
         <Note>
           {formatCount(pageRows)} a page, from{" "}
-          <button type="button" className={LINK_CLASS} onClick={() => openSettings("dataEditor")}>
+          <button type="button" className={INLINE_LINK} onClick={() => openSettings("dataEditor")}>
             Settings
           </button>
         </Note>
@@ -173,11 +139,11 @@ function TimeoutGroup({ consoleId, timeout }: { readonly consoleId: string; read
   const fromDatasource = datasource?.statementTimeoutSeconds !== undefined;
   return (
     <Group title="Statement timeout">
-      <Choice
+      <Segmented
         name="run-settings-timeout"
         options={TIMEOUT_OPTIONS}
         value={timeout.kind}
-        onPick={(kind) => {
+        onChange={(kind) => {
           if (kind === "seconds")
             change({ timeout: { kind, seconds: base > 0 ? base : FIRST_CUSTOM_TIMEOUT_SECONDS } });
           else change({ timeout: { kind } });
@@ -189,7 +155,7 @@ function TimeoutGroup({ consoleId, timeout }: { readonly consoleId: string; read
           {fromDatasource ? (
             "the data source"
           ) : (
-            <button type="button" className={LINK_CLASS} onClick={() => openSettings("advanced")}>
+            <button type="button" className={INLINE_LINK} onClick={() => openSettings("advanced")}>
               Settings
             </button>
           )}
@@ -232,27 +198,30 @@ function RunSettingsPopover({
       onClose={() => useRunSettingsPopover.getState().hide()}
       focusSelf
     >
-      <div className="flex w-status-popover max-w-full flex-col gap-gap overflow-y-auto p-gap">
-        <RowsGroup rows={runSettings.rows} />
-        {timeouts ? (
-          <TimeoutGroup consoleId={consoleId} timeout={runSettings.timeout} />
-        ) : (
-          <Group title="Statement timeout">
-            <Note>{NO_TIMEOUT_TEXT}</Note>
-          </Group>
-        )}
-      </div>
-      <div className="flex shrink-0 items-center gap-gap border-t border-line px-gap py-1">
-        <p className="min-w-0 flex-1 text-ink-muted">For this console only, from its next run.</p>
-        <button
-          type="button"
-          data-testid="run-settings-reset"
-          disabled={isDefaultRunSettings(runSettings)}
-          className={cn(TEXT_PRESS, "rounded px-1 text-accent enabled:hover:bg-raised disabled:opacity-50")}
-          onClick={() => change(DEFAULT_RUN_SETTINGS)}
-        >
-          Restore Defaults
-        </button>
+      <div className={POPOVER_PANEL}>
+        <div className={POPOVER_HEADER}>{POPOVER_TITLE}</div>
+        <div className={POPOVER_BODY}>
+          <RowsGroup rows={runSettings.rows} />
+          {timeouts ? (
+            <TimeoutGroup consoleId={consoleId} timeout={runSettings.timeout} />
+          ) : (
+            <Group title="Statement timeout">
+              <Note>{NO_TIMEOUT_TEXT}</Note>
+            </Group>
+          )}
+        </div>
+        <div className={POPOVER_FOOTER}>
+          <p className="min-w-0 flex-1 text-ink-muted">For this console only, from its next run.</p>
+          <button
+            type="button"
+            data-testid="run-settings-reset"
+            disabled={isDefaultRunSettings(runSettings)}
+            className={LINK_BUTTON}
+            onClick={() => change(DEFAULT_RUN_SETTINGS)}
+          >
+            Restore Defaults
+          </button>
+        </div>
       </div>
     </Popover>
   );

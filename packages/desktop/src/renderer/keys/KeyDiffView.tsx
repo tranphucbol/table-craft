@@ -72,7 +72,7 @@ export function KeyDiffView({
         {groups.map((lines, index) =>
           lines[0]?.left?.kind === "same" && lines.length >= FOLD_LINES ? (
             <details key={`${leftTitle}:${rightTitle}:${String(index)}`} className="text-ink-muted">
-              <summary className="cursor-pointer bg-panel px-gap py-1 hover:bg-raised">
+              <summary className="cursor-pointer bg-panel px-gap py-1 hover:bg-hover">
                 ⋯ {lines.length} unchanged lines
               </summary>
               {lines.map((pair, row) => (
