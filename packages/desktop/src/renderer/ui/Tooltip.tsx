@@ -27,7 +27,7 @@ export function Tooltip({ label, shortcut, side = "right", children }: TooltipPr
           side={side}
           sideOffset={SIDE_OFFSET_PX}
           className={cn(
-            "z-50 rounded-tooltip border border-line bg-raised px-cell py-1 text-ui text-ink shadow-lg",
+            "z-50 rounded-tooltip border border-line bg-raised px-cell py-1 text-ui text-ink shadow-popover",
             TOOLTIP_MOTION,
           )}
         >

@@ -76,7 +76,7 @@ export function Popover({
             if (returnTo instanceof HTMLElement) returnTo.focus();
           }}
           className={cn(
-            "z-50 flex max-h-popover-height w-max max-w-popover flex-col overflow-hidden rounded-popover border border-line bg-raised surface-raised text-ui text-ink shadow-lg outline-none",
+            "z-50 flex max-h-popover-height w-max max-w-popover flex-col overflow-hidden rounded-popover border border-line bg-raised surface-raised text-ui text-ink shadow-popover outline-none",
             SURFACE_MOTION,
           )}
         >

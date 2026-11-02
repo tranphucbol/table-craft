@@ -9,7 +9,7 @@ import { DIALOG_MOTION, OVERLAY_MOTION } from "@table-craft/desktop/renderer/ui/
 import { FILLED_DANGER_PRESS, FILLED_PRESS, TEXT_PRESS } from "@table-craft/desktop/renderer/ui/pressClasses.js";
 
 export const OVERLAY_CLASS = `fixed inset-0 z-40 bg-canvas/60 ${OVERLAY_MOTION}`;
-export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-dialog border border-line bg-panel text-ui text-ink shadow-2xl outline-none ${DIALOG_MOTION}`;
+export const CONTENT_CLASS = `fixed top-1/2 left-1/2 z-50 -translate-x-1/2 -translate-y-1/2 rounded-dialog border border-line bg-panel text-ui text-ink shadow-dialog outline-none ${DIALOG_MOTION}`;
 export const INPUT_CLASS = FIELD_CLASS;
 
 type ButtonVariant = "primary" | "secondary" | "warning" | "danger" | "dangerOutline";

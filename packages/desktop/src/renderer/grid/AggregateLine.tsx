@@ -104,7 +104,7 @@ export function AggregateLine({
             align="end"
             sideOffset={SIDE_OFFSET_PX}
             aria-label="Shown aggregates"
-            className={`z-50 flex flex-col rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-lg outline-none ${SURFACE_MOTION}`}
+            className={`z-50 flex flex-col rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-popover outline-none ${SURFACE_MOTION}`}
           >
             {AGGREGATE_NAMES.map((name) => {
               const args: AggregateArgs = { name };

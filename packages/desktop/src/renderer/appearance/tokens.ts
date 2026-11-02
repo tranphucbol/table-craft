@@ -1,6 +1,7 @@
 import {
   DEFAULT_FONTS,
   DENSITIES,
+  ELEVATION,
   frameColors,
   type Appearance,
   type FontToken,
@@ -35,6 +36,7 @@ export function appearanceOf(
     colors: theme.colors,
     windowStyle,
     frame: frameColors(theme),
+    elevation: ELEVATION[theme.colorScheme],
     fonts: {
       ui: fontOf(fonts.ui, DEFAULT_FONTS.ui),
       editor: fontOf(fonts.editor, DEFAULT_FONTS.editor),

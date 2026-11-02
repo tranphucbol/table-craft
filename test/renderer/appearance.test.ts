@@ -4,9 +4,11 @@ import { describe, expect, it } from "vitest";
 import {
   BUILT_IN_THEMES,
   COMPACT_DENSITY,
+  ELEVATION,
   frameColors,
   type Appearance,
   type DensityId,
+  type Theme,
   type WindowStyle,
 } from "@table-craft/desktop/appearance/themes.js";
 import { appearanceVariables } from "@table-craft/desktop/renderer/appearance/apply.js";
@@ -219,6 +221,39 @@ describe("floating surface radii", () => {
         expect(dialog).toBeGreaterThanOrEqual(popover);
         expect(popover).toBeGreaterThanOrEqual(tooltip);
       }
+    }
+  });
+});
+
+function shadowsOf(theme: Theme) {
+  const variables = appearanceVariables(appearanceOf(DEFAULT_SETTINGS, theme, NO_PREFERENCE));
+  return { popover: variables["--tc-popover-shadow"], dialog: variables["--tc-dialog-shadow"] };
+}
+
+/** The darkest layer's alpha: what decides whether the shadow shows on the canvas. */
+function peakAlpha(shadow: string | undefined): number {
+  return Math.max(...[...(shadow ?? "").matchAll(/\/ ([\d.]+)\)/g)].map(([, alpha]) => Number(alpha)));
+}
+
+describe("floating surface shadows", () => {
+  it("givenEachScheme_whenVariablesBuilt_thenShadowsAreThatSchemesElevation", () => {
+    expect(shadowsOf(BUILT_IN_THEMES.light)).toEqual(ELEVATION.light);
+    expect(shadowsOf(BUILT_IN_THEMES.dark)).toEqual(ELEVATION.dark);
+    expect(shadowsOf(BUILT_IN_THEMES.highContrast)).toEqual(ELEVATION.dark);
+  });
+
+  it("givenDarkAndLight_whenVariablesBuilt_thenDarkCastsTheDarkerShadow", () => {
+    const dark = shadowsOf(BUILT_IN_THEMES.dark);
+    const light = shadowsOf(BUILT_IN_THEMES.light);
+
+    expect(peakAlpha(dark.popover)).toBeGreaterThan(peakAlpha(light.popover));
+    expect(peakAlpha(dark.dialog)).toBeGreaterThan(peakAlpha(light.dialog));
+  });
+
+  it("givenEachScheme_whenVariablesBuilt_thenADialogCastsDarkerThanAPopover", () => {
+    for (const theme of [BUILT_IN_THEMES.light, BUILT_IN_THEMES.dark]) {
+      const { popover, dialog } = shadowsOf(theme);
+      expect(peakAlpha(dialog)).toBeGreaterThan(peakAlpha(popover));
     }
   });
 });

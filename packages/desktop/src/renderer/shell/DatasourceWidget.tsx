@@ -118,7 +118,7 @@ export function DatasourceWidget() {
           collisionPadding={SIDE_OFFSET_PX}
           aria-label="Switch data source"
           className={cn(
-            "app-no-drag z-50 flex max-h-popover-height w-max max-w-popover min-w-56 flex-col overflow-y-auto rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-lg outline-none",
+            "app-no-drag z-50 flex max-h-popover-height w-max max-w-popover min-w-56 flex-col overflow-y-auto rounded-popover border border-line bg-raised surface-raised p-1 text-ui text-ink shadow-popover outline-none",
             SURFACE_MOTION,
           )}
         >

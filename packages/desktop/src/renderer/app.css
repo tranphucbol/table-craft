@@ -77,6 +77,9 @@
   --radius-popover: var(--tc-popover-radius);
   --radius-tooltip: var(--tc-tooltip-radius);
 
+  --shadow-popover: var(--tc-popover-shadow);
+  --shadow-dialog: var(--tc-dialog-shadow);
+
   /* Open animations only: Radix holds a closing surface until its exit animation ends, which
      delays the focus return, so nothing here runs on `data-state=closed` (decision 120). The
      levels in `appearance/motion.ts` zero the durations and travel, and pause the loops. */
