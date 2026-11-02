@@ -1,8 +1,12 @@
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { openQueryHistory } from "@table-craft/core";
 import { createConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
 import { createDatasourceStore, DATASOURCES_FILE } from "@table-craft/desktop/main/datasources.js";
+import {
+  ENGINE_CREDENTIALS_APPLIED_MESSAGE,
+  ENGINE_CREDENTIALS_MESSAGE,
+} from "@table-craft/desktop/engine/protocol.js";
 import { createHostRegistry } from "@table-craft/desktop/main/hosts.js";
 import { listPlugins } from "@table-craft/desktop/main/plugins.js";
 import { createSecretStore, SECRETS_FILE } from "@table-craft/desktop/main/secrets.js";
@@ -886,5 +890,99 @@ describe("datasource tree order (plan 136)", () => {
 
     await expect(deleting).rejects.toThrow(DatasourceError);
     await expect(deleting).rejects.toThrow('Folder "Old" is not empty.');
+  });
+});
+
+/** Plays the engine: acknowledges the credentials main posted once they arrive. */
+async function credentialsApplied(dependencies: ReturnType<typeof fakeHostDependencies>): Promise<unknown> {
+  const host = dependencies.forked[0];
+  let posted: { kind: string; requestId: number; datasource: unknown } | undefined;
+  await vi.waitFor(() => {
+    posted = host?.posted.find(
+      (message): message is { kind: string; requestId: number; datasource: unknown } =>
+        (message as { kind?: unknown }).kind === ENGINE_CREDENTIALS_MESSAGE,
+    );
+    expect(posted).toBeDefined();
+  });
+  host?.answer({ kind: ENGINE_CREDENTIALS_APPLIED_MESSAGE, requestId: posted?.requestId });
+  return posted?.datasource;
+}
+
+describe("language engines (decision 149)", () => {
+  const NEVER_PG = { ...PG_DRAFT, secretModes: { password: "never" } } as const;
+
+  it("givenLanguageModeWithoutStoredPassword_whenConnect_thenPartialEngineStartedWithoutNeedsSecrets", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(NEVER_PG));
+
+    expect(await datasources.connect(saved.id, {}, WINDOW, "language")).toEqual({ status: "connected" });
+
+    expect(dependencies.forked).toHaveLength(1);
+    expect(dependencies.ports).toEqual([[saved.id, WINDOW]]);
+    expect((bootedConfig(dependencies) as { config: Record<string, unknown> }).config).not.toHaveProperty("password");
+  });
+
+  it("givenStoredPassword_whenLanguageConnect_thenCompleteHostSharedWithSessionConnect", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT, SECRET));
+    await datasources.connect(saved.id, {}, WINDOW, "language");
+
+    expect(await datasources.connect(saved.id, {}, "agent")).toEqual({ status: "connected" });
+
+    expect(bootedConfig(dependencies)).toMatchObject({ config: { password: SECRET } });
+    expect(dependencies.forked).toHaveLength(1);
+    expect(dependencies.forked[0]?.posted.map((message) => (message as { kind: string }).kind)).toEqual([
+      "engine.boot",
+    ]);
+  });
+
+  it("givenPartialHost_whenSessionConnectWithoutSecrets_thenNeedsSecretsAndNoPort", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(NEVER_PG));
+    await datasources.connect(saved.id, {}, WINDOW, "language");
+
+    expect(await datasources.connect(saved.id, {}, "agent")).toEqual({ status: "needsSecrets", keys: ["password"] });
+    expect(await datasources.authorize(saved.id, {})).toEqual({ status: "needsSecrets", keys: ["password"] });
+
+    expect(dependencies.ports).toHaveLength(1);
+  });
+
+  it("givenPartialHost_whenSecretsTyped_thenCredentialsSuppliedToSameEngineAndKeptAfterLogin", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+    await datasources.connect(saved.id, {}, WINDOW, "language");
+
+    const authorized = datasources.authorize(saved.id, { password: SECRET });
+    const supplied = await credentialsApplied(dependencies);
+
+    expect(await authorized).toEqual({ status: "connected" });
+    expect(supplied).toMatchObject({ id: saved.id, pluginId: "postgres", config: { password: SECRET } });
+    expect(dependencies.forked).toHaveLength(1);
+    expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+    expect(datasources.list().datasources[0]?.storedSecrets).toEqual(["password"]);
+    expect(await datasources.connect(saved.id, {}, "agent")).toEqual({ status: "connected" });
+    expect(dependencies.ports).toHaveLength(2);
+  });
+
+  it("givenPartialHostExits_whenAuthorizing_thenFailsAndNothingKept", async () => {
+    const { dependencies, service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT));
+    await datasources.connect(saved.id, {}, WINDOW, "language");
+
+    const authorized = datasources.authorize(saved.id, { password: SECRET });
+    await vi.waitFor(() => expect(dependencies.forked[0]?.posted).toHaveLength(2));
+    dependencies.forked[0]?.exit(1);
+
+    expect(await authorized).toMatchObject({ status: "failed" });
+    await datasources.rememberServer(saved.id, seenAt(SEEN_AT));
+    expect(datasources.list().datasources[0]?.storedSecrets).toEqual([]);
+  });
+
+  it("givenNoEngine_whenAuthorizing_thenFailed", async () => {
+    const { service: datasources } = await service();
+    const saved = await datasources.save(saving(PG_DRAFT, SECRET));
+
+    expect(await datasources.authorize(saved.id, {})).toMatchObject({ status: "failed" });
   });
 });

@@ -7,6 +7,7 @@ import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
 import type { MoveRequest } from "@table-craft/desktop/datasourceTree/arrange.js";
 import type {
   Capability,
+  EngineConnectMode,
   HostKeyOffer,
   LastServer,
   ProbeResult,
@@ -81,6 +82,7 @@ export const INVOKE_CHANNELS = {
   installPluginFile: "table-craft:plugins.install-file",
   removePlugin: "table-craft:plugins.remove",
   connectEngine: "table-craft:engine.connect",
+  authorizeEngine: "table-craft:engine.authorize",
   disconnectEngine: "table-craft:engine.disconnect",
   chooseFile: "table-craft:dialog.choose-file",
   openFile: "table-craft:dialog.open-file",
@@ -690,9 +692,22 @@ export interface TableCraftBridge {
   /**
    * Starts or reuses the datasource's engine. On `connected`, the port arrives as a window
    * message of kind `ENGINE_PORT_WINDOW_MESSAGE` naming the datasource. `secrets` carries what
-   * the user typed after `needsSecrets`.
+   * the user typed after `needsSecrets`. `mode` defaults to `session`; `language` never answers
+   * `needsSecrets` (decision 149).
    */
-  connectEngine(datasourceId: string, secrets?: Readonly<Record<string, string>>): Promise<InvokeResult<ConnectResult>>;
+  connectEngine(
+    datasourceId: string,
+    secrets?: Readonly<Record<string, string>>,
+    mode?: EngineConnectMode,
+  ): Promise<InvokeResult<ConnectResult>>;
+  /**
+   * Readies the running engine a `language` port reached for a login: it gets every secret, or
+   * `needsSecrets` names what to type. No new port.
+   */
+  authorizeEngine(
+    datasourceId: string,
+    secrets?: Readonly<Record<string, string>>,
+  ): Promise<InvokeResult<ConnectResult>>;
   /** Stops the datasource's engine; its sessions close and its ports go dead. */
   disconnectEngine(datasourceId: string): Promise<InvokeResult<null>>;
   /** The native open dialog, for a `file` connection field; null when cancelled. */

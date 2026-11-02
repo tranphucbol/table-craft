@@ -9,7 +9,7 @@ import {
 import { MS_PER_SECOND, connectDatasource } from "@table-craft/desktop/engine/connect.js";
 import { createConnectionContext } from "@table-craft/desktop/engine/connection.js";
 import { createEngineContext } from "@table-craft/desktop/engine/context.js";
-import { BUG_HINT, toEngineError } from "@table-craft/desktop/engine/failures.js";
+import { BUG_HINT, EngineFailure, toEngineError } from "@table-craft/desktop/engine/failures.js";
 import type {
   DatasourceConfig,
   EngineEvent,
@@ -51,8 +51,41 @@ export interface Engine {
   connect(emit?: (event: EngineEvent) => void, files?: EngineOperationFiles): EngineConnection;
   /** Resolves once no export or import runs, so a reloading window does not cut one short. */
   tasksSettled(): Promise<void>;
+  /**
+   * The datasource's config with the secrets the engine booted without (decision 149): sessions
+   * opened from now on log in with it; open ones keep their login. It must name the same
+   * datasource and plugin.
+   */
+  supply(datasource: DatasourceConfig): void;
   /** Closes what the engine holds for every connection: export and import tasks and the introspection session. */
   close(): Promise<void>;
+}
+
+interface SwappableConnector extends Connector {
+  replace(next: Connector): void;
+}
+
+/**
+ * Every part of the engine holds the connector it was built with, so supplied credentials swap
+ * what it delegates to. A replaced connector stays open until the engine closes: its tunnel may
+ * still carry sessions opened before.
+ */
+function swappable(initial: Connector): SwappableConnector {
+  let current = initial;
+  const retired: Connector[] = [];
+  return {
+    connect: (options) => current.connect(options),
+    get hop() {
+      return current.hop;
+    },
+    replace(next) {
+      retired.push(current);
+      current = next;
+    },
+    async close() {
+      await Promise.all([current, ...retired].map((connector) => connector.close()));
+    },
+  };
 }
 
 const refuseUnknownHostKey: HostKeyVerifier = (offer) =>
@@ -114,7 +147,8 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
 }
 
 export function createEngine(options: EngineOptions, now: () => number = Date.now): Engine {
-  const context = createEngineContext(options, datasourceConnector(options), now);
+  const target = swappable(datasourceConnector(options));
+  const context = createEngineContext(options, target, now);
   const { log, logContext, tasks, imports, scripts, connector } = context;
   const connections = new Set<ReturnType<typeof createConnectionContext>>();
   const credentials = new KeyOperationScope(context);
@@ -200,6 +234,16 @@ export function createEngine(options: EngineOptions, now: () => number = Date.no
   return {
     applyAccessSecret: (change) => applyAccessSecret(credentials, change),
     connect,
+    supply(datasource) {
+      if (datasource.id !== options.datasource.id || datasource.pluginId !== options.datasource.pluginId) {
+        throw new EngineFailure({
+          code: "invalidRequest",
+          message: `Credentials for ${datasource.id} (${datasource.pluginId}) reached the engine of ${options.datasource.id} (${options.datasource.pluginId}).`,
+          hint: BUG_HINT,
+        });
+      }
+      target.replace(datasourceConnector({ ...options, datasource }));
+    },
     tasksSettled: async () => {
       await Promise.all([
         tasks.settled(),

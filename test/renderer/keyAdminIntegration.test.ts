@@ -179,6 +179,7 @@ describe("key admin shell integration", () => {
   it("givenTxnDrafts_whenConsoleClosesOrPluginGoes_thenDraftForgottenAndProbeRepeated", async () => {
     const datasources = createDatasourcesStore({
       connectEngine: () => Promise.resolve({ status: "connected", client: client(() => Promise.resolve(null)) }),
+      authorizeEngine: () => Promise.resolve({ status: "authorized" }),
       disconnectEngine: () => Promise.resolve(undefined),
       promptSecrets: () => Promise.resolve(null),
       rememberServer: () => Promise.resolve(),

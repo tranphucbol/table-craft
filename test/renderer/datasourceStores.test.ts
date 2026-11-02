@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
   ClassifiedStatement,
+  EngineConnectMode,
   EngineError,
   ExecutedStatement,
   OpenedSession,
@@ -9,6 +10,7 @@ import type {
 import type { DatasourceList, DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import {
   EngineRequestError,
+  type EngineAuthorization,
   type EngineClient,
   type EngineConnection,
 } from "@table-craft/desktop/renderer/engine/client.js";
@@ -31,6 +33,7 @@ const PG = view({ id: "pg", name: "pg", secretModes: { password: "never" } });
 const LITE = view({ id: "lite", name: "lite", pluginId: "sqlite" });
 
 const SEEN_AT = 1_800_000_000_000;
+const REFUSED: EngineError = { code: "connectionFailed", message: "password authentication failed", hint: "Check it." };
 
 function list(datasources: readonly DatasourceView[]): DatasourceList {
   return { datasources, folders: [], warning: null, encryption: { available: true, reason: null } };
@@ -38,17 +41,25 @@ function list(datasources: readonly DatasourceView[]): DatasourceList {
 
 interface FakeClient extends EngineClient {
   readonly failedWith: () => EngineError | null;
+  readonly calls: string[];
 }
 
 /** An engine that names its datasource in every result, so a mix-up shows. */
-function fakeClient(datasourceId: string, options: { openFails?: EngineError; serverBrand?: string } = {}): FakeClient {
+function fakeClient(
+  datasourceId: string,
+  options: { openFails?: EngineError | (() => EngineError | undefined); serverBrand?: string } = {},
+): FakeClient {
   let sessions = 0;
   let failure: EngineError | null = null;
+  const calls: string[] = [];
   const client = {
+    calls,
     call(type: string, params: Record<string, unknown>): Promise<unknown> {
+      calls.push(type);
       if (failure !== null) return Promise.reject(new EngineRequestError(failure));
       if (type === "session.open") {
-        if (options.openFails !== undefined) return Promise.reject(new EngineRequestError(options.openFails));
+        const openFails = typeof options.openFails === "function" ? options.openFails() : options.openFails;
+        if (openFails !== undefined) return Promise.reject(new EngineRequestError(openFails));
         const opened: OpenedSession = {
           sessionId: `${datasourceId}-${String(++sessions)}`,
           pluginName: datasourceId,
@@ -61,6 +72,7 @@ function fakeClient(datasourceId: string, options: { openFails?: EngineError; se
         };
         return Promise.resolve(opened);
       }
+      if (type === "sql.format") return Promise.resolve(String(params.text).toUpperCase());
       if (type === "script.split") {
         const text = String(params.text);
         const statement: ClassifiedStatement = {
@@ -106,12 +118,31 @@ function harness(
   } = {},
 ) {
   const clients = new Map<string, FakeClient>();
-  const connectEngine = vi.fn((id: string, secrets?: Readonly<Record<string, string>>): Promise<EngineConnection> => {
+  /** The password main handed a `language` engine of pg; null while it runs without one. */
+  let supplied: string | null = null;
+  const connectEngine = vi.fn(
+    (id: string, secrets?: Readonly<Record<string, string>>, mode?: EngineConnectMode): Promise<EngineConnection> => {
+      if (id === "pg" && mode === "language") {
+        supplied = null;
+        const client = fakeClient(id, { openFails: () => (supplied === "right" ? undefined : REFUSED) });
+        clients.set(id, client);
+        return Promise.resolve({ status: "connected", client });
+      }
+      return connectForSession(id, secrets);
+    },
+  );
+  const authorizeEngine = vi.fn(
+    (id: string, secrets?: Readonly<Record<string, string>>): Promise<EngineAuthorization> => {
+      if (id !== "pg" || supplied !== null) return Promise.resolve({ status: "authorized" });
+      if (secrets?.password === undefined) return Promise.resolve({ status: "needsSecrets", keys: ["password"] });
+      supplied = secrets.password;
+      return Promise.resolve({ status: "authorized" });
+    },
+  );
+  function connectForSession(id: string, secrets?: Readonly<Record<string, string>>): Promise<EngineConnection> {
     if (id === "pg" && secrets === undefined) return Promise.resolve({ status: "needsSecrets", keys: ["password"] });
     if (id === "pg" && secrets?.password !== "right") {
-      const client = fakeClient(id, {
-        openFails: { code: "connectionFailed", message: "password authentication failed", hint: "Check it." },
-      });
+      const client = fakeClient(id, { openFails: REFUSED });
       clients.set(id, client);
       return Promise.resolve({ status: "connected", client });
     }
@@ -119,12 +150,13 @@ function harness(
     const client = fakeClient(id, serverBrand === undefined ? {} : { serverBrand });
     clients.set(id, client);
     return Promise.resolve({ status: "connected", client });
-  });
+  }
   const remembered: [string, ServerSeen][] = [];
   const disconnectEngine = vi.fn((_id: string) => Promise.resolve());
   const prompts: SecretRequest[] = [];
   const dependencies: DatasourcesDependencies = {
     connectEngine,
+    authorizeEngine,
     disconnectEngine,
     promptSecrets: (request) => {
       prompts.push(request);
@@ -142,11 +174,23 @@ function harness(
   let now = 0;
   const consoles = createConsolesStore({
     connect: (id) => datasources.getState().connect(id),
+    engine: (id) => datasources.getState().engine(id),
     now: () => (now += 5),
   });
   const tabs = createTabsStore();
   const unwire = wireStores({ datasources, consoles, tabs });
-  return { datasources, consoles, tabs, unwire, connectEngine, disconnectEngine, prompts, clients, remembered };
+  return {
+    datasources,
+    consoles,
+    tabs,
+    unwire,
+    connectEngine,
+    authorizeEngine,
+    disconnectEngine,
+    prompts,
+    clients,
+    remembered,
+  };
 }
 
 describe("datasource and console stores", () => {
@@ -202,8 +246,8 @@ describe("datasource and console stores", () => {
 
     expect(prompts.map((request) => request.fields.map((field) => field.key))).toEqual([["password"]]);
     expect(connectEngine.mock.calls).toEqual([
-      ["pg", undefined],
-      ["pg", { password: "right" }],
+      ["pg", undefined, "session"],
+      ["pg", { password: "right" }, "session"],
     ]);
     expect(datasources.getState().connections.pg).toEqual({
       status: "connected",
@@ -296,6 +340,114 @@ describe("datasource and console stores", () => {
 
     expect(disconnectEngine).toHaveBeenCalledWith("lite");
     expect(datasources.getState().connections.lite?.status).toBe("disconnected");
+    expect(consoles.getState().consoles.c1?.status).toBe("disconnected");
+  });
+
+  it("givenDisconnectedDatasource_whenEngineRequested_thenNoSessionOpenedAndStatusStaysDisconnected", async () => {
+    const { datasources, connectEngine, clients, prompts } = harness();
+
+    await datasources.getState().engine("pg");
+
+    expect(connectEngine.mock.calls).toEqual([["pg", undefined, "language"]]);
+    expect(clients.get("pg")?.calls).toEqual([]);
+    expect(prompts).toEqual([]);
+    expect(datasources.getState().connections.pg).toBeUndefined();
+  });
+
+  it("givenConnectedDatasource_whenEngineRequested_thenConnectedClientReturned", async () => {
+    const { datasources, connectEngine } = harness();
+    const connected = await datasources.getState().connect("lite");
+
+    const engine = await datasources.getState().engine("lite");
+
+    expect(engine).toBe(connected);
+    expect(connectEngine).toHaveBeenCalledTimes(1);
+    expect(datasources.getState().connections.lite?.status).toBe("connected");
+  });
+
+  it("givenTwoEngineRequests_whenConcurrent_thenOneEngineStarted", async () => {
+    const { datasources, connectEngine } = harness();
+
+    const [first, second] = await Promise.all([
+      datasources.getState().engine("lite"),
+      datasources.getState().engine("lite"),
+    ]);
+
+    expect(first).toBe(second);
+    expect(connectEngine).toHaveBeenCalledTimes(1);
+  });
+
+  it("givenEngineStartedForFormat_whenConnected_thenSameEngineAuthorizedAndVerified", async () => {
+    const { datasources, connectEngine, authorizeEngine } = harness();
+    const engine = await datasources.getState().engine("lite");
+
+    const connected = await datasources.getState().connect("lite");
+
+    expect(connected).toBe(engine);
+    expect(connectEngine).toHaveBeenCalledTimes(1);
+    expect(authorizeEngine.mock.calls).toEqual([["lite", undefined]]);
+    expect(datasources.getState().connections.lite).toMatchObject({ status: "connected", serverVersion: "lite 1.0" });
+  });
+
+  it("givenPartialEngine_whenConnected_thenPromptsAndAuthorizesBeforeVerify", async () => {
+    const { datasources, connectEngine, authorizeEngine, prompts } = harness();
+    const engine = await datasources.getState().engine("pg");
+
+    const connected = await datasources.getState().connect("pg");
+
+    expect(connected).toBe(engine);
+    expect(prompts.map((request) => request.fields.map((field) => field.key))).toEqual([["password"]]);
+    expect(authorizeEngine.mock.calls).toEqual([
+      ["pg", undefined],
+      ["pg", { password: "right" }],
+    ]);
+    expect(connectEngine).toHaveBeenCalledTimes(1);
+    expect(datasources.getState().connections.pg?.status).toBe("connected");
+  });
+
+  it("givenPartialEngine_whenWrongPasswordOnConnect_thenFailedAndEngineStopped", async () => {
+    const { datasources, disconnectEngine, clients } = harness({ prompt: () => ({ password: "wrong" }) });
+    await datasources.getState().engine("pg");
+
+    await expect(datasources.getState().connect("pg")).rejects.toMatchObject({ code: "connectionFailed" });
+
+    await vi.waitFor(() => expect(disconnectEngine).toHaveBeenCalledWith("pg"));
+    expect(clients.get("pg")?.failedWith()?.message).toBe("password authentication failed");
+    expect(datasources.getState().connections.pg?.status).toBe("failed");
+  });
+
+  it("givenLanguageOnlyEngine_whenItExits_thenStatusUnchangedConsolesUntouchedAndNextRequestStartsOne", async () => {
+    const { datasources, consoles, connectEngine } = harness();
+    await consoles.getState().open("c1", "lite", { sql: "select 1", connect: false });
+    await datasources.getState().engine("lite");
+
+    datasources.getState().engineExited({ datasourceId: "lite", code: 134, clean: false });
+    await datasources.getState().engine("lite");
+
+    expect(datasources.getState().connections.lite).toBeUndefined();
+    expect(consoles.getState().consoles.c1).toMatchObject({ status: "disconnected", error: null });
+    expect(connectEngine).toHaveBeenCalledTimes(2);
+  });
+
+  it("givenLanguageOnlyEngine_whenDisconnected_thenEngineStoppedAndStatusUntouched", async () => {
+    const { datasources, disconnectEngine } = harness();
+    await datasources.getState().engine("lite");
+
+    await datasources.getState().disconnect("lite");
+
+    expect(disconnectEngine).toHaveBeenCalledWith("lite");
+    expect(datasources.getState().connections.lite).toBeUndefined();
+  });
+
+  it("givenDisconnectedConsole_whenReformatted_thenFormattedAndDatasourceStaysDisconnected", async () => {
+    const { datasources, consoles, clients } = harness();
+    await consoles.getState().open("c1", "pg", { sql: "select 1", connect: false });
+
+    await consoles.getState().reformat("c1");
+
+    expect(consoles.getState().consoles.c1?.replacement?.text).toBe("SELECT 1");
+    expect(clients.get("pg")?.calls).toEqual(["sql.format"]);
+    expect(datasources.getState().connections.pg).toBeUndefined();
     expect(consoles.getState().consoles.c1?.status).toBe("disconnected");
   });
 });

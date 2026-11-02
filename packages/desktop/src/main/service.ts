@@ -1,7 +1,12 @@
 import { keyNeedsPassphrase, type QueryHistory } from "@table-craft/core";
 import { ConnectionUrlError, formatConnectionUrl, parseConnectionUrl } from "@table-craft/plugin-api";
 import type { ConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
-import type { DatasourceConfig, ProbeResult, SshTunnelConfig } from "@table-craft/desktop/engine/protocol.js";
+import type {
+  DatasourceConfig,
+  EngineConnectMode,
+  ProbeResult,
+  SshTunnelConfig,
+} from "@table-craft/desktop/engine/protocol.js";
 import {
   arrange,
   ArrangeError,
@@ -43,6 +48,21 @@ export class DatasourceError extends Error {
   ) {
     super(message);
   }
+}
+
+const ENGINE_STOPPED: ConnectResult = {
+  status: "failed",
+  message: "The data source's engine stopped before it could log in.",
+  hint: "Connect again.",
+};
+
+/** What `connect` starts an engine with, and what it still lacks for a login. */
+interface Credentials {
+  readonly status: "resolved";
+  readonly config: DatasourceConfig;
+  readonly missing: readonly string[];
+  /** Typed secrets the user chose to keep, stored once a login confirms them. */
+  readonly toKeep: Readonly<Record<string, string>>;
 }
 
 /** The `TABLE_CRAFT_DATASOURCE` seam (decision 018, amended): listed, never written to disk. */
@@ -87,7 +107,15 @@ export interface DatasourceService<Target> {
   parseUrl(pluginId: string, url: string): ParsedUrl;
   /** The saved data source's connection URL, without secrets. */
   url(id: string): string;
-  connect(datasourceId: string, typed: Readonly<Record<string, string>>, target: Target): Promise<ConnectResult>;
+  /** A port to the datasource's engine; `language` starts one without asking for secrets (decision 149). */
+  connect(
+    datasourceId: string,
+    typed: Readonly<Record<string, string>>,
+    target: Target,
+    mode?: EngineConnectMode,
+  ): Promise<ConnectResult>;
+  /** Gives the running engine every secret a login needs, without a new port; `needsSecrets` names what to type. */
+  authorize(datasourceId: string, typed: Readonly<Record<string, string>>): Promise<ConnectResult>;
   disconnect(datasourceId: string): Promise<void>;
   /**
    * Settings › MCP Server's access column (decision 127). It never raises a production-coloured
@@ -554,16 +582,11 @@ export async function createDatasourceService<Target>(
     return hosts.probe(engineConfig(probed, values));
   }
 
-  async function connect(
-    datasourceId: string,
+  /** The secrets a login needs: what was typed, else what is stored; `missing` is neither. */
+  async function credentialsOf(
+    datasource: Datasource,
     typed: Readonly<Record<string, string>>,
-    target: Target,
-  ): Promise<ConnectResult> {
-    const datasource = find(datasourceId);
-    if (hosts.isRunning(datasourceId)) {
-      hosts.open(engineConfig(datasource, {}), target);
-      return { status: "connected" };
-    }
+  ): Promise<Credentials | Extract<ConnectResult, { status: "failed" }>> {
     const plugin = pluginOf(datasource.pluginId);
     if (plugin === undefined || plugin.unavailableReason !== null) {
       const reason = plugin?.unavailableReason ?? `No plugin "${datasource.pluginId}" is installed.`;
@@ -572,14 +595,14 @@ export async function createDatasourceService<Target>(
     const values: Record<string, string> = {};
     const toKeep: Record<string, string> = {};
     const missing: string[] = [];
-    const isEphemeral = ephemeral?.id === datasourceId;
+    const isEphemeral = ephemeral?.id === datasource.id;
     const needed = [
       ...(await pluginKeysNeeded(plugin, datasource.config)),
       ...(await sshKeysNeeded(tunnelOf(plugin, datasource.ssh))),
     ];
     for (const key of needed) {
       const mode = datasource.secretModes[key] ?? "never";
-      const value = typed[key] ?? secrets.get(datasourceId, key, mode);
+      const value = typed[key] ?? secrets.get(datasource.id, key, mode);
       if (value === undefined) {
         if (!isEphemeral) missing.push(key);
         continue;
@@ -587,11 +610,56 @@ export async function createDatasourceService<Target>(
       values[key] = value;
       if (typed[key] !== undefined && mode !== "never") toKeep[key] = value;
     }
-    if (missing.length > 0) return { status: "needsSecrets", keys: missing };
+    return { status: "resolved", config: engineConfig(datasource, values), missing, toKeep };
+  }
+
+  function holdUnconfirmed(datasourceId: string, toKeep: Readonly<Record<string, string>>): void {
     if (Object.keys(toKeep).length > 0) unconfirmed.set(datasourceId, toKeep);
     else unconfirmed.delete(datasourceId);
-    hosts.open(engineConfig(datasource, values), target);
+  }
+
+  /** Gives a running engine started for `language` what a login needs (decision 149). */
+  async function complete(datasource: Datasource, typed: Readonly<Record<string, string>>): Promise<ConnectResult> {
+    if (hosts.isComplete(datasource.id)) return { status: "connected" };
+    const resolved = await credentialsOf(datasource, typed);
+    if (resolved.status === "failed") return resolved;
+    if (resolved.missing.length > 0) return { status: "needsSecrets", keys: resolved.missing };
+    holdUnconfirmed(datasource.id, resolved.toKeep);
+    if (await hosts.supply(resolved.config)) return { status: "connected" };
+    unconfirmed.delete(datasource.id);
+    return ENGINE_STOPPED;
+  }
+
+  async function connect(
+    datasourceId: string,
+    typed: Readonly<Record<string, string>>,
+    target: Target,
+    mode: EngineConnectMode = "session",
+  ): Promise<ConnectResult> {
+    const datasource = find(datasourceId);
+    if (hosts.isRunning(datasourceId)) {
+      if (mode === "session") {
+        const completed = await complete(datasource, typed);
+        if (completed.status !== "connected") return completed;
+      }
+      hosts.open(engineConfig(datasource, {}), target);
+      return { status: "connected" };
+    }
+    const resolved = await credentialsOf(datasource, typed);
+    if (resolved.status === "failed") return resolved;
+    const { config, missing, toKeep } = resolved;
+    if (mode === "session") {
+      if (missing.length > 0) return { status: "needsSecrets", keys: missing };
+      holdUnconfirmed(datasourceId, toKeep);
+    }
+    hosts.open(config, target, missing.length === 0);
     return { status: "connected" };
+  }
+
+  async function authorize(datasourceId: string, typed: Readonly<Record<string, string>>): Promise<ConnectResult> {
+    const datasource = find(datasourceId);
+    if (!hosts.isRunning(datasourceId)) return ENGINE_STOPPED;
+    return complete(datasource, typed);
   }
 
   /**
@@ -689,6 +757,7 @@ export async function createDatasourceService<Target>(
     parseUrl,
     url: urlOf,
     connect,
+    authorize,
     disconnect,
     setAgentAccess,
     setAgentPolicy,

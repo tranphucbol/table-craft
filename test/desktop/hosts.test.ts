@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENGINE_CREDENTIALS_APPLIED_MESSAGE,
+  ENGINE_CREDENTIALS_MESSAGE,
   ENGINE_HOST_KEY_ANSWER_MESSAGE,
   ENGINE_HOST_KEY_MESSAGE,
   ENGINE_LOG_MESSAGE,
@@ -222,5 +224,52 @@ describe("host registry host keys", () => {
     dependencies.elapse();
     await settle();
     expect(result).toMatchObject({ ok: false, error: { code: "timedOut" } });
+  });
+});
+
+describe("partial hosts (decision 149)", () => {
+  const SUPPLIED = { ...DATASOURCE, config: { host: "db", password: "hunter2" } };
+
+  it("givenHostOpenedIncomplete_whenSupplied_thenCredentialsPostedProtectedAndHostComplete", async () => {
+    const { dependencies, hosts, protectedConfigs } = loggedRegistry();
+    hosts.open(DATASOURCE, "window-1", false);
+    expect(hosts.isComplete("pg")).toBe(false);
+
+    const supplied = hosts.supply(SUPPLIED);
+    const posted = dependencies.forked[0]?.posted[1] as { kind: string; requestId: number; datasource: unknown };
+    expect(posted).toMatchObject({ kind: ENGINE_CREDENTIALS_MESSAGE, datasource: SUPPLIED });
+    expect(protectedConfigs).toContainEqual(SUPPLIED);
+    dependencies.forked[0]?.answer({ kind: ENGINE_CREDENTIALS_APPLIED_MESSAGE, requestId: posted.requestId });
+
+    expect(await supplied).toBe(true);
+    expect(hosts.isComplete("pg")).toBe(true);
+    expect(dependencies.forked).toHaveLength(1);
+  });
+
+  it("givenCompleteHost_whenOpened_thenIsCompleteTrue", () => {
+    const { hosts } = registry();
+
+    hosts.open(DATASOURCE, "window-1");
+
+    expect(hosts.isComplete("pg")).toBe(true);
+    expect(hosts.isComplete("other")).toBe(false);
+  });
+
+  it("givenHostExitsBeforeAnswering_whenSupplied_thenFalse", async () => {
+    const { dependencies, hosts } = registry();
+    hosts.open(DATASOURCE, "window-1", false);
+
+    const supplied = hosts.supply(SUPPLIED);
+    dependencies.forked[0]?.exit(15);
+
+    expect(await supplied).toBe(false);
+    expect(hosts.isComplete("pg")).toBe(false);
+  });
+
+  it("givenNoHost_whenSupplied_thenFalseAndNothingStarted", async () => {
+    const { dependencies, hosts } = registry();
+
+    expect(await hosts.supply(SUPPLIED)).toBe(false);
+    expect(dependencies.forked).toHaveLength(0);
   });
 });

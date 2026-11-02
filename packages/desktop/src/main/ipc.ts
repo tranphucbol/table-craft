@@ -81,10 +81,11 @@ const deleteRequest = z.strictObject({
 }) satisfies z.ZodType<DeleteDatasourcesRequest>;
 const folderRequest = z.strictObject({ path: z.string() });
 const parseUrlRequest = z.strictObject({ pluginId: z.string().min(1), url: z.string() });
-const connectRequest = z.strictObject({
+const authorizeRequest = z.strictObject({
   datasourceId: z.string().min(1),
   secrets: z.record(z.string(), z.string()).optional(),
 });
+const connectRequest = authorizeRequest.extend({ mode: z.enum(["session", "language"]).optional() });
 const disconnectRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const chooseFileRequest = z.strictObject({ title: z.string() });
 const saveFileRequest = z.strictObject({ title: z.string(), defaultName: z.string() });
@@ -329,8 +330,11 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.testDatasource, saveRequest, (request) => service.test(request));
   handle(INVOKE_CHANNELS.parseDatasourceUrl, parseUrlRequest, ({ pluginId, url }) => service.parseUrl(pluginId, url));
   handle(INVOKE_CHANNELS.datasourceUrl, idRequest, ({ id }) => service.url(id));
-  handle(INVOKE_CHANNELS.connectEngine, connectRequest, ({ datasourceId, secrets }, sender) =>
-    service.connect(datasourceId, secrets ?? {}, sender),
+  handle(INVOKE_CHANNELS.connectEngine, connectRequest, ({ datasourceId, secrets, mode }, sender) =>
+    service.connect(datasourceId, secrets ?? {}, sender, mode),
+  );
+  handle(INVOKE_CHANNELS.authorizeEngine, authorizeRequest, ({ datasourceId, secrets }) =>
+    service.authorize(datasourceId, secrets ?? {}),
   );
   handle(INVOKE_CHANNELS.disconnectEngine, disconnectRequest, async ({ datasourceId }) => {
     await service.disconnect(datasourceId);
