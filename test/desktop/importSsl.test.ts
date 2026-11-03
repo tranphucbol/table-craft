@@ -63,6 +63,13 @@ describe("importing SSL settings", () => {
     expect(result.draft?.config).toMatchObject({ sslMode: "verify-full", sslRootCert: "/certs/ca.pem" });
   });
 
+  it("givenPreferred_whenMapped_thenSslOffWithoutWarnings", async () => {
+    const result = await mapped({ mode: "preferred", ...NO_FILES });
+
+    expect(result.draft?.config).toMatchObject({ sslMode: "disable" });
+    expect(result.row.warnings).toEqual([]);
+  });
+
   it("givenPluginWithoutCertificateFields_whenMapped_thenFilesDroppedWithWarning", async () => {
     const plugins = (await listPlugins([BUILT_IN_PLUGINS])).map((plugin) =>
       plugin.id === "postgres" ? { ...plugin, tls: null } : plugin,
