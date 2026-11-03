@@ -2474,7 +2474,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `editor.format.indentWidth`            | 1–8 spaces                                                                                      | 2             |
 | `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                 | 1             |
 | `editor.format.alignAliases`           | boolean; line up `AS` in a select list (aligned style)                                          | `true`        |
-| `keymap`                               | action id to the chords that replace its own; `[]` leaves it none (decision 153)                | `{}`          |
+| `keymap`                               | action id to the chords that replace its own; `[]` leaves it none (decision 154)                | `{}`          |
 | `console.parameters`                   | boolean; ask for `:name`, `?` and `$1` values before a run                                      | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override   | 0             |
 | `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements, or a script, does on a failure     | `ask`         |
@@ -2538,7 +2538,7 @@ statement fails, `console.runAllOnError`; the Sessions refresh). Each page has
 Restore Defaults; a value outside its range is refused inline and not saved.
 Date and time formats are not settings in v1.
 
-The Keymap page (plan 044, decision 153) lists every action in the palette or with a chord, under
+The Keymap page (plan 044, decision 154) lists every action in the palette or with a chord, under
 a sticky heading per category and by title, each with its chords, a remove button per chord, an add
 button shown on hover or focus, and, once changed, a Modified marker with Reset; Restore Defaults
 puts back every action this build knows. The list is one Tab stop: the arrow keys, Home and End move

@@ -6,7 +6,7 @@ import type { Chord } from "@table-craft/desktop/renderer/actions/chords.js";
  * editor declares one. Run, Run All and Commit (`Mod+Enter` and its siblings) stay with the registry,
  * and so do Find and Replace (plan 139). `Ctrl+Space` is CodeMirror's Basic Completion (plan 009
  * decision 17); `F3` and `Shift+F3` step through matches and `Escape` closes the find bar. Each
- * is named, so the Keymap page can say what a chord recorded over one does there (decision 153).
+ * is named, so the Keymap page can say what a chord recorded over one does there (decision 154).
  */
 export const EDITOR_COMMANDS: readonly { readonly chord: Chord; readonly name: string }[] = [
   { chord: "Mod+Z", name: "Undo" },

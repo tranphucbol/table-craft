@@ -171,7 +171,7 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
 /**
  * An item that shows its action's chord shows the one in effect: on macOS an unhandled key
  * equivalent still reaches the menu, so a stale accelerator would run the action under its old
- * chord (decision 153). An item declared without one stays without, as New Data Source's ⌘N does.
+ * chord (decision 154). An item declared without one stays without, as New Data Source's ⌘N does.
  */
 function withKeymap(item: ActionMenuItem, overrides: KeymapOverrides): ActionMenuItem {
   if (item.accelerator === undefined || !Object.hasOwn(overrides, item.actionId)) return item;

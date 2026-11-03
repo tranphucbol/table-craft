@@ -15,7 +15,7 @@ function defaultsOf(action: ShortcutSource): readonly Chord[] {
 
 /**
  * The keymap in effect: an override replaces the action's declared chord, `[]` leaves it none, and
- * an override for an id no action has is ignored (decision 153).
+ * an override for an id no action has is ignored (decision 154).
  */
 export function effectiveShortcuts(
   actions: readonly ShortcutSource[],
@@ -78,7 +78,7 @@ export function withDefault(overrides: KeymapOverrides, actionId: string): Keyma
 
 /**
  * Every action back to its default. Overrides for ids this build has no action for stay, as
- * reading the file keeps them (decision 153).
+ * reading the file keeps them (decision 154).
  */
 export function withAllDefaults(overrides: KeymapOverrides, actions: readonly ShortcutSource[]): KeymapOverrides {
   const known = new Set(actions.map((action) => action.id));
