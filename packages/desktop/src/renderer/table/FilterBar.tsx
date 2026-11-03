@@ -12,6 +12,9 @@ import { connectedSignature } from "@table-craft/desktop/renderer/console/signat
 /** Chords CodeMirror would take that belong to the registry here: ⌘↵ is Submit. */
 const REGISTRY_KEYS = new Set(["Mod-Enter"]);
 
+/** A one-line field has no room for a bar: it scrolls by caret, wheel or trackpad instead. */
+const ONE_LINE_THEME = EditorView.theme({ ".cm-scroller": { scrollbarWidth: "none" } });
+
 export interface FilterBarProps {
   /** `WHERE` or `ORDER BY`, shown before the field and naming it. */
   readonly label: string;
@@ -63,6 +66,7 @@ export function FilterBar({
         doc: "",
         extensions: [
           EDITOR_THEME,
+          ONE_LINE_THEME,
           history(),
           sql({ dialect, upperCaseKeywords: true }),
           completion({

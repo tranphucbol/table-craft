@@ -38,7 +38,10 @@ gone or broken falls back to Dark with a notice in the Database pane. Contrast i
 user themes. `color-scheme` drives native form controls, and main sets
 `nativeTheme.themeSource` and the window's `backgroundColor` to match. Scrollbars take the theme
 too: `app.css` sets `scrollbar-color` on the root to `inkMuted` at 45% over a transparent track,
-so every scroller, the editor's included, follows a theme switch with no token of its own.
+so every scroller, the editor's included, follows a theme switch with no token of its own. That
+rule turns macOS overlay bars into classic ones that always take room, so a one-line field (the
+table editor's WHERE and ORDER BY) and a strip too short for a bar (editor tabs) hide theirs with
+`scrollbar-width: none` (`scrollbar-none` in `app.css`) and still scroll by caret, wheel or trackpad.
 
 | Token (`appearance/themes.ts`) | CSS variable                | Dark      | Light     | High contrast |
 | ------------------------------ | --------------------------- | --------- | --------- | ------------- |
