@@ -83,4 +83,23 @@ describe("application menu", () => {
       expect(item.accelerator, item.actionId).toBe(electronAccelerator(shortcut ?? ""));
     }
   });
+
+  it("givenOverride_whenMenuBuilt_thenAcceleratorUpdated", () => {
+    const [newConsole] = menuActionItems(menuFor(true, { "console.new": ["Ctrl+Alt+N", "F7"] })).filter(
+      (item) => item.actionId === "console.new",
+    );
+
+    expect(newConsole?.accelerator).toBe("Ctrl+Alt+N");
+  });
+
+  it("givenEmptyOverride_whenMenuBuilt_thenNoAccelerator", () => {
+    const declared = menuActionItems(menuFor(true)).find((item) => item.actionId === "console.new");
+    const cleared = menuActionItems(menuFor(true, { "console.new": [] })).find(
+      (item) => item.actionId === "console.new",
+    );
+
+    expect(declared?.accelerator).toBe("CmdOrCtrl+Shift+L");
+    expect(cleared).toBeDefined();
+    expect(cleared?.accelerator).toBeUndefined();
+  });
 });

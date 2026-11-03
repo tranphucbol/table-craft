@@ -2,9 +2,9 @@ import { useCallback, type ReactNode } from "react";
 import { SEGMENT, SEGMENT_GROUP } from "@table-craft/desktop/renderer/ui/Segmented.js";
 import type { EngineError } from "@table-craft/desktop/engine/protocol.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
-import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
+import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { formatPatternOf, hasAttributes, KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { TABLE_ACTION_IDS, TABLE_CELL_MENU } from "@table-craft/desktop/renderer/actions/tableActions.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
@@ -54,11 +54,6 @@ const GUARDED_TEXT = "Saves only if no one changed it since you opened it";
 const RECREATE_PENDING_TEXT = "; Submit writes it back as it was read";
 const ERROR_CLASS = "shrink-0 border-b border-line bg-panel px-gap py-1 break-words text-danger";
 
-function shortcutText(actionId: string): string {
-  const shortcut = registry.get(actionId)?.shortcut;
-  return shortcut === undefined ? "" : formatChord(shortcut, currentPlatform());
-}
-
 function KeyPanel({
   tabId,
   tab,
@@ -70,6 +65,7 @@ function KeyPanel({
   readonly editable: boolean;
   readonly focus: { readonly row: number; readonly column: number } | null;
 }) {
+  const applyHint = useShortcut(TABLE_ACTION_IDS.applyValue) ?? "";
   const result = tab.result;
   const column = focus === null ? null : (result?.columns[focus.column] ?? null);
   const pattern = formatPatternOf(tab);
@@ -87,7 +83,7 @@ function KeyPanel({
           column={column}
           text={draft?.text ?? text}
           json={false}
-          applyHint={shortcutText(TABLE_ACTION_IDS.applyValue)}
+          applyHint={applyHint}
           onChange={(next) => useKeyTabs.getState().editPanel(tabId, focus, next)}
         />
       );

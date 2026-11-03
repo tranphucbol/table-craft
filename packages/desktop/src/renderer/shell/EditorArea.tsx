@@ -2,7 +2,7 @@ import * as ContextMenu from "@radix-ui/react-context-menu";
 import { Fragment, useEffect, useRef, useState, type WheelEvent } from "react";
 import { Group, Panel } from "react-resizable-panels";
 import { ACTION_IDS, type TabArgs } from "@table-craft/desktop/renderer/actions/appActions.js";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
 import { FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/fileActions.js";
 import { ActionTabContext, invoke, registry, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
@@ -96,15 +96,14 @@ function TabMenuItem({
 }) {
   const { actionId } = entry;
   const enabled = useActionEnabled(actionId) && (entry.enabled?.(facts) ?? true);
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   if (action === undefined) return null;
   const args: TabArgs = { tabId };
   return (
     <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId, args)}>
       <span>{entry.label?.(facts) ?? action.title}</span>
-      {action.shortcut === undefined ? null : (
-        <span className={MENU_SHORTCUT}>{formatChord(action.shortcut, currentPlatform())}</span>
-      )}
+      {shortcut === undefined ? null : <span className={MENU_SHORTCUT}>{shortcut}</span>}
     </ContextMenu.Item>
   );
 }

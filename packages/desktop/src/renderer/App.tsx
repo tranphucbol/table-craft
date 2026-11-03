@@ -12,6 +12,7 @@ import { currentContext, focusedRegion, modalOpen, trackFocus } from "@table-cra
 import { openRecentFromMenu, syncFileConsoles } from "@table-craft/desktop/renderer/actions/fileActions.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { installKeymap } from "@table-craft/desktop/renderer/actions/keymap.js";
+import { currentShortcuts } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { rememberOpenTables, restoreTables } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { adminHost } from "@table-craft/desktop/renderer/keyAdmin/host.js";
@@ -86,6 +87,7 @@ export function App() {
         paletteOpen: modalOpen,
         focusedRegion,
         reservedChords: editorReservedChords,
+        shortcuts: currentShortcuts,
       }),
     [],
   );

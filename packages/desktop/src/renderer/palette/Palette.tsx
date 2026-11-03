@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { shortcutOf } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import type { OpenTableArgs } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 import { TABLE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/tableActions.js";
@@ -26,7 +27,7 @@ import { OVERLAY_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { SURFACE_MOTION } from "@table-craft/desktop/renderer/ui/motion.js";
 
 const PROVIDERS: readonly SearchProvider[] = [
-  actionsProvider(registry),
+  actionsProvider(registry, shortcutOf),
   tablesProvider({
     catalogs: () => useCatalog.getState().catalogs,
     datasources: () => useDatasources.getState().datasources,
