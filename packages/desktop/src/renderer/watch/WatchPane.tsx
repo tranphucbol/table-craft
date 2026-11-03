@@ -350,7 +350,7 @@ export function WatchPane() {
       <div
         role="tablist"
         aria-label="Watches"
-        className={`flex shrink-0 overflow-x-auto border-b border-line bg-panel ${TEXT_TAB_ROW_INSET}`}
+        className={`flex shrink-0 scrollbar-none overflow-x-auto border-b border-line bg-panel ${TEXT_TAB_ROW_INSET}`}
       >
         {Object.values(entries).map((item) => (
           <div key={item.summary.watchId} className="flex shrink-0 items-center border-r border-line">

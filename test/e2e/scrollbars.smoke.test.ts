@@ -1,6 +1,6 @@
 /**
- * Plan 034's live test: scrollbars take the theme, and a one-line filter field draws none. Gated,
- * because it needs a display and a fresh build:
+ * Plan 034's live test: scrollbars take the theme, and a one-line filter field or a strip too short
+ * for a bar draws none. Gated, because it needs a display and a fresh build:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/034 bun run test:smoke:headless test/e2e/scrollbars.smoke.test.ts
  */
@@ -13,15 +13,18 @@ import {
   chooseTheme,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
+  consoleToolbar,
   EVIDENCE_WINDOW,
   evidenceFor,
   launchApp,
   LAUNCH_TIMEOUT_MS,
   pressChord,
+  runAllButton,
   runStatement,
   SCENARIO_TIMEOUT_MS,
   SMOKE_ENABLED,
   setWindowSize,
+  sqlEditor,
   themePickerTrigger,
   toolWindow,
   waitUntilReady,
@@ -42,6 +45,10 @@ const THEMES: readonly BundledThemeId[] = ["dracula-dark", "solarized-light", "k
 const TABLES_GROUP = "tables 6";
 const LONG_WHERE =
   "customer_id IN (SELECT id FROM customers WHERE email LIKE '%@example.com') AND total >= 0 AND placed_at > '2020-01-01'";
+/** Narrower than the console toolbar's buttons, so the toolbar and the result tabs overflow. */
+const NARROW_WINDOW = { width: 420, height: 600 } as const;
+const RESULT_COUNT = 10;
+const MANY_RESULTS = Array.from({ length: RESULT_COUNT }, (_, index) => `SELECT ${String(index + 1)} AS n;`).join("\n");
 
 /** The few DOM members the evaluation touches; the e2e program is compiled without the DOM lib. */
 interface Element {
@@ -61,6 +68,11 @@ interface ScrollBox {
   readonly clientHeight: number;
   readonly scrollWidth: number;
   readonly clientWidth: number;
+  readonly ownerDocument: {
+    readonly defaultView: {
+      getComputedStyle(box: ScrollBox): { readonly borderTopWidth: string; readonly borderBottomWidth: string };
+    };
+  };
 }
 
 interface ScrollMetrics {
@@ -70,10 +82,11 @@ interface ScrollMetrics {
 }
 
 function scrollMetrics(scroller: Locator): Promise<ScrollMetrics> {
-  return scroller.evaluate((box: ScrollBox) => ({
-    barHeight: box.offsetHeight - box.clientHeight,
-    overflows: box.scrollWidth > box.clientWidth,
-  }));
+  return scroller.evaluate((box: ScrollBox) => {
+    const style = box.ownerDocument.defaultView.getComputedStyle(box);
+    const borders = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+    return { barHeight: box.offsetHeight - box.clientHeight - borders, overflows: box.scrollWidth > box.clientWidth };
+  });
 }
 
 function scrollers(page: Page): { root: Locator; grid: Locator; editor: Locator } {
@@ -168,6 +181,27 @@ describe.runIf(SMOKE_ENABLED)("themed scrollbars live test", () => {
         .poll(() => where.scroller.evaluate((box: { scrollLeft: number }) => box.scrollLeft))
         .toBeGreaterThan(0);
       await captureWindow(page, "filter-bar-no-scrollbar");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenNarrowConsoleWithManyResults_whenShown_thenToolbarAndResultTabsScrollWithoutABar",
+    async () => {
+      running = await launchApp({ id: "lite", pluginId: "sqlite", config: { path: seededSqliteFile() } });
+      const { page } = running;
+      await setWindowSize(running.app, NARROW_WINDOW);
+      await waitUntilReady(page);
+      await sqlEditor(page).fill(MANY_RESULTS);
+      await sqlEditor(page).press("Escape");
+      await runAllButton(page).click();
+      await waitUntilReady(page);
+
+      const results = page.getByRole("tablist", { name: "Results", exact: true });
+      await expect.poll(() => results.getByRole("tab").count()).toBe(RESULT_COUNT + 1);
+      await expect.poll(() => scrollMetrics(consoleToolbar(page))).toEqual({ barHeight: 0, overflows: true });
+      await expect.poll(() => scrollMetrics(results)).toEqual({ barHeight: 0, overflows: true });
+      await captureWindow(page, "console-strips-no-scrollbar");
     },
     SCENARIO_TIMEOUT_MS,
   );
