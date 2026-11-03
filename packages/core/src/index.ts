@@ -48,6 +48,7 @@ export {
 } from "./history/index.js";
 export {
   discoverPlugins,
+  loadPluginById,
   loadPlugins,
   type AvailablePlugin,
   type LoadedPlugin,

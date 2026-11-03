@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadPlugins, type PluginLoadResult } from "@table-craft/core";
+import { loadPluginById, loadPlugins, type PluginLoadResult } from "@table-craft/core";
 import { API_VERSION, MANIFEST_FILE, parseVersion } from "@table-craft/plugin-api";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -216,5 +216,92 @@ describe("loadPlugins", () => {
     const [result] = await loadPlugins([join(workspace, "builtin")]);
 
     expect(result?.status === "unavailable" && result.reason).toContain("outside");
+  });
+});
+
+/** Set by a plugin's top-level code, so a test can tell whether its entry was ever imported. */
+const IMPORTED_MARKER = "__tableCraftLoaderTestImported";
+
+function markingSource(id: string): string {
+  return `globalThis[${JSON.stringify(IMPORTED_MARKER)}] = ${JSON.stringify(id)};\n${pluginSource(id)}`;
+}
+
+function importedMarker(): unknown {
+  return (globalThis as Record<string, unknown>)[IMPORTED_MARKER];
+}
+
+describe("loadPluginById", () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, IMPORTED_MARKER);
+  });
+
+  it("givenSeveralPlugins_whenLoadedById_thenOnlyThatEntryIsImported", async () => {
+    await writePlugin("builtin", "alpha", { id: "alpha" });
+    await writePlugin("builtin", "beta", { id: "beta", source: markingSource("beta") });
+
+    const results = await loadPluginById([join(workspace, "builtin")], "alpha");
+
+    expect(results.map((result) => [result.manifest?.id, result.status])).toEqual([["alpha", "loaded"]]);
+    expect(importedMarker()).toBeUndefined();
+    await loadPluginById([join(workspace, "builtin")], "beta");
+    expect(importedMarker()).toBe("beta");
+  });
+
+  it("givenOtherPluginThrowsOnImport_whenLoadedById_thenOwnPluginLoads", async () => {
+    await writePlugin("builtin", "broken", { id: "broken", source: 'throw new Error("boom");\n' });
+    await writePlugin("builtin", "working", { id: "working" });
+
+    const results = await loadPluginById([join(workspace, "builtin")], "working");
+
+    expect(results.map((result) => [result.manifest?.id, result.status])).toEqual([["working", "loaded"]]);
+  });
+
+  it("givenOwnPluginThrowsOnImport_whenLoadedById_thenUnavailableWithReason", async () => {
+    await writePlugin("builtin", "broken", { id: "broken", source: 'throw new Error("boom");\n' });
+
+    const [result, ...rest] = await loadPluginById([join(workspace, "builtin")], "broken");
+
+    expect(rest).toEqual([]);
+    expect(result).toMatchObject({ status: "unavailable", manifest: { id: "broken" } });
+    expect(result?.status === "unavailable" && result.reason).toContain("boom");
+  });
+
+  it("givenIncompatibleOwnPlugin_whenLoadedById_thenUnavailableWithoutImport", async () => {
+    await writePlugin("builtin", "newer", {
+      id: "newer",
+      apiVersion: NEXT_MAJOR_API_VERSION,
+      source: markingSource("newer"),
+    });
+
+    const [result, ...rest] = await loadPluginById([join(workspace, "builtin")], "newer");
+
+    expect(rest).toEqual([]);
+    expect(result?.status === "unavailable" && result.reason).toContain(
+      `needs TableCraft with plugin API ${major + 1}.0 or later`,
+    );
+    expect(importedMarker()).toBeUndefined();
+  });
+
+  it("givenSameIdInTwoRoots_whenLoadedById_thenEarlierRootLoadsAndLaterIsDuplicate", async () => {
+    const first = await writePlugin("builtin", "alpha", { id: "alpha" });
+    const second = await writePlugin("user", "alpha-copy", { id: "alpha", source: markingSource("alpha") });
+
+    const results = await loadPluginById([join(workspace, "builtin"), join(workspace, "user")], "alpha");
+
+    expect(results.map((result) => [result.directory, result.status])).toEqual([
+      [first, "loaded"],
+      [second, "unavailable"],
+    ]);
+    const duplicate = results[1];
+    expect(duplicate?.status === "unavailable" && duplicate.reason).toContain("Duplicate plugin id");
+    expect(importedMarker()).toBeUndefined();
+  });
+
+  it("givenUnknownId_whenLoadedById_thenEmpty", async () => {
+    await writePlugin("builtin", "alpha", { id: "alpha", source: markingSource("alpha") });
+    await mkdir(join(workspace, "builtin", "stray"), { recursive: true });
+
+    expect(await loadPluginById([join(workspace, "builtin")], "missing")).toEqual([]);
+    expect(importedMarker()).toBeUndefined();
   });
 });

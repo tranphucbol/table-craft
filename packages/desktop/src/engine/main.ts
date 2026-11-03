@@ -1,5 +1,5 @@
 import type { MessagePortMain, ParentPort } from "electron";
-import { loadPlugins, TunnelError, type HostKeyVerifier, type PluginLoadResult } from "@table-craft/core";
+import { loadPluginById, TunnelError, type HostKeyVerifier, type PluginLoadResult } from "@table-craft/core";
 import {
   createEngine,
   probeDatasource,
@@ -68,7 +68,7 @@ const connections = new Set<Promise<EngineConnection>>();
 type EngineConnectionFactory = (emit: (event: EngineEvent) => void, files?: EngineOperationFiles) => EngineConnection;
 
 async function plugins(message: EngineBoot): Promise<PluginLoadResult[]> {
-  const loaded = await loadPlugins(message.pluginRoots);
+  const loaded = await loadPluginById(message.pluginRoots, message.datasource.pluginId);
   const plugins = log.child("plugins");
   for (const entry of loaded) {
     const fields = {
