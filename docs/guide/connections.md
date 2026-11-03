@@ -60,7 +60,8 @@ See [Datasources and secrets](../design/specification.md#datasources-and-secrets
 your connections over from DataGrip, TablePro or MySQL Workbench. TableCraft only reads their
 files; it never changes them. The first step shows what it found on this computer and where it
 looked; **From a file…** reads a DataGrip `dataSources.xml`, a TablePro `.tablepro` export, or a
-MySQL Workbench `connections.xml` or **Backup Connections** `.zip` instead. When TableCraft finds
+MySQL Workbench `connections.xml` or **Backup Connections** `.zip` instead, or a file TableCraft
+exported ([Export and share data sources](#export-and-share-data-sources)). When TableCraft finds
 connections at launch, the [notification bell](settings.md#notifications) offers them; its
 **Import…** opens straight on that app's list.
 
@@ -102,3 +103,27 @@ data source to encrypt it.
 
 Untick **Import passwords** to bring none: such a data source asks on connect, and you save its
 password in the Data Sources dialog.
+
+## Export and share data sources
+
+Select data sources or folders in the Database tool window and choose **Export Data Sources…** in
+their context menu, or **File → Export Data Sources…**, to write them to a JSON file
+(`tablecraft-datasources.json`) you can hand to a teammate or keep for another computer. The dialog
+exports the selection or every saved data source; a folder brings everything inside it, empty
+folders included. Folders, colours, comments, read-only, timeouts and SSH tunnels come along; the
+data source TableCraft was launched with from `TABLE_CRAFT_DATASOURCE` never does.
+
+The file holds no passwords unless you tick **Include passwords** and type a passphrase of at least
+8 characters twice. The passwords are then encrypted with that passphrase (scrypt and AES-256-GCM);
+TableCraft never stores it, so tell the person who imports the file through another channel.
+Without passwords, each data source asks for its password on the first connect.
+
+Import the file with **File → Import Data Sources…** → **From a file…**. An encrypted file asks for
+its passphrase; **Import without passwords** reads it without one. Rows already in TableCraft, by
+the same settings or from an earlier import of the same file, start unticked. A data source whose
+plugin is not installed is listed as not supported and names the plugin to download. Agent access
+is never imported: such a row says it is off, and you turn it on in the data source's properties.
+
+**Copy Data Sources** (`Mod+C` in the Database tool window) puts the selection on the clipboard in
+the same format, never with passwords; **Paste Data Sources** (`Mod+V`) there, in this or another
+TableCraft, opens the import list on what you copied.

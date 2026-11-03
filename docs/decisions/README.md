@@ -145,3 +145,4 @@ started, not when it is merged.
 | 150 | [Floating surfaces round on the island ladder](150-floating-surfaces-round-on-the-island-ladder.md)                                                                    |
 | 151 | [Notices wait in a bell and never interrupt](151-notices-wait-in-a-bell-and-never-interrupt.md)                                                                        |
 | 152 | [Agent statements are logged](152-agent-statements-are-logged.md)                                                                                                      |
+| 153 | [Data sources export to a sealed JSON file](153-data-sources-export-to-a-sealed-json-file.md)                                                                          |

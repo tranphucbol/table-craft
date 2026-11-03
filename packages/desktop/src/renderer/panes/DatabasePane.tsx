@@ -15,6 +15,7 @@ import { DDL_ACTION_IDS } from "@table-craft/desktop/renderer/actions/ddlActions
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
+import { DATASOURCE_FILE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/datasourceFileActions.js";
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
 import {
@@ -132,6 +133,9 @@ const DATASOURCE_MENU = [
   ACTION_IDS.datasourceProperties,
   ACTION_IDS.duplicateDatasource,
   ACTION_IDS.copyDatasourceUrl,
+  DATASOURCE_FILE_ACTION_IDS.copyDatasources,
+  DATASOURCE_FILE_ACTION_IDS.pasteDatasources,
+  DATASOURCE_FILE_ACTION_IDS.exportDatasources,
   ACTION_IDS.moveToFolder,
   null,
   ACTION_IDS.deleteDatasource,
@@ -140,6 +144,9 @@ const FOLDER_MENU = [
   ACTION_IDS.newDatasource,
   ACTION_IDS.newFolder,
   null,
+  DATASOURCE_FILE_ACTION_IDS.copyDatasources,
+  DATASOURCE_FILE_ACTION_IDS.pasteDatasources,
+  DATASOURCE_FILE_ACTION_IDS.exportDatasources,
   ACTION_IDS.moveToFolder,
   null,
   ACTION_IDS.deleteDatasource,

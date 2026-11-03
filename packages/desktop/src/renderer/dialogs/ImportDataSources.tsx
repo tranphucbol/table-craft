@@ -2,7 +2,6 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
 import type {
   BridgeFailure,
-  ImportApp,
   ImportPreview,
   ImportPreviewRequest,
   ImportProgress,
@@ -25,7 +24,9 @@ import {
   STATUS_LABELS,
   allSelected,
   asksKeychain,
+  filePreviewRequest,
   initialSelection,
+  type FileUnlock,
   selectedKeys,
   sourceDetail,
   summaryNotes,
@@ -33,11 +34,13 @@ import {
   toggled,
 } from "@table-craft/desktop/renderer/model/importDataSources.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
+import {
+  useImportDataSourcesDialog,
+  type ImportDataSourcesRequest,
+  type ReadyImportPreview as ReadyPreview,
+} from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
-
-type ReadyPreview = Extract<ImportPreview, { status: "ready" }>;
 
 type Step =
   | { readonly kind: "source" }
@@ -48,6 +51,13 @@ type Step =
 const BROWSE_TITLE = "Import Data Sources from a File";
 const FILE_FIELD_ID = "import-datasources-file";
 const PASSPHRASE_FIELD_ID = "import-datasources-passphrase";
+interface PassphraseState {
+  readonly needed: boolean;
+  readonly error: string | null;
+  readonly skippable: boolean;
+}
+
+const NO_PASSPHRASE: PassphraseState = { needed: false, error: null, skippable: false };
 const KEYCHAIN_NOTE = "The system may ask once for each password; on macOS click Allow, not Always Allow.";
 
 function SourceCard({
@@ -171,22 +181,25 @@ function Failure({ failure }: { readonly failure: BridgeFailure | null }) {
 }
 
 /**
- * Import Data Sources (plans 035, 143): pick DataGrip, TablePro, MySQL Workbench or a file, tick the connections, then
- * import them. Main reads the other apps' files and secrets; this view only sees rows.
+ * Import Data Sources (plans 035, 040, 143): pick DataGrip, TablePro, MySQL Workbench or a file, tick the
+ * connections, then import them. Main reads the other apps' files and secrets; this view only sees rows.
  */
-function Wizard({ app }: { readonly app: ImportApp | null }) {
+function Wizard({ start }: { readonly start: ImportDataSourcesRequest | null }) {
   const hide = useImportDataSourcesDialog((state) => state.hide);
-  const [step, setStep] = useState<Step>({ kind: "source" });
+  const pasted = start !== null && "preview" in start ? start : null;
+  const app = start !== null && "app" in start ? start.app : null;
+  const [step, setStep] = useState<Step>(
+    pasted === null ? { kind: "source" } : { kind: "choose", preview: pasted.preview },
+  );
   const [sources, setSources] = useState<readonly ImportSource[] | null>(null);
   const [failure, setFailure] = useState<BridgeFailure | null>(null);
   const [busy, setBusy] = useState(false);
   const [file, setFile] = useState("");
-  const [passphrase, setPassphrase] = useState<{ readonly needed: boolean; readonly error: string | null }>({
-    needed: false,
-    error: null,
-  });
+  const [passphrase, setPassphrase] = useState<PassphraseState>(NO_PASSPHRASE);
   const [passphraseText, setPassphraseText] = useState("");
-  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
+  const [selection, setSelection] = useState<ReadonlySet<string>>(() =>
+    pasted === null ? new Set() : initialSelection(pasted.preview.rows),
+  );
   const [importPasswords, setImportPasswords] = useState(true);
   const [topFolder, setTopFolder] = useState(true);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -214,7 +227,7 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
 
   useEffect(() => bridge().onImportProgress(setProgress), []);
 
-  const lastRequest = useRef<ImportPreviewRequest | null>(null);
+  const lastRequest = useRef<ImportPreviewRequest | null>(pasted?.request ?? null);
   // Installing a missing plugin from a row reads the source again, so its rows become importable.
   useEffect(() => {
     if (step.kind !== "choose") return;
@@ -249,27 +262,31 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
     const value = answer.value;
     if (value.status === "ready") {
       setPassphraseText("");
-      setPassphrase({ needed: false, error: null });
+      setPassphrase(NO_PASSPHRASE);
       setSelection(initialSelection(value.rows));
       setStep({ kind: "choose", preview: value });
       return;
     }
-    setPassphrase({ needed: true, error: value.status === "wrongPassphrase" ? value.message : null });
+    setPassphrase({
+      needed: true,
+      error: value.status === "wrongPassphrase" ? value.message : null,
+      skippable: value.skippable,
+    });
   }
 
   async function browse(): Promise<void> {
     const picked = await bridge().chooseFile(BROWSE_TITLE);
     if (picked.ok && picked.value !== null) {
       setFile(picked.value);
-      setPassphrase({ needed: false, error: null });
+      setPassphrase(NO_PASSPHRASE);
       await preview({ source: "file", path: picked.value });
     }
   }
 
-  function readFile(): void {
+  function readFile(unlock: FileUnlock): void {
     const path = file.trim();
     if (path === "") return;
-    void preview(passphrase.needed ? { source: "file", path, passphrase: passphraseText } : { source: "file", path });
+    void preview(filePreviewRequest(path, unlock));
   }
 
   async function run(chosen: ReadyPreview): Promise<void> {
@@ -320,12 +337,12 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
               className="flex flex-col gap-cell"
               onSubmit={(event) => {
                 event.preventDefault();
-                readFile();
+                readFile(passphrase.needed ? { kind: "passphrase", passphrase: passphraseText } : { kind: "plain" });
               }}
             >
               <label htmlFor={FILE_FIELD_ID} className="text-ink-muted">
-                From a file: a TablePro export (.tablepro), a DataGrip dataSources.xml, or a MySQL Workbench
-                connections.xml or Backup Connections .zip
+                From a file: a TableCraft export (.json), a TablePro export (.tablepro), a DataGrip dataSources.xml, or
+                a MySQL Workbench connections.xml or Backup Connections .zip
               </label>
               <div className="flex items-center gap-cell">
                 <TextInput
@@ -335,7 +352,7 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
                   value={file}
                   onChange={(event) => {
                     setFile(event.target.value);
-                    setPassphrase({ needed: false, error: null });
+                    setPassphrase(NO_PASSPHRASE);
                   }}
                 />
                 <Button disabled={busy} onClick={() => void browse()}>
@@ -363,6 +380,15 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
                   <Button type="submit" variant="primary" disabled={busy || passphraseText === ""}>
                     Unlock
                   </Button>
+                  {passphrase.skippable ? (
+                    <Button
+                      data-testid="import-skip-passwords"
+                      disabled={busy}
+                      onClick={() => readFile({ kind: "skipSecrets" })}
+                    >
+                      Import without passwords
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
               {passphrase.needed ? (
@@ -370,7 +396,10 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
                   data-testid="import-passphrase-note"
                   className={passphrase.error === null ? "text-ink-muted" : "text-danger"}
                 >
-                  {passphrase.error ?? "This file is encrypted; enter the passphrase it was exported with."}
+                  {passphrase.error ??
+                    (passphrase.skippable
+                      ? "This file's passwords are encrypted; enter the passphrase, or import without them."
+                      : "This file is encrypted; enter the passphrase it was exported with.")}
                 </p>
               ) : null}
             </form>
@@ -455,7 +484,7 @@ function Wizard({ app }: { readonly app: ImportApp | null }) {
 
 export function ImportDataSourcesDialog() {
   const session = useImportDataSourcesDialog((state) => state.session);
-  const app = useImportDataSourcesDialog((state) => state.app);
+  const start = useImportDataSourcesDialog((state) => state.start);
   return (
     <Dialog.Root
       open={session !== null}
@@ -473,7 +502,7 @@ export function ImportDataSourcesDialog() {
           )}
           onInteractOutside={(event) => event.preventDefault()}
         >
-          {session === null ? null : <Wizard key={session} app={app} />}
+          {session === null ? null : <Wizard key={session} start={start} />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

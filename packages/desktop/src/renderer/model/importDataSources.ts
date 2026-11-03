@@ -1,9 +1,22 @@
 import type {
   ImportPasswordState,
+  ImportPreviewRequest,
   ImportRow,
   ImportSource,
   ImportSummary,
 } from "@table-craft/desktop/preload/bridge.js";
+
+/** How a file is read: as it is, with the passphrase typed, or without its encrypted passwords. */
+export type FileUnlock =
+  | { readonly kind: "plain" }
+  | { readonly kind: "passphrase"; readonly passphrase: string }
+  | { readonly kind: "skipSecrets" };
+
+export function filePreviewRequest(path: string, unlock: FileUnlock): ImportPreviewRequest {
+  if (unlock.kind === "passphrase") return { source: "file", path, passphrase: unlock.passphrase };
+  if (unlock.kind === "skipSecrets") return { source: "file", path, skipSecrets: true };
+  return { source: "file", path };
+}
 
 export const PASSWORD_LABELS: Readonly<Record<ImportPasswordState, string>> = {
   keychain: "Keychain — will ask",
