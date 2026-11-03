@@ -1,6 +1,6 @@
 # Settings and appearance
 
-**Settings…** (`⌘,`) has pages for Appearance, Editor, Data Editor, Plugins, MCP and Advanced; the X in its corner,
+**Settings…** (`⌘,`) has pages for Appearance, Keymap, Editor, Data Editor, Plugins, MCP and Advanced; the X in its corner,
 Close or Escape shuts it. Numbers show their digit separators until you edit them. The theme is a
 dropdown: type to filter by name or source, and the theme under the arrow keys or the mouse
 previews live; Enter or a click keeps it, Escape puts the previous one back. Themes and density

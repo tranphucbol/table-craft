@@ -17,6 +17,7 @@ import {
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { InspectionFields } from "@table-craft/desktop/renderer/dialogs/InspectionSettings.js";
+import { KeymapPage, recordingChord, restoreKeymap } from "@table-craft/desktop/renderer/dialogs/KeymapPage.js";
 import { McpSettingsPage } from "@table-craft/desktop/renderer/dialogs/McpSettings.js";
 import { MotionFields } from "@table-craft/desktop/renderer/dialogs/MotionSettings.js";
 import { PluginsPage } from "@table-craft/desktop/renderer/dialogs/PluginsPage.js";
@@ -81,6 +82,7 @@ import {
 
 const PAGE_TITLES: Readonly<Record<SettingsPage, string>> = {
   appearance: "Appearance",
+  keymap: "Keymap",
   editor: "Editor",
   dataEditor: "Data Editor",
   plugins: "Plugins",
@@ -139,6 +141,7 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
       brandIconColor: DEFAULT_SETTINGS.appearance.brandIconColor,
     },
   }),
+  keymap: restoreKeymap,
   editor: (current) => ({
     ...withFont(current, "editor", DEFAULT_SETTINGS.appearance.fonts.editor),
     editor: DEFAULT_SETTINGS.editor,
@@ -814,6 +817,7 @@ function AdvancedPage() {
 
 const PAGES: Readonly<Record<SettingsPage, () => ReactNode>> = {
   appearance: AppearancePage,
+  keymap: KeymapPage,
   editor: EditorPage,
   dataEditor: DataEditorPage,
   plugins: PluginsPage,
@@ -900,6 +904,9 @@ export function SettingsDialog() {
         <Dialog.Overlay className={OVERLAY_CLASS} />
         <Dialog.Content
           aria-describedby={undefined}
+          onEscapeKeyDown={(event) => {
+            if (recordingChord()) event.preventDefault();
+          }}
           className={cn(
             CONTENT_CLASS,
             "flex h-dialog-height max-h-[95vh] w-dialog max-w-[95vw] flex-col overflow-hidden",

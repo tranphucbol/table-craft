@@ -5,19 +5,22 @@ import type { Chord } from "@table-craft/desktop/renderer/actions/chords.js";
  * through to CodeMirror. `test/renderer/keymap.test.ts` fails when an action that can fire in the
  * editor declares one. Run, Run All and Commit (`Mod+Enter` and its siblings) stay with the registry,
  * and so do Find and Replace (plan 139). `Ctrl+Space` is CodeMirror's Basic Completion (plan 009
- * decision 17); `F3` and `Shift+F3` step through matches and `Escape` closes the find bar.
+ * decision 17); `F3` and `Shift+F3` step through matches and `Escape` closes the find bar. Each
+ * is named, so the Keymap page can say what a chord recorded over one does there (decision 153).
  */
-export const EDITOR_CHORDS: readonly Chord[] = [
-  "Mod+Z",
-  "Mod+Shift+Z",
-  "Mod+A",
-  "Mod+/",
-  "Mod+D",
-  "Escape",
-  "Ctrl+Space",
-  "F3",
-  "Shift+F3",
+export const EDITOR_COMMANDS: readonly { readonly chord: Chord; readonly name: string }[] = [
+  { chord: "Mod+Z", name: "Undo" },
+  { chord: "Mod+Shift+Z", name: "Redo" },
+  { chord: "Mod+A", name: "Select All" },
+  { chord: "Mod+/", name: "Comment with Line Comment" },
+  { chord: "Mod+D", name: "Select Next Occurrence" },
+  { chord: "Escape", name: "Close Find" },
+  { chord: "Ctrl+Space", name: "Basic Completion" },
+  { chord: "F3", name: "Find Next" },
+  { chord: "Shift+F3", name: "Find Previous" },
 ];
+
+export const EDITOR_CHORDS: readonly Chord[] = EDITOR_COMMANDS.map((command) => command.chord);
 
 /**
  * The chords a plain text field keeps (plan 008): the table editor's cell editor and the value
