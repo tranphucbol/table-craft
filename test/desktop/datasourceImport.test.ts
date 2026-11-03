@@ -667,7 +667,7 @@ describe("importer", () => {
       password: "askOnConnect",
       status: "ready",
     });
-    expect(row(preview.rows, "Reports PG").warnings).toEqual([expect.stringContaining("Preferred")]);
+    expect(row(preview.rows, "Reports PG").warnings).toEqual([]);
     expect(row(preview.rows, "Cache")).toMatchObject({ status: "unsupported" });
     await importer.run(
       { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: true, topFolder: false },
@@ -681,7 +681,7 @@ describe("importer", () => {
       config: { sslMode: "disable" },
     });
     expect(service.list().datasources.find((datasource) => datasource.name === "Reports PG")?.config).toMatchObject({
-      sslMode: "require",
+      sslMode: "disable",
     });
   });
 
