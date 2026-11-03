@@ -3,6 +3,7 @@ import { ADMIN_ACTIONS } from "@table-craft/desktop/renderer/keyAdmin/actions.js
 import { WATCH_ACTIONS } from "@table-craft/desktop/renderer/watch/actions.js";
 import { CONSOLE_INTENT_ACTIONS } from "@table-craft/desktop/renderer/keyAdmin/consoleIntents.js";
 import { COMMAND_TXN_ACTIONS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
+import { DATASOURCE_FILE_ACTIONS } from "@table-craft/desktop/renderer/actions/datasourceFileActions.js";
 import { DDL_ACTIONS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
 import { EDITOR_FIND_ACTIONS } from "@table-craft/desktop/renderer/actions/editorFindActions.js";
 import { ERROR_ACTIONS } from "@table-craft/desktop/renderer/actions/errorActions.js";
@@ -41,6 +42,7 @@ import { UPDATE_ACTIONS } from "@table-craft/desktop/renderer/actions/updateActi
 /** Every action the app registers; the keymap and menu tests check this list. */
 export const ALL_ACTIONS: readonly AnyAction[] = [
   ...APP_ACTIONS,
+  ...DATASOURCE_FILE_ACTIONS,
   ...ADMIN_ACTIONS,
   ...WATCH_ACTIONS,
   ...CONSOLE_INTENT_ACTIONS,

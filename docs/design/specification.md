@@ -2069,8 +2069,9 @@ connect, Test Connection or agent session saw (decision 131): its version, its o
 (`timeout`, `null` when it has none, left out when the plugin did not report it), how `cancel`
 reaches it and when, in epoch ms. Main writes it over `datasources.remember-server` with the brand,
 only when either changed or `seenAt` is a day old; a form save keeps it. An
-imported datasource carries `origin: { app: "datagrip" | "tablepro", id }` (decision 068), the
-other app's id for it, so a second import knows it; editing keeps it, and nothing else reads it.
+imported datasource carries `origin: { app: "datagrip" | "tablepro" | "workbench" | "tablecraft", id }`
+(decision 068), the other app's id for it, so a second import knows it; editing keeps it, and
+nothing else reads it.
 
 A plugin with `connection.url` (decision 055) gets a URL row at the top of General: a URL pasted
 there, or into the host or file field, fills the fields, and its password becomes the password
@@ -2080,6 +2081,48 @@ menu and the palette writes the saved datasource's URL, never a secret.
 
 `<userData>/secrets.json` is `{ "version": 1, "secrets": { "<datasource id>": { "<field key>":
 "<base64 safeStorage ciphertext>" } } }`, holding Forever secrets only.
+
+### Export and paste
+
+**Export Data Sources…** (`datasource.export`, decision 153) writes the selected data sources and
+folders, or every saved one, to a JSON file main picks the path for, `tablecraft-datasources.json`
+by default:
+
+```json
+{
+  "format": "table-craft-datasources",
+  "version": 1,
+  "exportedAt": "2026-11-03T10:00:00.000Z",
+  "folders": ["Docker", "Docker/Main"],
+  "datasources": [{ "id": "0b7c…", "name": "pg", "pluginId": "postgres", "folder": "Docker/Main", "…": "…" }],
+  "secrets": { "kdf": "scrypt", "N": 131072, "r": 8, "p": 1, "salt": "…", "iv": "…", "tag": "…", "data": "…" }
+}
+```
+
+Each record is the `datasources.json` record without `lastServer`, which is what one machine saw.
+`folders` holds the selected folders, empty ones too, and the ancestors of every exported record.
+The datasource from `TABLE_CRAFT_DATASOURCE` is never exported. `secrets` is present only when the
+user ticked **Include passwords** and typed a passphrase of at least 8 characters twice: main
+derives a 32-byte key with scrypt over a 16-byte random salt and seals
+`{ "<datasource id>": { "<secret key>": "<value>" } }` with AES-256-GCM under a 12-byte random IV.
+The passphrase crosses IPC once, is never stored or logged, and the renderer never sees a secret.
+
+**File → Import Data Sources…** reads such a file through the same preview (`app: "tablecraft"`,
+file-only, top folder `TableCraft`). Any other JSON is refused with "`<file>` is not a TableCraft
+data sources file."; a higher `version` is refused with an update hint; an unknown or unreadable
+field is dropped with the row warning "Some settings from a newer TableCraft were left out.". A
+file with `secrets` and no passphrase answers `needsPassphrase` with `skippable: true`, so the
+dialog offers **Import without passwords** (`skipSecrets` on the file request); a wrong one answers
+`wrongPassphrase`. An imported record keeps its `origin`, or gets `{ "app": "tablecraft", "id":
+<its id in the file> }`, so importing the same file twice marks its rows duplicate. Agent access
+(`agentAccess`, `agentSchemas`, `agentRowCap`, `agentTimeoutSeconds`) is never imported: the row
+warns that it is off. A record whose plugin is not installed is a not-supported row naming the
+plugin to download.
+
+**Copy Data Sources** (`datasource.copy`, `Mod+C` in the Database tool window) writes the same
+document without `secrets` to the clipboard; **Paste Data Sources** (`datasource.paste`, `Mod+V`)
+reads the clipboard in the renderer, at most 1 MiB, and sends it as `{ "source": "text", "text" }`
+to the import preview, which opens on its list.
 
 ### SSH tunnel
 

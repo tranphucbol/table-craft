@@ -3,6 +3,7 @@ import type { ImportRow, ImportSummary } from "@table-craft/desktop/preload/brid
 import {
   allSelected,
   asksKeychain,
+  filePreviewRequest,
   initialSelection,
   selectedKeys,
   sourceDetail,
@@ -78,5 +79,17 @@ describe("import dialog model", () => {
 
     expect(summaryText(summary)).toBe("Imported 14, with passwords 3, skipped 1.");
     expect(summaryNotes(summary)).toEqual([expect.stringContaining("asks on connect")]);
+  });
+
+  it("givenNeedsPassphrase_whenSkipChosen_thenPreviewRequestedWithSkipSecrets", () => {
+    const path = "/exports/tablecraft-datasources.json";
+
+    expect(filePreviewRequest(path, { kind: "skipSecrets" })).toEqual({ source: "file", path, skipSecrets: true });
+    expect(filePreviewRequest(path, { kind: "passphrase", passphrase: "open sesame" })).toEqual({
+      source: "file",
+      path,
+      passphrase: "open sesame",
+    });
+    expect(filePreviewRequest(path, { kind: "plain" })).toEqual({ source: "file", path });
   });
 });

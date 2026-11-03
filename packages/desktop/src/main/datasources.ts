@@ -66,7 +66,8 @@ export const serverSeenSchema = z.strictObject({
   lastServer: lastServerSchema,
 }) satisfies z.ZodType<ServerSeen>;
 
-const datasourceSchema = z.strictObject({
+/** One stored data source; the exported file's records derive from it (plan 040). */
+export const datasourceSchema = z.strictObject({
   id: z.string().min(1),
   name: z.string().min(1),
   pluginId: z.string().min(1),

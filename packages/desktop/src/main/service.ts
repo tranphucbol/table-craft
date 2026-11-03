@@ -11,10 +11,12 @@ import {
   arrange,
   ArrangeError,
   folderKeepingContent,
+  isWithin,
   normalizeFolder,
   normalizeFolders,
   type MoveRequest,
 } from "@table-craft/desktop/datasourceTree/arrange.js";
+import type { DatasourceFileContent } from "@table-craft/desktop/main/datasourceFile.js";
 import { toDatasource, type DatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import type { HostRegistry } from "@table-craft/desktop/main/hosts.js";
 import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
@@ -26,6 +28,7 @@ import type {
   Datasource,
   DatasourceDraft,
   DatasourceList,
+  DatasourceSelection,
   DeleteDatasourcesRequest,
   DatasourceView,
   LastServer,
@@ -94,8 +97,16 @@ export interface DatasourceService<Target> {
   list(): DatasourceList;
   plugins(): readonly PluginInfo[];
   save(request: SaveDatasourceRequest): Promise<DatasourceView>;
-  /** Adds imported datasources in one write (plan 035); secret values go straight to the store. */
-  importMany(items: readonly ImportedDatasource[]): Promise<string[]>;
+  /**
+   * Adds imported datasources, and empty `folders` from a TableCraft file, in one write (plans 035,
+   * 040); secret values go straight to the store.
+   */
+  importMany(items: readonly ImportedDatasource[], folders?: readonly string[]): Promise<string[]>;
+  /**
+   * The saved data sources a selection names, in tree order, with every folder within it or above
+   * them; with `includeSecrets`, each stored secret value (plan 040). Never the ephemeral one.
+   */
+  exportDefinitions(selection: DatasourceSelection, includeSecrets: boolean): DatasourceFileContent;
   /** Deletes datasources and folders in one write; refuses a folder that would keep anything not deleted. */
   delete(request: DeleteDatasourcesRequest): Promise<void>;
   /** Applies one move in one write (plan 136); answers with each renamed folder, old path to new. */
@@ -134,7 +145,10 @@ export interface DatasourceService<Target> {
 
 export interface ImportedDatasource {
   readonly draft: DatasourceDraft;
-  /** Secret values by field key; each is kept in the field's default mode. */
+  /**
+   * Secret values by field key; each is kept in the mode the draft asks for, or the default mode
+   * when it asks for none or Forever cannot be kept here.
+   */
   readonly secrets: Readonly<Record<string, string>>;
 }
 
@@ -422,14 +436,23 @@ export async function createDatasourceService<Target>(
     return view(next, false);
   }
 
-  async function importMany(items: readonly ImportedDatasource[]): Promise<string[]> {
+  /** A mode another machine chose, unless it is Forever and this machine cannot encrypt. */
+  function keepableModes(requested: Readonly<Record<string, SecretMode>>): Record<string, SecretMode> {
+    const canEncrypt = secrets.encryption().available;
+    return Object.fromEntries(Object.entries(requested).filter(([, mode]) => canEncrypt || mode !== "forever"));
+  }
+
+  async function importMany(
+    items: readonly ImportedDatasource[],
+    newFolders: readonly string[] = [],
+  ): Promise<string[]> {
     const added: Datasource[] = [];
     for (const item of items) {
       const plugin = availablePlugin(item.draft.pluginId);
       const id = options.newId();
       const offersTunnel = plugin.network !== null;
       const ssh = offersTunnel ? item.draft.ssh : undefined;
-      const modes = modesFor(plugin, ssh, item.draft.config, {});
+      const modes = modesFor(plugin, ssh, item.draft.config, keepableModes(item.draft.secretModes));
       const next = toDatasource({ ...item.draft, secretModes: modes }, id, plugin.fields, offersTunnel);
       for (const [key, value] of Object.entries(item.secrets)) {
         const mode = modes[key];
@@ -437,11 +460,33 @@ export async function createDatasourceService<Target>(
       }
       added.push(next);
     }
-    if (added.length === 0) return [];
+    const created = newFolders.flatMap((path) => normalizeFolder(path) ?? []).filter((path) => !folders.includes(path));
+    if (added.length === 0 && created.length === 0) return [];
     datasources = [...datasources, ...added];
+    folders = [...folders, ...created];
     await write();
     changed();
     return added.map((datasource) => datasource.id);
+  }
+
+  function exportDefinitions(selection: DatasourceSelection, includeSecrets: boolean): DatasourceFileContent {
+    const ids = new Set(selection.ids);
+    const selected = (path: string | null) => selection.folders.some((folder) => isWithin(path, folder));
+    const records = datasources.filter((datasource) => ids.has(datasource.id) || selected(datasource.folder));
+    const exportedFolders = folders.filter(
+      (path) => selected(path) || records.some((datasource) => isWithin(datasource.folder, path)),
+    );
+    if (!includeSecrets) return { folders: exportedFolders, datasources: records };
+    const values: Record<string, Record<string, string>> = {};
+    for (const datasource of records) {
+      const own: Record<string, string> = {};
+      for (const [key, mode] of Object.entries(datasource.secretModes)) {
+        const value = secrets.get(datasource.id, key, mode);
+        if (value !== undefined) own[key] = value;
+      }
+      if (Object.keys(own).length > 0) values[datasource.id] = own;
+    }
+    return { folders: exportedFolders, datasources: records, secrets: values };
   }
 
   async function remove(request: DeleteDatasourcesRequest): Promise<void> {
@@ -752,6 +797,7 @@ export async function createDatasourceService<Target>(
     plugins: () => options.plugins(),
     save,
     importMany,
+    exportDefinitions,
     delete: remove,
     move,
     createFolder,

@@ -76,6 +76,8 @@ export const INVOKE_CHANNELS = {
   testDatasource: "table-craft:datasources.test",
   parseDatasourceUrl: "table-craft:datasources.parse-url",
   datasourceUrl: "table-craft:datasources.url",
+  exportDatasources: "table-craft:datasources.export",
+  copyDatasources: "table-craft:datasources.copy",
   listPlugins: "table-craft:plugins.list",
   pluginsState: "table-craft:plugins.state",
   installPlugin: "table-craft:plugins.install",
@@ -369,9 +371,31 @@ export interface Datasource {
   readonly lastServer?: LastServer | undefined;
 }
 
-/** The apps whose saved connections TableCraft imports (plan 035). */
-export const IMPORT_APPS = ["datagrip", "tablepro", "workbench"] as const;
+/** The apps whose saved connections TableCraft imports (plan 035), and its own exported files (plan 040). */
+export const IMPORT_APPS = ["datagrip", "tablepro", "workbench", "tablecraft"] as const;
 export type ImportApp = (typeof IMPORT_APPS)[number];
+/** The apps the import dialog looks for on this machine; a TableCraft file only comes picked or pasted. */
+export const SCANNED_APPS = ["datagrip", "tablepro", "workbench"] as const satisfies readonly ImportApp[];
+export type ScannedApp = (typeof SCANNED_APPS)[number];
+
+/** A passphrase that encrypts an exported file's passwords is at least this long. */
+export const MIN_PASSPHRASE_LENGTH = 8;
+/** Far above any real copied selection; longer clipboard text is not data sources (plan 040). */
+export const MAX_PASTED_BYTES = 1024 * 1024;
+
+/** Data sources by id and folders by path; a folder brings everything below it. */
+export interface DatasourceSelection {
+  readonly ids: readonly string[];
+  readonly folders: readonly string[];
+}
+
+export interface ExportDatasourcesRequest extends DatasourceSelection {
+  /** Encrypts every stored password into the file; without it the file holds none. Used once, never kept. */
+  readonly passphrase?: string | undefined;
+}
+
+export type ExportDatasourcesResult =
+  { readonly status: "saved"; readonly path: string; readonly count: number } | { readonly status: "cancelled" };
 
 export interface DatasourceOrigin {
   readonly app: ImportApp;
@@ -385,7 +409,7 @@ export type ImportPasswordState =
   | "keychain"
   /** Read already, from DataGrip's KeePass file. */
   | "found"
-  /** In the decrypted `.tablepro` bundle, or in clear in an old Workbench file. */
+  /** In the decrypted `.tablepro` bundle or TableCraft file, or in clear in an old Workbench file. */
   | "inFile"
   | "notSaved"
   | "locked"
@@ -419,7 +443,7 @@ export interface ImportRow {
 }
 
 export interface ImportSource {
-  readonly app: ImportApp;
+  readonly app: ScannedApp;
   readonly label: string;
   readonly found: boolean;
   /** Connections found; 0 when not found. */
@@ -431,12 +455,20 @@ export interface ImportSource {
 }
 
 export type ImportPreviewRequest =
-  | { readonly source: ImportApp }
+  | { readonly source: ScannedApp }
   /**
-   * A `.tablepro` bundle, a `dataSources.xml`, or a Workbench `connections.xml` or Backup
-   * Connections `.zip` the user picked; the passphrase is used once.
+   * A `.tablepro` bundle, a `dataSources.xml`, a Workbench `connections.xml` or Backup Connections
+   * `.zip`, or a TableCraft `.json` the user picked; the passphrase is used once. `skipSecrets`
+   * reads an encrypted TableCraft file without its passwords.
    */
-  | { readonly source: "file"; readonly path: string; readonly passphrase?: string | undefined };
+  | {
+      readonly source: "file";
+      readonly path: string;
+      readonly passphrase?: string | undefined;
+      readonly skipSecrets?: boolean | undefined;
+    }
+  /** Data sources copied from TableCraft and pasted into its Database pane. */
+  | { readonly source: "text"; readonly text: string };
 
 export type ImportPreview =
   | {
@@ -447,7 +479,12 @@ export type ImportPreview =
       readonly topFolder: string;
       readonly rows: readonly ImportRow[];
     }
-  | { readonly status: "needsPassphrase" | "wrongPassphrase"; readonly message: string };
+  | {
+      readonly status: "needsPassphrase" | "wrongPassphrase";
+      readonly message: string;
+      /** Only the passwords are encrypted, so the file reads without them (`skipSecrets`), as a TableCraft file does. */
+      readonly skippable: boolean;
+    };
 
 export interface ImportRunRequest {
   readonly previewId: number;
@@ -690,6 +727,10 @@ export interface TableCraftBridge {
   parseDatasourceUrl(pluginId: string, url: string): Promise<InvokeResult<ParsedUrl>>;
   /** The saved data source as a connection URL, without its secrets, for Copy as URL. */
   datasourceUrl(id: string): Promise<InvokeResult<string>>;
+  /** Export Data Sources: main asks where to save, then writes the file; passwords only under a passphrase. */
+  exportDatasources(request: ExportDatasourcesRequest): Promise<InvokeResult<ExportDatasourcesResult>>;
+  /** The same document as an export, never with secrets, for the clipboard. */
+  copyDatasources(selection: DatasourceSelection): Promise<InvokeResult<string>>;
   listPlugins(): Promise<InvokeResult<readonly PluginInfo[]>>;
   pluginsState(): Promise<InvokeResult<PluginsState>>;
   /** Downloads the catalog plugin's newest compatible version; resolves once it is installed or failed. */
