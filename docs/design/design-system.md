@@ -193,6 +193,12 @@ adds. No component writes a duration.
 | `progress` (spinners)          | `--tc-motion-progress`         | running | running | paused |
 | `ambient` (connecting pulse)   | `--tc-motion-ambient`          | running | paused  | paused |
 
+`halo-burst` (`app.css`, plan 145) plays the connecting pulse's `tc-halo` waves
+`--tc-halo-waves` times (3, about 6 s) on the notification bell's dot and stops; it runs on
+`ambient`, so Reduced and Off show the dot still. It replays once per arriving notice by
+remounting the dot. A pulse that never stopped would turn an unread notice into an alarm, which is
+what the bell exists to avoid (decision 151).
+
 Two easings: `--ease-standard` (`cubic-bezier(0.2, 0, 0, 1)`) for entering, `linear` for fades and
 progress. No springs, bounce or overshoot.
 
@@ -420,7 +426,7 @@ and Fonts and density sections above hold every value.
 | `colors.panel`                 | `--tc-panel`                | `bg-panel`                   | `#2b2d30`          | `#f7f8fa`       | Stripes, tool windows, tab strip, status bar, palette                              |
 | `colors.canvas`                | `--tc-canvas`               | `bg-canvas`                  | `#1e1f22`          | `#ffffff`       | The editor area and the active tab                                                 |
 | `colors.raised`                | `--tc-raised`               | `bg-raised`                  | `#393b40`          | `#ebecf0`       | Hovered tabs and buttons, the pressed stripe button, an unfocused tree's selection |
-| `colors.accent`                | `--tc-accent`               | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle, the tree's drop line          |
+| `colors.accent`                | `--tc-accent`               | `border-accent`, `bg-accent` | `#78a6fb`          | `#2b63d9`       | The active tab's underline, an active resize handle, the tree's drop line, unread  |
 | `colors.border`                | `--tc-border`               | `border-line`, `bg-line`     | `#43454a`          | `#d3d5db`       | Dividers and resize handles at rest                                                |
 | `density.dialogWidthPx`        | `--tc-dialog-width`         | `w-dialog`                   | 1040 px            | 1040 px         | The Data Sources and Settings dialogs                                              |
 | `density.dialogHeightPx`       | `--tc-dialog-height`        | `h-dialog-height`            | 720 px             | 720 px          | The Data Sources and Settings dialogs                                              |
@@ -447,6 +453,18 @@ The active editor tab is `bg-canvas` with a 2 px `border-accent` underline; inac
 `text-ink-muted` on the strip's `bg-panel` and show their close button on hover. Disabled actions are `text-ink-muted`: in the palette at
 full opacity and after every enabled result, so they stay legible (4.5:1) and never take the
 highlighted first row; toolbar buttons add reduced opacity beside their enabled neighbours.
+
+Dots say state by colour: `bg-success`, `bg-warning` and `bg-danger` for a connection or the MCP
+server, a `border-ink-muted` ring for off. `bg-accent` means unread and nothing else: the
+notification bell's dot and the Run Settings dot are the only accent dots, 8 px (`size-2`) at the
+button's top right, with no count.
+
+The notification bell (plan 145, decision 151) is the third button of the right stripe, a stripe
+action button with `OPEN_ON_FRAME` while its popover is open. Its popover is a `ui/Popover` opening
+to the left, laid out by `ui/popoverParts.ts`: a "Notifications" header, then one block per notice
+with no fill or border of its own, a semibold title, a `text-ink-muted` body and a row of one
+`LINK_BUTTON` action and a `MUTED_LINK_BUTTON` Dismiss; a footer with Dismiss All once two or more
+wait. Empty, the body says "No notifications" with a muted line on what shows up there.
 
 ### Islands
 

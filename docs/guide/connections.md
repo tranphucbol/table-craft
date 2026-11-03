@@ -60,7 +60,9 @@ See [Datasources and secrets](../design/specification.md#datasources-and-secrets
 your connections over from DataGrip, TablePro or MySQL Workbench. TableCraft only reads their
 files; it never changes them. The first step shows what it found on this computer and where it
 looked; **From a file…** reads a DataGrip `dataSources.xml`, a TablePro `.tablepro` export, or a
-MySQL Workbench `connections.xml` or **Backup Connections** `.zip` instead.
+MySQL Workbench `connections.xml` or **Backup Connections** `.zip` instead. When TableCraft finds
+connections at launch, the [notification bell](settings.md#notifications) offers them; its
+**Import…** opens straight on that app's list.
 
 The next step lists every connection with its type, address, user, folder and where its password
 comes from. MySQL, MariaDB and TiDB open in the MySQL plugin, PostgreSQL in the PostgreSQL plugin,

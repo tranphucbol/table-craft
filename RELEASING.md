@@ -99,6 +99,12 @@ next patch.
    git diff --name-only --diff-filter=A "$(git describe --tags --abbrev=0 --exclude 'v*-*')..HEAD" -- docs/decisions/
    ```
 
+7. The notification bell's feature notices (`packages/desktop/src/renderer/notices/features.ts`,
+   decision 151) name what is new. Each user-visible feature in this release has its entry, added
+   by the pull request that shipped it; remove the entries that came two releases ago, in a pull
+   request before you tag. An entry's id never changes once released, or every profile sees it as
+   new again.
+
 ## Tag
 
 Use an annotated tag whose message is the tag itself, as every release so far has:
