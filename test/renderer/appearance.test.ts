@@ -165,6 +165,26 @@ describe("island variables", () => {
     });
   });
 
+  it("givenIslands_whenVariablesBuilt_thenStripeIsAButtonAndOneGapWide", () => {
+    for (const density of DENSITY_IDS) {
+      const appearance = appearanceOf(withWindowStyle("islands", density), BUILT_IN_THEMES.dark, NO_PREFERENCE);
+
+      expect(appearanceVariables(appearance)["--tc-stripe-width"]).toBe(
+        `${String(appearance.density.tabHeightPx + appearance.density.islandGapPx)}px`,
+      );
+    }
+  });
+
+  it("givenClassic_whenVariablesBuilt_thenStripeKeepsTheDensityWidth", () => {
+    for (const density of DENSITY_IDS) {
+      const appearance = appearanceOf(withWindowStyle("classic", density), BUILT_IN_THEMES.dark, NO_PREFERENCE);
+
+      expect(appearanceVariables(appearance)["--tc-stripe-width"]).toBe(
+        `${String(appearance.density.stripeWidthPx)}px`,
+      );
+    }
+  });
+
   it("givenClassic_whenVariablesBuilt_thenPanesKeepTheGapAndARowHighHeader", () => {
     const variables = (density: DensityId) =>
       appearanceVariables(appearanceOf(withWindowStyle("classic", density), BUILT_IN_THEMES.dark, NO_PREFERENCE));
