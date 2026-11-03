@@ -2,9 +2,9 @@ import { create } from "zustand";
 import type {
   EngineError,
   ExportEvent,
-  ExportFormat,
   ExportSource,
   ExportTask,
+  ExportTaskFormat,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -20,7 +20,7 @@ export interface ExportEntry {
 
 export interface ExportRequest {
   readonly source: ExportSource;
-  readonly format: ExportFormat;
+  readonly format: ExportTaskFormat;
   readonly path: string;
 }
 

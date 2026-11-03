@@ -33,6 +33,7 @@ import {
   type WireValue,
 } from "@table-craft/plugin-api";
 import { connectDatasource } from "@table-craft/desktop/engine/connect.js";
+import { scriptNamespace, type ScriptRequest, type ScriptSource } from "@table-craft/desktop/engine/ddlScript.js";
 import type { EngineOptions } from "@table-craft/desktop/engine/engine.js";
 import {
   BUG_HINT,
@@ -54,6 +55,7 @@ import type {
   FormatOptions,
   GeneratorStatement,
   ReferencingKey,
+  SchemaScript,
   SwitchStatement,
 } from "@table-craft/desktop/engine/protocol.js";
 import { connectionTarget, type LoggedRequest, type RequestContext } from "@table-craft/desktop/engine/requestLog.js";
@@ -271,8 +273,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     });
   }
 
-  /** Read afresh on every call, never from the cache (decision 029). */
-  function definitionOf(path: readonly string[], name: string): Promise<string> {
+  function requireDdl(): void {
     const { plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
     if (!plugin.capabilities.includes("ddl")) {
       throw new EngineFailure({
@@ -281,6 +282,11 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
         hint: BUG_HINT,
       });
     }
+  }
+
+  /** Read afresh on every call, never from the cache (decision 029). */
+  function definitionOf(path: readonly string[], name: string): Promise<string> {
+    requireDdl();
     return introspect(async ({ session }) => {
       const introspector = session.introspector;
       if (introspector?.definition === undefined) {
@@ -292,6 +298,20 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
       }
       return introspector.definition(path, name);
     });
+  }
+
+  /** Where a whole-namespace script reads: the cached catalog, and each definition afresh (plan 148). */
+  function scriptSource(): ScriptSource {
+    requireDdl();
+    return {
+      describe: async (path) => (await introspect(({ cache }) => cache.describe(path))).catalog,
+      definition: definitionOf,
+      now,
+    };
+  }
+
+  function scriptOf(request: ScriptRequest): Promise<SchemaScript> {
+    return scriptNamespace(scriptSource(), request);
   }
 
   async function generate(path: readonly string[], name: string, statement: GeneratorStatement): Promise<string> {
@@ -558,6 +578,8 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     introspect,
     relationOf,
     definitionOf,
+    scriptSource,
+    scriptOf,
     generate,
     routineCall,
     referencingKeys,

@@ -1,14 +1,24 @@
 import { MS_PER_SECOND } from "@table-craft/desktop/engine/connect.js";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
-import { EngineFailure } from "@table-craft/desktop/engine/failures.js";
+import { BUG_HINT, EngineFailure } from "@table-craft/desktop/engine/failures.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
 
 export function exportRoutes(connection: ConnectionContext): RoutesFor<"export"> {
-  const { qualifiedOf, tasks, tableJob, taskOf, absolutePath, exportTables, resultJob } = connection;
+  const { qualifiedOf, tasks, tableJob, ddlJob, taskOf, absolutePath, exportTables, resultJob } = connection;
   return {
     "export.start": async ({ source, format, path, stallSeconds }) => {
       absolutePath(path);
       const stallMs = stallSeconds * MS_PER_SECOND;
+      if (source.kind === "ddl" || format === "sql") {
+        if (source.kind !== "ddl" || format !== "sql") {
+          throw new EngineFailure({
+            code: "invalidRequest",
+            message: `An export of ${source.kind} cannot be written as ${format}.`,
+            hint: BUG_HINT,
+          });
+        }
+        return tasks.start(await ddlJob(source, path), stallMs);
+      }
       if (source.kind === "table") {
         const job = await tableJob(source, format, path);
         const task = tasks.start(job, stallMs);
