@@ -17,7 +17,6 @@ import {
   type AgentPolicy,
   type ApprovalAnswer,
   type McpClient,
-  type McpConsoleRequest,
   type McpKnownClient,
 } from "@table-craft/desktop/settings/mcp.js";
 
@@ -335,14 +334,16 @@ export const MCP_ACTIONS: readonly AnyAction[] = [
       return target === undefined ? undefined : explainRequest(target);
     },
   }),
-  defineAction<McpConsoleRequest | undefined>({
+  defineAction<number | undefined>({
     id: MCP_ACTION_IDS.openInConsole,
     title: "Open Agent Statement in Console",
     category: "App",
     icon: "newConsole",
-    run: (_context, request) => {
-      if (request === undefined) return showActivity();
-      return openConsole(request.datasourceId, request.sql).then(() => useMcp.getState().setActivity(false));
+    // The host opens it: the status carries long statements cut, the host keeps them whole.
+    run: (_context, callId) => {
+      if (callId === undefined) return showActivity();
+      useMcp.getState().setActivity(false);
+      return answered(bridge().mcpControl({ action: "open", callId }), "Could not open the agent statement");
     },
   }),
   defineAction<string | undefined>({

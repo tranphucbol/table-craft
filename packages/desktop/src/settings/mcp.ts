@@ -186,7 +186,9 @@ export type McpUserControl =
   | { readonly action: "answer"; readonly approvalId: string; readonly answer: ApprovalAnswer }
   | { readonly action: "pause"; readonly paused: boolean }
   | { readonly action: "disconnect"; readonly clientId: string }
-  | { readonly action: "cancel"; readonly runId: string };
+  | { readonly action: "cancel"; readonly runId: string }
+  /** Opens a finished call's statement uncut in the focused window's console; the status carries it cut. */
+  | { readonly action: "open"; readonly callId: number };
 
 /** The focused console as `get_active_context` reads it; the host drops it unless its datasource is exposed. */
 export interface McpActiveConsole {
