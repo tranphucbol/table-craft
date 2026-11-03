@@ -10,6 +10,9 @@ export const WIDE_MENU_CONTENT = `z-50 min-w-56 rounded-popover border border-li
 /** A Radix menu item: its title, then its shortcut pushed to the right edge. */
 export const MENU_ITEM =
   "flex h-row cursor-default items-center justify-between gap-gap rounded px-gap whitespace-nowrap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection";
+/** A row that opens a submenu: an item that stays highlighted while its submenu is open. */
+export const MENU_SUB_TRIGGER =
+  "flex h-row cursor-default items-center justify-between gap-gap rounded px-gap whitespace-nowrap outline-none data-[disabled]:text-ink-muted data-[highlighted]:bg-selection data-[state=open]:bg-selection";
 /** A menu row drawn as a plain button, in a popover that is not a Radix menu. */
 export const MENU_BUTTON_ITEM =
   "flex h-row w-full cursor-default items-center gap-cell rounded px-gap text-left whitespace-nowrap outline-none hover:bg-selection focus-visible:bg-selection disabled:text-ink-muted disabled:hover:bg-transparent";
