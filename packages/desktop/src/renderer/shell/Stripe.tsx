@@ -108,8 +108,10 @@ export function Stripe({ side, top = [], bottom = [] }: StripeProps) {
     <nav
       aria-label={`${side === "left" ? "Left" : "Right"} tool window stripe`}
       className={cn(
-        "flex w-stripe shrink-0 flex-col items-center justify-between bg-panel py-1",
-        islands ? FRAME_SURFACE : side === "left" ? "border-r border-line" : "border-l border-line",
+        "flex w-stripe shrink-0 flex-col items-center justify-between bg-panel",
+        islands
+          ? cn(FRAME_SURFACE, "py-island-gap", side === "left" ? "pl-island-gap" : "pr-island-gap")
+          : cn("py-1", side === "left" ? "border-r border-line" : "border-l border-line"),
       )}
     >
       <div className="flex flex-col gap-1">{top.map(renderEntry)}</div>

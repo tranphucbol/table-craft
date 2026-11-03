@@ -477,7 +477,10 @@ Plan 132, decision 141. The tables above describe the Classic window style. With
 default, `appearance.windowStyle`), the editor area and the Database, Log, Watch and Services tool
 windows are islands, `rounded-island` cards of `bg-canvas`, set `p-island-gap`
 inside the window frame (`bg-frame`) and `island-gap` apart. The layout, the panels and their
-sizes are the Classic ones.
+sizes are the Classic ones, except the stripes: each is `tabHeightPx + islandGapPx` wide (37 px
+comfortable, 36 px compact) and pads its window edge and its ends by `island-gap`, so a stripe
+button sits one gap from the window edge, one gap from the island beside it, and level with the
+island's top and bottom (plan 147).
 
 | Token                       | CSS variable              | Tailwind                          | Dark / comfortable | Light / compact | Used by                                                            |
 | --------------------------- | ------------------------- | --------------------------------- | ------------------ | --------------- | ------------------------------------------------------------------ |
