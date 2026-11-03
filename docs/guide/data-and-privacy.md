@@ -23,7 +23,8 @@ Everything is stored in one profile folder:
 | `managed-plugins/`     | Plugins TableCraft downloaded, one folder per version                      |
 
 Passwords are never written to `datasources.json` or to the log, and there is no plaintext fallback:
-where the keychain cannot encrypt, _Forever_ is disabled. Apart from the databases you connect to,
+where the keychain cannot encrypt, _Forever_ is disabled. The log keeps none of the SQL you run,
+but it does keep the statements [agents](agents.md) sent, as the query history does. Apart from the databases you connect to,
 TableCraft talks only to GitHub, to [check for updates](install.md#updates), and to the npm registry, to
 [download plugins](plugins.md#databases-in-the-box-and-on-demand), and sends nothing about you to either;
 turn **Check for updates automatically** off and it asks only when you choose **Help → Check for

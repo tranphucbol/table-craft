@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { HISTORY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/historyActions.js";
+import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { hasFailedStatement, located, SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
 import { SESSIONS_ACTION_IDS, showableInSessions } from "@table-craft/desktop/renderer/actions/sessionsActions.js";
 import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
@@ -193,6 +194,9 @@ function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): rea
   if (row.kind === "keyDelete") {
     const args = { taskId: row.node.taskId };
     return keyDeleteActionsOf(row.node).map((actionId) => ({ actionId, args }));
+  }
+  if (row.kind === "agents" || row.kind === "agentClient") {
+    return [{ actionId: LOG_ACTION_IDS.showAgents, args: undefined }];
   }
   if (row.kind === "agentRun") {
     return row.node.cancellable ? [{ actionId: MCP_ACTION_IDS.cancel, args: row.node.id }] : [];

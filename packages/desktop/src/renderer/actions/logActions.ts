@@ -9,6 +9,7 @@ import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 export const LOG_ACTION_IDS = {
   show: "log.show",
   showFor: "log.showFor",
+  showAgents: "log.showAgents",
   reveal: "log.reveal",
   copyRecord: "log.copyRecord",
   clearFilter: "log.clearFilter",
@@ -21,7 +22,11 @@ export interface CopyRecordArgs {
 
 /** What the confirmation lists, so the user knows what leaves the machine before saving (plan 017 decision 10). */
 export const DIAGNOSTICS_CONTENTS = [
-  { label: "logs/", detail: "The app log, current and rotated files", tone: "info" },
+  {
+    label: "logs/",
+    detail: "The app log, current and rotated files, with the statements agents sent",
+    tone: "info",
+  },
   { label: "about.json", detail: "Versions, operating system, installed plugins", tone: "info" },
   { label: "settings.json", detail: "Your settings", tone: "info" },
   { label: "datasources.json", detail: "Datasource names, drivers and hosts; never passwords", tone: "info" },
@@ -49,7 +54,7 @@ async function exportDiagnostics(): Promise<void> {
     kind: "confirm",
     title: "Export Diagnostics",
     message:
-      "Saves a zip to attach to a bug report. It holds no passwords, row data or SQL text; error messages from a database are kept as the database wrote them.",
+      "Saves a zip to attach to a bug report. It holds no passwords or row data, and none of the SQL you run. The log does hold the statements agents sent, and error messages from a database as the database wrote them.",
     items: DIAGNOSTICS_CONTENTS,
     confirm: "Export…",
   });
@@ -81,6 +86,13 @@ export const LOG_ACTIONS: readonly AnyAction[] = [
     run: async (_context, args) => {
       await useLogView.getState().showFor(isLogTarget(args) ? args : { requestId: null, message: "" });
     },
+  }),
+  defineAction({
+    id: LOG_ACTION_IDS.showAgents,
+    title: "Show Agent Log",
+    category: "App",
+    icon: "log",
+    run: () => useLogView.getState().showAgents(),
   }),
   defineAction({
     id: LOG_ACTION_IDS.reveal,
