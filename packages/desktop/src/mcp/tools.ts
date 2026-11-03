@@ -103,10 +103,15 @@ const TOOL_SPECS: Readonly<Record<ToolName, ToolSpec>> = {
   run_query: {
     title: "Run query",
     description:
-      "Runs one SQL statement, or one command on a datasource such as Redis. Reads run on a read-only session and return at most the user's row cap, with a handle for fetch_rows when there are more. A statement that changes data or schema waits until the user approves it in TableCraft, and is refused on a read-only datasource. On an ask-before-reads datasource every read waits until the user approves it, and changes are refused. The user sees reason while deciding. Transaction statements are refused; each approved statement commits on its own.",
+      "Runs one SQL statement, or one command on a datasource such as Redis. Reads run on a read-only session and return at most the user's row cap, with a handle for fetch_rows when there are more. A statement that changes data or schema waits until the user approves it in TableCraft, and is refused on a read-only datasource. On an ask-before-reads datasource every read waits until the user approves it, and changes are refused. The user sees reason while deciding. Transaction statements are refused; each approved statement commits on its own. Integers beyond ±2^53 come back as strings holding the exact value; compare or add them in SQL, not after parsing them as numbers.",
     readOnly: false,
   },
-  fetch_rows: { title: "Fetch rows", description: "More rows of a result run_query kept open.", readOnly: true },
+  fetch_rows: {
+    title: "Fetch rows",
+    description:
+      "More rows of a result run_query kept open. Integers beyond ±2^53 come back as strings holding the exact value, as in run_query.",
+    readOnly: true,
+  },
   close_result: { title: "Close result", description: "Releases a result run_query kept open.", readOnly: true },
   explain: {
     title: "Explain",
