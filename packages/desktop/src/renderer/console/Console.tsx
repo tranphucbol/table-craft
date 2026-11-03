@@ -228,7 +228,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
       <div
         role="toolbar"
         aria-label="Console toolbar"
-        className="flex shrink-0 items-center gap-gap overflow-x-auto border-b border-line bg-panel px-gap py-1"
+        className="flex shrink-0 items-center gap-gap scrollbar-none overflow-x-auto border-b border-line bg-panel px-gap py-1"
       >
         <div className="flex shrink-0 items-center gap-1">
           <ActionButton actionId={ACTION_IDS.run} compact tone="success" />

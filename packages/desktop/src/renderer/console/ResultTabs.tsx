@@ -93,7 +93,7 @@ export function ResultTabs({ consoleId, session }: { readonly consoleId: string;
       <div
         role="tablist"
         aria-label="Results"
-        className="flex h-row shrink-0 overflow-x-auto overflow-y-hidden border-b border-line bg-panel"
+        className="flex h-row shrink-0 scrollbar-none overflow-x-auto overflow-y-hidden border-b border-line bg-panel"
       >
         <TabButton selected={active === null} title={OUTPUT_TITLE} onSelect={() => showResult(consoleId, OUTPUT_TAB)} />
         {session.results.map((result) => (
