@@ -77,7 +77,7 @@ export function editorNote(chord: Chord, action: AnyAction, platform: Platform):
   if (!shortcutWorksIn(action, EDITOR_REGION)) return null;
   const command = EDITOR_COMMANDS.find((held) => sameChord(held.chord, chord, platform));
   if (command === undefined) return null;
-  return `Not in the SQL editor, which uses ${formatChord(command.chord, platform)} for ${command.name}`;
+  return `Doesn't work in the SQL editor, where ${formatChord(command.chord, platform)} is ${command.name}.`;
 }
 
 /** Actions other than `target.action` that hold `chord` where it could fire too. */
