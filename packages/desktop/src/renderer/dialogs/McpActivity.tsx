@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useState } from "react";
 import { useClock } from "@table-craft/desktop/renderer/ui/useClock.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { Button, CONTENT_CLASS, OVERLAY_CLASS, Select } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
@@ -141,7 +142,10 @@ function Activity() {
           </table>
         )}
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-gap">
+        <Dialog.Close asChild>
+          <Button onClick={() => void invoke(LOG_ACTION_IDS.showAgents)}>Show in Log</Button>
+        </Dialog.Close>
         <Dialog.Close asChild>
           <Button variant="primary">Close</Button>
         </Dialog.Close>
