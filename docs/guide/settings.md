@@ -57,7 +57,7 @@ back to its default without affecting the others.
 | `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                              | 5                                              |
 | `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure   | `ask`                                          |
 | `data.nullText`                        | 1–16 characters                                                                                 | `<null>`                                       |
-| `data.stripedRows`                     | `true`, `false`                                                                                 | `false`                                        |
+| `data.stripedRows`                     | `true`, `false`                                                                                 | `true`                                         |
 | `data.groupDigits`                     | `true`, `false`                                                                                 | `false`                                        |
 | `data.detectJson`                      | `true`, `false`; open a text value holding a JSON object or array formatted in the value panel  | `true`                                         |
 | `data.pageRows`                        | 10–10,000                                                                                       | 500                                            |
