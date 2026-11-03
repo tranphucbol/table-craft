@@ -213,6 +213,9 @@ export interface McpContextRequest {
 /** Agent Activity keeps this many calls, newest first. */
 export const MCP_ACTIVITY_LIMIT = 200;
 
+/** The app log scope of every agent record, which Show Agent Log filters on (decision 152). */
+export const AGENT_LOG_SCOPE = "agent";
+
 export interface McpStatus {
   readonly state: McpServerState;
   readonly port: number;

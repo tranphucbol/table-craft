@@ -53,11 +53,21 @@ export interface ApprovalsOptions {
   readonly timeoutMs?: number;
   readonly setTimer?: (run: () => void, ms: number) => unknown;
   readonly clearTimer?: (timer: unknown) => void;
+  /** A dialog opened for the request. */
+  readonly onAsked?: (id: string, request: ApprovalRequest) => void;
+  /** Every request's end, including those refused without asking, whose `id` is null. */
+  readonly onSettled?: (
+    request: ApprovalRequest,
+    outcome: ApprovalOutcome,
+    waitedMs: number,
+    id: string | null,
+  ) => void;
 }
 
 interface Waiting {
   readonly view: McpApprovalView;
   readonly request: ApprovalRequest;
+  readonly askedAt: number;
   readonly timer: unknown;
   readonly settle: (outcome: ApprovalOutcome) => void;
 }
@@ -82,8 +92,14 @@ export function createApprovals(options: ApprovalsOptions): Approvals {
     if (entry === undefined) return;
     waiting.delete(id);
     clearTimer(entry.timer);
+    options.onSettled?.(entry.request, outcome, Math.max(0, now() - entry.askedAt), id);
     entry.settle(outcome);
     options.onChange();
+  }
+
+  function refuse(request: ApprovalRequest, outcome: ApprovalOutcome): Promise<ApprovalOutcome> {
+    options.onSettled?.(request, outcome, 0, null);
+    return Promise.resolve(outcome);
   }
 
   function settleAll(outcome: ApprovalOutcome): void {
@@ -92,11 +108,12 @@ export function createApprovals(options: ApprovalsOptions): Approvals {
 
   return {
     request(request) {
-      if (paused) return Promise.resolve("paused");
-      if (!windows) return Promise.resolve("noWindow");
+      if (paused) return refuse(request, "paused");
+      if (!windows) return refuse(request, "noWindow");
       next += 1;
       const id = `approval-${String(next)}`;
       return new Promise<ApprovalOutcome>((resolve) => {
+        const askedAt = now();
         const view: McpApprovalView = {
           id,
           clientName: request.clientName,
@@ -108,11 +125,12 @@ export function createApprovals(options: ApprovalsOptions): Approvals {
           database: request.database,
           destructive: request.destructive,
           reason: request.reason,
-          deadline: now() + timeoutMs,
+          deadline: askedAt + timeoutMs,
           allowable: request.allowable,
         };
         const timer = setTimer(() => settle(id, "timedOut"), timeoutMs);
-        waiting.set(id, { view, request, timer, settle: resolve });
+        waiting.set(id, { view, request, askedAt, timer, settle: resolve });
+        options.onAsked?.(id, request);
         options.onChange();
       });
     },

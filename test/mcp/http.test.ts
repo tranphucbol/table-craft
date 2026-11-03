@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
-import { createLogger } from "@table-craft/desktop/log/record.js";
+import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { createMcpHost, type McpHost } from "@table-craft/desktop/mcp/host.js";
 import { listen, ListenError, MAX_BODY_BYTES, SESSION_HEADER } from "@table-craft/desktop/mcp/http.js";
 import {
@@ -21,7 +21,12 @@ import {
   type McpToMain,
 } from "@table-craft/desktop/mcp/messages.js";
 import type { McpServer } from "@table-craft/desktop/mcp/server.js";
-import type { McpKnownClient, McpStatus } from "@table-craft/desktop/settings/mcp.js";
+import {
+  AGENT_LOG_SCOPE,
+  type AgentAccess,
+  type McpKnownClient,
+  type McpStatus,
+} from "@table-craft/desktop/settings/mcp.js";
 import { SQLITE_MANIFEST } from "../support/manifests.js";
 import { inProcessPort } from "../support/mcpHarness.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
@@ -33,7 +38,6 @@ const LOADED_SQLITE: PluginLoadResult = {
   manifest: SQLITE_MANIFEST,
   plugin: sqlite,
 };
-const SILENT = createLogger({ process: "mcp", scope: "test", sink: () => undefined });
 const INITIALIZE = {
   jsonrpc: "2.0",
   id: 1,
@@ -105,17 +109,22 @@ const COUNT_ORDERS = {
   params: { name: "run_query", arguments: { datasource: "shop", sql: "SELECT count(*) AS n FROM orders" } },
 };
 
-async function bootedHost(clients = KNOWN_CLIENTS): Promise<{
+async function bootedHost(
+  clients = KNOWN_CLIENTS,
+  access: AgentAccess = "read",
+): Promise<{
   readonly port: number;
   readonly statuses: McpStatus[];
   readonly history: AgentHistoryEntry[];
+  readonly records: LogRecord[];
 }> {
   const path = seededSqliteFile();
   const statuses: McpStatus[] = [];
   const history: AgentHistoryEntry[] = [];
+  const records: LogRecord[] = [];
   let sessions = 0;
   const started = createMcpHost({
-    log: SILENT,
+    log: createLogger({ process: "mcp", scope: "mcp", sink: (record) => records.push(record) }),
     newSessionId: () => `session-${String((sessions += 1))}`,
     send: (message: McpToMain) => {
       if (message.kind === MCP_STATUS_MESSAGE) statuses.push(message.status);
@@ -155,12 +164,12 @@ async function bootedHost(clients = KNOWN_CLIENTS): Promise<{
     timeoutSeconds: 120,
     windows: true,
     clients,
-    datasources: [{ id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access: "read" }],
+    datasources: [{ id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access }],
   });
   await started.ready();
   const running = statuses.at(-1);
   if (running?.state !== "running") throw new Error(`MCP host did not start: ${running?.message ?? "no status"}`);
-  return { port: running.port, statuses, history };
+  return { port: running.port, statuses, history, records };
 }
 
 async function initialized(port: number): Promise<string> {
@@ -318,6 +327,47 @@ describe("MCP over HTTP", () => {
     expect(deleted.status).toBe(200);
     expect(after.status).toBe(404);
     expect(statuses.at(-1)?.clients).toEqual([]);
+  });
+
+  it("givenAgentRun_whenItConnectsCallsAsksAndLeaves_thenEachStepIsLoggedInOrder", async () => {
+    const { port, statuses, records } = await bootedHost(KNOWN_CLIENTS, "ask");
+    const sessionId = await initialized(port);
+    const update = "UPDATE orders SET total = total WHERE id = 1";
+
+    await rpc(port, COUNT_ORDERS, sessionId);
+    const called = rpc(
+      port,
+      {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: { name: "run_query", arguments: { datasource: "shop", sql: update } },
+      },
+      sessionId,
+    );
+    await expect.poll(() => statuses.at(-1)?.approvals.length).toBe(1);
+    const approvalId = statuses.at(-1)?.approvals[0]?.id ?? "";
+    host?.handle({ kind: MCP_CONTROL_MESSAGE, action: "answer", approvalId, answer: "allowOnce" });
+    await called;
+    await send(port, { method: "DELETE", headers: { [SESSION_HEADER]: sessionId } });
+
+    const agent = records.filter((record) => record.scope === AGENT_LOG_SCOPE);
+    expect(agent.map((record) => record.msg)).toEqual([
+      "agent connected",
+      "agent call",
+      "approval asked",
+      "approval answered",
+      "agent call",
+      "agent disconnected",
+    ]);
+    expect(agent).toMatchObject([
+      { process: "mcp", clientId: sessionId, clientName: "claude-code", clientVersion: "2.1" },
+      { tool: "run_query", outcome: "ok", target: "SELECT count(*) AS n FROM orders", rowCount: 1 },
+      { approvalId, kind: "write", target: update },
+      { approvalId, outcome: "allowed" },
+      { tool: "run_query", outcome: "ok", target: update },
+      { by: "client" },
+    ]);
   });
 
   it("givenPortTaken_whenListening_thenListenErrorNamesThePort", async () => {
