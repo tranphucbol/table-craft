@@ -9,6 +9,12 @@ import type { FeatureNotice } from "@table-craft/desktop/renderer/model/notices.
  */
 export const FEATURE_NOTICES: readonly FeatureNotice[] = [
   {
+    id: "custom-shortcuts",
+    title: "Change keyboard shortcuts",
+    body: "Rebind any action, or find one by pressing its keys, in Settings › Keymap.",
+    action: { label: "Open Keymap", actionId: SETTINGS_ACTION_IDS.show, args: { page: "keymap" } },
+  },
+  {
     id: "beta-channel",
     title: "Get beta versions",
     body: "Try new features before they are released, from Settings › Advanced.",
