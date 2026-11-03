@@ -9,8 +9,9 @@
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/120 bun run test:smoke:db:headless:redis test/e2e/mcp.smoke.test.ts
  */
-import type { ElectronApplication, Page } from "playwright-core";
+import type { ElectronApplication, Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import { ACTIVITY_TARGET_CHARS } from "@table-craft/desktop/mcp/activity.js";
 import mysql from "@table-craft/plugin-mysql";
 import { MYSQL_CONFIG, REDIS_CONFIG, TIDB_CONFIG, WITHOUT_REDIS } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
@@ -21,6 +22,7 @@ import {
   closeApp,
   DATABASES_ENABLED,
   dataSourcesDialog,
+  editorTabs,
   EVIDENCE_WINDOW,
   evidenceFor,
   findAction,
@@ -60,6 +62,8 @@ const KNOWN_CLIENTS = [
 const SLOW_COUNT =
   "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 30000000) SELECT count(*) FROM c";
 const TOKEN_HINT = /^tc_•+[\w-]{4}$/;
+const LONG_TAIL = "'end of the agent statement' AS tail";
+const LONG_SELECT = `SELECT id, ${Array.from({ length: 40 }, (_, index) => `'padding ${String(index)}' AS c${String(index)}`).join(", ")}, ${LONG_TAIL} FROM customers`;
 const SELECT_CUSTOMERS = "SELECT id, name FROM customers ORDER BY id";
 const SELECT_ORDERS = "SELECT id, customer_id FROM orders ORDER BY id";
 const READ_REASON = "Checking the customer list";
@@ -169,6 +173,12 @@ function chip(page: Page) {
 
 function approval(page: Page) {
   return page.getByTestId("mcp-approval");
+}
+
+/** Scrolls a one-line statement to its end, so the evidence shows it was not cut. */
+async function showStatementEnd(editor: Locator): Promise<void> {
+  await editor.click();
+  await editor.press("End");
 }
 
 async function clipboardText(app: ElectronApplication): Promise<string> {
@@ -526,6 +536,35 @@ describe.runIf(SMOKE_ENABLED)("MCP server live test", () => {
         .toContain("disconnected");
       expect(await finished.count()).toBe(1);
       await captureWindow(page, "13-services-agent-history");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenLongAgentStatement_whenOpenedFromServicesAndActivity_thenConsoleHoldsItWhole",
+    async () => {
+      expect(LONG_SELECT.length).toBeGreaterThan(ACTIVITY_TARGET_CHARS);
+      const { page, port } = await launchServing([shop()]);
+      const agent = await agentAs(page, port, "Claude Code");
+      expect((await agent.tool("run_query", { datasource: "shop", sql: LONG_SELECT })).isError).toBe(false);
+      const editor = page.locator('[data-testid="sql-editor"] .cm-content');
+
+      const services = await showServices(page);
+      const finished = services.locator('[role="treeitem"][data-kind="agentCall"]');
+      await expect.poll(() => finished.getAttribute("data-state")).toBe("ok");
+      await finished.dblclick();
+      await expect.poll(() => editor.last().textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(LONG_SELECT);
+      await showStatementEnd(editor.last());
+      await captureWindow(page, "14-services-open-whole");
+
+      await findAction(page, "Show Agent Activity");
+      const activity = page.getByTestId("mcp-activity");
+      await activity.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await activity.getByTestId("mcp-activity-row").first().dblclick();
+      await expect.poll(() => editorTabs(page).count()).toBe(2);
+      await expect.poll(() => editor.last().textContent()).toBe(LONG_SELECT);
+      await showStatementEnd(editor.last());
+      await captureWindow(page, "15-activity-open-whole");
     },
     SCENARIO_TIMEOUT_MS,
   );
