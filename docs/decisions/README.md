@@ -144,3 +144,4 @@ started, not when it is merged.
 | 149 | [An engine runs before its datasource connects](149-an-engine-runs-before-its-datasource-connects.md)                                                                  |
 | 150 | [Floating surfaces round on the island ladder](150-floating-surfaces-round-on-the-island-ladder.md)                                                                    |
 | 151 | [Notices wait in a bell and never interrupt](151-notices-wait-in-a-bell-and-never-interrupt.md)                                                                        |
+| 152 | [Agent statements are logged](152-agent-statements-are-logged.md)                                                                                                      |
