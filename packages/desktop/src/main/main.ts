@@ -33,6 +33,7 @@ import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js"
 import { createHostKeyService } from "@table-craft/desktop/main/hostKeys.js";
 import { createHostRegistry, type EngineProcess } from "@table-craft/desktop/main/hosts.js";
 import { createImporter } from "@table-craft/desktop/main/import/importer.js";
+import { createDatasourceExport } from "@table-craft/desktop/main/datasourceExport.js";
 import { createCredentialReader, runCommand } from "@table-craft/desktop/main/import/keychain.js";
 import { nodeImportFiles } from "@table-craft/desktop/main/import/nodeFiles.js";
 import { parseTableProDefaults, TABLEPRO_DEFAULTS_DOMAIN } from "@table-craft/desktop/main/import/tablepro.js";
@@ -993,6 +994,12 @@ void app.whenReady().then(async () => {
         }),
       cancel: () => importer.cancel(),
     },
+    datasourceFiles: createDatasourceExport({
+      service,
+      saveFile,
+      writeText: (path, text) => files.writeText(path, text),
+      log: mainLog.child("export"),
+    }),
     plugins: plugins.channels,
     mcp: {
       status: () => mcp.status(),

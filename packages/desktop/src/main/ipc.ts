@@ -15,13 +15,18 @@ import {
   type SnippetsService,
 } from "@table-craft/desktop/main/snippets.js";
 import { DatasourceError, type DatasourceService } from "@table-craft/desktop/main/service.js";
+import type { DatasourceExportChannels } from "@table-craft/desktop/main/datasourceExport.js";
 import {
   HISTORY_OUTCOMES,
   HISTORY_SOURCES,
-  IMPORT_APPS,
   INVOKE_CHANNELS,
+  MAX_PASTED_BYTES,
+  MIN_PASSPHRASE_LENGTH,
+  SCANNED_APPS,
   type AppInfo,
   type BridgeFailure,
+  type DatasourceSelection,
+  type ExportDatasourcesRequest,
   type HistoryEntry,
   type ImportPreview,
   type ImportPreviewRequest,
@@ -175,9 +180,22 @@ const mcpContextReply = z.strictObject({
 const mcpClientRequest = z.strictObject({ client: z.enum(MCP_CLIENTS) });
 const pluginRequest = z.strictObject({ pluginId: z.string().min(1) });
 const importPreviewRequest = z.union([
-  z.strictObject({ source: z.enum(IMPORT_APPS) }),
-  z.strictObject({ source: z.literal("file"), path: z.string().min(1), passphrase: z.string().optional() }),
+  z.strictObject({ source: z.enum(SCANNED_APPS) }),
+  z.strictObject({
+    source: z.literal("file"),
+    path: z.string().min(1),
+    passphrase: z.string().optional(),
+    skipSecrets: z.boolean().optional(),
+  }),
+  z.strictObject({ source: z.literal("text"), text: z.string().max(MAX_PASTED_BYTES) }),
 ]) satisfies z.ZodType<ImportPreviewRequest>;
+const datasourceSelection = z.strictObject({
+  ids: z.array(z.string().min(1)).readonly(),
+  folders: z.array(z.string().min(1)).readonly(),
+}) satisfies z.ZodType<DatasourceSelection>;
+const exportDatasourcesRequest = datasourceSelection.extend({
+  passphrase: z.string().min(MIN_PASSPHRASE_LENGTH).optional(),
+}) satisfies z.ZodType<ExportDatasourcesRequest>;
 const importRunRequest = z.strictObject({
   previewId: z.number().int().positive(),
   keys: z.array(z.string().min(1)),
@@ -220,6 +238,7 @@ export interface IpcOptions<Sender> {
   readonly logs: LogChannels<Sender>;
   readonly updates: UpdateChannels;
   readonly importer: ImportChannels<Sender>;
+  readonly datasourceFiles: DatasourceExportChannels<Sender>;
   readonly plugins: PluginChannels<Sender>;
   readonly mcp: McpChannels;
 }
@@ -336,6 +355,11 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.testDatasource, saveRequest, (request) => service.test(request));
   handle(INVOKE_CHANNELS.parseDatasourceUrl, parseUrlRequest, ({ pluginId, url }) => service.parseUrl(pluginId, url));
   handle(INVOKE_CHANNELS.datasourceUrl, idRequest, ({ id }) => service.url(id));
+  const { datasourceFiles } = options;
+  handle(INVOKE_CHANNELS.exportDatasources, exportDatasourcesRequest, (request, sender) =>
+    datasourceFiles.export(sender, request),
+  );
+  handle(INVOKE_CHANNELS.copyDatasources, datasourceSelection, (selection) => datasourceFiles.copy(selection));
   handle(INVOKE_CHANNELS.connectEngine, connectRequest, ({ datasourceId, secrets, mode }, sender) =>
     service.connect(datasourceId, secrets ?? {}, sender, mode),
   );

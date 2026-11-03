@@ -14,6 +14,7 @@ import {
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl, type DdlTab } from "@table-craft/desktop/renderer/state/ddl.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
+import { useExportDataSourcesDialog } from "@table-craft/desktop/renderer/state/exportDataSourcesDialog.js";
 import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
 import { useManageShownSchemasDialog } from "@table-craft/desktop/renderer/state/manageShownSchemasDialog.js";
 import { useSettingsDialog } from "@table-craft/desktop/renderer/state/settingsDialog.js";
@@ -152,6 +153,7 @@ export function modalOpen(): boolean {
     usePalette.getState().mode !== null ||
     useDataSourcesDialog.getState().target !== null ||
     useImportDataSourcesDialog.getState().session !== null ||
+    useExportDataSourcesDialog.getState().session !== null ||
     useManageShownSchemasDialog.getState().datasourceId !== null ||
     useSettingsDialog.getState().page !== null ||
     useSnippetsDialog.getState().open ||
