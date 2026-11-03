@@ -39,6 +39,7 @@ import { installHostKeyPrompts } from "@table-craft/desktop/renderer/state/hostK
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { installUpdateState } from "@table-craft/desktop/renderer/state/update.js";
 import { installMcpState } from "@table-craft/desktop/renderer/state/mcp.js";
+import { installNotices } from "@table-craft/desktop/renderer/state/notices.js";
 import { installMcpConsoleRelay } from "@table-craft/desktop/renderer/actions/mcpConsole.js";
 import { installWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { installDatasourceSync } from "@table-craft/desktop/renderer/state/wiring.js";
@@ -60,6 +61,7 @@ function onFirstList(): void {
   void restoreConsoles().then(() => {
     if (stopConsoleSync === null) restoreTables();
     openEphemeralConsole();
+    installNotices();
     if (stopConsoleSync !== null) return;
     const forget = rememberOpenConsoles();
     const forgetTables = rememberOpenTables();

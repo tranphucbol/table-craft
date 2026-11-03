@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useRef, useState } from "react";
 import type {
   BridgeFailure,
+  ImportApp,
   ImportPreview,
   ImportPreviewRequest,
   ImportProgress,
@@ -173,7 +174,7 @@ function Failure({ failure }: { readonly failure: BridgeFailure | null }) {
  * Import Data Sources (plans 035, 143): pick DataGrip, TablePro, MySQL Workbench or a file, tick the connections, then
  * import them. Main reads the other apps' files and secrets; this view only sees rows.
  */
-function Wizard() {
+function Wizard({ app }: { readonly app: ImportApp | null }) {
   const hide = useImportDataSourcesDialog((state) => state.hide);
   const [step, setStep] = useState<Step>({ kind: "source" });
   const [sources, setSources] = useState<readonly ImportSource[] | null>(null);
@@ -196,12 +197,19 @@ function Wizard() {
       .importScan()
       .then((answer) => {
         if (!current) return;
-        if (answer.ok) setSources(answer.value);
-        else setFailure(answer.error);
+        if (!answer.ok) {
+          setFailure(answer.error);
+          return;
+        }
+        setSources(answer.value);
+        if (app !== null && answer.value.some((source) => source.app === app && source.found))
+          void preview({ source: app });
       });
     return () => {
       current = false;
     };
+    // The app is fixed for the dialog's session; `preview` only reads refs and setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => bridge().onImportProgress(setProgress), []);
@@ -447,6 +455,7 @@ function Wizard() {
 
 export function ImportDataSourcesDialog() {
   const session = useImportDataSourcesDialog((state) => state.session);
+  const app = useImportDataSourcesDialog((state) => state.app);
   return (
     <Dialog.Root
       open={session !== null}
@@ -464,7 +473,7 @@ export function ImportDataSourcesDialog() {
           )}
           onInteractOutside={(event) => event.preventDefault()}
         >
-          {session === null ? null : <Wizard key={session} />}
+          {session === null ? null : <Wizard key={session} app={app} />}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

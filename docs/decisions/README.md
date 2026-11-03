@@ -143,3 +143,4 @@ started, not when it is merged.
 | 148 | [A console can override its run limits](148-a-console-can-override-its-run-limits.md)                                                                                  |
 | 149 | [An engine runs before its datasource connects](149-an-engine-runs-before-its-datasource-connects.md)                                                                  |
 | 150 | [Floating surfaces round on the island ladder](150-floating-surfaces-round-on-the-island-ladder.md)                                                                    |
+| 151 | [Notices wait in a bell and never interrupt](151-notices-wait-in-a-bell-and-never-interrupt.md)                                                                        |

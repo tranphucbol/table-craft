@@ -594,6 +594,10 @@ export interface AppInfo {
   readonly chromium: string;
 }
 
+export interface ReleaseNotesRequest {
+  readonly version: string;
+}
+
 /** The release an update offers; its URLs stay in main, which opens them itself (plan 020). */
 export interface UpdateRelease {
   readonly version: string;
@@ -815,7 +819,8 @@ export interface TableCraftBridge {
   /** Clears an error or a not-installable notice until the next check. */
   updateDismiss(): Promise<InvokeResult<null>>;
   /** Opens the offered release's notes page in the browser. */
-  updateOpenNotes(): Promise<InvokeResult<null>>;
+  /** A version opens that release's page; none opens the offered update's notes. */
+  updateOpenNotes(request?: ReleaseNotesRequest): Promise<InvokeResult<null>>;
   /** Looks for DataGrip, TablePro and MySQL Workbench on this machine (plans 035, 143); reads files, asks no keychain. */
   importScan(): Promise<InvokeResult<readonly ImportSource[]>>;
   importPreview(request: ImportPreviewRequest): Promise<InvokeResult<ImportPreview>>;

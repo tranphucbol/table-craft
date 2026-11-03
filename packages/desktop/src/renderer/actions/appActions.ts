@@ -28,7 +28,10 @@ import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { focusRegion } from "@table-craft/desktop/renderer/shell/focus.js";
 import { canRun, OUTPUT_TAB, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
-import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
+import {
+  useImportDataSourcesDialog,
+  type ImportDataSourcesRequest,
+} from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
 import { useManageShownSchemasDialog } from "@table-craft/desktop/renderer/state/manageShownSchemasDialog.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
@@ -519,14 +522,14 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     run: (context) =>
       useDataSourcesDialog.getState().show({ kind: "new", pluginId: null, folder: selectedFolder(context) ?? "" }),
   }),
-  defineAction({
+  defineAction<ImportDataSourcesRequest | undefined>({
     id: ACTION_IDS.importDatasources,
     title: "Import Data Sources…",
     category: "Database",
     icon: "import",
-    run: () => {
+    run: (_context, args) => {
       useDataSourcesDialog.getState().hide();
-      useImportDataSourcesDialog.getState().show();
+      useImportDataSourcesDialog.getState().show(args);
     },
   }),
   defineAction({

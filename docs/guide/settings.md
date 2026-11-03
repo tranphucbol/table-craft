@@ -15,6 +15,18 @@ the way JetBrains' Islands theme does (Islands, the default), or as flat panes s
 
 See [Settings and appearance](../design/specification.md#settings-and-appearance).
 
+## Notifications
+
+The bell on the right edge of the window holds what TableCraft has to tell you: the version you
+updated to, with its release notes; connections it found in DataGrip, TablePro or MySQL Workbench,
+with **Import…**; an optional plugin it updated in the background; and new features, each with a
+button that opens the place to try it. A blue dot on the bell means something new; it pulses three
+times when a notice arrives (not at all with **Motion** at Reduced or Off) and goes away when you
+open the bell. Nothing opens by itself. **Dismiss** removes one notice, **Dismiss All** every one,
+and using a notice's button settles it too; an import notice stays until you import those
+connections or dismiss it. A new profile counts the version and features it starts with as seen,
+so only connections found in other apps show on its first launch.
+
 ## Settings file
 
 Settings live in `settings.json` in your [profile folder](data-and-privacy.md). The Settings
