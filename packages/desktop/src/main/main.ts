@@ -95,6 +95,7 @@ import {
   updateEndpoint,
 } from "@table-craft/desktop/main/update/overrides.js";
 import { isVersion } from "@table-craft/desktop/version/compare.js";
+import { removeTree } from "@table-craft/desktop/main/update/removeTree.js";
 import { createUpdateSchedule, type UpdateSchedule } from "@table-craft/desktop/main/update/schedule.js";
 import {
   createUpdater,
@@ -738,6 +739,7 @@ async function startUpdater(directory: string, settings: SettingsService): Promi
     spawnDetached(command, args) {
       spawn(command, [...args], { detached: true, stdio: "ignore" }).unref();
     },
+    remove: removeTree,
     readMemory: async () => readUpdateMemory(await files.readText(statePath)),
     writeMemory: (memory) => files.writeText(statePath, writeUpdateMemory(memory)),
     onState: (state) => broadcast(CHANNELS.updateState, state),
@@ -746,7 +748,7 @@ async function startUpdater(directory: string, settings: SettingsService): Promi
     lastSwapFailure,
   });
   const bundlePath = process.platform === MAC_PLATFORM && app.isPackaged ? bundlePathFrom(process.execPath) : null;
-  if (bundlePath !== null) await removeLeftovers({ kind: "macBundle", bundlePath }, updateLog);
+  if (bundlePath !== null) await removeLeftovers({ kind: "macBundle", bundlePath }, updateLog, removeTree);
   // A development run checks on its own only when pointed at a test release.
   const automaticAllowed = app.isPackaged || endpoint.overridden;
   updateSchedule = createUpdateSchedule({
