@@ -200,7 +200,7 @@ function ClashPrompt({
     <span
       role="alert"
       {...{ [RECORDER_ATTRIBUTE]: "" }}
-      className="col-span-3 flex min-w-0 flex-wrap items-center gap-cell text-ink-muted"
+      className="col-span-3 flex min-w-0 flex-wrap items-center gap-x-cell gap-y-gap text-ink-muted"
       onKeyDown={(event) => {
         if (!isBareKey(event, CANCEL_KEY)) return;
         stopKey(event);
@@ -275,10 +275,10 @@ function KeymapRow({
       {...{ [ROW_ATTRIBUTE]: action.id }}
       tabIndex={tabIndex}
       className={cn(
-        "group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-cell rounded px-cell py-0.5 outline-none",
+        "group grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-cell rounded px-cell outline-none",
         "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
         ROW_SCROLL_MARGIN,
-        recording === null ? "hover:bg-hover" : "bg-selection",
+        recording === null ? "gap-y-1 py-0.5 hover:bg-hover" : "my-1 gap-y-gap bg-selection py-gap",
       )}
       onFocus={() => onActive(action.id)}
       onKeyDown={onRowKey}
