@@ -1,7 +1,7 @@
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import type { CellInput, SortDirection, TypeClass, WireValue } from "@table-craft/desktop/engine/protocol.js";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import {
   GRID_ACTION_IDS,
   LOCAL_FILTER_LABELS,
@@ -518,14 +518,13 @@ export function MenuItem({
   readonly args?: unknown;
 }) {
   const enabled = useActionEnabled(actionId);
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   if (action === undefined) return null;
   return (
     <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId, args)}>
       <span>{label ?? action.title}</span>
-      {action.shortcut === undefined ? null : (
-        <span className={MENU_SHORTCUT}>{formatChord(action.shortcut, currentPlatform())}</span>
-      )}
+      {shortcut === undefined ? null : <span className={MENU_SHORTCUT}>{shortcut}</span>}
     </ContextMenu.Item>
   );
 }

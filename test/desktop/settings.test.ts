@@ -63,6 +63,7 @@ const CHOSEN: Settings = {
     clients: [{ name: "Claude Code", allowed: true }],
     notifications: false,
   },
+  keymap: { "console.run": ["Ctrl+Enter"], "console.format": [] },
 };
 
 function store(files = memoryFiles()) {
@@ -362,6 +363,24 @@ describe("settings document", () => {
     expect(
       settingsSchema.safeParse({ ...CHOSEN, mcp: { ...CHOSEN.mcp, statementTimeoutSeconds: 3_601 } }).success,
     ).toBe(false);
+  });
+
+  it("givenInvalidChord_whenRead_thenDroppedRestKept", () => {
+    const read = readSettings({
+      ...CHOSEN,
+      keymap: { "console.run": ["Ctrl+Enter", "Hyper+X", 7], "console.format": ["Nope+"], "editor.zoomIn": "Mod+=" },
+    });
+
+    expect(read.keymap).toEqual({ "console.run": ["Ctrl+Enter"] });
+    expect(readSettings({ ...CHOSEN, keymap: ["Mod+Enter"] }).keymap).toEqual({});
+  });
+
+  it("givenUnknownActionId_whenRead_thenKept", () => {
+    const keymap = { "plugin.someday": ["Mod+Shift+K"], "console.format": [] };
+
+    expect(readSettings({ ...CHOSEN, keymap }).keymap).toEqual(keymap);
+    expect(settingsSchema.safeParse({ ...CHOSEN, keymap }).success).toBe(true);
+    expect(settingsSchema.safeParse({ ...CHOSEN, keymap: { "console.run": ["Hyper+X"] } }).success).toBe(false);
   });
 });
 

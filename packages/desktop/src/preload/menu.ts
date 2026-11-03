@@ -3,6 +3,7 @@
  * click sends the item's action id to the renderer, which runs it through the action registry.
  * Main never decides whether an action is enabled.
  */
+import { menuAccelerator, type KeymapOverrides } from "@table-craft/desktop/settings/chords.js";
 
 /** Which platforms show an entry; every platform when absent. */
 export type MenuPlatform = "mac" | "notMac";
@@ -167,12 +168,32 @@ export const APPLICATION_MENU: readonly MenuEntry[] = [
   },
 ];
 
-/** The entries one platform shows, at every depth. */
-export function menuFor(mac: boolean, entries: readonly MenuEntry[] = APPLICATION_MENU): readonly MenuEntry[] {
+/**
+ * An item that shows its action's chord shows the one in effect: on macOS an unhandled key
+ * equivalent still reaches the menu, so a stale accelerator would run the action under its old
+ * chord (decision 153). An item declared without one stays without, as New Data Source's ⌘N does.
+ */
+function withKeymap(item: ActionMenuItem, overrides: KeymapOverrides): ActionMenuItem {
+  if (item.accelerator === undefined || !Object.hasOwn(overrides, item.actionId)) return item;
+  const { accelerator: _declared, ...rest } = item;
+  const first = overrides[item.actionId]?.[0];
+  const accelerator = first === undefined ? null : menuAccelerator(first);
+  return accelerator === null ? rest : { ...rest, accelerator };
+}
+
+/** The entries one platform shows, at every depth, with the accelerators `overrides` gives. */
+export function menuFor(
+  mac: boolean,
+  overrides: KeymapOverrides = {},
+  entries: readonly MenuEntry[] = APPLICATION_MENU,
+): readonly MenuEntry[] {
   const shown = mac ? "mac" : "notMac";
   return entries
     .filter((entry) => entry.only === undefined || entry.only === shown)
-    .map((entry) => (entry.kind === "submenu" ? { ...entry, items: menuFor(mac, entry.items) } : entry));
+    .map((entry) => {
+      if (entry.kind === "submenu") return { ...entry, items: menuFor(mac, overrides, entry.items) };
+      return entry.kind === "action" ? withKeymap(entry, overrides) : entry;
+    });
 }
 
 /** Every action id the menu names, for the test that checks each one is registered. */
