@@ -96,7 +96,9 @@ Passwords:
 A Workbench connection's group (the text before the first `/` of its name) becomes its folder.
 **Local Socket/Pipe** connections are listed as not supported, since TableCraft's MySQL connects
 over TCP/IP; LDAP and Kerberos ones import their address with a warning, and options TableCraft
-has no field for, such as an SSL cipher or `SQL_MODE`, are named in the row's warning.
+has no field for, such as an SSL cipher or `SQL_MODE`, are named in the row's warning. An SSL mode
+of _Preferred_, the default in Workbench and TablePro, imports as _Disable_; choose _Require_ on the
+data source to encrypt it.
 
 Untick **Import passwords** to bring none: such a data source asks on connect, and you save its
 password in the Data Sources dialog.

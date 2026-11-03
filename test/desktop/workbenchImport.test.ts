@@ -245,9 +245,8 @@ describe("MySQL Workbench import", () => {
 
     const orders = row(preview.rows, "Orders via bastion");
     expect(orders).toMatchObject({ folder: "Prod", target: "10.0.0.5:3306 via bastion.test", status: "ready" });
-    expect(orders.warnings).toContain(
-      "SSL Preferred became Require: TableCraft does not fall back to an unencrypted connection.",
-    );
+    expect(orders.warnings).toEqual([]);
+    expect(datasource("Orders via bastion").config).toMatchObject({ sslMode: "disable" });
     expect(datasource("Orders via bastion").ssh).toEqual({
       enabled: true,
       host: "bastion.test",

@@ -278,6 +278,7 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await expect.poll(() => importRow(page, "Shop MySQL").getAttribute("data-status")).toBe("ready");
       await expect.poll(() => importRow(page, "Local socket").getAttribute("data-status")).toBe("unsupported");
       await expect.poll(() => importRow(page, "Orders via bastion").textContent()).toContain("via bastion.test");
+      await expect.poll(() => importRow(page, "Orders via bastion").textContent()).not.toContain("SSL");
       await expect.poll(() => importRow(page, "Secure").textContent()).toContain("Not imported: sslCipher.");
       await captureWorkbench(page, "02-preview");
 
@@ -304,6 +305,10 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await expect.poll(() => form.getByLabel("SSH user", { exact: true }).inputValue()).toBe("deploy");
       await form.getByLabel("SSH user", { exact: true }).scrollIntoViewIfNeeded();
       await captureWorkbench(page, "04-ssh-settings");
+      const sslMode = form.getByLabel("SSL mode", { exact: true });
+      await sslMode.scrollIntoViewIfNeeded();
+      await expect.poll(() => sslMode.textContent()).toBe("Disable");
+      await captureWorkbench(page, "05-ssl-preferred-disabled");
       await page.keyboard.press("Escape");
       await form.waitFor({ state: "detached" });
 

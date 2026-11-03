@@ -125,7 +125,9 @@ function applySsl(
   const { ssl } = connection;
   if (ssl === null) return;
   const field = sslField(plugin);
-  if (ssl.mode === "disabled") {
+  // Preferred is Workbench's and TablePro's default and only means "encrypt if the server offers it";
+  // turning it into Require broke every server without SSL, so it imports as off.
+  if (ssl.mode === "disabled" || ssl.mode === "preferred") {
     if (field?.values.has(SSL_DISABLE) === true) config[field.key] = SSL_DISABLE;
     return;
   }
@@ -134,15 +136,12 @@ function applySsl(
     return;
   }
   const wanted =
-    ssl.mode === "preferred" || ssl.mode === "required"
+    ssl.mode === "required"
       ? SSL_REQUIRE
       : ssl.mode === "verifyCa" && field.values.has(SSL_VERIFY_CA)
         ? SSL_VERIFY_CA
         : SSL_VERIFY_FULL;
   config[field.key] = field.values.has(wanted) ? wanted : SSL_REQUIRE;
-  if (ssl.mode === "preferred") {
-    warnings.push("SSL Preferred became Require: TableCraft does not fall back to an unencrypted connection.");
-  }
   if (ssl.mode === "verifyCa" && wanted !== SSL_VERIFY_CA) {
     warnings.push("SSL Verify CA became Verify full, which also checks the host name.");
   }
