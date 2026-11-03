@@ -61,7 +61,7 @@ import { createRedactor, isSecretKey } from "@table-craft/desktop/main/log/redac
 import { readLogRecord } from "@table-craft/desktop/main/log/schema.js";
 import { createLogWriter, LOG_DIRECTORY, nodeLogFiles } from "@table-craft/desktop/main/log/writer.js";
 import { zip } from "@table-craft/desktop/main/log/zip.js";
-import { installApplicationMenu } from "@table-craft/desktop/main/menu.js";
+import { createApplicationMenu } from "@table-craft/desktop/main/menu.js";
 import { createElectronMcpNotices } from "@table-craft/desktop/main/mcpNoticesElectron.js";
 import { FILE_ATTACHMENTS_FILE, createFileAttachments } from "@table-craft/desktop/main/fileAttachments.js";
 import { createSqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
@@ -911,6 +911,8 @@ void app.whenReady().then(async () => {
     void mcp.settingsChanged(changed.mcp);
     mcpNotices.settingsChanged();
   });
+  const menu = createApplicationMenu(menuTarget, settings.snapshot().settings.keymap);
+  settingsListeners.push((changed) => menu.setKeymap(changed.keymap));
   const updates = await startUpdater(directory, settings);
   updater = updates;
   nativeTheme.on("updated", () => {
@@ -922,7 +924,7 @@ void app.whenReady().then(async () => {
     sqlFiles: createSqlFileChannels<WebContents>({
       attachments,
       choose: chooseSqlFiles,
-      recentChanged: (recent) => installApplicationMenu(menuTarget, recent),
+      recentChanged: (recent) => menu.setRecent(recent),
     }),
     history,
     settings,
@@ -1047,7 +1049,7 @@ void app.whenReady().then(async () => {
       });
     },
   });
-  installApplicationMenu(menuTarget, await attachments.recent());
+  menu.setRecent(await attachments.recent());
   createWindow(settings);
   void mcp.start();
   app.on("activate", () => {

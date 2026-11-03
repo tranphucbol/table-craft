@@ -212,8 +212,10 @@ function settingAt(path: string): unknown {
   return path.split(".").reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], DEFAULT_SETTINGS);
 }
 
+/** A field's path; an object with no keys by default, such as `keymap`, is one field keyed by the user. */
 function settingPaths(value: unknown, prefix: string): string[] {
   if (typeof value !== "object" || value === null || Array.isArray(value) || "sizePx" in value) return [prefix];
+  if (Object.keys(value).length === 0) return [prefix];
   return Object.entries(value).flatMap(([key, child]) => settingPaths(child, prefix ? `${prefix}.${key}` : key));
 }
 
@@ -312,7 +314,7 @@ describe("user docs", () => {
         expect(values, `Settings row ${path}`).toContain(rangeText(FONT_SIZE_RANGE));
         continue;
       }
-      if (Array.isArray(value)) {
+      if (typeof value === "object" && value !== null) {
         expect(fallback, `Settings row ${path}`).toBe(`\`${JSON.stringify(value)}\``);
         continue;
       }

@@ -10,7 +10,8 @@ import {
   type MouseEvent,
 } from "react";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { DDL_ACTION_IDS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
 import { EXPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
@@ -227,18 +228,14 @@ const OVERSCAN_ROWS = 20;
 const NO_POSITIONS: readonly number[] = [];
 const LEFT_BUTTON = 0;
 
-function shortcutOf(actionId: string): string | undefined {
-  const shortcut = registry.get(actionId)?.shortcut;
-  return shortcut === undefined ? undefined : formatChord(shortcut, currentPlatform());
-}
-
 function ToolbarButton({ actionId }: { readonly actionId: string }) {
   const enabled = useActionEnabled(actionId);
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   if (action === undefined) return null;
   const Icon = action.icon === undefined ? DatabaseIcon : ACTION_ICONS[action.icon];
   return (
-    <Tooltip label={action.title} shortcut={shortcutOf(actionId)} side="bottom">
+    <Tooltip label={action.title} shortcut={shortcut} side="bottom">
       <button
         type="button"
         aria-label={action.title}
@@ -273,9 +270,9 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
 
 function MenuItem({ actionId }: { readonly actionId: string }) {
   const enabled = useActionEnabled(actionId);
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   if (action === undefined) return null;
-  const shortcut = shortcutOf(actionId);
   return (
     <ContextMenu.Item disabled={!enabled} className={MENU_ITEM} onSelect={() => invoke(actionId)}>
       <span>{action.title}</span>

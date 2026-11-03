@@ -1,7 +1,9 @@
 import { basename } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { Menu, type BrowserWindow, type MenuItemConstructorOptions } from "electron";
 import { CHANNELS } from "@table-craft/desktop/preload/bridge.js";
 import { menuFor, type MenuEntry } from "@table-craft/desktop/preload/menu.js";
+import type { KeymapOverrides } from "@table-craft/desktop/settings/chords.js";
 
 const MAC_PLATFORM = "darwin";
 const NO_RECENT_FILES = "No Recent Files";
@@ -45,10 +47,40 @@ function toTemplate(
 
 /**
  * Builds and installs the application menu; `target` is the window a click acts on. Called again
- * whenever the recent SQL files move, since a native menu cannot change one submenu in place.
+ * whenever the recent SQL files or the keymap change, since a native menu cannot change one
+ * submenu in place.
  */
-export function installApplicationMenu(target: () => BrowserWindow | null, recent: readonly string[] = []): void {
+export function installApplicationMenu(
+  target: () => BrowserWindow | null,
+  recent: readonly string[] = [],
+  keymap: KeymapOverrides = {},
+): void {
   const mac = process.platform === MAC_PLATFORM;
-  const template = menuFor(mac).map((entry) => toTemplate(entry, target, recent));
+  const template = menuFor(mac, keymap).map((entry) => toTemplate(entry, target, recent));
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+export interface ApplicationMenu {
+  /** The recent SQL files moved (plan 041). */
+  setRecent(recent: readonly string[]): void;
+  /** Settings were saved; rebuilt only when the keymap is what changed (decision 154). */
+  setKeymap(keymap: KeymapOverrides): void;
+}
+
+/** The menu as main keeps it current; nothing is installed until the first `setRecent`. */
+export function createApplicationMenu(target: () => BrowserWindow | null, keymap: KeymapOverrides): ApplicationMenu {
+  let recent: readonly string[] = [];
+  let current = keymap;
+  const install = () => installApplicationMenu(target, recent, current);
+  return {
+    setRecent(next) {
+      recent = next;
+      install();
+    },
+    setKeymap(next) {
+      if (isDeepStrictEqual(next, current)) return;
+      current = next;
+      install();
+    },
+  };
 }

@@ -12,6 +12,7 @@ import {
 import { isWindowStyle, type WindowStyle } from "@table-craft/desktop/appearance/islands.js";
 import { isMotionChoice, type MotionChoice } from "@table-craft/desktop/appearance/motion.js";
 import { isUpdateChannelSetting, type UpdateChannelSetting } from "@table-craft/desktop/settings/channel.js";
+import { isChord, type Chord, type KeymapOverrides } from "@table-craft/desktop/settings/chords.js";
 import type { McpKnownClient } from "@table-craft/desktop/settings/mcp.js";
 
 export const SETTINGS_VERSION = 1;
@@ -175,6 +176,8 @@ export interface Settings {
   readonly updates: UpdateSettings;
   readonly plugins: PluginSettings;
   readonly mcp: McpSettings;
+  /** Shortcut overrides by action id; an absent id keeps its default (decision 154). */
+  readonly keymap: KeymapOverrides;
 }
 
 export const DEFAULT_REGISTRY_URL = "https://registry.npmjs.org";
@@ -283,6 +286,7 @@ export const DEFAULT_SETTINGS: Settings = {
     clients: [],
     notifications: true,
   },
+  keymap: {},
 };
 
 const DENSITY_IDS: readonly DensityId[] = ["comfortable", "compact"];
@@ -431,6 +435,24 @@ function readInspections(value: unknown, fallback: InspectionSettings): Inspecti
   };
 }
 
+/** Longer than any action id; guards a hand-edited file. */
+const ACTION_ID_MAX_LENGTH = 128;
+
+/**
+ * Ids are kept even when this build has no such action, so a plugin's or a newer version's binding
+ * survives a downgrade; a chord that does not parse is dropped and the rest of its entry kept. An
+ * entry left with none of the chords it named is dropped too, since `[]` would mean no shortcut.
+ */
+function readKeymap(value: unknown): KeymapOverrides {
+  return Object.fromEntries(
+    Object.entries(record(value)).flatMap(([id, chords]): [string, readonly Chord[]][] => {
+      if (id === "" || id.length > ACTION_ID_MAX_LENGTH || !Array.isArray(chords)) return [];
+      const valid = [...new Set(chords.filter(isChord))];
+      return valid.length === 0 && chords.length > 0 ? [] : [[id, valid]];
+    }),
+  );
+}
+
 /** `settings` with inspection `id` turned on or off; the master switch is left as it is. */
 export function withInspection(settings: Settings, id: string, enabled: boolean): Settings {
   const { inspections } = settings.editor;
@@ -546,6 +568,7 @@ export function readSettings(input: unknown): Settings {
       clients: Array.isArray(mcp.clients) ? knownClients(mcp.clients) : defaults.mcp.clients,
       notifications: typeof mcp.notifications === "boolean" ? mcp.notifications : defaults.mcp.notifications,
     },
+    keymap: readKeymap(root.keymap),
   };
 }
 

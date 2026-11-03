@@ -8,6 +8,8 @@ import { createActionRegistry, defineAction, type AnyAction } from "@table-craft
 import { WINDOW_ACTION_IDS } from "@table-craft/desktop/renderer/actions/windowActions.js";
 import { EDITOR_FIND_ACTION_IDS } from "@table-craft/desktop/renderer/actions/editorFindActions.js";
 import { EDITOR_CHORDS, FIELD_CHORDS, FIND_FIELD_CHORDS } from "@table-craft/desktop/renderer/console/editorKeys.js";
+import { effectiveShortcuts } from "@table-craft/desktop/renderer/actions/keymapOverrides.js";
+import type { KeymapOverrides } from "@table-craft/desktop/settings/chords.js";
 import { IDLE_CONTEXT, keydown } from "./support.js";
 
 function dispatcherWith(enabled: boolean, paletteOpen = false) {
@@ -27,6 +29,19 @@ function dispatcherWith(enabled: boolean, paletteOpen = false) {
   ]);
   const dispatch = createKeyDispatcher({ registry, platform: "mac", paletteOpen: () => paletteOpen });
   return { dispatch, searched, ran };
+}
+
+function dispatcherOverriding(overrides: KeymapOverrides) {
+  const ran = vi.fn();
+  const registry = createActionRegistry(() => IDLE_CONTEXT);
+  registry.register([defineAction({ id: "run", title: "Run", category: "Console", shortcut: "Mod+Enter", run: ran })]);
+  const dispatch = createKeyDispatcher({
+    registry,
+    platform: "mac",
+    paletteOpen: () => false,
+    shortcuts: () => effectiveShortcuts(registry.all(), overrides),
+  });
+  return { dispatch, ran };
 }
 
 describe("keymap", () => {
@@ -120,6 +135,59 @@ describe("keymap", () => {
       defineAction({ id: "a", title: "A", category: "Console", shortcut: "Mod+Shift+A", run }),
       defineAction({ id: "b", title: "B", category: "Console", shortcut: "Mod+Shift+A", run }),
     ]);
+
+    expect(clashes.map((clash) => clash.ids)).toEqual([
+      ["a", "b"],
+      ["a", "b"],
+    ]);
+  });
+
+  it("givenOverride_whenDispatch_thenNewChordRunsAction", () => {
+    const { dispatch, ran } = dispatcherOverriding({ run: ["Ctrl+Enter"] });
+
+    const pressed = keydown({ key: "Enter", ctrlKey: true });
+    dispatch(pressed);
+
+    expect(ran).toHaveBeenCalledOnce();
+    expect(pressed.prevented()).toBe(true);
+  });
+
+  it("givenOverride_whenDispatchOldChord_thenNothingRuns", () => {
+    const { dispatch, ran } = dispatcherOverriding({ run: ["Ctrl+Enter"] });
+
+    const pressed = keydown({ key: "Enter", metaKey: true });
+    dispatch(pressed);
+
+    expect(ran).not.toHaveBeenCalled();
+    expect(pressed.prevented()).toBe(false);
+  });
+
+  it("givenEmptyOverride_whenDispatch_thenActionHasNoShortcut", () => {
+    const { dispatch, ran } = dispatcherOverriding({ run: [] });
+
+    dispatch(keydown({ key: "Enter", metaKey: true }));
+    dispatch(keydown({ key: "Enter", ctrlKey: true }));
+
+    expect(ran).not.toHaveBeenCalled();
+  });
+
+  it("givenTwoChords_whenEitherPressed_thenActionRuns", () => {
+    const { dispatch, ran } = dispatcherOverriding({ run: ["Mod+Enter", "F5"] });
+
+    dispatch(keydown({ key: "Enter", metaKey: true }));
+    dispatch(keydown({ key: "F5" }));
+
+    expect(ran).toHaveBeenCalledTimes(2);
+  });
+
+  it("givenOverrideOntoAnotherActionsChord_whenCompared_thenClashNamesBoth", () => {
+    const run = () => undefined;
+    const actions = [
+      defineAction({ id: "a", title: "A", category: "Console", shortcut: "Mod+Shift+A", run }),
+      defineAction({ id: "b", title: "B", category: "Console", shortcut: "Mod+Shift+B", run }),
+    ];
+
+    const clashes = findClashes(actions, effectiveShortcuts(actions, { b: ["Mod+Shift+A"] }));
 
     expect(clashes.map((clash) => clash.ids)).toEqual([
       ["a", "b"],

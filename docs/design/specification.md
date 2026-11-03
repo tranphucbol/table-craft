@@ -2474,6 +2474,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `editor.format.indentWidth`            | 1–8 spaces                                                                                      | 2             |
 | `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                 | 1             |
 | `editor.format.alignAliases`           | boolean; line up `AS` in a select list (aligned style)                                          | `true`        |
+| `keymap`                               | action id to the chords that replace its own; `[]` leaves it none (decision 154)                | `{}`          |
 | `console.parameters`                   | boolean; ask for `:name`, `?` and `$1` values before a run                                      | `true`        |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits; a datasource may override   | 0             |
 | `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements, or a script, does on a failure     | `ask`         |
@@ -2535,7 +2536,24 @@ font, the zoom chords, and under Running, query parameters and the statement tim
 limit) and Advanced (Debug logging, `log.level`, see App log and diagnostics; under Running, When a
 statement fails, `console.runAllOnError`; the Sessions refresh). Each page has
 Restore Defaults; a value outside its range is refused inline and not saved.
-Keymap editing and date and time formats are not settings in v1.
+Date and time formats are not settings in v1.
+
+The Keymap page (plan 044, decision 154) lists every action in the palette or with a chord, under
+a sticky heading per category and by title, each with its chords, a remove button per chord, an add
+button shown on hover or focus, and, once changed, a Modified marker with Reset; Restore Defaults
+puts back every action this build knows. The list is one Tab stop: the arrow keys, Home and End move
+between rows, Enter records and Delete removes the row's last chord, and focus returns to the row
+after each change. The search filters by title or category; Find by Shortcut turns it into a recorder that lists the
+actions holding the pressed chord. `keymap` holds only the actions whose chords differ from their
+own: an entry replaces the declared chord, the first chord is the one labels show, and an id this
+build has no action for is kept and ignored. Reading drops chords that do not parse and keeps the
+rest. The renderer's dispatcher matches the effective chords (`renderer/actions/shortcuts.ts`),
+every label reads them through `useShortcut`, and main rebuilds the native menu with the new
+accelerators when the setting changes. The recorder refuses a key without `Mod`, `Ctrl` or `Alt`
+other than F1–F24, the chords the menu's roles and the system keep (`RESERVED_CHORDS` in
+`settings/chords.ts`) and the Super key off macOS; a chord another action holds where both could
+fire offers Reassign, which removes it there. A chord the SQL editor keeps while it has focus is
+accepted with a note saying what the editor does with it.
 
 ## App log and diagnostics
 

@@ -1,9 +1,8 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import { WINDOW_STYLES, type DensityId, type WindowStyle } from "@table-craft/desktop/appearance/themes.js";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
-import { registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { UPDATE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/updateActions.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
@@ -18,6 +17,7 @@ import {
   TextInput,
 } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { InspectionFields } from "@table-craft/desktop/renderer/dialogs/InspectionSettings.js";
+import { KeymapPage, recordingChord, restoreKeymap } from "@table-craft/desktop/renderer/dialogs/KeymapPage.js";
 import { McpSettingsPage } from "@table-craft/desktop/renderer/dialogs/McpSettings.js";
 import { MotionFields } from "@table-craft/desktop/renderer/dialogs/MotionSettings.js";
 import { PluginsPage } from "@table-craft/desktop/renderer/dialogs/PluginsPage.js";
@@ -82,6 +82,7 @@ import {
 
 const PAGE_TITLES: Readonly<Record<SettingsPage, string>> = {
   appearance: "Appearance",
+  keymap: "Keymap",
   editor: "Editor",
   dataEditor: "Data Editor",
   plugins: "Plugins",
@@ -140,6 +141,7 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
       brandIconColor: DEFAULT_SETTINGS.appearance.brandIconColor,
     },
   }),
+  keymap: restoreKeymap,
   editor: (current) => ({
     ...withFont(current, "editor", DEFAULT_SETTINGS.appearance.fonts.editor),
     editor: DEFAULT_SETTINGS.editor,
@@ -407,13 +409,9 @@ function TitleBarField() {
   );
 }
 
-function chordText(actionId: string): string {
-  const shortcut = registry.get(actionId)?.shortcut;
-  return shortcut === undefined ? "" : formatChord(shortcut, currentPlatform());
-}
-
 function FormattingFields() {
   const format = useSettings((state) => state.settings.editor.format);
+  const reformat = useShortcut(ACTION_IDS.reformat) ?? "";
   const styleId = useId();
   const caseId = useId();
   const aliasesId = useId();
@@ -482,7 +480,7 @@ function FormattingFields() {
         </label>
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
-        {chordText(ACTION_IDS.reformat)} reformats the selection, or the whole console without one.
+        {reformat} reformats the selection, or the whole console without one.
       </p>
     </>
   );
@@ -584,13 +582,15 @@ function RunAllOnErrorField() {
 }
 
 function EditorPage() {
+  const zoomIn = useShortcut(SETTINGS_ACTION_IDS.zoomIn) ?? "";
+  const zoomOut = useShortcut(SETTINGS_ACTION_IDS.zoomOut) ?? "";
+  const zoomReset = useShortcut(SETTINGS_ACTION_IDS.zoomReset) ?? "";
   return (
     <>
       <SectionTitle>Font</SectionTitle>
       <FontFields role="editor" />
       <p className="col-start-2 text-ink-muted">
-        In the console, {chordText(SETTINGS_ACTION_IDS.zoomIn)} enlarges the font,{" "}
-        {chordText(SETTINGS_ACTION_IDS.zoomOut)} shrinks it and {chordText(SETTINGS_ACTION_IDS.zoomReset)} restores{" "}
+        In the console, {zoomIn} enlarges the font, {zoomOut} shrinks it and {zoomReset} restores{" "}
         {DEFAULT_SETTINGS.appearance.fonts.editor.sizePx} px.
       </p>
       <SectionTitle>Formatting</SectionTitle>
@@ -817,6 +817,7 @@ function AdvancedPage() {
 
 const PAGES: Readonly<Record<SettingsPage, () => ReactNode>> = {
   appearance: AppearancePage,
+  keymap: KeymapPage,
   editor: EditorPage,
   dataEditor: DataEditorPage,
   plugins: PluginsPage,
@@ -903,6 +904,9 @@ export function SettingsDialog() {
         <Dialog.Overlay className={OVERLAY_CLASS} />
         <Dialog.Content
           aria-describedby={undefined}
+          onEscapeKeyDown={(event) => {
+            if (recordingChord()) event.preventDefault();
+          }}
           className={cn(
             CONTENT_CLASS,
             "flex h-dialog-height max-h-[95vh] w-dialog max-w-[95vw] flex-col overflow-hidden",

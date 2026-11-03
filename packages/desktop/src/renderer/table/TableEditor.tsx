@@ -1,6 +1,6 @@
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { REGION_ATTRIBUTE } from "@table-craft/desktop/renderer/actions/context.js";
-import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
+import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { TABLE_ACTION_IDS, TABLE_CELL_MENU } from "@table-craft/desktop/renderer/actions/tableActions.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
@@ -40,11 +40,6 @@ const ORDER_BY_PLACEHOLDER = "e.g. name DESC";
 /** Plan 008 decision 17: the editor always submits in one transaction of its own. */
 const TX_TEXT = "Tx: Auto";
 
-function shortcutText(actionId: string): string {
-  const shortcut = registry.get(actionId)?.shortcut;
-  return shortcut === undefined ? "" : formatChord(shortcut, currentPlatform());
-}
-
 function TablePanel({
   tableId,
   session,
@@ -54,6 +49,7 @@ function TablePanel({
   readonly session: TableSession;
   readonly focus: { readonly row: number; readonly column: number } | null;
 }) {
+  const applyHint = useShortcut(TABLE_ACTION_IDS.applyValue) ?? "";
   const result = session.result;
   const column = focus === null ? null : (result?.columns[focus.column] ?? null);
   if (result === null || focus === null) return <ValuePanel column={column} value={undefined} />;
@@ -71,7 +67,7 @@ function TablePanel({
         text={draft?.text ?? text}
         json={typeClass === "json"}
         jsonOwner={jsonOwner}
-        applyHint={shortcutText(TABLE_ACTION_IDS.applyValue)}
+        applyHint={applyHint}
         onChange={(next) => useTables.getState().editPanel(tableId, focus, next)}
       />
     );
