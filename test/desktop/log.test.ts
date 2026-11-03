@@ -130,6 +130,17 @@ describe("log redaction", () => {
     expect(redacted.msg).toBe(`bad ${REDACTED}`);
   });
 
+  it("givenRememberedSecretInAgentTarget_whenRedacted_thenMasked", () => {
+    const redactor = createRedactor();
+    redactor.remember(PASSWORD);
+
+    const redacted = redactor.record(
+      record({ process: "mcp", scope: "agent", msg: "agent call", target: `SELECT '${PASSWORD}'` }),
+    );
+
+    expect(redacted.target).toBe(`SELECT '${REDACTED}'`);
+  });
+
   it("givenLongLetterRun_whenRedacted_thenLinearTime", () => {
     const redactor = createRedactor();
     redactor.remember(PASSWORD);
@@ -264,6 +275,34 @@ describe("log hub", () => {
     const [line] = await lines();
     expect(Buffer.byteLength(line ?? "")).toBeLessThanOrEqual(LOG_RECORD_BYTES);
     expect(JSON.parse(line ?? "{}")).toMatchObject({ truncated: true, scope: "app" });
+  });
+
+  it("givenOversizeStringField_whenWritten_thenOtherFieldsKept", async () => {
+    const { logHub, lines } = hub();
+
+    logHub.write(
+      record({ msg: "agent call", tool: "run_query", rowCount: 3, target: "S".repeat(LOG_RECORD_BYTES * 2) }),
+    );
+
+    const [line] = await lines();
+    const written = JSON.parse(line ?? "{}") as LogRecord;
+    expect(Buffer.byteLength(line ?? "")).toBeLessThanOrEqual(LOG_RECORD_BYTES);
+    expect(written).toMatchObject({ msg: "agent call", tool: "run_query", rowCount: 3, truncated: true });
+    expect((written.target as string).length).toBeLessThan(LOG_RECORD_BYTES);
+    expect(written.target).toMatch(/^S+$/);
+  });
+
+  it("givenOversizeAfterCut_whenWritten_thenEnvelopeFallback", async () => {
+    const { logHub, lines } = hub();
+    const many = Object.fromEntries(Array.from({ length: 20 }, (_, index) => [`f${String(index)}`, "z".repeat(4096)]));
+
+    logHub.write(record({ msg: "wide", ...many }));
+
+    const [line] = await lines();
+    const written = JSON.parse(line ?? "{}") as LogRecord;
+    expect(Buffer.byteLength(line ?? "")).toBeLessThanOrEqual(LOG_RECORD_BYTES);
+    expect(written).toMatchObject({ msg: "wide", truncated: true });
+    expect(written.f0).toBeUndefined();
   });
 
   it("givenRotatedFiles_whenReadRecent_thenNewestFirst", async () => {

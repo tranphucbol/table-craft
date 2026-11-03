@@ -109,7 +109,7 @@ async function route(
   }
   if (request.method === "DELETE") {
     const sessionId = sessionOf(request);
-    return send(response, sessionId !== null && options.server.end(sessionId) ? HTTP_OK : HTTP_NOT_FOUND);
+    return send(response, sessionId !== null && options.server.end(sessionId, "client") ? HTTP_OK : HTTP_NOT_FOUND);
   }
   if (request.method !== "POST") return send(response, HTTP_METHOD_NOT_ALLOWED, undefined, { allow: "POST, DELETE" });
   const body = await readBody(request);

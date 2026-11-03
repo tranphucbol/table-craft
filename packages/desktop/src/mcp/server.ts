@@ -11,6 +11,7 @@ import {
   type JsonObject,
 } from "@table-craft/desktop/mcp/jsonrpc.js";
 import { TOOL_DEFINITIONS, isToolName, type Tools } from "@table-craft/desktop/mcp/tools.js";
+import type { AgentLeave, AgentSession } from "@table-craft/desktop/mcp/agentLog.js";
 import { APPROVAL_REFUSALS } from "@table-craft/desktop/mcp/approvals.js";
 import { approvalWait } from "@table-craft/desktop/mcp/toolKit.js";
 import { getPrompt, listPrompts, RESOURCE_TEMPLATES } from "@table-craft/desktop/mcp/resources.js";
@@ -44,7 +45,7 @@ export interface McpReply {
 export interface McpServer {
   handle(sessionId: string | null, body: string): Promise<McpReply>;
   /** Ends a session, as a client's DELETE or the user's Disconnect does; false when it was unknown. */
-  end(sessionId: string): boolean;
+  end(sessionId: string, by: AgentLeave): boolean;
   clients(): readonly McpClientView[];
 }
 
@@ -59,21 +60,19 @@ export interface McpServerOptions {
   readonly resources: McpResources;
   /** Null when the client may call; otherwise why not, for the agent to read (decision 127). */
   readonly admit: (name: string, version: string) => Promise<string | null>;
-  /** Every finished tool call, for Agent Activity. */
+  /** Every finished tool call, for Agent Activity and the log. */
   readonly onCall: (entry: Omit<McpActivityView, "id">) => void;
+  readonly onStarted: (session: AgentSession) => void;
   readonly serverVersion: string;
   readonly paused: () => boolean;
   readonly now: () => number;
   readonly newSessionId: () => string;
   /** A client connected, called or left; the status changed. */
   readonly onChange: () => void;
-  readonly onEnded: (sessionId: string) => void;
+  readonly onEnded: (session: AgentSession, by: AgentLeave) => void;
 }
 
-interface Session {
-  readonly id: string;
-  readonly name: string;
-  readonly version: string;
+interface Session extends AgentSession {
   readonly connectedAt: number;
   lastCall: McpCallView | null;
 }
@@ -101,6 +100,7 @@ export function createMcpServer(options: McpServerOptions): McpServer {
       lastCall: null,
     };
     sessions.set(session.id, session);
+    options.onStarted(session);
     options.onChange();
     const result = {
       protocolVersion: negotiatedVersion(text(params, "protocolVersion")),
@@ -241,9 +241,11 @@ export function createMcpServer(options: McpServerOptions): McpServer {
         return { status: HTTP_OK, body: rpcError(message.id, INTERNAL_ERROR, reason) };
       }
     },
-    end(sessionId) {
-      if (!sessions.delete(sessionId)) return false;
-      options.onEnded(sessionId);
+    end(sessionId, by) {
+      const session = sessions.get(sessionId);
+      if (session === undefined) return false;
+      sessions.delete(sessionId);
+      options.onEnded(session, by);
       options.onChange();
       return true;
     },

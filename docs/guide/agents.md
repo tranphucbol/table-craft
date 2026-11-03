@@ -51,3 +51,7 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
   wait for your approval; hover it, or read Agent Activity, to see how long it waited. A write request can also go to
   **Open in Console** instead of running. Query History filters by **All**, **Me** or **Agents**,
   and the Database pane marks exposed data sources with **AI** while the server runs.
+- **Logging.** The [app log](monitoring.md#app-log-and-diagnostics) keeps each agent run across
+  restarts: the client connecting and leaving, every call with its whole statement, outcome and
+  time, and every approval asked and its answer. **Show Agent Log**, in Agent Activity, on the
+  Services **Agents** node and in the command palette, opens the Log on them.
