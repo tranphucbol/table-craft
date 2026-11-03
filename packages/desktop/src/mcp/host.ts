@@ -1,5 +1,6 @@
 import { serverSeenOf } from "@table-craft/desktop/engine/protocol.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
+import { createAgentLog } from "@table-craft/desktop/mcp/agentLog.js";
 import { createApprovals } from "@table-craft/desktop/mcp/approvals.js";
 import { createActivity, createRuns } from "@table-craft/desktop/mcp/activity.js";
 import { ADMISSION_REFUSALS, createClientGate } from "@table-craft/desktop/mcp/clients.js";
@@ -77,8 +78,11 @@ export function createMcpHost(options: McpHostOptions): McpHost {
   let nextContext = 0;
   const contexts = new Map<number, (context: McpActiveConsole | null) => void>();
 
+  const agentLog = createAgentLog(options.log);
   const approvals = createApprovals({
     onChange: () => publish(),
+    onAsked: (id, request) => agentLog.asked(id, request),
+    onSettled: (request, outcome, waitedMs, id) => agentLog.answered(request, outcome, waitedMs, id),
     now,
     ...(options.approvalTimeoutMs === undefined ? {} : { timeoutMs: options.approvalTimeoutMs }),
   });
@@ -186,7 +190,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
         publish();
         return;
       case "disconnect":
-        server?.end(message.clientId);
+        server?.end(message.clientId, "user");
         return;
       case "cancel":
         void runs.cancel(message.runId).catch((cause: unknown) => options.log.warn("cancel failed", { err: cause }));
@@ -222,13 +226,20 @@ export function createMcpHost(options: McpHostOptions): McpHost {
         const admission = await gate.admit(name, version);
         return admission === "allowed" ? null : ADMISSION_REFUSALS[admission](name);
       },
-      onCall: (entry) => activity.add(entry),
+      onCall: (entry) => {
+        activity.add(entry);
+        agentLog.call(entry);
+      },
+      onStarted: (session) => agentLog.connected(session),
       serverVersion: message.serverVersion,
       paused: () => paused,
       now,
       newSessionId: options.newSessionId,
       onChange: () => publish(),
-      onEnded: (sessionId) => approvals.forgetSession(sessionId),
+      onEnded: (session, by) => {
+        approvals.forgetSession(session.id);
+        agentLog.disconnected(session, by);
+      },
     });
     server = mcp;
     try {

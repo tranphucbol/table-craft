@@ -58,6 +58,19 @@ export function serializeRecord(record: LogRecord): { readonly line: string; rea
   const line = JSON.stringify(record);
   if (Buffer.byteLength(line, "utf8") <= LOG_RECORD_BYTES) return { line, record };
   const err = cappedError(record.err);
+  const cutFields = Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [key, typeof value === "string" ? cut(value) : value]),
+  );
+  const shortened: LogRecord = {
+    ...record,
+    ...cutFields,
+    msg: cut(record.msg),
+    truncated: true,
+    bytes: Buffer.byteLength(line, "utf8"),
+    ...(err === undefined ? {} : { err }),
+  };
+  const shortLine = JSON.stringify(shortened);
+  if (Buffer.byteLength(shortLine, "utf8") <= LOG_RECORD_BYTES) return { line: shortLine, record: shortened };
   const capped: LogRecord = {
     ts: record.ts,
     level: record.level,
