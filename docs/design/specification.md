@@ -2495,12 +2495,19 @@ exports, edits, Test Connection, diagnostics exports and every failure with its 
 `debug` it adds one record per engine request with its type and elapsed time. It never holds a
 password, a secret, a row value or SQL text: main redacts keys that name a secret, URL userinfo
 and every secret value it handed to an engine, in every record from every process. A database's
-own error message can still quote a value from the statement.
+own error message can still quote a value from the statement. The one exception is what agents
+sent (decision 152): the MCP host logs under process `mcp`, scope `agent`, `agent connected`,
+`agent call` (tool, datasource, outcome, call time, approval wait, row count, message and the
+whole statement, key or handle as `target`), `approval asked` and `approval answered` (sharing
+`approvalId`) and `agent disconnected` (`by` `client` or `user`). A record over 16 KB first cuts
+each string field to 2,048 characters and keeps the rest.
 
 Help → Show Log opens the Log tool window on the right stripe: the last 2,000 records newest first
 with live tail, filters for level, scope and text, Copy on each record and Reveal Log File. An
 error notice from a request has Show in Log, which opens the window filtered to that request id
-(or the message text when there is none). Help → Reveal Log File shows the file in the file
+(or the message text when there is none). Show Agent Log, in Agent Activity and on the Services
+Agents node, opens it filtered to scope `agent`. A row cuts each field to 160 characters; the
+selected record shows whole. Help → Reveal Log File shows the file in the file
 manager. Help → Export Diagnostics… lists what it will include, asks for a place and writes
 `table-craft-diagnostics-<yyyyMMdd-HHmmss>.zip`: `logs/` (every log file), `about.json`
 (versions, platform, plugins with version and API version), `settings.json`, `datasources.json`

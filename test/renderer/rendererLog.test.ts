@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import { createRendererLog, LOG_BATCH_RECORDS, LOG_FLUSH_MS } from "@table-craft/desktop/renderer/log/log.js";
+import { fieldsText, LOG_ROW_FIELD_CHARS, scopeOptions } from "@table-craft/desktop/renderer/model/logRow.js";
 import {
+  AGENT_RECORDS,
   ALL_RECORDS,
   filterFor,
   isAllRecords,
@@ -9,6 +11,7 @@ import {
   prepended,
   scopesOf,
 } from "@table-craft/desktop/renderer/state/logView.js";
+import { AGENT_LOG_SCOPE } from "@table-craft/desktop/settings/mcp.js";
 
 function harness() {
   const sent: (readonly LogRecord[])[] = [];
@@ -97,5 +100,32 @@ describe("log view", () => {
 
     expect(next.map((entry) => entry.msg)).toEqual(["d", "c", "b", "a"]);
     expect(scopesOf(next)).toEqual(["app", "engine"]);
+  });
+});
+
+describe("log view, agent records", () => {
+  it("givenAgentFilter_whenMatched_thenOnlyAgentRecordsAtInfoAndUp", () => {
+    const call = record({ process: "mcp", scope: AGENT_LOG_SCOPE, msg: "agent call" });
+    const host = record({ process: "mcp", scope: "mcp", msg: "listening" });
+    const debug = record({ process: "mcp", scope: AGENT_LOG_SCOPE, level: "debug" });
+
+    expect([call, host, debug].filter((entry) => matches(entry, AGENT_RECORDS))).toEqual([call]);
+  });
+
+  it("givenLongField_whenRowText_thenCutWithEllipsisOnOneLine", () => {
+    const sql = `SELECT\n  ${"a".repeat(LOG_ROW_FIELD_CHARS * 2)}`;
+
+    const text = fieldsText(record({ tool: "run_query", target: sql }));
+
+    expect(text.startsWith("tool=run_query target=SELECT a")).toBe(true);
+    expect(text.endsWith("…")).toBe(true);
+    expect(text).not.toContain("\n");
+    expect(text.length).toBeLessThan(LOG_ROW_FIELD_CHARS + 40);
+  });
+
+  it("givenChosenScopeWithoutRecords_whenOptionsBuilt_thenItIsListed", () => {
+    expect(scopeOptions(["app", "engine"], AGENT_LOG_SCOPE)).toEqual(["agent", "app", "engine"]);
+    expect(scopeOptions(["app"], "")).toEqual(["app"]);
+    expect(scopeOptions(["agent", "app"], AGENT_LOG_SCOPE)).toEqual(["agent", "app"]);
   });
 });

@@ -153,3 +153,78 @@ describe("MCP approvals", () => {
     expect(changes).toHaveLength(2);
   });
 });
+
+describe("MCP approvals, what the log hears", () => {
+  function heard(now: () => number = () => 0) {
+    const asked: string[] = [];
+    const settled: { outcome: string; waitedMs: number; id: string | null }[] = [];
+    const timers = manualTimers();
+    const approvals = createApprovals({
+      onChange: () => undefined,
+      now,
+      onAsked: (id) => asked.push(id),
+      onSettled: (_request, outcome, waitedMs, id) => settled.push({ outcome, waitedMs, id }),
+      ...timers,
+    });
+    return { approvals, asked, settled, timers };
+  }
+
+  it("givenRequest_whenDialogOpens_thenOnAskedWithId", () => {
+    const { approvals, asked } = heard();
+    approvals.setWindows(true);
+
+    void approvals.request(REQUEST);
+
+    expect(asked).toEqual(["approval-1"]);
+  });
+
+  it("givenAnswer_whenSettled_thenOnSettledWithWaitedMs", async () => {
+    let clock = 1_000;
+    const { approvals, settled } = heard(() => clock);
+    approvals.setWindows(true);
+
+    const outcome = approvals.request(REQUEST);
+    clock += 4_000;
+    approvals.answer("approval-1", "allowOnce");
+    await outcome;
+
+    expect(settled).toEqual([{ outcome: "allowed", waitedMs: 4_000, id: "approval-1" }]);
+  });
+
+  it("givenTimeout_whenSettled_thenOnSettledTimedOut", async () => {
+    const { approvals, settled, timers } = heard();
+    approvals.setWindows(true);
+
+    const outcome = approvals.request(REQUEST);
+    timers.fire();
+    await outcome;
+
+    expect(settled).toEqual([expect.objectContaining({ outcome: "timedOut", id: "approval-1" })]);
+  });
+
+  it("givenPausedOrNoWindow_whenRequested_thenOnSettledWithoutIdAndNotAsked", async () => {
+    const { approvals, asked, settled } = heard();
+
+    await approvals.request(REQUEST);
+    approvals.setWindows(true);
+    approvals.setPaused(true);
+    await approvals.request(REQUEST);
+
+    expect(asked).toEqual([]);
+    expect(settled).toEqual([
+      { outcome: "noWindow", waitedMs: 0, id: null },
+      { outcome: "paused", waitedMs: 0, id: null },
+    ]);
+  });
+
+  it("givenForgottenSession_whenSettled_thenOnSettledDenied", async () => {
+    const { approvals, settled } = heard();
+    approvals.setWindows(true);
+
+    const outcome = approvals.request(REQUEST);
+    approvals.forgetSession("mcp-1");
+    await outcome;
+
+    expect(settled).toEqual([expect.objectContaining({ outcome: "denied", id: "approval-1" })]);
+  });
+});

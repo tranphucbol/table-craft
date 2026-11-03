@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { ASK_READS_REASON, READ_ONLY_REASON, TRANSACTION_REASON } from "@table-craft/desktop/mcp/access.js";
+import type { AgentLeave, AgentSession } from "@table-craft/desktop/mcp/agentLog.js";
 import { APPROVAL_REFUSALS } from "@table-craft/desktop/mcp/approvals.js";
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
 import { createMcpServer } from "@table-craft/desktop/mcp/server.js";
@@ -366,17 +367,20 @@ const WORKING_TIME_BOUND_MS = 1_000;
 /** The MCP server over the harness's tools, so a test reads what Services and Agent Activity get. */
 function served(harness: AgentHarness) {
   const calls: Omit<McpActivityView, "id">[] = [];
+  const started: AgentSession[] = [];
+  const ended: [AgentSession, AgentLeave][] = [];
   const server = createMcpServer({
     tools: harness.tools,
     resources: { list: () => ({ resources: [] }), read: () => Promise.resolve({}) },
     admit: () => Promise.resolve(null),
     onCall: (entry) => calls.push(entry),
+    onStarted: (session) => started.push(session),
     serverVersion: "1.0.0",
     paused: () => false,
     now: harness.context.now,
     newSessionId: () => "mcp-1",
     onChange: () => undefined,
-    onEnded: () => undefined,
+    onEnded: (session, by) => ended.push([session, by]),
   });
   let id = 0;
   const rpc = (sessionId: string | null, method: string, params: unknown) =>
@@ -386,9 +390,32 @@ function served(harness: AgentHarness) {
   );
   return {
     calls,
+    started,
+    ended,
+    session,
+    end: async (by: AgentLeave) => server.end(await session, by),
     call: async (name: string, args: unknown) => rpc(await session, "tools/call", { name, arguments: args }),
   };
 }
+
+describe("MCP server, sessions", () => {
+  it("givenInitialize_whenHandled_thenOnStartedWithClientName", async () => {
+    const server = served(agentHarness([SHOP]));
+
+    await server.session;
+
+    expect(server.started).toEqual([expect.objectContaining({ id: "mcp-1", name: "Claude Code" })]);
+  });
+
+  it("givenEnd_whenByUser_thenOnEndedWithSessionAndWho", async () => {
+    const server = served(agentHarness([SHOP]));
+
+    expect(await server.end("user")).toBe(true);
+    expect(await server.end("user")).toBe(false);
+
+    expect(server.ended).toEqual([[expect.objectContaining({ id: "mcp-1", name: "Claude Code" }), "user"]]);
+  });
+});
 
 /** Starts a call, lets the user take USER_THINKS_MS to give `answer`, and waits for it to end. */
 async function answeredLate(

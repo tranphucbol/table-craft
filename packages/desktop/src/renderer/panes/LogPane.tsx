@@ -3,6 +3,7 @@ import { LOG_LEVELS, type LogLevel, type LogRecord } from "@table-craft/desktop/
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions.js";
 import { INPUT_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import { fieldsText, scopeOptions } from "@table-craft/desktop/renderer/model/logRow.js";
 import { installLogSync, matches, scopesOf, useLogView } from "@table-craft/desktop/renderer/state/logView.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -25,7 +26,6 @@ const LEVEL_LABELS: Readonly<Record<LogLevel, string>> = {
 const LEVEL_OPTIONS = LOG_LEVELS.map((level) => ({ value: level, label: LEVEL_LABELS[level] }));
 
 const ALL_SCOPES = "";
-const ENVELOPE_KEYS: ReadonlySet<string> = new Set(["ts", "level", "process", "scope", "msg"]);
 
 const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
   hour: "2-digit",
@@ -38,18 +38,6 @@ const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
 function timeOf(record: LogRecord): string {
   const at = new Date(record.ts);
   return Number.isNaN(at.getTime()) ? record.ts : TIME_FORMAT.format(at);
-}
-
-/** The fields after the message, as `key=value`, the error reduced to its message. */
-function fieldsText(record: LogRecord): string {
-  return Object.entries(record)
-    .filter(([key]) => !ENVELOPE_KEYS.has(key))
-    .map(([key, value]) =>
-      key === "err" && typeof value === "object" && value !== null && "message" in value
-        ? `err=${String(value.message)}`
-        : `${key}=${typeof value === "string" ? value : JSON.stringify(value)}`,
-    )
-    .join(" ");
 }
 
 function Toolbar({ scopes }: { readonly scopes: readonly string[] }) {
@@ -116,7 +104,7 @@ export function LogPane() {
   }, []);
 
   const shown = useMemo(() => records.filter((record) => matches(record, filter)), [records, filter]);
-  const scopes = useMemo(() => scopesOf(records), [records]);
+  const scopes = useMemo(() => scopeOptions(scopesOf(records), filter.scope), [records, filter.scope]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">

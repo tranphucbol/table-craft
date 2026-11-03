@@ -35,10 +35,12 @@ See [Sessions](../design/specification.md#sessions).
 ## App log and diagnostics
 
 TableCraft keeps a log of what it does: launches, connections, statements by kind, row count and
-duration, exports, engine restarts and errors. It records no passwords, no row values and no SQL
-text. **Help → Show Log** opens the Log tool window, newest first, with filters for level, scope
+duration, exports, engine restarts and errors. It records no passwords, no row values and none of
+the SQL you run. What agents do is logged under the `agent` scope: each client that connects and
+leaves, every tool call with the statement it sent, and every approval asked and how it was
+answered; **Show Agent Log** opens the Log on those records. **Help → Show Log** opens the Log tool window, newest first, with filters for level, scope
 and text; an error notice's **Show in Log** opens it on the records of that request. **Help →
-Export Diagnostics…** saves a zip with the logs, versions, settings, data sources without
+Export Diagnostics…** saves a zip with the logs (including the statements agents sent), versions, settings, data sources without
 credentials and recent run metadata, for attaching to a bug report. Turn on **Debug logging** in
 Settings → Advanced to record every request while reproducing a problem.
 

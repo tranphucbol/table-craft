@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { enabled, LOG_READ_LIMIT, type LogLevel, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
+import { AGENT_LOG_SCOPE } from "@table-craft/desktop/settings/mcp.js";
 
 /** What the Log tool window shows (plan 017 decision 11); empty text and scope match everything. */
 export interface LogFilter {
@@ -14,6 +15,9 @@ export interface LogFilter {
 }
 
 export const ALL_RECORDS: LogFilter = { level: "debug", scope: "", text: "", requestId: null };
+
+/** Show Agent Log: what agents did, from connect to leave (plan 146). */
+export const AGENT_RECORDS: LogFilter = { ...ALL_RECORDS, level: "info", scope: AGENT_LOG_SCOPE };
 
 /** Where Show in Log points: the failed request when known, else the error's message. */
 export interface LogTarget {
@@ -75,6 +79,8 @@ export interface LogViewState {
   readonly select: (record: LogRecord | null) => void;
   /** Opens the Log tool window on what is about `target`. */
   readonly showFor: (target: LogTarget) => Promise<void>;
+  /** Opens the Log tool window on the agent records. */
+  readonly showAgents: () => Promise<void>;
 }
 
 export const useLogView = create<LogViewState>()((set, get) => ({
@@ -95,6 +101,11 @@ export const useLogView = create<LogViewState>()((set, get) => ({
   select: (record) => set({ selected: record }),
   showFor: async (target) => {
     set({ filter: filterFor(target) });
+    useLayout.getState().show("log");
+    await get().load();
+  },
+  showAgents: async () => {
+    set({ filter: AGENT_RECORDS });
     useLayout.getState().show("log");
     await get().load();
   },
