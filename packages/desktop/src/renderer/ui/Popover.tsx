@@ -14,7 +14,7 @@ export interface PopoverAnchor {
 }
 
 /**
- * A themed popover hanging below `anchor` (plan 010 decision 12), at most the popover tokens'
+ * A themed popover hanging below (or beside) `anchor` (plan 010 decision 12), at most the popover tokens'
  * size; Escape or a click outside closes it.
  */
 export function Popover({
@@ -24,6 +24,7 @@ export function Popover({
   onClose,
   onOutside,
   focusSelf,
+  side = "bottom",
   children,
 }: {
   readonly anchor: PopoverAnchor;
@@ -37,6 +38,8 @@ export function Popover({
    * would otherwise draw with a focus ring; Tab still reaches the controls.
    */
   readonly focusSelf?: boolean;
+  /** Where it hangs from the anchor; a stripe button at the window edge opens to its inner side. */
+  readonly side?: "bottom" | "left" | "right";
   readonly children: ReactNode;
 }) {
   // The anchor is no trigger Radix could hand focus back to, so focus returns where it was.
@@ -56,7 +59,7 @@ export function Popover({
       <Primitive.Anchor virtualRef={virtualRef} />
       <Primitive.Portal>
         <Primitive.Content
-          side="bottom"
+          side={side}
           align="start"
           sideOffset={SIDE_OFFSET_PX}
           collisionPadding={SIDE_OFFSET_PX}

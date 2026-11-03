@@ -9,6 +9,7 @@ import { LogPane } from "@table-craft/desktop/renderer/panes/LogPane.js";
 import { ServicesPane } from "@table-craft/desktop/renderer/panes/ServicesPane.js";
 import { EditorArea } from "@table-craft/desktop/renderer/shell/EditorArea.js";
 import { MainToolbar } from "@table-craft/desktop/renderer/shell/MainToolbar.js";
+import { NotificationBell } from "@table-craft/desktop/renderer/shell/NotificationBell.js";
 import { StatusBar } from "@table-craft/desktop/renderer/shell/StatusBar.js";
 import { Stripe } from "@table-craft/desktop/renderer/shell/Stripe.js";
 import { ToolWindow } from "@table-craft/desktop/renderer/shell/ToolWindow.js";
@@ -32,6 +33,7 @@ const LEFT_STRIPE_BOTTOM = [
 const RIGHT_STRIPE_TOP = [
   { toolWindow: "log", actionId: ACTION_IDS.toggleLog },
   { actionId: MCP_ACTION_IDS.settings },
+  { id: "notifications", Component: NotificationBell },
 ] as const;
 const SERVICES_FOLD_ACTIONS = [SERVICES_ACTION_IDS.collapseAll, SERVICES_ACTION_IDS.expandAll] as const;
 const MIN_TOOL_WINDOW_PERCENT = "10";

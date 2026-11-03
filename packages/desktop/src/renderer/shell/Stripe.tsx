@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { useActionEnabled, invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
 import { formatChord, currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
 import { FRAME_SURFACE } from "@table-craft/desktop/renderer/shell/islands.js";
@@ -16,16 +17,22 @@ export interface StripeAction {
   readonly actionId: string;
 }
 
-export type StripeEntry = StripeButton | StripeAction;
+/** A stripe button that draws itself, as the notification bell does with its dot and popover. */
+export interface StripeComponent {
+  readonly id: string;
+  readonly Component: ComponentType;
+}
+
+export type StripeEntry = StripeButton | StripeAction | StripeComponent;
 
 /**
  * The frame's hover tone is too close to the frame to say which tool window is open, so an open one
  * is drawn as a small island, edge included where the theme's islands need one (decision 141).
  */
-const OPEN_ON_FRAME = "bg-canvas text-ink ring-1 ring-island-edge ring-inset";
+export const OPEN_ON_FRAME = "bg-canvas text-ink ring-1 ring-island-edge ring-inset";
 
 /** On the frame a stripe button rounds like the islands beside it, so the open one reads as one of them. */
-function buttonShape(islands: boolean): string {
+export function buttonShape(islands: boolean): string {
   return islands ? "rounded-island" : "rounded";
 }
 
@@ -82,6 +89,12 @@ function ActionButton2({ actionId }: StripeAction) {
   );
 }
 
+function renderEntry(entry: StripeEntry, index: number) {
+  if ("Component" in entry) return <entry.Component key={entry.id} />;
+  if ("toolWindow" in entry) return <ToolWindowButton key={entry.toolWindow} {...entry} />;
+  return <ActionButton2 key={entry.actionId + index} actionId={entry.actionId} />;
+}
+
 export interface StripeProps {
   readonly side: "left" | "right";
   readonly top?: readonly StripeEntry[];
@@ -99,24 +112,8 @@ export function Stripe({ side, top = [], bottom = [] }: StripeProps) {
         islands ? FRAME_SURFACE : side === "left" ? "border-r border-line" : "border-l border-line",
       )}
     >
-      <div className="flex flex-col gap-1">
-        {top.map((entry, i) =>
-          "toolWindow" in entry ? (
-            <ToolWindowButton key={entry.toolWindow} {...entry} />
-          ) : (
-            <ActionButton2 key={entry.actionId + i} actionId={entry.actionId} />
-          ),
-        )}
-      </div>
-      <div className="flex flex-col gap-1">
-        {bottom.map((entry, i) =>
-          "toolWindow" in entry ? (
-            <ToolWindowButton key={entry.toolWindow} {...entry} />
-          ) : (
-            <ActionButton2 key={entry.actionId + i} actionId={entry.actionId} />
-          ),
-        )}
-      </div>
+      <div className="flex flex-col gap-1">{top.map(renderEntry)}</div>
+      <div className="flex flex-col gap-1">{bottom.map(renderEntry)}</div>
     </nav>
   );
 }
