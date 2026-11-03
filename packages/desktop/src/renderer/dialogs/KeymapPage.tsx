@@ -449,7 +449,7 @@ export function KeymapPage() {
             <h3 className="sticky top-row z-10 border-b border-line bg-panel px-cell pt-gap pb-1 font-semibold text-ink-muted">
               {category}
             </h3>
-            <ul className="flex flex-col">
+            <ul className="flex flex-col pt-1">
               {members.map((action) => (
                 <KeymapRow
                   key={action.id}
