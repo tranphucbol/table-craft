@@ -63,7 +63,7 @@ import {
   AgentsLine,
 } from "@table-craft/desktop/renderer/panes/agentLines.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
-import { activityConsoleRequest, agentGroups } from "@table-craft/desktop/renderer/model/mcp.js";
+import { agentGroups, openableCallId } from "@table-craft/desktop/renderer/model/mcp.js";
 import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { resumeLabel, useImports, type ImportEntry } from "@table-craft/desktop/renderer/state/imports.js";
 import {
@@ -198,8 +198,8 @@ function menuOf(row: ServiceRow, cancellable: boolean, inSessions: boolean): rea
     return row.node.cancellable ? [{ actionId: MCP_ACTION_IDS.cancel, args: row.node.id }] : [];
   }
   if (row.kind === "agentCall") {
-    const request = activityConsoleRequest(row.node);
-    return request === null ? [] : [{ actionId: MCP_ACTION_IDS.openInConsole, args: request }];
+    const callId = openableCallId(row.node);
+    return callId === null ? [] : [{ actionId: MCP_ACTION_IDS.openInConsole, args: callId }];
   }
   if (row.kind === "execution" && row.node.sql !== null) {
     const args = { tabId: row.tabId, executionId: row.node.id };
@@ -676,8 +676,8 @@ export function ServicesPane() {
               onContextMenu={() => select(row.key)}
               onClick={() => open(row)}
               onDoubleClick={() => {
-                const request = row.kind === "agentCall" ? activityConsoleRequest(row.node) : null;
-                if (request !== null) invoke(MCP_ACTION_IDS.openInConsole, request);
+                const callId = row.kind === "agentCall" ? openableCallId(row.node) : null;
+                if (callId !== null) invoke(MCP_ACTION_IDS.openInConsole, callId);
               }}
             >
               {canExpand ? (

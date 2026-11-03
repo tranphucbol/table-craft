@@ -3,13 +3,13 @@ import {
   AGENT_CALLS_PER_DATASOURCE,
   CALL_EXECUTION_OUTCOMES,
   activityClients,
-  activityConsoleRequest,
   agentGroups,
   connectedFor,
   countdown,
   filteredActivity,
   mcpChip,
   mcpStatusText,
+  openableCallId,
 } from "@table-craft/desktop/renderer/model/mcp.js";
 import { approvalWaitText } from "@table-craft/desktop/renderer/model/format.js";
 import {
@@ -226,8 +226,8 @@ describe("MCP round 2 model", () => {
   });
 
   it("givenStatementCall_whenConsoleRequested_thenOnlySqlToolsOpenOne", () => {
-    expect(activityConsoleRequest(call(1, "opencode", "ok"))).toEqual({ datasourceId: "shop", sql: "SELECT 1" });
-    expect(activityConsoleRequest({ ...call(1, "opencode", "ok"), tool: "describe_table" })).toBeNull();
+    expect(openableCallId(call(1, "opencode", "ok"))).toBe(1);
+    expect(openableCallId({ ...call(1, "opencode", "ok"), tool: "describe_table" })).toBeNull();
     expect(CALL_EXECUTION_OUTCOMES.refused).toBe("cancelled");
   });
 

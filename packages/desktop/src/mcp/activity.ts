@@ -7,6 +7,8 @@ const ELLIPSIS = "…";
 export interface Activity {
   add(entry: Omit<McpActivityView, "id">): void;
   list(): readonly McpActivityView[];
+  /** The call's target as the agent sent it, before the status cut it; null once the call is dropped. */
+  fullTarget(id: number): string | null;
 }
 
 function cut(text: string | null): string | null {
@@ -15,18 +17,19 @@ function cut(text: string | null): string | null {
 }
 
 export function createActivity(onChange: () => void, limit = MCP_ACTIVITY_LIMIT): Activity {
-  let entries: McpActivityView[] = [];
+  let entries: { readonly view: McpActivityView; readonly target: string | null }[] = [];
+  let views: McpActivityView[] = [];
   let next = 0;
   return {
     add(entry) {
       next += 1;
-      entries = [{ ...entry, id: next, target: cut(entry.target), message: cut(entry.message) }, ...entries].slice(
-        0,
-        limit,
-      );
+      const view = { ...entry, id: next, target: cut(entry.target), message: cut(entry.message) };
+      entries = [{ view, target: entry.target }, ...entries].slice(0, limit);
+      views = entries.map((kept) => kept.view);
       onChange();
     },
-    list: () => entries,
+    list: () => views,
+    fullTarget: (id) => entries.find((kept) => kept.view.id === id)?.target ?? null,
   };
 }
 

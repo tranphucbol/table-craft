@@ -98,10 +98,20 @@ describe("agent activity and runs", () => {
     ]);
   });
 
-  it("givenLongTarget_whenAdded_thenCut", () => {
+  it("givenLongTarget_whenAdded_thenCutInListAndKeptWhole", () => {
     const activity = createActivity(() => undefined);
-    activity.add({ ...CALL, target: "x".repeat(ACTIVITY_TARGET_CHARS + 10) });
+    const sql = "x".repeat(ACTIVITY_TARGET_CHARS + 10);
+    activity.add({ ...CALL, target: sql });
     expect(activity.list()[0]?.target).toHaveLength(ACTIVITY_TARGET_CHARS + 1);
+    expect(activity.fullTarget(1)).toBe(sql);
+  });
+
+  it("givenDroppedCall_whenFullTargetAsked_thenNull", () => {
+    const activity = createActivity(() => undefined, 1);
+    activity.add({ ...CALL, target: "SELECT 1" });
+    activity.add({ ...CALL, target: "SELECT 2" });
+    expect(activity.fullTarget(1)).toBeNull();
+    expect(activity.fullTarget(2)).toBe("SELECT 2");
   });
 
   it("givenRunningWork_whenCancelled_thenCancelCalledAndRunGoneAfter", async () => {

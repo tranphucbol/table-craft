@@ -148,6 +148,7 @@ const mcpControlRequest = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("pause"), paused: z.boolean() }),
   z.strictObject({ action: z.literal("disconnect"), clientId: z.string().min(1) }),
   z.strictObject({ action: z.literal("cancel"), runId: z.string().min(1) }),
+  z.strictObject({ action: z.literal("open"), callId: z.number().int().positive() }),
 ]) satisfies z.ZodType<McpUserControl>;
 const agentPolicyRequest = z.strictObject({
   datasourceId: z.string().min(1),
