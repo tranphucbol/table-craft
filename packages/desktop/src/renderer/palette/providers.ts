@@ -10,7 +10,7 @@ const ACTION_KEY_PREFIX = "action:";
 
 /**
  * Every registered action that is available, disabled ones included so the user sees why nothing
- * would happen. `shortcutOf` is the chord in effect (decision 153), the declared one when absent.
+ * would happen. `shortcutOf` is the chord in effect (decision 154), the declared one when absent.
  */
 export function actionsProvider(
   registry: ActionRegistry,

@@ -176,7 +176,7 @@ export interface Settings {
   readonly updates: UpdateSettings;
   readonly plugins: PluginSettings;
   readonly mcp: McpSettings;
-  /** Shortcut overrides by action id; an absent id keeps its default (decision 153). */
+  /** Shortcut overrides by action id; an absent id keeps its default (decision 154). */
   readonly keymap: KeymapOverrides;
 }
 

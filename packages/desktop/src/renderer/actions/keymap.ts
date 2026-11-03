@@ -29,7 +29,7 @@ export interface KeymapOptions {
   readonly focusedRegion?: () => FocusRegion;
   /** Chords the focused control keeps for itself, such as the SQL editor's undo; the registry lets them pass. */
   readonly reservedChords?: () => readonly Chord[];
-  /** The keymap in effect, read on every key; absent, each action's declared chord (decision 153). */
+  /** The keymap in effect, read on every key; absent, each action's declared chord (decision 154). */
   readonly shortcuts?: () => Shortcuts;
   readonly doubleTapWindowMs?: number;
 }
@@ -158,7 +158,7 @@ function overlap(a: AnyAction, b: AnyAction): boolean {
 /**
  * Chords two or more actions hold where both could fire: in a shared region on a shared tab kind.
  * `shortcuts` is the keymap to check, each action's declared chord when absent. The keymap test
- * fails on any; the Keymap page offers Reassign on one (decision 153).
+ * fails on any; the Keymap page offers Reassign on one (decision 154).
  */
 export function findClashes(
   actions: readonly AnyAction[],

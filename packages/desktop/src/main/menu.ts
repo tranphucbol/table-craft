@@ -63,7 +63,7 @@ export function installApplicationMenu(
 export interface ApplicationMenu {
   /** The recent SQL files moved (plan 041). */
   setRecent(recent: readonly string[]): void;
-  /** Settings were saved; rebuilt only when the keymap is what changed (decision 153). */
+  /** Settings were saved; rebuilt only when the keymap is what changed (decision 154). */
   setKeymap(keymap: KeymapOverrides): void;
 }
 

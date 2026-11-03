@@ -19,7 +19,7 @@ import type { AnyAction } from "@table-craft/desktop/renderer/actions/registry.j
 import { EDITOR_COMMANDS } from "@table-craft/desktop/renderer/console/editorKeys.js";
 import { reservedOwner, type KeymapOverrides } from "@table-craft/desktop/settings/chords.js";
 
-/** Why a key without Mod, Ctrl or Alt cannot be a shortcut (decision 153). */
+/** Why a key without Mod, Ctrl or Alt cannot be a shortcut (decision 154). */
 export const NEEDS_MODIFIER = "Use a modifier, or a function key.";
 export const NO_SUPER_KEY = "The Windows or Super key cannot be part of a shortcut.";
 export const UNNAMED_KEY = "This key cannot be part of a shortcut.";
@@ -71,7 +71,7 @@ export type Recorded =
 
 /**
  * What the SQL editor does with `chord` instead, when `action` could fire there: the editor keeps
- * its own chords while it has focus, so the shortcut works everywhere else (decision 153).
+ * its own chords while it has focus, so the shortcut works everywhere else (decision 154).
  */
 export function editorNote(chord: Chord, action: AnyAction, platform: Platform): string | null {
   if (!shortcutWorksIn(action, EDITOR_REGION)) return null;
@@ -93,7 +93,7 @@ function clashesOver(target: RecordTarget, chord: Chord): readonly AnyAction[] {
 }
 
 /**
- * Reads one key press as a shortcut for `target.action` (decision 153): Escape cancels, a key
+ * Reads one key press as a shortcut for `target.action` (decision 154): Escape cancels, a key
  * without Mod, Ctrl or Alt other than an F key is refused, so is a chord the menu's roles or the
  * system take, and an accepted chord names the actions it would clash with.
  */

@@ -84,7 +84,7 @@ function updateKeymap(next: (overrides: KeymapOverrides) => KeymapOverrides): vo
   update((current) => ({ ...current, keymap: next(current.keymap) }));
 }
 
-/** The Keymap page's Restore Defaults: every action's own chord back (decision 153). */
+/** The Keymap page's Restore Defaults: every action's own chord back (decision 154). */
 export function restoreKeymap(current: Settings): Settings {
   return { ...current, keymap: withAllDefaults(current.keymap, registry.all()) };
 }
@@ -361,7 +361,7 @@ function moveAmongRows(event: KeyboardEvent<HTMLElement>): void {
   rows[move(rows.indexOf(target), rows.length)]?.focus();
 }
 
-/** Settings → Keymap (decision 153): every action's shortcuts, searchable by name or by the chord itself. */
+/** Settings → Keymap (decision 154): every action's shortcuts, searchable by name or by the chord itself. */
 export function KeymapPage() {
   const overrides = useSettings((state) => state.settings.keymap);
   const actions = useMemo(() => keymapActions(), []);

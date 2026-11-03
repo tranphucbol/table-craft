@@ -15,7 +15,7 @@ function shortcutsFor(overrides: KeymapOverrides): Shortcuts {
   return cached.shortcuts;
 }
 
-/** The keymap in effect now: the registry's chords with `settings.json`'s overrides (decision 153). */
+/** The keymap in effect now: the registry's chords with `settings.json`'s overrides (decision 154). */
 export function currentShortcuts(): Shortcuts {
   return shortcutsFor(useSettings.getState().settings.keymap);
 }
@@ -33,7 +33,7 @@ export function shortcutText(actionId: string): string {
 
 /**
  * `actionId`'s chord as this platform writes it, or undefined when it has none, redrawn when the
- * keymap changes; every label of a chord reads it (decision 153).
+ * keymap changes; every label of a chord reads it (decision 154).
  */
 export function useShortcut(actionId: string): string | undefined {
   return useSettings((state) => {

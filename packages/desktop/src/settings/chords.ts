@@ -11,7 +11,7 @@ export const PLATFORMS: readonly Platform[] = ["mac", "other"];
 /** A chord as declared on an action, e.g. `"Mod+Shift+A"`. */
 export type Chord = string;
 
-/** `settings.json`'s `keymap`: an action id's chords in place of its default; `[]` is none (decision 153). */
+/** `settings.json`'s `keymap`: an action id's chords in place of its default; `[]` is none (decision 154). */
 export type KeymapOverrides = Readonly<Record<string, readonly Chord[]>>;
 
 export type Modifier = "Mod" | "Ctrl" | "Alt" | "Shift";
@@ -151,7 +151,7 @@ export interface ReservedChord {
   readonly owner: string;
 }
 
-/** Chords the Keymap page refuses to record (decision 153): macOS's app menu roles and window keys, Windows' and Linux's window keys. */
+/** Chords the Keymap page refuses to record (decision 154): macOS's app menu roles and window keys, Windows' and Linux's window keys. */
 export const RESERVED_CHORDS: Readonly<Record<Platform, readonly ReservedChord[]>> = {
   mac: [
     { chord: "Mod+Q", owner: "Quit TableCraft" },
