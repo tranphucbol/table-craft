@@ -255,7 +255,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   data: {
     nullText: "<null>",
-    stripedRows: false,
+    stripedRows: true,
     groupDigits: false,
     detectJson: true,
     pageRows: 500,

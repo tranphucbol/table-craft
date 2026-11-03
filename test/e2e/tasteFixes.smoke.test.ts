@@ -208,14 +208,14 @@ describe.runIf(DATABASES_ENABLED)("plan 130 UI fixes live test", () => {
   );
 
   it(
-    "givenConnectedTidb_whenQueriedAndFailed_thenNoConnectedWordNoStripesAndTheErrorBlock",
+    "givenConnectedTidb_whenQueriedAndFailed_thenNoConnectedWordStripedRowsAndTheErrorBlock",
     async () => {
       const page = await launchOnTidb();
 
       await runStatement(page, "SELECT * FROM orders");
       await hideCompletion(page);
       expect(await treeNode(page, TIDB_NAME).textContent()).not.toContain("connected");
-      expect(await page.locator(".bg-grid-stripe").count()).toBe(0);
+      expect(await page.locator(".bg-grid-stripe").count()).toBeGreaterThan(0);
       await captureWindow(page, "04-tree");
       await captureWindow(page, "05-grid");
 
