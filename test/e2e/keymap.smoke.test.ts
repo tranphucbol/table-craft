@@ -44,6 +44,7 @@ const REFORMAT_CHORD: Chord = "Mod+Alt+L";
 const REBOUND_NEW_CONSOLE: Chord = "F8";
 const RESERVED: Chord = PLATFORM === "mac" ? "Mod+Q" : "Alt+F4";
 const FOCUSED_ROW = "document.activeElement?.getAttribute('data-keymap-row') ?? null";
+const SCROLLED_PX = 600;
 const RESERVED_OWNER = PLATFORM === "mac" ? "Quit TableCraft" : "Close Window";
 
 function shown(chord: Chord): string {
@@ -173,6 +174,31 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
       );
       expect(await settingsDialog(page).count()).toBe(1);
       await captureWindow(page, "02-search-by-chord");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenKeymapScrolled_whenRowsPassUnderTheSearchBar_thenNoneShowsAboveIt",
+    async () => {
+      const { page } = await launch();
+      await openKeymap(page);
+      const panel = settingsDialog(page).getByRole("tabpanel");
+      await panel.evaluate((element: { scrollTop: number }, by: number) => {
+        element.scrollTop = by;
+      }, SCROLLED_PX);
+      const panelBox = await panel.boundingBox();
+      const searchBar = settingsDialog(page).getByRole("searchbox", { name: "Search actions" }).locator("xpath=../..");
+      const barBox = await searchBar.boundingBox();
+      const headingTops = await settingsDialog(page)
+        .getByRole("heading", { level: 3 })
+        .evaluateAll((headings: readonly { getBoundingClientRect(): { top: number } }[]) =>
+          headings.map((heading) => Math.round(heading.getBoundingClientRect().top)),
+        );
+      if (panelBox === null || barBox === null) throw new Error("The Keymap page is not laid out.");
+      expect(Math.round(barBox.y)).toBe(Math.round(panelBox.y));
+      expect(headingTops).toContain(Math.round(barBox.y + barBox.height));
+      await captureWindow(page, "09-scrolled");
     },
     SCENARIO_TIMEOUT_MS,
   );
