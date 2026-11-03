@@ -12,6 +12,7 @@ import {
 import { isPluginError, type Column, type InsertTarget, type SqlLanguage } from "@table-craft/plugin-api";
 import { MS_PER_SECOND, connectDatasource, connectOptions, drained } from "@table-craft/desktop/engine/connect.js";
 import type { BaseContext } from "@table-craft/desktop/engine/context.js";
+import { planScript, scriptEncoder, scriptRows } from "@table-craft/desktop/engine/ddlScript.js";
 import { exportTasks, type ExportJob, type ExportRows } from "@table-craft/desktop/engine/exports.js";
 import {
   BUG_HINT,
@@ -51,7 +52,17 @@ const BYTES_PER_MIB = 1024 * 1024;
 
 /** The export, import and script tasks every connection shares, and what starting one checks first. */
 export function transferContext(base: BaseContext) {
-  const { options, connector, log, sqlLanguage, introspect, relationOf, namespaceSwitchable, switchStatement } = base;
+  const {
+    options,
+    connector,
+    log,
+    sqlLanguage,
+    introspect,
+    relationOf,
+    namespaceSwitchable,
+    switchStatement,
+    scriptSource,
+  } = base;
 
   const tasks = exportTasks(log === null ? {} : { log: log.child("export") });
 
@@ -99,6 +110,24 @@ export function transferContext(base: BaseContext) {
       retryable: true,
       drains: null,
       open: () => exportRowsOf(sql),
+    };
+  }
+
+  /** Ordered once, when it starts; each definition is read as the file is written (plan 148). */
+  async function ddlJob(source: Extract<ExportSource, { kind: "ddl" }>, path: string): Promise<ExportJob> {
+    const scripted = scriptSource();
+    const { header, order } = await planScript(scripted, source);
+    return {
+      path,
+      format: "sql",
+      origin: "ddl",
+      columns: [],
+      projection: null,
+      estimate: order.length,
+      encoder: () => scriptEncoder(header),
+      retryable: true,
+      drains: null,
+      open: () => Promise.resolve({ rows: scriptRows(scripted, source.path, order), close: () => Promise.resolve() }),
     };
   }
 
@@ -390,6 +419,7 @@ export function transferContext(base: BaseContext) {
     tasks,
     exportRowsOf,
     tableJob,
+    ddlJob,
     taskOf,
     absolutePath,
     imports,

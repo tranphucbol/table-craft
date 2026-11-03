@@ -1,10 +1,24 @@
-import type { ExportTask, ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
+import type { ExportOrigin, ExportTask, ExportTaskState } from "@table-craft/desktop/engine/protocol.js";
 import { formatBytes, formatClock, formatCount, formatDuration } from "@table-craft/desktop/renderer/model/format.js";
 import type { ExecutionOutcome } from "@table-craft/desktop/renderer/state/executions.js";
 import type { ExportEntry } from "@table-craft/desktop/renderer/state/exports.js";
 
 const PERCENT = 100;
 const PATH_SEPARATOR = /[\\/]/;
+const ROW_UNITS = { one: "row", many: "rows" } as const;
+/** A DDL export (plan 148) counts the relations it wrote, one row each. */
+const RELATION_UNITS = { one: "relation", many: "relations" } as const;
+
+function unitsOf(origin: ExportOrigin): { readonly one: string; readonly many: string } {
+  return origin === "ddl" ? RELATION_UNITS : ROW_UNITS;
+}
+
+/** `12,345 of 50,000 rows` against an estimate, else `12,345 rows`. */
+function reachedText(task: Pick<ExportTask, "rows" | "estimate" | "origin">): string {
+  return task.estimate === null
+    ? exportRowsText(task.rows, task.origin)
+    : `${formatCount(task.rows)} of ${formatCount(task.estimate)} ${unitsOf(task.origin).many}`;
+}
 
 /** An export's state as the outcome glyph Services and the Exports popover draw. */
 export const EXPORT_OUTCOME: Readonly<Record<ExportTaskState, ExecutionOutcome>> = {
@@ -38,10 +52,7 @@ export function exportPercent(task: Pick<ExportTask, "rows" | "estimate">): numb
  * estimate, `12,345 rows · 4.1 MB · 3.2 s` otherwise.
  */
 export function exportProgressText(task: ExportTask): string {
-  const rows =
-    task.state === "running" && task.estimate !== null
-      ? `${formatCount(task.rows)} of ${formatCount(task.estimate)} rows`
-      : `${formatCount(task.rows)} ${task.rows === 1 ? "row" : "rows"}`;
+  const rows = task.state === "running" ? reachedText(task) : exportRowsText(task.rows, task.origin);
   // A failed or cancelled export removed its file, so it names the rows it reached and no size.
   if (task.state === "failed" || task.state === "cancelled") {
     return [`${rows} before it stopped`, formatDuration(task.elapsedMs)].join(" · ");
@@ -92,9 +103,10 @@ export interface ExportChipState {
   readonly seen: ReadonlySet<string>;
 }
 
-/** `1 row`, `412,300 rows`. */
-export function exportRowsText(rows: number): string {
-  return `${formatCount(rows)} ${rows === 1 ? "row" : "rows"}`;
+/** `1 row`, `412,300 rows`; `12 relations` for a DDL export. */
+export function exportRowsText(rows: number, origin: ExportOrigin = "table"): string {
+  const units = unitsOf(origin);
+  return `${formatCount(rows)} ${rows === 1 ? units.one : units.many}`;
 }
 
 function elapsedOf(task: ExportTask, now: number): number {
@@ -102,11 +114,7 @@ function elapsedOf(task: ExportTask, now: number): number {
 }
 
 function runningTooltip(task: ExportTask): string {
-  const rows =
-    task.estimate === null
-      ? exportRowsText(task.rows)
-      : `${formatCount(task.rows)} of ${formatCount(task.estimate)} rows`;
-  return `${task.path}\n${rows} · ${formatBytes(task.bytes)}`;
+  return `${task.path}\n${reachedText(task)} · ${formatBytes(task.bytes)}`;
 }
 
 function combinedPercent(running: readonly ExportTask[]): number | null {
@@ -124,7 +132,7 @@ function runningChip(running: readonly ExportEntry[], cancelling: ReadonlySet<st
   if (tasks.length === 1 && only !== undefined) {
     const name = fileNameOf(only.path);
     const stopping = cancelling.has(only.taskId);
-    const progress = percent === null ? exportRowsText(only.rows) : `${String(percent)}%`;
+    const progress = percent === null ? exportRowsText(only.rows, only.origin) : `${String(percent)}%`;
     return {
       tone: "running",
       label: stopping ? `Cancelling ${name}…` : `${name} · ${progress}`,
@@ -179,7 +187,7 @@ export function exportChip(
   const { task } = done;
   return {
     tone: "done",
-    label: `${fileNameOf(task.path)} · ${exportRowsText(task.rows)} · ${formatDuration(task.elapsedMs)}`,
+    label: `${fileNameOf(task.path)} · ${exportRowsText(task.rows, task.origin)} · ${formatDuration(task.elapsedMs)}`,
     tooltip: `${task.path}\n${exportProgressText(task)}\nClick for details`,
     percent: null,
     startedAt: null,
@@ -231,15 +239,11 @@ export function exportTimeLeft(task: ExportTask, now: number): string | null {
  */
 export function exportDetailText(task: ExportTask, now: number): string {
   if (task.state !== "running") return exportProgressText(task);
-  const rows =
-    task.estimate === null
-      ? exportRowsText(task.rows)
-      : `${formatCount(task.rows)} of ${formatCount(task.estimate)} rows`;
   const rate = exportRate(task, now);
   return [
-    rows,
+    reachedText(task),
     formatBytes(task.bytes),
-    rate === null ? null : `${formatCount(Math.round(rate))} rows/s`,
+    rate === null ? null : `${formatCount(Math.round(rate))} ${unitsOf(task.origin).many}/s`,
     formatClock(now - task.startedAt),
     exportTimeLeft(task, now),
   ]

@@ -60,6 +60,14 @@ empty. A data source from `TABLE_CRAFT_DATASOURCE` stays first and does not move
 open in a console. The **SQL Generator** (`⌥⌘G`) writes `CREATE`, `DROP`, `SELECT`, `INSERT` or
 `UPDATE` statements for the selected objects and opens them in a console.
 
+**SQL Scripts** on a schema's context menu writes the DDL of every table, view and materialized
+view in it as one script: **Generate DDL to Console** opens it in a new console on that schema,
+**Generate DDL to Clipboard** copies it, and **Generate DDL to File…** saves it as a background
+export you can follow and cancel in Services. On the Tables or Views node it writes only those.
+Tables come before the tables that reference them, then views; tables that reference each other
+are named in the script's header, so you can create them with foreign key checks off. Routines
+and sequences are not included. A definition the database refuses becomes a comment in its place.
+
 ![DDL and SQL generation](../media/sql-generator.gif)
 
 See [DDL and SQL generation](../design/specification.md#ddl-and-sql-generation).

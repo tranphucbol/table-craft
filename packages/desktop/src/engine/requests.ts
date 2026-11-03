@@ -26,6 +26,7 @@ import {
   COMMAND_TXN_MAX_OPERATIONS,
   KEY_WATCH_MAX_EVENTS,
   KEY_WATCH_MAX_RING_BYTES,
+  SCRIPT_RELATION_KINDS,
   type CommandTransaction,
   type EngineRequest,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -51,6 +52,7 @@ const index = z.number().int().nonnegative();
 const extractor = z.enum(EXTRACTOR_KINDS);
 const columns = z.array(index);
 const relation = z.string().min(1);
+const relationKinds = z.array(z.enum(SCRIPT_RELATION_KINDS)).min(1);
 const keyName = z.strictObject({
   text: z.string(),
   hex: z
@@ -99,6 +101,7 @@ const stallSeconds = z.number().int().min(EXPORT_STALL_SECONDS_RANGE.min).max(EX
 const exportSource = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("result"), handle, columns, shownOnly: z.boolean().optional() }),
   z.strictObject({ kind: z.literal("table"), path: namespacePath, relation, columns: z.array(z.string().min(1)) }),
+  z.strictObject({ kind: z.literal("ddl"), path: namespacePath, kinds: relationKinds, title: z.string() }),
 ]);
 /** Matches the renderer's `INSPECTION_MAX_TEXT` (plan 108): longer consoles are not inspected live. */
 const MAX_INSPECTION_TEXT = 200_000;
@@ -577,7 +580,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     id: requestId,
     type: z.literal("export.start"),
     source: exportSource,
-    format: z.enum(EXPORT_FORMATS),
+    format: z.enum([...EXPORT_FORMATS, "sql"]),
     path: z.string().min(1),
     stallSeconds,
   }),
@@ -714,6 +717,13 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     name: z.string().min(1),
   }),
   z.strictObject({ id: requestId, type: z.literal("catalog.definition"), path: namespacePath, name: relation }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("catalog.script"),
+    path: namespacePath,
+    kinds: relationKinds,
+    title: z.string(),
+  }),
   z.strictObject({
     id: requestId,
     type: z.literal("sql.generate"),

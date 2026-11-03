@@ -24,6 +24,13 @@ import {
   KEY_TREE_KINDS,
   KEYSPACE_MENU,
 } from "@table-craft/desktop/renderer/panes/keyMenus.js";
+import {
+  DDL_SCRIPT_HIDDEN_WHEN_DISABLED,
+  NAMESPACE_MENU,
+  entriesKey,
+  shownEntries,
+  type MenuEntry,
+} from "@table-craft/desktop/renderer/panes/menuEntries.js";
 import { KEY_ACTION_IDS, type KeyDatabaseArgs } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { KEY_EDIT_ACTION_IDS, type KeyChildrenArgs } from "@table-craft/desktop/renderer/actions/keyEditActions.js";
 import { invoke, registry, subscribeToActions, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
@@ -90,7 +97,13 @@ import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { isRunningOn, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
-import { MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT, WIDE_MENU_CONTENT } from "@table-craft/desktop/renderer/ui/menu.js";
+import {
+  MENU_ITEM,
+  MENU_SEPARATOR,
+  MENU_SHORTCUT,
+  MENU_SUB_TRIGGER,
+  WIDE_MENU_CONTENT,
+} from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
 import {
   ACTION_ICONS,
@@ -175,22 +188,6 @@ const ROUTINE_MENU = [
   null,
   ACTION_IDS.toggleSystemSchemas,
 ] as const;
-const NAMESPACE_MENU = [
-  TABLE_ACTION_IDS.openData,
-  ACTION_IDS.newConsole,
-  IMPORT_ACTION_IDS.importNewTable,
-  SCRIPT_ACTION_IDS.run,
-  null,
-  OBJECT_ACTION_IDS.newTable,
-  OBJECT_ACTION_IDS.newSchema,
-  OBJECT_ACTION_IDS.newDatabase,
-  null,
-  ACTION_IDS.synchronize,
-  ACTION_IDS.copyName,
-  null,
-  ACTION_IDS.toggleSystemSchemas,
-  ACTION_IDS.manageShownSchemas,
-] as const;
 const RELATION_MENU = [
   TABLE_ACTION_IDS.openData,
   EXPORT_ACTION_IDS.exportRelation,
@@ -271,6 +268,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   ACTION_IDS.manageShownSchemas,
   ...KEY_HIDDEN_WHEN_DISABLED,
   KEY_EDIT_ACTION_IDS.refreshFolder,
+  ...DDL_SCRIPT_HIDDEN_WHEN_DISABLED,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {
@@ -286,31 +284,40 @@ function MenuItem({ actionId }: { readonly actionId: string }) {
   );
 }
 
-/** The items to show: plugin-specific ones that do not apply left out, and no separator doubled or at an end. */
-function shownItems(items: readonly (string | null)[]): readonly (string | null)[] {
-  const shown: (string | null)[] = [];
-  for (const item of items) {
-    if (item !== null && HIDDEN_WHEN_DISABLED.has(item) && !registry.isEnabled(item)) continue;
-    if (item === null && (shown.length === 0 || shown[shown.length - 1] === null)) continue;
-    shown.push(item);
-  }
-  if (shown[shown.length - 1] === null) shown.pop();
-  return shown;
+/** The entries to show: plugin-specific ones that do not apply left out, and no separator doubled or at an end. */
+function shownItems(items: readonly MenuEntry[]): readonly MenuEntry[] {
+  return shownEntries(items, HIDDEN_WHEN_DISABLED, (actionId) => registry.isEnabled(actionId));
 }
 
-/** Mounted when the menu opens, so the items left out are those that do not apply to this selection. */
-function MenuItems({ items }: { readonly items: readonly (string | null)[] }) {
-  useSyncExternalStore(subscribeToActions, () => shownItems(items).join("\n"));
-  return shownItems(items).map((actionId, index) =>
-    actionId === null ? (
-      <ContextMenu.Separator key={`separator-${String(index)}`} className={MENU_SEPARATOR} />
-    ) : (
-      <MenuItem key={actionId} actionId={actionId} />
-    ),
+function SubmenuItem({ label, items }: { readonly label: string; readonly items: readonly string[] }) {
+  return (
+    <ContextMenu.Sub>
+      <ContextMenu.SubTrigger className={MENU_SUB_TRIGGER}>
+        <span>{label}</span>
+        <CollapsedIcon aria-hidden className={cn("size-icon", MENU_SHORTCUT)} />
+      </ContextMenu.SubTrigger>
+      <ContextMenu.Portal>
+        <ContextMenu.SubContent className={WIDE_MENU_CONTENT}>
+          {items.map((actionId) => (
+            <MenuItem key={actionId} actionId={actionId} />
+          ))}
+        </ContextMenu.SubContent>
+      </ContextMenu.Portal>
+    </ContextMenu.Sub>
   );
 }
 
-function Menu({ items }: { readonly items: readonly (string | null)[] }) {
+/** Mounted when the menu opens, so the items left out are those that do not apply to this selection. */
+function MenuItems({ items }: { readonly items: readonly MenuEntry[] }) {
+  useSyncExternalStore(subscribeToActions, () => entriesKey(shownItems(items)));
+  return shownItems(items).map((entry, index) => {
+    if (entry === null) return <ContextMenu.Separator key={`separator-${String(index)}`} className={MENU_SEPARATOR} />;
+    if (typeof entry === "string") return <MenuItem key={entry} actionId={entry} />;
+    return <SubmenuItem key={entry.label} label={entry.label} items={entry.items} />;
+  });
+}
+
+function Menu({ items }: { readonly items: readonly MenuEntry[] }) {
   return (
     <ContextMenu.Portal>
       <ContextMenu.Content className={WIDE_MENU_CONTENT}>
@@ -329,7 +336,7 @@ function isLead(selection: TreeSelection | null, row: ExplorerRow): boolean {
   return selection.kind === "catalog" && selection.key === row.key;
 }
 
-function menuOf(node: ExplorerNode): readonly (string | null)[] {
+function menuOf(node: ExplorerNode): readonly MenuEntry[] {
   if (node.kind === "folder") return FOLDER_MENU;
   if (node.kind === "datasource") return DATASOURCE_MENU;
   if (node.kind === "relation") return RELATION_MENU;
