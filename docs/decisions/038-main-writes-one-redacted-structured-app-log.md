@@ -1,6 +1,6 @@
 # 038: Main writes one redacted, structured app log
 
-Status: Accepted
+Status: Accepted. Amended by 152.
 
 ## Decision
 
@@ -18,7 +18,8 @@ it (plan 017).
   Debug logging (`log.level`) switches to `debug` live. Main filters, so the other processes send
   everything and need no level of their own.
 - **Rotation**: 5 MB per file, the current file plus `table-craft.1.log` to `table-craft.4.log`, so at most 25 MB.
-- **Never logged**: passwords and other secrets, row values, SQL text, the connection URL's user
+- **Never logged**: passwords and other secrets, row values, SQL text (decision 152 logs the SQL an
+  agent sent), the connection URL's user
   information. A statement is its request id, kind, duration, row count and outcome. Main redacts
   every record before it is written: keys that name a secret, URL user information, and the
   values of every secret it has handed to an engine, wherever they appear.
