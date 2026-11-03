@@ -14,6 +14,12 @@ export const RELEASE_MANIFEST_URL = `https://github.com/tranphucbol/table-craft/
 export const BETA_MANIFEST_URL = `https://raw.githubusercontent.com/tranphucbol/table-craft/refs/heads/chore/update-channels/beta/${MANIFEST_FILE}`;
 /** Where Help → Check for Updates sends a user whose install cannot update itself and no notes are known. */
 export const RELEASES_PAGE_URL = "https://github.com/tranphucbol/table-craft/releases/latest";
+const LATEST_SUFFIX = "/latest";
+
+/** The GitHub release page of `version`, which a release tags `v<version>` (`RELEASING.md`). */
+export function releaseTagUrl(version: string): string {
+  return `${RELEASES_PAGE_URL.slice(0, -LATEST_SUFFIX.length)}/tag/v${version}`;
+}
 
 export const UPDATE_OVERRIDE_ENV = {
   manifestUrl: "TABLE_CRAFT_UPDATE_MANIFEST_URL",
@@ -21,6 +27,8 @@ export const UPDATE_OVERRIDE_ENV = {
   /** A path to a PEM public key, read at launch. */
   publicKey: "TABLE_CRAFT_UPDATE_PUBLIC_KEY",
   firstCheckMs: "TABLE_CRAFT_UPDATE_FIRST_CHECK_MS",
+  /** The version a development run reports instead of 0.0.0, so the live test can see an update notice. */
+  developmentVersion: "TABLE_CRAFT_DEVELOPMENT_VERSION",
 } as const;
 
 /** After the first window shows, so the check never competes with launch (plan 020 decision 6). */
