@@ -47,7 +47,7 @@ chords differ: the dispatcher already lets them through only while the SQL edito
 binding on one works everywhere else and the note says so.
 
 Keeping unknown ids makes a profile shared between versions, or with a plugin not loaded now,
-lossless. Reset All therefore resets only the actions this build knows.
+lossless. Restore Defaults therefore resets only the actions this build knows.
 
 ## Consequences
 

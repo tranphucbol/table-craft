@@ -114,6 +114,8 @@ export {
   Terminal as ConsoleIcon,
   X as CloseIcon,
   Keyboard as FindByShortcutIcon,
+  Plus as AddShortcutIcon,
+  ArrowCounterClockwise as ResetShortcutIcon,
   Info as InfoIcon,
   CaretDown as ExpandedIcon,
   CaretDown as DropdownIcon,

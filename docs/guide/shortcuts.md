@@ -14,14 +14,16 @@ See [Shell and actions](../design/specification.md#shell-and-actions).
 
 ## Change a shortcut
 
-**Settings → Keymap** lists every action with its shortcuts. Type to filter by name or category,
-or turn on **Find by Shortcut** (the keyboard button) and press a chord to see which actions hold
-it. **Add Shortcut** on a row records the next chord you press; Escape cancels. A chord needs `⌘`,
-`⌃` or `⌥` (`Ctrl` or `Alt` on Windows and Linux) unless it is an F key, and chords the system or
-the app menu keep, such as `⌘Q` or `Alt+F4`, are refused with the reason. When another action holds
-the chord where both could fire, the page names it and offers **Reassign**, which takes the chord
-from it. The X on a chord removes it, so an action can have several shortcuts or none; **Reset**
-puts one action back, **Reset All** every one, and a changed action is marked **Modified**.
+**Settings → Keymap** lists every action with its shortcuts, grouped by category. Type to filter
+by name or category, or turn on **Find by Shortcut** (the keyboard button) and press a chord to see
+which actions hold it. The **+** on a row records the next chord you press; Escape cancels. A chord
+needs `⌘`, `⌃` or `⌥` (`Ctrl` or `Alt` on Windows and Linux) unless it is an F key, and chords the
+system or the app menu keep, such as `⌘Q` or `Alt+F4`, are refused with the reason. When another
+action holds the chord where both could fire, the page names it and offers **Reassign**, which takes
+the chord from it. The X on a chord removes it, so an action can have several shortcuts or none. A
+changed action is marked **Modified**, with a button that puts it back; **Restore Defaults** puts
+back every one. From the keyboard, Tab reaches the list, the arrow keys move between rows, Enter
+records a shortcut and Delete removes the row's last one.
 
 Changes apply at once, to the menus, tooltips and Find Action too. The SQL editor keeps its own
 keys while it has focus, such as `⌘D` for Select Next Occurrence; a shortcut on one of them works

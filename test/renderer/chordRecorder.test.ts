@@ -87,7 +87,7 @@ describe("chordRecorder", () => {
       kind: "accepted",
       chord: "Mod+D",
       clashes: [],
-      editorNote: "Not in the SQL editor, which uses ⌘D for Select Next Occurrence",
+      editorNote: "Doesn't work in the SQL editor, where ⌘D is Select Next Occurrence.",
     });
   });
 

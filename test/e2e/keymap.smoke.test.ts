@@ -1,7 +1,7 @@
 /**
  * Plan 044's live test: Settings → Keymap, its search and Find by Shortcut, the recorder with its
- * clash, reserved and Escape handling, the labels and the native menu following an override, and
- * Reset All. On the in-memory SQLite console, so it needs no server:
+ * clash, reserved and Escape handling, the keyboard staying on its row, the labels and the native
+ * menu following an override, and Restore Defaults. On the in-memory SQLite console, so it needs no server:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/044 bun run test:smoke:headless test/e2e/keymap.smoke.test.ts
  *
@@ -43,6 +43,7 @@ const REBOUND_RUN: Chord = "F9";
 const REFORMAT_CHORD: Chord = "Mod+Alt+L";
 const REBOUND_NEW_CONSOLE: Chord = "F8";
 const RESERVED: Chord = PLATFORM === "mac" ? "Mod+Q" : "Alt+F4";
+const FOCUSED_ROW = "document.activeElement?.getAttribute('data-keymap-row') ?? null";
 const RESERVED_OWNER = PLATFORM === "mac" ? "Quit TableCraft" : "Close Window";
 
 function shown(chord: Chord): string {
@@ -87,11 +88,19 @@ async function listedIds(page: Page): Promise<string[]> {
 }
 
 async function rowChords(page: Page, actionId: string): Promise<string[]> {
-  return keymapRow(page, actionId).locator("kbd").allTextContents();
+  return keymapRow(page, actionId).locator("[data-keymap-chord] kbd").allTextContents();
 }
 
-async function startRecording(page: Page, actionId: string): Promise<void> {
-  await keymapRow(page, actionId).getByRole("button", { name: "Add Shortcut", exact: true }).click();
+/** The `data-keymap-row` of the focused row, or null when focus is elsewhere. */
+async function focusedRow(page: Page): Promise<string | null> {
+  return page.evaluate<string | null>(FOCUSED_ROW);
+}
+
+async function startRecording(page: Page, actionId: string, title: string): Promise<void> {
+  await keymapRow(page, actionId).hover();
+  await keymapRow(page, actionId)
+    .getByRole("button", { name: `Add shortcut to ${title}`, exact: true })
+    .click();
   await expect.poll(() => keymapRow(page, actionId).locator("[data-chord-recorder]").count()).toBe(1);
 }
 
@@ -176,7 +185,7 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
       const search = settingsDialog(page).getByRole("searchbox", { name: "Search actions" });
 
       await search.fill("Run");
-      await startRecording(page, RUN);
+      await startRecording(page, RUN, "Run");
       await page.keyboard.press("Escape");
       await expect.poll(() => keymapRow(page, RUN).locator("[data-chord-recorder]").count()).toBe(0);
       expect(await settingsDialog(page).count()).toBe(1);
@@ -184,7 +193,7 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
       await keymapRow(page, RUN)
         .getByRole("button", { name: `Remove ${shown("Mod+Enter")} from Run` })
         .click();
-      await startRecording(page, RUN);
+      await startRecording(page, RUN, "Run");
       await page.keyboard.press(REBOUND_RUN);
       await expect.poll(() => rowChords(page, RUN)).toEqual([shown(REBOUND_RUN)]);
       expect(await keymapRow(page, RUN).getByText("Modified", { exact: true }).count()).toBe(1);
@@ -195,16 +204,27 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
 
       await openKeymap(page);
       await search.fill("Run");
-      await startRecording(page, RUN);
+      await startRecording(page, RUN, "Run");
       await page.keyboard.press(playwrightKeys(REFORMAT_CHORD));
       const clash = keymapRow(page, RUN).getByRole("alert");
+      await expect.poll(() => clash.textContent()).toContain("Reformat Code (Console)");
+      await page.keyboard.press("Escape");
+      await expect.poll(() => clash.count()).toBe(0);
+      expect(await settingsDialog(page).count()).toBe(1);
+      await expect.poll(() => focusedRow(page)).toBe(RUN);
+
+      await page.keyboard.press("Enter");
+      await expect.poll(() => keymapRow(page, RUN).locator("[data-chord-recorder]").count()).toBe(1);
+      await page.keyboard.press(playwrightKeys(REFORMAT_CHORD));
       await expect.poll(() => clash.textContent()).toContain("Reformat Code (Console)");
       await captureWindow(page, "04-reassign");
       await clash.getByRole("button", { name: "Reassign", exact: true }).click();
       await expect.poll(() => rowChords(page, RUN)).toEqual([shown(REBOUND_RUN), shown(REFORMAT_CHORD)]);
       await expect.poll(() => savedKeymap(userDataDir)?.[REFORMAT]).toEqual([]);
+      await expect.poll(() => focusedRow(page)).toBe(RUN);
 
-      await startRecording(page, RUN);
+      await page.keyboard.press("Enter");
+      await expect.poll(() => keymapRow(page, RUN).locator("[data-chord-recorder]").count()).toBe(1);
       await page.keyboard.press(playwrightKeys(RESERVED));
       const refusal = keymapRow(page, RUN).getByRole("alert");
       await expect.poll(() => refusal.textContent()).toBe(`${shown(RESERVED)} belongs to ${RESERVED_OWNER}.`);
@@ -216,7 +236,7 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
       await keymapRow(page, NEW_CONSOLE)
         .getByRole("button", { name: `Remove ${shown("Mod+Shift+L")} from New Console` })
         .click();
-      await startRecording(page, NEW_CONSOLE);
+      await startRecording(page, NEW_CONSOLE, "New Console");
       await page.keyboard.press(REBOUND_NEW_CONSOLE);
       await expect.poll(() => rowChords(page, NEW_CONSOLE)).toEqual([shown(REBOUND_NEW_CONSOLE)]);
       await expect.poll(() => menuAccelerator(app, "New Console")).toBe(REBOUND_NEW_CONSOLE);
@@ -234,7 +254,7 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
       await page.keyboard.press("Escape");
 
       await openKeymap(page);
-      await settingsDialog(page).getByRole("button", { name: "Reset All", exact: true }).click();
+      await settingsDialog(page).getByRole("button", { name: "Restore Defaults", exact: true }).click();
       await expect.poll(() => savedKeymap(userDataDir)).toEqual({});
       await expect.poll(() => menuAccelerator(app, "New Console")).toBe("CmdOrCtrl+Shift+L");
       await search.fill("Run");
@@ -248,7 +268,7 @@ describe.runIf(SMOKE_ENABLED)("custom keyboard shortcuts live test", () => {
         [
           `Platform: ${process.platform}`,
           `New Console rebound to ${REBOUND_NEW_CONSOLE}: the native menu item's accelerator became ${REBOUND_NEW_CONSOLE}.`,
-          "After Reset All it was CmdOrCtrl+Shift+L again.",
+          "After Restore Defaults it was CmdOrCtrl+Shift+L again.",
         ].join("\n"),
       );
     },

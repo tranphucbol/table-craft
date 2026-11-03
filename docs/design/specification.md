@@ -2538,10 +2538,12 @@ statement fails, `console.runAllOnError`; the Sessions refresh). Each page has
 Restore Defaults; a value outside its range is refused inline and not saved.
 Date and time formats are not settings in v1.
 
-The Keymap page (plan 044, decision 153) lists every action in the palette or with a chord, by
-category and title, each with its chords, a Modified marker, Add Shortcut, a remove button per
-chord and Reset; Reset All and its Restore Defaults put back every action this build knows. The
-search filters by title or category; Find by Shortcut turns it into a recorder that lists the
+The Keymap page (plan 044, decision 153) lists every action in the palette or with a chord, under
+a sticky heading per category and by title, each with its chords, a remove button per chord, an add
+button shown on hover or focus, and, once changed, a Modified marker with Reset; Restore Defaults
+puts back every action this build knows. The list is one Tab stop: the arrow keys, Home and End move
+between rows, Enter records and Delete removes the row's last chord, and focus returns to the row
+after each change. The search filters by title or category; Find by Shortcut turns it into a recorder that lists the
 actions holding the pressed chord. `keymap` holds only the actions whose chords differ from their
 own: an entry replaces the declared chord, the first chord is the one labels show, and an id this
 build has no action for is kept and ignored. Reading drops chords that do not parse and keeps the
