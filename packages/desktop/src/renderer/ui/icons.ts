@@ -95,6 +95,7 @@ import {
   DotsThreeVertical,
   TextIndent,
   X,
+  Keyboard,
   type Icon,
 } from "@phosphor-icons/react";
 import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
@@ -112,6 +113,7 @@ export {
   Minus as HideIcon,
   Terminal as ConsoleIcon,
   X as CloseIcon,
+  Keyboard as FindByShortcutIcon,
   Info as InfoIcon,
   CaretDown as ExpandedIcon,
   CaretDown as DropdownIcon,
