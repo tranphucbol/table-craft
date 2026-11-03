@@ -1,4 +1,4 @@
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { invoke, registry, useActionBusy, useActionEnabled } from "@table-craft/desktop/renderer/actions/index.js";
 import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
@@ -78,13 +78,13 @@ export function ActionButton({
   const enabled = useActionEnabled(actionId);
   const busy = useDelayedFlag(useActionBusy(actionId), BUSY_SPINNER_DELAY_MS);
   const confirmation = useCopyConfirmation();
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   if (action === undefined) return null;
   const copies = action.icon === "copy";
   const copied = copies && confirmation.copied;
   const glyph = icon ?? action.icon;
   const Icon = copied ? CopiedIcon : busy ? SpinnerIcon : glyph === undefined ? null : ACTION_ICONS[glyph];
-  const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
   return (
     <Tooltip
       label={copied ? COPIED_LABEL : !enabled && reason != null ? reason : (hint ?? action.title)}

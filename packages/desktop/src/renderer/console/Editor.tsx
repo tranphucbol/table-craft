@@ -32,7 +32,8 @@ import { MENU_ITEM, MENU_SEPARATOR, MENU_SHORTCUT, WIDE_MENU_CONTENT } from "@ta
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { ERROR_ACTION_IDS } from "@table-craft/desktop/renderer/actions/errorActions.js";
 import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
-import { invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
+import { shortcutText } from "@table-craft/desktop/renderer/actions/shortcuts.js";
+import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { trackEditor } from "@table-craft/desktop/renderer/console/caretAnchor.js";
 import { completion, connectedEngine } from "@table-craft/desktop/renderer/console/completionSource.js";
 import { EDITOR_THEME, FLASH_CLASS } from "@table-craft/desktop/renderer/console/editorTheme.js";
@@ -166,15 +167,10 @@ export function highlighterOf(plugin: EditorLanguage | undefined): Extension {
 }
 
 function placeholderText(plugin: EditorLanguage | undefined): string {
-  const shortcut = registry.get(ACTION_IDS.run)?.shortcut;
-  const chord = shortcut === undefined ? "" : ` ${formatChord(shortcut, currentPlatform())}`;
+  const shortcut = shortcutText(ACTION_IDS.run);
+  const chord = shortcut === "" ? "" : ` ${shortcut}`;
   if (keywordDialectOf(plugin) === null) return `Type text;${chord} runs the current selection or command`;
   return `Type SQL;${chord} runs the statement at the caret`;
-}
-
-function chordOf(actionId: string): string {
-  const shortcut = registry.get(actionId)?.shortcut;
-  return shortcut === undefined ? "" : formatChord(shortcut, currentPlatform());
 }
 
 /** The Alt+Enter popup's reach outside the editor: the splitter for a suppression, and the settings. */
@@ -188,7 +184,7 @@ function intentionTarget(datasourceId: () => string | undefined): IntentionTarge
     },
     disable: (inspection) =>
       void useSettings.getState().update((current) => withInspection(current, inspection, false)),
-    chord: () => chordOf(ERROR_ACTION_IDS.showIntentions),
+    chord: () => shortcutText(ERROR_ACTION_IDS.showIntentions),
   };
 }
 

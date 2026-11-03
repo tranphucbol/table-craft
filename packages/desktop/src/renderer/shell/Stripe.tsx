@@ -1,6 +1,6 @@
 import type { ComponentType } from "react";
 import { useActionEnabled, invoke, registry } from "@table-craft/desktop/renderer/actions/index.js";
-import { formatChord, currentPlatform } from "@table-craft/desktop/renderer/actions/chords.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { FRAME_SURFACE } from "@table-craft/desktop/renderer/shell/islands.js";
 import { useLayout, type ToolWindowId } from "@table-craft/desktop/renderer/state/layout.js";
 import { useIslands } from "@table-craft/desktop/renderer/state/settings.js";
@@ -38,12 +38,12 @@ export function buttonShape(islands: boolean): string {
 
 function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
   const islands = useIslands();
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   const open = useLayout((state) => state.layout.visible[toolWindow]);
   const enabled = useActionEnabled(actionId);
   if (action === undefined) return null;
   const Icon = action.icon === undefined ? null : ACTION_ICONS[action.icon];
-  const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
   return (
     <Tooltip label={action.title} shortcut={shortcut}>
       <button
@@ -66,11 +66,11 @@ function ToolWindowButton({ toolWindow, actionId }: StripeButton) {
 
 function ActionButton2({ actionId }: StripeAction) {
   const islands = useIslands();
+  const shortcut = useShortcut(actionId);
   const action = registry.get(actionId);
   const enabled = useActionEnabled(actionId);
   if (action === undefined) return null;
   const Icon = action.icon === undefined ? null : ACTION_ICONS[action.icon];
-  const shortcut = action.shortcut === undefined ? undefined : formatChord(action.shortcut, currentPlatform());
   return (
     <Tooltip label={action.title} shortcut={shortcut}>
       <button

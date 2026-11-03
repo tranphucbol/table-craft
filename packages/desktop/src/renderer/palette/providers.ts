@@ -1,3 +1,4 @@
+import type { Chord } from "@table-craft/desktop/renderer/actions/chords.js";
 import type { ActionRegistry } from "@table-craft/desktop/renderer/actions/registry.js";
 import { score } from "@table-craft/desktop/renderer/model/fuzzy.js";
 import type { SearchItem, SearchProvider } from "@table-craft/desktop/renderer/model/palette.js";
@@ -9,9 +10,12 @@ const ACTION_KEY_PREFIX = "action:";
 
 /**
  * Every registered action that is available, disabled ones included so the user sees why nothing
- * would happen.
+ * would happen. `shortcutOf` is the chord in effect (decision 153), the declared one when absent.
  */
-export function actionsProvider(registry: ActionRegistry): SearchProvider {
+export function actionsProvider(
+  registry: ActionRegistry,
+  shortcutOf: (actionId: string) => Chord | undefined = (actionId) => registry.get(actionId)?.shortcut,
+): SearchProvider {
   return {
     id: ACTIONS_PROVIDER_ID,
     title: "Actions",
@@ -19,12 +23,13 @@ export function actionsProvider(registry: ActionRegistry): SearchProvider {
       return registry.all().flatMap((action): SearchItem[] => {
         const matched = score(query, action.title);
         if (matched === null || action.inPalette === false || !registry.isAvailable(action.id)) return [];
+        const shortcut = shortcutOf(action.id);
         return [
           {
             key: `${ACTION_KEY_PREFIX}${action.id}`,
             title: action.title,
             detail: action.category,
-            ...(action.shortcut === undefined ? {} : { shortcut: action.shortcut }),
+            ...(shortcut === undefined ? {} : { shortcut }),
             enabled: registry.isEnabled(action.id),
             score: matched,
             recentId: action.id,

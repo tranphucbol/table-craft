@@ -10,6 +10,7 @@ import {
   type TimedKey,
 } from "@table-craft/desktop/renderer/actions/chords.js";
 import type { FocusRegion } from "@table-craft/desktop/renderer/actions/context.js";
+import { effectiveShortcuts, type Shortcuts } from "@table-craft/desktop/renderer/actions/keymapOverrides.js";
 import type { ActionRegistry, AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 
 /** The parts of a `KeyboardEvent` the keymap reads and acts on. */
@@ -28,6 +29,8 @@ export interface KeymapOptions {
   readonly focusedRegion?: () => FocusRegion;
   /** Chords the focused control keeps for itself, such as the SQL editor's undo; the registry lets them pass. */
   readonly reservedChords?: () => readonly Chord[];
+  /** The keymap in effect, read on every key; absent, each action's declared chord (decision 153). */
+  readonly shortcuts?: () => Shortcuts;
   readonly doubleTapWindowMs?: number;
 }
 
@@ -44,16 +47,20 @@ export function shortcutWorksIn(action: Pick<AnyAction, "shortcutRegion">, regio
 export function createKeyDispatcher(options: KeymapOptions): (event: KeyEventLike) => void {
   const { registry, platform, paletteOpen } = options;
   const doubleTaps = createDoubleTapDetector(options.doubleTapWindowMs ?? DOUBLE_TAP_WINDOW_MS);
-  const parsed = new Map<string, ParsedChord>();
+  const parsed = new Map<Chord, ParsedChord>();
+  const shortcuts = options.shortcuts ?? (() => effectiveShortcuts(registry.all()));
 
-  function chordOf(action: AnyAction): ParsedChord | null {
-    if (action.shortcut === undefined) return null;
-    let chord = parsed.get(action.id);
-    if (chord === undefined) {
-      chord = parseChord(action.shortcut, platform);
-      parsed.set(action.id, chord);
+  function parsedChord(chord: Chord): ParsedChord {
+    let parsedOne = parsed.get(chord);
+    if (parsedOne === undefined) {
+      parsedOne = parseChord(chord, platform);
+      parsed.set(chord, parsedOne);
     }
-    return chord;
+    return parsedOne;
+  }
+
+  function holding(keymap: Shortcuts, action: AnyAction, test: (chord: ParsedChord) => boolean): boolean {
+    return (keymap.get(action.id) ?? []).some((chord) => test(parsedChord(chord)));
   }
 
   function inRegion(action: AnyAction): boolean {
@@ -81,24 +88,21 @@ export function createKeyDispatcher(options: KeymapOptions): (event: KeyEventLik
       return;
     }
     const actions = registry.all();
+    const keymap = shortcuts();
     const tapped = doubleTaps.feed(event);
     if (tapped !== null) {
       dispatch(
         event,
-        actions.filter((action) => {
-          const chord = chordOf(action);
-          return chord?.kind === "doubleTap" && chord.modifier === tapped;
-        }),
+        actions.filter((action) =>
+          holding(keymap, action, (chord) => chord.kind === "doubleTap" && chord.modifier === tapped),
+        ),
       );
       return;
     }
     if (MODIFIER_KEYS.has(event.key) || reserved(event)) return;
     dispatch(
       event,
-      actions.filter((action) => {
-        const chord = chordOf(action);
-        return chord !== null && matches(chord, event);
-      }),
+      actions.filter((action) => holding(keymap, action, (chord) => matches(chord, event))),
     );
   };
 }
@@ -152,17 +156,20 @@ function overlap(a: AnyAction, b: AnyAction): boolean {
 }
 
 /**
- * Chords two or more actions declare where both could fire: in a shared region on a shared tab
- * kind. The keymap test fails on any.
+ * Chords two or more actions hold where both could fire: in a shared region on a shared tab kind.
+ * `shortcuts` is the keymap to check, each action's declared chord when absent. The keymap test
+ * fails on any; the Keymap page offers Reassign on one (decision 153).
  */
-export function findClashes(actions: readonly AnyAction[]): readonly Clash[] {
+export function findClashes(
+  actions: readonly AnyAction[],
+  shortcuts: Shortcuts = effectiveShortcuts(actions),
+): readonly Clash[] {
   const clashes: Clash[] = [];
   for (const platform of ["mac", "other"] as const) {
     const byChord = new Map<string, AnyAction[]>();
     for (const action of actions) {
-      if (action.shortcut === undefined) continue;
-      const key = chordKey(parseChord(action.shortcut, platform));
-      byChord.set(key, [...(byChord.get(key) ?? []), action]);
+      const keys = new Set((shortcuts.get(action.id) ?? []).map((chord) => chordKey(parseChord(chord, platform))));
+      for (const key of keys) byChord.set(key, [...(byChord.get(key) ?? []), action]);
     }
     for (const [chord, sharing] of byChord) {
       const clashing = sharing.filter((action) => sharing.some((other) => other !== action && overlap(action, other)));

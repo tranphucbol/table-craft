@@ -1,6 +1,5 @@
 import { useEffect } from "react";
-import { currentPlatform, formatChord } from "@table-craft/desktop/renderer/actions/chords.js";
-import { registry } from "@table-craft/desktop/renderer/actions/index.js";
+import { useShortcut } from "@table-craft/desktop/renderer/actions/shortcuts.js";
 import { KEY_ACTION_IDS } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { TABLE_ACTION_IDS } from "@table-craft/desktop/renderer/actions/tableActions.js";
 import { CommandValuePanel } from "@table-craft/desktop/renderer/console/CommandValuePanel.js";
@@ -38,11 +37,6 @@ export const CONSOLE_CELL_MENU: readonly (string | null)[] = [
   TABLE_ACTION_IDS.revertSelected,
 ];
 
-function shortcutText(actionId: string): string {
-  const shortcut = registry.get(actionId)?.shortcut;
-  return shortcut === undefined ? "" : formatChord(shortcut, currentPlatform());
-}
-
 function EditablePanel({
   consoleId,
   result,
@@ -56,6 +50,7 @@ function EditablePanel({
   readonly editable: boolean;
   readonly focus: { readonly row: number; readonly column: number } | null;
 }) {
+  const applyHint = useShortcut(TABLE_ACTION_IDS.applyValue) ?? "";
   const column = focus === null ? null : (result.columns[focus.column] ?? null);
   if (focus === null) return <ValuePanel column={column} value={undefined} />;
   const target = editTargetOf(result, edits);
@@ -70,7 +65,7 @@ function EditablePanel({
         text={draft?.text ?? text}
         json={result.typeClasses[focus.column] === "json"}
         jsonOwner={jsonOwner}
-        applyHint={shortcutText(TABLE_ACTION_IDS.applyValue)}
+        applyHint={applyHint}
         onChange={(next) => useConsoles.getState().editPanel(consoleId, result.id, focus, next)}
       />
     );

@@ -52,6 +52,7 @@ back to its default without affecting the others.
 | `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                  | `true`                                         |
 | `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                          | `true`                                         |
 | `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                             | `[]`                                           |
+| `keymap`                               | action id to its chords, such as `"console.run": ["Ctrl+Enter"]`; `[]` for none                 | `{}`                                           |
 | `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                              | `true`                                         |
 | `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                              | 0                                              |
 | `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                              | 5                                              |
