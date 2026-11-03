@@ -35,9 +35,18 @@ import {
 } from "@table-craft/desktop/main/import/workbench.js";
 import { XmlError } from "@table-craft/desktop/main/import/xml.js";
 import { ZipReadError, readZipEntry } from "@table-craft/desktop/main/import/zipReader.js";
+import { mapTableCraftRecord } from "@table-craft/desktop/main/import/tablecraft.js";
+import {
+  DatasourceFileError,
+  isDatasourceFile,
+  readDatasourceFile,
+  type ReadDatasourceFile,
+  type ReadOptions,
+} from "@table-craft/desktop/main/datasourceFile.js";
 import { DatasourceError, type DatasourceService, type ImportedDatasource } from "@table-craft/desktop/main/service.js";
 import {
   SSH_SECRET_KEYS,
+  type ImportApp,
   type ImportPreview,
   type ImportPreviewRequest,
   type ImportProgress,
@@ -46,11 +55,16 @@ import {
   type ImportSummary,
 } from "@table-craft/desktop/preload/bridge.js";
 
+const JSON_FILE_EXTENSION = ".json";
 const XML_FILE_EXTENSION = ".xml";
 const ZIP_FILE_EXTENSION = ".zip";
 /** Far above any real `connections.xml`; a bigger entry is not one. */
 const MAX_WORKBENCH_FILE_BYTES = 16 * 1024 * 1024;
 const PICK_WORKBENCH_FILE = "Pick Workbench's connections.xml or a Backup Connections .zip.";
+const PICK_TABLECRAFT_FILE = "Pick a file TableCraft exported.";
+const UPDATE_TABLECRAFT = "Install the latest TableCraft, then import the file again.";
+const NOTHING_PASTED = "The clipboard holds no TableCraft data sources.";
+const COPY_FIRST = "Copy data sources in TableCraft's Database pane, then paste again.";
 const LABELS: Readonly<Record<ForeignApp, string>> = {
   datagrip: "DataGrip",
   tablepro: "TablePro",
@@ -78,14 +92,19 @@ export interface Importer {
 type KeePassRead = { readonly passwords: ReadonlyMap<string, string> } | { readonly locked: string } | null;
 
 interface Entry {
-  readonly connection: ForeignConnection;
+  /** Null for a TableCraft file's data source, whose passwords come in `secrets`. */
+  readonly connection: ForeignConnection | null;
   readonly mapped: MappedConnection;
+  readonly secrets: Readonly<Record<string, string>>;
 }
 
 interface Preview {
   readonly id: number;
+  readonly app: ImportApp;
   readonly entries: ReadonlyMap<string, Entry>;
   readonly keePass: KeePassRead;
+  /** The folders a TableCraft file names, so an empty one comes along too. */
+  readonly folders: readonly string[];
 }
 
 function storeLabel(store: DataGripPasswordStore, credentials: CredentialReader): string {
@@ -143,25 +162,37 @@ export function createImporter(options: ImporterOptions): Importer {
     };
   }
 
+  function existing() {
+    return service.list().datasources.filter((datasource) => !datasource.ephemeral);
+  }
+
   function remember(
     app: ForeignApp,
     connections: readonly ForeignConnection[],
     store: DataGripPasswordStore | null,
     keePass: KeePassRead,
   ): ImportPreview {
-    const { datasources } = service.list();
-    const context = {
-      plugins: service.plugins(),
-      existing: datasources.filter((datasource) => !datasource.ephemeral),
-      availability: availabilityFor(store, keePass),
-    };
+    const context = { plugins: service.plugins(), existing: existing(), availability: availabilityFor(store, keePass) };
+    const entries = connections.map((connection) => ({
+      connection,
+      mapped: mapConnection(connection, context),
+      secrets: {},
+    }));
+    return keep(app, entries, keePass, []);
+  }
+
+  function keep(
+    app: ImportApp,
+    list: readonly Entry[],
+    keePass: KeePassRead,
+    folders: readonly string[],
+  ): ImportPreview {
     const entries = new Map<string, Entry>();
-    for (const connection of connections) {
-      const mapped = mapConnection(connection, context);
-      if (!entries.has(mapped.row.key)) entries.set(mapped.row.key, { connection, mapped });
+    for (const entry of list) {
+      if (!entries.has(entry.mapped.row.key)) entries.set(entry.mapped.row.key, entry);
     }
     previewCount += 1;
-    current = { id: previewCount, entries, keePass };
+    current = { id: previewCount, app, entries, keePass, folders };
     const rows = [...entries.values()].map((entry) => entry.mapped.row);
     log.info("import preview", {
       app,
@@ -203,8 +234,36 @@ export function createImporter(options: ImporterOptions): Importer {
     return previewWorkbench(new TextDecoder().decode(entry), basename(path));
   }
 
-  async function previewFile(path: string, passphrase: string | undefined): Promise<ImportPreview> {
+  /** A null `name` is pasted text, so an error names the clipboard rather than a file. */
+  async function previewTableCraft(text: string, name: string | null, read: ReadOptions): Promise<ImportPreview> {
+    let file: ReadDatasourceFile;
+    try {
+      file = await readDatasourceFile(text, read);
+    } catch (cause) {
+      if (!(cause instanceof DatasourceFileError)) throw cause;
+      if (cause.problem === "needsPassphrase" || cause.problem === "wrongPassphrase") {
+        return { status: cause.problem, message: cause.message, skippable: true };
+      }
+      if (cause.problem === "newerVersion") throw new DatasourceError(cause.message, UPDATE_TABLECRAFT);
+      if (name === null) throw new DatasourceError(NOTHING_PASTED, COPY_FIRST);
+      throw new DatasourceError(`${name} is not a TableCraft data sources file.`, PICK_TABLECRAFT_FILE);
+    }
+    const context = { plugins: service.plugins(), existing: existing() };
+    const entries = file.records.map((record) => ({
+      connection: null,
+      ...mapTableCraftRecord(record, file.secrets, context),
+    }));
+    return keep("tablecraft", entries, null, file.folders);
+  }
+
+  async function previewFile(path: string, read: ReadOptions): Promise<ImportPreview> {
     const extension = path.toLowerCase();
+    if (extension.endsWith(JSON_FILE_EXTENSION)) {
+      const text = await environment.files.readText(path);
+      if (text === null)
+        throw new DatasourceError(`${basename(path)} could not be read.`, "Check the file still exists.");
+      return previewTableCraft(text, basename(path), read);
+    }
     if (extension.endsWith(ZIP_FILE_EXTENSION)) return previewZip(path);
     if (extension.endsWith(XML_FILE_EXTENSION)) {
       const text = await environment.files.readText(path);
@@ -222,12 +281,14 @@ export function createImporter(options: ImporterOptions): Importer {
     const bytes = await environment.files.readBytes(path);
     if (bytes === null)
       throw new DatasourceError(`${basename(path)} could not be read.`, "Check the file still exists.");
+    const text = new TextDecoder().decode(bytes);
+    if (isDatasourceFile(text)) return previewTableCraft(text, basename(path), read);
     try {
-      return remember("tablepro", await readTableProBundle(bytes, passphrase ?? null, basename(path)), null, null);
+      return remember("tablepro", await readTableProBundle(bytes, read.passphrase ?? null, basename(path)), null, null);
     } catch (cause) {
       if (!(cause instanceof TableProBundleError)) throw cause;
       if (cause.problem === "unreadable") throw new DatasourceError(cause.message, "Pick a file TablePro exported.");
-      return { status: cause.problem, message: cause.message };
+      return { status: cause.problem, message: cause.message, skippable: false };
     }
   }
 
@@ -272,7 +333,10 @@ export function createImporter(options: ImporterOptions): Importer {
       ];
     },
     async preview(request) {
-      if (request.source === "file") return previewFile(request.path, request.passphrase);
+      if (request.source === "file") {
+        return previewFile(request.path, { passphrase: request.passphrase, skipSecrets: request.skipSecrets });
+      }
+      if (request.source === "text") return previewTableCraft(request.text, null, { skipSecrets: true });
       if (request.source === "datagrip") {
         const scan = await scanDataGrip(environment);
         return remember("datagrip", scan.connections, scan.passwordStore, await readKeePass(scan.passwordStore));
@@ -300,6 +364,10 @@ export function createImporter(options: ImporterOptions): Importer {
         const { connection, mapped } = entry;
         const draft = mapped.draft;
         if (draft === null) continue;
+        const folder = importFolder(preview.app, draft.folder, request.topFolder);
+        const name = freeName(draft.name, folder, taken);
+        taken.push({ name, folder });
+        const secrets: Record<string, string> = request.importPasswords ? { ...entry.secrets } : {};
         const read = async (source: PasswordSource): Promise<string | null> => {
           if (source.kind === "bundle") return source.value;
           if (source.kind !== "store") return null;
@@ -317,20 +385,16 @@ export function createImporter(options: ImporterOptions): Importer {
           return found.status === "found" ? found.value : null;
         };
         const password =
-          request.importPasswords && mapped.passwordKey !== null ? await read(connection.password) : null;
+          request.importPasswords && mapped.passwordKey !== null && connection !== null
+            ? await read(connection.password)
+            : null;
         const sshPassword =
-          request.importPasswords && draft.ssh?.auth === "password" && connection.ssh !== null
+          request.importPasswords && draft.ssh?.auth === "password" && connection !== null && connection.ssh !== null
             ? await read(connection.ssh.password)
             : null;
-        const folder = importFolder(connection.app, draft.folder, request.topFolder);
-        const name = freeName(draft.name, folder, taken);
-        taken.push({ name, folder });
-        const secrets: Record<string, string> = {};
-        if (password !== null && mapped.passwordKey !== null) {
-          secrets[mapped.passwordKey] = password;
-          withPasswords += 1;
-        }
+        if (password !== null && mapped.passwordKey !== null) secrets[mapped.passwordKey] = password;
         if (sshPassword !== null) secrets[SSH_SECRET_KEYS.password] = sshPassword;
+        if (mapped.passwordKey !== null && secrets[mapped.passwordKey] !== undefined) withPasswords += 1;
         items.push({ draft: { ...draft, name, folder }, secrets });
         progress({
           done: index + 1,
@@ -338,7 +402,8 @@ export function createImporter(options: ImporterOptions): Importer {
           message: `Imported ${String(index + 1)} of ${String(chosen.length)}`,
         });
       }
-      const ids = await service.importMany(items);
+      const folders = preview.folders.flatMap((path) => importFolder(preview.app, path, request.topFolder) ?? []);
+      const ids = await service.importMany(items, cancelled ? [] : folders);
       const summary: ImportSummary = {
         imported: ids.length,
         withPasswords,

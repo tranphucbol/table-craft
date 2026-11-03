@@ -1,7 +1,7 @@
 import type { SshAuthMethod } from "@table-craft/desktop/engine/protocol.js";
-import type { ImportApp } from "@table-craft/desktop/preload/bridge.js";
+import type { ScannedApp } from "@table-craft/desktop/preload/bridge.js";
 
-export type ForeignApp = ImportApp;
+export type ForeignApp = ScannedApp;
 
 export type ForeignSslMode = "disabled" | "preferred" | "required" | "verifyCa" | "verifyIdentity";
 

@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { openQueryHistory } from "@table-craft/core";
 import { createConsoleFiles } from "@table-craft/desktop/main/consoleFiles.js";
+import { writeDatasourceFile } from "@table-craft/desktop/main/datasourceFile.js";
 import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import { createHostRegistry } from "@table-craft/desktop/main/hosts.js";
 import { scanDataGrip } from "@table-craft/desktop/main/import/datagrip.js";
@@ -23,11 +24,12 @@ import {
   TableProBundleError,
 } from "@table-craft/desktop/main/import/tablepro.js";
 import { mapConnection } from "@table-craft/desktop/main/import/mapping.js";
+import { AGENT_ACCESS_WARNING } from "@table-craft/desktop/main/import/tablecraft.js";
 import type { ForeignConnection, ImportEnvironment } from "@table-craft/desktop/main/import/types.js";
 import { listPlugins } from "@table-craft/desktop/main/plugins.js";
 import { createSecretStore } from "@table-craft/desktop/main/secrets.js";
 import { createDatasourceService } from "@table-craft/desktop/main/service.js";
-import type { ImportPreview, ImportRow } from "@table-craft/desktop/preload/bridge.js";
+import type { Datasource, ImportPreview, ImportRow } from "@table-craft/desktop/preload/bridge.js";
 import { fakeHostDependencies } from "../support/fakeHosts.js";
 import {
   DATAGRIP_CONFIG,
@@ -747,5 +749,246 @@ describe("importer", () => {
     expect(visible).not.toContain(SECRET);
     expect(visible).not.toContain(bundlePassphrase);
     expect(JSON.stringify(logs)).not.toContain(MYSQL.host);
+  });
+});
+
+const TABLECRAFT_PASSPHRASE = "share with the team";
+const FAST_KDF = { N: 2 ** 10, r: 8, p: 1 };
+
+const EXPORTED_MYSQL: Datasource = {
+  id: "src-mysql",
+  name: "Orders",
+  pluginId: "mysql",
+  folder: "Work/Shop",
+  color: "green",
+  readOnly: true,
+  comment: "orders replica",
+  config: { host: MYSQL.host, port: MYSQL.port, user: "shop", database: "shop" },
+  secretModes: { password: "forever" },
+};
+
+const EXPORTED_SQLITE: Datasource = {
+  id: "src-sqlite",
+  name: "Notes",
+  pluginId: "sqlite",
+  folder: null,
+  color: null,
+  readOnly: false,
+  comment: "",
+  config: { path: "/data/notes.db" },
+  secretModes: {},
+};
+
+const EXPORTED_POSTGRES: Datasource = {
+  ...EXPORTED_MYSQL,
+  id: "src-pg",
+  name: "Reports",
+  pluginId: "postgres",
+  config: { host: POSTGRES.host, port: POSTGRES.port, user: "reports", database: "reports", sslMode: "disable" },
+};
+
+async function tableCraftText(
+  datasources: readonly Datasource[],
+  options: { folders?: readonly string[]; passphrase?: string } = {},
+): Promise<string> {
+  return writeDatasourceFile(
+    {
+      folders: options.folders ?? ["Work", "Work/Shop"],
+      datasources,
+      secrets: { [EXPORTED_MYSQL.id]: { password: SECRET } },
+    },
+    options.passphrase,
+    { kdf: FAST_KDF },
+  );
+}
+
+async function tableCraftFile(
+  datasources: readonly Datasource[],
+  options: { folders?: readonly string[]; passphrase?: string } = {},
+): Promise<{ home: string; path: string }> {
+  const home = mkdtempSync(join(tmpdir(), "tc-import-"));
+  homes.push(home);
+  const path = join(home, "tablecraft-datasources.json");
+  writeFileSync(path, await tableCraftText(datasources, options));
+  return { home, path };
+}
+
+describe("TableCraft file importer", () => {
+  it("givenTableCraftFile_whenPreviewed_thenRowsKeepFoldersAndColours", async () => {
+    const { home, path } = await tableCraftFile([EXPORTED_MYSQL, EXPORTED_SQLITE], {
+      folders: ["Work", "Work/Shop", "Work/Empty"],
+      passphrase: TABLECRAFT_PASSPHRASE,
+    });
+    const { importer, service } = await setup(home, fakeCredentials(new Map()).reader);
+
+    const preview = ready(await importer.preview({ source: "file", path, passphrase: TABLECRAFT_PASSPHRASE }));
+
+    expect(preview).toMatchObject({ app: "tablecraft", topFolder: "TableCraft" });
+    expect(row(preview.rows, "Orders")).toMatchObject({
+      pluginId: "mysql",
+      folder: "Work/Shop",
+      user: "shop",
+      target: `${MYSQL.host}:${String(MYSQL.port)}/shop`,
+      password: "inFile",
+      status: "ready",
+      selected: true,
+    });
+    expect(row(preview.rows, "Notes")).toMatchObject({ password: "notNeeded", status: "ready" });
+    const summary = await importer.run(
+      { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: true, topFolder: true },
+      () => undefined,
+    );
+    expect(summary).toMatchObject({ imported: 2, withPasswords: 1, skipped: 0 });
+    const list = service.list();
+    expect(list.datasources.find((datasource) => datasource.name === "Orders")).toMatchObject({
+      folder: "TableCraft/Work/Shop",
+      color: "green",
+      readOnly: true,
+      comment: "orders replica",
+      storedSecrets: ["password"],
+      origin: { app: "tablecraft", id: EXPORTED_MYSQL.id },
+    });
+    expect(list.folders).toEqual(
+      expect.arrayContaining(["TableCraft", "TableCraft/Work", "TableCraft/Work/Shop", "TableCraft/Work/Empty"]),
+    );
+  });
+
+  it("givenExistingSameConfig_whenPreviewed_thenDuplicateUnticked", async () => {
+    const { home, path } = await tableCraftFile([EXPORTED_MYSQL, EXPORTED_SQLITE]);
+    const { importer, service } = await setup(home, fakeCredentials(new Map()).reader);
+    const { id: _id, ...draft } = EXPORTED_SQLITE;
+    await service.save({ datasource: { ...draft, name: "My notes" }, secrets: {} });
+
+    const preview = ready(await importer.preview({ source: "file", path }));
+    expect(row(preview.rows, "Notes")).toMatchObject({ status: "duplicate", selected: false });
+    expect(row(preview.rows, "Orders")).toMatchObject({ status: "ready", selected: true });
+
+    const first = ready(await importer.preview({ source: "file", path }));
+    await importer.run(
+      { previewId: first.previewId, keys: [row(first.rows, "Notes").key], importPasswords: true, topFolder: false },
+      () => undefined,
+    );
+    const again = ready(await importer.preview({ source: "file", path }));
+    expect(row(again.rows, "Orders").status).toBe("ready");
+    await importer.run(
+      { previewId: again.previewId, keys: [row(again.rows, "Notes").key], importPasswords: true, topFolder: false },
+      () => undefined,
+    );
+    expect(service.list().datasources.map((datasource) => datasource.name)).toEqual(["My notes", "Notes", "Notes (2)"]);
+  });
+
+  it("givenUnknownPlugin_whenPreviewed_thenUnsupportedNamingPlugin", async () => {
+    const { home, path } = await tableCraftFile([EXPORTED_POSTGRES, EXPORTED_SQLITE]);
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader, "darwin", ["postgres"]);
+
+    const { rows } = ready(await importer.preview({ source: "file", path }));
+
+    expect(row(rows, "Reports")).toMatchObject({
+      pluginId: "postgres",
+      pluginName: "PostgreSQL",
+      status: "unsupported",
+      selected: false,
+      warnings: ["No installed plugin reads PostgreSQL data sources."],
+    });
+  });
+
+  it("givenAgentAccess_whenImported_thenOffWithWarning", async () => {
+    const { home, path } = await tableCraftFile([
+      { ...EXPORTED_SQLITE, agentAccess: "read", agentSchemas: ["main"], agentRowCap: 50, agentTimeoutSeconds: 5 },
+    ]);
+    const { importer, service } = await setup(home, fakeCredentials(new Map()).reader);
+
+    const preview = ready(await importer.preview({ source: "file", path }));
+    expect(row(preview.rows, "Notes").warnings).toEqual([AGENT_ACCESS_WARNING]);
+    await importer.run(
+      { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: true, topFolder: false },
+      () => undefined,
+    );
+
+    const [imported] = service.list().datasources;
+    expect(imported?.agentAccess ?? "off").toBe("off");
+    expect(imported).not.toHaveProperty("agentSchemas");
+    expect(imported).not.toHaveProperty("agentRowCap");
+  });
+
+  it("givenSkipSecrets_whenImported_thenAskOnConnect", async () => {
+    const { home, path } = await tableCraftFile([EXPORTED_MYSQL], { passphrase: TABLECRAFT_PASSPHRASE });
+    const { importer, service, files } = await setup(home, fakeCredentials(new Map()).reader);
+
+    expect(await importer.preview({ source: "file", path })).toMatchObject({
+      status: "needsPassphrase",
+      skippable: true,
+    });
+    expect(await importer.preview({ source: "file", path, passphrase: "wrong passphrase" })).toMatchObject({
+      status: "wrongPassphrase",
+      skippable: true,
+    });
+    const preview = ready(await importer.preview({ source: "file", path, skipSecrets: true }));
+    expect(row(preview.rows, "Orders").password).toBe("askOnConnect");
+    const summary = await importer.run(
+      { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: true, topFolder: false },
+      () => undefined,
+    );
+
+    expect(summary).toMatchObject({ imported: 1, withPasswords: 0 });
+    expect(service.list().datasources[0]).toMatchObject({ name: "Orders", storedSecrets: [] });
+    expect(JSON.stringify([...files.contents.values()])).not.toContain(SECRET);
+  });
+
+  it("givenForeignOrigin_whenReimported_thenOriginKept", async () => {
+    const origin = { app: "datagrip", id: DATAGRIP_IDS.shopMysql } as const;
+    const { home, path } = await tableCraftFile([{ ...EXPORTED_MYSQL, origin }]);
+    const { importer, service } = await setup(home, fakeCredentials(new Map()).reader);
+
+    const preview = ready(await importer.preview({ source: "file", path }));
+    await importer.run(
+      { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: false, topFolder: false },
+      () => undefined,
+    );
+
+    expect(service.list().datasources[0]?.origin).toEqual(origin);
+    const again = ready(await importer.preview({ source: "file", path }));
+    expect(row(again.rows, "Orders")).toMatchObject({ status: "duplicate", selected: false });
+  });
+
+  it("givenPastedText_whenPreviewed_thenSameRowsAsFile", async () => {
+    const { home, path } = await tableCraftFile([EXPORTED_MYSQL, EXPORTED_SQLITE]);
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader);
+
+    const fromFile = ready(await importer.preview({ source: "file", path }));
+    const pasted = ready(
+      await importer.preview({ source: "text", text: await tableCraftText([EXPORTED_MYSQL, EXPORTED_SQLITE]) }),
+    );
+
+    expect(pasted.rows).toEqual(fromFile.rows);
+    expect(pasted.previewId).not.toBe(fromFile.previewId);
+  });
+
+  it("givenOtherJson_whenPreviewed_thenNotOurs", async () => {
+    const home = mkdtempSync(join(tmpdir(), "tc-import-"));
+    homes.push(home);
+    const path = join(home, "snippets.json");
+    writeFileSync(path, JSON.stringify({ snippets: [] }));
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader);
+
+    await expect(importer.preview({ source: "file", path })).rejects.toMatchObject({
+      message: "snippets.json is not a TableCraft data sources file.",
+      hint: "Pick a file TableCraft exported.",
+    });
+    await expect(importer.preview({ source: "text", text: "SELECT 1" })).rejects.toMatchObject({
+      message: "The clipboard holds no TableCraft data sources.",
+    });
+  });
+
+  it("givenNewerVersionFile_whenPreviewed_thenRefusedWithUpdateHint", async () => {
+    const home = mkdtempSync(join(tmpdir(), "tc-import-"));
+    homes.push(home);
+    const path = join(home, "newer.json");
+    writeFileSync(path, JSON.stringify({ format: "table-craft-datasources", version: 2, datasources: [] }));
+    const { importer } = await setup(home, fakeCredentials(new Map()).reader);
+
+    await expect(importer.preview({ source: "file", path })).rejects.toMatchObject({
+      message: "This file was exported by a newer TableCraft. Update TableCraft to import it.",
+    });
   });
 });

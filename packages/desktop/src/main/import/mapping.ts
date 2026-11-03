@@ -2,7 +2,7 @@ import { ConnectionUrlError, parseConnectionUrl, type ConnectionForm } from "@ta
 import { normalizeFolder } from "@table-craft/desktop/datasourceTree/arrange.js";
 import { pluginUrl, urlScheme } from "@table-craft/desktop/main/import/jdbc.js";
 import { catalogEntryForScheme } from "@table-craft/desktop/main/pluginStore/catalog.js";
-import type { ForeignApp, ForeignConnection, ForeignSsh, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
+import type { ForeignConnection, ForeignSsh, ForeignSsl } from "@table-craft/desktop/main/import/types.js";
 import {
   DATASOURCE_COLORS,
   DEFAULT_SSH_PORT,
@@ -10,6 +10,7 @@ import {
   type Datasource,
   type DatasourceColor,
   type DatasourceDraft,
+  type ImportApp,
   type ImportPasswordState,
   type ImportRow,
   type PluginInfo,
@@ -17,10 +18,11 @@ import {
 } from "@table-craft/desktop/preload/bridge.js";
 
 /** The folder an app's imports go under when the dialog's top-level folder option is on. */
-export const TOP_FOLDERS: Readonly<Record<ForeignApp, string>> = {
+export const TOP_FOLDERS: Readonly<Record<ImportApp, string>> = {
   datagrip: "DataGrip",
   tablepro: "TablePro",
   workbench: "MySQL Workbench",
+  tablecraft: "TableCraft",
 };
 
 /**
@@ -172,7 +174,7 @@ function applyCertificateFiles(
 }
 
 /** The same database through another bastion is another datasource, so the tunnel host counts. */
-function comparable(
+export function comparable(
   config: Readonly<Record<string, ConfigValue>>,
   plugin: PluginInfo,
   ssh: SshSettings | undefined,
@@ -207,7 +209,7 @@ function sshOf(ssh: ForeignSsh, plugin: PluginInfo): { ssh: SshSettings } | { ss
 }
 
 /** Where the connection points, for the preview: `host:port/database`, or the file. */
-function targetOf(config: Readonly<Record<string, ConfigValue>>, plugin: PluginInfo | undefined): string {
+export function targetOf(config: Readonly<Record<string, ConfigValue>>, plugin: PluginInfo | undefined): string {
   if (plugin === undefined) return "";
   const parts = plugin.url?.parts ?? {};
   const value = (key: string | undefined) => (key === undefined ? "" : String(config[key] ?? ""));
@@ -383,6 +385,6 @@ export function freeName(
 }
 
 /** The folder a datasource lands in, under the app's own top folder when asked. */
-export function importFolder(app: ForeignApp, folder: string | null, topFolder: boolean): string | null {
+export function importFolder(app: ImportApp, folder: string | null, topFolder: boolean): string | null {
   return normalizeFolder(topFolder ? [TOP_FOLDERS[app], folder ?? ""].join("/") : folder);
 }
