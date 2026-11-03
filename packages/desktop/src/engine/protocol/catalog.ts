@@ -48,6 +48,16 @@ export interface Index {
 /** Mirrors `RelationKind` in plugin-api. */
 export type RelationKind = "table" | "view" | "materializedView";
 
+/** Every `RelationKind`, in the order a whole-namespace DDL script writes them (plan 148). */
+export const SCRIPT_RELATION_KINDS = ["table", "view", "materializedView"] as const satisfies readonly RelationKind[];
+
+/** A whole namespace's DDL: the text, how many relations it covers, and how many failed to read. */
+export interface SchemaScript {
+  readonly text: string;
+  readonly relations: number;
+  readonly failed: number;
+}
+
 /** Mirrors `Relation` in plugin-api. */
 export interface Relation {
   readonly name: string;

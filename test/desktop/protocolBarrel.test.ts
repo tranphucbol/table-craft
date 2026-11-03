@@ -142,6 +142,7 @@ const METHODS = [
   "catalog.describe",
   "catalog.qualifiedName",
   "catalog.definition",
+  "catalog.script",
   "namespace.targets",
   "namespace.switchStatement",
   "server.nodes",

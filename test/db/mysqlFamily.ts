@@ -2,6 +2,8 @@ import mysql from "@table-craft/plugin-mysql";
 import type { Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { expect, it } from "vitest";
+import { createEngine } from "@table-craft/desktop/engine/engine.js";
+import { SCRIPT_RELATION_KINDS, type SchemaScript } from "@table-craft/desktop/engine/protocol.js";
 import { withWrongPassword } from "../support/databases.js";
 import { MYSQL_MANIFEST } from "../support/manifests.js";
 import { TYPE_PROBE_COPY_AS, TYPE_PROBE_EXPECTED, TYPE_PROBE_WRITE } from "../support/typeProbe.js";
@@ -111,6 +113,8 @@ export const MYSQL_STATEMENTS: NonNullable<ContractOptions["statements"]> = {
  * The plugin contract against a server seeded from `schema/mysql.sql`, as MySQL 8.4 runs it;
  * `overrides` carries what an older or compatible server answers differently.
  */
+const DEFAULT_CATALOG_PATH = ["table_craft"];
+
 export function runMysqlFamilyContract(
   config: { readonly password: string },
   rootConfig: { readonly password: string },
@@ -130,7 +134,7 @@ export function runMysqlFamilyContract(
       { text: "SELECT 'it\\'s;' AS s; # a; note\nSELECT 2", statements: ["SELECT 'it\\'s;' AS s", "SELECT 2"] },
     ],
     catalog: {
-      path: ["table_craft"],
+      path: DEFAULT_CATALOG_PATH,
       quoted: { name: "odd `name`", qualified: "`table_craft`.`odd ``name```" },
       lineItems: "`Line Items`",
       ordersCheck: "orders_total_nonnegative",
@@ -165,6 +169,30 @@ export function runMysqlFamilyContract(
     } finally {
       await run(root, `DROP USER IF EXISTS ${TABLE_GRANT_USER}`);
       await root.close();
+    }
+  });
+
+  it("givenMysqlFixture_whenScripted_thenOrdersAfterCustomers", async () => {
+    const path = overrides.catalog?.path ?? DEFAULT_CATALOG_PATH;
+    const engine = createEngine({
+      datasource: { id: "script", pluginId: "mysql", config, readOnly: true, keepAliveSeconds: 0 },
+      plugins: [{ status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql }],
+    });
+    try {
+      const response = await engine
+        .connect()
+        .handle({ id: 1, type: "catalog.script", path, kinds: SCRIPT_RELATION_KINDS, title: "mysql" });
+      if (response.type === "engine.error") throw new Error(response.error.message);
+      const { text, failed } = response.result as SchemaScript;
+      const at = (name: string) => text.search(new RegExp(`^CREATE (?:TABLE|.*VIEW) \`${name}\``, "mu"));
+
+      expect(failed).toBe(0);
+      expect(at("customers")).toBeGreaterThan(-1);
+      expect(at("customers")).toBeLessThan(at("orders"));
+      expect(at("orders")).toBeLessThan(at("customer_totals"));
+      expect(text).not.toContain("old_orders");
+    } finally {
+      await engine.close();
     }
   });
 }
