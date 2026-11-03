@@ -405,7 +405,7 @@ export function KeymapPage() {
 
   return (
     <div className="col-span-2 flex min-w-0 flex-col">
-      <div className="sticky top-0 z-10 flex items-center gap-cell bg-panel px-cell">
+      <div className="sticky -top-gap z-20 -mt-gap flex items-center gap-cell bg-panel px-cell pt-gap">
         <span className="relative flex min-w-0 flex-1">
           <input
             ref={search}
