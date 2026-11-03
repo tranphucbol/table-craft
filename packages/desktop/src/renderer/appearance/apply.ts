@@ -60,7 +60,7 @@ export function appearanceVariables(appearance: Appearance): Readonly<Record<str
     "--tc-grid-column-max-width": `${density.gridColumnMaxWidthPx}px`,
     "--tc-value-panel-width": `${density.valuePanelWidthPx}px`,
     "--tc-console-height": `${density.consoleHeightPx}px`,
-    "--tc-stripe-width": `${density.stripeWidthPx}px`,
+    "--tc-stripe-width": `${islands ? density.tabHeightPx + density.islandGapPx : density.stripeWidthPx}px`,
     "--tc-tab-height": `${density.tabHeightPx}px`,
     "--tc-title-bar-height": `${density.titleBarHeightPx}px`,
     "--tc-traffic-light-inset": `${TRAFFIC_LIGHT_INSET_PX}px`,
