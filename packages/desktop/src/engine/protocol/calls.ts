@@ -6,7 +6,9 @@ import type {
   Namespace,
   Routine,
   RoutineArgument,
+  RelationKind,
   RoutineCall,
+  SchemaScript,
   SignatureHelp,
 } from "./catalog.js";
 import type { Problem } from "./inspection.js";
@@ -59,9 +61,9 @@ import type { ServerInfo, ServerNode, SlowCommand } from "./server.js";
 import type { ConditionColumn, OrderTerm, ResultEditable, RowEdit, SubmittedEdits, TableQuery } from "./tables.js";
 import type {
   ErrorAnswer,
-  ExportFormat,
   ExportSource,
   ExportTask,
+  ExportTaskFormat,
   ExtractorKind,
   ImportErrorPolicy,
   ImportFormat,
@@ -222,7 +224,7 @@ export interface EngineCalls extends KeyAdvancedCalls {
   "export.start": {
     params: {
       readonly source: ExportSource;
-      readonly format: ExportFormat;
+      readonly format: ExportTaskFormat;
       readonly path: string;
       readonly stallSeconds: number;
     };
@@ -404,6 +406,16 @@ export interface EngineCalls extends KeyAdvancedCalls {
    */
   "catalog.definition": { params: { readonly path: readonly string[]; readonly name: string }; result: string };
   /**
+   * The DDL of every relation of `kinds` in `path`, tables ordered by their foreign keys, then views
+   * and materialized views (plan 148). Each definition is read as `catalog.definition` reads it; one
+   * the database refuses becomes a comment. `title` names the datasource in the header. Fails with
+   * `scriptTooLarge` over `MAX_SCRIPT_TEXT_BYTES`. Needs `ddl`.
+   */
+  "catalog.script": {
+    params: { readonly path: readonly string[]; readonly kinds: readonly RelationKind[]; readonly title: string };
+    result: SchemaScript;
+  };
+  /**
    * A statement over relation `name` from the cached catalog, written by the plugin's language;
    * `create` answers what `catalog.definition` does. Needs `sql`, and `ddl` for `create`.
    */
@@ -552,6 +564,7 @@ export type EngineErrorCode =
   | "cancelled"
   | "introspectionFailed"
   | "definitionNotFound"
+  | "scriptTooLarge"
   | "explainUnsupported"
   | "formatFailed"
   | "invalidRequest"

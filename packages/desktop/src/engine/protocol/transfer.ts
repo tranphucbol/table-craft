@@ -1,4 +1,5 @@
 import type { EngineError } from "./calls.js";
+import type { RelationKind } from "./catalog.js";
 
 /** Mirrors `EXTRACTOR_KINDS` in core: the formats Copy and Export write. */
 export const EXTRACTOR_KINDS = ["csv", "tsv", "json", "sqlInsert", "markdown"] as const;
@@ -13,6 +14,8 @@ export interface RowRange {
 /** Mirrors `EXPORT_FORMATS` in core: every extractor, plus XLSX, which only Export writes. */
 export const EXPORT_FORMATS = [...EXTRACTOR_KINDS, "xlsx"] as const;
 export type ExportFormat = (typeof EXPORT_FORMATS)[number];
+/** What a task writes: an export format, or `sql`, the DDL script a `ddl` source writes (plan 148). */
+export type ExportTaskFormat = ExportFormat | "sql";
 
 /** Mirrors `EXPORT_FAILURE_REASONS` in core. */
 export const EXPORT_FAILURE_REASONS = ["stalled", "diskFull", "cancelled", "source", "file"] as const;
@@ -35,21 +38,29 @@ export type ExportSource =
       readonly path: readonly string[];
       readonly relation: string;
       readonly columns: readonly string[];
+    }
+  | {
+      /** The DDL of a namespace's relations of `kinds`, as `catalog.script` writes it; format `sql`. */
+      readonly kind: "ddl";
+      readonly path: readonly string[];
+      readonly kinds: readonly RelationKind[];
+      readonly title: string;
     };
 
 /**
  * Where the rows come from: `rerun` runs the result's statement again on a session of the
  * export's own, `table` selects a whole table there, `memory` writes the rows the grid holds,
- * `cursor` drains the console's still-open cursor.
+ * `cursor` drains the console's still-open cursor, `ddl` reads one definition per relation, each
+ * counted as a row.
  */
-export type ExportOrigin = "rerun" | "table" | "memory" | "cursor";
+export type ExportOrigin = "rerun" | "table" | "memory" | "cursor" | "ddl";
 export type ExportTaskState = "running" | "done" | "failed" | "cancelled";
 
 /** One background export, as every event carries it whole. */
 export interface ExportTask {
   readonly taskId: string;
   readonly path: string;
-  readonly format: ExportFormat;
+  readonly format: ExportTaskFormat;
   readonly origin: ExportOrigin;
   readonly state: ExportTaskState;
   readonly rows: number;
@@ -57,7 +68,7 @@ export interface ExportTask {
   readonly elapsedMs: number;
   /** Epoch ms the task started; the clock the renderer runs from between progress events. */
   readonly startedAt: number;
-  /** Rows expected, when known: only a memory export knows. */
+  /** Rows expected, when known: a memory export's rows, a ddl export's relations. */
   readonly estimate: number | null;
   /** XLSX sheets written; 0 for text formats. */
   readonly sheets: number;

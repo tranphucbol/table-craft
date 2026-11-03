@@ -11,6 +11,7 @@ import {
   runExport,
   systemClock,
   type ExportClock,
+  type ExportEncoder,
   type ExportEncoderOptions,
   type SinkFiles,
 } from "@table-craft/core";
@@ -42,16 +43,21 @@ export interface ExportRows {
 }
 
 /** Everything a task needs to run, and to run again on Retry. */
-export interface ExportJob {
+export type ExportJob = ExportJobBase &
+  (
+    | { readonly format: ExportFormat; readonly encoder: ExportEncoderOptions }
+    /** A DDL script (plan 148) writes its own text, one row per relation. */
+    | { readonly format: "sql"; readonly encoder: () => ExportEncoder }
+  );
+
+interface ExportJobBase {
   readonly path: string;
-  readonly format: ExportFormat;
   readonly origin: ExportOrigin;
   /** The columns written, in order, as the header describes them. */
   readonly columns: readonly Column[];
   /** Indices of `columns` within each source row; null when the source reads exactly them. */
   readonly projection: readonly number[] | null;
   readonly estimate: number | null;
-  readonly encoder: ExportEncoderOptions;
   /** Re-run and table jobs can open their rows again; memory and cursor jobs cannot. */
   readonly retryable: boolean;
   readonly drains: string | null;
@@ -192,7 +198,7 @@ export function exportTasks(options: ExportTasksOptions = {}): ExportTasks {
           opened = rows;
           return projected(rows.rows, job.projection);
         },
-        encoder: exportEncoder(job.format, job.columns, job.encoder),
+        encoder: job.format === "sql" ? job.encoder() : exportEncoder(job.format, job.columns, job.encoder),
         sink,
         signal: controller.signal,
         stallMs,
