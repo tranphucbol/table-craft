@@ -42,7 +42,7 @@ const CHOSEN: Settings = {
   console: { parameters: false, statementTimeoutSeconds: 45, sessionsRefreshSeconds: 30, runAllOnError: "continue" },
   data: {
     nullText: "∅",
-    stripedRows: true,
+    stripedRows: false,
     groupDigits: true,
     detectJson: false,
     pageRows: 100,
@@ -180,7 +180,7 @@ describe("settings document", () => {
     expect(read.appearance.fonts.editor).toEqual({ family: null, sizePx: 13 });
     expect(read.data).toEqual({
       nullText: "<null>",
-      stripedRows: false,
+      stripedRows: true,
       groupDigits: false,
       detectJson: true,
       pageRows: 200,
