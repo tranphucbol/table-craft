@@ -1,6 +1,7 @@
 import {
   ArrowCircleUp,
   ArrowsLeftRight,
+  Bell,
   Selection,
   SelectionAll,
   DownloadSimple,
@@ -242,4 +243,5 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   more: DotsThreeVertical,
   tabs: CaretDown,
   runSettings: FadersHorizontal,
+  bell: Bell,
 };

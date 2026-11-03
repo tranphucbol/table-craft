@@ -86,7 +86,14 @@ import {
   UPDATE_STATE_FILE,
   writeUpdateMemory,
 } from "@table-craft/desktop/main/update/memory.js";
-import { CHECK_INTERVAL_MS, RELEASES_PAGE_URL, updateEndpoint } from "@table-craft/desktop/main/update/overrides.js";
+import {
+  CHECK_INTERVAL_MS,
+  RELEASES_PAGE_URL,
+  UPDATE_OVERRIDE_ENV,
+  releaseTagUrl,
+  updateEndpoint,
+} from "@table-craft/desktop/main/update/overrides.js";
+import { isVersion } from "@table-craft/desktop/version/compare.js";
 import { createUpdateSchedule, type UpdateSchedule } from "@table-craft/desktop/main/update/schedule.js";
 import {
   createUpdater,
@@ -445,7 +452,9 @@ let updateSchedule: UpdateSchedule | null = null;
 const updateLog = mainLog.child(UPDATE_SCOPE, { current: appVersionOf() });
 
 function appVersionOf(): string {
-  return app.isPackaged ? app.getVersion() : DEVELOPMENT_VERSION;
+  if (app.isPackaged) return app.getVersion();
+  const override = process.env[UPDATE_OVERRIDE_ENV.developmentVersion] ?? "";
+  return isVersion(override) ? override : DEVELOPMENT_VERSION;
 }
 
 function densityOf(settings: SettingsService): DensityTokens {
@@ -1007,8 +1016,10 @@ void app.whenReady().then(async () => {
       },
       skip: () => updates.skip(),
       dismiss: () => updates.dismiss(),
-      openNotes() {
-        void shell.openExternal(updates.notesUrl() ?? RELEASES_PAGE_URL);
+      openNotes(version) {
+        void shell.openExternal(
+          version === undefined ? (updates.notesUrl() ?? RELEASES_PAGE_URL) : releaseTagUrl(version),
+        );
       },
     },
   });

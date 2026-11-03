@@ -20,6 +20,8 @@ import {
   CHECK_INTERVAL_MS,
   FIRST_CHECK_DELAY_MS,
   RELEASE_MANIFEST_URL,
+  RELEASES_PAGE_URL,
+  releaseTagUrl,
   updateEndpoint,
   UPDATE_OVERRIDE_ENV,
 } from "@table-craft/desktop/main/update/overrides.js";
@@ -1055,6 +1057,11 @@ describe.runIf(SHELL_AVAILABLE)("swap script", () => {
 
 describe("update endpoint", () => {
   const readKey = (path: string) => `key from ${path}`;
+
+  it("givenVersion_whenReleaseTagUrl_thenTagPage", () => {
+    expect(releaseTagUrl("1.9.0")).toBe("https://github.com/tranphucbol/table-craft/releases/tag/v1.9.0");
+    expect(RELEASES_PAGE_URL).toBe("https://github.com/tranphucbol/table-craft/releases/latest");
+  });
 
   it("givenReleaseBuild_whenOverridesAreSet_thenTheyAreIgnored", () => {
     const env = {

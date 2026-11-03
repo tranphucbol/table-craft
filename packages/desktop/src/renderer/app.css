@@ -271,8 +271,33 @@ body {
   }
 }
 
+/* The same wave once something new arrives, as an unread notice's dot: a few waves, then the dot
+   rests. It is ambient, not progress, because nothing is under way; at Reduced and Off it holds the
+   mid-flight ring instead. `forwards` keeps the last frame, where the wave has faded out. */
+@utility halo-burst {
+  position: relative;
+
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: inherit;
+    pointer-events: none;
+    animation: tc-halo var(--tc-halo-period) ease-out var(--tc-halo-waves) forwards var(--tc-motion-ambient);
+    animation-delay: calc(var(--tc-halo-period) * -0.3);
+  }
+
+  &::after {
+    animation-delay: calc(var(--tc-halo-period) * -0.8);
+  }
+}
+
 :root {
   --tc-halo-period: 2s;
+  /* About 6 s at the period above; raise it if the burst proves easy to miss, never to infinite. */
+  --tc-halo-waves: 3;
 }
 
 @keyframes tc-halo {
