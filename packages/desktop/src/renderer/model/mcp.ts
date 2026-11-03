@@ -2,7 +2,6 @@ import type { ExecutionOutcome } from "@table-craft/desktop/renderer/state/execu
 import type {
   McpActivityView,
   McpCallOutcome,
-  McpConsoleRequest,
   McpRunView,
   McpServerState,
   McpStatus,
@@ -144,10 +143,10 @@ export const CALL_EXECUTION_OUTCOMES: Readonly<Record<McpCallOutcome, Exclude<Ex
 
 const SQL_TOOLS: ReadonlySet<string> = new Set(["run_query", "explain", "check_sql", "open_in_console"]);
 
-/** The console a finished call opens, when it carried a statement for a datasource. */
-export function activityConsoleRequest(entry: McpActivityView): McpConsoleRequest | null {
+/** The call Open in Console asks the host for, when it carried a statement for a datasource. */
+export function openableCallId(entry: McpActivityView): number | null {
   if (entry.datasourceId === null || entry.target === null || !SQL_TOOLS.has(entry.tool)) return null;
-  return { datasourceId: entry.datasourceId, sql: entry.target };
+  return entry.id;
 }
 
 export interface AgentDatasourceGroup {

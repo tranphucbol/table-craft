@@ -191,6 +191,13 @@ export function createMcpHost(options: McpHostOptions): McpHost {
       case "cancel":
         void runs.cancel(message.runId).catch((cause: unknown) => options.log.warn("cancel failed", { err: cause }));
         return;
+      case "open": {
+        const call = activity.list().find((entry) => entry.id === message.callId);
+        const sql = activity.fullTarget(message.callId);
+        const datasourceId = call?.datasourceId ?? null;
+        if (datasourceId !== null && sql !== null) context.consoles.open({ datasourceId, sql });
+        return;
+      }
       case "windows":
         windows = message.open;
         approvals.setWindows(message.open);

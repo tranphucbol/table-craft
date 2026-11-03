@@ -15,8 +15,8 @@ import {
   CALL_OUTCOME_LABELS,
   CALL_OUTCOME_TONES,
   activityClients,
-  activityConsoleRequest,
   filteredActivity,
+  openableCallId,
   type ActivityFilter,
 } from "@table-craft/desktop/renderer/model/mcp.js";
 import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -41,15 +41,15 @@ function ActivityRow({ entry, now }: { readonly entry: McpActivityView; readonly
   const datasource = useDatasources((state) =>
     entry.datasourceId === null ? null : (datasourceById(state, entry.datasourceId)?.name ?? entry.datasourceId),
   );
-  const request = activityConsoleRequest(entry);
+  const callId = openableCallId(entry);
   return (
     <tr
       data-testid="mcp-activity-row"
       data-outcome={entry.outcome}
-      className={cn("border-b border-line", request !== null && "cursor-default hover:bg-hover")}
-      title={request === null ? (entry.message ?? undefined) : "Double-click to open in a console"}
+      className={cn("border-b border-line", callId !== null && "cursor-default hover:bg-hover")}
+      title={callId === null ? (entry.message ?? undefined) : "Double-click to open in a console"}
       onDoubleClick={() => {
-        if (request !== null) invoke(MCP_ACTION_IDS.openInConsole, request);
+        if (callId !== null) invoke(MCP_ACTION_IDS.openInConsole, callId);
       }}
     >
       <td className={cn(CELL, "text-ink-muted")}>{historyTime(entry.at, now)}</td>
