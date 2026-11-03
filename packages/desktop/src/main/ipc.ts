@@ -32,12 +32,14 @@ import {
   type InvokeResult,
   type MenuPoint,
   type PluginsState,
+  type ReleaseNotesRequest,
   type DeleteDatasourcesRequest,
   type SaveDatasourceRequest,
   type UpdateState,
   type WindowState,
 } from "@table-craft/desktop/preload/bridge.js";
 import type { Logger, LogRecord } from "@table-craft/desktop/log/record.js";
+import { isVersion } from "@table-craft/desktop/version/compare.js";
 import {
   AGENT_ACCESS_LEVELS,
   APPROVAL_ANSWERS,
@@ -136,6 +138,9 @@ const menuPoint = z.strictObject({
   y: z.number().int().nonnegative(),
 }) satisfies z.ZodType<MenuPoint>;
 const noRequest = z.undefined();
+const releaseNotesRequest = z
+  .strictObject({ version: z.string().refine(isVersion, "Not a semver version.") })
+  .optional() satisfies z.ZodType<ReleaseNotesRequest | undefined>;
 const agentAccessRequest = z.strictObject({ datasourceId: z.string().min(1), access: z.enum(AGENT_ACCESS_LEVELS) });
 const rememberServerRequest = serverSeenSchema.extend({ datasourceId: z.string().min(1) });
 const mcpControlRequest = z.discriminatedUnion("action", [
@@ -254,7 +259,7 @@ export interface UpdateChannels {
   install(): void;
   skip(): Promise<void>;
   dismiss(): void;
-  openNotes(): void;
+  openNotes(version?: string): void;
 }
 
 /** The log and diagnostics behind the `log.*` and `diagnostics.export` channels (plan 017). */
@@ -490,11 +495,10 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
     noRequest,
     done(() => updates.dismiss()),
   );
-  handle(
-    INVOKE_CHANNELS.updateOpenNotes,
-    noRequest,
-    done(() => updates.openNotes()),
-  );
+  handle(INVOKE_CHANNELS.updateOpenNotes, releaseNotesRequest, (request) => {
+    updates.openNotes(request?.version);
+    return null;
+  });
 
   const { history } = options;
   handle(INVOKE_CHANNELS.historyRecord, historyEntry, (entry) => {
