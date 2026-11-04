@@ -2,6 +2,7 @@ import { DIAGRAM_COLUMN_MODES, type DiagramColumnMode } from "@table-craft/deskt
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { openDdl } from "@table-craft/desktop/renderer/actions/ddlCommands.js";
 import { openDiagram } from "@table-craft/desktop/renderer/actions/diagramCommands.js";
+import { canExportDiagram, exportDiagram } from "@table-craft/desktop/renderer/actions/diagramExport.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { openTable } from "@table-craft/desktop/renderer/actions/tableCommands.js";
 import { viewportOf } from "@table-craft/desktop/renderer/diagram/viewports.js";
@@ -50,6 +51,8 @@ export const DIAGRAM_ACTION_IDS = {
   addRelationshipFrom: "diagram.addRelationshipFrom",
   deleteRelationship: "diagram.deleteRelationship",
   hideTable: "diagram.hideTable",
+  exportSvg: "diagram.exportSvg",
+  exportPng: "diagram.exportPng",
 } as const;
 
 const DIAGRAM = "diagram";
@@ -467,4 +470,17 @@ export const DIAGRAM_ACTIONS: readonly AnyAction[] = [
       useDiagrams.getState().select(diagram.id, null);
     },
   }),
+  ...(["svg", "png"] as const).map((format) =>
+    defineAction({
+      id: format === "svg" ? DIAGRAM_ACTION_IDS.exportSvg : DIAGRAM_ACTION_IDS.exportPng,
+      title: format === "svg" ? "Export Diagram as SVG…" : "Export Diagram as PNG…",
+      category: "Database",
+      icon: format === "svg" ? "exportSvg" : "exportPng",
+      tabKind: DIAGRAM,
+      when: (context) => context.diagram !== null && canExportDiagram(context.diagram),
+      run: async ({ diagram }) => {
+        if (diagram !== null) await exportDiagram(diagram, format);
+      },
+    }),
+  ),
 ];

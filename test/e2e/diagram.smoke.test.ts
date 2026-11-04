@@ -5,7 +5,9 @@
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/152 bun run test:smoke:headless test/e2e/diagram.smoke.test.ts
  */
-import type { Page } from "playwright-core";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { ElectronApplication, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import { erdSqliteFile } from "../support/sqliteFixture.js";
 import {
@@ -15,6 +17,7 @@ import {
   closeApp,
   EVIDENCE_WINDOW,
   evidenceFor,
+  evidenceTextFor,
   LAUNCH_TIMEOUT_MS,
   launchApp,
   newProfile,
@@ -23,6 +26,9 @@ import {
   seedDatasources,
   setWindowSize,
   SMOKE_ENABLED,
+  chooseTheme,
+  pressChord,
+  themePickerTrigger,
   toolWindow,
   treeNode,
   waitUntilReady,
@@ -31,6 +37,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("152");
+const writeEvidence = evidenceTextFor("152");
 
 const ERD_TABLES_GROUP = "tables 8";
 /** What the rule infers on the seed: every `<table>_id` and `parent_id`, not `notes.person_id`. */
@@ -176,6 +183,22 @@ describe.runIf(SMOKE_ENABLED)("ER diagram", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
+  it(
+    "givenDiagramInLightThenDark_whenExportedAsSvgAndPng_thenEachFileIsInTheShownTheme",
+    async () => {
+      const page = await launch(erd());
+      if (running === null) throw new Error("The app is not running.");
+      await showDiagram(page);
+      await expect.poll(() => diagramEdges(page, "inferred").count()).toBe(INFERRED_EDGES);
+
+      for (const theme of ["Light", "Dark"] as const) {
+        await setTheme(page, theme);
+        await exportBoth(running.app, page, `06-sqlite-${theme.toLowerCase()}`);
+      }
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
   /** One key hidden, one kept as virtual, one added: five inferred edges and two virtual ones. */
   async function expectEdits(page: Page): Promise<void> {
     await expect.poll(() => diagramEdges(page, "inferred").count()).toBe(INFERRED_EDGES - 2);
@@ -230,4 +253,65 @@ async function dragTable(page: Page, table: string, by: { readonly x: number; re
   await page.mouse.move(start.x + by.x / 2, start.y + by.y / 2, { steps: 5 });
   await page.mouse.move(start.x + by.x, start.y + by.y, { steps: 5 });
   await page.mouse.up();
+}
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const EXPORT_WAIT_MS = 10_000;
+
+async function setTheme(page: Page, name: string): Promise<void> {
+  await pressChord(page, ",");
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.waitFor();
+  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
+  await themePickerTrigger(page).waitFor();
+  await chooseTheme(page, name);
+  await settings.getByRole("button", { name: "Close", exact: true }).click();
+  await expect.poll(() => settings.count()).toBe(0);
+}
+
+/** The few DOM members `rootVariable` reads; the e2e program is compiled without the DOM lib. */
+interface Root {
+  readonly ownerDocument: {
+    readonly defaultView: {
+      getComputedStyle(element: Root): { getPropertyValue(name: string): string };
+    };
+  };
+}
+
+function rootVariable(page: Page, name: string): Promise<string> {
+  return page
+    .locator("html")
+    .evaluate(
+      (element: Root, variable) =>
+        element.ownerDocument.defaultView.getComputedStyle(element).getPropertyValue(variable).trim(),
+      name,
+    );
+}
+
+/** Exports the open diagram through the stubbed save dialog and checks what landed on disk. */
+async function exportTo(app: ElectronApplication, page: Page, path: string, button: string): Promise<Buffer> {
+  await app.evaluate(({ dialog }, picked) => {
+    dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: picked });
+  }, path);
+  await toolbarButton(page, button).click();
+  await expect.poll(() => existsSync(path), { timeout: EXPORT_WAIT_MS }).toBe(true);
+  return readFileSync(path);
+}
+
+/**
+ * Exports SVG and PNG in the theme on screen: the SVG's background is that theme's canvas, the PNG is
+ * a PNG, and both are kept beside a capture of the window for comparison.
+ */
+async function exportBoth(app: ElectronApplication, page: Page, name: string): Promise<void> {
+  const directory = newProfile();
+  const canvas = await rootVariable(page, "--tc-canvas");
+  const svg = (await exportTo(app, page, join(directory, `${name}.svg`), "Export Diagram as SVG…")).toString("utf8");
+  expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
+  expect(svg).toContain(`fill="${canvas}"`);
+  expect(svg.match(/data-table=/g)?.length).toBe(8);
+  const png = await exportTo(app, page, join(directory, `${name}.png`), "Export Diagram as PNG…");
+  expect([...png.subarray(0, PNG_SIGNATURE.length)]).toEqual(PNG_SIGNATURE);
+  await captureWindow(page, `${name}-screen`);
+  writeEvidence(`${name}-export.png`, png);
+  writeEvidence(`${name}-export.svg`, svg);
 }

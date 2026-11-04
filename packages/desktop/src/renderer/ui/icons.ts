@@ -25,6 +25,8 @@ import {
   ArrowUUpLeft,
   FileSql,
   FileCode,
+  FilePng,
+  FileSvg,
   Info,
   Code,
   Funnel,
@@ -264,4 +266,6 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   layout: FlowArrow,
   inferredKeys: MagicWand,
   tables: ListChecks,
+  exportSvg: FileSvg,
+  exportPng: FilePng,
 };

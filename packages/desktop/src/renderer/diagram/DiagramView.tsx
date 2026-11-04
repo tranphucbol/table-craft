@@ -76,6 +76,9 @@ const PANE_MENU: readonly (string | null)[] = [
   DIAGRAM_ACTION_IDS.hiddenKeys,
   null,
   DIAGRAM_ACTION_IDS.addRelationship,
+  null,
+  DIAGRAM_ACTION_IDS.exportSvg,
+  DIAGRAM_ACTION_IDS.exportPng,
 ];
 
 function MenuItem({ actionId }: { readonly actionId: string }) {

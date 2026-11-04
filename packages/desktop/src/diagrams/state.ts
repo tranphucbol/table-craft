@@ -55,3 +55,13 @@ export function virtualKeyId(key: Omit<VirtualKey, "id">): string {
     key.target.columns,
   ]);
 }
+
+export const DIAGRAM_IMAGE_FORMATS = ["svg", "png"] as const;
+export type DiagramImageFormat = (typeof DIAGRAM_IMAGE_FORMATS)[number];
+
+/** An exported diagram on its way to the save dialog: main writes the bytes where the user chooses. */
+export interface DiagramImageRequest {
+  readonly format: DiagramImageFormat;
+  readonly data: Uint8Array;
+  readonly defaultName: string;
+}

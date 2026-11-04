@@ -111,6 +111,9 @@ export function DiagramToolbar({
         <ActionButton actionId={DIAGRAM_ACTION_IDS.hiddenKeys} compact expanded={hiddenKeysOpen} />
       </span>
       <ToolbarDivider />
+      <ActionButton actionId={DIAGRAM_ACTION_IDS.exportSvg} compact />
+      <ActionButton actionId={DIAGRAM_ACTION_IDS.exportPng} compact />
+      <ToolbarDivider />
       <Legend />
       <span data-testid="diagram-status" className="ml-auto truncate">
         {status}
