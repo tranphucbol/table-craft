@@ -196,7 +196,12 @@ function savedVirtualKey(context: ActionContext, args: unknown): string | null {
   return chosenEdge(context, args, "virtual")?.keyId ?? null;
 }
 
-export const DIAGRAM_ACTIONS: readonly AnyAction[] = [
+/** Only a datasource with a schema tree draws diagrams, so the palette lists none for the others. */
+function drawsDiagrams(context: ActionContext): boolean {
+  return context.datasource === null || context.datasource.capabilities.includes(SCHEMA_TREE);
+}
+
+const ACTIONS: readonly AnyAction[] = [
   defineAction({
     id: DIAGRAM_ACTION_IDS.show,
     title: "Show Diagram",
@@ -484,3 +489,5 @@ export const DIAGRAM_ACTIONS: readonly AnyAction[] = [
     }),
   ),
 ];
+
+export const DIAGRAM_ACTIONS: readonly AnyAction[] = ACTIONS.map((action) => ({ ...action, available: drawsDiagrams }));
