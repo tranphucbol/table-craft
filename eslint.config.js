@@ -105,6 +105,19 @@ const PROTOCOL_PURITY_RULE =
   "A protocol area imports nothing but its sibling areas (./<area>.js); the engine and the renderer both load it.";
 
 /**
+ * A service lives under the capability that declares it, so the engine and core reach it through
+ * one gate that answers an absent one with `notDeclared` (decision 155). The two core files read
+ * `transactions` themselves to keep their own typed errors.
+ */
+const SERVICE_GATE_FILES = ["packages/desktop/src/engine/**/*.ts", "packages/core/src/**/*.ts"];
+const SERVICE_GATE_EXCEPTIONS = [
+  "packages/desktop/src/engine/services.ts",
+  "packages/core/src/edits/submit.ts",
+  "packages/core/src/objects/apply.ts",
+];
+const SERVICE_GATE_RULE = "Reach a capability's service through engine/services.ts (decision 155).";
+
+/**
  * Code lines a source file may hold (decision 091). Past this an agent reads a file in slices and
  * re-reads it after every compression, which is where most of a plan session's tokens go.
  */
@@ -222,6 +235,16 @@ export default tseslint.config(
     files: PROTOCOL_FILES,
     rules: {
       "no-restricted-imports": restrictImports({ regex: PROTOCOL_PURITY_IMPORTS, message: PROTOCOL_PURITY_RULE }),
+    },
+  },
+  {
+    files: SERVICE_GATE_FILES,
+    ignores: SERVICE_GATE_EXCEPTIONS,
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        { selector: "MemberExpression[property.name='services']", message: SERVICE_GATE_RULE },
+      ],
     },
   },
   {
