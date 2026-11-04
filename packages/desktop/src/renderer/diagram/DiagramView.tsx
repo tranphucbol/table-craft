@@ -346,6 +346,9 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
                 useDiagrams.getState().select(diagramId, node.id);
                 setMenu({ kind: "table" });
               }}
+              // Without a click handler React Flow marks an unselectable edge inactive and turns
+              // its pointer events off, which takes the edge's tooltip and context menu with them.
+              onEdgeClick={(_event, edge) => useDiagrams.getState().selectEdge(diagramId, edge.id)}
               onEdgeContextMenu={(_event, edge) => {
                 useDiagrams.getState().selectEdge(diagramId, edge.id);
                 setMenu({ kind: "edge" });

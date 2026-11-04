@@ -53,28 +53,31 @@ interface PathElement {
 }
 
 /**
- * Opens an edge's context menu at the middle of its path: a click at its bounding box's centre can
- * miss a step path or land on a table drawn over it.
+ * Where on screen the edge's path is halfway along: a click at its bounding box's centre can miss a
+ * step path or land on a table drawn over it.
+ */
+export function edgeMiddle(page: Page, keyId: string): Promise<{ readonly x: number; readonly y: number }> {
+  return diagramEdge(page, keyId)
+    .locator(".tc-diagram-edge-hit")
+    .evaluate((element) => {
+      const path = element as unknown as PathElement;
+      const middle = path.getPointAtLength(path.getTotalLength() / 2);
+      const matrix = path.getScreenCTM();
+      if (matrix === null) return middle;
+      return {
+        x: matrix.a * middle.x + matrix.c * middle.y + matrix.e,
+        y: matrix.b * middle.x + matrix.d * middle.y + matrix.f,
+      };
+    });
+}
+
+/**
+ * Opens an edge's context menu with a real right-click at the middle of its path, so an edge that
+ * takes no pointer events fails here as it would for a user.
  */
 export async function rightClickEdge(page: Page, keyId: string): Promise<void> {
-  const hit = diagramEdge(page, keyId).locator(".tc-diagram-edge-hit");
-  const point = await hit.evaluate((element) => {
-    const path = element as unknown as PathElement;
-    const middle = path.getPointAtLength(path.getTotalLength() / 2);
-    const matrix = path.getScreenCTM();
-    if (matrix === null) return middle;
-    return {
-      x: matrix.a * middle.x + matrix.c * middle.y + matrix.e,
-      y: matrix.b * middle.x + matrix.d * middle.y + matrix.f,
-    };
-  });
-  await hit.dispatchEvent("contextmenu", {
-    bubbles: true,
-    cancelable: true,
-    button: 2,
-    clientX: point.x,
-    clientY: point.y,
-  });
+  const point = await edgeMiddle(page, keyId);
+  await page.mouse.click(point.x, point.y, { button: "right" });
 }
 
 export function tableNode(page: Page, table: string) {
