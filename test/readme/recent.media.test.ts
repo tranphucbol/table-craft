@@ -1,8 +1,9 @@
 /**
  * The GIFs plan 128 added for features that shipped without one: etcd keys and their History,
- * snippets, side-by-side console groups, the theme catalogue and plugins downloaded on demand.
- * Recorded the same way as `readme.media.test.ts`, by the same `bun run readme:media`.
+ * snippets, side-by-side console groups, the theme catalogue and plugins downloaded on demand; and
+ * plan 152's DuckDB on a Parquet file and a zstd CSV. Recorded the same way as `readme.media.test.ts`, by the same `bun run readme:media`.
  */
+import { join } from "node:path";
 import type { Locator, Page } from "playwright-core";
 import { expect } from "vitest";
 import { pluginPackageName, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
@@ -20,6 +21,7 @@ import { clickVisibly, pause, pointAt, pressVisibly, typeSlowly } from "./pace.j
 import {
   connect,
   datasourceRow,
+  EXPORT_DIRECTORY,
   mediaSuite,
   openConsole,
   PASSWORD,
@@ -29,7 +31,15 @@ import {
   SHOP,
   waitForRows,
 } from "./scenes.js";
-import { loadShopEtcd, SHOP_ETCD_NAMESPACE, SHOP_ETCD_PORT, stopShopEtcd } from "./shop.js";
+import {
+  loadShopEtcd,
+  SHOP_ETCD_NAMESPACE,
+  SHOP_ETCD_PORT,
+  SHOP_EVENTS_CSV_ZST,
+  SHOP_SALES_PARQUET,
+  stopShopEtcd,
+  writeShopDataFiles,
+} from "./shop.js";
 
 const CONFIG = "config";
 const CONFIG_ETCD: SavedDatasource = {
@@ -54,6 +64,23 @@ const CHOICE_SETTLE_MS = 100;
 
 const TOKYONIGHT_DARK = "Tokyonight Dark";
 const DARK_PREVIEWS = 3;
+
+const SALES = SHOP_SALES_PARQUET;
+const SALES_DUCKDB: SavedDatasource = {
+  id: "sales",
+  name: SALES,
+  pluginId: "duckdb",
+  color: "yellow",
+  config: { path: join(EXPORT_DIRECTORY, SHOP_SALES_PARQUET), readOnlyFile: false, downloadExtensions: false },
+};
+const EVENTS_FILE = join(EXPORT_DIRECTORY, SHOP_EVENTS_CSV_ZST);
+
+/** The view DuckDB makes of `sales.parquet`, not the data source named after the file. */
+function salesView(page: Page): Locator {
+  return toolWindow(page, "Database")
+    .getByRole("treeitem", { name: /^sales(?!\.)/ })
+    .first();
+}
 
 const POSTGRES = "postgres";
 /** Long enough to read the progress line, short against the launch timeout (plan 057). */
@@ -108,6 +135,18 @@ async function retype(page: Page, field: Locator, text: string): Promise<void> {
   await clickVisibly(page, field);
   await page.keyboard.press("ControlOrMeta+A");
   await typeSlowly(page, text);
+}
+
+/** Types `lines` into the console; Escape first, so Enter starts a line rather than accepting a completion. */
+async function typeLines(page: Page, lines: readonly string[]): Promise<void> {
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Enter");
+    }
+    await typeSlowly(page, line);
+  }
+  await page.keyboard.press("Escape");
 }
 
 /** True once the completion popup's selected option names `label` and has settled. */
@@ -307,6 +346,49 @@ mediaSuite("README recent feature media", () => {
       await clickVisibly(page, dialog.getByRole("button", { name: "Close", exact: true }));
       await dialog.waitFor({ state: "detached" });
       await pointAt(page, page.getByRole("gridcell").first());
+    },
+  });
+
+  scene("duckdb", {
+    alsoSaved: [SALES_DUCKDB],
+    prepare: () => writeShopDataFiles(EXPORT_DIRECTORY),
+    setup: async ({ page }) => {
+      await connect(page, SALES);
+      await datasourceRow(page, SALES).click();
+      await page.keyboard.press("ArrowRight");
+      const views = toolWindow(page, "Database").getByRole("treeitem", { name: /^views \d+$/ });
+      await views.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      if ((await views.getAttribute("aria-expanded")) !== "true") {
+        await views.click();
+        await page.keyboard.press("ArrowRight");
+      }
+      await salesView(page).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await openConsole(page, SALES);
+      await page.keyboard.press("Escape");
+    },
+    run: async ({ page }) => {
+      await pointAt(page, salesView(page));
+      await pause(page, READ_PAUSE_MS);
+      await clickVisibly(page, sqlEditor(page));
+      await typeLines(page, [
+        "SELECT city, count(*) AS orders, sum(amount) AS revenue",
+        "FROM sales GROUP BY city ORDER BY revenue DESC;",
+      ]);
+      await pressVisibly(page, "Mod+Enter");
+      await waitForRows(page, /^8 rows$/);
+      await pointAt(page, page.getByRole("gridcell").first());
+      await pause(page, READ_PAUSE_MS);
+      await clickVisibly(page, sqlEditor(page));
+      await page.keyboard.press("ControlOrMeta+A");
+      await typeLines(page, [
+        "SELECT kind, count(*) AS events",
+        `FROM '${EVENTS_FILE}'`,
+        "GROUP BY kind ORDER BY events DESC;",
+      ]);
+      await pressVisibly(page, "Mod+Enter");
+      await waitForRows(page, /^3 rows$/);
+      await pointAt(page, page.getByRole("gridcell").first());
+      await pause(page, READ_PAUSE_MS);
     },
   });
 

@@ -5,6 +5,8 @@ queries it with DuckDB's SQL. It downloads on demand like the other
 [plugins](plugins.md#databases-in-the-box-and-on-demand); unlike them it carries DuckDB itself, so
 each computer gets the build for its system, about 20 to 29 MB.
 
+![DuckDB on a Parquet file and a zstd CSV](../media/duckdb.gif)
+
 - **The file.** **Path** takes a `.duckdb` file (a missing one is created), `:memory:` for a
   scratch database that lives as long as the connection, or a data file: `.parquet`, `.csv`,
   `.tsv`, `.json`, `.ndjson` or `.jsonl`, compressed as `.gz` or `.zst` too. A data file opens as

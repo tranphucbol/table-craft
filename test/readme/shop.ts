@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import duckdb from "@table-craft/plugin-duckdb";
 import redis from "@table-craft/plugin-redis";
 import { POSTGRES_CONFIG, REDIS_CONFIG } from "../support/databases.js";
 
@@ -169,6 +170,41 @@ export async function loadShopEtcd(): Promise<void> {
   const lease = /^lease (\w+) granted/.exec(etcdctl("lease", "grant", String(SESSION_TTL_SECONDS)))?.[1];
   if (lease === undefined) throw new Error("The demo etcd granted no lease.");
   etcdctl("put", `--lease=${lease}`, SESSION_KEY, '{"user":17,"cart":1042}');
+}
+
+export const SHOP_SALES_PARQUET = "sales.parquet";
+export const SHOP_EVENTS_CSV_ZST = "events.csv.zst";
+const SALES = 48_000;
+const EVENTS = 250_000;
+/** The cities of `shop.postgres.sql`'s customers. */
+const CITIES = ["Lisbon", "Hanoi", "Berlin", "Austin", "Osaka", "Toronto", "Lyon", "Melbourne"];
+
+function sqlText(text: string): string {
+  return `'${text.replaceAll("'", "''")}'`;
+}
+
+/**
+ * Writes the shop's sales as Parquet and its storefront events as a zstd CSV into `directory`, with
+ * DuckDB itself, for the scene that opens them as files. Each city is drawn by the square root of
+ * a uniform hash, so the cities sell unevenly and the grouped result reads like real sales.
+ */
+export async function writeShopDataFiles(directory: string): Promise<void> {
+  const cities = `[${CITIES.map(sqlText).join(", ")}]`;
+  const session = await duckdb.connect(
+    { path: ":memory:", readOnlyFile: false, downloadExtensions: false },
+    { readOnly: false },
+  );
+  try {
+    for (const sql of [
+      `COPY (SELECT range + 1 AS order_id, ${cities}[CAST(floor(sqrt(hash(range) % ${String(CITIES.length ** 2)})) AS INTEGER) + 1] AS city, DATE '2026-01-01' + CAST(range % 300 AS INTEGER) AS placed_on, CAST((hash(range * 31) % 12000) / 100 + 3 AS DECIMAL(10, 2)) AS amount FROM range(${String(SALES)})) TO ${sqlText(join(directory, SHOP_SALES_PARQUET))} (FORMAT parquet)`,
+      `COPY (SELECT range AS id, range % ${String(SALES)} + 1 AS order_id, CASE WHEN range % 10 < 7 THEN 'view' WHEN range % 10 < 9 THEN 'add_to_cart' ELSE 'checkout' END AS kind FROM range(${String(EVENTS)})) TO ${sqlText(join(directory, SHOP_EVENTS_CSV_ZST))} (FORMAT csv, HEADER, COMPRESSION zstd)`,
+    ]) {
+      const result = await session.execute(sql);
+      for await (const _row of result.rows) void _row;
+    }
+  } finally {
+    await session.close();
+  }
 }
 
 /** Writes `shop.db` into `directory` from `shop.sqlite.sql` and returns its path. */
