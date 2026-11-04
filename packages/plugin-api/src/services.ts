@@ -22,6 +22,7 @@ import type {
   NewColumn,
   RoutineArgument,
   RoutineCall,
+  SavepointStatements,
   ServerInfo,
   ServerNode,
   ServerTimeout,
@@ -103,6 +104,12 @@ export interface ImportDdl {
   createTable(qualifiedName: string, columns: readonly NewColumn[]): string;
 }
 
+/** The `savepoints` service of a language (decision 155): edits joining an open transaction undo only themselves. */
+export interface SavepointWriter {
+  /** The statements that set, roll back to and release a savepoint called `name`. `sqlSavepoints` implements it. */
+  savepoint(name: string): SavepointStatements;
+}
+
 /** The `routineCall` service (decision 090). */
 export interface RoutineCaller {
   /**
@@ -172,6 +179,7 @@ export interface LanguageServices {
   /** The DDL for creating, altering, renaming and dropping (decision 052). */
   readonly objects: ObjectEditor;
   readonly routineCall: RoutineCaller;
+  readonly savepoints: SavepointWriter;
 }
 
 export type SessionCapability = keyof SessionServices;
@@ -206,6 +214,7 @@ const LANGUAGE_KEYS: Readonly<Record<LanguageCapability, true>> = {
   bulkInsert: true,
   objects: true,
   routineCall: true,
+  savepoints: true,
 };
 
 /** The capabilities with a session service: the keys of `SessionServices`. */

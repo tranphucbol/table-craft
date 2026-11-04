@@ -71,6 +71,7 @@ export const CAPABILITIES = [
   "serverMessages",
   "sessions",
   "routineCall",
+  "savepoints",
 ] as const;
 
 export type MssqlCapability = (typeof CAPABILITIES)[number];
@@ -119,7 +120,6 @@ export const language: PluginLanguage<MssqlCapability> = {
   literal,
   emptyInsert: defaultValuesInsert,
   updateDefault: defaultKeyword,
-  savepoint,
   ...sqlCompleter(COMPLETER),
   ...sqlInspector({ ...COMPLETER, reservedWords: MSSQL_RESERVED_WORDS }),
   ...sqlGenerator({
@@ -142,6 +142,7 @@ export const language: PluginLanguage<MssqlCapability> = {
     currentNamespace: namespaceSwitcher("use", quoteIdentifier),
     objects: mssqlObjects({ name: writeName, quoteIdentifier }),
     routineCall: { call: mssqlRoutineCall(writeName) },
+    savepoints: { savepoint },
   },
 };
 

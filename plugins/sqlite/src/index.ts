@@ -55,7 +55,16 @@ import { sqliteObjects } from "./objects.js";
 
 const PLUGIN_ID = "sqlite";
 /** No `cancel`: node:sqlite runs a statement synchronously, so nothing could deliver the request. */
-const CAPABILITIES = ["sql", "schemaTree", "transactions", "ddl", "explain", "bulkInsert", "objects"] as const;
+const CAPABILITIES = [
+  "sql",
+  "schemaTree",
+  "transactions",
+  "ddl",
+  "explain",
+  "bulkInsert",
+  "objects",
+  "savepoints",
+] as const;
 
 type SqliteCapability = (typeof CAPABILITIES)[number];
 
@@ -93,7 +102,6 @@ const language: PluginLanguage<SqliteCapability> = {
   literal: (value) => sqlLiteral(value, LITERALS),
   emptyInsert: defaultValuesInsert,
   updateDefault,
-  savepoint: sqlSavepoints(quoteIdentifier),
   ...sqlCompleter(COMPLETER),
   ...sqlInspector({ ...COMPLETER, reservedWords: SQLITE_RESERVED_WORDS }),
   ...sqlGenerator({ quoteIdentifier, updateDefault, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
@@ -120,6 +128,7 @@ const language: PluginLanguage<SqliteCapability> = {
     objects: sqliteObjects({
       name: identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
     }),
+    savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
   },
 };
 

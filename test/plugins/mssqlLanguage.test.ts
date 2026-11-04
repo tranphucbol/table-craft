@@ -43,7 +43,7 @@ describe("mssql language", () => {
   });
 
   it("givenSavepoint_whenWritten_thenSaveTransactionAndNoRelease", () => {
-    const savepoint = language.savepoint?.("edits");
+    const savepoint = language.services.savepoints?.savepoint("edits");
     expect(savepoint?.set).toContain("SAVE TRANSACTION [edits]");
     expect(savepoint?.rollback).toContain("ROLLBACK TRANSACTION [edits]");
     expect(savepoint?.release.trimStart().startsWith("--")).toBe(true);

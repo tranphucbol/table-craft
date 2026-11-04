@@ -40,6 +40,7 @@ service.
 | `maintenance`      | Reports status and alarms, compacts, defragments, snapshots and checks consistency.                                                                                                                                     | `session.services.maintenance`                                            |
 | `coordination`     | Shows holders and queues under configured lock and election prefixes.                                                                                                                                                   | `session.services.coordination`                                           |
 | `bulkTransfer`     | Exports a range and imports chunk-atomically, resuming only confirmed boundaries.                                                                                                                                       | `session.services.bulkTransfer`                                           |
+| `savepoints`       | Writes the savepoint statements that let console edits inside an open transaction undo only themselves when one is refused; requires `sql` and `transactions`.                                                          | `language.services.savepoints`                                            |
 
 Write the default export with `definePlugin` and its capabilities `as const`: the types then
 require exactly the declared keys on the session and the language, and type `connect`'s
@@ -91,7 +92,8 @@ export default definePlugin({
     "serverMessages",
     "sessions",
     "routineCall",
-    "serverTimeout"
+    "serverTimeout",
+    "savepoints"
   ],
   "highlight": "postgresql",
   "brands": [{ "id": "postgresql", "name": "PostgreSQL" }],
@@ -175,9 +177,10 @@ from a file shows "Rebuild it for plugin API 2.x". To move a plugin:
   `maintenance`.
 - Move the language's optional members under `language.services`: `explainable` to
   `explain.explainable`, `namespaceSwitch` to `currentNamespace`, `importType` and `createTable`
-  to `bulkInsert`, `objects` and `routineCall` (now `routineCall.call`) as they are.
-- Implement what became required: `splitStream`, `signatureAt`, `inspect`, `selectSource` and
-  `savepoint` on the language, `reach` on `cancel`, `slowLog` on `serverInfo`. The SQL kit's
+  to `bulkInsert`, `objects` and `routineCall` (now `routineCall.call`) as they are, and `savepoint`
+  to `savepoints.savepoint`, declaring `savepoints`.
+- Implement what became required: `splitStream`, `signatureAt`, `inspect`, and `selectSource` on
+  the language, `reach` on `cancel`, `slowLog` on `serverInfo`. The SQL kit's
   `sqlStatementStream`, `sqlCompleter`, `sqlInspector` and `sqlSavepoints` supply them.
 - Leave out every key you do not declare: a service without its capability is refused like a
   capability without its service. `serviceProblems` in `@tablecraft-app/plugin-api` says what the

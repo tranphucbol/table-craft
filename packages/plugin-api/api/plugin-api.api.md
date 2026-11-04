@@ -71,7 +71,7 @@ interface BytesValue {
   readonly preview: string;
 }
 
-const CAPABILITIES: readonly [ "sql", "cancel", "schemaTree", "transactions", "ddl", "explain", "explainAnalyze", "currentNamespace", "keepAlive", "bulkInsert", "objects", "serverMessages", "sessions", "routineCall", "commands", "keyValue", "nodes", "serverInfo", "serverTimeout", "revisions", "watch", "leases", "access", "members", "maintenance", "coordination", "bulkTransfer" ];
+const CAPABILITIES: readonly [ "sql", "cancel", "schemaTree", "transactions", "ddl", "explain", "explainAnalyze", "currentNamespace", "keepAlive", "bulkInsert", "objects", "serverMessages", "sessions", "routineCall", "commands", "keyValue", "nodes", "serverInfo", "serverTimeout", "revisions", "watch", "leases", "access", "members", "maintenance", "coordination", "bulkTransfer", "savepoints" ];
 
 const COMMAND_ADMISSIONS: readonly [ "execute", "omitHistory", "managed", "reject" ];
 
@@ -904,6 +904,7 @@ interface LanguageServices {
   readonly explain: ExplainCheck;
   readonly objects: ObjectEditor;
   readonly routineCall: RoutineCaller;
+  readonly savepoints: SavepointWriter;
 }
 
 interface LeaseInfo {
@@ -1331,7 +1332,6 @@ interface SqlLanguageBase {
   parameters(statement: string): readonly SqlParameter[];
   quoteIdentifier(name: string): string;
   resolve(request: ResolveRequest, catalog: CompletionCatalog): Promise<Declaration | null>;
-  savepoint(name: string): SavepointStatements;
   selectSource(sql: string, catalog: CompletionCatalog): Promise<SelectSource>;
   signatureAt(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>;
   split(text: string): readonly StatementSpan[];
@@ -1470,7 +1470,7 @@ function parseConnectionUrl(form: ConnectionForm, text: string): ParsedConnectio
 
 function parseVersion(text: string): Version | null;
 
-const pluginManifestSchema: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; apiVersion: z.ZodString; entry: z.ZodString; capabilities: z.ZodArray<z.ZodEnum<{ cancel: "cancel"; schemaTree: "schemaTree"; ddl: "ddl"; transactions: "transactions"; explain: "explain"; currentNamespace: "currentNamespace"; keepAlive: "keepAlive"; bulkInsert: "bulkInsert"; sessions: "sessions"; keyValue: "keyValue"; nodes: "nodes"; serverInfo: "serverInfo"; serverTimeout: "serverTimeout"; watch: "watch"; leases: "leases"; members: "members"; maintenance: "maintenance"; access: "access"; coordination: "coordination"; bulkTransfer: "bulkTransfer"; objects: "objects"; routineCall: "routineCall"; sql: "sql"; explainAnalyze: "explainAnalyze"; serverMessages: "serverMessages"; commands: "commands"; revisions: "revisions"; }>>; highlight: z.ZodString; brands: z.ZodOptional<z.ZodArray<z.ZodObject<{ id: z.ZodString; name: z.ZodString; }, z.core.$strict>>>; connection: z.ZodObject<{ fields: z.ZodArray<z.ZodObject<{ key: z.ZodString; label: z.ZodString; kind: z.ZodEnum<{ number: "number"; text: "text"; select: "select"; password: "password"; file: "file"; checkbox: "checkbox"; }>; default: z.ZodOptional<z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>; required: z.ZodOptional<z.ZodBoolean>; placeholder: z.ZodOptional<z.ZodString>; options: z.ZodOptional<z.ZodArray<z.ZodObject<{ value: z.ZodString; label: z.ZodString; }, z.core.$strict>>>; group: z.ZodOptional<z.ZodEnum<{ general: "general"; advanced: "advanced"; }>>; secret: z.ZodOptional<z.ZodBoolean>; visibleWhen: z.ZodOptional<z.ZodObject<{ key: z.ZodString; equals: z.ZodUnion<readonly [ z.ZodString, z.ZodBoolean, z.ZodArray<z.ZodString> ]>; }, z.core.$strict>>; }, z.core.$strict>>; url: z.ZodOptional<z.ZodObject<{ schemes: z.ZodArray<z.ZodString>; form: z.ZodEnum<{ file: "file"; server: "server"; }>; parts: z.ZodRecord<z.ZodEnum<{ database: "database"; path: "path"; password: "password"; host: "host"; port: "port"; user: "user"; }> & z.core.$partial, z.ZodString>; params: z.ZodOptional<z.ZodArray<z.ZodObject<{ name: z.ZodString; key: z.ZodString; values: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>; }, z.core.$strict>>>; sets: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodRecord<z.ZodString, z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>>>; semicolonParams: z.ZodOptional<z.ZodBoolean>; }, z.core.$strict>>; network: z.ZodOptional<z.ZodObject<{ host: z.ZodString; port: z.ZodString; connectTimeout: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; tls: z.ZodOptional<z.ZodObject<{ mode: z.ZodString; verifyModes: z.ZodArray<z.ZodString>; caFile: z.ZodOptional<z.ZodString>; certFile: z.ZodOptional<z.ZodString>; keyFile: z.ZodOptional<z.ZodString>; keyPassphrase: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; }, z.core.$strict>; }, z.core.$strict>;
+const pluginManifestSchema: z.ZodObject<{ id: z.ZodString; name: z.ZodString; version: z.ZodString; apiVersion: z.ZodString; entry: z.ZodString; capabilities: z.ZodArray<z.ZodEnum<{ cancel: "cancel"; schemaTree: "schemaTree"; ddl: "ddl"; transactions: "transactions"; explain: "explain"; currentNamespace: "currentNamespace"; keepAlive: "keepAlive"; bulkInsert: "bulkInsert"; sessions: "sessions"; keyValue: "keyValue"; nodes: "nodes"; serverInfo: "serverInfo"; serverTimeout: "serverTimeout"; watch: "watch"; leases: "leases"; members: "members"; maintenance: "maintenance"; access: "access"; coordination: "coordination"; bulkTransfer: "bulkTransfer"; objects: "objects"; routineCall: "routineCall"; savepoints: "savepoints"; sql: "sql"; explainAnalyze: "explainAnalyze"; serverMessages: "serverMessages"; commands: "commands"; revisions: "revisions"; }>>; highlight: z.ZodString; brands: z.ZodOptional<z.ZodArray<z.ZodObject<{ id: z.ZodString; name: z.ZodString; }, z.core.$strict>>>; connection: z.ZodObject<{ fields: z.ZodArray<z.ZodObject<{ key: z.ZodString; label: z.ZodString; kind: z.ZodEnum<{ number: "number"; text: "text"; select: "select"; password: "password"; file: "file"; checkbox: "checkbox"; }>; default: z.ZodOptional<z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>; required: z.ZodOptional<z.ZodBoolean>; placeholder: z.ZodOptional<z.ZodString>; options: z.ZodOptional<z.ZodArray<z.ZodObject<{ value: z.ZodString; label: z.ZodString; }, z.core.$strict>>>; group: z.ZodOptional<z.ZodEnum<{ general: "general"; advanced: "advanced"; }>>; secret: z.ZodOptional<z.ZodBoolean>; visibleWhen: z.ZodOptional<z.ZodObject<{ key: z.ZodString; equals: z.ZodUnion<readonly [ z.ZodString, z.ZodBoolean, z.ZodArray<z.ZodString> ]>; }, z.core.$strict>>; }, z.core.$strict>>; url: z.ZodOptional<z.ZodObject<{ schemes: z.ZodArray<z.ZodString>; form: z.ZodEnum<{ file: "file"; server: "server"; }>; parts: z.ZodRecord<z.ZodEnum<{ database: "database"; path: "path"; password: "password"; host: "host"; port: "port"; user: "user"; }> & z.core.$partial, z.ZodString>; params: z.ZodOptional<z.ZodArray<z.ZodObject<{ name: z.ZodString; key: z.ZodString; values: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodString>>; }, z.core.$strict>>>; sets: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodRecord<z.ZodString, z.ZodUnion<readonly [ z.ZodString, z.ZodNumber, z.ZodBoolean ]>>>>; semicolonParams: z.ZodOptional<z.ZodBoolean>; }, z.core.$strict>>; network: z.ZodOptional<z.ZodObject<{ host: z.ZodString; port: z.ZodString; connectTimeout: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; tls: z.ZodOptional<z.ZodObject<{ mode: z.ZodString; verifyModes: z.ZodArray<z.ZodString>; caFile: z.ZodOptional<z.ZodString>; certFile: z.ZodOptional<z.ZodString>; keyFile: z.ZodOptional<z.ZodString>; keyPassphrase: z.ZodOptional<z.ZodString>; }, z.core.$strict>>; }, z.core.$strict>; }, z.core.$strict>;
 
 function serviceProblems(capabilities: readonly Capability[], plugin: HostPlugin, session?: { readonly services?: unknown; }): readonly ServiceProblem[];
 
@@ -1508,6 +1508,10 @@ export { z } from "zod";
 }
 
 ~type PluginLanguages<C extends Capability> = ("sql" extends C ? { readonly language: PluginLanguage<C>; } : { readonly language?: never; }) & ("commands" extends C ? { readonly commandLanguage: CommandLanguage; } : { readonly commandLanguage?: never; });
+
+~interface SavepointWriter {
+  savepoint(name: string): SavepointStatements;
+}
 
 ~interface UrlField {
   readonly default?: ConnectionValue | undefined;
