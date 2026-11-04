@@ -77,7 +77,9 @@ from them.
 
 ![SQL console](../media/console.gif)
 
-**New Console** in the tab strip opens another console on the current data source. Right-click a tab
+**New Console** in the tab strip opens another console on the current data source; from a node
+in the Database tool window it starts in that node's database or schema
+([Explorer](explorer.md)). Right-click a tab
 and choose **Split Right** or **Split Left** to put it in a group of its own beside the current
 one; each group has its own toolbar, runs and results, and tabs drag from one group to another.
 Closing a group's last tab closes the group.

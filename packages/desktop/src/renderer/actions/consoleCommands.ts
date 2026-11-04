@@ -1,6 +1,7 @@
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { settleAdminRenewals } from "@table-craft/desktop/renderer/keyAdmin/actions.js";
 import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
+import { consoleNamespaceFor } from "@table-craft/desktop/renderer/model/consoleNamespace.js";
 import { closedConsoleOf, duplicateSeed } from "@table-craft/desktop/renderer/model/consoleTabs.js";
 import type { ParameterValues } from "@table-craft/desktop/renderer/model/parameters.js";
 import {
@@ -20,7 +21,7 @@ import {
   useConsoles,
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
-import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { capabilitiesOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { createFileConsoles } from "@table-craft/desktop/renderer/state/fileConsoles.js";
 import { assertConsoleTextPersistable } from "@table-craft/desktop/renderer/state/consolePersistence.js";
 import { useLayout, type OpenConsole } from "@table-craft/desktop/renderer/state/layout.js";
@@ -36,6 +37,7 @@ import { settlePendingEdits } from "@table-craft/desktop/renderer/actions/tableC
 const CONSOLE_ID_PREFIX = "console-";
 const COMMIT = "commit";
 const ROLLBACK = "rollback";
+const CURRENT_NAMESPACE = "currentNamespace";
 let consolesOpened = 0;
 /** One allocation at a time per datasource, so two quick New Consoles never take the same name. */
 const allocating = new Map<string, Promise<unknown>>();
@@ -72,12 +74,35 @@ export function openConsole(datasourceId: string, sql?: string, parameterValues?
 }
 
 /**
- * Opens a console tab like `openConsole`, in `namespace`, and answers its tab id once its session
- * is open (or failed to open), so a caller can run it straight away.
+ * The namespace a console opened on the explorer node at `path` starts in (plan 153); null when the
+ * plugin cannot switch, the targets cannot be listed or none holds the node, so it opens as before.
+ */
+export async function nodeConsoleNamespace(
+  datasourceId: string,
+  path: readonly string[],
+): Promise<readonly string[] | null> {
+  const state = useDatasources.getState();
+  const view = datasourceById(state, datasourceId);
+  if (view === undefined || !capabilitiesOf(state.plugins, view.pluginId).includes(CURRENT_NAMESPACE)) return null;
+  try {
+    const client = await state.connect(datasourceId);
+    return consoleNamespaceFor(path, await client.call("namespace.targets", {}));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Opens a console tab like `openConsole`, in `namespace` when there is one, and answers its tab id
+ * once its session is open (or failed to open), so a caller can run it straight away.
  */
 export async function openConsoleOn(
   datasourceId: string,
-  options: { readonly sql: string; readonly parameterValues: ParameterValues; readonly namespace: readonly string[] },
+  options: {
+    readonly sql?: string;
+    readonly parameterValues?: ParameterValues;
+    readonly namespace: readonly string[] | null;
+  },
 ): Promise<string> {
   let session: Promise<void> = Promise.resolve();
   const id = await allocateConsole(

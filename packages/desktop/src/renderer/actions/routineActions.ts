@@ -1,6 +1,6 @@
 import type { Routine } from "@table-craft/desktop/engine/protocol.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
-import { openConsoleOn } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
+import { nodeConsoleNamespace, openConsoleOn } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { pathKey, routineKey } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { parseRoutineAnswer, ROUTINE_CHOICES, routineNote } from "@table-craft/desktop/renderer/model/routineCall.js";
@@ -65,7 +65,11 @@ async function executeRoutine({ datasourceId, path, routine }: SelectedRoutine):
   });
   if (answer === null) return;
   const { choice, call } = parseRoutineAnswer(answer);
-  const consoleId = await openConsoleOn(datasourceId, { sql: call.sql, parameterValues: call.params, namespace: path });
+  const consoleId = await openConsoleOn(datasourceId, {
+    sql: call.sql,
+    parameterValues: call.params,
+    namespace: await nodeConsoleNamespace(datasourceId, path),
+  });
   if (choice === ROUTINE_CHOICES.run) await useConsoles.getState().run(consoleId, "all", call.params);
 }
 
