@@ -73,7 +73,7 @@ function fixture(extra: Partial<Keyspace> = {}) {
     connectionSchema: z.object({}),
     connect: () =>
       Promise.resolve({
-        keyspace,
+        services: { keyValue: keyspace },
         serverVersion: null,
         execute: vi.fn(),
         close: () => Promise.resolve(),

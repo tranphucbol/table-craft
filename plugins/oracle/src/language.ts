@@ -1,4 +1,4 @@
-import type { SqlLanguage } from "@table-craft/plugin-api";
+import type { PluginLanguage } from "@table-craft/plugin-api";
 import {
   defaultKeyword,
   defaultValuesInsert,
@@ -52,7 +52,26 @@ export const writeName = identifierWriter({ quoteIdentifier, plainIdentifier: PL
 const IMPORT_IDENTIFIER = /^[A-Za-z][A-Za-z0-9_$#]*$/;
 export const importName = identifierWriter({ quoteIdentifier, plainIdentifier: IMPORT_IDENTIFIER, keywords: KEYWORDS });
 
-export const { explainable } = sqlExplainable({
+export const CAPABILITIES = [
+  "sql",
+  "cancel",
+  "schemaTree",
+  "transactions",
+  "ddl",
+  "explain",
+  "explainAnalyze",
+  "currentNamespace",
+  "keepAlive",
+  "bulkInsert",
+  "objects",
+  "serverMessages",
+  "sessions",
+  "routineCall",
+] as const;
+
+export type OracleCapability = (typeof CAPABILITIES)[number];
+
+export const explainCheck = sqlExplainable({
   dialect: DIALECT,
   name: "Oracle",
   verbs: EXPLAIN_VERBS,
@@ -74,7 +93,7 @@ export function textLiteral(value: string): string {
   return sqlLiteral(value, LITERALS);
 }
 
-export const language: SqlLanguage = {
+export const language: PluginLanguage<OracleCapability> = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
   classify,
@@ -92,17 +111,19 @@ export const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     keywords: KEYWORDS,
   }),
-  explainable,
   ...sqlFormatter({ dialect: "plsql", lexer: DIALECT, parameters: PARAMETERS.styles }),
   ...sqlParameters(PARAMETERS),
-  ...sqlImporter({
-    quoteIdentifier,
-    plainIdentifier: IMPORT_IDENTIFIER,
-    keywords: KEYWORDS,
-    types: ORACLE_IMPORT_TYPES,
-    decimal: oracleDecimal,
-  }),
-  namespaceSwitch: namespaceSwitcher("alterSessionSchema", quoteIdentifier),
-  objects: oracleObjects({ name: writeName, text: textLiteral }),
-  routineCall: oracleRoutineCall(writeName),
+  services: {
+    explain: explainCheck,
+    bulkInsert: sqlImporter({
+      quoteIdentifier,
+      plainIdentifier: IMPORT_IDENTIFIER,
+      keywords: KEYWORDS,
+      types: ORACLE_IMPORT_TYPES,
+      decimal: oracleDecimal,
+    }),
+    currentNamespace: namespaceSwitcher("alterSessionSchema", quoteIdentifier),
+    objects: oracleObjects({ name: writeName, text: textLiteral }),
+    routineCall: { call: oracleRoutineCall(writeName) },
+  },
 };

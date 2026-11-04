@@ -190,7 +190,7 @@ function relationKind(relation: Relation): CompletionKind {
 /** The shared completion and navigation every built-in plugin spreads into its `SqlLanguage` (decision 028). */
 export function sqlCompleter(
   options: CompleterOptions,
-): Pick<SqlLanguage, "complete" | "resolve"> & Required<Pick<SqlLanguage, "selectSource" | "signatureAt">> {
+): Pick<SqlLanguage, "complete" | "resolve" | "selectSource" | "signatureAt"> {
   const reserved = new Set(options.keywords.map((keyword) => keyword.toUpperCase()));
   const unquotedWord = options.dialect.variables === true ? VARIABLE_WORD : UNQUOTED_WORD;
   const { denotes, sameIdentifier, cteNamed, sourceNamed, serverOf, Lookup } = nameRules(options);

@@ -6,27 +6,23 @@ import {
   toWireInteger,
   toWireValue,
   z,
-  type Capability,
+  definePlugin,
   type Column,
   type ColumnOrigin,
   type ConnectOptions,
-  type DatasourcePlugin,
   type ExecuteOptions,
   type ExecuteResult,
   type ExplainedPlan,
   type ExplainOptions,
   type InsertRow,
   type InsertTarget,
-  type Introspector,
   type ParameterValue,
   type Row,
   type PluginErrorCode,
+  type PluginSession,
   type ServerMessage,
   type ServerTimeout,
-  type CancelReach,
-  type Session,
-  type SessionMonitor,
-  type SqlLanguage,
+  type PluginLanguage,
   type StatementKind,
   type TlsInfo,
   type TransactionMode,
@@ -98,7 +94,7 @@ import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 import { SHOW_WARNINGS_SQL, warningCount, warningMessages } from "./warnings.js";
 
 const PLUGIN_ID = "mysql";
-const CAPABILITIES: readonly Capability[] = [
+const CAPABILITIES = [
   "sql",
   "cancel",
   "schemaTree",
@@ -114,7 +110,9 @@ const CAPABILITIES: readonly Capability[] = [
   "sessions",
   "routineCall",
   "serverTimeout",
-];
+] as const;
+
+type MysqlCapability = (typeof CAPABILITIES)[number];
 
 /** What the mysql client accepts: `'\''`, `# comments`, `DELIMITER //` and `BEGIN … END` routine bodies. */
 const DIALECT: SqlDialectOptions = {
@@ -135,7 +133,7 @@ const PLAIN_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 const KEYWORDS: readonly string[] = [...SQL_KEYWORDS, "STRAIGHT_JOIN", "REPLACE"];
 const writeName = identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS });
 
-const { explainable } = sqlExplainable({
+const explainCheck = sqlExplainable({
   dialect: DIALECT,
   name: "MySQL",
   verbs: EXPLAIN_VERBS,
@@ -152,7 +150,7 @@ const COMPLETER: CompleterOptions = {
   server: serverIdentity,
 };
 
-const language: SqlLanguage = {
+const language: PluginLanguage<MysqlCapability> = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
   classify: (sql) => classifyTokens(sql, DIALECT),
@@ -169,22 +167,24 @@ const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     keywords: KEYWORDS,
   }),
-  explainable,
   ...sqlFormatter({ dialect: "mysql", lexer: DIALECT, parameters: PARAMETERS.styles }),
   ...sqlParameters(PARAMETERS),
-  ...sqlImporter({
-    quoteIdentifier,
-    plainIdentifier: PLAIN_IDENTIFIER,
-    keywords: KEYWORDS,
-    types: MYSQL_IMPORT_TYPES,
-    decimal: mysqlDecimal,
-  }),
-  namespaceSwitch: namespaceSwitcher("use", quoteIdentifier),
-  objects: mysqlObjects({
-    name: writeName,
-    text: (value) => sqlLiteral(value, LITERALS),
-  }),
-  routineCall: mysqlRoutineCall(writeName),
+  services: {
+    explain: explainCheck,
+    bulkInsert: sqlImporter({
+      quoteIdentifier,
+      plainIdentifier: PLAIN_IDENTIFIER,
+      keywords: KEYWORDS,
+      types: MYSQL_IMPORT_TYPES,
+      decimal: mysqlDecimal,
+    }),
+    currentNamespace: namespaceSwitcher("use", quoteIdentifier),
+    objects: mysqlObjects({
+      name: writeName,
+      text: (value) => sqlLiteral(value, LITERALS),
+    }),
+    routineCall: { call: mysqlRoutineCall(writeName) },
+  },
 };
 
 /** Manual mode is autocommit off: the server opens a transaction with the next statement. */
@@ -619,7 +619,7 @@ function isFatal(cause: unknown): boolean {
   return (cause as { fatal?: unknown }).fatal === true;
 }
 
-class MysqlSession implements Session {
+class MysqlSession implements PluginSession<MysqlCapability> {
   readonly #config: MysqlConfig;
   readonly #serverName: string | undefined;
   readonly #connection: mysql.Connection;
@@ -638,14 +638,9 @@ class MysqlSession implements Session {
 
   readonly serverVersion: string | null;
   readonly serverBrand: string;
-  readonly serverTimeout: ServerTimeout | null;
-  readonly cancelReach: CancelReach;
+  readonly #serverTimeout: ServerTimeout | null;
   readonly tls: TlsInfo | null;
-  readonly introspector: Introspector;
-  readonly transactions: Transactions;
-  readonly sessions: SessionMonitor;
-  readonly serverSessionId: string;
-  readonly findServerInstance?: () => Promise<string | null>;
+  readonly services: PluginSession<MysqlCapability>["services"];
 
   constructor(config: MysqlConfig, serverName: string | undefined, connection: mysql.Connection, identity: Identity) {
     this.#config = config;
@@ -656,16 +651,12 @@ class MysqlSession implements Session {
     this.serverVersion = identity.serverVersion;
     this.serverBrand = identity.dialect.kind;
     this.#dialect = identity.dialect;
-    this.serverTimeout = serverTimeoutOf(this.#dialect);
-    this.cancelReach = cancelReachOf(identity.serverVersion);
+    this.#serverTimeout = serverTimeoutOf(this.#dialect);
     this.tls = tlsInfoOf((connection as unknown as WithStream).stream);
-    this.introspector = mysqlIntrospector(connection);
-    this.sessions = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));
-    this.serverSessionId = identity.serverSessionId;
-    // Asked for on demand: CLUSTER_PROCESSLIST asks every TiDB server, and one that never answers held each connect for 40 s.
-    if (tidbGlobalKill(identity.serverVersion) === false) this.findServerInstance = () => tidbInstanceOf(connection);
+    const introspector = mysqlIntrospector(connection);
+    const monitor = mysqlSessions(connection, identity.serverVersion, () => openConnection(config, { serverName }));
     const state = this.#transaction;
-    this.transactions = {
+    const transactions: Transactions = {
       setMode: (mode) => this.#setMode(mode),
       commit: () => this.#endTransaction(COMMIT_SQL),
       rollback: () => this.#endTransaction(ROLLBACK_SQL),
@@ -675,6 +666,23 @@ class MysqlSession implements Session {
       get open() {
         return state.open;
       },
+    };
+    this.services = {
+      cancel: { cancel: () => this.#cancel(), reach: cancelReachOf(identity.serverVersion) },
+      schemaTree: introspector,
+      ddl: introspector,
+      transactions,
+      explain: { explain: (sql, options) => this.#explain(sql, options) },
+      currentNamespace: { current: () => this.#currentNamespace() },
+      keepAlive: { ping: () => this.#ping() },
+      bulkInsert: { insertRows: (target, rows) => this.#insertRows(target, rows) },
+      sessions: {
+        ...monitor,
+        ownId: identity.serverSessionId,
+        // Asked for on demand: CLUSTER_PROCESSLIST asks every TiDB server, and one that never answers held each connect for 40 s.
+        ...(tidbGlobalKill(identity.serverVersion) === false && { findOwnInstance: () => tidbInstanceOf(connection) }),
+      },
+      serverTimeout: { limit: this.#serverTimeout },
     };
     connection.on("error", (error: Error) => {
       this.#broken = error;
@@ -749,7 +757,7 @@ class MysqlSession implements Session {
    * Returns the limit the statement runs under, null for none.
    */
   async #applyTimeout(requested: number | undefined): Promise<number | null> {
-    if (this.serverTimeout === null) return null;
+    if (this.#serverTimeout === null) return null;
     if (requested === undefined && this.#appliedTimeoutMs === null) return null;
     if (this.#ownTimeoutMs === null) {
       const rows = (await query(
@@ -768,7 +776,7 @@ class MysqlSession implements Session {
     return want === 0 ? null : want;
   }
 
-  async currentNamespace(): Promise<readonly string[] | null> {
+  async #currentNamespace(): Promise<readonly string[] | null> {
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     const rows = (await query(this.#connection, CURRENT_DATABASE_SQL, "statementFailed")) as readonly {
       name?: unknown;
@@ -777,7 +785,7 @@ class MysqlSession implements Session {
     return typeof name === "string" ? [name] : null;
   }
 
-  async ping(): Promise<void> {
+  async #ping(): Promise<void> {
     if (this.#broken !== null) {
       throw new PluginError("connectionLost", `The connection was lost: ${this.#broken.message}`);
     }
@@ -791,7 +799,7 @@ class MysqlSession implements Session {
     });
   }
 
-  async insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
+  async #insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
     if (this.#broken !== null) {
       throw new PluginError("connectionFailed", `The connection was lost: ${this.#broken.message}`);
     }
@@ -849,8 +857,8 @@ class MysqlSession implements Session {
     });
   }
 
-  async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
-    const verdict = explainable(sql, options);
+  async #explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
+    const verdict = explainCheck.explainable(sql, options);
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     const dialect = explainDialect(this.serverVersion);
     const format = planFormat(explainedVerb(sql, DIALECT), dialect, options.analyze);
@@ -986,7 +994,7 @@ class MysqlSession implements Session {
     return new PluginError("statementFailed", message, { cause, position });
   }
 
-  cancel(): Promise<void> {
+  #cancel(): Promise<void> {
     const running = this.#running;
     if (running === null) return Promise.resolve();
     running.cancelRequested = true;
@@ -1023,7 +1031,7 @@ class MysqlSession implements Session {
   }
 }
 
-const plugin: DatasourcePlugin = {
+export default definePlugin({
   id: PLUGIN_ID,
   capabilities: CAPABILITIES,
   language,
@@ -1038,9 +1046,7 @@ const plugin: DatasourcePlugin = {
       throw cause;
     }
   },
-};
-
-export default plugin;
+});
 
 /** The table column MySQL reports a result column comes from, or null for an expression (plan 026). */
 function originOf(field: mysql.FieldPacket): ColumnOrigin | null {

@@ -271,7 +271,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     "givenLockWaitOnRedPostgres_whenHolderTerminated_thenBlockedByShownAndPidTypedToConfirm",
     async () => {
       holder = await holdLock(PG_SERVER, "BEGIN");
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launchSaved(savedPostgres({ name: "pg-prod", color: "red" }));
       await startStatement(page, BLOCKED_UPDATE);
 
@@ -320,7 +320,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     "givenLockWaitOnMysql_whenHolderTerminated_thenBlockedByShownAndConfirmShowsKill",
     async () => {
       holder = await holdLock(MYSQL_SERVER, "START TRANSACTION");
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launch(MYSQL_ROOT);
       await startStatement(page, BLOCKED_UPDATE);
 
@@ -419,8 +419,8 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     "givenSleepOnTidb4_whenShowSessions_thenActiveWithoutCancelAndTerminateRuns",
     async () => {
       holder = await TIDB_SERVER.plugin.connect(TIDB_SERVER.config, { readOnly: false });
-      const holderId = holder.serverSessionId ?? "";
-      const holderInstance = await holder.findServerInstance?.();
+      const holderId = holder.services.sessions?.ownId ?? "";
+      const holderInstance = await holder.services.sessions?.findOwnInstance?.();
       if (holderInstance === undefined || holderInstance === null) {
         throw new Error("A TiDB 4 session finds the server it is on.");
       }

@@ -149,7 +149,10 @@ for (const target of TARGETS) {
         const opened = await session(config);
         proxy.blackhole();
 
-        const outcome = await Promise.race([opened.ping?.().then(() => "answered"), delay(PING_WAIT_MS)]);
+        const outcome = await Promise.race([
+          opened.services.keepAlive?.ping().then(() => "answered"),
+          delay(PING_WAIT_MS),
+        ]);
 
         expect(outcome).toBe("waited");
       });

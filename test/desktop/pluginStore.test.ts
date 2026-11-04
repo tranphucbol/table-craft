@@ -171,7 +171,7 @@ describe("plugin service", () => {
     await plugins.install("postgres");
     registry.publish(PACKAGE, [
       release({ id: "postgres", version: "1.0.0" }),
-      release({ id: "postgres", version: "2.0.0", apiVersion: "2.0.0" }),
+      release({ id: "postgres", version: "2.0.0", apiVersion: "3.0.0" }),
     ]);
 
     expect(await plugins.updateAll()).toEqual([{ id: "postgres", version: "1.0.0", changed: false }]);
@@ -222,12 +222,12 @@ describe("plugin service", () => {
   it("givenStableChannelAndBetaInstalledIncompatible_whenUpdateAll_thenInstallsStable", async () => {
     registry.publish(PACKAGE, [
       release({ id: "postgres", version: "1.0.0" }),
-      release({ id: "postgres", version: "1.1.0-beta.1", apiVersion: "1.1.0" }),
+      release({ id: "postgres", version: "1.1.0-beta.1", apiVersion: "2.1.0" }),
     ]);
-    const beta = service(registry.url, { channel: () => "beta" });
+    const beta = service(registry.url, { channel: () => "beta", hostVersion: "2.1.0" });
     await beta.start();
     await beta.install("postgres");
-    const older = service(registry.url, { channel: () => "stable", hostVersion: "1.0.0" });
+    const older = service(registry.url, { channel: () => "stable", hostVersion: "2.0.0" });
     await older.start();
 
     expect(await older.updateAll()).toEqual([{ id: "postgres", version: "1.0.0", changed: true }]);

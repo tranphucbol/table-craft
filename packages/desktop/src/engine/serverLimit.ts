@@ -1,5 +1,6 @@
-import type { Capability, ExecuteOptions, Session } from "@table-craft/plugin-api";
+import type { Capability, ExecuteOptions, ServerTimeout, Session } from "@table-craft/plugin-api";
 import type { StatementLimit } from "@table-craft/desktop/engine/protocol.js";
+import { hasService, serviceOf } from "@table-craft/desktop/engine/services.js";
 
 const MS_PER_SECOND = 1000;
 
@@ -15,6 +16,13 @@ export function serverTimeoutOptions(
 ): Pick<ExecuteOptions, "serverTimeoutMs"> {
   const seconds = limit.timeoutSeconds ?? 0;
   if (limit.serverEnforced !== true || seconds <= 0) return {};
-  if (!capabilities.includes("serverTimeout") || session.serverTimeout == null) return {};
+  if (!capabilities.includes("serverTimeout") || serverTimeoutOf(session) === null) return {};
   return { serverTimeoutMs: seconds * MS_PER_SECOND };
+}
+
+/** What the server stops by itself, or null without the `serverTimeout` service or a server limit. */
+export function serverTimeoutOf(session: Session): ServerTimeout | null {
+  if (!hasService(session, "serverTimeout")) return null;
+  const { limit } = serviceOf(session, "serverTimeout");
+  return limit === null ? null : { ...limit };
 }

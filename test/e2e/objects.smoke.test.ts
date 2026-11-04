@@ -10,6 +10,7 @@ import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
+import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
@@ -47,7 +48,7 @@ const POSTGRES_CLEANUP = [
 ];
 const MYSQL_CLEANUP = [`DROP TABLE IF EXISTS ${TABLE}`];
 
-type Plugin = typeof postgres;
+type Plugin = DatasourcePlugin;
 
 function sqlite(path: string): Datasource {
   return { id: "lite", pluginId: "sqlite", config: { path } };

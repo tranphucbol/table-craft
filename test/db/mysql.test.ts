@@ -10,7 +10,7 @@ describe.runIf(databaseEnabled("mysql"))("mysql server", () => {
   it("givenMysqlServer_whenSessionOpens_thenKillQueryReachesTheStatement", async () => {
     const session = await mysql.connect(MYSQL_CONFIG, { readOnly: false });
     try {
-      expect(session.cancelReach).toEqual({ method: "KILL QUERY", reaches: "statement" });
+      expect(session.services.cancel.reach).toEqual({ method: "KILL QUERY", reaches: "statement" });
     } finally {
       await session.close();
     }
@@ -69,18 +69,20 @@ describe.runIf(databaseEnabled("mysql"))("mysql server", () => {
 
   describe("mysql explain", () => {
     it("givenMysqlDelete_whenAnalyseExplainable_thenRefused", async () => {
-      const verdict = mysql.language?.explainable?.("DELETE FROM orders WHERE id = 1", { analyze: true });
+      const verdict = mysql.language.services.explain.explainable("DELETE FROM orders WHERE id = 1", { analyze: true });
       expect(verdict).toEqual({
         ok: false,
         reason: "MySQL analyses only SELECT or TABLE statements; use Explain Plan for this DELETE.",
       });
       const session = await mysql.connect(MYSQL_CONFIG, { readOnly: false });
       try {
-        const failure: unknown = await session
-          .explain?.("DELETE FROM orders WHERE id = 1", { analyze: true })
+        const failure: unknown = await session.services.explain
+          .explain("DELETE FROM orders WHERE id = 1", { analyze: true })
           .catch((error: unknown) => error);
         expect(isPluginError(failure) && failure.code).toBe("explainUnsupported");
-        const plan = await session.explain?.("UPDATE orders SET total = total WHERE id = 1", { analyze: false });
+        const plan = await session.services.explain.explain("UPDATE orders SET total = total WHERE id = 1", {
+          analyze: false,
+        });
         expect(plan?.statement).toMatch(/^EXPLAIN FORMAT=JSON /);
         expect(plan?.roots[0]).toMatchObject({ operation: "Update", target: "orders" });
       } finally {

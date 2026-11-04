@@ -59,7 +59,7 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
     });
 
     it("givenCluster_whenNodes_thenThreePrimariesCoveringEverySlot", async () => {
-      const nodes = (await session.nodes?.()) ?? [];
+      const nodes = (await session.services.nodes?.list()) ?? [];
       const primaries = nodes.filter((node) => node.role === "primary");
       expect(primaries).toHaveLength(cluster.primaries);
       expect(nodes.filter((node) => node.role === "replica")).toHaveLength(cluster.replicas);
@@ -77,7 +77,7 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
     });
 
     it("givenCluster_whenScan_thenKeysFromEveryPrimary", async () => {
-      const keyspace = session.keyspace;
+      const keyspace = session.services.keyValue;
       if (keyspace === undefined) throw new Error("no keyspace");
       const [database] = await keyspace.databases();
       expect(database).toMatchObject({ index: 0, current: true });
@@ -96,7 +96,7 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
     });
 
     it("givenPickedNode_whenDbsize_thenThatNodeAlone", async () => {
-      const [primary] = (await session.nodes?.()) ?? [];
+      const [primary] = (await session.services.nodes?.list()) ?? [];
       const result = await session.execute("DBSIZE", [], { node: primary?.id ?? "" });
       expect(result.columns).toEqual([]);
       expect(result.reply?.text).toMatch(/^\(integer\) \d+$/);
@@ -116,7 +116,7 @@ describe.runIf(databaseEnabled("redis")).each(CLUSTERS)("redis $version cluster"
     });
 
     it("givenCluster_whenRenameAcrossSlots_thenRefusedWithHashTagHint", async () => {
-      const keyspace = session.keyspace;
+      const keyspace = session.services.keyValue;
       if (keyspace === undefined) throw new Error("no keyspace");
       await session.execute("SET rename:{1}:from x");
       try {

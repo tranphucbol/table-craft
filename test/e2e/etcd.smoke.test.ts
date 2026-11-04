@@ -69,7 +69,7 @@ async function onEtcd(config: object, commands: readonly string[]): Promise<void
 async function valueOn(config: object, key: string): Promise<string | null> {
   const session = await etcd.connect(etcd.connectionSchema.parse(config), { readOnly: true });
   try {
-    const contents = await session.keyspace?.read(0, { text: key, hex: null }, { window: 1 });
+    const contents = await session.services.keyValue?.read(0, { text: key, hex: null }, { window: 1 });
     return typeof contents?.value === "string" ? contents.value : null;
   } finally {
     await session.close();

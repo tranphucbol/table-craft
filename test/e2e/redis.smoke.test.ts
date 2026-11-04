@@ -498,7 +498,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
     "givenCluster_whenShowSessionsAndTerminate_thenClientsAcrossPrimariesAndOneGone",
     async () => {
       holder = await redis.connect(REDIS_CLUSTER_CONFIG, { readOnly: false });
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launch(CLUSTER);
       await showFromDatasourceMenu(page, CLUSTER.id, /^Show Sessions/);
       const grid = page.getByTestId("sessions-grid");

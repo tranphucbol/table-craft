@@ -194,9 +194,17 @@ export interface ClusterSnapshot {
   close(): Promise<void>;
 }
 
-export interface ClusterManager {
+/** The `members` service (decision 137). */
+export interface ClusterMembers {
   endpoints(): Promise<readonly ClusterEndpoint[]>;
   members(): Promise<readonly ClusterMember[]>;
+  promote(memberId: string): Promise<void>;
+  remove(memberId: string): Promise<void>;
+}
+
+/** The `maintenance` service (decision 137). */
+export interface ClusterMaintenance {
+  endpoints(): Promise<readonly ClusterEndpoint[]>;
   status(endpointId: string): Promise<ClusterStatus>;
   alarms(): Promise<readonly ClusterAlarm[]>;
   disarm(alarm: ClusterAlarm): Promise<void>;
@@ -204,8 +212,6 @@ export interface ClusterManager {
   defragment(endpointId: string): Promise<void>;
   hash(endpointId: string, revision: string): Promise<ClusterHash>;
   snapshot(endpointId: string): Promise<ClusterSnapshot>;
-  promote(memberId: string): Promise<void>;
-  remove(memberId: string): Promise<void>;
 }
 
 export interface AccessStatus {

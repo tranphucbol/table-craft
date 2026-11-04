@@ -491,7 +491,7 @@ describe.runIf(DATABASES_ENABLED)("oracle live test", () => {
       holder = await oracle.connect(ORACLE_CONFIG, { readOnly: false });
       await run(holder, "SET TRANSACTION READ WRITE");
       await run(holder, HOLDING_UPDATE);
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launch(ORACLE);
       await startStatement(page, BLOCKED_UPDATE);
 
@@ -520,7 +520,7 @@ describe.runIf(DATABASES_ENABLED)("oracle live test", () => {
         .evaluate((header: Scrollable) => header.scrollIntoView({ inline: "center" }));
       await captureWindow(page, "09-sessions-blocked");
 
-      await holder.transactions?.rollback();
+      await holder.services.transactions?.rollback();
     },
     SCENARIO_TIMEOUT_MS,
   );

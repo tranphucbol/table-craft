@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ServerSession, Session } from "@table-craft/plugin-api";
+import type { ServerSession, ServerSessions, Session } from "@table-craft/plugin-api";
 import { isListedAs, learnInstance, repeatedIds } from "@table-craft/desktop/engine/serverInstances.js";
 
 const ID = "7";
@@ -27,14 +27,15 @@ function row(id: string, instance: string | null): ServerSession {
   };
 }
 
-function session(fields: Partial<Session>): Session {
-  return { serverSessionId: ID, serverVersion: null, close: () => Promise.resolve(), ...fields } as Session;
+function session(fields: Partial<ServerSessions>): Session {
+  const sessions = { ownId: ID, ...fields } as ServerSessions;
+  return { serverVersion: null, close: () => Promise.resolve(), services: { sessions } } as Session;
 }
 
 function counted(answer: () => Promise<string | null>): { session: Session; asked: () => number } {
   let asked = 0;
   const lookedUp = session({
-    findServerInstance: () => {
+    findOwnInstance: () => {
       asked += 1;
       return answer();
     },
@@ -50,7 +51,7 @@ describe("server instances", () => {
   });
 
   it("givenReportedInstance_whenListedAs_thenMatchesThatInstanceOnly", () => {
-    const reported = session({ serverInstance: OWN });
+    const reported = session({ ownInstance: OWN });
 
     expect(isListedAs(reported, row(ID, OWN))).toBe(true);
     expect(isListedAs(reported, row(ID, OTHER))).toBe(false);

@@ -104,18 +104,7 @@ export function createTunnelPool(open: () => Promise<Tunnel>): TunnelPool {
 }
 
 const UNGUARDED: ReadonlySet<PropertyKey> = new Set(["cancel", "close", "dispose", "stop", "return"]);
-const NESTED: ReadonlySet<PropertyKey> = new Set([
-  "introspector",
-  "transactions",
-  "keyspace",
-  "sessions",
-  "leases",
-  "watch",
-  "cluster",
-  "access",
-  "coordination",
-  "keyTransfer",
-]);
+const SERVICES: keyof Session = "services";
 
 /**
  * `session` with its lease: `close()` releases it once, a call after the tunnel dropped is refused
@@ -161,14 +150,27 @@ export function tunneledSession(session: Session, lease: TunnelLease, describe: 
     return known;
   }
 
+  function once(target: object, make: (target: object) => object): object {
+    const known = wrapped.get(target) ?? make(target);
+    wrapped.set(target, known);
+    return known;
+  }
+
+  /** Each service, the way the session's own methods are: guarded and its resources tracked. */
+  function wrapServices(services: object): object {
+    return new Proxy(services, {
+      get(object, property) {
+        const service: unknown = Reflect.get(object, property, object);
+        return typeof service === "object" && service !== null ? once(service, wrap) : service;
+      },
+    });
+  }
+
   function wrap<T extends object>(target: T): T {
     return new Proxy(target, {
       get(object, property) {
         const value: unknown = Reflect.get(object, property, object);
-        if (typeof value !== "function") {
-          if (typeof value === "object" && value !== null && NESTED.has(property)) return wrap(value);
-          return resource(value);
-        }
+        if (typeof value !== "function") return resource(value);
         const method = value as (...args: unknown[]) => unknown;
         if (property === "close")
           return (...args: unknown[]) => {
@@ -201,11 +203,7 @@ export function tunneledSession(session: Session, lease: TunnelLease, describe: 
         };
       }
       const value: unknown = Reflect.get(object, property, object);
-      if (NESTED.has(property) && typeof value === "object" && value !== null) {
-        const known = wrapped.get(value) ?? wrap(value);
-        wrapped.set(value, known);
-        return known;
-      }
+      if (property === SERVICES && typeof value === "object" && value !== null) return once(value, wrapServices);
       if (typeof value !== "function") return value;
       const method = value as (...args: unknown[]) => unknown;
       if (UNGUARDED.has(property)) return method.bind(object);

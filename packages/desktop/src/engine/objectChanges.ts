@@ -10,7 +10,6 @@ import {
 import { connectDatasource } from "@table-craft/desktop/engine/connect.js";
 import type { BaseContext } from "@table-craft/desktop/engine/context.js";
 import {
-  BUG_HINT,
   DESIGN_HINT,
   EngineFailure,
   OBJECT_BUSY_HINT,
@@ -24,6 +23,7 @@ import {
   statementFailed,
 } from "@table-craft/desktop/engine/failures.js";
 import type { AppliedChange } from "@table-craft/desktop/engine/protocol.js";
+import { languageServiceOf, notDeclared, serviceOf } from "@table-craft/desktop/engine/services.js";
 import type { TransferContext } from "@table-craft/desktop/engine/transfers.js";
 
 /** Changing objects from the tree: designs, previews and applying a change on a session of its own. */
@@ -33,15 +33,8 @@ export function objectContext(base: BaseContext, transfers: TransferContext) {
 
   function objectEditor(): ObjectEditor {
     const { plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
-    const editor = plugin.language?.objects;
-    if (!plugin.capabilities.includes("objects") || editor === undefined) {
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: "This datasource's plugin does not declare the objects capability.",
-        hint: BUG_HINT,
-      });
-    }
-    return editor;
+    if (!plugin.capabilities.includes("objects") || plugin.language === undefined) throw notDeclared("objects");
+    return languageServiceOf(plugin.language, "objects");
   }
 
   /** Read afresh: a design or a diff from a stale cache would undo what another session changed. */
@@ -76,11 +69,10 @@ export function objectContext(base: BaseContext, transfers: TransferContext) {
 
   async function objectScript(change: ObjectChange): Promise<DdlScript> {
     const editor = objectEditor();
-    const introspector = await introspect(({ session }) => session.introspector);
+    const introspector = await introspect(({ session }) => serviceOf(session, "schemaTree"));
     const altered = change.kind === "alterTable" ? await freshRelation(change.path, change.relation) : null;
     const current = altered === null ? null : designed(() => editor.design(altered));
-    const qualifiedName = (path: readonly string[], name: string): string =>
-      introspector?.qualifiedName(path, name) ?? name;
+    const qualifiedName = (path: readonly string[], name: string): string => introspector.qualifiedName(path, name);
     return designed(() => editor.script(change, { qualifiedName, current }));
   }
 

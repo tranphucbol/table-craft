@@ -53,7 +53,7 @@ async function runAll(session: Session, script: DdlScript, transactional: boolea
  * `auto` mode.
  */
 export async function applyDdl(session: Session, script: DdlScript): Promise<AppliedScript> {
-  const transactions = script.transactional ? session.transactions : undefined;
+  const transactions = script.transactional ? session.services.transactions : undefined;
   if (script.transactional && transactions === undefined) {
     throw new CoreError(
       "invalidRequest",

@@ -36,7 +36,7 @@ export interface PlanNode {
   readonly warnings?: readonly string[];
 }
 
-/** What `Session.explain` answers. */
+/** What `Explainer.explain` answers. */
 export interface ExplainedPlan {
   /** The EXPLAIN statement the plugin sent, which is what history records. */
   readonly statement: string;

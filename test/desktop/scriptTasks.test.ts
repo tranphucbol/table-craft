@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { sqlSplitter, sqlStatementStream } from "@table-craft/plugin-api/sql";
+import { sqlStatementStream } from "@table-craft/plugin-api/sql";
 import type { EngineError, ScriptEvent, ScriptTask } from "@table-craft/desktop/engine/protocol.js";
-import {
-  scriptTasks,
-  wholeFileStream,
-  type ScriptJob,
-  type ScriptSession,
-} from "@table-craft/desktop/engine/scripts.js";
+import { scriptTasks, type ScriptJob, type ScriptSession } from "@table-craft/desktop/engine/scripts.js";
 
 const FILE = "/scripts/seed.sql";
 const OTHER = "/scripts/more.sql";
@@ -227,18 +222,7 @@ describe("scriptTasks", () => {
   });
 });
 
-describe("wholeFileStream", () => {
-  it("givenPluginWithoutSplitStream_whenStreamed_thenSplitAtTheEndWithLines", () => {
-    const stream = wholeFileStream(sqlSplitter());
-
-    expect(stream.push("SELECT 1;\n\n  SEL")).toEqual([]);
-    expect(stream.push("ECT 2;")).toEqual([]);
-    expect(stream.end()).toEqual([
-      { from: 0, to: 8, sql: "SELECT 1", line: 1, column: 1 },
-      { from: 13, to: 21, sql: "SELECT 2", line: 3, column: 3 },
-    ]);
-  });
-
+describe("scriptTasks on error", () => {
   it("givenRunScriptContinue_whenErrors_thenTaskFinishesWithFailures", async () => {
     const record = recorded();
     const tasks = scriptTasks({ chunks: chunksFrom({ [FILE]: [encode(FAILING)] }, record) });

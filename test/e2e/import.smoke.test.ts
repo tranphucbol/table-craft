@@ -14,6 +14,7 @@ import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
+import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
 import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
@@ -48,7 +49,7 @@ const SHOWN_PROGRESS_ROWS = 12_000;
 const CHAOS_SCENARIO_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
 const UTF16_LE_BOM = Buffer.from([0xff, 0xfe]);
 
-type Plugin = typeof postgres;
+type Plugin = DatasourcePlugin;
 
 function sqlite(path = seededSqliteFile()): Datasource {
   return { id: "lite", pluginId: "sqlite", config: { path } };

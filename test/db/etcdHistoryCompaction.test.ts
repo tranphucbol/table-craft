@@ -129,7 +129,7 @@ async function lifecycle(server: IsolatedServer) {
     maxBytes: PAGE_BYTES,
     timeoutMs: HISTORY_TIMEOUT_MS,
   };
-  const keyspace = server.session.keyspace;
+  const keyspace = server.session.services.keyValue;
   if (keyspace?.history === undefined) throw new Error("etcd history capability is unavailable");
   return { key, created, updated, deleted, recreated, request, keyspace, history: keyspace.history.bind(keyspace) };
 }
