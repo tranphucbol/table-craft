@@ -2,7 +2,13 @@
  * Installs, updates and removes downloaded plugins (decision 110). Electron and the filesystem's
  * owner arrive as options, so this runs under Vitest against a loopback registry.
  */
-import { catalogEntry, OFFICIAL_SCOPE, type CatalogEntry } from "@table-craft/desktop/main/pluginStore/catalog.js";
+import {
+  catalogEntry,
+  hostPlatform,
+  OFFICIAL_SCOPE,
+  packageFor,
+  type CatalogEntry,
+} from "@table-craft/desktop/main/pluginStore/catalog.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import {
   installManaged,
@@ -49,6 +55,8 @@ export interface InstallerOptions {
   /** After every progress or install change, so main can rediscover and tell the windows. */
   readonly onChanged: (installed: boolean) => void;
   readonly log: Logger;
+  /** `<process.platform>-<process.arch>`; which package a native plugin downloads as (decision 156). */
+  readonly platform?: string;
 }
 
 export interface InstallOutcome {
@@ -73,6 +81,8 @@ export interface PackageJson {
   readonly name: string;
   readonly version: string;
   readonly id: string;
+  /** The platform a native plugin's package is built for; absent for one that runs everywhere. */
+  readonly platform?: string;
 }
 
 /** The package a `.tgz` holds, read before the trust confirmation names it; throws when it is not a plugin. */
@@ -86,7 +96,7 @@ function readPackageJson(files: readonly PackageFile[]): PackageJson {
   const file = files.find((entry) => entry.path === PACKAGE_JSON);
   if (file === undefined) throw invalid("it has no package.json");
   if (!files.some((entry) => entry.path === MANIFEST_FILE)) throw invalid(`it has no ${MANIFEST_FILE}`);
-  let json: { name?: unknown; version?: unknown; tableCraft?: { id?: unknown } };
+  let json: { name?: unknown; version?: unknown; tableCraft?: { id?: unknown; platform?: unknown } };
   try {
     json = JSON.parse(file.data.toString("utf8")) as typeof json;
   } catch {
@@ -96,7 +106,9 @@ function readPackageJson(files: readonly PackageFile[]): PackageJson {
   if (typeof name !== "string" || typeof version !== "string" || typeof tableCraft?.id !== "string") {
     throw invalid("its package.json has no name, version or tableCraft.id");
   }
-  return { name, version, id: tableCraft.id };
+  const platform = tableCraft.platform;
+  if (platform !== undefined && typeof platform !== "string") throw invalid("its tableCraft.platform is not a string");
+  return { name, version, id: tableCraft.id, ...(platform === undefined ? {} : { platform }) };
 }
 
 function failureOf(cause: unknown): { message: string; hint: string } {
@@ -111,6 +123,7 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
   const progress = new Map<string, InstallProgress>();
   const running = new Map<string, Promise<InstallOutcome>>();
   const log = options.log;
+  const platform = options.platform ?? hostPlatform();
 
   function setProgress(id: string, next: InstallProgress, installed = false): void {
     progress.set(id, next);
@@ -127,6 +140,18 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
       );
     }
     return entry;
+  }
+
+  function packageOf(entry: CatalogEntry): string {
+    const name = packageFor(entry, platform);
+    if (name === null) {
+      throw new PluginInstallError(
+        "unsupportedPlatform",
+        `${entry.name} has no build for this computer (${platform}).`,
+        `It is published for ${(entry.platforms ?? []).join(", ")}.`,
+      );
+    }
+    return name;
   }
 
   async function stage(files: readonly PackageFile[], meta: PackageJson, source: ManagedPlugin["source"]) {
@@ -152,9 +177,10 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
 
   async function download(id: string): Promise<InstallOutcome> {
     const entry = officialEntry(id);
+    const packageName = packageOf(entry);
     const registry = options.registryUrl();
-    const packument = await fetchPackument(options.fetch, registry, entry.packageName);
-    const picked = pickVersion(packument, id, entry.packageName, options.hostVersion, options.channel?.() ?? "stable");
+    const packument = await fetchPackument(options.fetch, registry, packageName);
+    const picked = pickVersion(packument, id, packageName, options.hostVersion, options.channel?.() ?? "stable");
     const current = (await listManaged(options.root)).find((plugin) => plugin.id === id);
     if (current?.source === "registry" && (await keeps(current, picked.version))) {
       return { id, version: current.version, changed: false };
@@ -163,13 +189,13 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
     const bytes = await downloadTarball(options.fetch, picked.tarball, (received, total) =>
       setProgress(id, { status: "installing", received, total }),
     );
-    checkIntegrity(bytes, picked.integrity, entry.packageName);
+    checkIntegrity(bytes, picked.integrity, packageName);
     const files = readPackageTarball(bytes);
     const meta = readPackageJson(files);
-    if (meta.id !== id || meta.name !== entry.packageName || meta.version !== picked.version) {
+    if (meta.id !== id || meta.name !== packageName || meta.version !== picked.version) {
       throw new PluginInstallError(
         "invalid",
-        `The registry's ${entry.packageName} ${picked.version} holds ${meta.name} ${meta.version} (${meta.id}).`,
+        `The registry's ${packageName} ${picked.version} holds ${meta.name} ${meta.version} (${meta.id}).`,
         "Nothing was installed. Check the registry in Settings → Plugins.",
       );
     }
@@ -208,6 +234,15 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
         "builtIn",
         `"${meta.id}" ships with TableCraft and cannot be replaced from a file.`,
         "Update TableCraft to update it.",
+      );
+    }
+    if (meta.platform !== undefined && meta.platform !== platform) {
+      const entry = catalogEntry(meta.id);
+      const wanted = entry === undefined ? null : packageFor(entry, platform);
+      throw new PluginInstallError(
+        "unsupportedPlatform",
+        `${meta.name} is built for ${meta.platform}, not this computer (${platform}).`,
+        wanted === null ? "Pick the package built for this computer." : `Pick ${wanted} instead.`,
       );
     }
     const installed = await stage(files, meta, "file");

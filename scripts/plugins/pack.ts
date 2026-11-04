@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { MANIFEST_FILE } from "@table-craft/plugin-api";
-import { officialPackage } from "../../packages/desktop/src/main/pluginStore/catalog.js";
+import { catalogEntry, officialPackage, packageFor } from "../../packages/desktop/src/main/pluginStore/catalog.js";
 import { PluginInstallError } from "../../packages/desktop/src/main/pluginStore/errors.js";
 import type { RegistryFetch } from "../../packages/desktop/src/main/pluginStore/registry.js";
 import { readPackageTarball } from "../../packages/desktop/src/main/pluginStore/tarball.js";
@@ -26,6 +26,7 @@ import { stagePackage } from "../../packages/plugin-api/scripts/build.js";
 import { OPTIONAL_OUT_DIR, OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
 import { baselineFor, DEFAULT_REGISTRY, type Baseline } from "./baseline.js";
 import { tarballFingerprint } from "./fingerprint.js";
+import { fetchBinding, type FetchBinding, type NativeBinding } from "./native.js";
 
 const ROOT = resolve(import.meta.dirname, "..", "..");
 const DESKTOP = join(ROOT, "packages", "desktop");
@@ -38,6 +39,7 @@ const STAGE_DIRECTORY = "stage";
 const TARBALL = ".tgz";
 const REGISTRY_ENV = "npm_config_registry";
 const JSON_INDENT = 2;
+const NOTICES_FILE = "THIRD-PARTY-NOTICES";
 /** The keyword that marks a TableCraft plugin on npm (decision 109). */
 export const PLUGIN_KEYWORD = "table-craft-plugin";
 export const PACKAGES_DIRECTORY = join(ROOT, "dist", "plugin-packages");
@@ -152,6 +154,52 @@ export function stagePlugin(id: string, version: string, built: string, stage: s
   return directory;
 }
 
+/** The manifest's `platform-arch` as npm's `os` and `cpu` fields read it. */
+function osAndCpu(platform: string): { os: string[]; cpu: string[] } {
+  const [os = "", cpu = ""] = platform.split("-");
+  return { os: [os], cpu: [cpu] };
+}
+
+function notices(binding: NativeBinding): string {
+  return [`${binding.packageName}@${binding.version}`, "", binding.license.trim(), ""].join("\n");
+}
+
+/**
+ * Stages plugin `id`'s package for `platform` into `stage/<id>-<platform>/` (decision 156): the
+ * same bundle and manifest as every platform's, beside that platform's `binding` and its license.
+ */
+export function stageNativePlugin(
+  id: string,
+  platform: string,
+  version: string,
+  built: string,
+  stage: string,
+  binding: NativeBinding,
+): string {
+  const entry = catalogEntry(id);
+  const name = entry === undefined ? null : packageFor(entry, platform);
+  if (name === null) throw new PackError(`Plugin ${id} is not published for ${platform}.`);
+  const directory = stagePlugin(id, version, built, join(stage, platform));
+  const nativeFiles = binding.files.map((file) => file.path).sort();
+  for (const file of binding.files) writeFileSync(join(directory, file.path), file.data);
+  writeFileSync(join(directory, NOTICES_FILE), notices(binding));
+  const generic = readJson<Record<string, unknown>>(join(directory, PACKAGE_FILE));
+  const tableCraft = generic.tableCraft as Record<string, unknown>;
+  writeJson(join(directory, PACKAGE_FILE), {
+    ...generic,
+    name,
+    description: `${String(generic.description)} This package is for ${platform}.`,
+    files: [ENTRY_FILE, MANIFEST_FILE, ...nativeFiles, NOTICES_FILE],
+    ...osAndCpu(platform),
+    tableCraft: { ...tableCraft, platform },
+  });
+  writeFileSync(
+    join(directory, README_FILE),
+    pluginReadme(readJson<BuiltManifest>(join(directory, MANIFEST_FILE)), name),
+  );
+  return directory;
+}
+
 interface NpmPackReport {
   readonly name: string;
   readonly version: string;
@@ -208,6 +256,8 @@ export interface PackOptions {
   readonly npm?: NpmPack;
   /** Attach the published package instead of a new one when nothing but the version differs. */
   readonly reuse?: ReuseOptions;
+  /** The binding of a native plugin for one platform; npm through `bun.lock` when absent. */
+  readonly fetchBinding?: FetchBinding;
 }
 
 /** The file name `npm pack` gives `name@version`. */
@@ -258,17 +308,25 @@ export async function packAll(options: PackOptions): Promise<PackedPackage[]> {
   mkdirSync(stage, { recursive: true });
   if (options.build ?? true) buildOptionalPlugins(ids);
   const packed = channel === "beta" ? [] : [npmPack(stagePackage(), out, null, options.npm)];
+  const built = options.built ?? OPTIONAL_OUT_DIR;
+  const binding =
+    options.fetchBinding ??
+    ((id: string, platform: string) =>
+      fetchBinding(id, platform, { registry: process.env[REGISTRY_ENV] ?? DEFAULT_REGISTRY, fetch: globalThis.fetch }));
   for (const id of ids) {
-    const fresh = npmPack(
-      stagePlugin(id, options.version, options.built ?? OPTIONAL_OUT_DIR, stage),
-      out,
-      id,
-      options.npm,
-    );
-    const reuse = options.reuse;
-    packed.push(
-      reuse === undefined ? fresh : reuseUnchanged(fresh, out, await publishedBaseline(fresh.name, channel, reuse)),
-    );
+    const platforms = catalogEntry(id)?.platforms;
+    const directories: string[] = [];
+    if (platforms === undefined) directories.push(stagePlugin(id, options.version, built, stage));
+    for (const platform of platforms ?? []) {
+      directories.push(stageNativePlugin(id, platform, options.version, built, stage, await binding(id, platform)));
+    }
+    for (const directory of directories) {
+      const fresh = npmPack(directory, out, id, options.npm);
+      const reuse = options.reuse;
+      packed.push(
+        reuse === undefined ? fresh : reuseUnchanged(fresh, out, await publishedBaseline(fresh.name, channel, reuse)),
+      );
+    }
   }
   rmSync(stage, { recursive: true, force: true });
   return packed;

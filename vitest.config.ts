@@ -131,6 +131,12 @@ export default defineConfig({
       // The etcd plugin's parts, which its unit tests drive without a server (plan 110).
       { find: /^@table-craft\/plugin-etcd\/(\w+)$/, replacement: resolve(WORKSPACE_ROOT, "plugins/etcd/src/$1.ts") },
       { find: "@table-craft/plugin-etcd", replacement: resolve(WORKSPACE_ROOT, "plugins/etcd/src/index.ts") },
+      // The DuckDB plugin's parts, which its unit tests drive on an in-memory database (plan 152).
+      {
+        find: /^@table-craft\/plugin-duckdb\/(\w+)$/,
+        replacement: resolve(WORKSPACE_ROOT, "plugins/duckdb/src/$1.ts"),
+      },
+      { find: "@table-craft/plugin-duckdb", replacement: resolve(WORKSPACE_ROOT, "plugins/duckdb/src/index.ts") },
       { find: "@table-craft/plugin-sqlite", replacement: resolve(WORKSPACE_ROOT, "plugins/sqlite/src/index.ts") },
       { find: "@table-craft/plugin-postgres", replacement: resolve(WORKSPACE_ROOT, "plugins/postgres/src/index.ts") },
       { find: "@table-craft/plugin-mysql", replacement: resolve(WORKSPACE_ROOT, "plugins/mysql/src/index.ts") },
