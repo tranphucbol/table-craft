@@ -27,6 +27,7 @@ import {
 } from "@table-craft/desktop/renderer/panes/keyMenus.js";
 import {
   DDL_SCRIPT_HIDDEN_WHEN_DISABLED,
+  DIAGRAM_HIDDEN_WHEN_DISABLED,
   NAMESPACE_MENU,
   entriesKey,
   shownEntries,
@@ -267,6 +268,7 @@ const HIDDEN_WHEN_DISABLED: ReadonlySet<string> = new Set([
   ...KEY_HIDDEN_WHEN_DISABLED,
   KEY_EDIT_ACTION_IDS.refreshFolder,
   ...DDL_SCRIPT_HIDDEN_WHEN_DISABLED,
+  ...DIAGRAM_HIDDEN_WHEN_DISABLED,
 ]);
 
 function MenuItem({ actionId }: { readonly actionId: string }) {

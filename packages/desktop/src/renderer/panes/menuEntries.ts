@@ -1,5 +1,6 @@
 import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { DDL_SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/ddlScriptActions.js";
+import { DIAGRAM_ACTION_IDS } from "@table-craft/desktop/renderer/actions/diagramActions.js";
 import { IMPORT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/importActions.js";
 import { OBJECT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/objectActions.js";
 import { SCRIPT_ACTION_IDS } from "@table-craft/desktop/renderer/actions/scriptActions.js";
@@ -22,12 +23,19 @@ export const SQL_SCRIPTS_MENU: Submenu = {
 /** Shown only for a schema, or its Tables, Views and Materialized Views, of a plugin that declares `ddl`. */
 export const DDL_SCRIPT_HIDDEN_WHEN_DISABLED: readonly string[] = SQL_SCRIPTS_MENU.items;
 
+/** DataGrip's Diagrams submenu (plan 152 decision 1). */
+export const DIAGRAMS_MENU: Submenu = { label: "Diagrams", items: [DIAGRAM_ACTION_IDS.show] };
+
+/** Shown only for a schema, or its Tables, of a plugin that declares `schemaTree`. */
+export const DIAGRAM_HIDDEN_WHEN_DISABLED: readonly string[] = DIAGRAMS_MENU.items;
+
 export const NAMESPACE_MENU: readonly MenuEntry[] = [
   TABLE_ACTION_IDS.openData,
   ACTION_IDS.newConsole,
   IMPORT_ACTION_IDS.importNewTable,
   SCRIPT_ACTION_IDS.run,
   SQL_SCRIPTS_MENU,
+  DIAGRAMS_MENU,
   null,
   OBJECT_ACTION_IDS.newTable,
   OBJECT_ACTION_IDS.newSchema,

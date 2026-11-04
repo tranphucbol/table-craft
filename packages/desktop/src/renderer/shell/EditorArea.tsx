@@ -9,6 +9,7 @@ import { ActionTabContext, invoke, registry, useActionEnabled } from "@table-cra
 import { Console } from "@table-craft/desktop/renderer/console/Console.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { DdlView } from "@table-craft/desktop/renderer/ddl/DdlView.js";
+import { DiagramView } from "@table-craft/desktop/renderer/diagram/DiagramView.js";
 import { KeyTab } from "@table-craft/desktop/renderer/keys/KeyTab.js";
 import { AdminView } from "@table-craft/desktop/renderer/keyAdmin/AdminView.js";
 import { ServerTab } from "@table-craft/desktop/renderer/server/ServerTab.js";
@@ -325,6 +326,8 @@ function EditorContent({ active }: { readonly active: Tab | null }) {
     <TableEditor key={active.id} tableId={active.id} />
   ) : active.kind === "ddl" ? (
     <DdlView key={active.id} ddlId={active.id} />
+  ) : active.kind === "diagram" ? (
+    <DiagramView key={active.id} diagramId={active.id} />
   ) : active.kind === "sessions" ? (
     <SessionsView key={active.id} sessionsId={active.id} />
   ) : active.kind === "key" ? (

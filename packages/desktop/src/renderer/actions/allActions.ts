@@ -5,6 +5,7 @@ import { CONSOLE_INTENT_ACTIONS } from "@table-craft/desktop/renderer/keyAdmin/c
 import { COMMAND_TXN_ACTIONS } from "@table-craft/desktop/renderer/actions/commandTxnActions.js";
 import { DATASOURCE_FILE_ACTIONS } from "@table-craft/desktop/renderer/actions/datasourceFileActions.js";
 import { DDL_ACTIONS } from "@table-craft/desktop/renderer/actions/ddlActions.js";
+import { DIAGRAM_ACTIONS } from "@table-craft/desktop/renderer/actions/diagramActions.js";
 import { DDL_SCRIPT_ACTIONS } from "@table-craft/desktop/renderer/actions/ddlScriptActions.js";
 import { EDITOR_FIND_ACTIONS } from "@table-craft/desktop/renderer/actions/editorFindActions.js";
 import { ERROR_ACTIONS } from "@table-craft/desktop/renderer/actions/errorActions.js";
@@ -62,6 +63,7 @@ export const ALL_ACTIONS: readonly AnyAction[] = [
   ...NAVIGATION_ACTIONS,
   ...DDL_ACTIONS,
   ...DDL_SCRIPT_ACTIONS,
+  ...DIAGRAM_ACTIONS,
   ...HISTORY_ACTIONS,
   ...EXPLAIN_ACTIONS,
   ...SESSIONS_ACTIONS,
