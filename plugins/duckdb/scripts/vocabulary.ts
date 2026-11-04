@@ -16,13 +16,15 @@ const SUMMARY_LIMIT = 240;
 const NAMED_OPTIONS_AFTER = 3;
 const NAMED_OPTION = "option = value";
 
+/** Overloads sort by their content: `function_oid` differs between each system's build. */
 const FUNCTIONS_SQL = `
   SELECT function_name, function_type, description, return_type, parameters, varargs, categories
   FROM duckdb_functions()
   WHERE schema_name = 'main'
     AND function_type IN ('scalar', 'aggregate', 'window', 'macro', 'table', 'table_macro')
     AND regexp_matches(function_name, '^[a-z][a-z0-9_]*$')
-  ORDER BY function_name, function_oid`;
+  ORDER BY function_name, len(parameters), parameters::VARCHAR, parameter_types::VARCHAR, return_type,
+    function_type, description`;
 const RESERVED_SQL = `SELECT upper(keyword_name) AS word FROM duckdb_keywords() WHERE keyword_category = 'reserved' ORDER BY word`;
 
 /** One row of `duckdb_functions()`, as `getRowObjectsJson` returns it. */
@@ -75,7 +77,6 @@ function returnsOf(row: FunctionRow): string {
   return row.function_type === "table" || row.function_type === "table_macro" ? "TABLE" : "ANY";
 }
 
-/** Folds every overload of a name into one spec, the first described overload naming its category. */
 /**
  * `duckdb_functions()` lists a table function's named options (`read_csv(path, header = true)`)
  * as if they were positional, so past a few parameters only the first is positional.
