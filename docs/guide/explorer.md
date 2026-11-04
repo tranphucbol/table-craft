@@ -25,6 +25,10 @@ Appearance › Data sources turns them off for the generic database glyph and th
 Logos take their brand's colour, fitted to the theme; Settings › Appearance › Data sources › Logo
 colour draws them in gray instead.
 
+**New Console** on a database, schema, table, column or routine opens a console already switched to
+the database or schema that holds it, as the console's schema switcher would; on a data source, or
+where the data source cannot switch, the console starts where a connection lands.
+
 The tree's context menu also changes the database: **New Table…** on a schema, **Modify Table…**
 (`⌘F6`) on a table, **Rename…** (`⇧F6`), **Truncate…** and **Drop…** (`⌘⌫`). Every change shows
 the DDL it will run first, and **Open in Console** takes it to a console instead. On PostgreSQL and
@@ -61,7 +65,8 @@ open in a console. The **SQL Generator** (`⌥⌘G`) writes `CREATE`, `DROP`, `S
 `UPDATE` statements for the selected objects and opens them in a console.
 
 **SQL Scripts** on a schema's context menu writes the DDL of every table, view and materialized
-view in it as one script: **Generate DDL to Console** opens it in a new console on that schema,
+view in it as one script: **Generate DDL to Console** opens it in a new console switched to that schema, or to its database
+where the console switches databases,
 **Generate DDL to Clipboard** copies it, and **Generate DDL to File…** saves it as a background
 export you can follow and cancel in Services. On the Tables or Views node it writes only those.
 Tables come before the tables that reference them, then views; tables that reference each other
