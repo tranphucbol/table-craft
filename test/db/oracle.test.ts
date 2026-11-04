@@ -1,10 +1,12 @@
 import oracle from "@table-craft/plugin-oracle";
-import { PluginError, type ExecuteResult, type Session } from "@table-craft/plugin-api";
+import { type DatasourcePlugin, PluginError, type ExecuteResult, type Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { describe, expect, it } from "vitest";
 import { databaseEnabled, ORACLE_CONFIG, ORACLE_LIMITED_CONFIG, withWrongPassword } from "../support/databases.js";
 import { ORACLE_MANIFEST } from "../support/manifests.js";
 import { ORACLE_TYPE_PROBE_EXPECTED, TYPE_PROBE_COPY_ORACLE, TYPE_PROBE_WRITE } from "../support/typeProbe.js";
+
+const oraclePlugin: DatasourcePlugin = oracle;
 
 /** Oracle's private temporary tables must carry this prefix (the `PRIVATE_TEMP_TABLE_PREFIX` default). */
 const PRIVATE_TEMPORARY_PREFIX = "ORA$PTT_";
@@ -149,7 +151,7 @@ describe.runIf(databaseEnabled("oracle"))("oracle server", () => {
   });
 
   async function withSession<T>(work: (session: Session) => Promise<T>, config: object = ORACLE_CONFIG): Promise<T> {
-    const session = await oracle.connect(config, { readOnly: false });
+    const session = await oraclePlugin.connect(config, { readOnly: false });
     try {
       return await work(session);
     } finally {
@@ -237,7 +239,7 @@ describe.runIf(databaseEnabled("oracle"))("oracle server", () => {
 
   describe("oracle routines", () => {
     async function routines(session: Session) {
-      const catalog = await session.introspector?.describe(["TABLE_CRAFT"]);
+      const catalog = await session.services.schemaTree?.describe(["TABLE_CRAFT"]);
       return catalog?.routines ?? [];
     }
 
@@ -262,8 +264,8 @@ describe.runIf(databaseEnabled("oracle"))("oracle server", () => {
     it("givenRefCursorOut_whenCalled_thenResultSet", async () => {
       await withSession(async (session) => {
         const routine = (await routines(session)).find((candidate) => candidate.name === "CUSTOMER_ORDERS");
-        if (routine === undefined || oracle.language?.routineCall === undefined) throw new Error("No routine call.");
-        const call = oracle.language.routineCall(routine, "TABLE_CRAFT.CUSTOMER_ORDERS", [
+        if (routine === undefined) throw new Error("No routine call.");
+        const call = oracle.language.services.routineCall.call(routine, "TABLE_CRAFT.CUSTOMER_ORDERS", [
           { kind: "value", value: "1" },
         ]);
         const bound = oracle.language.bind(call.sql, call.params);
@@ -277,8 +279,8 @@ describe.runIf(databaseEnabled("oracle"))("oracle server", () => {
   describe("oracle explain", () => {
     it("givenNoCatalogRole_whenAnalyze_thenHintNamesRole", async () => {
       await withSession(async (session) => {
-        const failure = await session
-          .explain?.("SELECT * FROM table_craft.customers", { analyze: true })
+        const failure = await session.services.explain
+          ?.explain("SELECT * FROM table_craft.customers", { analyze: true })
           .catch((error: unknown) => error);
         expect(failure).toMatchObject({ code: "explainUnsupported" });
         expect((failure as Error).message).toMatch(/SELECT_CATALOG_ROLE/);
@@ -292,8 +294,8 @@ describe.runIf(databaseEnabled("oracle"))("oracle server", () => {
         const statement = "ALTER SESSION SET CURRENT_SCHEMA = archive";
         expect(oracle.language?.classify(statement).setsNamespace).toBe(true);
         await session.execute(statement);
-        expect(await session.currentNamespace?.()).toEqual(["ARCHIVE"]);
-        const catalog = await session.introspector?.describe(["ARCHIVE"]);
+        expect(await session.services.currentNamespace?.current()).toEqual(["ARCHIVE"]);
+        const catalog = await session.services.schemaTree?.describe(["ARCHIVE"]);
         expect(catalog?.relations.map((relation) => relation.name)).toContain("OLD_ORDERS");
       });
     });

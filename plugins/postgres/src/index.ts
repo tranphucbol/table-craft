@@ -5,29 +5,25 @@ import { from as copyFrom } from "pg-copy-streams";
 import Cursor from "pg-cursor";
 import {
   BYTES_PREVIEW_LENGTH,
+  type CancelReach,
   PluginError,
   toWireInteger,
   z,
-  type CancelReach,
-  type Capability,
+  definePlugin,
   type Column,
   type ColumnOrigin,
   type ConnectOptions,
-  type DatasourcePlugin,
   type ExecuteOptions,
   type ExecuteResult,
   type ExplainedPlan,
   type ExplainOptions,
   type InsertRow,
   type InsertTarget,
-  type Introspector,
   type ParameterValue,
+  type PluginSession,
   type Row,
   type ServerMessage,
-  type ServerTimeout,
-  type Session,
-  type SessionMonitor,
-  type SqlLanguage,
+  type PluginLanguage,
   type TlsInfo,
   type TransactionMode,
   type Transactions,
@@ -81,7 +77,7 @@ import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 
 const PLUGIN_ID = "postgres";
 const CANCEL_REACH: CancelReach = { method: "pg_cancel_backend", reaches: "statement" };
-const CAPABILITIES: readonly Capability[] = [
+const CAPABILITIES = [
   "sql",
   "cancel",
   "schemaTree",
@@ -97,7 +93,9 @@ const CAPABILITIES: readonly Capability[] = [
   "sessions",
   "routineCall",
   "serverTimeout",
-];
+] as const;
+
+type PostgresCapability = (typeof CAPABILITIES)[number];
 
 /** Function bodies live in dollar quotes; `BEGIN ATOMIC … END` holds a SQL-standard body. */
 const DIALECT: SqlDialectOptions = {
@@ -118,7 +116,7 @@ const PLAIN_IDENTIFIER = /^[a-z_][a-z0-9_$]*$/;
 const KEYWORDS: readonly string[] = [...SQL_KEYWORDS, "ILIKE", "LATERAL", "RETURNING"];
 const writeName = identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS });
 
-const { explainable } = sqlExplainable({
+const explainCheck = sqlExplainable({
   dialect: DIALECT,
   name: "PostgreSQL",
   verbs: EXPLAIN_VERBS,
@@ -134,7 +132,7 @@ const COMPLETER: CompleterOptions = {
   functions: POSTGRES_FUNCTIONS,
 };
 
-const language: SqlLanguage = {
+const language: PluginLanguage<PostgresCapability> = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
   classify: (sql) => classifyTokens(sql, DIALECT),
@@ -151,22 +149,24 @@ const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     keywords: KEYWORDS,
   }),
-  explainable,
   ...sqlFormatter({ dialect: "postgresql", lexer: DIALECT, parameters: PARAMETERS.styles }),
   ...sqlParameters(PARAMETERS),
-  ...sqlImporter({
-    quoteIdentifier,
-    plainIdentifier: PLAIN_IDENTIFIER,
-    keywords: KEYWORDS,
-    types: POSTGRES_IMPORT_TYPES,
-    decimal: postgresDecimal,
-  }),
-  namespaceSwitch: namespaceSwitcher("searchPath", quoteIdentifier),
-  objects: postgresObjects({
-    name: writeName,
-    text: (value) => sqlLiteral(value, LITERALS),
-  }),
-  routineCall: postgresRoutineCall(writeName),
+  services: {
+    explain: explainCheck,
+    bulkInsert: sqlImporter({
+      quoteIdentifier,
+      plainIdentifier: PLAIN_IDENTIFIER,
+      keywords: KEYWORDS,
+      types: POSTGRES_IMPORT_TYPES,
+      decimal: postgresDecimal,
+    }),
+    currentNamespace: namespaceSwitcher("searchPath", quoteIdentifier),
+    objects: postgresObjects({
+      name: writeName,
+      text: (value) => sqlLiteral(value, LITERALS),
+    }),
+    routineCall: { call: postgresRoutineCall(writeName) },
+  },
 };
 
 const BEGIN_SQL = "BEGIN";
@@ -386,7 +386,7 @@ function isServerError(cause: unknown): boolean {
   );
 }
 
-class PostgresSession implements Session {
+class PostgresSession implements PluginSession<PostgresCapability> {
   readonly #config: PostgresConfig;
   readonly #serverName: string | undefined;
   readonly #client: pg.Client;
@@ -406,13 +406,8 @@ class PostgresSession implements Session {
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "postgresql";
-  readonly serverTimeout: ServerTimeout = POSTGRES_SERVER_TIMEOUT;
-  readonly cancelReach: CancelReach = CANCEL_REACH;
   readonly tls: TlsInfo | null;
-  readonly introspector: Introspector;
-  readonly transactions: Transactions;
-  readonly sessions: SessionMonitor;
-  readonly serverSessionId: string;
+  readonly services: PluginSession<PostgresCapability>["services"];
 
   constructor(
     config: PostgresConfig,
@@ -427,11 +422,9 @@ class PostgresSession implements Session {
     this.#typeNames = typeNames;
     this.serverVersion = serverVersion;
     this.tls = tlsInfoOf((client as unknown as WithConnection).connection.stream);
-    this.introspector = postgresIntrospector(client);
-    this.sessions = postgresSessions(client, () => openClient(config, { serverName }));
-    this.serverSessionId = String((client as pg.Client & WithBackendPid).processID);
+    const introspector = postgresIntrospector(client);
     const state = this.#transaction;
-    this.transactions = {
+    const transactions: Transactions = {
       setMode: (mode) => this.#setMode(mode),
       commit: () => this.#endTransaction(COMMIT_SQL),
       rollback: () => this.#endTransaction(ROLLBACK_SQL),
@@ -441,6 +434,21 @@ class PostgresSession implements Session {
       get open() {
         return state.open;
       },
+    };
+    this.services = {
+      cancel: { cancel: () => this.#cancel(), reach: CANCEL_REACH },
+      schemaTree: introspector,
+      ddl: introspector,
+      transactions,
+      explain: { explain: (sql, options) => this.#explain(sql, options) },
+      currentNamespace: { current: () => this.#currentNamespace() },
+      keepAlive: { ping: () => this.#ping() },
+      bulkInsert: { insertRows: (target, rows) => this.#insertRows(target, rows) },
+      sessions: {
+        ...postgresSessions(client, () => openClient(config, { serverName })),
+        ownId: String((client as pg.Client & WithBackendPid).processID),
+      },
+      serverTimeout: { limit: POSTGRES_SERVER_TIMEOUT },
     };
     client.on("error", (error) => {
       this.#broken = error;
@@ -537,7 +545,7 @@ class PostgresSession implements Session {
     }
   }
 
-  async currentNamespace(): Promise<readonly string[] | null> {
+  async #currentNamespace(): Promise<readonly string[] | null> {
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     try {
       const result = await this.#client.query<{ database: string; schema: string | null }>(CURRENT_NAMESPACE_SQL);
@@ -548,7 +556,7 @@ class PostgresSession implements Session {
     }
   }
 
-  async ping(): Promise<void> {
+  async #ping(): Promise<void> {
     if (this.#broken !== null) {
       throw new PluginError("connectionLost", `The connection was lost: ${this.#broken.message}`);
     }
@@ -560,7 +568,7 @@ class PostgresSession implements Session {
     }
   }
 
-  async insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
+  async #insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
     if (this.#broken !== null) {
       throw new PluginError("connectionFailed", `The connection was lost: ${this.#broken.message}`);
     }
@@ -613,8 +621,8 @@ class PostgresSession implements Session {
     await pipeline(Readable.from([text]), stream);
   }
 
-  async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
-    const verdict = explainable(sql, options);
+  async #explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
+    const verdict = explainCheck.explainable(sql, options);
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     const statement = explainStatement(sql, options.analyze);
     const rows: Row[] = [];
@@ -679,7 +687,7 @@ class PostgresSession implements Session {
     return new PluginError("statementFailed", messageOf(cause), { cause, position });
   }
 
-  cancel(): Promise<void> {
+  #cancel(): Promise<void> {
     const running = this.#running;
     if (running === null) return Promise.resolve();
     running.cancelRequested = true;
@@ -766,15 +774,13 @@ class PostgresSession implements Session {
   }
 }
 
-const plugin: DatasourcePlugin = {
+export default definePlugin({
   id: PLUGIN_ID,
   capabilities: CAPABILITIES,
   language,
   connectionSchema,
   connect: (config, options) => PostgresSession.open(connectionSchema.parse(config), options),
-};
-
-export default plugin;
+});
 
 /** The table OID and attribute number PostgreSQL reports, or null for an expression (plan 026). */
 function originOf(field: pg.FieldDef): ColumnOrigin | null {

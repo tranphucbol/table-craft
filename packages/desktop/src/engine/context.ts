@@ -27,7 +27,6 @@ import {
   type Row,
   type Session,
   type SessionListing,
-  type SessionMonitor,
   type SessionTarget,
   type SqlLanguage,
   type WireValue,
@@ -51,7 +50,6 @@ import {
 import { objectContext } from "@table-craft/desktop/engine/objectChanges.js";
 import type {
   ClassifiedStatement,
-  EngineError,
   FormatOptions,
   GeneratorStatement,
   ReferencingKey,
@@ -60,6 +58,13 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { connectionTarget, type LoggedRequest, type RequestContext } from "@table-craft/desktop/engine/requestLog.js";
 import { learnInstance, repeatedIds } from "@table-craft/desktop/engine/serverInstances.js";
+import {
+  hasLanguageService,
+  hasService,
+  languageServiceOf,
+  notDeclared,
+  serviceOf,
+} from "@table-craft/desktop/engine/services.js";
 import { transferContext } from "@table-craft/desktop/engine/transfers.js";
 import type { LogFields, Logger } from "@table-craft/desktop/log/record.js";
 
@@ -209,15 +214,11 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
 
   async function openIntrospection(): Promise<Introspection> {
     const session = await connectDatasource(options, connector);
-    if (session.introspector === undefined) {
+    if (!hasService(session, "schemaTree")) {
       await session.close().catch(() => undefined);
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: "This datasource's plugin does not declare the schemaTree capability.",
-        hint: BUG_HINT,
-      });
+      throw notDeclared("schemaTree");
     }
-    return { session, cache: new CatalogCache(session.introspector) };
+    return { session, cache: new CatalogCache(serviceOf(session, "schemaTree")) };
   }
 
   /** A failed open is forgotten, so the next catalog call connects again. */
@@ -269,35 +270,19 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
           hint: SYNCHRONIZE_HINT,
         });
       }
-      return { relation, qualified: session.introspector?.qualifiedName(path, name) ?? name };
+      return { relation, qualified: serviceOf(session, "schemaTree").qualifiedName(path, name) };
     });
   }
 
   function requireDdl(): void {
     const { plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
-    if (!plugin.capabilities.includes("ddl")) {
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: "This datasource's plugin does not declare the ddl capability.",
-        hint: BUG_HINT,
-      });
-    }
+    if (!plugin.capabilities.includes("ddl")) throw notDeclared("ddl");
   }
 
   /** Read afresh on every call, never from the cache (decision 029). */
   function definitionOf(path: readonly string[], name: string): Promise<string> {
     requireDdl();
-    return introspect(async ({ session }) => {
-      const introspector = session.introspector;
-      if (introspector?.definition === undefined) {
-        throw new EngineFailure({
-          code: "invalidRequest",
-          message: "This datasource's plugin declares ddl but its introspector has no definition.",
-          hint: BUG_HINT,
-        });
-      }
-      return introspector.definition(path, name);
-    });
+    return introspect(({ session }) => serviceOf(session, "ddl").definition(path, name));
   }
 
   /** Where a whole-namespace script reads: the cached catalog, and each definition afresh (plan 148). */
@@ -327,15 +312,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     target: Pick<Routine, "name" | "kind" | "signature">,
     args: readonly RoutineArgument[],
   ): Promise<RoutineCall> {
-    const language = sqlLanguage();
-    const call = language.routineCall?.bind(language);
-    if (call === undefined) {
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: "This datasource's plugin does not declare the routineCall capability.",
-        hint: BUG_HINT,
-      });
-    }
+    const caller = languageServiceOf(sqlLanguage(), "routineCall");
     const { routine, qualified } = await introspect(async ({ cache, session }) => {
       const find = (described: { readonly catalog: { readonly routines: readonly Routine[] } }) =>
         described.catalog.routines.find(
@@ -350,11 +327,11 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
           hint: SYNCHRONIZE_HINT,
         });
       }
-      return { routine, qualified: session.introspector?.qualifiedName(path, routine.name) ?? routine.name };
+      return { routine, qualified: serviceOf(session, "schemaTree").qualifiedName(path, routine.name) };
     });
     // Outside `introspect`, which takes a plugin error for a broken session and reopens it.
     try {
-      return call(routine, qualified, args);
+      return caller.call(routine, qualified, args);
     } catch (cause) {
       if (!isPluginError(cause)) throw cause;
       throw new EngineFailure({ code: "statementFailed", message: cause.message, hint: ROUTINE_ARGUMENTS_HINT }, cause);
@@ -427,7 +404,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     const request: InspectionRequest = disabled === undefined ? { text } : { text, disabled };
     try {
       if (commands !== undefined) return (await commands.inspect?.(request)) ?? [];
-      if (language?.inspect === undefined) return [];
+      if (language === undefined) return [];
       return await language.inspect(request, await completionCatalogOf(current));
     } catch (cause) {
       log?.warn("inspection failed", { message: messageOf(cause) });
@@ -442,7 +419,6 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
       return (await commands.signatureAt?.(request, await helperSession().catch(() => null))) ?? null;
     }
     const language = sqlLanguage();
-    if (language.signatureAt === undefined) return null;
     return language.signatureAt(request, await completionCatalogOf(undefined));
   }
 
@@ -464,15 +440,10 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
 
   function namespaceSwitch(): NamespaceSwitch {
     const { plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
-    const switcher = plugin.language?.namespaceSwitch;
-    if (!plugin.capabilities.includes("currentNamespace") || switcher === undefined) {
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: "This datasource's plugin does not declare the currentNamespace capability.",
-        hint: BUG_HINT,
-      });
+    if (!plugin.capabilities.includes("currentNamespace") || plugin.language === undefined) {
+      throw notDeclared("currentNamespace");
     }
-    return switcher;
+    return languageServiceOf(plugin.language, "currentNamespace");
   }
 
   async function switchTargets(refresh: boolean | undefined): Promise<Namespace[]> {
@@ -483,7 +454,11 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
 
   function namespaceSwitchable(): boolean {
     const { plugin } = loadedPlugin(options.plugins, options.datasource.pluginId);
-    return plugin.capabilities.includes("currentNamespace") && plugin.language?.namespaceSwitch !== undefined;
+    return (
+      plugin.capabilities.includes("currentNamespace") &&
+      plugin.language !== undefined &&
+      hasLanguageService(plugin.language, "currentNamespace")
+    );
   }
 
   function switchStatement(path: readonly string[]): SwitchStatement {
@@ -492,24 +467,13 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
   }
 
   async function qualifiedOf(path: readonly string[], name: string): Promise<string> {
-    return introspect(({ session }) => session.introspector?.qualifiedName(path, name) ?? name);
+    return introspect(({ session }) => serviceOf(session, "schemaTree").qualifiedName(path, name));
   }
-
-  const NO_SESSIONS: EngineError = {
-    code: "invalidRequest",
-    message: "This datasource's plugin does not declare the sessions capability.",
-    hint: BUG_HINT,
-  };
 
   /** Checked before the catalog connects, so a plugin without the capability opens nothing. */
   function requireSessions(): void {
     const { capabilities } = loadedPlugin(options.plugins, options.datasource.pluginId).plugin;
-    if (!capabilities.includes("sessions")) throw new EngineFailure(NO_SESSIONS);
-  }
-
-  function monitorOf(session: Session): SessionMonitor {
-    if (session.sessions === undefined) throw new EngineFailure(NO_SESSIONS);
-    return session.sessions;
+    if (!capabilities.includes("sessions")) throw notDeclared("sessions");
   }
 
   /**
@@ -519,7 +483,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
   function listServerSessions(): Promise<{ readonly listing: SessionListing; readonly catalog: Session }> {
     requireSessions();
     const listOn = async (session: Session) => {
-      const listing = await monitorOf(session).list();
+      const listing = await serviceOf(session, "sessions").list();
       await learnInstance(session, repeatedIds(listing.sessions));
       return { listing, catalog: session };
     };
@@ -534,7 +498,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
       throw new EngineFailure({ code: "invalidRequest", message: READ_ONLY_SESSIONS, hint: READ_ONLY_SESSIONS_HINT });
     }
     const session = commandLanguage() !== null ? await helperSession() : (await catalog()).session;
-    const monitor = monitorOf(session);
+    const monitor = serviceOf(session, "sessions");
     try {
       await (stop === "cancel" ? monitor.cancelSession(target) : monitor.terminateSession(target));
     } catch (cause) {
@@ -595,9 +559,7 @@ function baseContext(options: EngineOptions, connector: Connector, now: () => nu
     namespaceSwitchable,
     switchStatement,
     qualifiedOf,
-    NO_SESSIONS,
     requireSessions,
-    monitorOf,
     listServerSessions,
     stopServerSession,
     nextSessionId,

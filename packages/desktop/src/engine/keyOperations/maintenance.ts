@@ -1,9 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import type { ClusterManager } from "@table-craft/plugin-api";
+import type { ClusterMaintenance } from "@table-craft/plugin-api";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
 import type { RequestOf } from "@table-craft/desktop/engine/protocol.js";
 import type { EngineOperationFiles } from "./files.js";
 import { type KeyTasks, type KeyJob } from "./tasks.js";
-import { invalidOperation, quietClose, serviceMethod } from "./scope.js";
+import { invalidOperation, quietClose } from "./scope.js";
 
 const SNAPSHOT_MAX_BYTES = 17_179_869_184;
 const SNAPSHOT_HASH_BYTES = 32;
@@ -40,8 +41,11 @@ export async function* verifiedSnapshot(
   }
 }
 
-async function configuredEndpoints(cluster: ClusterManager, requested: readonly string[]): Promise<readonly string[]> {
-  const configured = await serviceMethod(cluster, "endpoints")();
+async function configuredEndpoints(
+  cluster: ClusterMaintenance,
+  requested: readonly string[],
+): Promise<readonly string[]> {
+  const configured = await cluster.endpoints();
   const ids = configured.map((endpoint) => endpoint.id);
   if (requested.some((id) => !ids.includes(id)))
     throw invalidOperation("Only configured endpoint IDs can be used for maintenance.");
@@ -49,9 +53,8 @@ async function configuredEndpoints(cluster: ClusterManager, requested: readonly 
 }
 
 export function maintenanceOperations(tasks: KeyTasks, files: EngineOperationFiles | undefined) {
-  function manager(job: KeyJob): ClusterManager {
-    if (job.session.cluster === undefined) throw invalidOperation("The datasource has no cluster maintenance service.");
-    return job.session.cluster;
+  function manager(job: KeyJob): ClusterMaintenance {
+    return serviceOf(job.session, "maintenance");
   }
 
   return {
@@ -63,7 +66,7 @@ export function maintenanceOperations(tasks: KeyTasks, files: EngineOperationFil
         let completed = 0;
         while (pending.length > 0) {
           job.check();
-          const statuses = await Promise.all(pending.map((id) => serviceMethod(cluster, "status")(id)));
+          const statuses = await Promise.all(pending.map((id) => cluster.status(id)));
           if (statuses.some((status, index) => status.endpointId !== pending[index]))
             throw invalidOperation("Maintenance status did not match the configured endpoint.");
           const leaders = new Set(statuses.map((status) => status.leaderId).filter((id) => id !== null));
@@ -73,7 +76,7 @@ export function maintenanceOperations(tasks: KeyTasks, files: EngineOperationFil
           const chosen = statuses.find((status) => status.memberId !== leader) ?? statuses[0];
           if (chosen === undefined) break;
           job.beginWrite();
-          await serviceMethod(cluster, "defragment")(chosen.endpointId);
+          await cluster.defragment(chosen.endpointId);
           job.confirmed();
           pending.splice(pending.indexOf(chosen.endpointId), 1);
           completed += 1;
@@ -92,7 +95,7 @@ export function maintenanceOperations(tasks: KeyTasks, files: EngineOperationFil
         const hashes = [];
         for (const id of all) {
           job.check();
-          const hash = await serviceMethod(cluster, "hash")(id, request.revision);
+          const hash = await cluster.hash(id, request.revision);
           if (hash.revision !== request.revision)
             throw invalidOperation("The server did not hash the requested revision.");
           hashes.push(hash);
@@ -106,7 +109,7 @@ export function maintenanceOperations(tasks: KeyTasks, files: EngineOperationFil
       return tasks.start("snapshot", "maintenance", false, async (job) => {
         const cluster = manager(job);
         await configuredEndpoints(cluster, [request.endpointId]);
-        const snapshot = await serviceMethod(cluster, "snapshot")(request.endpointId);
+        const snapshot = await cluster.snapshot(request.endpointId);
         const close = () => {
           void quietClose(snapshot);
         };

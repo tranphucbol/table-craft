@@ -7,7 +7,7 @@ import {
   type SessionTarget,
 } from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
-import sqlite from "@table-craft/plugin-sqlite";
+import sqlitePlugin from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
 import {
   RESULT_FETCH_ALL_CAP,
@@ -19,6 +19,7 @@ import {
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { fakeManifest, SQLITE_MANIFEST } from "../support/manifests.js";
 
+const sqlite: DatasourcePlugin = sqlitePlugin;
 const PLUGIN_ID = "monitored";
 const CAPABILITIES: readonly Capability[] = ["sql", "schemaTree", "sessions"];
 const FOREIGN_ID = "900";
@@ -85,31 +86,35 @@ function monitoredEngine(
           if (sql === HELD_SQL) await options.held;
           return session.execute(sql, params);
         },
-        ...(session.introspector === undefined ? {} : { introspector: session.introspector }),
-        sessions: {
-          list: () =>
-            Promise.resolve({
-              sessions: [
-                ...[...live].map((id) => row(id, { instance: options.instance ?? null })),
-                ...(options.instance === undefined ? [] : [...live].map((id) => row(id, { instance: OTHER_INSTANCE }))),
-                row(FOREIGN_ID),
-              ],
-              notes: ["a note"],
-            }),
-          cancelSession: stop("cancel"),
-          terminateSession: stop("terminate"),
+        services: {
+          schemaTree: session.services.schemaTree,
+          sessions: {
+            list: () =>
+              Promise.resolve({
+                sessions: [
+                  ...[...live].map((id) => row(id, { instance: options.instance ?? null })),
+                  ...(options.instance === undefined
+                    ? []
+                    : [...live].map((id) => row(id, { instance: OTHER_INSTANCE }))),
+                  row(FOREIGN_ID),
+                ],
+                notes: ["a note"],
+              }),
+            cancelSession: stop("cancel"),
+            terminateSession: stop("terminate"),
+            ownId: serverSessionId,
+            ...(options.instance === undefined
+              ? {}
+              : options.lookup === true
+                ? {
+                    findOwnInstance: () => {
+                      lookups.push(serverSessionId);
+                      return Promise.resolve(options.instance ?? null);
+                    },
+                  }
+                : { ownInstance: options.instance }),
+          },
         },
-        serverSessionId,
-        ...(options.instance === undefined
-          ? {}
-          : options.lookup === true
-            ? {
-                findServerInstance: () => {
-                  lookups.push(serverSessionId);
-                  return Promise.resolve(options.instance ?? null);
-                },
-              }
-            : { serverInstance: options.instance }),
         serverVersion: session.serverVersion,
         close: async () => {
           live.delete(serverSessionId);

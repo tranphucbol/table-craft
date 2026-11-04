@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { PluginError, type DatasourcePlugin, type SqlLanguage, type StatementClass } from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
-import sqlite from "@table-craft/plugin-sqlite";
+import sqlitePlugin from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
 import type {
   EngineResponse,
@@ -16,6 +16,7 @@ import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/eng
 import { exportHarness, startExport, type ExportHarness } from "../support/engineExports.js";
 import { fakeManifest } from "../support/manifests.js";
 
+const sqlite: DatasourcePlugin = sqlitePlugin;
 const PLUGIN_ID = "switching";
 const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
 const USE = /^USE\s+(\w+)$/i;
@@ -51,12 +52,16 @@ function switchingPlugin(options: { failRead?: boolean } = {}) {
           current = [target];
           return session.execute("SELECT 1 WHERE 0");
         },
-        ...(session.transactions === undefined ? {} : { transactions: session.transactions }),
-        currentNamespace: () => {
-          reads += 1;
-          return options.failRead === true
-            ? Promise.reject(new PluginError("statementFailed", "gone"))
-            : Promise.resolve(current);
+        services: {
+          transactions: session.services.transactions,
+          currentNamespace: {
+            current: () => {
+              reads += 1;
+              return options.failRead === true
+                ? Promise.reject(new PluginError("statementFailed", "gone"))
+                : Promise.resolve(current);
+            },
+          },
         },
         serverVersion: session.serverVersion,
         close: () => session.close(),

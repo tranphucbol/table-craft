@@ -30,6 +30,7 @@ import type {
   SessionsListing,
 } from "@table-craft/desktop/engine/protocol.js";
 import { isListedAs, learnInstance, repeatedIds } from "@table-craft/desktop/engine/serverInstances.js";
+import { hasService, inTransaction, serviceOf } from "@table-craft/desktop/engine/services.js";
 import { statementRunners } from "@table-craft/desktop/engine/statements.js";
 import { bytesRunners } from "@table-craft/desktop/engine/bytes.js";
 import { keyOperations } from "@table-craft/desktop/engine/keyOperations/index.js";
@@ -93,7 +94,8 @@ const LOST_REASONS: Readonly<Record<LostReason, string>> = {
 
 /** Null when `session` answered its ping in time; else why it counts as lost. */
 async function pingFailure(session: Session): Promise<string | null> {
-  if (session.ping === undefined) return null;
+  if (!hasService(session, "keepAlive")) return null;
+  const keepAlive = serviceOf(session, "keepAlive");
   let timer: ReturnType<typeof setTimeout> | undefined;
   const silence = new Promise<string>((resolve) => {
     timer = setTimeout(() => {
@@ -102,7 +104,7 @@ async function pingFailure(session: Session): Promise<string | null> {
   });
   try {
     return await Promise.race([
-      session.ping().then(
+      keepAlive.ping().then(
         () => null,
         () => "ping failed",
       ),
@@ -355,7 +357,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
       sql !== undefined &&
       owner !== undefined &&
       language.classify(sql).kind === "read" &&
-      owner.session.transactions?.open !== true &&
+      !inTransaction(owner.session) &&
       owner.session.privateDatabase !== true;
     if (rerun) {
       return {
@@ -436,7 +438,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
    */
   async function learnOn(sessionId: string, open: OpenSession, repeated: ReadonlySet<string>): Promise<void> {
     const busy = open.running > 0 || open.exporting > 0 || open.closing !== null || cursors.has(sessionId);
-    if (busy || open.lost !== null || open.session.transactions?.open === true) return;
+    if (busy || open.lost !== null || inTransaction(open.session)) return;
     const lookup = learnInstance(open.session, repeated);
     if (lookup === null) return;
     noteClosing(sessionId, lookup);
@@ -466,10 +468,12 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   async function namespaceOf(
     open: Pick<OpenSession, "session" | "capabilities">,
   ): Promise<CurrentNamespace | undefined> {
-    if (!open.capabilities.includes("currentNamespace") || open.session.currentNamespace === undefined) {
+    if (!open.capabilities.includes("currentNamespace") || !hasService(open.session, "currentNamespace")) {
       return undefined;
     }
-    return open.session.currentNamespace().catch(() => undefined);
+    return serviceOf(open.session, "currentNamespace")
+      .current()
+      .catch(() => undefined);
   }
 
   /** Notes whether `open` is off its opening namespace; a switch it could not read counts as one. */
@@ -492,7 +496,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   const keepAliveMs = options.datasource.keepAliveSeconds * MS_PER_SECOND;
 
   function pings(open: OpenSession): boolean {
-    return keepAliveMs > 0 && open.capabilities.includes("keepAlive") && open.session.ping !== undefined;
+    return keepAliveMs > 0 && open.capabilities.includes("keepAlive") && hasService(open.session, "keepAlive");
   }
 
   /** Whether the session must prove itself before a statement: given up, or idle a keepalive interval. */
@@ -506,7 +510,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
    * than heal silently.
    */
   function abandon(sessionId: string, open: OpenSession, reason: string): { transaction: boolean } {
-    const transaction = open.session.transactions?.open === true;
+    const transaction = inTransaction(open.session);
     open.lost = reason;
     sessionLog?.warn("session lost", { reason, transaction });
     void closeCursorOf(sessionId);
@@ -533,14 +537,14 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
    * namespace the last switch chose.
    */
   async function reconnect(sessionId: string, open: OpenSession): Promise<Reconnection> {
-    const mode = open.session.transactions?.mode;
+    const mode = hasService(open.session, "transactions") ? serviceOf(open.session, "transactions").mode : undefined;
     const session = await connectDatasource(options, connector, open.readOnly);
     const opening = await namespaceOf({ session, capabilities: open.capabilities });
     // Before manual mode, so the replayed switch does not open a transaction.
     const restored = open.moved && (await replaySwitch(session, open.switchedBy));
     const namespace = restored ? await namespaceOf({ session, capabilities: open.capabilities }) : opening;
     try {
-      if (mode === "manual") await session.transactions?.setMode("manual");
+      if (mode === "manual") await serviceOf(session, "transactions").setMode("manual");
     } catch (cause) {
       await session.close().catch(() => undefined);
       throw new EngineFailure({ code: "connectionFailed", message: messageOf(cause), hint: RECONNECT_HINT }, cause);
@@ -590,8 +594,8 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   ): Promise<T> {
     const { session } = open;
     const cancel =
-      open.capabilities.includes("cancel") && session.cancel !== undefined
-        ? () => session.cancel?.() ?? Promise.resolve()
+      open.capabilities.includes("cancel") && hasService(session, "cancel")
+        ? () => serviceOf(session, "cancel").cancel()
         : undefined;
     const probing = keepAliveMs > 0 && open.capabilities.includes("keepAlive");
     try {

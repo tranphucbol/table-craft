@@ -1,17 +1,9 @@
 import { CoreError, EditRejectedError, TunnelError } from "@table-craft/core";
-import {
-  errorPositionOf,
-  isPluginError,
-  isTlsSettingsError,
-  offsetOfPosition,
-  z,
-  type SqlLanguage,
-} from "@table-craft/plugin-api";
+import { errorPositionOf, isPluginError, isTlsSettingsError, offsetOfPosition, z } from "@table-craft/plugin-api";
 import {
   STATEMENT_CANCELLED_MESSAGE,
   KEY_HISTORY_MAX_BYTES,
   type EngineError,
-  type Explainability,
 } from "@table-craft/desktop/engine/protocol.js";
 import type { SessionLost } from "@table-craft/desktop/engine/watch.js";
 
@@ -173,17 +165,6 @@ export function explainFailed(cause: unknown, readOnly: boolean): EngineFailure 
     });
   }
   return statementFailed(cause, readOnly);
-}
-
-export function explainabilityOf(language: SqlLanguage, sql: string, analyze: boolean): Explainability {
-  if (language.explainable === undefined) {
-    throw new EngineFailure({
-      code: "invalidRequest",
-      message: "This datasource's plugin does not declare the explain capability.",
-      hint: BUG_HINT,
-    });
-  }
-  return language.explainable(sql, { analyze });
 }
 
 export const INTROSPECTION_HINT =

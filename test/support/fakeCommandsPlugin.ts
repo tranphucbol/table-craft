@@ -140,6 +140,7 @@ export function fakeCommandsPlugin(capabilities: readonly Capability[] = ["comma
           return Promise.reject(new Error(`ERR unknown command '${name ?? ""}'`));
       }
     },
+    services: {},
     close: () => Promise.resolve(),
     serverVersion: "7.4.0",
   });

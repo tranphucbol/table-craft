@@ -57,6 +57,7 @@ function networkedPlugin(reached: Reached[]): PluginLoadResult {
       const session = await sqlite.connect({ path }, options);
       return {
         execute: (sql, params) => session.execute(sql, params),
+        services: {},
         serverVersion: session.serverVersion,
         close: async () => {
           socket.destroy();

@@ -39,7 +39,7 @@ describe("mssql language", () => {
 
   it("givenUse_whenClassified_thenSetsNamespace", () => {
     expect(language.classify("USE [sales]").setsNamespace).toBe(true);
-    expect(language.namespaceSwitch?.statement(["sales"])).toBe("USE [sales]");
+    expect(language.services.currentNamespace?.statement(["sales"])).toBe("USE [sales]");
   });
 
   it("givenSavepoint_whenWritten_thenSaveTransactionAndNoRelease", () => {

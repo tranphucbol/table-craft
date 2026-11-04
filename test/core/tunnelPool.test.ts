@@ -122,12 +122,14 @@ function fakeSession(execute: () => Promise<unknown>): Session & { closes: numbe
     closes: 0,
     serverVersion: "17",
     execute,
-    transactions: {
-      mode: "auto" as const,
-      open: false,
-      setMode: () => Promise.resolve(),
-      commit: () => Promise.resolve(),
-      rollback: () => Promise.resolve(),
+    services: {
+      transactions: {
+        mode: "auto" as const,
+        open: false,
+        setMode: () => Promise.resolve(),
+        commit: () => Promise.resolve(),
+        rollback: () => Promise.resolve(),
+      },
     },
     close() {
       session.closes += 1;
@@ -177,7 +179,7 @@ describe("tunneledSession", () => {
 
     source.tunnels[0]?.drop("connection reset");
     const error = await rejection(session.execute("select 1"));
-    const nested = await rejection(session.transactions?.setMode("manual") ?? Promise.resolve());
+    const nested = await rejection(session.services.transactions?.setMode("manual") ?? Promise.resolve());
 
     expect(calls).toBe(0);
     expect(isPluginError(error) && error.code).toBe("connectionLost");
@@ -214,7 +216,7 @@ describe("tunneledSession", () => {
 
     expect(await rejection(session.execute("selec"))).toBe(failure);
     expect(session.serverVersion).toBe("17");
-    expect(session.transactions?.open).toBe(false);
+    expect(session.services.transactions?.open).toBe(false);
   });
 
   it("givenDriverSaysConnectionLostAfterSend_whenTunnelDrops_thenNeverDefinitelyUnsent", async () => {
@@ -246,8 +248,12 @@ describe("tunneledSession", () => {
         closed.push(source.tunnels[0]!.closed);
       },
     };
-    const session = tunneledSession({ ...inner, watch: { open: () => Promise.resolve(handle) } }, lease, "bastion");
-    const watch = await session.watch!.open({ database: 0, range: { kind: "all" }, from: { kind: "now" } });
+    const session = tunneledSession(
+      { ...inner, services: { ...inner.services, watch: { open: () => Promise.resolve(handle) } } },
+      lease,
+      "bastion",
+    );
+    const watch = await session.services.watch!.open({ database: 0, range: { kind: "all" }, from: { kind: "now" } });
     expect(watch).not.toBe(handle);
     await session.close();
     expect(closed).toEqual([false]);

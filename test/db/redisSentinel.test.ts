@@ -89,8 +89,8 @@ describe.runIf(databaseEnabled("redis"))("redis 7.4 sentinel", () => {
 
     it("givenPickedReplica_whenServerInfo_thenReplicationRoleSlave", async () => {
       const replica = (await nodesOf(session))[1];
-      if (replica === undefined || session.serverInfo === undefined) throw new Error("no replica listed");
-      const info = await session.serverInfo(replica.id);
+      if (replica === undefined || session.services.serverInfo === undefined) throw new Error("no replica listed");
+      const info = await session.services.serverInfo.info(replica.id);
       const replication = info.sections.find((section) => section.title === "Replication");
       expect(replication?.entries.find((entry) => entry.name === "role")?.value).toBe("slave");
     });

@@ -32,7 +32,11 @@ async function completed(session: Session, text: string): Promise<string[]> {
 }
 
 async function hashColumns(session: Session): Promise<string[]> {
-  const contents = await session.keyspace?.read(0, { text: "type_probe:hash", hex: null }, { window: READ_WINDOW });
+  const contents = await session.services.keyValue?.read(
+    0,
+    { text: "type_probe:hash", hex: null },
+    { window: READ_WINDOW },
+  );
   return (contents?.result?.columns ?? []).map((column) => column.name);
 }
 
@@ -87,7 +91,7 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
 
   it("givenRedis62Cluster_whenNodes_thenFromClusterNodes", async () => {
     await withRedis(REDIS6_CLUSTER_CONFIG, async (session) => {
-      const nodes = (await session.nodes?.()) ?? [];
+      const nodes = (await session.services.nodes?.list()) ?? [];
       const primaries = nodes.filter((node) => node.role === "primary");
       expect(primaries).toHaveLength(3);
       const slots = primaries.flatMap((node) => node.slots).reduce((sum, [from, to]) => sum + to - from + 1, 0);
@@ -129,7 +133,7 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
     { version: "7.4", config: REDIS_CONFIG },
   ])("givenRedis$version_whenServerInfo_thenEverySection", async ({ config }) => {
     await withRedis(config, async (session) => {
-      const info = await session.serverInfo?.(null);
+      const info = await session.services.serverInfo?.info(null);
       expect(info?.sections.map((section) => section.title)).toEqual(
         expect.arrayContaining([
           "Server",
@@ -150,7 +154,7 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
 
   it("givenRedis62_whenSetTtl_thenPlainPexpire", async () => {
     await withRedis(REDIS6_CONFIG, async (session) => {
-      const keyspace = session.keyspace;
+      const keyspace = session.services.keyValue;
       if (keyspace === undefined) throw new Error("no keyspace");
       const key = { text: "versions:ttl", hex: null };
       await session.execute("SET versions:ttl 1");
@@ -203,7 +207,7 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
 
   it("givenRedis5_whenScanByType_thenOnlyThatTypeWithoutScanType", async () => {
     await withRedis(REDIS5_CONFIG, async (session) => {
-      const keyspace = session.keyspace;
+      const keyspace = session.services.keyValue;
       if (keyspace === undefined) throw new Error("no keyspace");
       const found: string[] = [];
       let cursor: string | null = null;
@@ -218,7 +222,7 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
 
   it("givenRedis5_whenEditStringWithTtl_thenTtlKept", async () => {
     await withRedis(REDIS5_CONFIG, async (session) => {
-      const keyspace = session.keyspace;
+      const keyspace = session.services.keyValue;
       if (keyspace === undefined) throw new Error("no keyspace");
       const key = { text: "versions:string", hex: null };
       const change = {
@@ -247,7 +251,11 @@ describe.runIf(databaseEnabled("redis"))("redis versions", () => {
     await withRedis(REDIS5_CONFIG, async (session) => {
       for (const id of ids) await session.execute(`XADD versions:stream ${id} n ${id}`);
       try {
-        const contents = await session.keyspace?.read(0, { text: "versions:stream", hex: null }, { window: 2 });
+        const contents = await session.services.keyValue?.read(
+          0,
+          { text: "versions:stream", hex: null },
+          { window: 2 },
+        );
         const read: unknown[] = [];
         for await (const row of contents?.result?.rows ?? []) read.push(row[0]);
         expect(read).toEqual(ids);

@@ -1,6 +1,7 @@
 import type { LeaseKeepAlive, Session } from "@table-craft/plugin-api";
 import type { LeaseKeepAliveStarted, ManagedLeaseInfo } from "@table-craft/desktop/engine/protocol.js";
-import { type KeyOperationScope, KEY_RESOURCE_LIMIT, invalidOperation, quietClose, requireMethod } from "./scope.js";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
+import { type KeyOperationScope, KEY_RESOURCE_LIMIT, invalidOperation, quietClose } from "./scope.js";
 
 interface Renewal {
   readonly session: Session;
@@ -24,12 +25,11 @@ export class KeyRenewals {
     const session = await this.scope.open("leases");
     let resource: LeaseKeepAlive | undefined;
     try {
-      const manager = session.leases;
-      resource = await requireMethod(manager, "keepAlive", "leases.keepAlive").keepAlive(leaseId);
+      const manager = serviceOf(session, "leases");
+      resource = await manager.keepAlive(leaseId);
       this.scope.live();
-      const lease = await requireMethod(manager, "get", "leases.get").get(leaseId);
+      const lease = await manager.get(leaseId);
       this.scope.live();
-      requireMethod(resource, "close", "lease renewal.close");
       const id = this.scope.id();
       const held: Renewal = { session, resource, lease, closed: false, closing: null };
       this.renewals.set(id, held);

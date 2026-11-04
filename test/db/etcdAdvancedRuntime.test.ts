@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EtcdSession } from "@table-craft/plugin-etcd/session";
+import type { EtcdKeyspace } from "@table-craft/plugin-etcd/keyspace";
 import { connectionSchema } from "@table-craft/plugin-etcd/config";
 import { databaseEnabled } from "../support/databases.js";
 import { withIsolatedEtcd, type IsolatedEtcd } from "../support/etcdIsolated.js";
@@ -11,6 +12,10 @@ const WATCH_LIMITS = { count: 100, maxBytes: 1_048_576, timeoutMs: 2000 };
 const text = (value: string) => ({ text: value, hex: null });
 const ALL = { kind: "all" as const };
 const NESTED_TXN = 'txn\nthen: txn\nif: version("a") = 0\nthen: put a b\nelse: get a\nend\nelse: del a\nend';
+
+function keyspaceOf(opened: EtcdSession): EtcdKeyspace {
+  return opened.services.keyValue as EtcdKeyspace;
+}
 
 async function open(fixture: IsolatedEtcd, extra: Record<string, unknown> = {}, readOnly = false) {
   const config = connectionSchema.parse({
@@ -45,13 +50,13 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
           expect(await rawValue(fixture, OUTSIDE)).toBe("untouched");
           expect(await rawValue(fixture, `${NAMESPACE}a`)).toBeUndefined();
 
-          const lease = await session.leases.grant("60");
+          const lease = await session.services.leases.grant("60");
           const leaseHex = BigInt.asUintN(64, BigInt(lease.id)).toString(16);
           const leases = await session.suggestConsoleValues("lease", "");
           expect(leases.map((entry) => entry.apply)).toContain(leaseHex);
           const [revision] = await session.suggestConsoleValues("revision", "");
           expect(revision?.apply).toMatch(/^\d+$/);
-          await session.leases.revokePrepared((await session.leases.prepareRevoke(lease.id)).token);
+          await session.services.leases.revokePrepared((await session.services.leases.prepareRevoke(lease.id)).token);
         } finally {
           await session.close();
         }
@@ -66,7 +71,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
       await withIsolatedEtcd({}, async (fixture) => {
         const session = await open(fixture, { lockPrefix: "/locks/", electionPrefix: "" });
         try {
-          const lease = await session.leases.grant("60");
+          const lease = await session.services.leases.grant("60");
           const leaseHex = BigInt.asUintN(64, BigInt(lease.id)).toString(16);
           await fixture.client.kv.put({
             key: Buffer.from(`${NAMESPACE}/locks/job/${leaseHex}`),
@@ -74,15 +79,15 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
             lease: lease.id,
           });
           await fixture.client.kv.put({ key: Buffer.from(`/locks/job/${leaseHex}`), value: Buffer.from("global") });
-          expect((await session.coordination.prefixes()).map((prefix) => prefix.id)).toEqual(["locks"]);
-          const page = await session.coordination.read("locks", null, 10);
+          expect((await session.services.coordination.prefixes()).map((prefix) => prefix.id)).toEqual(["locks"]);
+          const page = await session.services.coordination.read("locks", null, 10);
           expect(page.queues).toHaveLength(1);
           expect(page.queues[0]).toMatchObject({ name: text("/locks/job"), kind: "lock", complete: true });
           expect(page.queues[0]?.candidates).toHaveLength(1);
-          await expect(session.coordination.read("elections", null, 10)).rejects.toThrow("configured");
+          await expect(session.services.coordination.read("elections", null, 10)).rejects.toThrow("configured");
 
           for (const name of ["c/1", "c/2", "c/3"]) await session.execute(`put "${name}" "v"`);
-          const first = await session.keyspace.children({
+          const first = await keyspaceOf(session).children({
             database: 0,
             range: ALL,
             parent: text("c/"),
@@ -93,7 +98,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
           expect(first.children).toHaveLength(1);
           expect(first.cursor).not.toBeNull();
           await session.execute('put "c/0" "late"');
-          const rest = await session.keyspace.children({
+          const rest = await keyspaceOf(session).children({
             database: 0,
             range: ALL,
             parent: text("c/"),
@@ -104,7 +109,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
           expect(rest.revision).toBe(first.revision);
           expect([...first.children, ...rest.children].map((child) => child.key.text)).toEqual(["c/1", "c/2", "c/3"]);
           await expect(
-            session.keyspace.children({
+            keyspaceOf(session).children({
               database: 0,
               range: ALL,
               parent: text("other/"),
@@ -113,7 +118,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
               timeoutMs: 5000,
             }),
           ).rejects.toThrow("cursor");
-          await session.leases.revokePrepared((await session.leases.prepareRevoke(lease.id)).token);
+          await session.services.leases.revokePrepared((await session.services.leases.prepareRevoke(lease.id)).token);
         } finally {
           await session.close();
         }
@@ -128,7 +133,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
       await withIsolatedEtcd({}, async (fixture) => {
         const serializable = await open(fixture, { readMode: "serializable" });
         try {
-          const info = await serializable.serverInfo(null);
+          const info = await serializable.services.serverInfo.info(null);
           const connection = info.sections.find((section) => section.title === "Connection");
           expect(connection?.entries).toEqual(
             expect.arrayContaining([
@@ -144,7 +149,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
         try {
           await expect(readOnly.execute('put "x" "y"')).rejects.toThrow(/read-only/i);
           await expect(readOnly.execute(NESTED_TXN)).rejects.toThrow(/read-only/i);
-          await expect(readOnly.keyTransfer.importChunk([], "overwrite")).rejects.toThrow(/read-only/i);
+          await expect(readOnly.services.bulkTransfer.importChunk([], "overwrite")).rejects.toThrow(/read-only/i);
           expect(await rawValue(fixture, `${NAMESPACE}x`)).toBeUndefined();
         } finally {
           await readOnly.close();
@@ -159,14 +164,14 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd runtime integration on an isolat
     async () => {
       await withIsolatedEtcd({}, async (fixture) => {
         const session = await open(fixture);
-        const lease = await session.leases.grant("60");
+        const lease = await session.services.leases.grant("60");
         await session.execute('put "doomed/a" "1"');
-        const watch = await session.watch.open({ database: 0, range: ALL, from: { kind: "now" } });
-        const preview = await session.keyspace.prepareDelete(0, { kind: "prefix", prefix: text("doomed/") });
+        const watch = await session.services.watch.open({ database: 0, range: ALL, from: { kind: "now" } });
+        const preview = await keyspaceOf(session).prepareDelete(0, { kind: "prefix", prefix: text("doomed/") });
         await session.close();
 
         await expect(watch.next(WATCH_LIMITS)).resolves.toMatchObject({ state: "stopped", events: [] });
-        await expect(session.keyspace.deletePrepared(preview.token)).rejects.toThrow();
+        await expect(keyspaceOf(session).deletePrepared(preview.token)).rejects.toThrow();
         await expect(session.execute('get "doomed/a"')).rejects.toThrow("closed");
         expect(await rawValue(fixture, `${NAMESPACE}doomed/a`)).toBe("1");
         const ttl = await fixture.client.leaseClient.leaseTimeToLive({ ID: lease.id });

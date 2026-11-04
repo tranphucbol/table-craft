@@ -119,7 +119,7 @@ describe.runIf(databaseEnabled("postgres"))("postgres server", () => {
   it("givenPostgresServer_whenSessionOpens_thenCancelBackendReachesTheStatement", async () => {
     const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
     try {
-      expect(session.cancelReach).toEqual({ method: "pg_cancel_backend", reaches: "statement" });
+      expect(session.services.cancel.reach).toEqual({ method: "pg_cancel_backend", reaches: "statement" });
     } finally {
       await session.close();
     }
@@ -129,7 +129,7 @@ describe.runIf(databaseEnabled("postgres"))("postgres server", () => {
     it("givenOverloads_whenTree_thenSeparateRoutines", async () => {
       const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
       try {
-        const catalog = await session.introspector?.describe(["table_craft", "public"]);
+        const catalog = await session.services.schemaTree.describe(["table_craft", "public"]);
         const overloads = catalog?.routines.filter((routine) => routine.name === "calc_fee") ?? [];
         expect(overloads.map((routine) => routine.signature)).toEqual([
           "amount numeric, currency text, rate numeric",
@@ -146,7 +146,7 @@ describe.runIf(databaseEnabled("postgres"))("postgres server", () => {
       const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
       try {
         await session.execute("SET search_path TO no_such_schema");
-        expect(await session.currentNamespace?.()).toBeNull();
+        expect(await session.services.currentNamespace.current()).toBeNull();
       } finally {
         await session.close();
       }
@@ -155,11 +155,11 @@ describe.runIf(databaseEnabled("postgres"))("postgres server", () => {
     it("givenSetLocalInTransaction_whenRolledBack_thenNamespaceReverts", async () => {
       const session = await postgres.connect(POSTGRES_CONFIG, { readOnly: false });
       try {
-        await session.transactions?.setMode("manual");
+        await session.services.transactions.setMode("manual");
         await session.execute("SET LOCAL search_path TO archive");
-        expect(await session.currentNamespace?.()).toEqual(["table_craft", "archive"]);
-        await session.transactions?.rollback();
-        expect(await session.currentNamespace?.()).toEqual(["table_craft", "public"]);
+        expect(await session.services.currentNamespace.current()).toEqual(["table_craft", "archive"]);
+        await session.services.transactions.rollback();
+        expect(await session.services.currentNamespace.current()).toEqual(["table_craft", "public"]);
       } finally {
         await session.close();
       }

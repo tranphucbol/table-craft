@@ -136,33 +136,33 @@ export function mssqlServerCases(): void {
       await connected(async (session) => {
         expect(mssql.language?.classify("USE master").setsNamespace).toBe(true);
         await run(session, "USE master");
-        expect(await session.currentNamespace?.()).toEqual(["master", "guest"]);
+        expect(await session.services.currentNamespace?.current()).toEqual(["master", "guest"]);
         await run(session, "USE [table_craft]");
-        expect(await session.currentNamespace?.()).toEqual(["table_craft", "dbo"]);
+        expect(await session.services.currentNamespace?.current()).toEqual(["table_craft", "dbo"]);
       });
     });
 
     it("givenImplicitTransactions_whenManualMode_thenTrancountTracked", async () => {
       await connected(async (session) => {
-        await session.transactions?.setMode("manual");
-        expect(session.transactions?.open).toBe(false);
+        await session.services.transactions?.setMode("manual");
+        expect(session.services.transactions?.open).toBe(false);
         await run(session, "UPDATE orders SET total = total WHERE id = 1");
-        expect(session.transactions?.open).toBe(true);
+        expect(session.services.transactions?.open).toBe(true);
         expect(await run(session, "SELECT @@TRANCOUNT")).toEqual([[1]]);
-        await session.transactions?.commit();
-        expect(session.transactions?.open).toBe(false);
-        await session.transactions?.setMode("auto");
+        await session.services.transactions?.commit();
+        expect(session.services.transactions?.open).toBe(false);
+        await session.services.transactions?.setMode("auto");
       });
     });
 
     it("givenDdlInManualMode_whenRolledBack_thenTableGone", async () => {
       await connected(async (session) => {
-        await session.transactions?.setMode("manual");
+        await session.services.transactions?.setMode("manual");
         await run(session, "CREATE TABLE table_craft_rolled_back (id int)");
-        expect(session.transactions?.open).toBe(true);
-        await session.transactions?.rollback();
+        expect(session.services.transactions?.open).toBe(true);
+        await session.services.transactions?.rollback();
         expect(await run(session, "SELECT OBJECT_ID('table_craft_rolled_back')")).toEqual([[null]]);
-        await session.transactions?.setMode("auto");
+        await session.services.transactions?.setMode("auto");
       });
     });
   });
@@ -170,10 +170,10 @@ export function mssqlServerCases(): void {
   describe("mssql routines and sessions", () => {
     it("givenProcedureWithOutput_whenCalled_thenOutputsAndReturnValue", async () => {
       await connected(async (session) => {
-        const catalog = await session.introspector?.describe(["table_craft", "dbo"]);
+        const catalog = await session.services.schemaTree?.describe(["table_craft", "dbo"]);
         const routine = catalog?.routines.find((candidate) => candidate.name === "settle_order");
-        if (routine === undefined || mssql.language?.routineCall === undefined) throw new Error("No settle_order.");
-        const call = mssql.language.routineCall(routine, "[table_craft].[dbo].[settle_order]", [
+        if (routine === undefined) throw new Error("No settle_order.");
+        const call = mssql.language.services.routineCall.call(routine, "[table_craft].[dbo].[settle_order]", [
           { kind: "value", value: "1" },
           { kind: "value", value: null },
         ]);
@@ -187,9 +187,9 @@ export function mssqlServerCases(): void {
     it("givenNoViewServerState_whenListSessions_thenOwnOnlyWithHint", async () => {
       const limited = { ...MSSQL_CONFIG, user: "table_craft_limited", password: "table_craft_limited" };
       await connected(async (session) => {
-        const listing = await session.sessions?.list();
+        const listing = await session.services.sessions?.list();
         expect(listing?.sessions.every((row) => row.user === "table_craft_limited")).toBe(true);
-        expect(listing?.sessions.some((row) => row.id === session.serverSessionId)).toBe(true);
+        expect(listing?.sessions.some((row) => row.id === session.services.sessions?.ownId)).toBe(true);
         expect(listing?.notes.join(" ")).toMatch(/GRANT VIEW SERVER STATE TO \[table_craft_limited\]/);
       }, limited);
     });

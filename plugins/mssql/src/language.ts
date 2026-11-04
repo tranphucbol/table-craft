@@ -1,4 +1,4 @@
-import type { SavepointStatements, SqlLanguage, WireValue } from "@table-craft/plugin-api";
+import type { PluginLanguage, SavepointStatements, WireValue } from "@table-craft/plugin-api";
 import {
   classifyTokens,
   defaultKeyword,
@@ -56,7 +56,26 @@ export const writeName = identifierWriter({
   keywords: QUOTED_WORDS,
 });
 
-const { explainable } = sqlExplainable({
+export const CAPABILITIES = [
+  "sql",
+  "cancel",
+  "schemaTree",
+  "transactions",
+  "ddl",
+  "explain",
+  "explainAnalyze",
+  "currentNamespace",
+  "keepAlive",
+  "bulkInsert",
+  "objects",
+  "serverMessages",
+  "sessions",
+  "routineCall",
+] as const;
+
+export type MssqlCapability = (typeof CAPABILITIES)[number];
+
+const explainCheck = sqlExplainable({
   dialect: DIALECT,
   name: "SQL Server",
   verbs: EXPLAIN_VERBS,
@@ -92,7 +111,7 @@ function savepoint(name: string): SavepointStatements {
   };
 }
 
-export const language: SqlLanguage = {
+export const language: PluginLanguage<MssqlCapability> = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
   classify: (sql) => classifyTokens(sql, DIALECT),
@@ -109,19 +128,21 @@ export const language: SqlLanguage = {
     plainIdentifier: PLAIN_IDENTIFIER,
     keywords: QUOTED_WORDS,
   }),
-  explainable,
   ...sqlFormatter({ dialect: "transactsql", lexer: DIALECT, parameters: PARAMETERS.styles }),
   ...sqlParameters(PARAMETERS),
-  ...sqlImporter({
-    quoteIdentifier,
-    plainIdentifier: PLAIN_IDENTIFIER,
-    keywords: QUOTED_WORDS,
-    types: MSSQL_IMPORT_TYPES,
-    decimal: mssqlDecimal,
-  }),
-  namespaceSwitch: namespaceSwitcher("use", quoteIdentifier),
-  objects: mssqlObjects({ name: writeName, quoteIdentifier }),
-  routineCall: mssqlRoutineCall(writeName),
+  services: {
+    explain: explainCheck,
+    bulkInsert: sqlImporter({
+      quoteIdentifier,
+      plainIdentifier: PLAIN_IDENTIFIER,
+      keywords: QUOTED_WORDS,
+      types: MSSQL_IMPORT_TYPES,
+      decimal: mssqlDecimal,
+    }),
+    currentNamespace: namespaceSwitcher("use", quoteIdentifier),
+    objects: mssqlObjects({ name: writeName, quoteIdentifier }),
+    routineCall: { call: mssqlRoutineCall(writeName) },
+  },
 };
 
 export { nationalText };

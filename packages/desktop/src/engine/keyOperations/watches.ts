@@ -7,7 +7,8 @@ import {
   KEY_WATCH_MAX_EVENTS,
   KEY_WATCH_MAX_RING_BYTES,
 } from "@table-craft/desktop/engine/protocol.js";
-import { type KeyOperationScope, KEY_RESOURCE_LIMIT, invalidOperation, quietClose, requireMethod } from "./scope.js";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
+import { type KeyOperationScope, KEY_RESOURCE_LIMIT, invalidOperation, quietClose } from "./scope.js";
 import { captureRetainedWatch } from "./watchExport.js";
 
 interface HeldEvent {
@@ -124,12 +125,10 @@ export class KeyWatches {
     const session = await this.scope.open("watch");
     let watch: KeyWatch | undefined;
     try {
-      const watcher = session.watch;
+      const watcher = serviceOf(session, "watch");
       const spec: KeyWatchRequest = { database: request.database, range: request.range, from: request.from };
-      watch = await requireMethod(watcher, "open", "watch.open").open(spec);
+      watch = await watcher.open(spec);
       this.scope.live();
-      requireMethod(watch, "next", "watch.next");
-      requireMethod(watch, "close", "watch.close");
       const held: RunningWatch = {
         id: this.scope.id(),
         request: spec,

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type { KeyWatchEvent } from "@table-craft/plugin-api";
 import { describe, expect, it } from "vitest";
 import { EtcdSession } from "@table-craft/plugin-etcd/session";
+import type { EtcdKeyspace } from "@table-craft/plugin-etcd/keyspace";
 import { connectionSchema } from "@table-craft/plugin-etcd/config";
 import { databaseEnabled } from "../support/databases.js";
 import { withIsolatedEtcd, type IsolatedEtcd } from "../support/etcdIsolated.js";
@@ -11,6 +12,10 @@ const WATCH_LIMITS = { count: 100, maxBytes: 1_048_576, timeoutMs: 5000 };
 const text = (value: string) => ({ text: value, hex: null });
 const ALL = { kind: "all" as const };
 const NAMESPACE = "/private-runtime/";
+
+function keyspaceOf(opened: EtcdSession): EtcdKeyspace {
+  return opened.services.keyValue as EtcdKeyspace;
+}
 
 async function session(fixture: IsolatedEtcd, namespace = NAMESPACE, readOnly = false) {
   const credentials = fixture.credentials?.root;
@@ -32,8 +37,8 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
         const raw = fixture.client;
         try {
           await raw.kv.put({ key: Buffer.from("/outside"), value: Buffer.from("untouched") });
-          const lease = await connected.leases.grant("60");
-          await connected.keyspace.apply(
+          const lease = await connected.services.leases.grant("60");
+          await keyspaceOf(connected).apply(
             0,
             text("folder/key"),
             [{ kind: "setString", value: text("first"), original: null }],
@@ -41,7 +46,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           );
           let stored = await raw.kv.range({ key: Buffer.from(`${NAMESPACE}folder/key`) });
           expect(stored.kvs[0]?.lease).toBe(lease.id);
-          await connected.keyspace.apply(
+          await keyspaceOf(connected).apply(
             0,
             text("folder/key"),
             [{ kind: "setString", value: text("second"), original: text("first") }],
@@ -49,7 +54,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           );
           stored = await raw.kv.range({ key: Buffer.from(`${NAMESPACE}folder/key`) });
           expect(stored.kvs[0]?.lease).toBe(lease.id);
-          await connected.keyspace.apply(0, text("folder/key"), [], {
+          await keyspaceOf(connected).apply(0, text("folder/key"), [], {
             type: "string",
             guard: false,
             lease: { kind: "detach" },
@@ -58,7 +63,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           expect(stored.kvs[0]?.lease).toBe("0");
           expect(stored.kvs[0]?.value.toString()).toBe("second");
 
-          const watch = await connected.watch.open({ database: 0, range: ALL, from: { kind: "now" } });
+          const watch = await connected.services.watch.open({ database: 0, range: ALL, from: { kind: "now" } });
           await connected.execute('put "watched" "new"');
           const events: KeyWatchEvent[] = [];
           const maxPulls = 3;
@@ -68,7 +73,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           expect(events.every((event) => !event.key.text.startsWith(NAMESPACE))).toBe(true);
           await watch.close();
 
-          const children = await connected.keyspace.children({
+          const children = await keyspaceOf(connected).children({
             database: 0,
             range: ALL,
             parent: text(""),
@@ -81,7 +86,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           );
           expect(children.children.some((child) => child.key.text === "/outside")).toBe(false);
 
-          const first = await connected.keyTransfer.exportPage({
+          const first = await connected.services.bulkTransfer.exportPage({
             database: 0,
             range: ALL,
             cursor: null,
@@ -91,7 +96,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           expect(first.namespace.text).toBe(NAMESPACE);
           expect(first.cursor).not.toBeNull();
           await connected.execute('put "zzz-after-snapshot" "late"');
-          const rest = await connected.keyTransfer.exportPage({
+          const rest = await connected.services.bulkTransfer.exportPage({
             database: 0,
             range: ALL,
             cursor: first.cursor,
@@ -101,37 +106,37 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           expect(rest.revision).toBe(first.revision);
           expect(rest.records.some((record) => record.key.text === "zzz-after-snapshot")).toBe(false);
 
-          const stale = await connected.keyspace.prepareDelete(0, { kind: "prefix", prefix: text("folder/") });
+          const stale = await keyspaceOf(connected).prepareDelete(0, { kind: "prefix", prefix: text("folder/") });
           await connected.execute('put "folder/new" "racing"');
-          await expect(connected.keyspace.deletePrepared(stale.token)).rejects.toThrow("modified after preview");
-          const ready = await connected.keyspace.prepareDelete(0, { kind: "prefix", prefix: text("folder/") });
-          await expect(connected.keyspace.deletePrepared(ready.token)).resolves.toMatchObject({ deleted: "2" });
+          await expect(keyspaceOf(connected).deletePrepared(stale.token)).rejects.toThrow("modified after preview");
+          const ready = await keyspaceOf(connected).prepareDelete(0, { kind: "prefix", prefix: text("folder/") });
+          await expect(keyspaceOf(connected).deletePrepared(ready.token)).resolves.toMatchObject({ deleted: "2" });
           expect((await raw.kv.range({ key: Buffer.from("/outside") })).kvs[0]?.value.toString()).toBe("untouched");
 
           await expect(
-            connected.keyTransfer.importChunk(
+            connected.services.bulkTransfer.importChunk(
               [{ key: text("watched"), value: text("overwrite"), expectedModRevision: null }],
               "ifUnchanged",
             ),
           ).rejects.toThrow("expected revision");
           await expect(
-            connected.keyTransfer.importChunk(
+            connected.services.bulkTransfer.importChunk(
               [{ key: text("watched"), value: text("skipped"), expectedModRevision: null }],
               "skipExisting",
             ),
           ).resolves.toMatchObject({ written: "0", skipped: "1" });
           await expect(
-            connected.keyTransfer.importChunk(
+            connected.services.bulkTransfer.importChunk(
               [{ key: text("imported"), value: { text: "", hex: "ff00" }, expectedModRevision: "0" }],
               "ifUnchanged",
             ),
           ).resolves.toMatchObject({ written: "1" });
 
-          const leaseKeys = await connected.leases.keys(lease.id, null, 100);
+          const leaseKeys = await connected.services.leases.keys(lease.id, null, 100);
           expect(leaseKeys.lease.totalKeyCount).toBe("0");
-          await connected.leases.keepAliveOnce(lease.id);
-          const revoke = await connected.leases.prepareRevoke(lease.id);
-          await connected.leases.revokePrepared(revoke.token);
+          await connected.services.leases.keepAliveOnce(lease.id);
+          const revoke = await connected.services.leases.prepareRevoke(lease.id);
+          await connected.services.leases.revokePrepared(revoke.token);
         } finally {
           await connected.close();
         }
@@ -146,17 +151,17 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
       await withIsolatedEtcd({ members: 3 }, async (fixture) => {
         const connected = await session(fixture);
         try {
-          const endpoints = await connected.cluster.endpoints();
+          const endpoints = await connected.services.maintenance.endpoints();
           expect(endpoints).toHaveLength(3);
           expect(endpoints.every((endpoint) => endpoint.reachable)).toBe(true);
-          const status = await connected.cluster.status(endpoints[0]!.id);
-          await expect(connected.cluster.status("advertised-url")).rejects.toThrow("configured");
-          await expect(connected.cluster.remove(status.leaderId!)).rejects.toThrow("current leader");
-          const hash = await connected.cluster.hash(endpoints[0]!.id, "0");
+          const status = await connected.services.maintenance.status(endpoints[0]!.id);
+          await expect(connected.services.maintenance.status("advertised-url")).rejects.toThrow("configured");
+          await expect(connected.services.members.remove(status.leaderId!)).rejects.toThrow("current leader");
+          const hash = await connected.services.maintenance.hash(endpoints[0]!.id, "0");
           expect(hash.endpointId).toBe(endpoints[0]!.id);
           expect(hash.hash).toMatch(/^\d+$/);
-          await connected.cluster.defragment(endpoints[0]!.id);
-          const snapshot = await connected.cluster.snapshot(endpoints[0]!.id);
+          await connected.services.maintenance.defragment(endpoints[0]!.id);
+          const snapshot = await connected.services.maintenance.snapshot(endpoints[0]!.id);
           const chunks: Buffer[] = [];
           try {
             for await (const chunk of snapshot.chunks) chunks.push(Buffer.from(chunk));
@@ -170,7 +175,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
           expect(createHash("sha256").update(bytes.subarray(0, -checksumBytes)).digest()).toEqual(
             bytes.subarray(-checksumBytes),
           );
-          await connected.cluster.compact(status.revision, false);
+          await connected.services.maintenance.compact(status.revision, false);
         } finally {
           await connected.close();
         }
@@ -185,23 +190,29 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd advanced runtime on disposable s
       await withIsolatedEtcd({ auth: true }, async (fixture) => {
         const connected = await session(fixture);
         try {
-          expect(await connected.access.status()).toMatchObject({ enabled: true, currentUser: "root" });
-          await expect(connected.access.apply({ kind: "deleteUser", user: "root" })).rejects.toThrow("lock out");
-          await connected.access.apply({ kind: "createRole", role: "runtime-reader" });
-          await connected.access.apply({
+          expect(await connected.services.access.status()).toMatchObject({ enabled: true, currentUser: "root" });
+          await expect(connected.services.access.apply({ kind: "deleteUser", user: "root" })).rejects.toThrow(
+            "lock out",
+          );
+          await connected.services.access.apply({ kind: "createRole", role: "runtime-reader" });
+          await connected.services.access.apply({
             kind: "grantPermission",
             role: "runtime-reader",
             permission: { access: "read", range: { kind: "prefix", prefix: text("/global/") } },
           });
-          const role = (await connected.access.roles()).find((entry) => entry.name === "runtime-reader");
+          const role = (await connected.services.access.roles()).find((entry) => entry.name === "runtime-reader");
           expect(role?.permissions[0]?.range).toEqual({ kind: "prefix", prefix: text("/global/") });
-          await connected.access.applySecret({ kind: "createUser", user: "runtime-user", password: "isolated-secret" });
-          await connected.access.apply({ kind: "grantRole", user: "runtime-user", role: "runtime-reader" });
-          const users = await connected.access.users();
+          await connected.services.access.applySecret({
+            kind: "createUser",
+            user: "runtime-user",
+            password: "isolated-secret",
+          });
+          await connected.services.access.apply({ kind: "grantRole", user: "runtime-user", role: "runtime-reader" });
+          const users = await connected.services.access.users();
           expect(users.find((user) => user.name === "runtime-user")?.roles).toContain("runtime-reader");
           expect(JSON.stringify(users)).not.toContain("isolated-secret");
-          await connected.access.apply({ kind: "deleteUser", user: "runtime-user" });
-          await connected.access.apply({ kind: "deleteRole", role: "runtime-reader" });
+          await connected.services.access.apply({ kind: "deleteUser", user: "runtime-user" });
+          await connected.services.access.apply({ kind: "deleteRole", role: "runtime-reader" });
         } finally {
           await connected.close();
         }

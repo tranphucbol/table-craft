@@ -21,8 +21,8 @@ function text(value: string) {
 }
 
 function keyspaceOf(session: Session) {
-  if (session.keyspace === undefined) throw new Error("no keyspace");
-  return session.keyspace;
+  if (session.services.keyValue === undefined) throw new Error("no keyspace");
+  return session.services.keyValue;
 }
 
 async function withRedis(config: unknown, use: (session: Session) => Promise<void>): Promise<void> {
@@ -54,7 +54,7 @@ describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", 
   describe("standalone", () => {
     it("givenNodes_whenStandalone_thenOnePrimary", async () => {
       await withRedis(config, async (session) => {
-        const nodes = (await session.nodes?.()) ?? [];
+        const nodes = (await session.services.nodes?.list()) ?? [];
         expect(nodes).toEqual([
           expect.objectContaining({ role: "primary", slots: [], primaryId: null, state: "connected" }),
         ]);
@@ -63,7 +63,7 @@ describe.runIf(databaseEnabled("redis")).each(SERVERS)("redis $version server", 
 
     it("givenOtherDatabase_whenKeyspaceReads_thenConsoleKeepsItsOwn", async () => {
       await withRedis(config, async (session) => {
-        const keyspace = session.keyspace;
+        const keyspace = session.services.keyValue;
         if (keyspace === undefined) throw new Error("no keyspace");
         const databases = await keyspace.databases();
         expect(databases.length).toBeGreaterThanOrEqual(DATABASES);

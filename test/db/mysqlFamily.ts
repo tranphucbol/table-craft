@@ -1,5 +1,5 @@
 import mysql from "@table-craft/plugin-mysql";
-import type { Session } from "@table-craft/plugin-api";
+import type { DatasourcePlugin, Session } from "@table-craft/plugin-api";
 import { runPluginContract } from "@table-craft/plugin-api/testing";
 import { expect, it } from "vitest";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
@@ -114,6 +114,7 @@ export const MYSQL_STATEMENTS: NonNullable<ContractOptions["statements"]> = {
  * `overrides` carries what an older or compatible server answers differently.
  */
 const DEFAULT_CATALOG_PATH = ["table_craft"];
+const mysqlPlugin: DatasourcePlugin = mysql;
 
 export function runMysqlFamilyContract(
   config: { readonly password: string },
@@ -147,21 +148,21 @@ export function runMysqlFamilyContract(
   });
 
   it("givenTableGrantOnly_whenNamespacesAndDescribe_thenDatabaseAndTableShown", async () => {
-    const root = await mysql.connect(rootConfig, { readOnly: false });
+    const root = await mysqlPlugin.connect(rootConfig, { readOnly: false });
     try {
       await run(root, `DROP USER IF EXISTS ${TABLE_GRANT_USER}`);
       await run(root, `CREATE USER ${TABLE_GRANT_USER} IDENTIFIED BY '${config.password}'`);
       await run(root, `GRANT SELECT ON ${TABLE_GRANT_DATABASE}.${TABLE_GRANT_TABLE} TO ${TABLE_GRANT_USER}`);
-      const session = await mysql.connect(
+      const session = await mysqlPlugin.connect(
         { ...config, user: TABLE_GRANT_USER_NAME, database: TABLE_GRANT_DATABASE },
         { readOnly: true },
       );
       try {
-        const namespaces = (await session.introspector?.namespaces()) ?? [];
+        const namespaces = (await session.services.schemaTree?.namespaces()) ?? [];
         expect(namespaces.filter((namespace) => !namespace.system)).toEqual([
           { path: [TABLE_GRANT_DATABASE], name: TABLE_GRANT_DATABASE, kind: "schema", system: false, current: true },
         ]);
-        const catalog = await session.introspector?.describe([TABLE_GRANT_DATABASE]);
+        const catalog = await session.services.schemaTree?.describe([TABLE_GRANT_DATABASE]);
         expect(catalog?.relations.map((relation) => relation.name)).toEqual([TABLE_GRANT_TABLE]);
       } finally {
         await session.close();

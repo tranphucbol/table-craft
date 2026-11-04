@@ -118,7 +118,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
     return running.page;
   }
   async function value(key: string) {
-    return (await session!.keyspace!.read(0, { text: key, hex: null }, { window: 1 })).value;
+    return (await session!.services.keyValue!.read(0, { text: key, hex: null }, { window: 1 })).value;
   }
   afterEach(async () => {
     await closeApp(running?.app);
@@ -127,11 +127,11 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       if (session !== null) {
         await session.execute('del "" --prefix');
         if (ownedLease !== null) {
-          const preview = await session.leases!.prepareRevoke(ownedLease);
-          await session.leases!.revokePrepared(preview.token);
+          const preview = await session.services.leases!.prepareRevoke(ownedLease);
+          await session.services.leases!.revokePrepared(preview.token);
         }
-        if ((await session.access!.users()).some((user) => user.name === USER))
-          await session.access!.apply({ kind: "deleteUser", user: USER });
+        if ((await session.services.access!.users()).some((user) => user.name === USER))
+          await session.services.access!.apply({ kind: "deleteUser", user: USER });
       }
     } finally {
       ownedLease = null;
@@ -145,7 +145,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
     async () => {
       const page = await launch();
       await session!.execute("put attached before");
-      const before = new Set((await session!.leases!.list()).map((lease) => lease.id));
+      const before = new Set((await session!.services.leases!.list()).map((lease) => lease.id));
       await findAction(page, "Leases");
       const leases = page.getByRole("region", { name: "leases", exact: true });
       await leases.getByRole("button", { name: "Grant Lease…", exact: true }).click();
@@ -154,11 +154,11 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
         .click();
       await dialog(page).getByRole("button", { name: "Continue", exact: true }).click();
       await expect
-        .poll(async () => (await session!.leases!.list()).filter((lease) => !before.has(lease.id)).length, {
+        .poll(async () => (await session!.services.leases!.list()).filter((lease) => !before.has(lease.id)).length, {
           timeout: LAUNCH_TIMEOUT_MS,
         })
         .toBe(1);
-      ownedLease = (await session!.leases!.list()).find((lease) => !before.has(lease.id))!.id;
+      ownedLease = (await session!.services.leases!.list()).find((lease) => !before.has(lease.id))!.id;
       await leases.getByRole("button", { name: new RegExp(`^${ownedLease} `) }).click();
       await leases.getByRole("button", { name: "Attach Key…", exact: true }).click();
       await dialog(page)
@@ -171,16 +171,17 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       await expect
         .poll(
           async () =>
-            (await session!.keyspace!.read(0, { text: "attached", hex: null }, { window: 1 })).details.revision?.lease,
+            (await session!.services.keyValue!.read(0, { text: "attached", hex: null }, { window: 1 })).details.revision
+              ?.lease,
         )
         .toBe(ownedLease);
       const renew = leases.getByRole("button", { name: "Keep Alive", exact: true });
       await renew.click();
       await expect.poll(() => renew.getAttribute("aria-pressed")).toBe("true");
       await capture(page, "advanced-01-lease-attached-renewing");
-      const preview = await session!.leases!.prepareRevoke(ownedLease);
+      const preview = await session!.services.leases!.prepareRevoke(ownedLease);
       expect(preview.lease.outsideNamespaceKeyCount).toBe("0");
-      await session!.leases!.revokePrepared(preview.token);
+      await session!.services.leases!.revokePrepared(preview.token);
       ownedLease = null;
       await expect.poll(() => leases.textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toContain("Renewal stopped:");
       await expect.poll(() => renew.getAttribute("aria-pressed")).toBe("false");
@@ -266,7 +267,9 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       await capture(page, "advanced-05-temporary-user-private-credentials");
       await access.getByRole("button", { name: "Delete User…", exact: true }).click();
       await dialog(page).getByRole("button", { name: "Apply Change", exact: true }).click();
-      await expect.poll(async () => (await session!.access!.users()).some((user) => user.name === USER)).toBe(false);
+      await expect
+        .poll(async () => (await session!.services.access!.users()).some((user) => user.name === USER))
+        .toBe(false);
       expect(await page.locator("body").textContent()).not.toContain(PASSWORD);
     },
     SCENARIO_TIMEOUT_MS,

@@ -79,6 +79,31 @@
       "key": "KeyspaceFixture.stream",
       "kind": "addition",
       "reason": "Becomes optional and the stream read test runs only when the fixture names it; a plugin supplies the fixture, so every fixture valid before still is."
+    },
+    {
+      "key": "Session",
+      "kind": "breaking",
+      "reason": "Plugin API 2.0 (decision 155): the optional members of a session become services keyed by capability under services, and the host's Session is SessionBase with any subset of them."
+    },
+    {
+      "key": "SqlLanguage",
+      "kind": "breaking",
+      "reason": "Plugin API 2.0 (decision 155): the members every SQL language has move to SqlLanguageBase, and the optional ones become language services keyed by capability under services."
+    },
+    {
+      "key": "sqlExplainable",
+      "kind": "breaking",
+      "reason": "Plugin API 2.0 (decision 155): returns the explain language service, which a plugin puts under language.services.explain, instead of a language fragment."
+    },
+    {
+      "key": "sqlImporter",
+      "kind": "breaking",
+      "reason": "Plugin API 2.0 (decision 155): returns the bulkInsert language service, which a plugin puts under language.services.bulkInsert, instead of a language fragment."
+    },
+    {
+      "key": "sqlCompleter",
+      "kind": "addition",
+      "reason": "The same four members; selectSource and signatureAt are now required on every SqlLanguage, so the Required wrapper says nothing more."
     }
   ]
 }

@@ -1,4 +1,4 @@
-import type { Explainability, ExplainOptions, Row, SqlLanguage } from "@table-craft/plugin-api";
+import type { ExplainCheck, Explainability, ExplainOptions, Row } from "@table-craft/plugin-api";
 import { classifyTokens } from "./classify.js";
 import { sqlSplitter } from "./splitter.js";
 import { significantTokens, type SqlDialectOptions } from "./tokens.js";
@@ -61,10 +61,10 @@ export function explainedVerb(sql: string, dialect: SqlDialectOptions): string {
 }
 
 /**
- * `SqlLanguage.explainable` from a dialect's verb lists: the shared refusals, then the statement's
+ * The `explain` language service (`ExplainCheck`) from a dialect's verb lists: the shared refusals, then the statement's
  * main verb against what the dialect explains and analyses. A statement writes when it is not a read.
  */
-export function sqlExplainable(options: ExplainableOptions): Required<Pick<SqlLanguage, "explainable">> {
+export function sqlExplainable(options: ExplainableOptions): ExplainCheck {
   const verbs = new Set(options.verbs);
   const analyzeVerbs = new Set(options.analyzeVerbs);
   const explainable = (sql: string, { analyze }: ExplainOptions): Explainability => {

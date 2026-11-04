@@ -434,7 +434,7 @@ describe.runIf(DATABASES_ENABLED)("sql server live test", () => {
       holder = await mssql.connect(mssql.connectionSchema.parse(MSSQL_CONFIG), { readOnly: false });
       await drain(holder, "BEGIN TRANSACTION");
       await drain(holder, HOLDING_UPDATE);
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launch();
       await startStatement(page, BLOCKED_UPDATE);
 

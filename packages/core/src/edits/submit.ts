@@ -31,7 +31,7 @@ function countMessage(index: number, affected: number | null): string {
 }
 
 function transactionsOf(session: Session): Transactions {
-  const transactions = session.transactions;
+  const transactions = session.services.transactions;
   if (transactions === undefined) {
     throw new CoreError(
       "invalidRequest",
