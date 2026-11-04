@@ -48,7 +48,7 @@ git log --first-parent --oneline "$(git describe --tags --abbrev=0 --exclude 'v*
   ships as an app patch release (decision 109).
 - **Minor** (`v1.14.0` to `v1.15.0`): anything new a user can see or a plugin can use: a feature, a
   plan, a setting, a plugin, or a plugin API addition.
-- **Major**: only the project owner decides on a new major version. A plugin API major (decision 106) is a separate decision with its own plan; it never comes from a release step.
+- **Major**: only the project owner decides on a new major version. A plugin API major (decision 106) is a separate decision with its own plan; it never comes from a release step. A release that ships a plugin API major gets its plugins to npm before users get the app: see [Publish](#publish).
 
 A stable tag is `v` and three numbers. The only pre-release is a beta, `v1.15.0-beta.1`; any other
 suffix, such as `v1.15.0-rc.1`, builds as a development version and never releases.
@@ -246,6 +246,12 @@ Publishing starts `.github/workflows/publish-plugins.yml`. Approve the `plugins`
 asks. It downloads the tarballs attached to the release, load-checks them against the tag,
 publishes `@tablecraft-app/plugin-api` first and then each plugin with npm provenance, skipping
 every version already on npm, and appends what each plugin is at this release to the notes.
+
+When the release takes a plugin API major (decision 155), every plugin moves with it and an app on
+the new major refuses the plugins it already has. Publish only when you can approve the `plugins`
+environment at once, approve it before anything else, and check `npm view` (below) before
+announcing the release. Until the packages are on npm, an updated app finds no plugin for its API:
+its data sources show **Update failed** with Retry, and the next connect or launch tries again.
 
 ## Check the release
 

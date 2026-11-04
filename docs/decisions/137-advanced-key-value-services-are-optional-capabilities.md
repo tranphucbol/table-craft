@@ -1,6 +1,6 @@
 # 137: Advanced key-value services are optional capabilities in API 1.8.0
 
-Status: Accepted
+Status: Accepted. Amended by 155: each service is a key of `session.services`, `cluster` split into `members` and `maintenance`.
 
 ## Decision
 

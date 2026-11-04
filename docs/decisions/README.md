@@ -147,3 +147,4 @@ started, not when it is merged.
 | 152 | [Agent statements are logged](152-agent-statements-are-logged.md)                                                                                                      |
 | 153 | [Data sources export to a sealed JSON file](153-data-sources-export-to-a-sealed-json-file.md)                                                                          |
 | 154 | [Shortcuts are overrides in settings.json, and the menu follows them](154-shortcuts-are-overrides-and-the-menu-follows-them.md)                                        |
+| 155 | [Plugin API 2.0: a capability is a key](155-plugin-api-2-capabilities-are-keys.md)                                                                                     |

@@ -97,6 +97,11 @@ Each rule has a decision record that says why.
 - The plugin API only adds within a major: new exports, optional fields and methods, capabilities
   ([106](docs/decisions/106-plugin-api-1-0-follows-semver.md)); `bun run api:check` compares it with
   the last release ([107](docs/decisions/107-plugin-api-compatibility-is-checked.md)).
+- A capability is a key ([155](docs/decisions/155-plugin-api-2-capabilities-are-keys.md)). Adding
+  one adds its name to `CAPABILITIES` and its service to `SessionServices` or `LanguageServices`
+  (`packages/plugin-api/src/services.ts`), never a member on `Session` or `SqlLanguage`. The engine
+  reaches it only through `serviceOf` and `hasService` in `packages/desktop/src/engine/services.ts`;
+  ESLint refuses `.services` anywhere else in the engine and core.
 - Code that Electron runs uses Node APIs, and drivers are Node-compatible
   ([001](docs/decisions/001-electron-with-bun-as-the-toolchain.md)).
 - Colours, spacing and fonts come from the [design tokens](docs/design/design-system.md), never
