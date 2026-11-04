@@ -222,7 +222,8 @@ export async function discoverPlugins(
 
 /**
  * Loads every plugin `discoverPlugins` finds available. A broken plugin becomes an
- * `UnavailablePlugin` with a reason; it never stops the others.
+ * `UnavailablePlugin` with a reason; it never stops the others. For load-checking whole folders;
+ * a datasource's engine uses `loadPluginById` instead, so it runs no other plugin's code.
  */
 export async function loadPlugins(
   roots: readonly PluginRoot[],
@@ -230,6 +231,23 @@ export async function loadPlugins(
 ): Promise<PluginLoadResult[]> {
   const results: PluginLoadResult[] = [];
   for (const found of await discoverPlugins(roots, hostVersion)) {
+    results.push(found.status === "available" ? await importPlugin(found.directory, found.manifest) : found);
+  }
+  return results;
+}
+
+/**
+ * Discovers every plugin under `roots` like `discoverPlugins`, then imports only the available one
+ * whose id is `pluginId`. Returns the discovered entries with that id, nothing for other ids.
+ */
+export async function loadPluginById(
+  roots: readonly PluginRoot[],
+  pluginId: string,
+  hostVersion: string = API_VERSION,
+): Promise<PluginLoadResult[]> {
+  const results: PluginLoadResult[] = [];
+  for (const found of await discoverPlugins(roots, hostVersion)) {
+    if (found.manifest?.id !== pluginId) continue;
     results.push(found.status === "available" ? await importPlugin(found.directory, found.manifest) : found);
   }
   return results;
