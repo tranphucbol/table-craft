@@ -15,6 +15,7 @@ import {
   type SnippetsService,
 } from "@table-craft/desktop/main/snippets.js";
 import { DatasourceError, type DatasourceService } from "@table-craft/desktop/main/service.js";
+import { DiagramsError, diagramStateSchema, type DiagramsService } from "@table-craft/desktop/main/diagrams.js";
 import type { DatasourceExportChannels } from "@table-craft/desktop/main/datasourceExport.js";
 import {
   HISTORY_OUTCOMES,
@@ -97,6 +98,8 @@ const disconnectRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const chooseFileRequest = z.strictObject({ title: z.string() });
 const saveFileRequest = z.strictObject({ title: z.string(), defaultName: z.string() });
 const revealFileRequest = z.strictObject({ path: z.string().min(1) });
+const readDiagramsRequest = z.strictObject({ datasourceId: z.string().min(1) });
+const saveDiagramsRequest = readDiagramsRequest.extend({ state: diagramStateSchema });
 const consoleListRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const consoleRequest = z.strictObject({ datasourceId: z.string().min(1), name: z.string().min(1) });
 const consoleWriteRequest = z.strictObject({
@@ -225,6 +228,7 @@ export interface IpcOptions<Sender> {
   readonly answerHostKey: (requestId: number, trust: boolean) => void;
   readonly settings: SettingsService;
   readonly snippets: SnippetsService;
+  readonly diagrams: DiagramsService;
   /** Creates `<userData>/themes/` if missing and shows it in the file manager. */
   readonly openThemesFolder: () => Promise<void>;
   readonly appInfo: () => AppInfo;
@@ -298,6 +302,7 @@ function failureOf(cause: unknown): BridgeFailure | null {
     cause instanceof ConsoleFileError ||
     cause instanceof SqlFileError ||
     cause instanceof SnippetError ||
+    cause instanceof DiagramsError ||
     cause instanceof PluginInstallError
   ) {
     return { message: cause.message, hint: cause.hint };
@@ -347,7 +352,10 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.removePlugin, pluginRequest, ({ pluginId }) => plugins.remove(pluginId));
   handle(INVOKE_CHANNELS.saveDatasource, saveRequest, (request) => service.save(request));
   handle(INVOKE_CHANNELS.deleteDatasources, deleteRequest, async (request) => {
+    const before = service.list().datasources.map(({ id }) => id);
     await service.delete(request);
+    const after = new Set(service.list().datasources.map(({ id }) => id));
+    await options.diagrams.delete(before.filter((id) => !after.has(id)));
     return null;
   });
   handle(INVOKE_CHANNELS.moveDatasources, moveRequest, (request) => service.move(request));
@@ -384,6 +392,11 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.saveFile, saveFileRequest, ({ title, defaultName }, sender) =>
     options.saveFile(sender, title, defaultName),
   );
+  handle(INVOKE_CHANNELS.readDiagrams, readDiagramsRequest, ({ datasourceId }) => options.diagrams.get(datasourceId));
+  handle(INVOKE_CHANNELS.saveDiagrams, saveDiagramsRequest, async ({ datasourceId, state }) => {
+    await options.diagrams.save(datasourceId, state);
+    return null;
+  });
   handle(INVOKE_CHANNELS.revealFile, revealFileRequest, ({ path }) => {
     options.revealFile(path);
     return null;

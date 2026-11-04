@@ -26,7 +26,7 @@ export interface VirtualKey {
 /** One datasource's diagrams, as `<userData>/diagrams.json` keeps them (plan 152, decision 8). */
 export interface DiagramState {
   readonly inferKeys: boolean;
-  /** Ids of inferred keys the user hid, as `InferredKey.id` spells them. */
+  /** Inferred keys the user hid, each as `hiddenKeyId` spells it. */
   readonly hiddenKeys: readonly string[];
   readonly virtualKeys: readonly VirtualKey[];
   /** Keyed by the namespace path key, `JSON.stringify(path)`. */
@@ -34,6 +34,15 @@ export interface DiagramState {
 }
 
 export const DEFAULT_DIAGRAM_STATE: DiagramState = { inferKeys: true, hiddenKeys: [], virtualKeys: [], layouts: {} };
+
+/**
+ * How a hidden inferred key is saved: its namespace with its `InferredKey.id`, which names only
+ * tables and columns, so hiding `orders(customer_id)->customers(id)` in one schema leaves another
+ * schema's alone.
+ */
+export function hiddenKeyId(path: readonly string[], keyId: string): string {
+  return JSON.stringify([path, keyId]);
+}
 
 /** The id a virtual key is saved under: its two ends, so the same relationship cannot be added twice. */
 export function virtualKeyId(key: Omit<VirtualKey, "id">): string {

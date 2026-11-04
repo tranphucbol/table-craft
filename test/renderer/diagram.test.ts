@@ -11,7 +11,14 @@ import {
   DIAGRAM_FULL_COLUMNS_TABLES,
   diagramGraph,
   ghostTableId,
+  hiddenKeysOf,
   openingLayout,
+  relationshipProblem,
+  virtualKeyFor,
+  withHiddenKey,
+  withoutVirtualKey,
+  withRestoredKeys,
+  withVirtualKey,
   shownGraph,
   visibleColumns,
 } from "@table-craft/desktop/renderer/model/diagram.js";
@@ -101,10 +108,65 @@ describe("diagram graph", () => {
     const graph = diagramGraph({
       catalog: NOTES_CATALOG,
       inferred: [PERSON_KEY],
-      state: state({ hiddenKeys: [PERSON_KEY.id] }),
+      state: withHiddenKey(state(), PUBLIC_PATH, PERSON_KEY.id),
     });
 
     expect(graph.edges).toEqual([]);
+  });
+
+  it("givenKeyHiddenInAnotherSchema_whenGraphBuilt_thenStillDrawn", () => {
+    const graph = diagramGraph({
+      catalog: NOTES_CATALOG,
+      inferred: [PERSON_KEY],
+      state: withHiddenKey(state(), AUDIT_PATH, PERSON_KEY.id),
+    });
+
+    expect(graph.edges.map((edge) => edge.origin)).toEqual(["inferred"]);
+  });
+
+  it("givenKeptInferredKey_whenGraphBuilt_thenAVirtualEdgeOnTheSameColumnsReplacesIt", () => {
+    const [inferred] = diagramGraph({ catalog: NOTES_CATALOG, inferred: [PERSON_KEY], state: state() }).edges;
+    if (inferred === undefined) throw new Error("expected the inferred edge");
+
+    const kept = withVirtualKey(state({ inferKeys: false }), virtualKeyFor(PUBLIC_PATH, inferred));
+    const graph = diagramGraph({ catalog: NOTES_CATALOG, inferred: [PERSON_KEY], state: kept });
+
+    expect(graph.edges.map((edge) => [edge.origin, edge.source, edge.target])).toEqual([
+      ["virtual", "notes", "people"],
+    ]);
+    expect(withVirtualKey(kept, virtualKeyFor(PUBLIC_PATH, inferred))).toBe(kept);
+    expect(withoutVirtualKey(kept, kept.virtualKeys[0]?.id ?? "").virtualKeys).toEqual([]);
+  });
+
+  it("givenHiddenAndMissingKeys_whenListed_thenThisNamespacesOnlyWithRestore", () => {
+    const gone = virtual("notes", "person_id", "dropped");
+    const hidden = withHiddenKey(
+      withHiddenKey(state({ virtualKeys: [gone] }), PUBLIC_PATH, PERSON_KEY.id),
+      AUDIT_PATH,
+      "x",
+    );
+
+    const listed = hiddenKeysOf(NOTES_CATALOG, [PERSON_KEY], hidden);
+
+    expect(listed.hidden.map((key) => key.label)).toEqual(["notes.person_id → people.id"]);
+    expect(listed.missing.map((entry) => entry.key.id)).toEqual([gone.id]);
+    const restored = withRestoredKeys(
+      hidden,
+      listed.hidden.map((key) => key.id),
+    );
+    expect(restored.hiddenKeys).toEqual(hidden.hiddenKeys.filter((id) => id !== listed.hidden[0]?.id));
+  });
+
+  it.each([
+    [{ from: "notes", columns: ["person_id"], to: "", targetColumns: [""] }, "Choose both tables."],
+    [{ from: "notes", columns: [""], to: "people", targetColumns: ["id"] }, "Choose every source column."],
+    [
+      { from: "notes", columns: ["person_id", "author_id"], to: "people", targetColumns: ["id"] },
+      "The source and the target need as many columns as each other.",
+    ],
+    [{ from: "notes", columns: ["person_id"], to: "people", targetColumns: ["id"] }, null],
+  ])("givenRelationshipDraft_whenChecked_thenColumnCountsMustMatch (%#)", (draft, problem) => {
+    expect(relationshipProblem(draft)).toBe(problem);
   });
 
   it("givenVirtualKeyOnInferredColumns_whenGraphBuilt_thenOneVirtualEdge", () => {

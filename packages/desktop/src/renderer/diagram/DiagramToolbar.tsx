@@ -3,10 +3,18 @@ import { DIAGRAM_COLUMN_MODES, type DiagramColumnMode } from "@table-craft/deskt
 import { DIAGRAM_ACTION_IDS } from "@table-craft/desktop/renderer/actions/diagramActions.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { TablesPicker } from "@table-craft/desktop/renderer/diagram/TablesPicker.js";
-import { EDGE_ORIGINS, type DiagramTable, type EdgeOrigin } from "@table-craft/desktop/renderer/model/diagram.js";
+import { HiddenKeys } from "@table-craft/desktop/renderer/diagram/HiddenKeys.js";
+import {
+  EDGE_ORIGINS,
+  type DiagramTable,
+  type EdgeOrigin,
+  type HiddenKey,
+  type MissingKey,
+} from "@table-craft/desktop/renderer/model/diagram.js";
 import { useDiagrams } from "@table-craft/desktop/renderer/state/diagrams.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
+import type { PopoverAnchor } from "@table-craft/desktop/renderer/ui/Popover.js";
 import { ToolbarDivider } from "@table-craft/desktop/renderer/ui/ToolbarDivider.js";
 
 const COLUMN_MODE_LABELS: Readonly<Record<DiagramColumnMode, string>> = {
@@ -40,6 +48,12 @@ function Legend() {
   );
 }
 
+function anchorOf(open: boolean, element: HTMLElement | null): PopoverAnchor | null {
+  if (!open || element === null) return null;
+  const { left, top, right, bottom } = element.getBoundingClientRect();
+  return { left, top, right, bottom };
+}
+
 export function DiagramToolbar({
   diagramId,
   mode,
@@ -47,6 +61,9 @@ export function DiagramToolbar({
   pickerOpen,
   tables,
   hidden,
+  hiddenKeysOpen,
+  hiddenKeys,
+  missingKeys,
   status,
 }: {
   readonly diagramId: string;
@@ -56,14 +73,15 @@ export function DiagramToolbar({
   /** The namespace's own tables, which the picker lists. */
   readonly tables: readonly DiagramTable[];
   readonly hidden: readonly string[];
+  readonly hiddenKeysOpen: boolean;
+  readonly hiddenKeys: readonly HiddenKey[];
+  readonly missingKeys: readonly MissingKey[];
   readonly status: string;
 }) {
   const [anchorElement, setAnchorElement] = useState<HTMLElement | null>(null);
-  const anchor = useMemo(() => {
-    if (!pickerOpen || anchorElement === null) return null;
-    const { left, top, right, bottom } = anchorElement.getBoundingClientRect();
-    return { left, top, right, bottom };
-  }, [pickerOpen, anchorElement]);
+  const [keysElement, setKeysElement] = useState<HTMLElement | null>(null);
+  const anchor = useMemo(() => anchorOf(pickerOpen, anchorElement), [pickerOpen, anchorElement]);
+  const keysAnchor = useMemo(() => anchorOf(hiddenKeysOpen, keysElement), [hiddenKeysOpen, keysElement]);
   return (
     <div
       data-testid="diagram-toolbar"
@@ -88,6 +106,11 @@ export function DiagramToolbar({
         <ActionButton actionId={DIAGRAM_ACTION_IDS.tables} compact expanded={pickerOpen} />
       </span>
       <ToolbarDivider />
+      <ActionButton actionId={DIAGRAM_ACTION_IDS.addRelationship} compact />
+      <span ref={setKeysElement} className="flex">
+        <ActionButton actionId={DIAGRAM_ACTION_IDS.hiddenKeys} compact expanded={hiddenKeysOpen} />
+      </span>
+      <ToolbarDivider />
       <Legend />
       <span data-testid="diagram-status" className="ml-auto truncate">
         {status}
@@ -99,6 +122,14 @@ export function DiagramToolbar({
           hidden={hidden}
           anchor={anchor}
           onClose={() => useDiagrams.getState().setPickerOpen(diagramId, false)}
+        />
+      )}
+      {keysAnchor === null ? null : (
+        <HiddenKeys
+          hidden={hiddenKeys}
+          missing={missingKeys}
+          anchor={keysAnchor}
+          onClose={() => useDiagrams.getState().setHiddenKeysOpen(diagramId, false)}
         />
       )}
     </div>
