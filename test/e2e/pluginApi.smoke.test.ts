@@ -1,5 +1,5 @@
 /**
- * Plan 056's live test: the app on plugin API 1.0.0, a user plugin built for it, and the plugins
+ * Plan 056's live test: the app on its plugin API, a user plugin built for it, and the plugins
  * the semver rule refuses. Gated with the other smoke tests; the MySQL scenario needs the
  * `test/db` containers:
  *
@@ -40,17 +40,17 @@ import {
 const captureWindow = evidenceFor("056");
 const writeEvidence = evidenceTextFor("056");
 
-const FROZEN_DIRECTORY = join(import.meta.dirname, "../support/frozen-plugins/sqlite-1.0.0");
+const FROZEN_DIRECTORY = join(import.meta.dirname, `../support/frozen-plugins/sqlite-${API_VERSION}`);
 const MANIFEST_FILE = "table-craft-plugin.json";
 const ENTRY_FILE = "index.js";
 /** The bundle's own id constant; a copy under another id must change it with the manifest. */
 const BUNDLED_ID = 'var PLUGIN_ID = "sqlite";';
 const LOG_FILE = join("logs", "table-craft.log");
-const BUILT_IN_IDS = ["mysql", "postgres", "sqlite"];
+const BUILT_IN_IDS = ["mysql", "sqlite"];
 
 const HOST = parseVersion(API_VERSION);
 const NEWER_MINOR = `${HOST?.major ?? 1}.99.0`;
-const OLDER_MAJOR = "0.28.0";
+const OLDER_MAJOR = `${(HOST?.major ?? 1) - 1}.28.0`;
 
 const QUERY = "SELECT id, name FROM customers ORDER BY id";
 const QUERY_HEADERS = ["id", "name"];
@@ -63,7 +63,7 @@ interface UserPlugin {
   readonly apiVersion: string;
 }
 
-const FROZEN_COPY: UserPlugin = { id: "frozen-sqlite", name: "Frozen SQLite", apiVersion: "1.0.0" };
+const FROZEN_COPY: UserPlugin = { id: "frozen-sqlite", name: "Frozen SQLite", apiVersion: API_VERSION };
 const NEWER: UserPlugin = { id: "future-sqlite", name: "Future SQLite", apiVersion: NEWER_MINOR };
 const OLDER: UserPlugin = { id: "legacy-sqlite", name: "Legacy SQLite", apiVersion: OLDER_MAJOR };
 
@@ -73,9 +73,22 @@ function seedFrozenCopy(userDataDir: string, plugin: UserPlugin): void {
   const bundle = readFileSync(join(FROZEN_DIRECTORY, ENTRY_FILE), "utf8");
   if (!bundle.includes(BUNDLED_ID)) throw new Error(`The frozen bundle no longer holds ${BUNDLED_ID}.`);
   seedPlugin(userDataDir, plugin.id, {
-    [MANIFEST_FILE]: JSON.stringify({ ...manifest, id: plugin.id, name: plugin.name, apiVersion: plugin.apiVersion }),
+    // The kind picker lists brands, so the copy renames its brand with the plugin.
+    [MANIFEST_FILE]: JSON.stringify({
+      ...manifest,
+      id: plugin.id,
+      name: plugin.name,
+      apiVersion: plugin.apiVersion,
+      brands: [{ ...brandOf(manifest), name: plugin.name }],
+    }),
     [ENTRY_FILE]: bundle.replace(BUNDLED_ID, `var PLUGIN_ID = "${plugin.id}";`),
   });
+}
+
+function brandOf(manifest: Record<string, unknown>): Record<string, unknown> {
+  const [brand] = manifest["brands"] as readonly Record<string, unknown>[];
+  if (brand === undefined) throw new Error("The frozen manifest no longer names a brand.");
+  return brand;
 }
 
 interface LoggedLine {
@@ -120,7 +133,7 @@ async function openKindPicker(page: Page): Promise<void> {
   await dataSourcesDialog(page).getByRole("list", { name: "Database kinds" }).waitFor();
 }
 
-describe.runIf(SMOKE_ENABLED)("plugin API 1.0 live test", () => {
+describe.runIf(SMOKE_ENABLED)("plugin API live test", () => {
   let running: RunningApp | null = null;
 
   afterEach(async () => {
@@ -143,20 +156,16 @@ describe.runIf(SMOKE_ENABLED)("plugin API 1.0 live test", () => {
   }
 
   it(
-    "givenBuiltInSqlite_whenQueriedAndBrowsed_thenEveryBuiltInIsOnApi1",
+    "givenBuiltInSqlite_whenQueriedAndBrowsed_thenEveryPluginIsOnTheHostApi",
     async () => {
       const page = await launch({ id: "sqlite", pluginId: "sqlite", config: { path: seededSqliteFile() } });
       await queryAndBrowse(page, "main");
 
       const userDataDir = running?.userDataDir ?? "";
-      await expect
-        .poll(() =>
-          pluginLines(userDataDir)
-            .filter(({ line }) => line.msg === "plugin found")
-            .map(({ line }) => [line.id, line.apiVersion])
-            .sort(),
-        )
-        .toEqual(BUILT_IN_IDS.map((id) => [id, API_VERSION]));
+      const found = () => pluginLines(userDataDir).filter(({ line }) => line.msg === "plugin found");
+      // A development run also loads the optional plugins it built, so only the built-ins are certain.
+      await expect.poll(() => found().map(({ line }) => line.id)).toEqual(expect.arrayContaining(BUILT_IN_IDS));
+      expect(found().filter(({ line }) => line.apiVersion !== API_VERSION)).toEqual([]);
       await captureWindow(page, "01-sqlite-on-api-1-0-0");
     },
     SCENARIO_TIMEOUT_MS,
