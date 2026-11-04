@@ -10,6 +10,7 @@ export const SERIAL_SMOKE_FILES: Readonly<Record<string, string>> = {
   "test/e2e/console.smoke.test.ts": "updates `orders` totals and expects `tables 6`",
   "test/e2e/consoleEdits.smoke.test.ts": "edits and resets `orders`",
   "test/e2e/ddl.smoke.test.ts": "alters `orders` under an exclusive lock and expects `tables 6`",
+  "test/e2e/diagramServers.smoke.test.ts": "expects `tables 6` and exactly one declared key in `public`",
   "test/e2e/explain.smoke.test.ts": "updates `orders` and expects its exact count",
   "test/e2e/explorer.smoke.test.ts": "creates a table and schemas and expects `tables 6`",
   "test/e2e/history.smoke.test.ts": "updates `orders` and expects `tables 6`",

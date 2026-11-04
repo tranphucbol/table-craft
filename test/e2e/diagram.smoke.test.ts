@@ -4,20 +4,16 @@
  * display and a fresh build:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/152 bun run test:smoke:headless test/e2e/diagram.smoke.test.ts
+ *
+ * `diagramServers.smoke.test.ts` covers Postgres, MySQL and Redis.
  */
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import type { ElectronApplication, Page } from "playwright-core";
+import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { erdSqliteFile } from "../support/sqliteFixture.js";
+import { erdSqliteFile, wideErdSqliteFile } from "../support/sqliteFixture.js";
 import {
-  activeEditorTab,
-  chooseOption,
   CLOSE_HOOK_TIMEOUT_MS,
   closeApp,
   EVIDENCE_WINDOW,
-  evidenceFor,
-  evidenceTextFor,
   LAUNCH_TIMEOUT_MS,
   launchApp,
   newProfile,
@@ -26,88 +22,35 @@ import {
   seedDatasources,
   setWindowSize,
   SMOKE_ENABLED,
-  chooseTheme,
-  pressChord,
-  themePickerTrigger,
-  toolWindow,
   treeNode,
   waitUntilReady,
   type Datasource,
   type RunningApp,
 } from "./harness.js";
-
-const captureWindow = evidenceFor("152");
-const writeEvidence = evidenceTextFor("152");
-
-const ERD_TABLES_GROUP = "tables 8";
-/** What the rule infers on the seed: every `<table>_id` and `parent_id`, not `notes.person_id`. */
-const INFERRED_EDGES = 7;
+import {
+  addRelationship,
+  captureWindow,
+  diagramEdge,
+  diagramEdges,
+  dragTable,
+  edgeEndOffset,
+  ERD_TABLES_GROUP,
+  exportBoth,
+  frameGaps,
+  INFERRED_EDGES,
+  inSettings,
+  rightClickEdge,
+  setTheme,
+  showDiagram,
+  tableNode,
+  toolbarButton,
+  treeRow,
+  watchFrames,
+  writeEvidence,
+} from "./diagramLive.js";
 
 function erd(): Datasource {
   return { id: "erd", pluginId: "sqlite", config: { path: erdSqliteFile() } };
-}
-
-function treeRow(page: Page, name: string) {
-  return toolWindow(page, "Database").getByRole("treeitem", { name, exact: true });
-}
-
-function diagramEdges(page: Page, origin: string) {
-  return page.locator(`[data-testid="diagram-edge"][data-edge-origin="${origin}"]`);
-}
-
-function diagramEdge(page: Page, keyId: string) {
-  return page.locator(`[data-testid="diagram-edge"][data-edge-id$=${JSON.stringify(`:${keyId}`)}]`);
-}
-
-/** The few SVG members `rightClickEdge` reads; the e2e program is compiled without the DOM lib. */
-interface PathElement {
-  getTotalLength(): number;
-  getPointAtLength(length: number): { readonly x: number; readonly y: number };
-  getScreenCTM(): {
-    readonly a: number;
-    readonly b: number;
-    readonly c: number;
-    readonly d: number;
-    readonly e: number;
-    readonly f: number;
-  } | null;
-}
-
-/**
- * Opens an edge's context menu at the middle of its path: a click at its bounding box's centre can
- * miss a step path or land on a table drawn over it.
- */
-async function rightClickEdge(page: Page, keyId: string): Promise<void> {
-  const hit = diagramEdge(page, keyId).locator(".tc-diagram-edge-hit");
-  const point = await hit.evaluate((element) => {
-    const path = element as unknown as PathElement;
-    const middle = path.getPointAtLength(path.getTotalLength() / 2);
-    const matrix = path.getScreenCTM();
-    if (matrix === null) return middle;
-    return {
-      x: matrix.a * middle.x + matrix.c * middle.y + matrix.e,
-      y: matrix.b * middle.x + matrix.d * middle.y + matrix.f,
-    };
-  });
-  await hit.dispatchEvent("contextmenu", {
-    bubbles: true,
-    cancelable: true,
-    button: 2,
-    clientX: point.x,
-    clientY: point.y,
-  });
-}
-
-function tableNode(page: Page, table: string) {
-  return page.locator(`.react-flow__node[data-id=${JSON.stringify(table)}]`);
-}
-
-/** Opens the diagram from the Tables group's Diagrams submenu. */
-async function showDiagram(page: Page, row = ERD_TABLES_GROUP): Promise<void> {
-  await treeRow(page, row).click({ button: "right" });
-  await page.getByRole("menuitem", { name: "Diagrams" }).click();
-  await page.getByRole("menuitem", { name: /^Show Diagram/ }).click();
-  await expect.poll(() => activeEditorTab(page).locator('[data-tab-kind="diagram"]').count()).toBe(1);
 }
 
 describe.runIf(SMOKE_ENABLED)("ER diagram", () => {
@@ -119,11 +62,11 @@ describe.runIf(SMOKE_ENABLED)("ER diagram", () => {
     await closeApp(current?.app);
   }, CLOSE_HOOK_TIMEOUT_MS);
 
-  async function launch(datasource: Datasource): Promise<Page> {
+  async function launch(datasource: Datasource, tablesGroup = ERD_TABLES_GROUP): Promise<Page> {
     running = await launchApp(datasource);
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
-    await treeRow(running.page, ERD_TABLES_GROUP).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+    await treeRow(running.page, tablesGroup).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
     return running.page;
   }
 
@@ -199,6 +142,97 @@ describe.runIf(SMOKE_ENABLED)("ER diagram", () => {
     SCENARIO_TIMEOUT_MS,
   );
 
+  it(
+    "givenDiagramOpen_whenCompactDensityAndALargerGridFontChosen_thenEdgesStillMeetTheirRows",
+    async () => {
+      const page = await launch(erd());
+      await showDiagram(page);
+      await expect.poll(() => diagramEdges(page, "inferred").count()).toBe(INFERRED_EDGES);
+      await expectEdgesOnRows(page);
+      const comfortable = await tableNode(page, "orders").boundingBox();
+
+      await inSettings(page, "Appearance", async (settings) => {
+        await settings.getByRole("radio", { name: "Compact", exact: true }).check();
+      });
+      await inSettings(page, "Data Editor", async (settings) => {
+        const size = settings.getByLabel("Size", { exact: true });
+        await size.fill(String(LARGER_GRID_PX));
+        await expect.poll(() => size.getAttribute("aria-invalid")).toBe("false");
+      });
+
+      await expect
+        .poll(async () => (await tableNode(page, "orders").boundingBox())?.height)
+        .not.toBe(comfortable?.height);
+      await expectEdgesOnRows(page);
+      await captureWindow(page, "09-sqlite-compact-density");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenFiveHundredTables_whenAllShown_thenLaidOutOffTheMainThreadAndPannable",
+    async () => {
+      const wideGroup = `tables ${String(WIDE_TABLES)}`;
+      const page = await launch(
+        { id: "wide", pluginId: "sqlite", config: { path: wideErdSqliteFile(WIDE_TABLES) } },
+        wideGroup,
+      );
+      await showDiagram(page, wideGroup);
+      const picker = page.getByTestId("diagram-tables-picker");
+      await picker.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      expect(await page.getByTestId("diagram-table").count()).toBe(0);
+      await captureWindow(page, "10-sqlite-500-tables-picker");
+
+      await watchFrames(page);
+      const started = Date.now();
+      await picker.getByRole("button", { name: "Show All", exact: true }).click();
+      await expect
+        .poll(() => page.getByTestId("diagram-status").textContent(), { timeout: WIDE_LAYOUT_MS })
+        .toMatch(new RegExp(`^${String(WIDE_TABLES)} of ${String(WIDE_TABLES)} tables`));
+      const laidOutMs = Date.now() - started;
+      const layout = await frameGaps(page);
+      await page.keyboard.press("Escape");
+
+      const canvas = page.getByTestId("diagram-canvas");
+      const box = await canvas.boundingBox();
+      if (box === null) throw new Error("The diagram is not drawn.");
+      const viewport = page.locator(".react-flow__viewport");
+      const fitted = await viewport.getAttribute("style");
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      for (let step = 0; step < WHEEL_STEPS; step += 1) await page.mouse.wheel(0, -WHEEL_DELTA);
+      await expect.poll(() => viewport.getAttribute("style")).not.toBe(fitted);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 4, box.y + box.height / 4, { steps: 10 });
+      await page.mouse.up();
+      const panning = await frameGaps(page);
+
+      writeEvidence(
+        "10-sqlite-500-tables.txt",
+        [
+          `tables: ${String(WIDE_TABLES)}, inferred keys: ${String(WIDE_TABLES - 1)}`,
+          `Show All to laid out: ${String(laidOutMs)} ms`,
+          `while laying out: ${String(layout.frames)} frames, longest gap ${String(layout.longest)} ms`,
+          `zoom and pan: ${String(panning.frames)} frames, longest gap ${String(panning.longest)} ms`,
+          "",
+        ].join("\n"),
+      );
+      expect(layout.frames).toBeGreaterThan(0);
+      expect(panning.frames).toBeGreaterThan(0);
+      await captureWindow(page, "10-sqlite-500-tables");
+    },
+    WIDE_SCENARIO_MS,
+  );
+
+  /** Every edge's two ends sit on the middles of the rows of the columns it joins. */
+  async function expectEdgesOnRows(page: Page): Promise<void> {
+    await expect
+      .poll(async () => {
+        const { measured, worst } = await edgeEndOffset(page);
+        return measured === INFERRED_EDGES && worst <= ROW_TOLERANCE_PX;
+      })
+      .toBe(true);
+  }
+
   /** One key hidden, one kept as virtual, one added: five inferred edges and two virtual ones. */
   async function expectEdits(page: Page): Promise<void> {
     await expect.poll(() => diagramEdges(page, "inferred").count()).toBe(INFERRED_EDGES - 2);
@@ -224,94 +258,11 @@ const SAVE_WAIT_MS = 5_000;
 const HIDDEN_KEY = "products(category_id)->categories(id)";
 const KEPT_KEY = "order_items(product_id)->products(id)";
 const DRAG = { x: 400, y: -120 };
-
-function toolbarButton(page: Page, name: string) {
-  return page.getByTestId("diagram-toolbar").getByRole("button", { name, exact: true });
-}
-
-async function addRelationship(
-  page: Page,
-  [from, column]: readonly [string, string],
-  [to, target]: readonly [string, string],
-): Promise<void> {
-  await toolbarButton(page, "Add Relationship…").click();
-  const dialog = page.getByTestId("relationship-dialog");
-  await chooseOption(dialog.getByTestId("relationship-from"), from);
-  await chooseOption(dialog.getByTestId("relationship-to"), to);
-  await chooseOption(dialog.getByTestId("relationship-column-1"), column);
-  await expect.poll(() => dialog.getByTestId("relationship-target-1").getAttribute("data-value")).toBe(target);
-  await dialog.getByRole("button", { name: "Add Relationship", exact: true }).click();
-  await dialog.waitFor({ state: "detached" });
-}
-
-async function dragTable(page: Page, table: string, by: { readonly x: number; readonly y: number }): Promise<void> {
-  const box = await tableNode(page, table).locator(".tc-diagram-header").boundingBox();
-  if (box === null) throw new Error(`The ${table} table is not drawn.`);
-  const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  await page.mouse.move(start.x, start.y);
-  await page.mouse.down();
-  await page.mouse.move(start.x + by.x / 2, start.y + by.y / 2, { steps: 5 });
-  await page.mouse.move(start.x + by.x, start.y + by.y, { steps: 5 });
-  await page.mouse.up();
-}
-
-const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-const EXPORT_WAIT_MS = 10_000;
-
-async function setTheme(page: Page, name: string): Promise<void> {
-  await pressChord(page, ",");
-  const settings = page.getByRole("dialog", { name: "Settings" });
-  await settings.waitFor();
-  await settings.getByRole("tab", { name: "Appearance", exact: true }).click();
-  await themePickerTrigger(page).waitFor();
-  await chooseTheme(page, name);
-  await settings.getByRole("button", { name: "Close", exact: true }).click();
-  await expect.poll(() => settings.count()).toBe(0);
-}
-
-/** The few DOM members `rootVariable` reads; the e2e program is compiled without the DOM lib. */
-interface Root {
-  readonly ownerDocument: {
-    readonly defaultView: {
-      getComputedStyle(element: Root): { getPropertyValue(name: string): string };
-    };
-  };
-}
-
-function rootVariable(page: Page, name: string): Promise<string> {
-  return page
-    .locator("html")
-    .evaluate(
-      (element: Root, variable) =>
-        element.ownerDocument.defaultView.getComputedStyle(element).getPropertyValue(variable).trim(),
-      name,
-    );
-}
-
-/** Exports the open diagram through the stubbed save dialog and checks what landed on disk. */
-async function exportTo(app: ElectronApplication, page: Page, path: string, button: string): Promise<Buffer> {
-  await app.evaluate(({ dialog }, picked) => {
-    dialog.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: picked });
-  }, path);
-  await toolbarButton(page, button).click();
-  await expect.poll(() => existsSync(path), { timeout: EXPORT_WAIT_MS }).toBe(true);
-  return readFileSync(path);
-}
-
-/**
- * Exports SVG and PNG in the theme on screen: the SVG's background is that theme's canvas, the PNG is
- * a PNG, and both are kept beside a capture of the window for comparison.
- */
-async function exportBoth(app: ElectronApplication, page: Page, name: string): Promise<void> {
-  const directory = newProfile();
-  const canvas = await rootVariable(page, "--tc-canvas");
-  const svg = (await exportTo(app, page, join(directory, `${name}.svg`), "Export Diagram as SVG…")).toString("utf8");
-  expect(svg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg"/);
-  expect(svg).toContain(`fill="${canvas}"`);
-  expect(svg.match(/data-table=/g)?.length).toBe(8);
-  const png = await exportTo(app, page, join(directory, `${name}.png`), "Export Diagram as PNG…");
-  expect([...png.subarray(0, PNG_SIGNATURE.length)]).toEqual(PNG_SIGNATURE);
-  await captureWindow(page, `${name}-screen`);
-  writeEvidence(`${name}-export.png`, png);
-  writeEvidence(`${name}-export.svg`, svg);
-}
+const LARGER_GRID_PX = 16;
+/** A screen pixel of rounding between the row's box and the edge's end. */
+const ROW_TOLERANCE_PX = 1;
+const WIDE_TABLES = 500;
+const WIDE_LAYOUT_MS = 60_000;
+const WIDE_SCENARIO_MS = 120_000;
+const WHEEL_STEPS = 6;
+const WHEEL_DELTA = 200;
