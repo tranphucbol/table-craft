@@ -229,9 +229,12 @@ describe.runIf(DATABASES_ENABLED)("ER diagram on the servers", () => {
 
       await database.click();
       await pressChord(page, "Shift+A");
-      await paletteInput(page, "Find Action").fill("Diagram");
+      const input = paletteInput(page, "Find Action");
+      await input.fill("Refresh");
       await expect.poll(() => paletteRows(page).count()).toBeGreaterThan(0);
-      expect(await paletteRows(page).filter({ hasText: "Show Diagram" }).count()).toBe(0);
+      await input.fill("Diagram");
+      await expect.poll(() => paletteRows(page).filter({ hasText: "Refresh" }).count()).toBe(0);
+      expect(await paletteRows(page).filter({ hasText: "Diagram" }).count()).toBe(0);
       await captureWindow(page, "07-redis-no-diagram");
     },
     SCENARIO_TIMEOUT_MS,
