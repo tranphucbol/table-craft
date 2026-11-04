@@ -4,6 +4,7 @@ export {
   completionCatalog,
   type CompletionCatalogOptions,
 } from "./catalog/completionCatalog.js";
+export { inferForeignKeys, nameTokens, type InferredKey } from "./catalog/inferKeys.js";
 export { CoreError, EditRejectedError, TunnelError, type CoreErrorCode, type TunnelErrorCode } from "./errors.js";
 export {
   READ_ONLY_REASONS,

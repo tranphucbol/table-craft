@@ -15,6 +15,7 @@ import { createLifetime } from "@table-craft/desktop/engine/lifetime.js";
 import type {
   ClassifiedStatement,
   DescribedCatalog,
+  InferredKey,
   EngineResponse,
   ExecutedStatement,
   Explainability,
@@ -554,6 +555,18 @@ describe("engine catalog", () => {
     expect(opened()).toBe(1);
     expect(resultOf<DescribedCatalog>(left).introspectedAt).toBe(resultOf<DescribedCatalog>(right).introspectedAt);
     expect(resultOf<DescribedCatalog>(left).catalog.relations.map((relation) => relation.name)).toContain("orders");
+  });
+
+  it("givenDeclaredKeysOnly_whenInferredKeysRequested_thenNoneAndTheCachedCatalogAnswers", async () => {
+    const { engine, opened } = countingSqlite();
+    const connection = engine.connect();
+    await connection.handle({ id: 1, type: "catalog.describe", path: ["main"] });
+
+    const response = await connection.handle({ id: 2, type: "catalog.inferredKeys", path: ["main"] });
+
+    // The seed declares `orders.customer_id`, the one column the rule would otherwise match.
+    expect(resultOf<InferredKey[]>(response)).toEqual([]);
+    expect(opened()).toBe(1);
   });
 
   it("givenIntrospectionLinkDropped_whenDescribed_thenFreshSessionAnswers", async () => {
