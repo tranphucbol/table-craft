@@ -48,6 +48,7 @@ import {
   type ParameterPrompt,
   type ParameterValues,
 } from "@table-craft/desktop/renderer/model/parameters.js";
+import { landedIn } from "@table-craft/desktop/renderer/model/consoleNamespace.js";
 import { caretAfterReformat } from "@table-craft/desktop/renderer/model/reformat.js";
 import type { ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
@@ -890,7 +891,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         log(id, { sql: "", message: SWITCH_IN_TRANSACTION, tone: "info" });
       }
       const landed = get().consoles[id]?.namespace ?? null;
-      if (landed !== null && landed.join(".") !== path.join(".")) {
+      if (landed !== null && !landedIn(landed, path)) {
         log(id, {
           sql: "",
           message: `The session is in ${landed.join(".")}, not ${path.join(".")}.`,

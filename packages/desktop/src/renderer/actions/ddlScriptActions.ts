@@ -1,6 +1,6 @@
 import { SCRIPT_RELATION_KINDS, type RelationKind, type SchemaScript } from "@table-craft/desktop/engine/protocol.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
-import { openConsole, openConsoleOn } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
+import { nodeConsoleNamespace, openConsoleOn } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { reportExportFailure } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
@@ -24,7 +24,6 @@ export const DDL_SCRIPT_ACTION_IDS = {
 } as const;
 
 const DDL = "ddl";
-const CURRENT_NAMESPACE = "currentNamespace";
 const SAVE_TITLE = "Generate DDL to File";
 const SQL_EXTENSION = ".sql";
 const FAILED_TITLE = "Could not generate DDL";
@@ -44,8 +43,6 @@ export interface ScriptScope {
   readonly path: readonly string[];
   readonly name: string;
   readonly kinds: readonly RelationKind[];
-  /** Where the console opens; null on a plugin that cannot switch namespaces, whose console stays put. */
-  readonly consoleNamespace: readonly string[] | null;
 }
 
 /** The schema, or the Tables, Views or Materialized Views node, the Database pane has selected. */
@@ -62,13 +59,7 @@ export function scriptScope(context: ActionContext): ScriptScope | null {
     .getState()
     .catalogs[selection.id]?.namespaces?.find((candidate) => pathKey(candidate.path) === key);
   if (namespace?.kind !== "schema") return null;
-  const scope = {
-    datasourceId: selection.id,
-    title: view.name,
-    path: namespace.path,
-    name: namespace.name,
-    consoleNamespace: capabilities.includes(CURRENT_NAMESPACE) ? namespace.path : null,
-  };
+  const scope = { datasourceId: selection.id, title: view.name, path: namespace.path, name: namespace.name };
   if (selection.key === namespaceKey(selection.id, namespace.path)) return { ...scope, kinds: SCRIPT_RELATION_KINDS };
   const group = Object.entries(GROUP_KINDS).find(
     ([candidate]) => selection.key === objectGroupKey(selection.id, namespace.path, candidate as ObjectGroup),
@@ -123,14 +114,10 @@ export const DDL_SCRIPT_ACTIONS: readonly AnyAction[] = [
       if (scope === null) return;
       const script = await scriptOf(scope);
       if (script === null) return;
-      if (scope.consoleNamespace === null) await openConsole(scope.datasourceId, script.text);
-      else {
-        await openConsoleOn(scope.datasourceId, {
-          sql: script.text,
-          parameterValues: {},
-          namespace: scope.consoleNamespace,
-        });
-      }
+      await openConsoleOn(scope.datasourceId, {
+        sql: script.text,
+        namespace: await nodeConsoleNamespace(scope.datasourceId, scope.path),
+      });
       await reportFailures(script);
     },
   }),
