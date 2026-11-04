@@ -37,6 +37,10 @@ export interface ForeignSsh {
   readonly auth: SshAuthMethod | null;
   readonly keyPath: string | null;
   readonly password: PasswordSource;
+  /** The key file's passphrase, for `key` auth; none when the app keeps none. */
+  readonly passphrase?: PasswordSource;
+  /** Why the tunnel cannot be imported as it is, such as a jump host; the row keeps its address. */
+  readonly unsupported?: string;
 }
 
 /** One saved connection as another app describes it, before mapping to a TableCraft datasource. */
@@ -78,6 +82,27 @@ export interface ImportFiles {
   readBytes(path: string): Promise<Uint8Array | null>;
   /** The names in a directory; null when it is not one. */
   list(path: string): Promise<readonly string[] | null>;
+  /**
+   * A SQLite database opened read-only in place; null when the file is missing. Throws
+   * `ImportBusyError` when its owner is writing it or left a journal behind.
+   */
+  readDatabase(path: string): Promise<ImportDatabase | null>;
+}
+
+/** One SQLite database opened read-only; rows come back as plain objects. */
+export interface ImportDatabase {
+  /** The column names of `table`, empty when it does not exist. */
+  columns(table: string): readonly string[];
+  all(sql: string, ...params: readonly (string | number | null)[]): readonly Record<string, unknown>[];
+  close(): void;
+}
+
+/** The other app holds its database open for writing, or did not close it cleanly. */
+export class ImportBusyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ImportBusyError";
+  }
 }
 
 /** Where the readers look: the platform and the user's directories, never `process` itself. */

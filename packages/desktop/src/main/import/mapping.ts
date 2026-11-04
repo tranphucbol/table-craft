@@ -22,11 +22,12 @@ export const TOP_FOLDERS: Readonly<Record<ImportApp, string>> = {
   datagrip: "DataGrip",
   tablepro: "TablePro",
   workbench: "MySQL Workbench",
+  beekeeper: "Beekeeper Studio",
   tablecraft: "TableCraft",
 };
 
 /**
- * TablePro names a database type rather than a URL; this is the URL scheme each type speaks, so the
+ * TablePro and Beekeeper name a database type rather than a URL; this is the URL scheme each type speaks, so the
  * plugin is still found by its manifest's schemes (decision 007), never by id.
  */
 const SCHEME_OF_TYPE: Readonly<Record<string, string>> = {
@@ -41,6 +42,7 @@ const SCHEME_OF_TYPE: Readonly<Record<string, string>> = {
   sqlserver: "sqlserver",
   mssql: "sqlserver",
   azure: "sqlserver",
+  redis: "redis",
 };
 
 /** Each named colour another app offers, to the nearest TableCraft tint (decision 011). */
@@ -109,13 +111,18 @@ function separateFields(connection: ForeignConnection, plugin: PluginInfo): Reco
   return config;
 }
 
-/** The select param whose values include `require`: the plugin's SSL mode field, if it has one. */
+/**
+ * The plugin's SSL mode field: the select URL param whose values include `require`, else the TLS
+ * mode field when its options do (Redis takes TLS from its scheme, not a param).
+ */
 function sslField(plugin: PluginInfo): { key: string; values: ReadonlySet<string> } | null {
   for (const param of plugin.url?.params ?? []) {
     const values = new Set(Object.values(param.values ?? {}));
     if (values.has(SSL_REQUIRE)) return { key: param.key, values };
   }
-  return null;
+  const mode = plugin.fields.find((field) => field.key === plugin.tls?.mode);
+  const values = new Set((mode?.options ?? []).map((option) => option.value));
+  return mode !== undefined && values.has(SSL_REQUIRE) ? { key: mode.key, values } : null;
 }
 
 function applySsl(
@@ -191,6 +198,7 @@ export function comparable(
 function sshOf(ssh: ForeignSsh, plugin: PluginInfo): { ssh: SshSettings } | { ssh: undefined; warning: string } {
   const port = ssh.port ?? DEFAULT_SSH_PORT;
   const address = `${ssh.host}:${String(port)}`;
+  if (ssh.unsupported !== undefined) return { ssh: undefined, warning: ssh.unsupported };
   if (plugin.network === null) {
     return {
       ssh: undefined,
