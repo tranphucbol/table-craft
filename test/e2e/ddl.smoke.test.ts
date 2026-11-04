@@ -6,6 +6,8 @@
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/010 bun run test:smoke:db
  *
  * The one scenario that alters a shared table puts it back; the inserting one runs on a SQLite copy.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
@@ -36,6 +38,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("010");
+const captureLive = evidenceFor("151");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -219,6 +222,7 @@ describe.runIf(DATABASES_ENABLED)("DDL and SQL generation live test", () => {
       expect(text).toContain("KEY `orders_placed_at_idx` (`placed_at`)");
       expect(text).toMatch(/\) ENGINE=InnoDB .*;$/);
       await captureWindow(page, "mysql-show-create");
+      await captureLive(page, "02-explain-sessions-ddl");
     },
     SCENARIO_TIMEOUT_MS,
   );
