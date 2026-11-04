@@ -760,7 +760,7 @@ function Editor({ target }: { readonly target: DialogTarget }) {
             <button
               type="button"
               aria-label="Import data sources"
-              title="Import from DataGrip, TablePro, MySQL Workbench or a TableCraft file…"
+              title="Import from DataGrip, TablePro, MySQL Workbench, Beekeeper Studio or a TableCraft file…"
               className={ICON_BUTTON}
               onClick={() => void invoke(ACTION_IDS.importDatasources)}
             >
