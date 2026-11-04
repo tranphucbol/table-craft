@@ -45,6 +45,9 @@ export interface FetchedResponse {
 
 export type Fetch = (url: string, init: { readonly signal: AbortSignal }) => Promise<FetchedResponse>;
 
+/** Deletes a file or a whole directory tree; a missing path is not an error. */
+export type RemovePath = (path: string) => Promise<void>;
+
 export interface RunResult {
   readonly code: number | null;
   readonly output: string;
@@ -75,6 +78,11 @@ export interface UpdaterOptions {
   readonly run: (command: string, args: readonly string[]) => Promise<RunResult>;
   /** Starts a command that outlives TableCraft. */
   readonly spawnDetached: (command: string, args: readonly string[]) => void;
+  /**
+   * Removes what was staged. In Electron, `node:fs` reads the staged bundle's `app.asar` as a
+   * directory and cannot delete it, so `rm` fails with ENOTEMPTY; main passes `original-fs`.
+   */
+  readonly remove: RemovePath;
   readonly readMemory: () => Promise<UpdateMemory>;
   readonly writeMemory: (memory: UpdateMemory) => Promise<void>;
   readonly onState: (state: UpdateState) => void;
@@ -174,8 +182,11 @@ function channelAllows(channel: ReleaseChannel, manifest: UpdateManifest): boole
   return channel === "beta" || manifest.channel === "stable";
 }
 
-/** Leftovers from a crash or a power cut mid-download: staging directories beside the installed app. */
-export async function removeLeftovers(target: InstallTarget, log: Logger): Promise<void> {
+/**
+ * Leftovers from a crash or a power cut mid-download: staging directories beside the installed app.
+ * Runs before the first window opens, so a leftover that will not go is logged and kept, never thrown.
+ */
+export async function removeLeftovers(target: InstallTarget, log: Logger, remove: RemovePath): Promise<void> {
   const path =
     target.kind === "macBundle" ? target.bundlePath : target.kind === "appImage" ? target.appImagePath : null;
   if (path === null) return;
@@ -186,8 +197,13 @@ export async function removeLeftovers(target: InstallTarget, log: Logger): Promi
     return;
   }
   for (const name of names.filter((entry) => entry.startsWith(STAGING_PREFIX))) {
-    await rm(join(dirname(path), name), { recursive: true, force: true });
-    log.info("removed a leftover update", { path: join(dirname(path), name) });
+    const leftover = join(dirname(path), name);
+    try {
+      await remove(leftover);
+      log.info("removed a leftover update", { path: leftover });
+    } catch (cause) {
+      log.warn("leftover update could not be removed", { path: leftover, err: cause });
+    }
   }
 }
 
@@ -335,8 +351,8 @@ export function createUpdater(options: UpdaterOptions): Updater {
     const leftover = staged;
     staged = null;
     if (leftover === null) return;
-    await rm(leftover.directory ?? leftover.path, { recursive: true, force: true });
-    if (leftover.directory !== null) await rm(leftover.path, { force: true });
+    await options.remove(leftover.directory ?? leftover.path);
+    if (leftover.directory !== null) await options.remove(leftover.path);
   }
 
   /** Streams the asset to `path`, hashing as it goes; throws a `HashMismatch` when the bytes are not the signed ones. */

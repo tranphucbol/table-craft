@@ -192,6 +192,8 @@ async function installedApp(): Promise<InstallFacts> {
   };
 }
 
+const removeTree = (path: string): Promise<void> => rm(path, { recursive: true, force: true });
+
 /** `ditto -x -k` as the tests see it: unpacks into a new bundle with an executable. */
 const unzipBundle: UpdaterOptions["run"] = async (_command, args) => {
   const destination = args[3] ?? "";
@@ -234,6 +236,7 @@ async function harness(
     fetch: fakeFetch(routes),
     run: unzipBundle,
     spawnDetached: (command, args) => spawned.push({ command, args }),
+    remove: removeTree,
     readMemory: () => Promise.resolve(memory.value),
     writeMemory: (next) => {
       memory.value = next;
@@ -948,9 +951,34 @@ describe("updater", () => {
     await mkdir(join(dirname(bundlePath), ".table-craft-update-old"), { recursive: true });
     await mkdir(join(dirname(bundlePath), "Other.app"), { recursive: true });
 
-    await removeLeftovers({ kind: "macBundle", bundlePath }, recordingLogger([]));
+    await removeLeftovers({ kind: "macBundle", bundlePath }, recordingLogger([]), removeTree);
 
     expect((await readdir(dirname(bundlePath))).sort()).toEqual(["Other.app", "TableCraft.app"]);
+  });
+
+  it("givenLeftoverThatWillNotGo_whenRemoved_thenItIsLoggedAndTheOthersStillGo", async () => {
+    const facts = await installedApp();
+    const bundlePath = bundlePathFrom(facts.executablePath) ?? "";
+    const stuck = join(dirname(bundlePath), ".table-craft-update-stuck");
+    await mkdir(stuck, { recursive: true });
+    await mkdir(join(dirname(bundlePath), ".table-craft-update-old"), { recursive: true });
+    const logs: Logged[] = [];
+    const notEmpty = Object.assign(new Error(`ENOTEMPTY: directory not empty, rmdir '${stuck}'`), {
+      code: "ENOTEMPTY",
+    });
+
+    await removeLeftovers({ kind: "macBundle", bundlePath }, recordingLogger(logs), (path) =>
+      path === stuck ? Promise.reject(notEmpty) : removeTree(path),
+    );
+
+    expect((await readdir(dirname(bundlePath))).sort()).toEqual([".table-craft-update-stuck", "TableCraft.app"]);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: "warn",
+        msg: "leftover update could not be removed",
+        fields: { path: stuck, err: notEmpty },
+      }),
+    );
   });
 
   it("givenSignedAssetUrl_whenLogged_thenItsQueryIsStripped", () => {
