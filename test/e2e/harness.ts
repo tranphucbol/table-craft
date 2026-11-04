@@ -619,9 +619,9 @@ export function evidenceFor(plan: string): CaptureWindow {
   };
 }
 
-export type WriteEvidence = (file: string, text: string) => void;
+export type WriteEvidence = (file: string, text: string | Uint8Array) => void;
 
-/** Like `evidenceFor`, for text evidence such as a log excerpt: writes `<EVIDENCE_DIR>/<file>`. */
+/** Like `evidenceFor`, for text evidence such as a log excerpt, or a file the app wrote: writes `<EVIDENCE_DIR>/<file>`. */
 export function evidenceTextFor(plan: string): WriteEvidence {
   return (file, text) => {
     if (EVIDENCE_DIR === undefined || EVIDENCE_DIR === "" || basename(EVIDENCE_DIR) !== plan) return;

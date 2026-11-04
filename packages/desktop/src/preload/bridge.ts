@@ -5,7 +5,7 @@
  */
 import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
 import type { MoveRequest } from "@table-craft/desktop/datasourceTree/arrange.js";
-import type { DiagramState } from "@table-craft/desktop/diagrams/state.js";
+import type { DiagramImageRequest, DiagramState } from "@table-craft/desktop/diagrams/state.js";
 import type {
   Capability,
   EngineConnectMode,
@@ -94,6 +94,7 @@ export const INVOKE_CHANNELS = {
   revealFile: "table-craft:shell.reveal-file",
   readDiagrams: "table-craft:diagrams.get",
   saveDiagrams: "table-craft:diagrams.save",
+  exportDiagramImage: "table-craft:diagrams.export-image",
   listConsoles: "table-craft:consoles.list",
   readConsole: "table-craft:consoles.read",
   writeConsole: "table-craft:consoles.write",
@@ -784,6 +785,8 @@ export interface TableCraftBridge {
   /** The datasource's saved diagram state from `<userData>/diagrams.json`; the defaults when none is saved (plan 152). */
   readDiagrams(datasourceId: string): Promise<InvokeResult<DiagramState>>;
   saveDiagrams(datasourceId: string, state: DiagramState): Promise<InvokeResult<null>>;
+  /** The save dialog for an exported diagram; answers the path written, or null when cancelled. */
+  exportDiagramImage(request: DiagramImageRequest): Promise<InvokeResult<string | null>>;
   /** The console names saved for the datasource, sorted (plan 006). */
   listConsoles(datasourceId: string): Promise<InvokeResult<readonly string[]>>;
   /** A saved console's text; null when none of that name is saved. */

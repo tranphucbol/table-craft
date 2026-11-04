@@ -15,6 +15,7 @@ import {
   type SnippetsService,
 } from "@table-craft/desktop/main/snippets.js";
 import { DatasourceError, type DatasourceService } from "@table-craft/desktop/main/service.js";
+import { DIAGRAM_IMAGE_FORMATS, type DiagramImageRequest } from "@table-craft/desktop/diagrams/state.js";
 import { DiagramsError, diagramStateSchema, type DiagramsService } from "@table-craft/desktop/main/diagrams.js";
 import type { DatasourceExportChannels } from "@table-craft/desktop/main/datasourceExport.js";
 import {
@@ -100,6 +101,11 @@ const saveFileRequest = z.strictObject({ title: z.string(), defaultName: z.strin
 const revealFileRequest = z.strictObject({ path: z.string().min(1) });
 const readDiagramsRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const saveDiagramsRequest = readDiagramsRequest.extend({ state: diagramStateSchema });
+const diagramImageRequest = z.strictObject({
+  format: z.enum(DIAGRAM_IMAGE_FORMATS),
+  data: z.instanceof(Uint8Array),
+  defaultName: z.string().min(1),
+}) satisfies z.ZodType<DiagramImageRequest>;
 const consoleListRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const consoleRequest = z.strictObject({ datasourceId: z.string().min(1), name: z.string().min(1) });
 const consoleWriteRequest = z.strictObject({
@@ -229,6 +235,8 @@ export interface IpcOptions<Sender> {
   readonly settings: SettingsService;
   readonly snippets: SnippetsService;
   readonly diagrams: DiagramsService;
+  /** Asks where to save an exported diagram and writes it there; null when the user cancels. */
+  readonly exportDiagramImage: (sender: Sender, request: DiagramImageRequest) => Promise<string | null>;
   /** Creates `<userData>/themes/` if missing and shows it in the file manager. */
   readonly openThemesFolder: () => Promise<void>;
   readonly appInfo: () => AppInfo;
@@ -391,6 +399,9 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   handle(INVOKE_CHANNELS.openAnyFile, chooseFileRequest, ({ title }, sender) => options.openAnyFile(sender, title));
   handle(INVOKE_CHANNELS.saveFile, saveFileRequest, ({ title, defaultName }, sender) =>
     options.saveFile(sender, title, defaultName),
+  );
+  handle(INVOKE_CHANNELS.exportDiagramImage, diagramImageRequest, (request, sender) =>
+    options.exportDiagramImage(sender, request),
   );
   handle(INVOKE_CHANNELS.readDiagrams, readDiagramsRequest, ({ datasourceId }) => options.diagrams.get(datasourceId));
   handle(INVOKE_CHANNELS.saveDiagrams, saveDiagramsRequest, async ({ datasourceId, state }) => {

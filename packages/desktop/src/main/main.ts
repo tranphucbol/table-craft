@@ -25,7 +25,13 @@ import { createKnownHosts, expandHome, openQueryHistory, type HistoryRun } from 
 import { windowChrome } from "@table-craft/desktop/main/chrome.js";
 import { createCloseGuard } from "@table-craft/desktop/main/closeGuard.js";
 import { createConsoleFiles, type DirectoryFileSystem } from "@table-craft/desktop/main/consoleFiles.js";
-import { chooseFile, chooseSqlFiles, openFile, saveFile } from "@table-craft/desktop/main/fileDialogs.js";
+import {
+  chooseFile,
+  chooseSqlFiles,
+  exportDiagramImage,
+  openFile,
+  saveFile,
+} from "@table-craft/desktop/main/fileDialogs.js";
 import { datasourceFromEnvironment } from "@table-craft/desktop/main/datasource.js";
 import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import { createHostKeyService } from "@table-craft/desktop/main/hostKeys.js";
@@ -909,6 +915,7 @@ void app.whenReady().then(async () => {
     openFile: (contents, title) => openFile(contents, title),
     openAnyFile: (contents, title) => openFile(contents, title, true),
     saveFile,
+    exportDiagramImage,
     revealFile: (path) => shell.showItemInFolder(path),
     answerHostKey,
     answerClose(sender, proceed) {

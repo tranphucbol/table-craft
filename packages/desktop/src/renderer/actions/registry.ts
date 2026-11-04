@@ -97,7 +97,9 @@ export type ActionIcon =
   | "zoomOut"
   | "layout"
   | "inferredKeys"
-  | "tables";
+  | "tables"
+  | "exportSvg"
+  | "exportPng";
 
 export interface Action<A = void> {
   readonly id: string;

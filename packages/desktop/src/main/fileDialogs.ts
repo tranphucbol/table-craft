@@ -1,4 +1,6 @@
+import { writeFile } from "node:fs/promises";
 import { BrowserWindow, dialog, type OpenDialogOptions, type SaveDialogOptions, type WebContents } from "electron";
+import type { DiagramImageFormat, DiagramImageRequest } from "@table-craft/desktop/diagrams/state.js";
 
 const IMPORT_FILE_FILTERS = [
   { name: "Delimited text", extensions: ["csv", "tsv", "txt"] },
@@ -14,6 +16,29 @@ export async function saveFile(contents: WebContents, title: string, defaultName
   const options: SaveDialogOptions = { title, defaultPath: defaultName, properties: ["createDirectory"] };
   const picked = parent === null ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(parent, options);
   return picked.canceled || picked.filePath === "" ? null : picked.filePath;
+}
+
+const DIAGRAM_IMAGE_TITLES: Readonly<Record<DiagramImageFormat, string>> = {
+  svg: "Export Diagram as SVG",
+  png: "Export Diagram as PNG",
+};
+const DIAGRAM_IMAGE_FILTERS: Readonly<Record<DiagramImageFormat, { name: string; extensions: string[] }>> = {
+  svg: { name: "SVG image", extensions: ["svg"] },
+  png: { name: "PNG image", extensions: ["png"] },
+};
+
+export async function exportDiagramImage(contents: WebContents, request: DiagramImageRequest): Promise<string | null> {
+  const parent = BrowserWindow.fromWebContents(contents);
+  const options: SaveDialogOptions = {
+    title: DIAGRAM_IMAGE_TITLES[request.format],
+    defaultPath: request.defaultName,
+    filters: [DIAGRAM_IMAGE_FILTERS[request.format]],
+    properties: ["createDirectory"],
+  };
+  const picked = parent === null ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(parent, options);
+  if (picked.canceled || picked.filePath === "") return null;
+  await writeFile(picked.filePath, request.data);
+  return picked.filePath;
 }
 
 export async function chooseFile(contents: WebContents, title: string): Promise<string | null> {
