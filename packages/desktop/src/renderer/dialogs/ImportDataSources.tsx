@@ -181,7 +181,7 @@ function Failure({ failure }: { readonly failure: BridgeFailure | null }) {
 }
 
 /**
- * Import Data Sources (plans 035, 040, 143): pick DataGrip, TablePro, MySQL Workbench or a file, tick the
+ * Import Data Sources (plans 035, 040, 143, 150): pick DataGrip, TablePro, MySQL Workbench, Beekeeper Studio or a file, tick the
  * connections, then import them. Main reads the other apps' files and secrets; this view only sees rows.
  */
 function Wizard({ start }: { readonly start: ImportDataSourcesRequest | null }) {
@@ -341,8 +341,8 @@ function Wizard({ start }: { readonly start: ImportDataSourcesRequest | null }) 
               }}
             >
               <label htmlFor={FILE_FIELD_ID} className="text-ink-muted">
-                From a file: a TableCraft export (.json), a TablePro export (.tablepro), a DataGrip dataSources.xml, or
-                a MySQL Workbench connections.xml or Backup Connections .zip
+                From a file: a TableCraft export (.json), a TablePro export (.tablepro), a DataGrip dataSources.xml, a
+                MySQL Workbench connections.xml or Backup Connections .zip, or a Beekeeper Studio app.db
               </label>
               <div className="flex items-center gap-cell">
                 <TextInput

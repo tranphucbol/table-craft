@@ -1,7 +1,8 @@
 /**
- * Plans 035 and 143's live test: the Import Data Sources dialog reading a fake home that holds a
- * DataGrip config directory and project, TablePro's `connections.json` and two `.tablepro` exports,
- * or MySQL Workbench's `connections.xml` and a Backup Connections `.zip`, then connecting what it
+ * Plans 035, 143 and 150's live test: the Import Data Sources dialog reading a fake home that holds
+ * a DataGrip config directory and project, TablePro's `connections.json` and two `.tablepro`
+ * exports, MySQL Workbench's `connections.xml` and a Backup Connections `.zip`, or Beekeeper
+ * Studio's `app.db` and `.key`, then connecting what it
  * imported to the `test/db/compose.yml` databases. The fake home is the app's
  * `HOME`, so nothing outside it is read; the Secret Service scenario needs `secret-tool` and runs in
  * the headless box only.
@@ -9,13 +10,19 @@
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/035 bun run test:smoke:db:headless test/e2e/importDataSources.smoke.test.ts
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { zip } from "@table-craft/desktop/main/log/zip.js";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
+import {
+  MYSQL_BEHIND_BASTION,
+  MYSQL_CONFIG,
+  POSTGRES_CONFIG,
+  SSH_BASTION,
+  WITHOUT_POSTGRES,
+} from "../support/databases.js";
 import {
   DATAGRIP_IDS,
   dataGripService,
@@ -23,6 +30,15 @@ import {
   writeImportFixture,
   type ImportFixture,
 } from "../support/import/fixtures.js";
+import {
+  BEEKEEPER_FOLDERS,
+  beekeeperConnections,
+  beekeeperKeyFile,
+  writeBeekeeperDatabase,
+  writeBeekeeperFixture,
+  type BeekeeperRow,
+} from "../support/import/beekeeperFixtures.js";
+import { seededSqliteFile } from "../support/sqliteFixture.js";
 import { workbenchConnections, workbenchXml, writeWorkbenchFixture } from "../support/import/workbenchFixtures.js";
 import {
   answerSecretPrompt,
@@ -47,6 +63,10 @@ import {
 const captureWindow = evidenceFor("035");
 const captureFoundation = evidenceFor("053");
 const captureWorkbench = evidenceFor("143");
+const captureBeekeeperNow = evidenceFor("150");
+/** Run in the page: dialogs fade in, so a capture waits for every finite animation. */
+const ANIMATIONS_FINISHED =
+  "Promise.all(document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity).map((animation) => animation.finished))";
 
 const PASSWORD = MYSQL_CONFIG.password;
 const HOME_PREFIX = "table-craft-import-home-";
@@ -65,6 +85,69 @@ function fixture(passwords: "keepass" | "native", options: { oracleAndSqlServer?
     password: PASSWORD,
     oracleAndSqlServer: options.oracleAndSqlServer,
   });
+}
+
+/** The fixture's connections, signed in to the compose databases, plus one through a jump host. */
+function beekeeperLiveConnections(sqlitePath: string): BeekeeperRow[] {
+  const servers = { mysql: MYSQL_CONFIG, postgres: POSTGRES_CONFIG };
+  const signIn: Readonly<Partial<Record<string, BeekeeperRow>>> = {
+    "Shop MySQL": {
+      username: MYSQL_CONFIG.user,
+      password: MYSQL_CONFIG.password,
+      defaultDatabase: MYSQL_CONFIG.database,
+    },
+    Reporting: {
+      username: POSTGRES_CONFIG.user,
+      password: POSTGRES_CONFIG.password,
+      defaultDatabase: POSTGRES_CONFIG.database,
+      ssl: 0,
+    },
+  };
+  return [
+    ...beekeeperConnections(servers, sqlitePath).map((row) => ({
+      ...row,
+      ...(typeof row.name === "string" ? signIn[row.name] : undefined),
+    })),
+    {
+      id: 10,
+      createdAt: "2026-01-05 10:09:00",
+      name: "Tunnelled MySQL",
+      connectionType: "mysql",
+      ...MYSQL_BEHIND_BASTION,
+      username: MYSQL_CONFIG.user,
+      password: MYSQL_CONFIG.password,
+      defaultDatabase: MYSQL_CONFIG.database,
+      sshEnabled: 1,
+      sshHost: SSH_BASTION.host,
+      sshPort: SSH_BASTION.port,
+      sshUsername: SSH_BASTION.user,
+      sshMode: "keyfile",
+      sshKeyfile: SSH_BASTION.keyPath,
+      sshKeyfilePassword: SSH_BASTION.passphrase,
+    },
+    {
+      id: 9,
+      createdAt: "2026-01-05 10:08:00",
+      name: "Behind jump host",
+      connectionType: "mysql",
+      host: "10.0.0.9",
+      port: 3306,
+      username: "app",
+      sshEnabled: 1,
+      sshHost: "inner.test",
+      sshUsername: "deploy",
+      sshMode: "agent",
+      sshBastionHost: "outer.test",
+    },
+  ];
+}
+
+/** Every row but the cloud workspace's, which the reader leaves out. */
+const BEEKEEPER_LOCAL_CONNECTIONS = beekeeperLiveConnections("").filter((row) => row.workspaceId === undefined).length;
+
+async function captureBeekeeper(page: Page, name: string): Promise<void> {
+  await page.evaluate(ANIMATIONS_FINISHED);
+  await captureBeekeeperNow(page, name);
 }
 
 function importDialog(page: Page) {
@@ -373,6 +456,104 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await captureWindow(page, "import-ask-on-connect");
       await answerSecretPrompt(page, "Shop PG", POSTGRES_CONFIG.password);
       await connected(page, "Shop PG");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenBeekeeperAppDb_whenImported_thenFoldersPasswordsAndTunnelsCome",
+    async () => {
+      const home = mkdtempSync(join(tmpdir(), HOME_PREFIX));
+      writeBeekeeperFixture(home, process.platform, {
+        connections: beekeeperLiveConnections(seededSqliteFile()),
+        folders: BEEKEEPER_FOLDERS,
+      });
+      const { page } = await launch(home);
+
+      await openImport(page);
+      const beekeeper = importDialog(page).getByTestId("import-source-beekeeper");
+      await expect.poll(() => beekeeper.isEnabled()).toBe(true);
+      await expect.poll(() => beekeeper.textContent()).toContain(`${String(BEEKEEPER_LOCAL_CONNECTIONS)} connections`);
+      await captureBeekeeper(page, "01-card");
+
+      await beekeeper.click();
+      await importDialog(page).getByTestId("import-rows").waitFor();
+      await expect.poll(() => importRow(page, "Shop MySQL").getAttribute("data-status")).toBe("ready");
+      await expect.poll(() => importRow(page, "Shop MySQL").textContent()).toContain("In file");
+      await expect.poll(() => importRow(page, "Socket").getAttribute("data-status")).toBe("unsupported");
+      await expect.poll(() => importRow(page, "Mongo").getAttribute("data-status")).toBe("unsupported");
+      await expect.poll(() => importRow(page, "Behind jump host").getAttribute("data-status")).toBe("sshTunnel");
+      await expect.poll(() => importRow(page, "Through bastion").textContent()).toContain("via bastion.test");
+      expect(await importRow(page, "Cloud only").count()).toBe(0);
+      await captureBeekeeper(page, "02-preview");
+
+      await importAndFinish(page);
+      await importDialog(page).getByRole("button", { name: "Done", exact: true }).click();
+      await importDialog(page).waitFor({ state: "detached" });
+      for (const folder of ["Beekeeper Studio", "Production", "EU", "Archive"]) await treeNode(page, folder).waitFor();
+
+      await connect(page, "Shop MySQL");
+      await connected(page, "Shop MySQL");
+      await captureBeekeeper(page, "03-mysql-connected");
+
+      await connect(page, "Local file");
+      await connected(page, "Local file");
+      if (!WITHOUT_POSTGRES) {
+        await connect(page, "Reporting");
+        await connected(page, "Reporting");
+      }
+      await captureBeekeeper(page, "04-pg-sqlite");
+
+      await treeNode(page, "Key tunnel").first().click();
+      await findAction(page, "Data Source Properties");
+      const form = dataSourcesDialog(page);
+      await form.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      expect(await form.getByLabel("Use SSH tunnel", { exact: true }).isChecked()).toBe(true);
+      await expect.poll(() => form.getByLabel("SSH host", { exact: true }).inputValue()).toBe("jump.test");
+      await expect.poll(() => form.getByLabel("SSH user", { exact: true }).inputValue()).toBe("deploy");
+      await form.getByLabel("SSH user", { exact: true }).scrollIntoViewIfNeeded();
+      await page.keyboard.press("Escape");
+      await form.waitFor({ state: "detached" });
+
+      await connect(page, "Tunnelled MySQL");
+      const hostKey = page.getByRole("dialog", { name: "Unknown SSH Host Key" });
+      await hostKey.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await hostKey.getByRole("button", { name: "Trust", exact: true }).click();
+      await connected(page, "Tunnelled MySQL");
+      expect(await secretPrompt(page, "Tunnelled MySQL").count()).toBe(0);
+      await captureBeekeeper(page, "05-ssh");
+
+      await openImport(page);
+      await importDialog(page).getByTestId("import-source-beekeeper").click();
+      await importDialog(page).getByTestId("import-rows").waitFor();
+      const again = importRow(page, "Shop MySQL");
+      await expect.poll(() => again.getAttribute("data-status")).toBe("duplicate");
+      await expect.poll(() => again.getByRole("checkbox").isChecked()).toBe(false);
+      await captureBeekeeper(page, "06-duplicates");
+    },
+    SCENARIO_TIMEOUT_MS * 2,
+  );
+
+  it(
+    "givenPortableBeekeeperAppDb_whenReadFromFile_thenPreviewsItsConnections",
+    async () => {
+      const home = mkdtempSync(join(tmpdir(), HOME_PREFIX));
+      const portable = join(home, "beekeeper_studio_data");
+      mkdirSync(portable);
+      const appDb = join(portable, "app.db");
+      writeBeekeeperDatabase(appDb, { connections: beekeeperLiveConnections(seededSqliteFile()) });
+      writeFileSync(join(portable, ".key"), beekeeperKeyFile());
+      const { page } = await launch(home);
+      await openImport(page);
+      const dialog = importDialog(page);
+      await expect.poll(() => dialog.getByTestId("import-source-beekeeper").isEnabled()).toBe(false);
+
+      await dialog.getByTestId("import-datasources-file").fill(appDb);
+      await dialog.getByRole("button", { name: "Read", exact: true }).click();
+      await dialog.getByTestId("import-rows").waitFor();
+      await expect.poll(() => dialog.getByTestId("import-row").count()).toBe(BEEKEEPER_LOCAL_CONNECTIONS);
+      await expect.poll(() => importRow(page, "Shop MySQL").textContent()).toContain("In file");
+      await captureBeekeeper(page, "08-file");
     },
     SCENARIO_TIMEOUT_MS,
   );
