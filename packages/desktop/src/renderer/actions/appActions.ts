@@ -6,7 +6,9 @@ import {
   consoleFilePath,
   disconnectDatasource,
   duplicateConsole,
+  nodeConsoleNamespace,
   openConsole,
+  openConsoleOn,
   reopenClosedTab,
   revealConsoleFile,
   settleTransactions,
@@ -159,6 +161,18 @@ function selectedFolder(context: ActionContext): string | null {
   if (context.selection?.kind === "folder") return context.selection.path;
   return context.focus === "database" ? (context.datasource?.view.folder ?? null) : null;
 }
+/** A console on the datasource; from a node in the Database pane, in the namespace that holds it (plan 153). */
+async function newConsole(context: ActionContext): Promise<void> {
+  if (context.datasource === null) return;
+  const datasourceId = context.datasource.view.id;
+  const { selection } = context;
+  if (!context.inDatabasePane || selection?.kind !== "catalog" || selection.id !== datasourceId) {
+    await openConsole(datasourceId);
+    return;
+  }
+  await openConsoleOn(datasourceId, { namespace: await nodeConsoleNamespace(datasourceId, selection.path) });
+}
+
 const hasSeveralTabs = (context: ActionContext) => context.tabs.length > 1;
 const hasConsoleTab = (context: ActionContext) => context.tabs.some((tab) => tab.kind === "console");
 const MAC_REVEAL_TITLE = "Reveal in Finder";
@@ -319,9 +333,7 @@ export const APP_ACTIONS: readonly AnyAction[] = [
     icon: "newConsole",
     shortcut: "Mod+Shift+L",
     when: hasDatasource,
-    run: async (context) => {
-      if (context.datasource !== null) await openConsole(context.datasource.view.id);
-    },
+    run: newConsole,
   }),
   defineAction<TabArgs | undefined>({
     id: ACTION_IDS.closeTab,

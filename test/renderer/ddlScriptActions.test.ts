@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { Namespace, SchemaScript } from "@table-craft/desktop/engine/protocol.js";
 import type { PluginInfo } from "@table-craft/desktop/preload/bridge.js";
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import {
@@ -13,8 +14,11 @@ import {
   SQL_SCRIPTS_MENU,
   shownEntries,
 } from "@table-craft/desktop/renderer/panes/menuEntries.js";
+import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
+import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { DISCONNECTED, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { LOADED_PG, PG_VIEW, PUBLIC_PATH } from "./catalogFixtures.js";
 import { POSTGRES_PLUGIN } from "./datasourceViews.js";
 import { IDLE_CONTEXT } from "./support.js";
@@ -24,6 +28,36 @@ const DDL_PLUGIN: PluginInfo = {
   capabilities: [...POSTGRES_PLUGIN.capabilities, "ddl", "currentNamespace"],
 };
 const HIDDEN = new Set(DDL_SCRIPT_HIDDEN_WHEN_DISABLED);
+const SCRIPT: SchemaScript = { text: "CREATE TABLE customers (id integer);", relations: 1, failed: 0 };
+const toConsole = DDL_SCRIPT_ACTIONS.find((action) => action.id === DDL_SCRIPT_ACTION_IDS.toConsole);
+const originals = {
+  open: useConsoles.getState().open,
+  connect: useDatasources.getState().connect,
+  ensureDescribed: useCatalog.getState().ensureDescribed,
+};
+
+function namespace(path: readonly string[], kind: Namespace["kind"]): Namespace {
+  return { path, name: path.at(-1) ?? "", kind, system: false, current: false };
+}
+
+/** Stubs the engine with `targets` and the script, and answers what each opened console was given. */
+function scriptingInto(targets: readonly Namespace[]): { sql: string | undefined; namespace: unknown }[] {
+  const opened: { sql: string | undefined; namespace: unknown }[] = [];
+  const answers: Readonly<Record<string, unknown>> = { "namespace.targets": targets, "catalog.script": SCRIPT };
+  const client = { call: (method: string) => Promise.resolve(answers[method]) } as unknown as EngineClient;
+  useDatasources.setState({
+    datasources: [{ ...PG_VIEW, ephemeral: true }],
+    connect: () => Promise.resolve(client),
+  });
+  useCatalog.setState({ ensureDescribed: () => Promise.resolve() });
+  useConsoles.setState({
+    open: (_id, _datasourceId, options) => {
+      opened.push({ sql: options?.sql, namespace: options?.namespace ?? null });
+      return Promise.resolve();
+    },
+  });
+  return opened;
+}
 
 function given(plugin: PluginInfo): void {
   useDatasources.setState({ datasources: [PG_VIEW], plugins: [plugin] });
@@ -50,8 +84,10 @@ function menuFor(context: ActionContext) {
 }
 
 afterEach(() => {
-  useDatasources.setState({ datasources: [], plugins: [] });
-  useCatalog.setState({ catalogs: {} });
+  useDatasources.setState({ datasources: [], plugins: [], connect: originals.connect });
+  useCatalog.setState({ catalogs: {}, ensureDescribed: originals.ensureDescribed });
+  useConsoles.setState({ open: originals.open });
+  useTabs.setState(useTabs.getInitialState(), true);
 });
 
 describe("generate DDL actions", () => {
@@ -87,21 +123,29 @@ describe("generate DDL actions", () => {
       path: PUBLIC_PATH,
       name: "public",
       kinds: ["table", "view", "materializedView"],
-      consoleNamespace: PUBLIC_PATH,
     });
   });
 
-  it("givenPluginThatCannotSwitchNamespaces_whenScoped_thenConsoleOpensWithoutOne", () => {
+  it("givenUseSwitcher_whenScriptToConsoleOnSchema_thenConsoleOnItsDatabase", async () => {
+    given(DDL_PLUGIN);
+    const opened = scriptingInto([namespace(["table_craft"], "database")]);
+
+    await toConsole?.run(selecting(PUBLIC_PATH, namespaceKey("pg", PUBLIC_PATH)), undefined as never);
+
+    expect(opened).toEqual([{ sql: SCRIPT.text, namespace: ["table_craft"] }]);
+  });
+
+  it("givenPluginThatCannotSwitchNamespaces_whenScriptToConsole_thenConsoleOpensWithoutOne", async () => {
     const fixed: PluginInfo = {
       ...DDL_PLUGIN,
       capabilities: DDL_PLUGIN.capabilities.filter((capability) => capability !== "currentNamespace"),
     };
     given(fixed);
+    const opened = scriptingInto([namespace(PUBLIC_PATH, "schema")]);
 
-    const scope = scriptScope(selecting(PUBLIC_PATH, namespaceKey("pg", PUBLIC_PATH), fixed));
+    await toConsole?.run(selecting(PUBLIC_PATH, namespaceKey("pg", PUBLIC_PATH), fixed), undefined as never);
 
-    expect(scope?.path).toEqual(PUBLIC_PATH);
-    expect(scope?.consoleNamespace).toBeNull();
+    expect(opened).toEqual([{ sql: SCRIPT.text, namespace: null }]);
   });
 
   it("givenTablesGroupNode_whenScoped_thenTablesOnly", () => {

@@ -1931,6 +1931,11 @@ Console, then Synchronize and Copy Qualified Name; a column's starts with Quick 
 A schema's menu, and its Tables, Views and Materialized Views nodes', carry a **SQL Scripts**
 submenu after Run SQL Script… with the three Generate DDL actions, shown only when the plugin
 declares `ddl`.
+New Console on a catalog node, Generate DDL to Console and Execute Routine… open their console in
+the namespace that holds the node: the deepest of `namespace.targets` whose path leads to the
+node's, so a `topLevel` switcher opens the database and a `schema` one the schema (plan 153). A
+plugin without `currentNamespace`, a failed listing or no such target opens it where the session
+lands, without a notice.
 A writable datasource whose plugin declares `objects` adds Modify Table…, Rename…, Truncate… and
 Drop… to a relation's menu, New Table… (and New Schema… or New Database…) to a schema's, and
 Rename… and Drop… to a routine's or sequence's, each only where the plugin's object features say
