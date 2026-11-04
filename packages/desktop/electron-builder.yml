@@ -23,6 +23,10 @@ extraResources:
   # The window icon on Windows and Linux, where the window does not take it from the bundle.
   - from: build/icon.png
     to: icon.png
+  # The ER diagram's layout worker is elkjs, taken under EPL-2.0, whose licence must ship with it
+  # (decision 157).
+  - from: node_modules/elkjs/LICENSE.md
+    to: licenses/elkjs-LICENSE.md
 asar: true
 npmRebuild: false
 icon: build/icon.png
