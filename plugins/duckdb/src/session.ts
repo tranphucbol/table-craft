@@ -21,6 +21,7 @@ import { explainStatement, readPlanRows } from "./explain.js";
 import { messageOf } from "./failures.js";
 import { duckdbIntrospector } from "./introspect.js";
 import { DIALECT, language, quoteIdentifier, type DuckdbCapability } from "./language.js";
+import { zonedText, type ZonedText } from "./timeZone.js";
 import { columnFor, rowsOf, type ColumnType } from "./values.js";
 
 const CANCEL_REACH: CancelReach = { method: "duckdb_interrupt", reaches: "statement" };
@@ -44,6 +45,9 @@ const INTERRUPTED = /^INTERRUPT Error/u;
 /** `ResultReturnType` values, copied for the reason `TYPE_ID` is (`values.ts`). */
 const CHANGED_ROWS = 1;
 const QUERY_RESULT = 3;
+/** `StatementType.SET`: `SET` and `RESET`, after which the session's time zone may differ. */
+const SET_STATEMENT = 20;
+const TIME_ZONE_SQL = "SELECT current_setting('TimeZone') AS time_zone";
 /** How the exporter writes bytes (`cellText`): `0x` and hex, which DuckDB reads back as `\x` pairs. */
 const EXPORTED_BYTES = /^0x((?:[0-9a-fA-F]{2})*)$/u;
 const BLOB_TYPE = /^BLOB$/iu;
@@ -62,6 +66,8 @@ export interface SessionParts {
   readonly privateDatabase: boolean;
   readonly serverVersion: string;
   readonly openedDatabase: string;
+  /** The connection's `TimeZone` setting when it opened. */
+  readonly timeZone: string;
   /** Closes the instance's share this session holds, after both connections closed. */
   readonly release: () => void;
 }
@@ -116,6 +122,7 @@ export class DuckdbSession implements PluginSession<DuckdbCapability> {
 
   readonly #parts: SessionParts;
   readonly #json: DuckDBValueConverter<Json>;
+  #zoned: ZonedText;
   #mode: TransactionMode = "auto";
   #open = false;
   #running: Running | null = null;
@@ -125,6 +132,7 @@ export class DuckdbSession implements PluginSession<DuckdbCapability> {
   constructor(parts: SessionParts) {
     this.#parts = parts;
     this.#json = parts.driver.JsonDuckDBValueConverter;
+    this.#zoned = this.#zonedIn(parts.timeZone);
     this.serverVersion = parts.serverVersion;
     this.privateDatabase = parts.privateDatabase;
     const catalog = duckdbIntrospector(
@@ -211,6 +219,8 @@ export class DuckdbSession implements PluginSession<DuckdbCapability> {
     if (returnType !== QUERY_RESULT) {
       const rowsAffected = returnType === CHANGED_ROWS ? Number(result.rowsChanged) : null;
       await finish(false);
+      const statementType: number = result.statementType;
+      if (statementType === SET_STATEMENT) await this.#readTimeZone();
       return { columns: [], rows: NO_ROWS, rowsAffected };
     }
     const types: ColumnType[] = [];
@@ -229,7 +239,8 @@ export class DuckdbSession implements PluginSession<DuckdbCapability> {
     this.#running = null;
     this.#current = { result, finish };
     const fullBytes = options.fullBytes === true;
-    const read = (chunk: DuckDBDataChunk): Row[] => rowsOf(chunk, types, this.#json, fullBytes);
+    const zoned = this.#zoned;
+    const read = (chunk: DuckDBDataChunk): Row[] => rowsOf(chunk, types, this.#json, fullBytes, zoned);
     const fetch = (): Promise<DuckDBDataChunk | null> => this.#inFlight(running, () => result.fetchChunk());
     const failure = (cause: unknown): PluginError => this.#failure(cause, running, sql);
     async function* rows(): AsyncGenerator<Row> {
@@ -257,6 +268,21 @@ export class DuckdbSession implements PluginSession<DuckdbCapability> {
       return await work();
     } finally {
       running.inFlight -= 1;
+    }
+  }
+
+  #zonedIn(timeZone: string): ZonedText {
+    const { DuckDBTimestampValue } = this.#parts.driver;
+    return zonedText(timeZone, (micros) => String(new DuckDBTimestampValue(micros)));
+  }
+
+  /** Follows a `SET TimeZone`; keeps the zone it had when the transaction cannot answer. */
+  async #readTimeZone(): Promise<void> {
+    try {
+      const row = (await this.#parts.connection.runAndReadAll(TIME_ZONE_SQL)).getRowObjectsJson()[0];
+      if (typeof row?.time_zone === "string") this.#zoned = this.#zonedIn(row.time_zone);
+    } catch {
+      // An aborted transaction refuses every statement but ROLLBACK.
     }
   }
 

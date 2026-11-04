@@ -7,6 +7,9 @@ import {
   type TypeClass,
   type WireValue,
 } from "@table-craft/plugin-api";
+import type { ZonedText } from "./timeZone.js";
+
+const NOT_ZONED: ZonedText = () => null;
 
 /**
  * `DuckDBTypeId` values from `@duckdb/node-api`. Its enum is a runtime object, and importing it
@@ -149,8 +152,13 @@ function hasBytes(value: object): value is { readonly bytes: Uint8Array } {
   return "bytes" in value && value.bytes instanceof Uint8Array;
 }
 
+/** Driver text unless `zoned` places a `TIMESTAMPTZ` in the session's time zone. */
+function objectText(type: ColumnType, value: object, zoned: ZonedText): string {
+  return (type.typeId === TYPE_ID.TIMESTAMP_TZ ? zoned(value) : null) ?? textOf(value);
+}
+
 /** One value as `getColumnValues` returns it, as it crosses the wire (decision 017). */
-export function cellFor(type: ColumnType, value: unknown, fullBytes: boolean): WireValue {
+export function cellFor(type: ColumnType, value: unknown, fullBytes: boolean, zoned: ZonedText = NOT_ZONED): WireValue {
   if (value === null || value === undefined) return null;
   switch (typeof value) {
     case "boolean":
@@ -161,7 +169,7 @@ export function cellFor(type: ColumnType, value: unknown, fullBytes: boolean): W
     case "string":
       return isJsonAlias(type) ? { kind: "json", text: value } : value;
     case "object":
-      return hasBytes(value) ? toBytesValue(value.bytes, { fullBytes }) : textOf(value);
+      return hasBytes(value) ? toBytesValue(value.bytes, { fullBytes }) : objectText(type, value, zoned);
     default:
       return null;
   }
@@ -177,11 +185,12 @@ export function rowsOf(
   types: readonly ColumnType[],
   json: DuckDBValueConverter<Json>,
   fullBytes: boolean,
+  zoned: ZonedText,
 ): Row[] {
   const columns = types.map((type, index): readonly WireValue[] =>
     isNested(type)
       ? chunk.convertColumnValues(index, json).map(nestedCell)
-      : chunk.getColumnValues(index).map((value) => cellFor(type, value, fullBytes)),
+      : chunk.getColumnValues(index).map((value) => cellFor(type, value, fullBytes, zoned)),
   );
   const rows: Row[] = [];
   for (let row = 0; row < chunk.rowCount; row += 1) rows.push(columns.map((column) => column[row] ?? null));
