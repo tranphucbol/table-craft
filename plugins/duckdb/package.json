@@ -11,7 +11,8 @@
     "./errorPosition": "./src/errorPosition.ts",
     "./values": "./src/values.ts",
     "./dataFiles": "./src/dataFiles.ts",
-    "./failures": "./src/failures.ts"
+    "./failures": "./src/failures.ts",
+    "./timeZone": "./src/timeZone.ts"
   },
   "dependencies": {
     "@duckdb/node-api": "2.0.0-r.1",

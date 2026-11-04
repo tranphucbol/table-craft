@@ -11,7 +11,8 @@ import { DuckdbSession } from "./session.js";
 const PLUGIN_ID = "duckdb";
 /** DuckDB's name for a database that lives only in this process. */
 const MEMORY_PATH = ":memory:";
-const SERVER_SQL = "SELECT version() AS version, current_database() AS database";
+const SERVER_SQL =
+  "SELECT version() AS version, current_database() AS database, current_setting('TimeZone') AS time_zone";
 const VERSION_PREFIX = /^v/u;
 
 const connectionSchema = z.strictObject({
@@ -79,6 +80,7 @@ async function connect(config: DuckdbConfig, options: ConnectOptions): Promise<D
       privateDatabase: isPrivate,
       serverVersion: textOf(server.version).replace(VERSION_PREFIX, ""),
       openedDatabase: textOf(server.database),
+      timeZone: textOf(server.time_zone),
       release: () => {
         opened.release();
       },
