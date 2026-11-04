@@ -24,6 +24,8 @@ const LOADED_SQLITE: PluginLoadResult = {
   plugin: sqlite,
 };
 const ROWS_1200 = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 1200) SELECT i FROM n";
+const SMALL_CAP = 1_000;
+const SMALL_CAP_PAGE_ROWS = 500;
 const ENDLESS = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n) SELECT i, hex(randomblob(64)) FROM n";
 
 function harness(path: string): ExportHarness {
@@ -89,6 +91,34 @@ describe("engine exports", () => {
     expect(done).toMatchObject({ state: "done", rows: 1200 });
     expect((await readFile(path, "utf8")).trimEnd().split("\n")).toHaveLength(1201);
     expect(state.cursorOpen).toBe(false);
+  });
+
+  it("givenPrivateDatabaseFetchedToTheCap_whenExported_thenRowsPastTheCapWritten", async () => {
+    const directory = await folder();
+    const path = join(directory, "rows.csv");
+    const { connection, finished } = open(":memory:");
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(connection, sessionId, ROWS_1200);
+    const capped = resultOf<{ rowCount: number; cursorOpen: boolean }>(
+      await connection.handle({
+        id: 4,
+        type: "result.fetchMore",
+        handle,
+        all: true,
+        pageRows: SMALL_CAP_PAGE_ROWS,
+        fetchAllCap: SMALL_CAP,
+      }),
+    );
+
+    const task = await start(connection, { source: { kind: "result", handle, columns: [0] }, format: "csv", path });
+    const done = await finished(task.taskId);
+    const lines = (await readFile(path, "utf8")).trimEnd().split("\n");
+
+    expect(capped).toMatchObject({ rowCount: SMALL_CAP, cursorOpen: false });
+    expect(task).toMatchObject({ origin: "cursor", estimate: null, drains: handle });
+    expect(done).toMatchObject({ state: "done", rows: 1200 });
+    expect(lines).toHaveLength(1201);
+    expect(lines.at(-1)).toBe("1200");
   });
 
   it("givenExhaustedResult_whenExported_thenFromMemory", async () => {

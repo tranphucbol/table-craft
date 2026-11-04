@@ -6,8 +6,8 @@ Status: Accepted
 
 A statement fetches one page (`RESULT_PAGE_ROWS`, 500) and leaves its row iterator open in the
 engine. The grid's Fetch Next Page and Fetch All pull more from that iterator, up to
-`RESULT_FETCH_ALL_CAP` (100,000) per result. The cursor closes, keeping the rows already fetched,
-when:
+`RESULT_FETCH_ALL_CAP` (100,000) per result. Reaching the cap ends fetching but keeps the cursor
+for an export. The cursor closes, keeping the rows already fetched, when:
 
 - the result is exhausted
 - the same session runs another statement
@@ -43,4 +43,5 @@ Holding the cursor has a cost: the session is busy, and a Postgres cursor holds 
   waits until the cursor closes.
 - Sorting a partly fetched result sorts only the fetched rows, and the header says "sorted locally".
 - Export drains the rest of an open cursor straight to the file without the fetch-all cap, so a
-  full export never needs a full fetch into memory.
+  full export never needs a full fetch into memory. A result fetched to the cap still holds its
+  cursor, so its export writes the rows past the cap too.

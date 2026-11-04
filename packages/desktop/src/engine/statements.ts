@@ -189,12 +189,13 @@ export function statementRunners(live: LiveContext) {
       if (!open.moved) statements.set(summary.handle, sql);
       ran.set(summary.handle, sql);
       if (summary.source !== undefined) keySources.set(summary.handle, summary.source);
-      if (summary.cursorOpen) cursors.set(sessionId, summary.handle);
+      const holdsCursor = results.holdsCursor(summary.handle);
+      if (holdsCursor) cursors.set(sessionId, summary.handle);
       // An open cursor keeps the session busy, and no statement that switches returns rows.
       // A statement that switches namespaces, or ends a transaction that may have, is followed by a read.
       const statement = consoleLanguage().classify(bound.sql);
       const switches = statement.setsNamespace === true;
-      const moves = !summary.cursorOpen && (switches || statement.kind === "transaction");
+      const moves = !holdsCursor && (switches || statement.kind === "transaction");
       const namespace = moves ? await namespaceOf(open) : undefined;
       if (moves) noteNamespace(open, namespace, switches);
       if (switches) open.switchedBy = bound.params.length === 0 ? bound.sql : null;
@@ -303,7 +304,7 @@ export function statementRunners(live: LiveContext) {
           sessionFor(request.sessionId);
         }
         handles.set(summary.handle, request.sessionId);
-        if (summary.cursorOpen) cursors.set(request.sessionId, summary.handle);
+        if (results.holdsCursor(summary.handle)) cursors.set(request.sessionId, summary.handle);
       }
       return {
         details: contents.details,
