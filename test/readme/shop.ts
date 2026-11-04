@@ -63,6 +63,17 @@ export function loadShopPostgres(): void {
   psql(SHOP_DATABASE, [], readFileSync(POSTGRES_SEED, "utf8"));
 }
 
+/**
+ * Drops the keys `order_items` declares, as a database that never declared them would, so the
+ * diagram scene draws them inferred beside the one `orders` still declares.
+ */
+export function dropShopOrderItemKeys(): void {
+  psql(SHOP_DATABASE, [
+    "-c",
+    "ALTER TABLE order_items DROP CONSTRAINT order_items_order_id_fkey, DROP CONSTRAINT order_items_product_id_fkey",
+  ]);
+}
+
 /** Empties database 3 of the `redis` service and fills it from `shop.redis` and the products. */
 export async function loadShopRedis(): Promise<void> {
   const seed = readFileSync(REDIS_SEED, "utf8")
