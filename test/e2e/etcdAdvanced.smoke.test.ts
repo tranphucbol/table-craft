@@ -3,6 +3,8 @@
  * TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/110 bun run test:smoke:db:headless:etcd test/e2e/etcdAdvanced.smoke.test.ts
  * Only a unique namespace, one owned lease and one temporary user are changed; no auth toggles,
  * compaction or membership changes. Native dialogs are answered in main, not bypassed in renderer.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -32,6 +34,7 @@ import { dialog, keyTab, openKey } from "./redisLive.js";
 import { stubSaveDialog } from "./workflows.js";
 
 const capture = evidenceFor("110");
+const captureLive = evidenceFor("151");
 const PREFIX = `/live/etcd-advanced/${randomUUID()}/`;
 const CONFIG = { ...ETCD_CONFIG, ...ETCD_ROOT_USER, namespace: PREFIX };
 const SOURCE = { id: "advanced-etcd", pluginId: "etcd", config: CONFIG };
@@ -179,6 +182,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       await renew.click();
       await expect.poll(() => renew.getAttribute("aria-pressed")).toBe("true");
       await capture(page, "advanced-01-lease-attached-renewing");
+      await captureLive(page, "05-etcd-services");
       const preview = await session!.services.leases!.prepareRevoke(ownedLease);
       expect(preview.lease.outsideNamespaceKeyCount).toBe("0");
       await session!.services.leases!.revokePrepared(preview.token);
@@ -217,6 +221,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
       expect(events).toContain('"DELETE"');
       expect(events).toContain("watch/a");
       await capture(page, "advanced-03-watch-put-delete-private-export");
+      await captureLive(page, "05-etcd-watch");
       await assertDistinctRail(page);
       await capture(page, "fix-03-watch-distinct-rail");
       await watch.getByRole("button", { name: "Stop", exact: true }).click();
@@ -247,6 +252,7 @@ describe.runIf(DATABASES_ENABLED && !WITHOUT_ETCD)("advanced etcd live UI", () =
         .poll(() => keyTab(page).getByTestId("value-editor").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
         .toContain("roundtrip");
       await capture(page, "advanced-04-scoped-private-import-export");
+      await captureLive(page, "05-etcd-key-transfer");
     },
     SCENARIO_TIMEOUT_MS,
   );

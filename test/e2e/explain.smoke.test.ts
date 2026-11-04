@@ -7,6 +7,8 @@
  *
  * The scenarios that analyse or refuse a write check `orders` afterwards; every scenario puts
  * `orders` back regardless, so a failure leaves the fixture as the next suite expects it.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import type { ElectronApplication, Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
@@ -50,6 +52,7 @@ import {
 
 const captureWindow = evidenceFor("012");
 const dropdownEvidence = evidenceFor("129");
+const captureLive = evidenceFor("151");
 /** More than a row's height, so a row and its time bar sit under the header. */
 const PLAN_SCROLL_PX = 40;
 /** The header's bottom line, where a time bar hangs from its cell. */
@@ -285,6 +288,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
       await page.getByRole("button", { name: "Tree", exact: true }).click();
       await planRows(page).first().waitFor();
       await captureWindow(page, "plan-mysql");
+      await captureLive(page, "02-explain");
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -323,6 +327,7 @@ describe.runIf(DATABASES_ENABLED)("Explain Plan and Explain Analyse live test", 
       }
       expect(await cornerRadius(page.getByRole("group", { name: "Plan view" }))).toBe(SEGMENT_RADIUS);
       await dropdownEvidence(page, "01-plan-header");
+      await captureLive(page, "02-explain-analyze");
     },
     SCENARIO_TIMEOUT_MS,
   );

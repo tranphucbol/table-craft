@@ -174,7 +174,7 @@ describe.runIf(DATABASES_ENABLED)("redis 5.0 live test", () => {
       await keyButton(page, "Submit").click();
       await expect
         .poll(() => keyTab(page).getByTestId("key-notice").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
-        .toBe("Submitted as one MULTI");
+        .toBe("Changes saved atomically");
       await expect.poll(() => keyTab(page).getByTestId("key-ttl").textContent()).toMatch(/^TTL \d+ m$/);
       await expect
         .poll(() => keyTab(page).getByTestId("value-editor").locator(".cm-content").textContent())

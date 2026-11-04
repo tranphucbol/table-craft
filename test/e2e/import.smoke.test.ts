@@ -5,6 +5,8 @@
  * PostgreSQL and MySQL need the `test/db/compose.yml` containers:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/021 bun run test:smoke:db
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -38,6 +40,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("021");
+const captureLive = evidenceFor("151");
 
 const LIVE_TABLE = "import_live";
 /** Enough rows that the import is still writing when the scenario looks, over a slowed link. */
@@ -232,6 +235,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
       await page.keyboard.press("ArrowRight");
       await treeRow(page, "cities").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await captureWindow(page, "import-new-table-done");
+      await captureLive(page, "03-import");
     },
     SCENARIO_TIMEOUT_MS,
   );
