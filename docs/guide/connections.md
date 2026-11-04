@@ -54,29 +54,31 @@ close; one that cannot close within 5 seconds costs a reconnect, which Output re
 
 See [Datasources and secrets](../design/specification.md#datasources-and-secrets).
 
-## Import from DataGrip, TablePro or MySQL Workbench
+## Import from DataGrip, TablePro, MySQL Workbench or Beekeeper Studio
 
 **File → Import Data Sources…**, or the import button beside Add in the Data Sources dialog, brings
-your connections over from DataGrip, TablePro or MySQL Workbench. TableCraft only reads their
-files; it never changes them. The first step shows what it found on this computer and where it
-looked; **From a file…** reads a DataGrip `dataSources.xml`, a TablePro `.tablepro` export, or a
-MySQL Workbench `connections.xml` or **Backup Connections** `.zip` instead, or a file TableCraft
-exported ([Export and share data sources](#export-and-share-data-sources)). When TableCraft finds
+your connections over from DataGrip, TablePro, MySQL Workbench or Beekeeper Studio. TableCraft only
+reads their files; it never changes them. The first step shows what it found on this computer and
+where it looked; **From a file…** reads a DataGrip `dataSources.xml`, a TablePro `.tablepro`
+export, a MySQL Workbench `connections.xml` or **Backup Connections** `.zip`, or a Beekeeper Studio
+`app.db` instead, or a file TableCraft exported ([Export and share data sources](#export-and-share-data-sources)). When TableCraft finds
 connections at launch, the [notification bell](settings.md#notifications) offers them; its
 **Import…** opens straight on that app's list.
 
 The next step lists every connection with its type, address, user, folder and where its password
 comes from. MySQL, MariaDB and TiDB open in the MySQL plugin, PostgreSQL in the PostgreSQL plugin,
 SQLite in the SQLite plugin and Oracle in the Oracle plugin (a `jdbc:oracle:thin:@//host:1521/service`
-URL or its `@host:1521:SID` form); anything else is listed as not supported. A PostgreSQL or Oracle
+URL or its `@host:1521:SID` form), and Beekeeper's SQL Server and Redis connections in those
+plugins; anything else is listed as not supported. A PostgreSQL or Oracle
 connection found before its plugin is installed offers **Install** in its row and maps once the
 plugin arrives. An SSH tunnel comes along when its host, user and sign-in method can be read (a
-DataGrip SSH configuration, a Workbench **Standard TCP/IP over SSH** connection). Workbench's SSH
-password comes from the keychain like the database one; any other SSH password or key passphrase
+DataGrip SSH configuration, a Workbench **Standard TCP/IP over SSH** connection, a Beekeeper SSH
+tunnel). Workbench's SSH password comes from the keychain like the database one, and Beekeeper's
+SSH password and key passphrase from its `app.db`; any other SSH password or key passphrase
 is asked for on connect. A tunnel TableCraft
 cannot read fully, or one already in TableCraft, starts unticked; ticking a duplicate imports a
 copy named `<name> (2)`, never overwriting the one you have. Folders and colours come along, under
-a `DataGrip`, `TablePro` or `MySQL Workbench` folder unless you turn that off.
+a `DataGrip`, `TablePro`, `MySQL Workbench` or `Beekeeper Studio` folder unless you turn that off.
 
 ![Import from DataGrip](../media/import-datasources.gif)
 
@@ -93,6 +95,9 @@ Passwords:
 - **MySQL Workbench** keeps them in the system keychain on macOS and in the Secret Service on
   Linux, read the same way as DataGrip's. On Windows they sit in Workbench's own encrypted vault,
   which TableCraft does not read: such a data source asks on connect.
+- **Beekeeper Studio** keeps them in its `app.db`, encrypted with the key in the `.key` file beside
+  it; TableCraft decrypts them on import, without asking. A connection whose **Save Passwords** is
+  off imports without one.
 
 A Workbench connection's group (the text before the first `/` of its name) becomes its folder.
 **Local Socket/Pipe** connections are listed as not supported, since TableCraft's MySQL connects
@@ -100,6 +105,15 @@ over TCP/IP; LDAP and Kerberos ones import their address with a warning, and opt
 has no field for, such as an SSL cipher or `SQL_MODE`, are named in the row's warning. An SSL mode
 of _Preferred_, the default in Workbench and TablePro, imports as _Disable_; choose _Require_ on the
 data source to encrypt it.
+
+Beekeeper Studio is found in its data folder (`~/Library/Application Support/beekeeper-studio` on
+macOS, `%APPDATA%\beekeeper-studio` on Windows, `~/.config/beekeeper-studio` on Linux, and its Snap
+and Flatpak folders); a portable copy's `beekeeper_studio_data\app.db` can be picked as a file.
+Only the local workspace's connections are read, not a Beekeeper cloud workspace's, and nested
+folders keep their path. A connection through a **jump host** imports without its tunnel and
+starts unticked, since TableCraft tunnels through one SSH host; one over a **local socket** or an
+Oracle **connect string** is listed as not supported, and Windows, Azure AD or IAM sign-in imports
+the address with a warning. Close Beekeeper Studio first if it says it is saving.
 
 Untick **Import passwords** to bring none: such a data source asks on connect, and you save its
 password in the Data Sources dialog.
