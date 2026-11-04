@@ -49,10 +49,12 @@ built into the first root and goes through the same loader as a user plugin. Eac
 ### Distribution
 
 SQLite and MySQL ship in the installer. Every other plugin TableCraft offers is optional
-(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL, Redis, Oracle and SQL Server) and listed in a compiled-in
+(`OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, today PostgreSQL, Redis, Oracle, SQL Server, etcd and DuckDB) and listed in a compiled-in
 catalog (decision 108). Each release publishes it to npm as `@tablecraft-app/plugin-<id>` at the app's
 version, with `"tableCraft": { "id", "apiVersion" }` in its `package.json`, and attaches the
-`.tgz` to the GitHub release (decision 109).
+`.tgz` to the GitHub release (decision 109). A plugin with a native driver, DuckDB, is one
+package per platform, `@tablecraft-app/plugin-<id>-<platform>-<arch>`, and main installs the one
+for this machine (decision 156).
 
 Main installs one from the registry in `plugins.registryUrl` (default
 `https://registry.npmjs.org`, `https://` only, plain `http://` only to this machine): the newest

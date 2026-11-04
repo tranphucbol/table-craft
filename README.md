@@ -3,7 +3,7 @@
 # TableCraft
 
 A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite, Oracle,
-SQL Server, Redis and etcd.
+SQL Server, DuckDB, Redis and etcd.
 Connections, a database explorer, SQL consoles with schema-aware completion, a result grid, a table
 data editor, DDL and SQL generation, query history and EXPLAIN plans, in one Electron app. Databases
 are reached through datasource plugins loaded at runtime.
@@ -35,7 +35,8 @@ are reached through datasource plugins loaded at runtime.
   `DBMS_OUTPUT` in Output, every SQL function of the manual in completion, sessions and plans.
 - [Plugins for any database](docs/guide/plugins.md): PostgreSQL, MySQL, SQLite, Oracle and SQL Server are
   plugins, loaded the same way yours would be. SQLite and MySQL come in the box; PostgreSQL, Oracle,
-  SQL Server, Redis and etcd download the first time you need them.
+  SQL Server, [DuckDB](docs/guide/duckdb.md) (Parquet and `csv.zst` files too), Redis and etcd
+  download the first time you need them.
 
 ## Install
 
@@ -107,6 +108,8 @@ plugins. The [specification](docs/design/specification.md) describes the whole o
 - [etcd](docs/guide/etcd.md): revision-guarded keys, leases, Watch and cluster administration.
 - [Oracle](docs/guide/oracle.md): connecting without the Instant Client, and what differs from SQL
   databases.
+- [DuckDB](docs/guide/duckdb.md): database files, Parquet and CSV files, file locks and
+  transactions.
 
 **Customising**
 

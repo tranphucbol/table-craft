@@ -19,10 +19,14 @@ SQL Server (2017 and later, and Azure SQL), about 760 KB, as
 [`@tablecraft-app/plugin-mssql`](https://www.npmjs.com/package/@tablecraft-app/plugin-mssql), and
 etcd (3.5 and later), about 400 KB, as
 [`@tablecraft-app/plugin-etcd`](https://www.npmjs.com/package/@tablecraft-app/plugin-etcd)
-(see [etcd](etcd.md))
-([decision 108](../decisions/108-sqlite-and-mysql-ship-other-plugins-download.md)).
+(see [etcd](etcd.md)), and DuckDB, about 29 MB because it carries DuckDB itself, as
+`@tablecraft-app/plugin-duckdb` followed by the system, such as
+[`@tablecraft-app/plugin-duckdb-darwin-arm64`](https://www.npmjs.com/package/@tablecraft-app/plugin-duckdb-darwin-arm64)
+(see [DuckDB](duckdb.md); macOS, Windows and Linux on x64 and arm64)
+([decision 108](../decisions/108-sqlite-and-mysql-ship-other-plugins-download.md),
+[decision 156](../decisions/156-native-drivers-ship-one-package-per-platform.md)).
 
-- **Data Sources +** lists PostgreSQL, Redis, Oracle, SQL Server and etcd with **Download**. Choosing it
+- **Data Sources +** lists PostgreSQL, Redis, Oracle, SQL Server, etcd and DuckDB with **Download**. Choosing it
   shows the progress, then the connection form.
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the
@@ -40,7 +44,8 @@ etcd (3.5 and later), about 400 KB, as
   own. With **Check for updates automatically** on, downloaded plugins are checked every 2 hours and
   a newer compatible version is used from the next connection.
 - Offline, or behind a firewall: every release attaches the plugin `.tgz` files. Choose **Install
-  from File…** in Settings → Plugins; TableCraft asks before installing any file.
+  from File…** in Settings → Plugins; TableCraft asks before installing any file, and refuses a
+  DuckDB file built for another system, naming the one to pick.
 - Behind a corporate npm mirror, set its address in Settings → Plugins (`plugins.registryUrl`).
 
 ![Plugins on demand](../media/plugins.gif)
