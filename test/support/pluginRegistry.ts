@@ -83,6 +83,8 @@ export interface PluginPackage {
   readonly manifest?: Record<string, unknown>;
   readonly indexJs?: string | Buffer;
   readonly extra?: readonly TarEntry[];
+  /** A native plugin's package for one platform: named `<package>-<platform>`, as decision 156 publishes it. */
+  readonly platform?: string;
 }
 
 const SOURCE_MANIFEST = (id: string) => join("plugins", id, "table-craft-plugin.json");
@@ -94,7 +96,11 @@ export function pluginPackageName(id: string): string {
 /** A plugin `.tgz` laid out as `scripts/plugins/pack.ts` lays it out. */
 export function pluginTarball(plugin: PluginPackage): Buffer {
   const apiVersion = plugin.apiVersion ?? API_VERSION;
-  const name = plugin.name ?? pluginPackageName(plugin.id);
+  const name =
+    plugin.name ??
+    (plugin.platform === undefined
+      ? pluginPackageName(plugin.id)
+      : `${pluginPackageName(plugin.id)}-${plugin.platform}`);
   const manifest = plugin.manifest ?? {
     ...(JSON.parse(readFileSync(SOURCE_MANIFEST(plugin.id), "utf8")) as Record<string, unknown>),
     version: manifestVersion(plugin.version),
@@ -105,7 +111,7 @@ export function pluginTarball(plugin: PluginPackage): Buffer {
     version: plugin.version,
     type: "module",
     main: "index.js",
-    tableCraft: { id: plugin.id, apiVersion },
+    tableCraft: { id: plugin.id, apiVersion, ...(plugin.platform === undefined ? {} : { platform: plugin.platform }) },
   };
   return tarball([
     { path: "package/package.json", data: JSON.stringify(packageJson, null, 2) },

@@ -1,4 +1,5 @@
 import { API_VERSION, pluginManifestSchema, type PluginManifest } from "@table-craft/plugin-api";
+import duckdbJson from "../../plugins/duckdb/table-craft-plugin.json" with { type: "json" };
 import mssqlJson from "../../plugins/mssql/table-craft-plugin.json" with { type: "json" };
 import mysqlJson from "../../plugins/mysql/table-craft-plugin.json" with { type: "json" };
 import oracleJson from "../../plugins/oracle/table-craft-plugin.json" with { type: "json" };
@@ -15,6 +16,7 @@ export const REDIS_MANIFEST: PluginManifest = pluginManifestSchema.parse(redisJs
 export const ORACLE_MANIFEST: PluginManifest = pluginManifestSchema.parse(oracleJson);
 export const MSSQL_MANIFEST: PluginManifest = pluginManifestSchema.parse(mssqlJson);
 export const ETCD_MANIFEST: PluginManifest = pluginManifestSchema.parse(etcdJson);
+export const DUCKDB_MANIFEST: PluginManifest = pluginManifestSchema.parse(duckdbJson);
 
 /** A valid manifest for a fake plugin; the connection form is one optional text field. */
 export function fakeManifest(overrides: Partial<PluginManifest> & { readonly id: string }): PluginManifest {

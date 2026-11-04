@@ -1,0 +1,20 @@
+{
+  "name": "@table-craft/plugin-duckdb",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Optional DuckDB datasource plugin for table-craft",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./explain": "./src/explain.ts",
+    "./errorPosition": "./src/errorPosition.ts",
+    "./values": "./src/values.ts",
+    "./dataFiles": "./src/dataFiles.ts",
+    "./failures": "./src/failures.ts"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "2.0.0-r.1",
+    "@table-craft/plugin-api": "workspace:*"
+  }
+}

@@ -19,7 +19,9 @@ import { OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js"
 import { pluginTarball, release, sha512, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
 
 const PACKAGE = "@tablecraft-app/plugin-postgres";
-const OUTSIDE_CATALOG = "duckdb";
+const OUTSIDE_CATALOG = "clickhouse";
+const HOST = "linux-x64";
+const DUCKDB_PACKAGE = `@tablecraft-app/plugin-duckdb-${HOST}`;
 const SOURCE_PLUGINS = "plugins";
 
 let profile: string;
@@ -44,9 +46,10 @@ function managedRoot(): string {
 
 function service(
   registryUrl = registry.url,
-  extra: Pick<PluginServiceOptions, "channel" | "hostVersion"> = {},
+  extra: Pick<PluginServiceOptions, "channel" | "hostVersion" | "platform"> = {},
 ): PluginService {
   return createPluginService({
+    platform: HOST,
     ...extra,
     builtInRoot: join(profile, "built-in"),
     developmentRoots: [],
@@ -60,8 +63,11 @@ function service(
   });
 }
 
-async function started(registryUrl?: string): Promise<PluginService> {
-  const plugins = service(registryUrl);
+async function started(
+  registryUrl?: string,
+  extra: Pick<PluginServiceOptions, "platform"> = {},
+): Promise<PluginService> {
+  const plugins = service(registryUrl, extra);
   await plugins.start();
   return plugins;
 }
@@ -104,7 +110,69 @@ describe("plugin service", () => {
       expect.objectContaining({ id: "oracle", installedVersion: null, install: { status: "idle" } }),
       expect.objectContaining({ id: "mssql", installedVersion: null, install: { status: "idle" } }),
       expect.objectContaining({ id: "etcd", installedVersion: null, install: { status: "idle" } }),
+      expect.objectContaining({ id: "duckdb", packageName: DUCKDB_PACKAGE, installedVersion: null }),
     ]);
+  });
+
+  describe("native plugins", () => {
+    const DUCKDB_RELEASE = release({ id: "duckdb", version: "1.0.0", platform: HOST });
+
+    it("givenNativePlugin_whenInstalled_thenTheHostPlatformPackageIsManaged", async () => {
+      registry.publish(DUCKDB_PACKAGE, [DUCKDB_RELEASE]);
+      const plugins = await started();
+
+      const outcome = await plugins.install("duckdb");
+
+      expect(outcome).toEqual({ id: "duckdb", version: "1.0.0", changed: true });
+      expect((await listManaged(managedRoot()))[0]).toMatchObject({ id: "duckdb", packageName: DUCKDB_PACKAGE });
+      expect(registry.requests.every((path) => path.includes("plugin-duckdb-linux-x64"))).toBe(true);
+    });
+
+    it("givenPlatformWithoutPackage_whenInstalled_thenUnsupportedPlatformAndNothingDownloaded", async () => {
+      const plugins = await started(registry.url, { platform: "freebsd-x64" });
+
+      const error = await rejectionOf(plugins.install("duckdb"));
+
+      expect(error.failure).toBe("unsupportedPlatform");
+      expect(error.message).toContain("freebsd-x64");
+      expect(registry.requests).toEqual([]);
+      expect(plugins.state().catalog.map((entry) => entry.id)).not.toContain("duckdb");
+    });
+
+    it("givenOtherPlatformsPackageFile_whenInstalled_thenRefusedNamingTheRightPackage", async () => {
+      const plugins = await started();
+
+      const error = await rejectionOf(
+        plugins.installFile(pluginTarball({ id: "duckdb", version: "1.0.0", platform: "win32-x64" })),
+      );
+
+      expect(error.failure).toBe("unsupportedPlatform");
+      expect(error.hint).toContain(DUCKDB_PACKAGE);
+      expect(await listManaged(managedRoot())).toEqual([]);
+    });
+
+    it("givenOutdatedDuckdbFromRegistry_whenLaunch_thenHostPlatformPackageReinstalled", async () => {
+      registry.publish(DUCKDB_PACKAGE, [
+        release({ id: "duckdb", version: "1.0.0", apiVersion: "1.0.0", platform: HOST }),
+      ]);
+      const older = service(registry.url, { hostVersion: "1.10.0" });
+      await older.start();
+      await older.install("duckdb");
+      registry.publish(DUCKDB_PACKAGE, [
+        release({ id: "duckdb", version: "1.0.0", apiVersion: "1.0.0", platform: HOST }),
+        release({ id: "duckdb", version: "2.0.0", platform: HOST }),
+      ]);
+      const plugins = await started();
+      expect(plugins.outdated()).toEqual(["duckdb"]);
+
+      await plugins.installMissing([]);
+
+      expect(plugins.plugins().find((plugin) => plugin.id === "duckdb")).toMatchObject({
+        version: "2.0.0",
+        unavailableReason: null,
+      });
+      expect(registry.requests.some((path) => path.includes("plugin-duckdb-linux-x64-2.0.0.tgz"))).toBe(true);
+    });
   });
 
   it("givenRegistryPlugin_whenInstalled_thenCurrentPointsAtItAndItLoadsFromItsOwnRoot", async () => {
