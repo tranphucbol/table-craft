@@ -15,6 +15,7 @@ import {
   KEY_HISTORY_MAX_CURSOR_LENGTH,
   KEY_HISTORY_MAX_TIMEOUT_MS,
 } from "@table-craft/desktop/engine/protocol.js";
+import { SILENT_COMMAND_LANGUAGE } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 
 const PLUGIN_ID = "history-fixture";
@@ -70,6 +71,7 @@ function fixture(extra: Partial<Keyspace> = {}) {
   const plugin: DatasourcePlugin = {
     id: PLUGIN_ID,
     capabilities: ["commands", "keyValue"],
+    commandLanguage: SILENT_COMMAND_LANGUAGE,
     connectionSchema: z.object({}),
     connect: () =>
       Promise.resolve({

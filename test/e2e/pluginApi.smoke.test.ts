@@ -210,7 +210,7 @@ describe.runIf(SMOKE_ENABLED)("plugin API 1.0 live test", () => {
       await expect.poll(() => older.isDisabled()).toBe(true);
       expect(await older.getAttribute("title")).toBe(
         `Built for plugin API ${OLDER_MAJOR}, an older major than this TableCraft's ${API_VERSION}. ` +
-          `Install a version of the plugin built for plugin API ${HOST?.major}.x.`,
+          `Rebuild it for plugin API ${HOST?.major}.x.`,
       );
       await captureWindow(page, "04-refused-plugins");
 

@@ -11,6 +11,7 @@ import type {
   OpenedSession,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
+import { languageFor } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 import { SSH_PASSWORD, SSH_USER, startEchoServer, startSshServer, type TestSshServer } from "../support/sshServer.js";
 
@@ -49,6 +50,7 @@ function networkedPlugin(reached: Reached[]): PluginLoadResult {
     ...sqlite,
     id: PLUGIN_ID,
     capabilities: ["sql"],
+    language: languageFor(sqlite.language, ["sql"]),
     connectionSchema,
     connect: async (config, options) => {
       const { host, port, path } = connectionSchema.parse(config);

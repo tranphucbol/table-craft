@@ -89,6 +89,7 @@ function cancellablePlugin(): { plugin: DatasourcePlugin; cancels: () => number 
   const plugin: DatasourcePlugin = {
     id: CANCELLABLE_ID,
     capabilities: ["sql", "cancel"],
+    language: { ...sqlitePlugin.language, services: {} },
     connectionSchema: z.object({}),
     connect: () => Promise.resolve(session),
   };
@@ -249,7 +250,13 @@ describe("engine", () => {
     const connection = createEngine({
       datasource: DATASOURCE,
       plugins: [
-        { status: "unavailable", directory: SQLITE_DIRECTORY, manifest: LOADED_SQLITE.manifest, reason: "broken" },
+        {
+          status: "unavailable",
+          directory: SQLITE_DIRECTORY,
+          manifest: LOADED_SQLITE.manifest,
+          reason: "broken",
+          incompatibility: null,
+        },
       ],
     }).connect();
 

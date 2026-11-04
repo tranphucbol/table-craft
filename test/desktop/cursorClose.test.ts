@@ -14,6 +14,7 @@ import { createEngine } from "@table-craft/desktop/engine/engine.js";
 import type { EngineResponse, ExecutedStatement, TransactionState } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
+import { languageFor, USE_SWITCH } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 
 const PLUGIN_ID = "slowclose";
@@ -46,6 +47,7 @@ function slowClosePlugin() {
     ...sqlite,
     id: PLUGIN_ID,
     capabilities: CAPABILITIES,
+    language: languageFor(sqlite.language, CAPABILITIES, { currentNamespace: USE_SWITCH }),
     connect: () => {
       connects += 1;
       let busy = false;
