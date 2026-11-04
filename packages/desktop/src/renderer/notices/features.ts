@@ -1,3 +1,4 @@
+import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js";
 import { MCP_ACTION_IDS } from "@table-craft/desktop/renderer/actions/mcpActions.js";
 import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
 import type { FeatureNotice } from "@table-craft/desktop/renderer/model/notices.js";
@@ -31,5 +32,11 @@ export const FEATURE_NOTICES: readonly FeatureNotice[] = [
     title: "More databases on demand",
     body: "PostgreSQL, Oracle, SQL Server, Redis and etcd download when you first need them.",
     action: { label: "Plugins", actionId: SETTINGS_ACTION_IDS.show, args: { page: "plugins" } },
+  },
+  {
+    id: "duckdb",
+    title: "Query Parquet and CSV files with DuckDB",
+    body: "Open a DuckDB database, or a Parquet or zstd CSV file, as a data source.",
+    action: { label: "New Data Source", actionId: ACTION_IDS.newDatasource },
   },
 ];
