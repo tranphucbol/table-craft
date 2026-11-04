@@ -56,7 +56,9 @@ function Items({ items }: { readonly items: readonly ModalItem[] }) {
             {item.label}
           </code>
           {item.detail === "" ? null : (
-            <span className={item.tone === "info" ? "text-ink-muted" : "text-danger"}>{item.detail}</span>
+            <span className={cn("wrap-anywhere", item.tone === "info" ? "text-ink-muted" : "text-danger")}>
+              {item.detail}
+            </span>
           )}
         </li>
       ))}
@@ -72,7 +74,7 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
 
   return (
     <form
-      className="flex flex-col gap-gap p-gap"
+      className="flex max-h-[95vh] flex-col gap-gap overflow-auto p-gap"
       onSubmit={(event) => {
         event.preventDefault();
         if (blocked) return;
@@ -80,7 +82,7 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
         else answer(request.kind === "text" ? text : "");
       }}
     >
-      <Dialog.Title className="font-semibold">{request.title}</Dialog.Title>
+      <Dialog.Title className="font-semibold wrap-anywhere">{request.title}</Dialog.Title>
       {request.kind === "text" ? (
         <label className="flex flex-col gap-1">
           <span className="text-ink-muted">{request.label}</span>
@@ -94,8 +96,10 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
         </label>
       ) : (
         <Dialog.Description className={cn(request.kind === "notice" && request.tone !== "info" && "text-danger")}>
-          {request.message}
-          {request.kind === "notice" ? <span className="block text-ink-muted">{request.hint}</span> : null}
+          <span className="block max-h-60 overflow-auto whitespace-pre-line wrap-anywhere">{request.message}</span>
+          {request.kind === "notice" ? (
+            <span className="block text-ink-muted wrap-anywhere">{request.hint}</span>
+          ) : null}
         </Dialog.Description>
       )}
       {(request.kind === "confirm" || request.kind === "choice") && request.items !== undefined ? (
