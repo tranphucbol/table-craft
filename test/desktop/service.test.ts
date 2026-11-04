@@ -19,6 +19,7 @@ import {
 import type {
   DatasourceDraft,
   DatasourceList,
+  PluginInfo,
   SaveDatasourceRequest,
   ServerSeen,
 } from "@table-craft/desktop/preload/bridge.js";
@@ -79,6 +80,8 @@ async function service(
     ephemeral?: EphemeralDatasource;
     cipher?: ReturnType<typeof fakeCipher>;
     keyFiles?: Readonly<Record<string, string>>;
+    plugins?: (installed: readonly PluginInfo[]) => readonly PluginInfo[];
+    updateOutdated?: (pluginId: string) => Promise<boolean>;
   } = {},
 ) {
   const files = memoryFiles();
@@ -93,7 +96,8 @@ async function service(
     store: createDatasourceStore({ directory: DIRECTORY, files }),
     secrets: await createSecretStore({ directory: DIRECTORY, files, cipher }),
     hosts,
-    plugins: () => plugins,
+    plugins: () => options.plugins?.(plugins) ?? plugins,
+    ...(options.updateOutdated === undefined ? {} : { updateOutdated: options.updateOutdated }),
     ephemeral: options.ephemeral ?? null,
     newId: () => `id-${String(++ids)}`,
     consoles: createConsoleFiles({ directory: DIRECTORY, files }),
@@ -142,6 +146,53 @@ describe("listPlugins", () => {
 });
 
 describe("datasource service", () => {
+  describe("outdated plugin", () => {
+    /** Postgres as main lists it once the profile holds the build for plugin API 1.x. */
+    function outdatedPostgres(installed: readonly PluginInfo[]): readonly PluginInfo[] {
+      return installed.map((plugin) =>
+        plugin.id === "postgres"
+          ? { ...plugin, needs: "pluginUpdate", unavailableReason: "Built for an older TableCraft. Updating…" }
+          : plugin,
+      );
+    }
+
+    it("givenOutdatedPlugin_whenConnect_thenWaitsForUpdateThenConnects", async () => {
+      let outdated = false;
+      const updateOutdated = vi.fn(() => {
+        outdated = false;
+        return Promise.resolve(true);
+      });
+      const { dependencies, service: datasources } = await service({
+        plugins: (installed) => (outdated ? outdatedPostgres(installed) : installed),
+        updateOutdated,
+      });
+      const saved = await datasources.save(saving(PG_DRAFT, SECRET));
+      outdated = true;
+
+      expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({ status: "connected" });
+
+      expect(updateOutdated).toHaveBeenCalledWith("postgres");
+      expect(bootedConfig(dependencies)).toMatchObject({ config: { password: SECRET } });
+    });
+
+    it("givenOutdatedPluginAndRegistryDown_whenConnect_thenMustBeUpdatedError", async () => {
+      let outdated = false;
+      const { dependencies, service: datasources } = await service({
+        plugins: (installed) => (outdated ? outdatedPostgres(installed) : installed),
+        updateOutdated: () => Promise.reject(new Error("The plugin registry did not answer.")),
+      });
+      const saved = await datasources.save(saving(PG_DRAFT, SECRET));
+      outdated = true;
+
+      expect(await datasources.connect(saved.id, {}, WINDOW)).toEqual({
+        status: "failed",
+        message: "The PostgreSQL plugin must be updated for this TableCraft: The plugin registry did not answer.",
+        hint: "Check the network and connect again.",
+      });
+      expect(dependencies.forked).toHaveLength(0);
+    });
+  });
+
   it("givenForeverSecret_whenSaved_thenDatasourcesJsonHasNoSecretValue", async () => {
     const { files, service: datasources } = await service();
 

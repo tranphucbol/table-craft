@@ -28,18 +28,26 @@ export function builtRelease(id: string, version: string, integrity?: string): R
   return release({ id, version, indexJs: builtFile(id, ENTRY_FILE) }, integrity);
 }
 
+export interface SeededPlugin {
+  /** The manifest's `apiVersion`; the build's own when absent. */
+  readonly apiVersion?: string;
+  /** Where `current.json` says it came from; a registry download is what an update replaces. */
+  readonly source?: "file" | "registry";
+}
+
 /**
  * Puts the built optional plugin `id` into `<userData>/managed-plugins/<id>/<version>/` as if it had
  * been installed from a file, so the background update check never asks a registry about it.
  */
-export function seedManagedPlugin(userDataDir: string, id: string, version = "0.0.0"): void {
+export function seedManagedPlugin(userDataDir: string, id: string, version = "0.0.0", seeded: SeededPlugin = {}): void {
   const root = join(userDataDir, MANAGED_PLUGINS_DIRECTORY, id);
   const directory = join(root, version);
   mkdirSync(directory, { recursive: true });
   const manifest = JSON.parse(builtFile(id, MANIFEST_FILE).toString("utf8")) as Record<string, unknown>;
-  writeFileSync(join(directory, MANIFEST_FILE), JSON.stringify({ ...manifest, version }, null, 2));
+  const apiVersion = seeded.apiVersion ?? manifest["apiVersion"];
+  writeFileSync(join(directory, MANIFEST_FILE), JSON.stringify({ ...manifest, version, apiVersion }, null, 2));
   cpSync(join(OPTIONAL_PLUGINS, id, ENTRY_FILE), join(directory, ENTRY_FILE));
-  const current = { version, packageName: pluginPackageName(id), source: "file" };
+  const current = { version, packageName: pluginPackageName(id), source: seeded.source ?? "file" };
   writeFileSync(join(root, "current.json"), JSON.stringify(current, null, 2));
 }
 

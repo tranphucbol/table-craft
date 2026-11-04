@@ -5,11 +5,24 @@ import {
   installText,
   missingPlugin,
   missingText,
+  needsNewerApp,
   pickerEntries,
   pluginVersionText,
+  unavailableText,
 } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { createDatasourcesStore } from "@table-craft/desktop/renderer/state/datasources.js";
 import { POSTGRES_PLUGIN, SQLITE_PLUGIN } from "./datasourceViews.js";
+
+const OUTDATED_POSTGRES = {
+  ...POSTGRES_PLUGIN,
+  needs: "pluginUpdate",
+  unavailableReason: "Built for an older TableCraft. Updating…",
+} as const;
+const NEWER_POSTGRES = {
+  ...POSTGRES_PLUGIN,
+  needs: "appUpdate",
+  unavailableReason: "Built for plugin API 3.0.0: needs TableCraft with plugin API 3.0 or later.",
+} as const;
 
 const MYSQL_PLUGIN = { ...SQLITE_PLUGIN, id: "mysql", name: "MySQL", brands: [{ id: "mysql", name: "MySQL" }] };
 
@@ -47,6 +60,31 @@ describe("plugin catalog", () => {
     expect(missingPlugin([entry()], [SQLITE_PLUGIN], "postgres")?.name).toBe("PostgreSQL");
     expect(missingPlugin([entry()], [POSTGRES_PLUGIN], "postgres")).toBeUndefined();
     expect(missingPlugin([entry()], [SQLITE_PLUGIN], "mongodb")).toBeUndefined();
+  });
+
+  it("givenPluginNeedingUpdate_whenMissingPlugin_thenCatalogEntry", () => {
+    expect(missingPlugin([entry()], [OUTDATED_POSTGRES], "postgres")?.name).toBe("PostgreSQL");
+    expect(missingPlugin([entry()], [OUTDATED_POSTGRES, POSTGRES_PLUGIN], "postgres")).toBeUndefined();
+  });
+
+  it("givenPluginNeedingApp_whenMissingPlugin_thenUndefined", () => {
+    expect(missingPlugin([entry()], [NEWER_POSTGRES], "postgres")).toBeUndefined();
+    expect(needsNewerApp([NEWER_POSTGRES], "postgres")).toBe(true);
+    expect(needsNewerApp([OUTDATED_POSTGRES], "postgres")).toBe(false);
+    expect(unavailableText(NEWER_POSTGRES)).toBe("Needs a newer TableCraft.");
+    expect(unavailableText(OUTDATED_POSTGRES)).toBe("Built for an older TableCraft. Updating…");
+  });
+
+  it("givenOutdatedPluginInEachInstallState_whenShown_thenWordedAsAnUpdate", () => {
+    expect(missingText(entry(), true).text).toBe("Update needed");
+    expect(missingText(entry({ status: "installing", received: 400, total: 1000 }), true)).toEqual({
+      text: "Updating… 40%",
+      title: "Updating PostgreSQL… 40%",
+    });
+    expect(missingText(entry({ status: "failed", message: "No connection.", hint: "Retry." }), true)).toEqual({
+      text: "Update failed",
+      title: "No connection. Retry.",
+    });
   });
 
   it("givenEachInstallState_whenDescribed_thenProgressOrFailure", () => {

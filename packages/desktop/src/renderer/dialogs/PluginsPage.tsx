@@ -4,7 +4,12 @@ import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
 import { PLUGIN_ACTION_IDS, type PluginArgs } from "@table-craft/desktop/renderer/actions/pluginActions.js";
 import { Button, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { FieldError, SectionTitle, update, useDraft } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
-import { downloadLabel, installText, SOURCE_LABELS } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
+import {
+  downloadLabel,
+  installText,
+  SOURCE_LABELS,
+  unavailableText,
+} from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
@@ -37,7 +42,9 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
         <span className="shrink-0">{plugin.version ?? ""}</span>
         <span className="shrink-0 text-ink-muted">{SOURCE_LABELS[plugin.source]}</span>
         {plugin.unavailableReason === null ? null : (
-          <span className="truncate text-danger">{plugin.unavailableReason}</span>
+          <span title={plugin.unavailableReason} className="truncate text-danger">
+            {unavailableText(plugin)}
+          </span>
         )}
         <Progress entry={entry} />
         {plugin.source === "managed" && entry !== undefined ? (

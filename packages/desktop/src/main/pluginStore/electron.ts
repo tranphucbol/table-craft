@@ -50,7 +50,11 @@ export interface PluginStore {
   readonly channels: PluginChannels<WebContents>;
   /** Prunes and discovers, logging each plugin; before any engine starts. */
   start(): Promise<void>;
-  /** After the first window shows: downloads plugins saved data sources miss, then starts the 2-hour check. */
+  /**
+   * Right after `start`, whatever `checkAutomatically` says: downloads plugins saved data sources
+   * miss and updates outdated ones, so a launch after an app update installs them before a data
+   * source is opened (decision 155); then starts the 2-hour check.
+   */
   startBackground(): void;
   setAutomatic(enabled: boolean): void;
   stop(): void;
@@ -130,13 +134,7 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     startBackground() {
       if (started) return;
       started = true;
-      const installed = new Set(service.plugins().map((plugin) => plugin.id));
-      void service.installMissing(
-        options
-          .datasources()
-          .map((datasource) => datasource.pluginId)
-          .filter((id) => !installed.has(id)),
-      );
+      void service.installMissing(options.datasources().map((datasource) => datasource.pluginId));
       schedule = createUpdateSchedule({
         check: () => void service.updateAll(),
         enabled: allowed && options.checkAutomatically(),

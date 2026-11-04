@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { discoverPlugins, type PluginRoot } from "@table-craft/core";
-import type { PluginInfo, PluginSource } from "@table-craft/desktop/preload/bridge.js";
+import type { Incompatibility } from "@table-craft/plugin-api";
+import type { PluginInfo, PluginNeed, PluginSource } from "@table-craft/desktop/preload/bridge.js";
 
 /**
  * Every installed plugin, from manifests alone (decision 019): main never runs plugin code
@@ -38,6 +39,12 @@ export async function manifestProblem(directory: string, id: string, hostVersion
   return null;
 }
 
+function needOf(incompatibility: Incompatibility | null): PluginNeed | null {
+  if (incompatibility === "olderMajor") return "pluginUpdate";
+  if (incompatibility === "newer") return "appUpdate";
+  return null;
+}
+
 /**
  * `packageVersionOf` names the npm version a downloaded plugin was installed at. It wins over the
  * manifest's, which must be `major.minor.patch` and so drops a beta's `-beta.N` (plan 124).
@@ -66,6 +73,7 @@ export async function discoverInstalled(
       source: sourceOf(entry.directory),
       version: versionOf(entry),
       unavailableReason: entry.status === "unavailable" ? entry.reason : null,
+      needs: entry.status === "unavailable" ? needOf(entry.incompatibility) : null,
       capabilities: manifest?.capabilities ?? [],
       fields: manifest?.connection.fields ?? [],
       highlight: manifest?.highlight ?? null,

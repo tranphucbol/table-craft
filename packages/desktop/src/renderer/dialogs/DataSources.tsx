@@ -65,6 +65,7 @@ import { Dropdown } from "@table-craft/desktop/renderer/ui/Dropdown.js";
 import { DatasourceGlyph, useDatasourceBrand } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { ACTION_ICONS, ReadOnlyIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
+import { missingPlugin, needsNewerApp } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { TINT_SWATCH } from "@table-craft/desktop/renderer/ui/tint.js";
 
 const NEW_KEY_PREFIX = "new-";
@@ -834,7 +835,9 @@ function Editor({ target }: { readonly target: DialogTarget }) {
               <div className="flex shrink-0 items-center gap-cell border-b border-line px-gap py-1 text-ink-muted">
                 <DraftGlyph draft={current} className="size-icon" />
                 <DraftProduct draft={current} fallback={plugin?.name ?? current.pluginId} />
-                {plugin?.unavailableReason == null ? null : (
+                {plugin?.unavailableReason == null ||
+                missingPlugin(catalog, plugins, current.pluginId) !== undefined ||
+                needsNewerApp(plugins, current.pluginId) ? null : (
                   <span className="text-danger">{plugin.unavailableReason}</span>
                 )}
                 <MissingPlugin pluginId={current.pluginId} />

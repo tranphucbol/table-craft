@@ -46,6 +46,7 @@ export const POSTGRES_PLUGIN: PluginInfo = {
   source: "managed",
   version: "1.0.0",
   unavailableReason: null,
+  needs: null,
   capabilities: ["sql", "cancel", "schemaTree"],
   fields: POSTGRES_FIELDS,
   highlight: "postgresql",
@@ -73,6 +74,7 @@ export const SQLITE_PLUGIN: PluginInfo = {
   source: "builtIn",
   version: "1.0.0",
   unavailableReason: null,
+  needs: null,
   capabilities: ["sql"],
   fields: [{ key: "path", label: "File", kind: "file", required: true }],
   highlight: "sqlite",
@@ -88,6 +90,7 @@ export const REDIS_PLUGIN: PluginInfo = {
   source: "managed",
   version: "1.0.0",
   unavailableReason: null,
+  needs: null,
   capabilities: ["commands", "keyValue"],
   fields: [
     {
