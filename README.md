@@ -18,6 +18,8 @@ are reached through datasource plugins loaded at runtime.
   conditions after `JOIN`, and the columns of an alias after `o.`.
 - [A table editor that shows its SQL](docs/guide/data.md#table-data-editor): edit cells, add and delete rows, preview
   the statements, and submit them in one transaction.
+- [An ER diagram that guesses missing keys](docs/guide/explorer.md#er-diagram): a schema's tables and keys, with the
+  `customer_id` columns a database never declared drawn dashed; hide a wrong guess, add a missed one.
 - [Explain Plan as a tree](docs/guide/console.md#explain): estimated and actual rows, costs and timings; Explain Analyse
   asks before it runs a write.
 - [Query history and a Services tree](docs/guide/monitoring.md#query-history-and-services): every statement you ran, per
@@ -89,8 +91,8 @@ plugins. The [specification](docs/design/specification.md) describes the whole o
   building from source.
 - [Connections](docs/guide/connections.md): data sources, SSH tunnels, SSL, and importing them from
   DataGrip, TablePro, MySQL Workbench or Beekeeper Studio.
-- [Database explorer](docs/guide/explorer.md): the tree, DDL and SQL generation, and running a
-  routine.
+- [Database explorer](docs/guide/explorer.md): the tree, DDL and SQL generation, the ER diagram,
+  and running a routine.
 - [SQL console](docs/guide/console.md): running statements, transactions, inspections and Explain.
 - [Completion and navigation](docs/guide/completion.md): schema-aware completion, navigation and
   snippets.

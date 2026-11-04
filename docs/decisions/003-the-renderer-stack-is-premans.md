@@ -20,3 +20,4 @@ a 100k-row grid fast.
 
 - When in doubt about a renderer pattern, look at how preman does it first.
 - CodeMirror is the one editor everywhere: consoles, the DDL view, cell editors for long values.
+- Amended by decision 157: the ER diagram adds React Flow (`@xyflow/react`) and ELK (`elkjs`).

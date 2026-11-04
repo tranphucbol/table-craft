@@ -77,6 +77,32 @@ and sequences are not included. A definition the database refuses becomes a comm
 
 See [DDL and SQL generation](../design/specification.md#ddl-and-sql-generation).
 
+## ER diagram
+
+**Diagrams → Show Diagram** (`⌥⇧⌘U`) on a schema or its Tables node draws its tables and the keys
+between them in a diagram tab. Keys the database declares draw solid. Many databases declare none,
+so the diagram also guesses: a column such as `customer_id`, `customerId` or `shipping_address_id`
+whose type matches the one key column of `customers` or `addresses` draws dashed. A guess is made
+only when exactly one table fits, so a name that could mean two tables draws nothing. Guesses stay
+in the diagram: completion and Go to Referenced Row use declared keys only.
+
+Right-click a dashed edge to **Hide Inferred Key** when the guess is wrong, or **Keep as Virtual
+Key** to keep it. **Add Relationship…** in the toolbar, or **Add Relationship From Here…** on a
+table, draws a key the guess missed, such as `person_id` to `people`, as a dotted virtual key.
+**Hidden Keys…** lists what you hid, with Restore, and **Show Inferred Keys** turns guessing off
+for the data source. None of it changes the database.
+
+Tables are laid out left to right, referencing tables before what they reference. Drag a table to
+move it; positions, hidden keys and virtual keys are saved per data source and come back after a
+restart. **Re-layout Diagram** starts over. The toolbar switches between all columns, key columns
+only and names only, and **Tables** picks which tables to draw: a schema of more than 200 tables
+opens with none drawn. Double-click a table to open its data. **Export as SVG…** and **Export as
+PNG…** save the whole diagram in the theme you are using.
+
+![ER diagram](../media/diagram.gif)
+
+See [ER diagram](../design/specification.md#er-diagram).
+
 ## Execute a routine
 
 The tree lists each function and procedure under Routines with its arguments, so every PostgreSQL
