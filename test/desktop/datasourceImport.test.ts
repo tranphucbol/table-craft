@@ -670,7 +670,7 @@ describe("importer", () => {
       status: "ready",
     });
     expect(row(preview.rows, "Reports PG").warnings).toEqual([]);
-    expect(row(preview.rows, "Cache")).toMatchObject({ status: "unsupported" });
+    expect(row(preview.rows, "Cache")).toMatchObject({ pluginId: "redis", target: "cache.internal:6379/0" });
     await importer.run(
       { previewId: preview.previewId, keys: selected(preview.rows), importPasswords: true, topFolder: false },
       () => undefined,

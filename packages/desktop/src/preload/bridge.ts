@@ -372,10 +372,10 @@ export interface Datasource {
 }
 
 /** The apps whose saved connections TableCraft imports (plan 035), and its own exported files (plan 040). */
-export const IMPORT_APPS = ["datagrip", "tablepro", "workbench", "tablecraft"] as const;
+export const IMPORT_APPS = ["datagrip", "tablepro", "workbench", "beekeeper", "tablecraft"] as const;
 export type ImportApp = (typeof IMPORT_APPS)[number];
 /** The apps the import dialog looks for on this machine; a TableCraft file only comes picked or pasted. */
-export const SCANNED_APPS = ["datagrip", "tablepro", "workbench"] as const satisfies readonly ImportApp[];
+export const SCANNED_APPS = ["datagrip", "tablepro", "workbench", "beekeeper"] as const satisfies readonly ImportApp[];
 export type ScannedApp = (typeof SCANNED_APPS)[number];
 
 /** A passphrase that encrypts an exported file's passwords is at least this long. */
@@ -458,8 +458,8 @@ export type ImportPreviewRequest =
   | { readonly source: ScannedApp }
   /**
    * A `.tablepro` bundle, a `dataSources.xml`, a Workbench `connections.xml` or Backup Connections
-   * `.zip`, or a TableCraft `.json` the user picked; the passphrase is used once. `skipSecrets`
-   * reads an encrypted TableCraft file without its passwords.
+   * `.zip`, a Beekeeper Studio `app.db`, or a TableCraft `.json` the user picked; the passphrase is
+   * used once. `skipSecrets` reads an encrypted TableCraft file or an `app.db` without its passwords.
    */
   | {
       readonly source: "file";

@@ -2091,7 +2091,7 @@ connect, Test Connection or agent session saw (decision 131): its version, its o
 (`timeout`, `null` when it has none, left out when the plugin did not report it), how `cancel`
 reaches it and when, in epoch ms. Main writes it over `datasources.remember-server` with the brand,
 only when either changed or `seenAt` is a day old; a form save keeps it. An
-imported datasource carries `origin: { app: "datagrip" | "tablepro" | "workbench" | "tablecraft", id }`
+imported datasource carries `origin: { app: "datagrip" | "tablepro" | "workbench" | "beekeeper" | "tablecraft", id }`
 (decision 068), the other app's id for it, so a second import knows it; editing keeps it, and
 nothing else reads it.
 
@@ -2286,7 +2286,7 @@ with the path chosen in File → Recent Files. On `connected` the port arrives
 as `table-craft:engine-port` with the datasource id, relayed by preload as a window message; a
 window holds one port per connected datasource.
 
-### Importing from DataGrip and TablePro
+### Importing from DataGrip, TablePro, MySQL Workbench and Beekeeper Studio
 
 Main reads the other apps' files read-only (decision 067; `main/import/`) and keeps every password
 it reads; a preview row says only where a password would come from (`keychain`, `found`, `inFile`,
@@ -2305,6 +2305,11 @@ it reads; a preview row says only where a password would come from (`keychain`, 
 - **TablePro**: `connections.json` in its Application Support folder and its groups from the
   `com.TablePro` defaults, without passwords; or a `.tablepro` export, plain or encrypted with a
   passphrase, with them.
+- **Beekeeper Studio**: the `saved_connection` rows of the local workspace (`workspaceId = -1`) in
+  its `app.db`, opened read-only in place through `node:sqlite`, and its `connection_folder` tree
+  as nested folders; a SQLite file picked from disk is told apart by its header. Passwords,
+  SSH passwords and key passphrases are decrypted at preview with the install key in the `.key`
+  beside it (decision 067).
 
 A connection maps by its URL scheme to a plugin's `connection.url.schemes`; one no plugin claims is
 listed as not supported. An SSH tunnel and an SSL mode TableCraft lacks become warnings; the CA,

@@ -29,4 +29,6 @@ version 1.
 - Amended by plan 143: `app` gains `"workbench"`, and an `origin` whose app this build does not
   know is dropped on read instead of failing the file, so a later app in the list costs an older
   build only the duplicate check, from this build on.
+- Amended by plan 150: `app` gains `"beekeeper"`; its `id` is the row id and its creation time
+  (`<id>@<createdAt>`), since SQLite can give a deleted row's id to the next one.
 - Deleting an imported datasource forgets its origin, so the next import offers it again.
