@@ -1,7 +1,7 @@
 import { z } from "@table-craft/plugin-api";
 import type { EngineContext } from "@table-craft/desktop/engine/context.js";
 import { EngineFailure } from "@table-craft/desktop/engine/failures.js";
-import { KeyOperationScope, serviceMethod } from "./scope.js";
+import { KeyOperationScope } from "./scope.js";
 import { KeyWatches } from "./watches.js";
 import { KeyRenewals } from "./renewals.js";
 import { KeyTasks } from "./tasks.js";
@@ -36,7 +36,7 @@ export async function applyAccessSecret(scope: KeyOperationScope, input: unknown
   try {
     const change = secretChange.parse(input);
     if (Buffer.byteLength(change.password) > MAX_SECRET_BYTES) throw new Error();
-    await scope.run("access", true, (session) => serviceMethod(session.access, "applySecret")(change));
+    await scope.run("access", true, (access) => access.applySecret(change));
   } catch {
     throw new EngineFailure({
       code: "statementFailed",

@@ -4,12 +4,15 @@
  * the `test/db/compose.yml` containers:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/024 bun run test:smoke:db
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { DatabaseSync } from "node:sqlite";
 import type { Locator, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
+import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
@@ -31,6 +34,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("024");
+const captureLive = evidenceFor("151");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -47,7 +51,7 @@ const POSTGRES_CLEANUP = [
 ];
 const MYSQL_CLEANUP = [`DROP TABLE IF EXISTS ${TABLE}`];
 
-type Plugin = typeof postgres;
+type Plugin = DatasourcePlugin;
 
 function sqlite(path: string): Datasource {
   return { id: "lite", pluginId: "sqlite", config: { path } };
@@ -427,6 +431,31 @@ describe.runIf(SMOKE_ENABLED)("object management live test", () => {
           ["added", "text"],
         ]);
       await captureWindow(page, "mysql-modify-table-done");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenSqliteDatabase_whenNewTableDesigned_thenPreviewedAndCreated",
+    async () => {
+      const database = seededSqliteFile();
+      const page = await launch(sqlite(database));
+
+      await fromMenu(page, "main", /^New Table/);
+      const dialog = designer(page);
+      await dialog.getByTestId("design-name").fill(TABLE);
+      await addColumn(dialog, "label", "TEXT");
+      const ddl = await previewed(dialog, new RegExp(`CREATE TABLE .*${TABLE}`));
+      expect(ddl).toMatch(/PRIMARY KEY/);
+      await apply(dialog);
+
+      await openGroup(page, "tables");
+      await treeRow(page, TABLE).waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      expect(sqliteRun(database, `SELECT name FROM pragma_table_info('${TABLE}') ORDER BY cid`)).toEqual([
+        { name: "id" },
+        { name: "label" },
+      ]);
+      await captureLive(page, "03-import-objects");
     },
     SCENARIO_TIMEOUT_MS,
   );

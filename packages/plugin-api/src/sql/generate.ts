@@ -1,6 +1,7 @@
 import type {
   ColumnMeta,
   GeneratedStatement,
+  ImportDdl,
   ImportKind,
   InferredColumn,
   NewColumn,
@@ -88,8 +89,8 @@ export interface ImporterOptions extends Omit<GeneratorOptions, "updateDefault">
   readonly decimal: (column: InferredColumn) => string;
 }
 
-/** `importType` and `createTable` for a plugin that declares `bulkInsert` (decision 046). */
-export function sqlImporter(options: ImporterOptions): Required<Pick<SqlLanguage, "importType" | "createTable">> {
+/** The `bulkInsert` language service for a plugin that declares it (decision 046). */
+export function sqlImporter(options: ImporterOptions): ImportDdl {
   const name = identifierWriter(options);
   return {
     importType: (column) => (column.kind === "decimal" ? options.decimal(column) : options.types[column.kind]),

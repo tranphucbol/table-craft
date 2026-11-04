@@ -1,28 +1,17 @@
-import type { Capability, CommandLanguage, DatasourcePlugin } from "@table-craft/plugin-api";
+import { definePlugin, type CommandLanguage } from "@table-craft/plugin-api";
 import { complete, signatureAt } from "./complete.js";
 import { connectionSchema } from "./config.js";
 import { classify, inspect, split } from "./language.js";
-import { RedisSession } from "./session.js";
+import { CAPABILITIES, RedisSession } from "./session.js";
 
 const PLUGIN_ID = "redis";
-const CAPABILITIES: readonly Capability[] = [
-  "commands",
-  "cancel",
-  "keepAlive",
-  "keyValue",
-  "nodes",
-  "serverInfo",
-  "sessions",
-];
 
 const commandLanguage: CommandLanguage = { split, classify, complete, signatureAt, inspect };
 
-const plugin: DatasourcePlugin = {
+export default definePlugin({
   id: PLUGIN_ID,
   capabilities: CAPABILITIES,
   commandLanguage,
   connectionSchema,
   connect: (config, options) => RedisSession.open(connectionSchema.parse(config), options),
-};
-
-export default plugin;
+});

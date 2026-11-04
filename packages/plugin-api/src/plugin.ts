@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { Introspector, Namespace, Relation, Routine } from "./catalog.js";
+import type { Namespace, Relation } from "./catalog.js";
 import type {
   CompletionCatalog,
   CompletionRequest,
@@ -8,23 +8,15 @@ import type {
   ResolveRequest,
   SignatureHelp,
 } from "./completion.js";
-import type { ExplainedPlan, Explainability, ExplainOptions } from "./explain.js";
 import type { InspectionRequest, Problem } from "./inspection.js";
-import type { KeySource, Keyspace } from "./keyspace.js";
+import type { KeySource } from "./keyspace.js";
 import type {
-  AccessManager,
-  ClusterManager,
   CommandAdmission,
   CommandTransactionBuilder,
   ConnectionEndpoint,
   ConnectionTransport,
-  CoordinationViewer,
-  KeyTransfer,
-  KeyWatcher,
-  LeaseManager,
 } from "./keyAdvanced.js";
-import type { ObjectEditor } from "./objects.js";
-import type { SessionMonitor } from "./sessions.js";
+import type { LanguageCapability, LanguageServices, PluginSession, Session } from "./services.js";
 import type { TypeClass, WireValue } from "./values.js";
 
 /**
@@ -197,7 +189,7 @@ export interface ExecuteOptions {
   /**
    * Have the server itself stop the statement after this many milliseconds, at least 1 (decision
    * 129), through its own setting, never above a limit the server already had. The host sends it
-   * only to a session whose `serverTimeout` is not null. Absent: the plugin puts back the
+   * only to a session whose `serverTimeout` service has a limit. Absent: the plugin puts back the
    * server's own value. A statement the server stops rejects with `timedOut`.
    */
   readonly serverTimeoutMs?: number;
@@ -269,7 +261,7 @@ export interface SlowCommand {
   readonly node: string | null;
 }
 
-/** What `Session.serverInfo` reads about one node. */
+/** What `ServerInfoReader.info` reads about one node. */
 export interface ServerInfo {
   /** The node, or null for a standalone server. */
   readonly node: string | null;
@@ -294,22 +286,20 @@ export interface NewColumn {
   readonly type: string;
 }
 
-/** Where `Session.insertRows` writes: `table` as the introspector qualifies it, `columns` as it describes them. */
+/** Where `BulkInserter.insertRows` writes: `table` as the introspector qualifies it, `columns` as it describes them. */
 export interface InsertTarget {
   readonly table: string;
   readonly columns: readonly Column[];
 }
 
-/** One row for `Session.insertRows`, a value per target column: text as a file holds it, or SQL NULL. */
+/** One row for `BulkInserter.insertRows`, a value per target column: text as a file holds it, or SQL NULL. */
 export type InsertRow = readonly ParameterValue[];
 
-export interface Session {
-  readonly watch?: KeyWatcher;
-  readonly leases?: LeaseManager;
-  readonly cluster?: ClusterManager;
-  readonly access?: AccessManager;
-  readonly coordination?: CoordinationViewer;
-  readonly keyTransfer?: KeyTransfer;
+/**
+ * What every session has, whatever its plugin declares. What a capability brings is in
+ * `PluginSession.services`, keyed by the capability (decision 155).
+ */
+export interface SessionBase {
   /**
    * Rejects with a `PluginError`: `cancelled` when `cancel` interrupted it, `connectionLost` when
    * the connection was gone before the statement was sent, `sessionBusy` when an earlier statement
@@ -318,79 +308,6 @@ export interface Session {
    * dialect's native placeholders in `sql`, as `SqlLanguage.bind` wrote them; never spliced.
    */
   execute(sql: string, params?: readonly ParameterValue[], options?: ExecuteOptions): Promise<ExecuteResult>;
-  /**
-   * Present exactly when the plugin declares `cancel`. Interrupts the running statement, which
-   * then rejects with `cancelled`, and leaves the session usable; a no-op when nothing runs.
-   */
-  cancel?(): Promise<void>;
-  /** Present exactly when the plugin declares `schemaTree`. */
-  readonly introspector?: Introspector;
-  /** Present exactly when the plugin declares `transactions`. A new session starts in `auto`. */
-  readonly transactions?: Transactions;
-  /**
-   * Present exactly when the plugin declares `explain` (decision 031). Checks `sql` with
-   * `SqlLanguage.explainable` and rejects with `explainUnsupported` and its reason when refused;
-   * otherwise sends the dialect's EXPLAIN on this session, like `execute`, and reads the whole plan.
-   * With `analyze`, which needs `explainAnalyze`, the statement runs, in this session's transaction.
-   * `cancel` interrupts it as it does `execute`.
-   */
-  explain?(sql: string, options: ExplainOptions): Promise<ExplainedPlan>;
-  /**
-   * Present exactly when the plugin declares `currentNamespace` (decision 048). Asks the server
-   * which namespace unqualified names resolve against now, as an introspector namespace path; null
-   * when none does. Never opens a transaction, and the host calls it only while nothing runs.
-   */
-  currentNamespace?(): Promise<readonly string[] | null>;
-  /**
-   * Present exactly when the plugin declares `keepAlive` (decision 054). One round trip to the
-   * server; rejects with `connectionLost` when the connection is gone. The host calls it only while
-   * nothing runs, and bounds how long it waits.
-   */
-  ping?(): Promise<void>;
-  /**
-   * Present exactly when the plugin declares `bulkInsert` (decision 046). Writes `rows` into
-   * `target` by the dialect's fastest safe path, values never spliced into SQL. Atomic: when the
-   * database refuses any row it rejects with `statementFailed`, none of `rows` is kept, and an open
-   * transaction stays usable; a lost connection rejects with `connectionFailed`. Text is converted
-   * where the column needs it, so what TableCraft's CSV export writes inserts back the same: `0x…`
-   * hex into a binary column, `true`/`false` into a boolean stored as a number.
-   */
-  insertRows?(target: InsertTarget, rows: readonly InsertRow[]): Promise<void>;
-  /** Present exactly when the plugin declares `sessions` (decision 088). */
-  readonly sessions?: SessionMonitor;
-  /**
-   * Present exactly when the plugin declares `sessions`: the server's id for this connection, as
-   * `ServerSession.id` lists it, so the host can tell its own sessions apart.
-   */
-  readonly serverSessionId?: string;
-  /**
-   * The `ServerSession.instance` this connection is listed under, where an id names a session on one
-   * server of a cluster only (TiDB before Global Kill); absent elsewhere, or when the server would
-   * not say, and the host then matches by id alone. A plugin for which finding it costs a round trip
-   * offers `findServerInstance` instead.
-   */
-  readonly serverInstance?: string;
-  /**
-   * Present where an id names a session on one server of a cluster only and finding which costs a
-   * round trip (TiDB before Global Kill): the `ServerSession.instance` this connection is listed
-   * under, or null when the server would not say. The host calls it only while nothing runs on the
-   * session, and only when a listing shows the session's id on more than one instance.
-   */
-  findServerInstance?(): Promise<string | null>;
-  /** Present exactly when the plugin declares `keyValue` (decision 113). */
-  readonly keyspace?: Keyspace;
-  /**
-   * Present exactly when the plugin declares `nodes` (decision 114): every server of the
-   * datasource, primaries first; one entry for a single server.
-   */
-  nodes?(): Promise<readonly ServerNode[]>;
-  /**
-   * Present exactly when the plugin declares `serverInfo`: what `node` (a `ServerNode.id`, or null
-   * for the one server or a primary of the plugin's choice) reports about itself.
-   */
-  serverInfo?(node: string | null): Promise<ServerInfo>;
-  /** Present exactly when the plugin declares `serverInfo`: the newest `limit` slow commands, of every primary for a null `node`. */
-  slowLog?(node: string | null, limit: number): Promise<readonly SlowCommand[]>;
   /**
    * Settles in bounded time even when the network is gone: a graceful goodbye that does not
    * answer within a few seconds gives way to dropping the socket (decision 040).
@@ -410,14 +327,6 @@ export interface Session {
    * (decision 072).
    */
   readonly tls?: TlsInfo | null;
-  /**
-   * Present exactly when the plugin declares `serverTimeout` (decision 129): what this server stops
-   * by itself under `ExecuteOptions.serverTimeoutMs`, read once at connect; null when this server
-   * version has no such setting.
-   */
-  readonly serverTimeout?: ServerTimeout | null;
-  /** Optional, only with `cancel`: how this session's cancel reaches the server, read once at connect. */
-  readonly cancelReach?: CancelReach;
 }
 
 /** What a TLS handshake agreed, as Node's socket names it: `TLSv1.3`, `TLS_AES_256_GCM_SHA384`. */
@@ -489,7 +398,7 @@ export interface StatementClass {
   readonly destructive: string | null;
   /**
    * The statement may move the session's current namespace, such as `USE db` or
-   * `SET search_path` (plan 022); the host then asks `Session.currentNamespace` again.
+   * `SET search_path` (plan 022); the host then asks `NamespaceReader.current` again.
    */
   readonly setsNamespace?: boolean;
   /**
@@ -564,14 +473,22 @@ export interface SavepointStatements {
 }
 
 /** What the console asks the plugin about its dialect (decision 008); the host never parses SQL. */
-export interface SqlLanguage {
+export interface SqlLanguage extends SqlLanguageBase {
+  /** What each declared language-side capability brings, keyed by the capability (decision 155); any may be absent. */
+  readonly services: Partial<LanguageServices>;
+}
+
+/** The language a plugin declaring `C` provides: exactly those services (decision 155). */
+export interface PluginLanguage<C extends Capability> extends SqlLanguageBase {
+  readonly services: Pick<LanguageServices, C & LanguageCapability>;
+}
+
+/** Every member of a SQL language but its services. */
+export interface SqlLanguageBase {
   /** Every non-empty statement in `text`, in order. Comments and blanks between statements belong to none. */
   split(text: string): readonly StatementSpan[];
-  /**
-   * A fresh stream that splits exactly as `split` would, for scripts too large to hold (decision
-   * 081). Absent: the host splits the whole file with `split`, up to a size it can hold.
-   */
-  splitStream?(): StatementStream;
+  /** A fresh stream that splits exactly as `split` would, for scripts too large to hold (decision 081). */
+  splitStream(): StatementStream;
   classify(sql: string): StatementClass;
   /** `name` quoted as an identifier, whatever characters it holds. */
   quoteIdentifier(name: string): string;
@@ -598,13 +515,13 @@ export interface SqlLanguage {
    * The built-in function call the caret is inside and the argument it is at, for the parameter
    * hint (decision 098); null outside a call or in one the dialect does not document.
    */
-  signatureAt?(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>;
+  signatureAt(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>;
   /**
    * Every problem in `request.text` found without running it, each with its quick fixes (plan 108).
    * Never rejects for SQL it cannot read: it reports less. A name the catalog cannot answer for (an
    * empty or undescribed namespace) is not reported unresolved. `sqlInspector` implements it.
    */
-  inspect?(request: InspectionRequest, catalog: CompletionCatalog): Promise<readonly Problem[]>;
+  inspect(request: InspectionRequest, catalog: CompletionCatalog): Promise<readonly Problem[]>;
   /**
    * A `statement` over `relation` for the SQL Generator (decision 029): one clause per line, columns
    * in table order, names quoted only where needed; `qualifiedName` is what the introspector names
@@ -612,12 +529,6 @@ export interface SqlLanguage {
    * `@table-craft/plugin-api/sql` implements it.
    */
   generate(statement: GeneratedStatement, relation: Relation, qualifiedName: string): string;
-  /**
-   * Present exactly when the plugin declares `explain` (decision 031): whether `sql`, one statement
-   * without its delimiter, can be explained (with `analyze`, analysed) in this dialect, and whether it
-   * writes. Pure; `sqlExplainable` in `@table-craft/plugin-api/sql` implements it.
-   */
-  explainable?(sql: string, options: ExplainOptions): Explainability;
   /**
    * `text` laid out by `options` (decision 042), comments and literals untouched. Throws an `Error`
    * whose message says why when the text cannot be read; the host then leaves the text as it was.
@@ -636,35 +547,16 @@ export interface SqlLanguage {
    */
   bind(statement: string, values: Readonly<Record<string, ParameterValue>>): BoundStatement;
   /**
-   * Present exactly when the plugin declares `bulkInsert`: the column type an import proposes for
-   * text that looks like `column` (decision 046). Every value of the sample inserts into it.
-   */
-  importType?(column: InferredColumn): string;
-  /** Present exactly when the plugin declares `bulkInsert`: the `CREATE TABLE` for a new import target. */
-  createTable?(qualifiedName: string, columns: readonly NewColumn[]): string;
-  /** Present exactly when the plugin declares `objects`: the DDL for creating, altering, renaming and dropping (decision 052). */
-  readonly objects?: ObjectEditor;
-  /**
    * The base table `sql`, one statement without its delimiter, reads, when it is a single-table
    * `SELECT` with no join, grouping, aggregate, window, set operation, `DISTINCT` or `WITH`
-   * (plan 026). Never rejects: what it cannot read is `readOnly`. Absent: console results stay
-   * read-only. `sqlCompleter` in `@table-craft/plugin-api/sql` implements it.
+   * (plan 026). Never rejects: what it cannot read is `readOnly`. `sqlCompleter` in `@table-craft/plugin-api/sql` implements it.
    */
-  selectSource?(sql: string, catalog: CompletionCatalog): Promise<SelectSource>;
+  selectSource(sql: string, catalog: CompletionCatalog): Promise<SelectSource>;
   /**
-   * Present with `selectSource`: the savepoint statements that let edits joining an open
-   * transaction undo only themselves when one is refused. `sqlSavepoints` implements it.
+   * The savepoint statements that let edits joining an open transaction undo only themselves when
+   * one is refused. `sqlSavepoints` implements it.
    */
-  savepoint?(name: string): SavepointStatements;
-  /** Present exactly when the plugin declares `currentNamespace`: how the console switches namespace (decision 060). */
-  readonly namespaceSwitch?: NamespaceSwitch;
-  /**
-   * Present exactly when the plugin declares `routineCall` (decision 090): the console text that
-   * calls `routine`, named `qualifiedName` by the introspector, and returns its result, OUT values
-   * included. `args` has one entry per parameter in order; an `out` entry is ignored. Throws a
-   * `PluginError` coded `statementFailed` saying what to change when the arguments do not fit.
-   */
-  routineCall?(routine: Routine, qualifiedName: string, args: readonly RoutineArgument[]): RoutineCall;
+  savepoint(name: string): SavepointStatements;
 }
 
 /** How a session moves to another namespace from the console's switcher (decision 060). */
@@ -738,18 +630,49 @@ export interface CommandLanguage {
   admit?(command: string): CommandAdmission;
 }
 
-/** The default export of a plugin's entry module (decision 005). */
-export interface DatasourcePlugin {
+interface PluginCore<C extends Capability, S extends z.ZodType> {
+  readonly id: string;
+  readonly capabilities: readonly C[];
+  /** Validates the configuration `connect` receives; the host parses before it calls. */
+  readonly connectionSchema: S;
+  /**
+   * Rejects with a `PluginError` coded `connectionFailed` when the database cannot be reached.
+   * Typed as the schema's input: callers outside the host pass a configuration it has not parsed.
+   */
+  connect(config: z.input<S>, options: ConnectOptions): Promise<PluginSession<C>>;
   /** Pure enumeration before transport setup; never returns secrets. */
-  connectionEndpoints?(config: unknown): readonly ConnectionEndpoint[];
+  connectionEndpoints?(config: z.input<S>): readonly ConnectionEndpoint[];
+}
+
+/** `language` exactly with `sql`, `commandLanguage` exactly with `commands` (decision 112). */
+type PluginLanguages<C extends Capability> = ("sql" extends C
+  ? { readonly language: PluginLanguage<C> }
+  : { readonly language?: never }) &
+  ("commands" extends C ? { readonly commandLanguage: CommandLanguage } : { readonly commandLanguage?: never });
+
+/** A plugin as its author writes it: its session and language carry exactly what `C` brings (decision 155). */
+export type PluginDefinition<C extends Capability, S extends z.ZodType> = PluginCore<C, S> & PluginLanguages<C>;
+
+/**
+ * The default export of a plugin's entry module (decision 005), as the host holds it before it
+ * checked anything: any service may be absent.
+ */
+export interface DatasourcePlugin {
   readonly id: string;
   readonly capabilities: readonly Capability[];
-  /** Present exactly when the plugin declares `sql`. */
-  readonly language?: SqlLanguage;
-  /** Present exactly when the plugin declares `commands` (decision 112). */
-  readonly commandLanguage?: CommandLanguage;
   /** Validates the configuration `connect` receives; the host parses before it calls. */
   readonly connectionSchema: z.ZodType;
   /** Rejects with a `PluginError` coded `connectionFailed` when the database cannot be reached. */
   connect(config: unknown, options: ConnectOptions): Promise<Session>;
+  /** Pure enumeration before transport setup; never returns secrets. */
+  connectionEndpoints?(config: unknown): readonly ConnectionEndpoint[];
+  readonly language?: SqlLanguage;
+  readonly commandLanguage?: CommandLanguage;
+}
+
+/** A plugin's default export (decision 005), typed so its session and language carry exactly what it declares. */
+export function definePlugin<const C extends Capability, S extends z.ZodType>(
+  plugin: PluginDefinition<C, S>,
+): PluginDefinition<C, S> {
+  return plugin;
 }

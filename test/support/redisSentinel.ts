@@ -30,8 +30,9 @@ export function textOf(value: unknown): string {
 }
 
 export async function nodesOf(session: Session) {
-  if (session.nodes === undefined) throw new Error("the Redis plugin declares nodes");
-  return session.nodes();
+  const { nodes } = session.services;
+  if (nodes === undefined) throw new Error("the Redis plugin declares nodes");
+  return nodes.list();
 }
 
 function pause(): Promise<void> {

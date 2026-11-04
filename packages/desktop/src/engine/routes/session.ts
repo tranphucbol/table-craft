@@ -2,6 +2,8 @@ import { loadedPlugin } from "@table-craft/core";
 import { connectDatasource } from "@table-craft/desktop/engine/connect.js";
 import type { ConnectionContext, OpenSession } from "@table-craft/desktop/engine/connection.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
+import { serverTimeoutOf } from "@table-craft/desktop/engine/serverLimit.js";
+import { hasService, serviceOf } from "@table-craft/desktop/engine/services.js";
 
 export function sessionRoutes(connection: ConnectionContext): RoutesFor<"session"> {
   const { options, now, connector, nextSessionId, sessions, releaseHandlesOf, sessionFor, namespaceOf } = connection;
@@ -35,8 +37,8 @@ export function sessionRoutes(connection: ConnectionContext): RoutesFor<"session
         serverVersion: session.serverVersion,
         serverBrand: session.serverBrand ?? null,
         namespace,
-        serverTimeout: session.serverTimeout == null ? null : { ...session.serverTimeout },
-        cancelReach: session.cancelReach === undefined ? null : { ...session.cancelReach },
+        serverTimeout: serverTimeoutOf(session),
+        cancelReach: hasService(session, "cancel") ? { ...serviceOf(session, "cancel").reach } : null,
       };
     },
     "session.close": async ({ sessionId }) => {

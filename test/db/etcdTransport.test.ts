@@ -1,5 +1,5 @@
 import { createConnector, type HostKeyOffer, type LoadedPlugin } from "@table-craft/core";
-import { PluginError, type Session } from "@table-craft/plugin-api";
+import { type DatasourcePlugin, PluginError, type Session } from "@table-craft/plugin-api";
 import etcd from "@table-craft/plugin-etcd";
 import { describe, expect, it } from "vitest";
 import {
@@ -21,6 +21,7 @@ const HISTORY_EVENTS = 10;
 const HISTORY_BYTES = 4096;
 const HISTORY_TIMEOUT_MS = 2_000;
 const CONFIG = { ...ETCD_TLS_CONFIG, connectTimeout: CONNECT_TIMEOUT_SECONDS };
+const hostEtcd: DatasourcePlugin = etcd;
 const LOADED: LoadedPlugin = {
   status: "loaded",
   directory: "plugins/etcd",
@@ -77,8 +78,8 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd TLS, mTLS and SSH transport", ()
   it("givenHistoryRead_whenPlainGetFollows_thenGetSucceeds", async () => {
     const session = await connect();
     try {
-      const keyspace = session.keyspace;
-      if (keyspace?.history === undefined) throw new Error("etcd history capability is unavailable");
+      const keyspace = session.services.keyValue;
+      if (keyspace.history === undefined) throw new Error("etcd history capability is unavailable");
       const page = await keyspace.history({
         database: HISTORY_DATABASE,
         key: { text: PROBE_KEY, hex: null },
@@ -131,7 +132,7 @@ describe.skipIf(!databaseEnabled("etcd"))("etcd TLS, mTLS and SSH transport", ()
             ...etcd,
             connect: (config, options) => {
               forwarded = options.transports;
-              return etcd.connect(config, options);
+              return hostEtcd.connect(config, options);
             },
           },
         },

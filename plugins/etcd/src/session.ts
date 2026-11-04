@@ -4,9 +4,9 @@ import {
   type ExecuteOptions,
   type ExecuteResult,
   type ParameterValue,
+  type PluginSession,
   type ServerInfo,
   type ServerNode,
-  type Session,
   type SlowCommand,
 } from "@table-craft/plugin-api";
 import type { Etcd3 } from "etcd3";
@@ -42,17 +42,32 @@ const NOT_PERMITTED =
 
 const MS_PER_SECOND = 1000;
 
+export const CAPABILITIES = [
+  "commands",
+  "keepAlive",
+  "keyValue",
+  "nodes",
+  "serverInfo",
+  "revisions",
+  "watch",
+  "leases",
+  "access",
+  "members",
+  "maintenance",
+  "coordination",
+  "bulkTransfer",
+] as const;
+
+export type EtcdCapability = (typeof CAPABILITIES)[number];
+
 /** Scoped KV and global administrative services, with independently closeable stream resources. */
-export class EtcdSession implements Session {
+export class EtcdSession implements PluginSession<EtcdCapability> {
   readonly serverVersion: string | null;
   readonly tls = null;
-  readonly keyspace: EtcdKeyspace;
-  readonly watch: EtcdWatcher;
-  readonly leases: EtcdLeases;
-  readonly cluster: EtcdCluster;
-  readonly access: EtcdAccess;
-  readonly coordination: EtcdCoordination;
-  readonly keyTransfer: EtcdTransfer;
+  readonly services: PluginSession<EtcdCapability>["services"];
+  readonly #keyspace: EtcdKeyspace;
+  readonly #leases: EtcdLeases;
+  readonly #cluster: EtcdCluster;
   readonly #state = new RuntimeState();
   readonly #consoleKv: ConsoleKvGateway;
   readonly #connection: Connection;
@@ -80,24 +95,16 @@ export class EtcdSession implements Session {
       readOnly: options.readOnly,
       clusterId: connection.clusterId,
     };
-    this.watch = new EtcdWatcher(runtime);
-    this.leases = new EtcdLeases(runtime);
-    this.cluster = new EtcdCluster(runtime, connection);
+    this.#leases = new EtcdLeases(runtime);
+    this.#cluster = new EtcdCluster(runtime, connection);
     const passwordIdentity = (config.authMode === "auto" || config.authMode === "password") && config.user !== "";
-    this.access = new EtcdAccess(
-      runtime,
-      passwordIdentity ? config.user : null,
-      passwordIdentity && config.password !== "",
-    );
-    this.coordination = new EtcdCoordination(runtime, config.lockPrefix, config.electionPrefix);
-    this.keyTransfer = new EtcdTransfer(runtime);
     this.#consoleKv = {
       range: (request) => call((etcd) => etcd.kv.range(request)),
       put: (request) => call((etcd) => etcd.kv.put(request)),
       deleteRange: (request) => call((etcd) => etcd.kv.deleteRange(request)),
       txn: (request) => call((etcd) => etcd.kv.txn(request)),
     };
-    this.keyspace = new EtcdKeyspace({
+    this.#keyspace = new EtcdKeyspace({
       call,
       runtime,
       delimiter: config.keyDelimiter,
@@ -105,6 +112,26 @@ export class EtcdSession implements Session {
       readOnly: options.readOnly,
       queued: (work) => this.#queued(work),
     });
+    this.services = {
+      keepAlive: { ping: () => this.#ping() },
+      keyValue: this.#keyspace,
+      nodes: { list: () => this.#nodes() },
+      serverInfo: {
+        info: (node) => this.#serverInfo(node),
+        slowLog: (node, limit) => this.#slowLog(node, limit),
+      },
+      watch: new EtcdWatcher(runtime),
+      leases: this.#leases,
+      access: new EtcdAccess(
+        runtime,
+        passwordIdentity ? config.user : null,
+        passwordIdentity && config.password !== "",
+      ),
+      members: this.#cluster,
+      maintenance: this.#cluster,
+      coordination: new EtcdCoordination(runtime, config.lockPrefix, config.electionPrefix),
+      bulkTransfer: new EtcdTransfer(runtime),
+    };
     if (config.autoSyncInterval > 0) this.#scheduleRefresh(config, options);
   }
 
@@ -129,7 +156,7 @@ export class EtcdSession implements Session {
     }
   }
 
-  async ping(): Promise<void> {
+  async #ping(): Promise<void> {
     this.#checkOpen();
     try {
       await this.#connection.client.call((etcd) => etcd.maintenance.status().catch(() => etcd.cluster.memberList({})));
@@ -148,7 +175,7 @@ export class EtcdSession implements Session {
     const found = commandOf(tokens.map((token) => token.text));
     if (found === null) throw new PluginError("statementFailed", "Unknown administrative command.");
     if (intent.action === "keepAlive") {
-      const lease = await this.leases.keepAliveOnce(consoleLeaseId(intent.arguments.positional[0]?.text ?? ""));
+      const lease = await this.#leases.keepAliveOnce(consoleLeaseId(intent.arguments.positional[0]?.text ?? ""));
       return replyResult(
         lease.remainingTtlSeconds,
         `Lease renewal confirmed, remaining TTL ${lease.remainingTtlSeconds ?? "unknown"}s. Stopping renewal does not revoke the lease.`,
@@ -157,12 +184,12 @@ export class EtcdSession implements Session {
     return runAdmin(this.#host, found.doc, tokens.slice(found.length));
   }
 
-  nodes(): Promise<readonly ServerNode[]> {
+  #nodes(): Promise<readonly ServerNode[]> {
     this.#checkOpen();
     return nodes(this.#host);
   }
 
-  async serverInfo(node: string | null): Promise<ServerInfo> {
+  async #serverInfo(node: string | null): Promise<ServerInfo> {
     this.#checkOpen();
     const endpoints = this.#connection.client.endpoints;
     let endpointId = endpoints[0]!.id;
@@ -171,7 +198,7 @@ export class EtcdSession implements Session {
       let denied = 0;
       for (const endpoint of endpoints) {
         try {
-          const status = await this.cluster.status(endpoint.id);
+          const status = await this.#cluster.status(endpoint.id);
           if (hexId(status.memberId) === node) {
             endpointId = endpoint.id;
             found = true;
@@ -222,7 +249,7 @@ export class EtcdSession implements Session {
   }
 
   /** etcd keeps no slow log a client can read; slow requests go to the server's own log. */
-  slowLog(_node: string | null, _limit: number): Promise<readonly SlowCommand[]> {
+  #slowLog(_node: string | null, _limit: number): Promise<readonly SlowCommand[]> {
     return Promise.resolve([]);
   }
 
@@ -249,7 +276,7 @@ export class EtcdSession implements Session {
     prefix: string,
   ): Promise<readonly ConsoleValueSuggestion[]> {
     this.#checkOpen();
-    return suggestConsoleValues(this, kind, prefix, async () => {
+    return suggestConsoleValues(this.services, kind, prefix, async () => {
       const result = await this.#host.call((etcd) =>
         etcd.kv.range({ key: NO_END, range_end: NO_END, count_only: true }),
       );
@@ -261,7 +288,7 @@ export class EtcdSession implements Session {
     if (this.#closed) return;
     this.#closed = true;
     clearTimeout(this.#refreshTimer);
-    this.keyspace.close();
+    this.#keyspace.close();
     await this.#state.close();
     this.#connection.client.close();
   }

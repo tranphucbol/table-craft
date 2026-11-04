@@ -6,6 +6,7 @@ import {
   type ColumnMeta,
   type ForeignKey,
   type Index,
+  type DefinitionReader,
   type Introspector,
   type Key,
   type Namespace,
@@ -255,7 +256,7 @@ function toColumn(row: ColumnRow, index: number): ColumnMeta {
 }
 
 /** Every query filters `information_schema` by `TABLE_SCHEMA = ?`, which MySQL answers without opening each table. */
-export function mysqlIntrospector(connection: mysql.Connection): Introspector {
+export function mysqlIntrospector(connection: mysql.Connection): Introspector & DefinitionReader {
   function rows<T>(sql: string, values: string[] = []): Promise<T[]> {
     return new Promise((resolve, reject) => {
       connection.query(sql, values, (error, found) => {

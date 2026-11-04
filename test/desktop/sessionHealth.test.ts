@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   PluginError,
+  type CancelReach,
   type Capability,
   type ConnectOptions,
   type DatasourcePlugin,
@@ -9,7 +10,7 @@ import {
   type StatementClass,
 } from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
-import sqlite from "@table-craft/plugin-sqlite";
+import sqlitePlugin from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
 import type {
   EngineResponse,
@@ -18,6 +19,7 @@ import type {
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
+import { languageFor, USE_SWITCH } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 
 const PLUGIN_ID = "healthy";
@@ -27,6 +29,8 @@ const SLEEP = /^SLEEP$/i;
 /** The fake server's own limit stopping a statement, as a plugin reports it. */
 const STOPPED = /^STOPPED$/i;
 const STOPPED_MESSAGE = "TestDB stopped the statement at its 1 s limit (statement_limit).";
+const sqlite: DatasourcePlugin = sqlitePlugin;
+const CANCEL_REACH: CancelReach = { method: "test cancel", reaches: "statement" };
 const SERVER_TIMEOUT = { setting: "statement_limit", covers: "all", counts: "statement" } as const;
 const KEEPALIVE_SECONDS = 30;
 const KEEPALIVE_MS = KEEPALIVE_SECONDS * 1_000;
@@ -52,11 +56,15 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
   const options: { readonly session: number; readonly options: ExecuteOptions }[] = [];
   let clock = 0;
   const base = sqlite.language as SqlLanguage;
-  const language: SqlLanguage = {
-    ...base,
-    classify: (sql): StatementClass =>
-      USE.test(sql.trim()) ? { kind: "other", destructive: null, setsNamespace: true } : base.classify(sql),
-  };
+  const language = languageFor(
+    {
+      ...base,
+      classify: (sql): StatementClass =>
+        USE.test(sql.trim()) ? { kind: "other", destructive: null, setsNamespace: true } : base.classify(sql),
+    },
+    capabilities,
+    { ...(capabilities.includes("currentNamespace") ? { currentNamespace: USE_SWITCH } : {}) },
+  );
   const plugin: DatasourcePlugin = {
     ...sqlite,
     id: PLUGIN_ID,
@@ -88,24 +96,33 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
           current = [target];
           return session.execute("SELECT 1 WHERE 0");
         },
-        ...(capabilities.includes("cancel")
-          ? {
-              cancel: () => {
-                sleeping?.(new PluginError("cancelled", "cancelled"));
-                sleeping = null;
-                return Promise.resolve();
-              },
-            }
-          : {}),
-        ...(capabilities.includes("keepAlive")
-          ? {
-              ping: () =>
-                controls.pingFails ? Promise.reject(new PluginError("connectionLost", "gone")) : Promise.resolve(),
-            }
-          : {}),
-        ...(session.transactions === undefined ? {} : { transactions: session.transactions }),
-        currentNamespace: () => Promise.resolve(current),
-        ...(capabilities.includes("serverTimeout") ? { serverTimeout: SERVER_TIMEOUT } : {}),
+        services: {
+          ...(capabilities.includes("cancel")
+            ? {
+                cancel: {
+                  cancel: () => {
+                    sleeping?.(new PluginError("cancelled", "cancelled"));
+                    sleeping = null;
+                    return Promise.resolve();
+                  },
+                  reach: CANCEL_REACH,
+                },
+              }
+            : {}),
+          ...(capabilities.includes("keepAlive")
+            ? {
+                keepAlive: {
+                  ping: () =>
+                    controls.pingFails ? Promise.reject(new PluginError("connectionLost", "gone")) : Promise.resolve(),
+                },
+              }
+            : {}),
+          ...(capabilities.includes("transactions") ? { transactions: session.services.transactions } : {}),
+          ...(capabilities.includes("currentNamespace")
+            ? { currentNamespace: { current: () => Promise.resolve(current) } }
+            : {}),
+          ...(capabilities.includes("serverTimeout") ? { serverTimeout: { limit: SERVER_TIMEOUT } } : {}),
+        },
         serverVersion: session.serverVersion,
         close: () => session.close(),
       };

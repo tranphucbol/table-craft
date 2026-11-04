@@ -53,8 +53,8 @@ import type {
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { serverTimeoutOptions } from "@table-craft/desktop/engine/serverLimit.js";
+import { inTransaction, notDeclared, serviceOf } from "@table-craft/desktop/engine/services.js";
 
-const NO_KEYSPACE = "This datasource's plugin does not declare the keyValue capability.";
 const REPLY_COLUMN = "value";
 const SCORE_COLUMN = "score";
 const LIST_INDEX_COLUMN = "#";
@@ -103,7 +103,7 @@ function reportedColumn(column: Column, index: number): ColumnMeta {
 }
 
 function savepointsOf(language: SqlLanguage): ((name: string) => SavepointStatements) | undefined {
-  return language.savepoint?.bind(language);
+  return language.savepoint.bind(language);
 }
 
 /** What runs SQL on a console session: statements, explain, the table editor, its edits and transactions. */
@@ -203,7 +203,7 @@ export function statementRunners(live: LiveContext) {
       return {
         ...summary,
         firstWindow: results.window(summary.handle, 0),
-        transactionOpen: open.session.transactions?.open ?? false,
+        transactionOpen: inTransaction(open.session),
         ...(namespace === undefined ? {} : { namespace }),
         ...(reconnected === undefined ? {} : { reconnected }),
       };
@@ -216,32 +216,25 @@ export function statementRunners(live: LiveContext) {
   async function explainStatement(request: RequestOf<"statement.explain">): Promise<ExplainedStatement> {
     const open = sessionFor(request.sessionId);
     const needed: Capability = request.analyze ? "explainAnalyze" : "explain";
-    if (!open.capabilities.includes(needed) || open.session.explain === undefined) {
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: `This datasource's plugin does not declare the ${needed} capability.`,
-        hint: BUG_HINT,
-      });
-    }
+    if (!open.capabilities.includes(needed)) throw notDeclared(needed);
+    serviceOf(open.session, "explain");
     open.running += 1;
     try {
       const { value: plan, reconnected } = await onLiveSession(
         request.sessionId,
         open,
         request.timeoutSeconds ?? 0,
-        (session) => {
-          if (session.explain === undefined) throw new Error("The session lost its explain method.");
-          return session.explain(request.sql, {
+        (session) =>
+          serviceOf(session, "explain").explain(request.sql, {
             analyze: request.analyze,
             ...serverTimeoutOptions(request, session, open.capabilities),
-          });
-        },
+          }),
         (cause) => explainFailed(cause, options.datasource.readOnly),
       );
       sessionFor(request.sessionId);
       return {
         plan,
-        transactionOpen: open.session.transactions?.open ?? false,
+        transactionOpen: inTransaction(open.session),
         ...(reconnected === undefined ? {} : { reconnected }),
       };
     } finally {
@@ -284,10 +277,7 @@ export function statementRunners(live: LiveContext) {
         open,
         request.timeoutSeconds ?? 0,
         async (session) => {
-          if (session.keyspace === undefined) {
-            throw new EngineFailure({ code: "invalidRequest", message: NO_KEYSPACE, hint: BUG_HINT });
-          }
-          const contents = await session.keyspace.read(request.database, request.key, {
+          const contents = await serviceOf(session, "keyValue").read(request.database, request.key, {
             ...request.range,
             window: request.pageRows,
           });
@@ -334,7 +324,7 @@ export function statementRunners(live: LiveContext) {
     if (commandLanguage() !== null) return keyEditable(handle, open, fallback, readOnly);
     const language = sqlLanguage();
     const sql = ran.get(handle);
-    if (sql === undefined || language.selectSource === undefined || tables.has(handle)) {
+    if (sql === undefined || tables.has(handle)) {
       return readOnly(CONSOLE_READ_ONLY_REASONS.unsupported);
     }
     const source = await language.selectSource(sql, await completionCatalogOf(request.current));
@@ -453,13 +443,13 @@ export function statementRunners(live: LiveContext) {
     open: OpenSession,
     statements: readonly string[],
   ): Promise<ResultOf<"edits.submit">> {
-    if (open.lost !== null && open.session.transactions?.open === true) throw transactionLost();
+    if (open.lost !== null && inTransaction(open.session)) throw transactionLost();
     const settled = mustSettle(sessionId, open) ? await afterClose(sessionId, open) : undefined;
     if (settled === undefined && needsCheck(open)) await ensureLive(sessionId, open);
     open.running += 1;
     try {
       const submitted = await submitConsoleEdits(open.session, statements, savepointsOf(sqlLanguage()));
-      return { ...submitted, transactionOpen: open.session.transactions?.open ?? false };
+      return { ...submitted, transactionOpen: inTransaction(open.session) };
     } catch (cause) {
       if (isPluginError(cause) && cause.code === "sessionBusy") {
         throw busyRefused(sessionId, open).transaction ? transactionLost() : sessionBusy();
@@ -503,17 +493,11 @@ export function statementRunners(live: LiveContext) {
     hint: string,
   ): Promise<TransactionState> {
     const open = sessionFor(sessionId);
-    const { transactions } = open.session;
-    if (!open.capabilities.includes("transactions") || transactions === undefined) {
-      throw new EngineFailure({
-        code: "invalidRequest",
-        message: "This datasource's plugin does not declare the transactions capability.",
-        hint: BUG_HINT,
-      });
-    }
+    if (!open.capabilities.includes("transactions")) throw notDeclared("transactions");
+    serviceOf(open.session, "transactions");
     if (open.lost !== null) await reconnect(sessionId, open);
     if (mustSettle(sessionId, open)) await afterClose(sessionId, open);
-    const current = open.session.transactions ?? transactions;
+    const current = serviceOf(open.session, "transactions");
     try {
       await change(current);
     } catch (cause) {

@@ -3,8 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { CSV_FORMAT, type PluginLoadResult } from "@table-craft/core";
-import type { Capability, ConnectOptions, DatasourcePlugin, Session } from "@table-craft/plugin-api";
-import sqlite from "@table-craft/plugin-sqlite";
+import type { CancelReach, Capability, ConnectOptions, DatasourcePlugin, Session } from "@table-craft/plugin-api";
+import sqlitePlugin from "@table-craft/plugin-sqlite";
 import {
   execute,
   exportHarness,
@@ -13,10 +13,13 @@ import {
   startImport,
   type ExportHarness,
 } from "../support/engineExports.js";
+import { languageFor } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 
+const sqlite: DatasourcePlugin = sqlitePlugin;
 const PLUGIN_ID = "watched";
+const CANCEL_REACH: CancelReach = { method: "test cancel", reaches: "statement" };
 const KEEPALIVE_SECONDS = 1;
 const KEEPALIVE_MS = KEEPALIVE_SECONDS * 1_000;
 /** Longer than two keepalive intervals, so an idle ping, a probe or a reconnect would have run. */
@@ -44,31 +47,38 @@ function watchedPlugin() {
     ...sqlite,
     id: PLUGIN_ID,
     capabilities: CAPABILITIES,
+    language: languageFor(sqlitePlugin.language, CAPABILITIES),
     connect: async (config, options) => {
       const session = await sqlite.connect(config, options);
       const record: Opened = { options, pings: 0, inserts: 0, executes: 0 };
       opened.push(record);
-      const insertRows = session.insertRows?.bind(session);
+      const { bulkInsert } = session.services;
       const wrapped: Session = {
         execute: async (sql, params, executeOptions) => {
           record.executes += 1;
           if (options.readOnly) await delay(HELD_MS);
           return session.execute(sql, params, executeOptions);
         },
-        cancel: () => session.cancel?.() ?? Promise.resolve(),
-        ping: () => {
-          record.pings += 1;
-          return Promise.reject(new Error("The link is gone."));
-        },
-        insertRows: async (target, rows) => {
-          record.inserts += 1;
-          await delay(HELD_MS);
-          await insertRows?.(target, rows);
+        services: {
+          cancel: { cancel: () => Promise.resolve(), reach: CANCEL_REACH },
+          keepAlive: {
+            ping: () => {
+              record.pings += 1;
+              return Promise.reject(new Error("The link is gone."));
+            },
+          },
+          bulkInsert: {
+            insertRows: async (target, rows) => {
+              record.inserts += 1;
+              await delay(HELD_MS);
+              await bulkInsert?.insertRows(target, rows);
+            },
+          },
+          schemaTree: session.services.schemaTree,
+          transactions: session.services.transactions,
         },
         close: () => session.close(),
         serverVersion: session.serverVersion,
-        ...(session.introspector === undefined ? {} : { introspector: session.introspector }),
-        ...(session.transactions === undefined ? {} : { transactions: session.transactions }),
       };
       return wrapped;
     },

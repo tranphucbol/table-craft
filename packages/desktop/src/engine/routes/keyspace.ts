@@ -1,10 +1,9 @@
-import type { KeyApplyOptions, Keyspace, Session } from "@table-craft/plugin-api";
+import type { KeyApplyOptions, Keyspace } from "@table-craft/plugin-api";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
-import { BUG_HINT, EngineFailure, helperRequestFailed } from "@table-craft/desktop/engine/failures.js";
+import { EngineFailure, helperRequestFailed } from "@table-craft/desktop/engine/failures.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
 import type { KeyAdvancedCalls } from "@table-craft/desktop/engine/protocol.js";
-
-const NO_KEYSPACE = "This datasource's plugin does not declare the keyValue capability.";
 
 function requireRevisionGuard(keyspace: Keyspace, options: KeyApplyOptions): void {
   if (options.lease !== undefined && keyspace.features?.leaseAssignment !== true) {
@@ -23,23 +22,16 @@ function requireRevisionGuard(keyspace: Keyspace, options: KeyApplyOptions): voi
   }
 }
 
-function keyspaceOf(session: Session): Keyspace {
-  if (session.keyspace === undefined) {
-    throw new EngineFailure({ code: "invalidRequest", message: NO_KEYSPACE, hint: BUG_HINT });
-  }
-  return session.keyspace;
-}
-
 /** The key tree and key actions of a `keyValue` datasource (decision 113), on the engine's helper session. */
 export function keyspaceRoutes(connection: ConnectionContext): Omit<RoutesFor<"keyspace">, keyof KeyAdvancedCalls> {
   const { onHelper, openKey } = connection;
   const on = <T>(work: (keyspace: Keyspace) => Promise<T>): Promise<T> =>
-    onHelper((session) => work(keyspaceOf(session))).catch((cause: unknown) => {
+    onHelper((session) => work(serviceOf(session, "keyValue"))).catch((cause: unknown) => {
       throw helperRequestFailed(cause);
     });
   const write = <T>(work: (keyspace: Keyspace) => Promise<T>): Promise<T> =>
     connection.keyOperations.scope
-      .run("keyValue", true, (session) => work(keyspaceOf(session)))
+      .run("keyValue", true, (keyspace) => work(keyspace))
       .catch((cause: unknown) => {
         throw helperRequestFailed(cause);
       });

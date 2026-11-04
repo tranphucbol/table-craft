@@ -1,7 +1,7 @@
 import { assertExecutable } from "@table-craft/desktop/engine/admission.js";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
-import { BUG_HINT, EngineFailure } from "@table-craft/desktop/engine/failures.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
 
 export function statementRoutes(connection: ConnectionContext): RoutesFor<"statement"> {
   const { sessionFor, runStatement, explainStatement } = connection;
@@ -16,18 +16,12 @@ export function statementRoutes(connection: ConnectionContext): RoutesFor<"state
     },
     "statement.cancel": async ({ sessionId }) => {
       const open = sessionFor(sessionId);
-      if (!open.capabilities.includes("cancel") || open.session.cancel === undefined) {
-        throw new EngineFailure({
-          code: "invalidRequest",
-          message: "This datasource's plugin does not declare the cancel capability.",
-          hint: BUG_HINT,
-        });
-      }
+      const canceller = serviceOf(open.session, "cancel");
       if (open.waiting.size > 0) {
         for (const stop of open.waiting) stop();
         return null;
       }
-      if (open.running > 0) await open.session.cancel();
+      if (open.running > 0) await canceller.cancel();
       return null;
     },
     "statement.explain": async (request) => {

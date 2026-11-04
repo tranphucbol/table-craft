@@ -46,7 +46,7 @@ async function withHistory(config: object, use: (fixture: Fixture) => Promise<vo
   const key = `/live/etcd-history/${randomUUID()}`;
   const name = { text: key, hex: null };
   const session = await etcd.connect(config, { readOnly: false });
-  const keyspace = session.keyspace;
+  const keyspace = session.services.keyValue;
   const leases = new Set<string>();
   try {
     if (keyspace?.history === undefined) throw new Error("etcd history is unavailable");

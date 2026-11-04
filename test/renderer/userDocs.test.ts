@@ -364,7 +364,7 @@ describe("user docs", () => {
       "bulkTransfer",
     ];
     const plugins = section("docs/guide/writing-plugins.md", "Capabilities");
-    const listed = [...plugins.matchAll(/^- `(\w+)`:/gm)].map((match) => match[1]);
+    const listed = [...plugins.matchAll(/^\| `(\w+)` +\|/gm)].map((match) => match[1]);
     const manifest = JSON.parse(/```json\n([\s\S]*?)```/.exec(plugins)?.[1] ?? "null") as {
       apiVersion: string;
       capabilities: string[];

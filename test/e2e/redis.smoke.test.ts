@@ -5,6 +5,8 @@
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/058 bun run test:smoke:db:headless:redis test/e2e/redis.smoke.test.ts
  *
  * Scratch keys live under `live:` and are removed by the suite.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -72,6 +74,7 @@ import {
 } from "./redisLive.js";
 
 const captureWindow = evidenceFor("058");
+const captureLive = evidenceFor("151");
 
 const REDIS: Datasource = { id: "redis", pluginId: "redis", config: REDIS_CONFIG };
 const REDIS6: Datasource = { id: "redis6", pluginId: "redis", config: REDIS6_CONFIG };
@@ -284,7 +287,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
 
       await keyButton(page, "Preview Pending Changes").click();
       const preview = dialog(page);
-      await expect.poll(() => preview.textContent()).toContain("as one MULTI");
+      await expect.poll(() => preview.textContent()).toContain("atomically; it cannot be undone.");
       expect(await preview.textContent()).toContain(`HSET ${EDIT_KEY} name Bo`);
       expect(await preview.textContent()).toContain(`HSET ${EDIT_KEY} city Oslo`);
       await captureWindow(page, "07-submit");
@@ -292,7 +295,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
 
       await expect
         .poll(() => keyTab(page).getByTestId("key-notice").textContent(), { timeout: LAUNCH_TIMEOUT_MS })
-        .toBe("Submitted as one MULTI");
+        .toBe("Changes saved atomically");
       await expect.poll(() => keyCell(page, 0, 1).textContent()).toBe("Bo");
     },
     SCENARIO_TIMEOUT_MS,
@@ -463,6 +466,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       await expect.poll(() => outputLog(page).textContent(), { timeout: LAUNCH_TIMEOUT_MS }).toMatch(/cancel/i);
       await waitUntilReady(page);
       await captureWindow(page, "13-cancel");
+      await captureLive(page, "04-redis-cancel");
       await runCommand(page, "PING", "PONG");
     },
     SCENARIO_TIMEOUT_MS,
@@ -479,10 +483,12 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       expect(await cards.first().textContent()).toContain("Memory");
       await chooseOption(server.getByTestId("server-refresh"), { label: "Refresh: 2 s" });
       await captureWindow(page, "14-server");
+      await captureLive(page, "04-redis-server");
 
       await server.getByTestId("server-view-slowLog").click();
       await server.getByTestId("server-slow-log").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await captureWindow(page, "14-server-slow-log");
+      await captureLive(page, "04-redis-slow-log");
       await closeApp(running?.app);
 
       const clusterPage = await launch(CLUSTER);
@@ -490,6 +496,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
       const overview = clusterPage.getByTestId("server-overview");
       await expect.poll(() => overview.locator("tbody tr").count(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(6);
       await captureWindow(clusterPage, "14-server-cluster");
+      await captureLive(clusterPage, "04-redis-nodes");
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -498,7 +505,7 @@ describe.runIf(DATABASES_ENABLED)("redis live test", () => {
     "givenCluster_whenShowSessionsAndTerminate_thenClientsAcrossPrimariesAndOneGone",
     async () => {
       holder = await redis.connect(REDIS_CLUSTER_CONFIG, { readOnly: false });
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launch(CLUSTER);
       await showFromDatasourceMenu(page, CLUSTER.id, /^Show Sessions/);
       const grid = page.getByTestId("sessions-grid");

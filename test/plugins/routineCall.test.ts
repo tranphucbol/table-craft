@@ -26,9 +26,9 @@ function value(text: string | null): RoutineArgument {
 const DEFAULT: RoutineArgument = { kind: "default" };
 
 function call(plugin: DatasourcePlugin, target: Routine, args: readonly RoutineArgument[]): RoutineCall {
-  const routineCall = plugin.language?.routineCall?.bind(plugin.language);
-  if (routineCall === undefined) throw new Error(`${plugin.id} declares routineCall`);
-  return routineCall(target, `s.${target.name}`, args);
+  const routineCaller = plugin.language?.services.routineCall;
+  if (routineCaller === undefined) throw new Error(`${plugin.id} declares routineCall`);
+  return routineCaller.call(target, `s.${target.name}`, args);
 }
 
 function failure(run: () => unknown): string {

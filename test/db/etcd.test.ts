@@ -28,8 +28,9 @@ function text(value: string): KeyName {
 }
 
 function keyspaceOf(session: Session) {
-  if (session.keyspace === undefined) throw new Error("no keyspace");
-  return session.keyspace;
+  const keyspace = session.services.keyValue;
+  if (keyspace === undefined) throw new Error("no keyspace");
+  return keyspace;
 }
 
 async function withEtcd(config: unknown, use: (session: Session) => Promise<void>, readOnly = false): Promise<void> {

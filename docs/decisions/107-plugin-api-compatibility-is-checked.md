@@ -1,6 +1,6 @@
 # 107: Plugin API compatibility is checked, not promised
 
-Status: Accepted. Plugin API 1.0.0.
+Status: Accepted. Plugin API 1.0.0. Amended by 155: the frozen SQLite 2.0.0 plugin runs the contract; 1.0.0 is the refused older major.
 
 ## Decision
 

@@ -1,6 +1,6 @@
 # 106: Plugin API 1.0 follows semver
 
-Status: Accepted. Plugin API 1.0.0.
+Status: Accepted. Plugin API 1.0.0. Amended by 155: plugin API 2.0.0 is the first major taken under it.
 
 ## Decision
 

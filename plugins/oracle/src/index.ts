@@ -1,22 +1,19 @@
 import oracledb from "oracledb";
 import {
   PluginError,
+  definePlugin,
   type CancelReach,
-  type Capability,
   type ConnectOptions,
-  type DatasourcePlugin,
   type ExecuteOptions,
   type ExecuteResult,
   type ExplainedPlan,
   type ExplainOptions,
   type InsertRow,
   type InsertTarget,
-  type Introspector,
   type ParameterValue,
+  type PluginSession,
   type Row,
   type ServerMessage,
-  type Session,
-  type SessionMonitor,
   type TlsInfo,
   type TransactionMode,
   type Transactions,
@@ -40,30 +37,21 @@ import {
   type PlanRow,
 } from "./explain.js";
 import { oracleIntrospector } from "./introspect.js";
-import { explainable, importName, language, quoteIdentifier, writeName } from "./language.js";
+import {
+  CAPABILITIES,
+  explainCheck,
+  importName,
+  language,
+  quoteIdentifier,
+  writeName,
+  type OracleCapability,
+} from "./language.js";
 import { compileMessages, COMPILE_WARNING, drainOutput, ENABLE_OUTPUT_SQL, MessageCollector } from "./output.js";
 import { cancelStatement, oracleSessions, SERVER_SESSION_ID_SQL } from "./sessions.js";
 import { classify, oracleTransactionEffect, serverText } from "./statements.js";
 import { columnReader, fetchTypeHandler, SESSION_FORMATS, wireRow, type ColumnReader } from "./values.js";
 
 const PLUGIN_ID = "oracle";
-const CAPABILITIES: readonly Capability[] = [
-  "sql",
-  "cancel",
-  "schemaTree",
-  "transactions",
-  "ddl",
-  "explain",
-  "explainAnalyze",
-  "currentNamespace",
-  "keepAlive",
-  "bulkInsert",
-  "objects",
-  "serverMessages",
-  "sessions",
-  "routineCall",
-];
-
 const COMMIT_SQL = "COMMIT";
 const ROLLBACK_SQL = "ROLLBACK";
 /** Each batch of an import is atomic inside the import's transaction (decision 046). */
@@ -153,7 +141,7 @@ async function firstValue(connection: oracledb.Connection, sql: string): Promise
   return typeof value === "string" || typeof value === "number" ? String(value) : null;
 }
 
-class OracleSession implements Session {
+class OracleSession implements PluginSession<OracleCapability> {
   readonly #config: OracleConfig;
   readonly #connection: oracledb.Connection;
   readonly #readOnly: boolean;
@@ -166,12 +154,9 @@ class OracleSession implements Session {
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "oracle";
-  readonly cancelReach = CANCEL_REACH;
+  readonly #serverSessionId: string;
   readonly tls: TlsInfo | null;
-  readonly introspector: Introspector;
-  readonly transactions: Transactions;
-  readonly sessions: SessionMonitor;
-  readonly serverSessionId: string;
+  readonly services: PluginSession<OracleCapability>["services"];
 
   constructor(config: OracleConfig, connection: oracledb.Connection, readOnly: boolean, sessionId: string) {
     this.#config = config;
@@ -179,11 +164,10 @@ class OracleSession implements Session {
     this.#readOnly = readOnly;
     this.serverVersion = connection.oracleServerVersionString || null;
     this.tls = config.sslMode === "disable" ? null : TCPS;
-    this.introspector = oracleIntrospector(connection, writeName);
-    this.sessions = oracleSessions(connection, () => openConnection(config, {}));
-    this.serverSessionId = sessionId;
+    this.#serverSessionId = sessionId;
+    const introspector = oracleIntrospector(connection, writeName);
     const state = this.#transaction;
-    this.transactions = {
+    const transactions: Transactions = {
       setMode: (mode) => this.#setMode(mode),
       commit: () => this.#endTransaction(COMMIT_SQL),
       rollback: () => this.#endTransaction(ROLLBACK_SQL),
@@ -193,6 +177,17 @@ class OracleSession implements Session {
       get open() {
         return state.open;
       },
+    };
+    this.services = {
+      cancel: { cancel: () => this.#cancel(), reach: CANCEL_REACH },
+      schemaTree: introspector,
+      ddl: introspector,
+      transactions,
+      explain: { explain: (sql, options) => this.#explain(sql, options) },
+      currentNamespace: { current: () => this.#currentNamespace() },
+      keepAlive: { ping: () => this.#ping() },
+      bulkInsert: { insertRows: (target, rows) => this.#insertRows(target, rows) },
+      sessions: { ...oracleSessions(connection, () => openConnection(config, {})), ownId: sessionId },
     };
   }
 
@@ -305,7 +300,7 @@ class OracleSession implements Session {
     return `INSERT INTO ${written} (${quoteIdentifier(column)}) VALUES (DEFAULT)`;
   }
 
-  async currentNamespace(): Promise<readonly string[] | null> {
+  async #currentNamespace(): Promise<readonly string[] | null> {
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
     try {
       const schema = await firstValue(this.#connection, CURRENT_SCHEMA_SQL);
@@ -315,7 +310,7 @@ class OracleSession implements Session {
     }
   }
 
-  async ping(): Promise<void> {
+  async #ping(): Promise<void> {
     const lost = this.#lostError("connectionLost");
     if (lost !== null) throw lost;
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
@@ -327,7 +322,7 @@ class OracleSession implements Session {
     }
   }
 
-  async insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
+  async #insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
     const lost = this.#lostError("connectionFailed");
     if (lost !== null) throw lost;
     if (this.#running !== null) throw new PluginError("sessionBusy", BUSY_MESSAGE);
@@ -368,8 +363,8 @@ class OracleSession implements Session {
     }
   }
 
-  async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
-    const verdict = explainable(sql, options);
+  async #explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
+    const verdict = explainCheck.explainable(sql, options);
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     const lost = this.#lostError("connectionLost");
     if (lost !== null) throw lost;
@@ -510,7 +505,7 @@ class OracleSession implements Session {
     return new PluginError("statementFailed", messageOf(cause), { cause, position });
   }
 
-  cancel(): Promise<void> {
+  #cancel(): Promise<void> {
     const running = this.#running;
     if (running === null) return Promise.resolve();
     running.cancelRequested = true;
@@ -527,7 +522,7 @@ class OracleSession implements Session {
   async #cancelOnServer(): Promise<void> {
     const other = await openConnection(this.#config, {});
     try {
-      await other.execute(cancelStatement(this.serverSessionId, null));
+      await other.execute(cancelStatement(this.#serverSessionId, null));
     } finally {
       await other.close().catch(() => undefined);
     }
@@ -585,12 +580,10 @@ function bindDefsOf(rows: readonly (readonly (string | Buffer | null)[])[]): ora
   });
 }
 
-const plugin: DatasourcePlugin = {
+export default definePlugin({
   id: PLUGIN_ID,
   capabilities: CAPABILITIES,
   language,
   connectionSchema,
   connect: (config, options) => OracleSession.open(connectionSchema.parse(config), options),
-};
-
-export default plugin;
+});

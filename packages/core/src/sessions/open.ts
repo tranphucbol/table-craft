@@ -1,6 +1,8 @@
-import type { ConnectOptions, Session } from "@table-craft/plugin-api";
+import { serviceProblems, type ConnectOptions, type Session } from "@table-craft/plugin-api";
 import { CoreError } from "@table-craft/core/errors.js";
 import type { LoadedPlugin, PluginLoadResult } from "@table-craft/core/plugins/loader.js";
+
+const BROKEN_SESSION_HINT = "Update the plugin, or report the problem to its author.";
 
 /** The loaded plugin with `pluginId`; rejects with `pluginUnavailable` or `unknownPlugin` otherwise. */
 export function loadedPlugin(plugins: readonly PluginLoadResult[], pluginId: string): LoadedPlugin {
@@ -24,7 +26,11 @@ export function loadedPlugin(plugins: readonly PluginLoadResult[], pluginId: str
   return loaded;
 }
 
-/** Connects through the loaded plugin with `pluginId`, validating `config` against its schema first. */
+/**
+ * Connects through the loaded plugin with `pluginId`, validating `config` against its schema first.
+ * A session whose services differ from the plugin's capabilities is closed and refused, so nothing
+ * downstream meets a capability without its service (decision 155).
+ */
 export async function openSession(
   plugins: readonly PluginLoadResult[],
   pluginId: string,
@@ -41,5 +47,13 @@ export async function openSession(
       "Correct the datasource settings and connect again.",
     );
   }
-  return loaded.plugin.connect(parsed.data, options);
+  const session = await loaded.plugin.connect(parsed.data, options);
+  const problems = serviceProblems(loaded.plugin.capabilities, loaded.plugin, session);
+  if (problems.length === 0) return session;
+  await session.close().catch(() => undefined);
+  throw new CoreError(
+    "pluginUnavailable",
+    `Plugin "${pluginId}" is unavailable: it ${problems.map((problem) => problem.message).join("; ")}.`,
+    BROKEN_SESSION_HINT,
+  );
 }

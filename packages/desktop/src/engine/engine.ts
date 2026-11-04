@@ -22,6 +22,8 @@ import type {
 import { logResponse } from "@table-craft/desktop/engine/requestLog.js";
 import { engineRequestSchema, readRequestId } from "@table-craft/desktop/engine/requests.js";
 import { routesOf } from "@table-craft/desktop/engine/routes/index.js";
+import { serverTimeoutOf } from "@table-craft/desktop/engine/serverLimit.js";
+import { hasService, serviceOf } from "@table-craft/desktop/engine/services.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import type { EngineOperationFiles } from "@table-craft/desktop/engine/keyOperations/files.js";
 import { applyAccessSecret } from "@table-craft/desktop/engine/keyOperations/index.js";
@@ -133,10 +135,8 @@ export async function probeDatasource(options: EngineOptions, now: () => number 
       elapsedMs,
       ...(hop === null ? {} : { ssh: hop }),
       ...(session.tls === undefined ? {} : { tls: session.tls === null ? null : { ...session.tls } }),
-      ...(session.serverTimeout === undefined
-        ? {}
-        : { serverTimeout: session.serverTimeout === null ? null : { ...session.serverTimeout } }),
-      cancelReach: session.cancelReach === undefined ? null : { ...session.cancelReach },
+      ...(hasService(session, "serverTimeout") ? { serverTimeout: serverTimeoutOf(session) } : {}),
+      cancelReach: hasService(session, "cancel") ? { ...serviceOf(session, "cancel").reach } : null,
     };
   } catch (cause) {
     const hop = connector.hop;

@@ -100,7 +100,7 @@ export interface NamespaceCatalog {
   readonly sequences: readonly Sequence[];
 }
 
-/** Present on a session exactly when the plugin declares `schemaTree`. */
+/** The `schemaTree` service (decision 155). */
 export interface Introspector {
   /** Every namespace the connection can see, system ones included and marked. */
   namespaces(): Promise<readonly Namespace[]>;
@@ -111,12 +111,16 @@ export interface Introspector {
   describe(path: readonly string[]): Promise<NamespaceCatalog>;
   /** `name` inside `path`, quoted the way this database quotes identifiers. */
   qualifiedName(path: readonly string[], name: string): string;
+}
+
+/** The `ddl` service (decision 029). */
+export interface DefinitionReader {
   /**
-   * Present exactly when the plugin declares `ddl` (decision 029). The statements that create
-   * relation `name` in `path`, read from the database on every call: each ends in `;` and a blank
-   * line separates them. Rejects with `DefinitionNotFoundError` when there is no such relation.
+   * The statements that create relation `name` in `path`, read from the database on every call:
+   * each ends in `;` and a blank line separates them. Rejects with `DefinitionNotFoundError` when
+   * there is no such relation.
    */
-  definition?(path: readonly string[], name: string): Promise<string>;
+  definition(path: readonly string[], name: string): Promise<string>;
 }
 
 /** Sorts by `name`, the order every catalog list but columns is returned in. */

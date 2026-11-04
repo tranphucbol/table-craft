@@ -4,6 +4,9 @@ import type { ConnectOptions, Session } from "@table-craft/plugin-api";
 import etcd from "@table-craft/plugin-etcd";
 import { ETCD_MANIFEST } from "../support/manifests.js";
 
+/** Trimmed to what the fake session below provides, so `openSession` accepts it. */
+const CAPABILITIES = ["commands"] as const;
+
 function fixture(failAt = -1) {
   const tunnels: { port: number; closed: boolean }[] = [];
   const targets: string[] = [];
@@ -11,7 +14,7 @@ function fixture(failAt = -1) {
   const connect = vi.fn(async (_config: unknown, options: ConnectOptions) => {
     await Promise.resolve();
     connectOptions.push(options);
-    return { serverVersion: null, close: async () => {} } as unknown as Session;
+    return { serverVersion: null, services: {}, close: async () => {} } as unknown as Session;
   });
   const loaded: LoadedPlugin = {
     status: "loaded",
@@ -19,6 +22,7 @@ function fixture(failAt = -1) {
     manifest: ETCD_MANIFEST,
     plugin: {
       ...etcd,
+      capabilities: CAPABILITIES,
       connect,
       connectionEndpoints: () => [
         { id: "a", host: "one", port: 2379 },
@@ -84,6 +88,22 @@ describe("multi-endpoint SSH connector", () => {
     const fixtureData = fixture();
     fixtureData.connect.mockRejectedValueOnce(new Error("cluster mismatch"));
     await expect(fixtureData.connector.connect({ readOnly: true })).rejects.toThrow("cluster mismatch");
+    expect(fixtureData.tunnels).toHaveLength(2);
+    expect(fixtureData.tunnels.every((tunnel) => tunnel.closed)).toBe(true);
+  });
+
+  it("givenTunneledEndpoints_whenSessionRefused_thenLeasesReleased", async () => {
+    const fixtureData = fixture();
+    const close = vi.fn(async () => {});
+    fixtureData.connect.mockResolvedValueOnce({
+      serverVersion: null,
+      services: { leases: {} },
+      close,
+    } as unknown as Session);
+    await expect(fixtureData.connector.connect({ readOnly: true })).rejects.toMatchObject({
+      code: "pluginUnavailable",
+    });
+    expect(close).toHaveBeenCalledOnce();
     expect(fixtureData.tunnels).toHaveLength(2);
     expect(fixtureData.tunnels.every((tunnel) => tunnel.closed)).toBe(true);
   });

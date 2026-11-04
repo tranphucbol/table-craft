@@ -7,6 +7,8 @@
  *
  * The shared databases are only read, except one throwaway MySQL database and one TiDB database
  * this suite creates and drops itself.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { createRequire } from "node:module";
 import type { Page } from "playwright-core";
@@ -42,6 +44,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("029");
+const captureLive = evidenceFor("151");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -321,6 +324,7 @@ describe.runIf(DATABASES_ENABLED)("namespace switcher and USE completion live te
       const labels = await completeAtEnd(page, FROM);
       expect(labels).toContain("old_orders");
       await captureWindow(page, "10-postgres-switched-schema");
+      await captureLive(page, "01-switch-schema");
     },
     SCENARIO_TIMEOUT_MS,
   );

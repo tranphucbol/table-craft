@@ -227,6 +227,8 @@ export interface Brand {
   readonly name: string;
 }
 
+export type PluginNeed = "pluginUpdate" | "appUpdate";
+
 /** An installed plugin as the Data Sources dialog lists it; read from its manifest only. */
 export interface PluginInfo {
   readonly id: string;
@@ -236,6 +238,11 @@ export interface PluginInfo {
   readonly version: string | null;
   /** Null when the plugin can be used; otherwise why not, in a sentence. */
   readonly unavailableReason: string | null;
+  /**
+   * What makes an unavailable plugin usable when its API version is the reason (decision 155): a
+   * build of the plugin for this TableCraft, or a newer TableCraft; null otherwise.
+   */
+  readonly needs: PluginNeed | null;
   readonly capabilities: readonly Capability[];
   readonly fields: readonly ConnectionField[];
   /** The manifest's SQL dialect for the editor, e.g. `postgresql`; null when the manifest is unreadable. */

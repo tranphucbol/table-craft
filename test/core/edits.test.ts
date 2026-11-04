@@ -36,6 +36,7 @@ import {
   sqlParameters,
   sqlSavepoints,
   sqlSplitter,
+  sqlStatementStream,
   classifyTokens,
 } from "@table-craft/plugin-api/sql";
 import { describe, expect, it } from "vitest";
@@ -44,11 +45,15 @@ const LANGUAGE: SqlLanguage = {
   ...sqlFormatter({ dialect: "sqlite", lexer: {}, parameters: [] }),
   ...sqlParameters({ dialect: {}, styles: [], native: "positional" }),
   split: sqlSplitter({}),
+  splitStream: sqlStatementStream({}),
   classify: (sql) => classifyTokens(sql, {}),
   quoteIdentifier: quoteIdentifierWith('"'),
   literal: (value) => sqlLiteral(value, { backslashEscapes: false, bytes: (hex) => `X'${hex}'` }),
   emptyInsert: defaultValuesInsert,
   updateDefault: defaultKeyword,
+  inspect: () => Promise.resolve([]),
+  savepoint: sqlSavepoints(quoteIdentifierWith('"')),
+  services: {},
   ...sqlCompleter({
     dialect: {},
     identifierFolding: "none",
@@ -238,27 +243,29 @@ function fake(
   return {
     log,
     serverVersion: null,
-    transactions: {
-      setMode: (to) => {
-        log.push(`mode ${to}`);
-        mode = to;
-        return Promise.resolve();
-      },
-      commit: () => {
-        log.push("commit");
-        open = false;
-        return Promise.resolve();
-      },
-      rollback: () => {
-        log.push("rollback");
-        open = false;
-        return Promise.resolve();
-      },
-      get mode() {
-        return mode;
-      },
-      get open() {
-        return open;
+    services: {
+      transactions: {
+        setMode: (to) => {
+          log.push(`mode ${to}`);
+          mode = to;
+          return Promise.resolve();
+        },
+        commit: () => {
+          log.push("commit");
+          open = false;
+          return Promise.resolve();
+        },
+        rollback: () => {
+          log.push("rollback");
+          open = false;
+          return Promise.resolve();
+        },
+        get mode() {
+          return mode;
+        },
+        get open() {
+          return open;
+        },
       },
     },
     execute: (sql) => {
@@ -373,7 +380,7 @@ describe("submitConsoleEdits", () => {
       "DELETE b",
       'RELEASE SAVEPOINT "table_craft_edits"',
     ]);
-    expect(target.transactions?.open).toBe(true);
+    expect(target.services.transactions?.open).toBe(true);
   });
 
   it("givenOpenManualTransaction_whenEditRejected_thenOnlyTheEditsAreUndone", async () => {
@@ -390,7 +397,7 @@ describe("submitConsoleEdits", () => {
       'ROLLBACK TO SAVEPOINT "table_craft_edits"',
       'RELEASE SAVEPOINT "table_craft_edits"',
     ]);
-    expect(target.transactions?.open).toBe(true);
+    expect(target.services.transactions?.open).toBe(true);
   });
 
   it("givenPluginWithoutSavepointsAndOpenTransaction_whenSubmitted_thenRefusedBeforeRunning", async () => {
