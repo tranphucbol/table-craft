@@ -13,6 +13,7 @@ import {
   startImport,
   type ExportHarness,
 } from "../support/engineExports.js";
+import { languageFor } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 
@@ -46,6 +47,7 @@ function watchedPlugin() {
     ...sqlite,
     id: PLUGIN_ID,
     capabilities: CAPABILITIES,
+    language: languageFor(sqlitePlugin.language, CAPABILITIES),
     connect: async (config, options) => {
       const session = await sqlite.connect(config, options);
       const record: Opened = { options, pings: 0, inserts: 0, executes: 0 };

@@ -46,6 +46,7 @@ describe("frozen SQLite plugin", () => {
 
     expect(found).toMatchObject({
       status: "unavailable",
+      incompatibility: "olderMajor",
       manifest: { id: FROZEN_ID, apiVersion: OLDER_MAJOR_VERSION },
     });
     expect(found?.status === "unavailable" && found.reason).toContain("an older major");

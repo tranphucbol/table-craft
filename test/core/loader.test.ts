@@ -118,7 +118,7 @@ describe("loadPlugins", () => {
       results.map((result) => [result.manifest?.id, result.status === "unavailable" ? result.reason : null]),
     );
     expect(reasons.get("older")).toBe(
-      `Built for plugin API ${PREVIOUS_MAJOR_API_VERSION}, an older major than this TableCraft's ${API_VERSION}. Install a version of the plugin built for plugin API ${major}.x.`,
+      `Built for plugin API ${PREVIOUS_MAJOR_API_VERSION}, an older major than this TableCraft's ${API_VERSION}. Rebuild it for plugin API ${major}.x.`,
     );
     expect(reasons.get("newer")).toContain(`needs TableCraft with plugin API ${major + 1}.0 or later`);
   });
@@ -185,6 +185,37 @@ describe("loadPlugins", () => {
     const [result] = await loadPlugins([join(workspace, "builtin")]);
 
     expect(result?.status).toBe("loaded");
+  });
+
+  it("givenLanguageWithUndeclaredService_whenLoaded_thenUnavailable", async () => {
+    const source = pluginSource("chatty").replace(
+      "  language: {",
+      "  language: {\n    services: { explain: { explainable: () => ({ explainable: true }) } },",
+    );
+    await writePlugin("builtin", "chatty", { id: "chatty", source });
+
+    const [result] = await loadPlugins([join(workspace, "builtin")]);
+
+    expect(result).toMatchObject({ status: "unavailable", incompatibility: null });
+    expect(result?.status === "unavailable" && result.reason).toBe(
+      "entry has the explain service on its language but does not declare explain.",
+    );
+  });
+
+  it("givenOlderMajorManifest_whenDiscovered_thenIncompatibilityOlderMajor", async () => {
+    await writePlugin("builtin", "older", { id: "older", apiVersion: PREVIOUS_MAJOR_API_VERSION });
+
+    const [result] = await loadPlugins([join(workspace, "builtin")]);
+
+    expect(result).toMatchObject({ status: "unavailable", incompatibility: "olderMajor" });
+  });
+
+  it("givenNewerMinorManifest_whenDiscovered_thenIncompatibilityNewer", async () => {
+    await writePlugin("builtin", "newer", { id: "newer", apiVersion: NEWER_MINOR_API_VERSION });
+
+    const [result] = await loadPlugins([join(workspace, "builtin")]);
+
+    expect(result).toMatchObject({ status: "unavailable", incompatibility: "newer" });
   });
 
   it("givenDirectoryWithoutManifest_whenLoaded_thenUnavailableWithReason", async () => {

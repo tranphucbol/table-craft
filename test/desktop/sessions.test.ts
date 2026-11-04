@@ -17,6 +17,7 @@ import {
   type SessionsListing,
 } from "@table-craft/desktop/engine/protocol.js";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
+import { languageFor } from "../support/declaredServices.js";
 import { fakeManifest, SQLITE_MANIFEST } from "../support/manifests.js";
 
 const sqlite: DatasourcePlugin = sqlitePlugin;
@@ -72,6 +73,7 @@ function monitoredEngine(
     ...sqlite,
     id: PLUGIN_ID,
     capabilities: CAPABILITIES,
+    language: languageFor(sqlitePlugin.language, CAPABILITIES),
     connect: async (config, connectOptions) => {
       const session = await sqlite.connect(config, connectOptions);
       const serverSessionId = String(next++);

@@ -2,7 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { PluginError, type DatasourcePlugin, type SqlLanguage, type StatementClass } from "@table-craft/plugin-api";
+import {
+  PluginError,
+  type Capability,
+  type DatasourcePlugin,
+  type SqlLanguage,
+  type StatementClass,
+} from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
 import sqlitePlugin from "@table-craft/plugin-sqlite";
 import { createEngine } from "@table-craft/desktop/engine/engine.js";
@@ -14,12 +20,14 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { exportHarness, startExport, type ExportHarness } from "../support/engineExports.js";
+import { languageFor, USE_SWITCH } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 
 const sqlite: DatasourcePlugin = sqlitePlugin;
 const PLUGIN_ID = "switching";
 const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
 const USE = /^USE\s+(\w+)$/i;
+const CAPABILITIES: readonly Capability[] = ["sql", "transactions", "currentNamespace"];
 const KNOWN = new Set(["main", "archive"]);
 const DATASOURCE = { id: "s", pluginId: PLUGIN_ID, config: { path: ":memory:" }, readOnly: false, keepAliveSeconds: 0 };
 
@@ -31,15 +39,19 @@ function switchingPlugin(options: { failRead?: boolean } = {}) {
   let current: readonly string[] = ["main"];
   let reads = 0;
   const base = sqlite.language as SqlLanguage;
-  const language: SqlLanguage = {
-    ...base,
-    classify: (sql): StatementClass =>
-      USE.test(sql.trim()) ? { kind: "other", destructive: null, setsNamespace: true } : base.classify(sql),
-  };
+  const language = languageFor(
+    {
+      ...base,
+      classify: (sql): StatementClass =>
+        USE.test(sql.trim()) ? { kind: "other", destructive: null, setsNamespace: true } : base.classify(sql),
+    },
+    CAPABILITIES,
+    { currentNamespace: USE_SWITCH },
+  );
   const plugin: DatasourcePlugin = {
     ...sqlite,
     id: PLUGIN_ID,
-    capabilities: ["sql", "transactions", "currentNamespace"],
+    capabilities: CAPABILITIES,
     language,
     connect: async (config, connectOptions) => {
       const session = await sqlite.connect(config, connectOptions);

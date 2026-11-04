@@ -264,20 +264,19 @@ export function serviceProblems(
   const problems: ServiceProblem[] = [];
   for (const [capability, member] of Object.entries(PLUGIN_LANGUAGES) as [Capability, keyof HostPlugin][]) {
     const present = isService(plugin[member]);
-    const noun = member === "language" ? "a SQL language" : "a command language";
     if (declared.has(capability) && !present) {
       problems.push({
         kind: "missing",
         capability,
         where: "plugin",
-        message: `declares ${capability} but has no ${noun}`,
+        message: `declares ${capability} but exports no ${member}`,
       });
     } else if (!declared.has(capability) && present) {
       problems.push({
         kind: "undeclared",
         capability,
         where: "plugin",
-        message: `has ${noun} but does not declare ${capability}`,
+        message: `exports ${member} but does not declare ${capability}`,
       });
     }
   }
@@ -311,7 +310,7 @@ function keyProblems(
         kind: "undeclared",
         capability,
         where,
-        message: `has a ${capability} service on its ${where} but does not declare ${capability}`,
+        message: `has the ${capability} service on its ${where} but does not declare ${capability}`,
       });
     }
   }

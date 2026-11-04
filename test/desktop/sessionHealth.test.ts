@@ -19,6 +19,7 @@ import type {
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
+import { languageFor, USE_SWITCH } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 
 const PLUGIN_ID = "healthy";
@@ -55,11 +56,15 @@ function healthyPlugin(capabilities: readonly Capability[] = ALL_CAPABILITIES, k
   const options: { readonly session: number; readonly options: ExecuteOptions }[] = [];
   let clock = 0;
   const base = sqlite.language as SqlLanguage;
-  const language: SqlLanguage = {
-    ...base,
-    classify: (sql): StatementClass =>
-      USE.test(sql.trim()) ? { kind: "other", destructive: null, setsNamespace: true } : base.classify(sql),
-  };
+  const language = languageFor(
+    {
+      ...base,
+      classify: (sql): StatementClass =>
+        USE.test(sql.trim()) ? { kind: "other", destructive: null, setsNamespace: true } : base.classify(sql),
+    },
+    capabilities,
+    { ...(capabilities.includes("currentNamespace") ? { currentNamespace: USE_SWITCH } : {}) },
+  );
   const plugin: DatasourcePlugin = {
     ...sqlite,
     id: PLUGIN_ID,

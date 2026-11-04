@@ -6,6 +6,7 @@ import {
   type DatasourcePlugin,
   type ExecuteOptions,
   type ExecuteResult,
+  type Keyspace,
   type KeySource,
   type KeyType,
   type Problem,
@@ -70,6 +71,22 @@ const language: CommandLanguage = {
       }));
     return Promise.resolve(problems);
   },
+};
+
+const unused = (): Promise<never> => Promise.reject(new Error("The fake commands plugin does not browse keys."));
+
+/** Present only so a fake declaring `keyValue` opens (decision 155); the tests here never browse. */
+const KEYSPACE: Keyspace = {
+  delimiter: ":",
+  databases: unused,
+  scan: unused,
+  describe: unused,
+  read: unused,
+  preview: () => [],
+  apply: unused,
+  rename: unused,
+  expire: unused,
+  remove: unused,
 };
 
 export interface FakeCommandsCalls {
@@ -140,7 +157,7 @@ export function fakeCommandsPlugin(capabilities: readonly Capability[] = ["comma
           return Promise.reject(new Error(`ERR unknown command '${name ?? ""}'`));
       }
     },
-    services: {},
+    services: capabilities.includes("keyValue") ? { keyValue: KEYSPACE } : {},
     close: () => Promise.resolve(),
     serverVersion: "7.4.0",
   });

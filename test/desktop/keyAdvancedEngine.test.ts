@@ -13,6 +13,7 @@ import {
 import type { PluginLoadResult } from "@table-craft/core";
 import { createEngine, type EngineOptions } from "@table-craft/desktop/engine/engine.js";
 import type { EngineResponse, KeyTask } from "@table-craft/desktop/engine/protocol.js";
+import { SILENT_COMMAND_LANGUAGE, withDeclaredServices } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 import { exportHeader, exportRecord } from "@table-craft/desktop/engine/keyOperations/transferFormat.js";
 import { EtcdRefusal } from "@table-craft/plugin-etcd/runtime";
@@ -53,8 +54,9 @@ function setup(
   const plugin: DatasourcePlugin = {
     id: "advanced",
     capabilities: declared,
+    commandLanguage: SILENT_COMMAND_LANGUAGE,
     connectionSchema: z.object({}),
-    connect: open,
+    connect: async () => withDeclaredServices(await open(), declared),
   };
   const loaded: PluginLoadResult = {
     status: "loaded",

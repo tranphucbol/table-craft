@@ -61,7 +61,7 @@ describe("serviceProblems", () => {
     const session = { services: { schemaTree: SERVICE, nodes: SERVICE } };
 
     expect(messages(["sql", "schemaTree"], { language: LANGUAGE }, session)).toEqual([
-      "has a nodes service on its session but does not declare nodes",
+      "has the nodes service on its session but does not declare nodes",
     ]);
   });
 
@@ -73,14 +73,14 @@ describe("serviceProblems", () => {
         kind: "undeclared",
         capability: "objects",
         where: "language",
-        message: "has a objects service on its language but does not declare objects",
+        message: "has the objects service on its language but does not declare objects",
       },
     ]);
   });
 
   it("givenSqlWithoutLanguage_whenChecked_thenMissingOnPlugin", () => {
     expect(serviceProblems(["sql"], {})).toEqual([
-      { kind: "missing", capability: "sql", where: "plugin", message: "declares sql but has no a SQL language" },
+      { kind: "missing", capability: "sql", where: "plugin", message: "declares sql but exports no language" },
     ]);
   });
 
@@ -89,7 +89,7 @@ describe("serviceProblems", () => {
     const plugin = { language: language({ explain: SERVICE }), commandLanguage: COMMAND_LANGUAGE };
 
     expect(messages(["sql", "explain", "keyValue", ...FLAG_CAPABILITIES], plugin, session)).toEqual([
-      "has a command language but does not declare commands",
+      "exports commandLanguage but does not declare commands",
     ]);
   });
 });
