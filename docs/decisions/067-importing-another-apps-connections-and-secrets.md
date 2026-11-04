@@ -84,3 +84,26 @@ here and not copied) joins the sources:
   Windows vault (`workbench_user_data.dat`, DPAPI) is not read.
 - Socket and named-pipe connections are not supported; the oldest files' cleartext `password`
   parameter is imported as found in the file.
+
+## Amendment: Beekeeper Studio (plan 150)
+
+**Beekeeper Studio** (format learned from its GPL-3.0 source, `beekeeper-studio/beekeeper-studio`,
+described here and not copied) joins the sources:
+
+- `app.db` in its user data folder (`~/Library/Application Support/beekeeper-studio` or
+  `Beekeeper Studio`, `%APPDATA%\beekeeper-studio`, `~/.config/beekeeper-studio` and the Snap and
+  Flatpak copies), a SQLite database. Main opens it read-only in place through `node:sqlite`, never
+  copying or writing it, and reads `saved_connection` rows whose `workspaceId` is `-1` (the local
+  workspace; cloud workspaces live on Beekeeper's server) and the `connection_folder` tree. Columns
+  are checked first, so an install from before a column existed still reads. A file picked from
+  disk is told apart by the SQLite header and the `saved_connection` table. A database Beekeeper is
+  writing, or left with a hot journal, is reported as busy rather than read.
+- Passwords are in the row, sealed by the `simple-encryptor` format (HMAC-SHA256 then AES-256-CBC
+  under SHA-256 of the key, JSON inside) with a random per-install key, itself sealed in `.key`
+  under a constant in Beekeeper's source. They are no more protected than a plain file, so
+  TableCraft decrypts them at preview like a TablePro bundle (`inFile`), with `node:crypto` and no
+  new dependency. A failed seal or missing `.key` imports the connection to ask on connect.
+- The SSH tunnel's password and key passphrase come along the same way, the passphrase under
+  `ssh.passphrase`. A jump host (`sshBastionHost`) leaves the tunnel out with a warning, since a
+  data source tunnels through one host; a local socket and an Oracle connect string are not
+  supported.
