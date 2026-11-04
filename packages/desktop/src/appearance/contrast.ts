@@ -85,6 +85,8 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   { foreground: "ink", background: "gridSelection", kind: "ink", pick: (colors) => [colors.ink, colors.gridSelection] },
   { foreground: "keyIcon", background: "panel", kind: "nonText", pick: (colors) => [colors.keyIcon, colors.panel] },
   { foreground: "planBar", background: "canvas", kind: "nonText", pick: (colors) => [colors.planBar, colors.canvas] },
+  // A selected ER diagram table's header keeps its name readable on the selection fill (plan 152).
+  { foreground: "ink", background: "selection", kind: "ink", pick: (colors) => [colors.ink, colors.selection] },
 ];
 
 const WCAG_TEXT = 4.5;

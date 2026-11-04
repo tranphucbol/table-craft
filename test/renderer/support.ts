@@ -7,6 +7,7 @@ export const IDLE_CONTEXT: ActionContext = {
   console: null,
   table: null,
   ddl: null,
+  diagram: null,
   sessions: null,
   keyTab: null,
   serverTab: null,

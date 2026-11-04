@@ -12,6 +12,12 @@ import {
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { ddlsOf, followRedescribes, useDdl, type DdlStore } from "@table-craft/desktop/renderer/state/ddl.js";
 import {
+  diagramsOf,
+  followDiagramRedescribes,
+  useDiagrams,
+  type DiagramsStore,
+} from "@table-craft/desktop/renderer/state/diagrams.js";
+import {
   capabilitiesOf,
   useDatasources,
   type DatasourcesStore,
@@ -47,6 +53,7 @@ export interface WiredStores {
   readonly keyTabs?: KeyTabsStore;
   readonly tables?: TablesStore;
   readonly ddl?: DdlStore;
+  readonly diagrams?: DiagramsStore;
   readonly executions?: ExecutionsStore;
   readonly exports?: ExportsStore;
   readonly imports?: ImportsStore;
@@ -67,7 +74,7 @@ function isScriptEvent(event: EngineEvent): event is ScriptEvent {
 /**
  * What one store's change means for the others: a datasource whose engine went away leaves its
  * consoles and tables disconnected and its catalog forgotten, a deleted one takes its tabs with it,
- * a namespace described anew refreshes the DDL tabs showing its relations, and a closed tab's
+ * a namespace described anew refreshes the DDL tabs showing its relations and the diagrams drawing it, and a closed tab's
  * executions leave Services with it; engine events reach the exports, imports and scripts lists.
  */
 export function wireStores({
@@ -79,6 +86,7 @@ export function wireStores({
   keyTabs,
   tables,
   ddl,
+  diagrams,
   executions,
   exports,
   imports,
@@ -120,6 +128,10 @@ export function wireStores({
         tabs.getState().close(ddlId);
         ddl?.getState().close(ddlId);
       }
+      for (const diagramId of diagrams === undefined ? [] : diagramsOf(diagrams.getState().tabs, id)) {
+        tabs.getState().close(diagramId);
+        diagrams?.getState().close(diagramId);
+      }
       for (const keyId of keyTabs === undefined ? [] : keyTabsOf(keyTabs.getState().tabs, id)) {
         tabs.getState().close(keyId);
         keyTabs?.getState().close(keyId);
@@ -138,6 +150,8 @@ export function wireStores({
   });
   const offAttached = catalog === undefined ? () => undefined : followAttaches(datasources, catalog, keys);
   const offRedescribes = catalog === undefined || ddl === undefined ? () => undefined : followRedescribes(ddl, catalog);
+  const offDiagrams =
+    catalog === undefined || diagrams === undefined ? () => undefined : followDiagramRedescribes(diagrams, catalog);
   const offClosed = executions === undefined ? () => undefined : dropClosedExecutions(tabs, executions);
   const offFeatures = objects === undefined ? () => undefined : followObjectFeatures(datasources, objects);
   return () => {
@@ -147,6 +161,7 @@ export function wireStores({
     offRemoved();
     offAttached();
     offRedescribes();
+    offDiagrams();
     offClosed();
   };
 }
@@ -257,6 +272,7 @@ export function installDatasourceSync(onFirstList: () => void): () => void {
     keyTabs: useKeyTabs,
     tables: useTables,
     ddl: useDdl,
+    diagrams: useDiagrams,
     sessions: useSessions,
     server: useServer,
     executions: useExecutions,

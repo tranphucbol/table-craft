@@ -1,5 +1,12 @@
 import {
   ArrowCircleUp,
+  CornersOut,
+  FlowArrow,
+  Graph,
+  ListChecks,
+  MagicWand,
+  MagnifyingGlassMinus,
+  MagnifyingGlassPlus,
   ArrowsLeftRight,
   Bell,
   Selection,
@@ -162,6 +169,8 @@ export {
   CaretLeft as PreviousMonthIcon,
   CaretRight as NextMonthIcon,
   Robot as AgentIcon,
+  Graph as DiagramIcon,
+  ArrowSquareOut as ExternalTableIcon,
 };
 
 /** The header's type glyph per column class (plan 007 decision 7); temporal reads as a date. */
@@ -248,4 +257,11 @@ export const ACTION_ICONS: Readonly<Record<ActionIcon, Icon>> = {
   tabs: CaretDown,
   runSettings: FadersHorizontal,
   bell: Bell,
+  diagram: Graph,
+  fit: CornersOut,
+  zoomIn: MagnifyingGlassPlus,
+  zoomOut: MagnifyingGlassMinus,
+  layout: FlowArrow,
+  inferredKeys: MagicWand,
+  tables: ListChecks,
 };

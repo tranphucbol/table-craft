@@ -13,6 +13,7 @@ import {
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl, type DdlTab } from "@table-craft/desktop/renderer/state/ddl.js";
+import { useDiagrams, type DiagramTab } from "@table-craft/desktop/renderer/state/diagrams.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { useExportDataSourcesDialog } from "@table-craft/desktop/renderer/state/exportDataSourcesDialog.js";
 import { useImportDataSourcesDialog } from "@table-craft/desktop/renderer/state/importDataSourcesDialog.js";
@@ -89,6 +90,8 @@ export interface ActionContext {
   readonly table: TableSession | null;
   /** The active tab's relation definition, when the active tab is a DDL tab. */
   readonly ddl: DdlTab | null;
+  /** The active tab's ER diagram and its id, when the active tab is a diagram tab. */
+  readonly diagram: (DiagramTab & { readonly id: string }) | null;
   /** The active tab's server sessions, when the active tab is a Sessions tab. */
   readonly sessions: SessionsTab | null;
   /** The active tab's key, when the active tab is a key tab (plan 058). */
@@ -172,6 +175,7 @@ export function currentContext(tabId?: string): ActionContext {
   const console = active?.kind === "console" ? (consoles[active.id] ?? null) : null;
   const table = active?.kind === "table" ? (useTables.getState().tables[active.id] ?? null) : null;
   const ddl = active?.kind === "ddl" ? (useDdl.getState().ddls[active.id] ?? null) : null;
+  const diagramTab = active?.kind === "diagram" ? useDiagrams.getState().tabs[active.id] : undefined;
   const sessions = active?.kind === "sessions" ? (useSessions.getState().tabs[active.id] ?? null) : null;
   const keyTab = active?.kind === "key" ? (useKeyTabs.getState().tabs[active.id] ?? null) : null;
   const serverTab = active?.kind === "server" ? (useServer.getState().tabs[active.id] ?? null) : null;
@@ -179,6 +183,7 @@ export function currentContext(tabId?: string): ActionContext {
     console?.datasourceId ??
     table?.datasourceId ??
     ddl?.datasourceId ??
+    diagramTab?.datasourceId ??
     sessions?.datasourceId ??
     keyTab?.datasourceId ??
     serverTab?.datasourceId ??
@@ -202,6 +207,7 @@ export function currentContext(tabId?: string): ActionContext {
     console,
     table,
     ddl,
+    diagram: diagramTab === undefined || active === null ? null : { ...diagramTab, id: active.id },
     sessions,
     keyTab,
     serverTab,
