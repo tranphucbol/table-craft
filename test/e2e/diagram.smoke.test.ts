@@ -106,6 +106,10 @@ describe.runIf(SMOKE_ENABLED)("ER diagram", () => {
       await expect
         .poll(() => readProfileFile(userDataDir, DIAGRAMS_FILE) ?? "", { timeout: SAVE_WAIT_MS })
         .toContain(`"person_id"`);
+      // The add's save can land before the drag ends; closing before the drag's own save loses it.
+      await expect
+        .poll(() => savedPosition(userDataDir, "people"), { timeout: SAVE_WAIT_MS })
+        .toEqual(translationOf(moved));
 
       await closeApp(running?.app);
       running = null;
@@ -266,3 +270,25 @@ const WIDE_LAYOUT_MS = 60_000;
 const WIDE_SCENARIO_MS = 120_000;
 const WHEEL_STEPS = 6;
 const WHEEL_DELTA = 200;
+const NODE_TRANSLATION = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/;
+
+interface SavedDiagrams {
+  readonly datasources: Readonly<
+    Record<
+      string,
+      { readonly layouts: Readonly<Record<string, { readonly positions: Readonly<Record<string, unknown>> }>> }
+    >
+  >;
+}
+
+function translationOf(style: string | null): { x: number; y: number } | null {
+  const match = NODE_TRANSLATION.exec(style ?? "");
+  return match === null ? null : { x: Number(match[1]), y: Number(match[2]) };
+}
+
+function savedPosition(userDataDir: string, table: string): unknown {
+  const text = readProfileFile(userDataDir, DIAGRAMS_FILE);
+  if (text === null) return null;
+  const layouts = (JSON.parse(text) as SavedDiagrams).datasources[SAVED_ERD.id]?.layouts ?? {};
+  return Object.values(layouts)[0]?.positions[table] ?? null;
+}
