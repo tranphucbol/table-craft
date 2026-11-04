@@ -13,6 +13,7 @@ const MANAGED_PLUGINS_DIRECTORY = "managed-plugins";
 const MANIFEST_FILE = "table-craft-plugin.json";
 const ENTRY_FILE = "index.js";
 const PLUGINS_SCOPE = "plugins";
+export const HOST_PLATFORM = `${process.platform}-${process.arch}`;
 /** A port nothing listens on: the registry is unreachable without any request leaving the machine. */
 export const UNREACHABLE_REGISTRY = "http://127.0.0.1:9";
 
@@ -26,6 +27,15 @@ function builtFile(id: string, file: string): Buffer {
 /** A registry release of the optional plugin `id` as the development build bundled it. */
 export function builtRelease(id: string, version: string, integrity?: string): RegistryRelease {
   return release({ id, version, indexJs: builtFile(id, ENTRY_FILE) }, integrity);
+}
+
+/** The host's package of a native plugin (decision 156): the bundle and the binding the build copied beside it. */
+export function builtNativeRelease(id: string, version: string): RegistryRelease {
+  const native = readdirSync(join(OPTIONAL_PLUGINS, id)).filter(
+    (file) => file !== ENTRY_FILE && file !== MANIFEST_FILE && !file.endsWith(".map"),
+  );
+  const extra = native.map((file) => ({ path: `package/${file}`, data: builtFile(id, file) }));
+  return release({ id, version, platform: HOST_PLATFORM, indexJs: builtFile(id, ENTRY_FILE), extra });
 }
 
 export interface SeededPlugin {
