@@ -59,6 +59,7 @@ const SCOPES: Readonly<Record<string, string>> = {
   "objects.apply": "objects",
   "sessions.cancel": "sessions",
   "sessions.terminate": "sessions",
+  "catalog.inferredKeys": "diagram",
 };
 const DEFAULT_SCOPE = "request";
 
@@ -179,6 +180,8 @@ function summary(request: LoggedRequest, result: unknown, context: RequestContex
       return ["cancelled query of session", { ...base, ...serverSession(request.target), ...context.target }];
     case "sessions.terminate":
       return ["terminated session", { ...base, ...serverSession(request.target), ...context.target }];
+    case "catalog.inferredKeys":
+      return ["keys inferred", { ...base, count: Array.isArray(result) ? result.length : null }];
     default:
       return null;
   }

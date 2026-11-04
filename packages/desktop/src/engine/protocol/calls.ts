@@ -3,6 +3,7 @@ import type {
   CompletionScope,
   Declaration,
   DescribedCatalog,
+  InferredKey,
   Namespace,
   Routine,
   RoutineArgument,
@@ -398,6 +399,11 @@ export interface EngineCalls extends KeyAdvancedCalls {
     params: { readonly path: readonly string[]; readonly refresh?: boolean };
     result: DescribedCatalog;
   };
+  /**
+   * The foreign keys `path`'s names and types suggest but the database does not declare, read
+   * through the same cache as `catalog.describe`. Only the ER diagram draws them. Needs `schemaTree`.
+   */
+  "catalog.inferredKeys": { params: { readonly path: readonly string[] }; result: readonly InferredKey[] };
   /** `name` inside `path`, quoted by the plugin (decision 008). Needs `schemaTree`. */
   "catalog.qualifiedName": { params: { readonly path: readonly string[]; readonly name: string }; result: string };
   /**

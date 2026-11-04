@@ -15,6 +15,7 @@ import {
   RESULT_WINDOW_ROWS,
   SSH_AUTH_METHODS,
   type CachedCatalog,
+  type InferredKey,
   type CellInput,
   type CoreErrorCode,
   type EditableIdentity,
@@ -211,6 +212,7 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.Namespace>().toEqualTypeOf<Namespace>();
     expectTypeOf<protocol.NamespaceCatalog>().toEqualTypeOf<NamespaceCatalog>();
     expectTypeOf<protocol.DescribedCatalog>().toEqualTypeOf<CachedCatalog>();
+    expectTypeOf<protocol.InferredKey>().toEqualTypeOf<InferredKey>();
   });
 
   it("givenPluginErrorCodes_whenComparedWithEngineErrorCodes_thenEveryOneIsCovered", () => {
