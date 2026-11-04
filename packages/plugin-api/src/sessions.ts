@@ -62,3 +62,23 @@ export interface SessionMonitor {
   /** Ends the target's connection; rejects as `cancelSession` does. */
   terminateSession(target: SessionTarget): Promise<void>;
 }
+
+/** The `sessions` service (decision 088): the server's sessions, and which of them is this connection. */
+export interface ServerSessions extends SessionMonitor {
+  /** The server's id for this connection, as `ServerSession.id` lists it, so the host can tell its own sessions apart. */
+  readonly ownId: string;
+  /**
+   * The `ServerSession.instance` this connection is listed under, where an id names a session on one
+   * server of a cluster only (TiDB before Global Kill); absent elsewhere, or when the server would
+   * not say, and the host then matches by id alone. A plugin for which finding it costs a round trip
+   * offers `findOwnInstance` instead.
+   */
+  readonly ownInstance?: string;
+  /**
+   * Where an id names a session on one server of a cluster only and finding which costs a round
+   * trip (TiDB before Global Kill): the `ServerSession.instance` this connection is listed under, or
+   * null when the server would not say. The host calls it only while nothing runs on the session,
+   * and only when a listing shows the session's id on more than one instance.
+   */
+  findOwnInstance?(): Promise<string | null>;
+}

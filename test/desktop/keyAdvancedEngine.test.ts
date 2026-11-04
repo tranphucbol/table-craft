@@ -3,6 +3,8 @@ import {
   PluginError,
   z,
   type Capability,
+  type ClusterMaintenance,
+  type ClusterMembers,
   type DatasourcePlugin,
   type Session,
   type KeyWatch,
@@ -11,6 +13,7 @@ import {
 import type { PluginLoadResult } from "@table-craft/core";
 import { createEngine, type EngineOptions } from "@table-craft/desktop/engine/engine.js";
 import type { EngineResponse, KeyTask } from "@table-craft/desktop/engine/protocol.js";
+import { SILENT_COMMAND_LANGUAGE, withDeclaredServices } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 import { exportHeader, exportRecord } from "@table-craft/desktop/engine/keyOperations/transferFormat.js";
 import { EtcdRefusal } from "@table-craft/plugin-etcd/runtime";
@@ -51,8 +54,9 @@ function setup(
   const plugin: DatasourcePlugin = {
     id: "advanced",
     capabilities: declared,
+    commandLanguage: SILENT_COMMAND_LANGUAGE,
     connectionSchema: z.object({}),
-    connect: open,
+    connect: async () => withDeclaredServices(await open(), declared),
   };
   const loaded: PluginLoadResult = {
     status: "loaded",
@@ -66,8 +70,9 @@ function setup(
     ...(options.files === undefined ? {} : { operationFiles: options.files }),
   });
 }
-function session(services: Partial<Session> = {}): Session {
-  return { execute: vi.fn(), serverVersion: null, close: vi.fn().mockResolvedValue(undefined), ...services };
+type Services = Session["services"];
+function session({ close, ...services }: Services & { readonly close?: Session["close"] } = {}): Session {
+  return { execute: vi.fn(), serverVersion: null, close: close ?? vi.fn().mockResolvedValue(undefined), services };
 }
 function result<T>(response: EngineResponse): T {
   if (response.type === "engine.error") throw new Error(response.error.message);
@@ -88,7 +93,7 @@ describe("advanced engine routes", () => {
       const read = vi.fn().mockResolvedValue([]);
       const files = { read: vi.fn(), publish: vi.fn() };
       const grant = vi.fn(() => files);
-      const engine = setup(() => Promise.resolve(session({ leases: { list: read } as unknown as Session["leases"] })));
+      const engine = setup(() => Promise.resolve(session({ leases: { list: read } as unknown as Services["leases"] })));
       const connection = engine.connect(undefined, filesForPort("mcp-owner", flag, grant));
       expect(result(await connection.handle({ id: 1, type: "leases.list" }))).toEqual([]);
       expect(read).toHaveBeenCalledTimes(1);
@@ -125,7 +130,7 @@ describe("advanced engine routes", () => {
     new PluginError("conflict", "Preview changed; nothing was written."),
   ])("givenDefiniteRefusal_whenMutationFails_thenPreserveTypedMessageWithoutUncertainty", async (failure) => {
     const grant = vi.fn().mockRejectedValue(failure);
-    const engine = setup(() => Promise.resolve(session({ leases: { grant } as unknown as Session["leases"] })));
+    const engine = setup(() => Promise.resolve(session({ leases: { grant } as unknown as Services["leases"] })));
     expect(await engine.connect().handle({ id: 1, type: "leases.grant", ttlSeconds: "60" })).toMatchObject({
       type: "engine.error",
       error: { code: failure.code, message: failure.message },
@@ -137,12 +142,12 @@ describe("advanced engine routes", () => {
   it("givenLostAdminSession_whenLaterReadArrives_thenReconnectOnlyForNewWorkAndNeverReplayMutation", async () => {
     const grant = vi.fn().mockRejectedValue(new PluginError("connectionLost", "lost"));
     const closeOld = vi.fn().mockResolvedValue(undefined);
-    const old = session({ close: closeOld, leases: { grant } as unknown as Session["leases"] });
+    const old = session({ close: closeOld, leases: { grant } as unknown as Services["leases"] });
     const list = vi.fn().mockResolvedValue([]);
     const open = vi
       .fn()
       .mockResolvedValueOnce(old)
-      .mockResolvedValueOnce(session({ leases: { list } as unknown as Session["leases"] }));
+      .mockResolvedValueOnce(session({ leases: { list } as unknown as Services["leases"] }));
     const engine = setup(open);
     const connection = engine.connect();
     expect(await connection.handle({ id: 1, type: "leases.grant", ttlSeconds: "60" })).toMatchObject({
@@ -172,9 +177,9 @@ describe("advanced engine routes", () => {
       leases: {
         keepAlive: () => Promise.resolve(resource),
         get: () => Promise.resolve(lease),
-      } as unknown as Session["leases"],
+      } as unknown as Services["leases"],
     });
-    const admin = session({ leases: { list: () => Promise.resolve([]) } as unknown as Session["leases"] });
+    const admin = session({ leases: { list: () => Promise.resolve([]) } as unknown as Services["leases"] });
     const engine = setup(vi.fn().mockResolvedValueOnce(owned).mockResolvedValueOnce(admin));
     const connection = engine.connect();
     const started = result<{ keepAliveId: string }>(
@@ -239,7 +244,7 @@ describe("advanced engine routes", () => {
 
   it("givenMutationTransportFailure_whenGrantCalled_thenNeverReplaysOnHelper", async () => {
     const grant = vi.fn().mockRejectedValue(new PluginError("connectionLost", "uncertain"));
-    const leases = { grant } as unknown as NonNullable<Session["leases"]>;
+    const leases = { grant } as unknown as NonNullable<Services["leases"]>;
     const open = vi.fn(() => Promise.resolve(session({ leases })));
     const engine = setup(open);
     const response = await engine.connect().handle({ id: 1, type: "leases.grant", ttlSeconds: "60" });
@@ -265,8 +270,8 @@ describe("advanced engine routes", () => {
     const open = vi.fn(() =>
       Promise.resolve(
         session({
-          keyspace: { prepareDelete, deletePrepared } as unknown as Session["keyspace"],
-          leases: { list: () => Promise.resolve([]) } as unknown as Session["leases"],
+          keyValue: { prepareDelete, deletePrepared } as unknown as Services["keyValue"],
+          leases: { list: () => Promise.resolve([]) } as unknown as Services["leases"],
         }),
       ),
     );
@@ -326,7 +331,7 @@ describe("advanced engine routes", () => {
         keepAlive: () => Promise.resolve(resource),
         get: () => Promise.resolve(lease),
         revokePrepared,
-      } as unknown as Session["leases"],
+      } as unknown as Services["leases"],
     });
     const engine = setup(() => Promise.resolve(owned));
     const connection = engine.connect();
@@ -349,8 +354,8 @@ describe("advanced engine routes", () => {
         await Promise.resolve();
         order.push(id);
       },
-    } as unknown as Session["cluster"];
-    const engine = setup(() => Promise.resolve(session({ cluster })));
+    } as unknown as ClusterMembers & ClusterMaintenance;
+    const engine = setup(() => Promise.resolve(session({ members: cluster, maintenance: cluster })));
     const connection = engine.connect();
     result<KeyTask>(
       await connection.handle({ id: 1, type: "maintenance.defragmentStart", endpointIds: ["leader", "follower"] }),
@@ -377,8 +382,8 @@ describe("advanced engine routes", () => {
     const cluster = {
       endpoints: () => Promise.resolve([{ id: "one" }, { id: "two" }]),
       hash,
-    } as unknown as Session["cluster"];
-    const engine = setup(() => Promise.resolve(session({ cluster })));
+    } as unknown as ClusterMembers & ClusterMaintenance;
+    const engine = setup(() => Promise.resolve(session({ members: cluster, maintenance: cluster })));
     const connection = engine.connect();
     await connection.handle({
       id: 1,
@@ -411,7 +416,7 @@ describe("advanced engine routes", () => {
       publish: vi.fn(),
     };
     const engine = setup(
-      () => Promise.resolve(session({ keyTransfer: { inspect } as unknown as Session["keyTransfer"] })),
+      () => Promise.resolve(session({ bulkTransfer: { inspect } as unknown as Services["bulkTransfer"] })),
       {
         files,
       },
@@ -459,10 +464,10 @@ describe("advanced engine routes", () => {
         () =>
           Promise.resolve(
             session({
-              keyTransfer: {
+              bulkTransfer: {
                 exportPage: () => Promise.resolve(identity),
                 importChunk,
-              } as unknown as Session["keyTransfer"],
+              } as unknown as Services["bulkTransfer"],
             }),
           ),
         { files },

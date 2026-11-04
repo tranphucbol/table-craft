@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { CommandTransaction, CommandTransactionOperation, Session } from "@table-craft/plugin-api";
+import type {
+  CommandTransaction,
+  CommandTransactionOperation,
+  Session,
+  SessionServices,
+} from "@table-craft/plugin-api";
 import {
   classify,
   consoleHistoryPolicy,
@@ -236,7 +241,7 @@ describe("etcd managed console intents", () => {
   it("givenServiceBackedCompletion_whenListed_thenSignedLeasesUseConsoleHexAndPrefixesAreBounded", async () => {
     const services = {
       leases: { list: () => Promise.resolve([{ id: "-1", remainingTtlSeconds: null }]) },
-    } as unknown as Pick<Session, "leases" | "access" | "cluster">;
+    } as unknown as Partial<Pick<SessionServices, "leases" | "access" | "members">>;
     expect(await suggestConsoleValues(services, "lease", "ff")).toEqual([
       { label: "ffffffffffffffff", apply: "ffffffffffffffff", detail: "global lease; TTL unknown" },
     ]);

@@ -53,9 +53,21 @@ export interface PluginService {
   installFile(bytes: Uint8Array): Promise<InstallOutcome>;
   remove(pluginId: string): Promise<void>;
   updateAll(): Promise<InstallOutcome[]>;
-  /** Downloads each catalog plugin a saved data source names and no root provides (decision 110). */
+  /**
+   * Downloads each catalog plugin a saved data source names and no root provides (decision 110),
+   * and each one downloaded from the registry for an older plugin API major (decision 155).
+   */
   installMissing(pluginIds: readonly string[]): Promise<void>;
+  /** The downloaded plugins built for an older plugin API major, which only an update makes usable. */
+  outdated(): readonly string[];
+  /**
+   * Installs `pluginId`'s build for this TableCraft when it is outdated, sharing a download already
+   * running; false when it is not outdated. Rejects when the update fails.
+   */
+  updateOutdated(pluginId: string): Promise<boolean>;
 }
+
+const UPDATING_REASON = "Built for an older TableCraft. Updating…";
 
 function within(directory: string, root: string): boolean {
   return directory.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
@@ -82,9 +94,36 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     return "user";
   }
 
+  const managedAt = (directory: string) =>
+    managed.find((plugin) => directory === plugin.directory || within(directory, plugin.directory));
+
+  /** Only a registry download is replaced: a plugin installed from a file stays what its user chose. */
+  function outdated(): string[] {
+    const ids = installed.plugins
+      .filter(
+        (plugin, index) =>
+          plugin.needs === "pluginUpdate" &&
+          PLUGIN_CATALOG.some((entry) => entry.id === plugin.id) &&
+          managedAt(installed.report[index]?.directory ?? "")?.source === "registry",
+      )
+      .map((plugin) => plugin.id)
+      .filter((id) => !installed.plugins.some((plugin) => plugin.id === id && plugin.unavailableReason === null));
+    return [...new Set(ids)];
+  }
+
+  function plugins(): PluginInfo[] {
+    const updating = outdated();
+    return installed.plugins.map((plugin) => {
+      if (plugin.needs !== "pluginUpdate" || !updating.includes(plugin.id)) return plugin;
+      const progress = installer.progress(plugin.id);
+      const reason = progress.status === "failed" ? `Update failed: ${progress.message}` : UPDATING_REASON;
+      return { ...plugin, unavailableReason: reason };
+    });
+  }
+
   function state(): PluginsState {
     return {
-      plugins: installed.plugins,
+      plugins: plugins(),
       catalog: PLUGIN_CATALOG.map((entry) => {
         const plugin = installed.plugins.find((info) => info.id === entry.id && info.unavailableReason === null);
         return { ...entry, installedVersion: plugin?.version ?? null, install: installer.progress(entry.id) };
@@ -94,12 +133,7 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
 
   async function rediscover(): Promise<void> {
     managed = await listManaged(options.managedRoot);
-    installed = await discoverInstalled(
-      roots(),
-      sourceOf,
-      (directory) =>
-        managed.find((plugin) => directory === plugin.directory || within(directory, plugin.directory))?.version,
-    );
+    installed = await discoverInstalled(roots(), sourceOf, (directory) => managedAt(directory)?.version);
   }
 
   let pending: Promise<void> = Promise.resolve();
@@ -142,7 +176,7 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
       return installed.report;
     },
     roots,
-    plugins: () => installed.plugins,
+    plugins,
     report: () => installed.report,
     state,
     install: (pluginId) => settled(installer.install(pluginId)),
@@ -161,15 +195,23 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     },
     updateAll: () => settled(installer.updateAll()),
     async installMissing(pluginIds) {
-      const wanted = [...new Set(pluginIds)].filter(
+      const stale = outdated();
+      const missing = [...new Set(pluginIds)].filter(
         (id) =>
           PLUGIN_CATALOG.some((entry) => entry.id === id) && !installed.plugins.some((plugin) => plugin.id === id),
       );
-      for (const id of wanted) {
-        log.info("plugin missing; installing", { pluginId: id, usedBy: options.usedBy(id) });
+      for (const id of [...missing, ...stale.filter((id) => !missing.includes(id))]) {
+        const message = stale.includes(id) ? "plugin outdated; updating" : "plugin missing; installing";
+        log.info(message, { pluginId: id, usedBy: options.usedBy(id) });
         await installer.install(id).catch(() => undefined);
       }
       await pending;
+    },
+    outdated,
+    async updateOutdated(pluginId) {
+      if (!outdated().includes(pluginId)) return false;
+      await settled(installer.install(pluginId));
+      return true;
     },
   };
 }

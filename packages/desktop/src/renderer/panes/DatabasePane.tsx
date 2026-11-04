@@ -106,6 +106,7 @@ import {
   WIDE_MENU_CONTENT,
 } from "@table-craft/desktop/renderer/ui/menu.js";
 import { MissingPlugin } from "@table-craft/desktop/renderer/ui/MissingPlugin.js";
+import { missingPlugin, needsNewerApp } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import {
   ACTION_ICONS,
   CollapsedIcon,
@@ -369,7 +370,9 @@ function DatasourceLabel({
   const connection = useDatasources((state) => connectionOf(state, datasource.id));
   const plugin = useDatasources((state) => pluginOf(state.plugins, datasource.pluginId));
   const missing = useDatasources(
-    (state) => plugin === undefined && state.catalog.some((entry) => entry.id === datasource.pluginId),
+    (state) =>
+      missingPlugin(state.catalog, state.plugins, datasource.pluginId) !== undefined ||
+      needsNewerApp(state.plugins, datasource.pluginId),
   );
   const brand = useDatasourceBrand(datasource);
   const logo = useBrandLogo(brand);

@@ -3,11 +3,10 @@ import type { ColumnMetadata } from "tedious/lib/token/colmetadata-token-parser.
 import {
   PluginError,
   z,
+  definePlugin,
   type CancelReach,
-  type Capability,
   type Column,
   type ConnectOptions,
-  type DatasourcePlugin,
   type ExecuteOptions,
   type ExecuteResult,
   type ExplainedPlan,
@@ -15,10 +14,9 @@ import {
   type InsertRow,
   type InsertTarget,
   type ParameterValue,
+  type PluginSession,
   type Row,
   type ServerMessage,
-  type Session,
-  type SessionMonitor,
   type StatementKind,
   type TlsInfo,
   type TransactionMode,
@@ -30,7 +28,7 @@ import { insertChunks } from "./bulk.js";
 import { serverErrorPosition } from "./errorPosition.js";
 import { explainBatches, PLAN_COLUMN, readPlan } from "./explain.js";
 import { mssqlIntrospector, type Reader } from "./introspect.js";
-import { language, nationalText, quoteIdentifier } from "./language.js";
+import { CAPABILITIES, language, nationalText, quoteIdentifier, type MssqlCapability } from "./language.js";
 import { infoMessage, MessageCollector, type InfoMessage } from "./messages.js";
 import { serverVersionOf } from "./server.js";
 import { mssqlSessions } from "./sessions.js";
@@ -39,23 +37,6 @@ import { bigintValue, columnOf, installExactValues, wireValue } from "./values.j
 
 const PLUGIN_ID = "mssql";
 const CANCEL_REACH: CancelReach = { method: "TDS attention", reaches: "statement" };
-
-const CAPABILITIES: readonly Capability[] = [
-  "sql",
-  "cancel",
-  "schemaTree",
-  "transactions",
-  "ddl",
-  "explain",
-  "explainAnalyze",
-  "currentNamespace",
-  "keepAlive",
-  "bulkInsert",
-  "objects",
-  "serverMessages",
-  "sessions",
-  "routineCall",
-];
 
 const AUTHENTICATIONS = ["sql", "ntlm", "azure-active-directory-password", "azure-active-directory-default"] as const;
 
@@ -254,7 +235,7 @@ function moreResultSetsMessage(count: number): ServerMessage {
   return { level: "info", code: null, text: `${sets} in this batch; separate statements with ; to see each.` };
 }
 
-class MssqlSession implements Session {
+class MssqlSession implements PluginSession<MssqlCapability> {
   readonly #connection: Connection;
   readonly #lane = new Lane();
   readonly #readOnly: boolean;
@@ -265,24 +246,19 @@ class MssqlSession implements Session {
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "microsoftsqlserver";
-  readonly cancelReach = CANCEL_REACH;
-  readonly serverSessionId: string;
   readonly tls: TlsInfo | null;
-  readonly introspector;
-  readonly sessions: SessionMonitor;
-  readonly transactions: Transactions;
+  readonly services: PluginSession<MssqlCapability>["services"];
 
   private constructor(connection: Connection, identity: Identity, fresh: () => Promise<Connection>, readOnly: boolean) {
     this.#connection = connection;
     this.#readOnly = readOnly;
     this.serverVersion = serverVersionOf(identity.version, identity.edition);
-    this.serverSessionId = String(identity.id);
     this.tls = tlsInfoOf(connection.socket) ?? tlsInfoOf(TLS_LAYER.get(connection));
     connection.on("error", (error: Error) => (this.#broken ??= error));
     connection.on("end", () => (this.#broken ??= new Error("The server closed the connection.")));
     const read: Reader = (sql, params = []) => this.#read(sql, params);
-    this.introspector = mssqlIntrospector(read, quoteIdentifier, nationalText);
-    this.sessions = mssqlSessions(read, async (work) => {
+    const introspector = mssqlIntrospector(read, quoteIdentifier, nationalText);
+    const monitor = mssqlSessions(read, async (work) => {
       const other = await fresh();
       try {
         return await work((sql, params = []) => readAll(other, sql, params));
@@ -292,7 +268,7 @@ class MssqlSession implements Session {
     });
     const mode = (): TransactionMode => this.#mode;
     const open = (): boolean => this.#open;
-    this.transactions = {
+    const transactions: Transactions = {
       setMode: (mode) => this.#setMode(mode),
       commit: () => this.#endTransaction(COMMIT_SQL),
       rollback: () => this.#endTransaction(ROLLBACK_SQL),
@@ -302,6 +278,17 @@ class MssqlSession implements Session {
       get open() {
         return open();
       },
+    };
+    this.services = {
+      cancel: { cancel: () => this.#cancel(), reach: CANCEL_REACH },
+      schemaTree: introspector,
+      ddl: introspector,
+      transactions,
+      explain: { explain: (sql, options) => this.#explain(sql, options) },
+      currentNamespace: { current: () => this.#currentNamespace() },
+      keepAlive: { ping: () => this.#ping() },
+      bulkInsert: { insertRows: (target, rows) => this.#insertRows(target, rows) },
+      sessions: { ...monitor, ownId: String(identity.id) },
     };
   }
 
@@ -439,7 +426,7 @@ class MssqlSession implements Session {
     }
   }
 
-  async cancel(): Promise<void> {
+  async #cancel(): Promise<void> {
     const running = this.#running;
     if (running === null) return;
     running.cancelRequested = true;
@@ -447,7 +434,7 @@ class MssqlSession implements Session {
     await this.#cancelling;
   }
 
-  async currentNamespace(): Promise<readonly string[] | null> {
+  async #currentNamespace(): Promise<readonly string[] | null> {
     this.#checkUsable();
     try {
       const [set] = await this.#read(NAMESPACE_SQL, []);
@@ -458,7 +445,7 @@ class MssqlSession implements Session {
     }
   }
 
-  async ping(): Promise<void> {
+  async #ping(): Promise<void> {
     try {
       await this.#read(PING_SQL, []);
     } catch (cause) {
@@ -466,7 +453,7 @@ class MssqlSession implements Session {
     }
   }
 
-  async insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
+  async #insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
     if (this.#broken !== null) {
       throw new PluginError("connectionFailed", `The connection was lost: ${this.#broken.message}`);
     }
@@ -486,9 +473,9 @@ class MssqlSession implements Session {
     });
   }
 
-  async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
-    const verdict = language.explainable?.(sql, options);
-    if (verdict !== undefined && !verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
+  async #explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
+    const verdict = language.services.explain.explainable(sql, options);
+    if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     this.#checkUsable();
     const { on, off, statement } = explainBatches(sql, options.analyze);
     const collector = new MessageCollector();
@@ -556,12 +543,10 @@ class MssqlSession implements Session {
   }
 }
 
-const plugin: DatasourcePlugin = {
+export default definePlugin({
   id: PLUGIN_ID,
   capabilities: CAPABILITIES,
   language,
   connectionSchema,
   connect: (config, options) => MssqlSession.open(connectionSchema.parse(config), options),
-};
-
-export default plugin;
+});

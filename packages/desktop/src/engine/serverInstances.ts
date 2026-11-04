@@ -1,6 +1,7 @@
-import type { ServerSession, Session } from "@table-craft/plugin-api";
+import type { ServerSession, ServerSessions, Session } from "@table-craft/plugin-api";
+import { hasService, serviceOf } from "@table-craft/desktop/engine/services.js";
 
-/** What each session's `findServerInstance` answered, null for a failure; a reconnect brings a new `Session`. */
+/** What each session's `findOwnInstance` answered, null for a failure; a reconnect brings a new `Session`. */
 const found = new WeakMap<Session, string | null>();
 const asking = new WeakMap<Session, Promise<void>>();
 
@@ -22,10 +23,11 @@ export function repeatedIds(rows: readonly ServerSession[]): ReadonlySet<string>
 export function learnInstance(session: Session, repeated: ReadonlySet<string>): Promise<void> | null {
   const pending = asking.get(session);
   if (pending !== undefined) return pending;
-  const id = session.serverSessionId;
-  if (id === undefined || !repeated.has(id) || session.serverInstance !== undefined || found.has(session)) return null;
-  if (session.findServerInstance === undefined) return null;
-  const lookup = session.findServerInstance().then(
+  const sessions = sessionsOf(session);
+  if (sessions === undefined) return null;
+  if (!repeated.has(sessions.ownId) || sessions.ownInstance !== undefined || found.has(session)) return null;
+  if (sessions.findOwnInstance === undefined) return null;
+  const lookup = sessions.findOwnInstance().then(
     (instance) => {
       found.set(session, instance);
     },
@@ -40,7 +42,12 @@ export function learnInstance(session: Session, repeated: ReadonlySet<string>): 
 
 /** Whether `row` is `session`'s own connection, by id and, where the instance is known, instance. */
 export function isListedAs(session: Session, row: ServerSession): boolean {
-  if (session.serverSessionId !== row.id) return false;
-  const instance = session.serverInstance ?? found.get(session) ?? undefined;
+  const sessions = sessionsOf(session);
+  if (sessions?.ownId !== row.id) return false;
+  const instance = sessions.ownInstance ?? found.get(session) ?? undefined;
   return instance === undefined || instance === row.instance;
+}
+
+function sessionsOf(session: Session): ServerSessions | undefined {
+  return hasService(session, "sessions") ? serviceOf(session, "sessions") : undefined;
 }

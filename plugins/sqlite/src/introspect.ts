@@ -6,6 +6,7 @@ import {
   type ColumnMeta,
   type ForeignKey,
   type Index,
+  type DefinitionReader,
   type Introspector,
   type Key,
   type Namespace,
@@ -86,7 +87,7 @@ async function introspecting<T>(work: () => T): Promise<T> {
 }
 
 /** Reads the `pragma_*` table-valued functions, one relation at a time; SQLite answers them from memory. */
-export function sqliteIntrospector(database: DatabaseSync): Introspector {
+export function sqliteIntrospector(database: DatabaseSync): Introspector & DefinitionReader {
   function all<T>(sql: string, ...values: (string | number)[]): T[] {
     return database.prepare(sql).all(...values) as T[];
   }

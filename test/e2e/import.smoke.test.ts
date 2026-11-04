@@ -5,6 +5,8 @@
  * PostgreSQL and MySQL need the `test/db/compose.yml` containers:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/021 bun run test:smoke:db
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,6 +16,7 @@ import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
+import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import { chaosProxy, type ChaosProxy } from "../support/chaosProxy.js";
 import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
@@ -37,6 +40,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("021");
+const captureLive = evidenceFor("151");
 
 const LIVE_TABLE = "import_live";
 /** Enough rows that the import is still writing when the scenario looks, over a slowed link. */
@@ -48,7 +52,7 @@ const SHOWN_PROGRESS_ROWS = 12_000;
 const CHAOS_SCENARIO_TIMEOUT_MS = SCENARIO_TIMEOUT_MS * 3;
 const UTF16_LE_BOM = Buffer.from([0xff, 0xfe]);
 
-type Plugin = typeof postgres;
+type Plugin = DatasourcePlugin;
 
 function sqlite(path = seededSqliteFile()): Datasource {
   return { id: "lite", pluginId: "sqlite", config: { path } };
@@ -231,6 +235,7 @@ describe.runIf(SMOKE_ENABLED)("CSV import live test", () => {
       await page.keyboard.press("ArrowRight");
       await treeRow(page, "cities").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
       await captureWindow(page, "import-new-table-done");
+      await captureLive(page, "03-import");
     },
     SCENARIO_TIMEOUT_MS,
   );

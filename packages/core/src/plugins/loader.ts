@@ -8,7 +8,9 @@ import {
   MANIFEST_FILE,
   parseVersion,
   pluginManifestSchema,
+  serviceProblems,
   type DatasourcePlugin,
+  type Incompatibility,
   type PluginManifest,
 } from "@table-craft/plugin-api";
 
@@ -25,6 +27,8 @@ export interface UnavailablePlugin {
   /** Present when the manifest was valid, so the UI can still name the plugin. */
   readonly manifest: PluginManifest | null;
   readonly reason: string;
+  /** Why the plugin's API version does not fit this host, when that is why it is unavailable. */
+  readonly incompatibility: Incompatibility | null;
 }
 
 export type PluginLoadResult = LoadedPlugin | UnavailablePlugin;
@@ -76,36 +80,45 @@ function incompatibleReason(apiVersion: string, hostVersion: string): string {
     return `Built for plugin API ${apiVersion}: needs TableCraft with plugin API ${needed.major}.${needed.minor} or later; this TableCraft provides ${hostVersion}. Update the app.`;
   }
   if (why === "olderMajor" && host !== null) {
-    return `Built for plugin API ${apiVersion}, an older major than this TableCraft's ${hostVersion}. Install a version of the plugin built for plugin API ${host.major}.x.`;
+    return `Built for plugin API ${apiVersion}, an older major than this TableCraft's ${hostVersion}. Rebuild it for plugin API ${host.major}.x.`;
   }
   return `Built for plugin API ${apiVersion}, but this TableCraft provides ${hostVersion}. Install a compatible version of the plugin.`;
 }
 
-type ManifestRead = { ok: true; manifest: PluginManifest } | { ok: false; reason: string };
+type ManifestRead =
+  { ok: true; manifest: PluginManifest } | { ok: false; reason: string; incompatibility: Incompatibility | null };
+
+function unreadable(reason: string): ManifestRead {
+  return { ok: false, reason, incompatibility: null };
+}
 
 async function readManifest(directory: string, hostVersion: string): Promise<ManifestRead> {
   let text: string;
   try {
     text = await readFile(join(directory, MANIFEST_FILE), "utf8");
   } catch (error) {
-    if (isMissing(error)) return { ok: false, reason: `No ${MANIFEST_FILE}; add one or remove the directory.` };
-    return { ok: false, reason: `Cannot read ${MANIFEST_FILE}: ${describe(error)}` };
+    if (isMissing(error)) return unreadable(`No ${MANIFEST_FILE}; add one or remove the directory.`);
+    return unreadable(`Cannot read ${MANIFEST_FILE}: ${describe(error)}`);
   }
   let json: unknown;
   try {
     json = JSON.parse(text);
   } catch (error) {
-    return { ok: false, reason: `${MANIFEST_FILE} is not valid JSON: ${describe(error)}` };
+    return unreadable(`${MANIFEST_FILE} is not valid JSON: ${describe(error)}`);
   }
   const parsed = pluginManifestSchema.safeParse(json);
   const apiVersion = (json as { apiVersion?: unknown } | null)?.apiVersion;
   if (!parsed.success && typeof apiVersion === "string" && !isCompatible(apiVersion, hostVersion)) {
     // An older plugin fails the schema for fields its contract never had; the version says why.
-    return { ok: false, reason: incompatibleReason(apiVersion, hostVersion) };
+    return {
+      ok: false,
+      reason: incompatibleReason(apiVersion, hostVersion),
+      incompatibility: incompatibility(apiVersion, hostVersion),
+    };
   }
   if (!parsed.success) {
     const issues = parsed.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`);
-    return { ok: false, reason: `${MANIFEST_FILE} is invalid: ${issues.join("; ")}` };
+    return unreadable(`${MANIFEST_FILE} is invalid: ${issues.join("; ")}`);
   }
   return { ok: true, manifest: parsed.data };
 }
@@ -122,34 +135,19 @@ function isDatasourcePlugin(value: unknown): value is DatasourcePlugin {
   );
 }
 
-const LANGUAGE_METHODS = ["split", "classify", "quoteIdentifier", "literal"] as const;
-type LanguageMethod = (typeof LANGUAGE_METHODS)[number];
-
-/**
- * `language` is how the console splits and classifies and how Copy writes SQL (decision 008); a
- * SQL plugin cannot run without it.
- */
-function hasLanguage(plugin: DatasourcePlugin): boolean {
-  const language = plugin.language as Partial<Record<LanguageMethod, unknown>> | undefined;
-  return LANGUAGE_METHODS.every((method) => typeof language?.[method] === "function");
-}
-
-const COMMAND_LANGUAGE_METHODS = ["split", "classify", "complete"] as const;
-type CommandLanguageMethod = (typeof COMMAND_LANGUAGE_METHODS)[number];
-
-/** `commandLanguage` is the console's split, classify and completion for a command plugin (decision 112). */
-function hasCommandLanguage(plugin: DatasourcePlugin): boolean {
-  const language = plugin.commandLanguage as Partial<Record<CommandLanguageMethod, unknown>> | undefined;
-  return COMMAND_LANGUAGE_METHODS.every((method) => typeof language?.[method] === "function");
-}
-
 function sameCapabilities(manifest: PluginManifest, plugin: DatasourcePlugin): boolean {
   const declared = new Set<string>(manifest.capabilities);
   return declared.size === plugin.capabilities.length && plugin.capabilities.every((name) => declared.has(name));
 }
 
 async function importPlugin(directory: string, manifest: PluginManifest): Promise<PluginLoadResult> {
-  const unavailable = (reason: string): UnavailablePlugin => ({ status: "unavailable", directory, manifest, reason });
+  const unavailable = (reason: string): UnavailablePlugin => ({
+    status: "unavailable",
+    directory,
+    manifest,
+    reason,
+    incompatibility: null,
+  });
   const entry = resolve(directory, manifest.entry);
   const fromDirectory = relative(directory, entry);
   if (fromDirectory.startsWith("..") || isAbsolute(fromDirectory)) {
@@ -171,14 +169,8 @@ async function importPlugin(directory: string, manifest: PluginManifest): Promis
   if (!sameCapabilities(manifest, plugin)) {
     return unavailable("capabilities in the manifest and the entry's export differ; make them match.");
   }
-  if (plugin.capabilities.includes("sql") && !hasLanguage(plugin)) {
-    return unavailable(
-      "declares sql but exports no language with split, classify, quoteIdentifier and literal; add one (plugin-api/sql helps).",
-    );
-  }
-  if (plugin.capabilities.includes("commands") && !hasCommandLanguage(plugin)) {
-    return unavailable("declares commands but exports no commandLanguage with split, classify and complete; add one.");
-  }
+  const problems = serviceProblems(manifest.capabilities, plugin);
+  if (problems.length > 0) return unavailable(`entry ${problems.map((problem) => problem.message).join("; ")}.`);
   return { status: "loaded", directory, manifest, plugin };
 }
 
@@ -198,20 +190,27 @@ export async function discoverPlugins(
     for (const directory of await pluginDirectories(root)) {
       const read = await readManifest(directory, hostVersion);
       if (!read.ok) {
-        results.push({ status: "unavailable", directory, manifest: null, reason: read.reason });
+        results.push({
+          status: "unavailable",
+          directory,
+          manifest: null,
+          reason: read.reason,
+          incompatibility: read.incompatibility,
+        });
         continue;
       }
       const { manifest } = read;
       const owner = claimed.get(manifest.id);
       if (owner !== undefined) {
         const reason = `Duplicate plugin id "${manifest.id}": ${directory} conflicts with ${owner}, which loaded first. Remove one.`;
-        results.push({ status: "unavailable", directory, manifest, reason });
+        results.push({ status: "unavailable", directory, manifest, reason, incompatibility: null });
         continue;
       }
       claimed.set(manifest.id, directory);
       if (!isCompatible(manifest.apiVersion, hostVersion)) {
         const reason = incompatibleReason(manifest.apiVersion, hostVersion);
-        results.push({ status: "unavailable", directory, manifest, reason });
+        const why = incompatibility(manifest.apiVersion, hostVersion);
+        results.push({ status: "unavailable", directory, manifest, reason, incompatibility: why });
         continue;
       }
       results.push({ status: "available", directory, manifest });

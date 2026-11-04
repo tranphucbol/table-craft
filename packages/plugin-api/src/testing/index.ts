@@ -10,7 +10,13 @@ import {
   offsetOfPosition,
   switchableTo,
   z,
+  serviceProblems,
   type BoundStatement,
+  type Capability,
+  type LanguageCapability,
+  type LanguageServices,
+  type SessionCapability,
+  type SessionServices,
   type CancelReach,
   type ColumnDesign,
   type CompletionCatalog,
@@ -43,6 +49,7 @@ import {
   type Relation,
   type Routine,
   type RoutineArgument,
+  type RoutineCaller,
   type Row,
   type ServerMessage,
   type ServerSession,
@@ -540,11 +547,25 @@ function catalogPathOf(fixture: ContractFixture): readonly string[] {
 const WRITABLE: ConnectOptions = { readOnly: false };
 const READ_ONLY: ConnectOptions = { readOnly: true };
 
+/** `capability`'s service on `session`, which the block's capability gate and `serviceProblems` guarantee. */
+function service<C extends SessionCapability>(session: Session, capability: C): SessionServices[C] {
+  const found = session.services[capability];
+  if (found === undefined) throw new Error(`The session has no ${capability} service.`);
+  return found;
+}
+
+/** `capability`'s service on the plugin's language, which the block's capability gate guarantees. */
+function languageService<C extends LanguageCapability>(plugin: DatasourcePlugin, capability: C): LanguageServices[C] {
+  const found = plugin.language?.services[capability];
+  if (found === undefined) throw new Error(`The language has no ${capability} service.`);
+  return found;
+}
+
 async function connect(plugin: DatasourcePlugin, config: unknown, options = WRITABLE): Promise<Session> {
   return plugin.connect(plugin.connectionSchema.parse(config), options);
 }
 
-/** A completion catalog straight over `introspector`, describing each namespace once. */
+/** A completion catalog straight over the `schemaTree` service, describing each namespace once. */
 async function liveCompletionCatalog(
   introspector: Introspector,
   serverVersion: string | null = null,
@@ -736,138 +757,51 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
     });
 
-    it("givenPlugin_whenInspected_thenHasLanguageExactlyWhenSqlDeclared", () => {
-      expect(plugin.language !== undefined).toBe(plugin.capabilities.includes("sql"));
+    it("givenPlugin_whenChecked_thenServicesMatchDeclaredCapabilities", () => {
+      expect(serviceProblems(plugin.capabilities, plugin).map((problem) => problem.message)).toEqual([]);
     });
 
-    it("givenPlugin_whenInspected_thenHasCommandLanguageExactlyWhenCommandsDeclared", () => {
-      const commands = plugin.capabilities.includes("commands");
-      if (commands) expect(plugin.capabilities).not.toContain("sql");
-      expect(plugin.commandLanguage !== undefined).toBe(commands);
-    });
-
-    it("givenSession_whenInspected_thenHasKeyspaceExactlyWhenKeyValueDeclared", async () => {
-      const keyValue = plugin.capabilities.includes("keyValue");
-      if (keyValue) expect(plugin.capabilities).toContain("commands");
+    it("givenSession_whenChecked_thenServicesMatchDeclaredCapabilities", async () => {
       await withSession(plugin, fixture, (session) => {
-        expect(session.keyspace !== undefined).toBe(keyValue);
+        expect(serviceProblems(plugin.capabilities, plugin, session).map((problem) => problem.message)).toEqual([]);
         return Promise.resolve();
       });
     });
 
-    it("givenSession_whenInspected_thenHasNodesAndServerInfoExactlyWhenDeclared", async () => {
-      await withSession(plugin, fixture, (session) => {
-        expect(session.nodes !== undefined).toBe(plugin.capabilities.includes("nodes"));
-        expect(session.serverInfo !== undefined).toBe(plugin.capabilities.includes("serverInfo"));
-        return Promise.resolve();
-      });
-    });
-
-    it("givenAdvancedCapabilities_whenConnected_thenExposesOnlyDeclaredServices", async () => {
-      await withSession(plugin, fixture, (session) => {
-        expect(session.watch !== undefined).toBe(plugin.capabilities.includes("watch"));
-        expect(session.leases !== undefined).toBe(plugin.capabilities.includes("leases"));
-        expect(session.access !== undefined).toBe(plugin.capabilities.includes("access"));
-        expect(session.coordination !== undefined).toBe(plugin.capabilities.includes("coordination"));
-        expect(session.keyTransfer !== undefined).toBe(plugin.capabilities.includes("bulkTransfer"));
-        expect(session.cluster !== undefined).toBe(
-          plugin.capabilities.includes("members") || plugin.capabilities.includes("maintenance"),
-        );
-        return Promise.resolve();
-      });
-    });
-
-    it("givenSession_whenInspected_thenHasTransactionsExactlyWhenDeclared", async () => {
-      await withSession(plugin, fixture, (session) => {
-        expect(session.transactions !== undefined).toBe(plugin.capabilities.includes("transactions"));
-        expect(session.transactions?.mode ?? "auto").toBe("auto");
-        expect(session.transactions?.open ?? false).toBe(false);
-        return Promise.resolve();
-      });
-    });
-
-    it("givenSession_whenInspected_thenHasIntrospectorExactlyWhenSchemaTreeDeclared", async () => {
-      await withSession(plugin, fixture, (session) => {
-        expect(session.introspector !== undefined).toBe(plugin.capabilities.includes("schemaTree"));
-        return Promise.resolve();
-      });
-    });
-
-    it("givenSession_whenInspected_thenHasDefinitionExactlyWhenDdlDeclared", async () => {
-      const ddl = plugin.capabilities.includes("ddl");
-      if (ddl) expect(plugin.capabilities).toContain("schemaTree");
-      await withSession(plugin, fixture, (session) => {
-        expect(session.introspector?.definition !== undefined).toBe(ddl);
-        return Promise.resolve();
-      });
-    });
-
-    it("givenPlugin_whenInspected_thenHasExplainableAndExplainExactlyWhenExplainDeclared", async () => {
-      const explain = plugin.capabilities.includes("explain");
-      if (explain) expect(plugin.capabilities).toContain("sql");
-      if (plugin.capabilities.includes("explainAnalyze")) expect(plugin.capabilities).toContain("explain");
-      expect(plugin.language?.explainable !== undefined).toBe(explain);
-      await withSession(plugin, fixture, (session) => {
-        expect(session.explain !== undefined).toBe(explain);
-        return Promise.resolve();
-      });
-    });
-
-    it("givenSession_whenInspected_thenHasPingExactlyWhenKeepAliveDeclared", async () => {
-      await withSession(plugin, fixture, (session) => {
-        expect(session.ping !== undefined).toBe(plugin.capabilities.includes("keepAlive"));
-        return Promise.resolve();
-      });
-    });
-
-    it("givenSession_whenInspected_thenHasCurrentNamespaceExactlyWhenDeclared", async () => {
-      const declared = plugin.capabilities.includes("currentNamespace");
-      if (declared) expect(plugin.capabilities).toContain("sql");
-      await withSession(plugin, fixture, (session) => {
-        expect(session.currentNamespace !== undefined).toBe(declared);
-        return Promise.resolve();
-      });
-    });
-
-    it("givenPlugin_whenInspected_thenHasNamespaceSwitchExactlyWhenCurrentNamespaceDeclared", () => {
-      expect(plugin.language?.namespaceSwitch !== undefined).toBe(plugin.capabilities.includes("currentNamespace"));
-    });
-
-    it("givenPlugin_whenInspected_thenHasInsertRowsAndImportLanguageExactlyWhenBulkInsertDeclared", async () => {
-      const bulk = plugin.capabilities.includes("bulkInsert");
-      if (bulk) expect(plugin.capabilities).toContain("transactions");
-      expect(plugin.language?.importType !== undefined).toBe(bulk);
-      expect(plugin.language?.createTable !== undefined).toBe(bulk);
-      await withSession(plugin, fixture, (session) => {
-        expect(session.insertRows !== undefined).toBe(bulk);
-        return Promise.resolve();
-      });
-    });
-
-    it("givenSession_whenInspected_thenHasSessionMonitorExactlyWhenSessionsDeclared", async () => {
-      const declared = plugin.capabilities.includes("sessions");
-      if (declared) {
-        expect(plugin.capabilities.includes("sql") || plugin.capabilities.includes("commands")).toBe(true);
-        expect(plugin.capabilities.includes("schemaTree") || plugin.capabilities.includes("keyValue")).toBe(true);
+    it("givenCapabilities_whenDeclared_thenEachBringsWhatItNeeds", () => {
+      const declared = new Set(plugin.capabilities);
+      const needs: Partial<Record<Capability, readonly Capability[]>> = {
+        keyValue: ["commands"],
+        ddl: ["schemaTree"],
+        explain: ["sql"],
+        explainAnalyze: ["explain"],
+        currentNamespace: ["sql"],
+        bulkInsert: ["transactions"],
+        objects: ["sql", "schemaTree"],
+        routineCall: ["sql", "schemaTree"],
+      };
+      for (const [capability, needed] of Object.entries(needs)) {
+        if (declared.has(capability as Capability))
+          expect(plugin.capabilities).toEqual(expect.arrayContaining([...needed]));
       }
-      await withSession(plugin, fixture, (session) => {
-        expect(session.sessions !== undefined).toBe(declared);
-        expect(typeof session.serverSessionId === "string").toBe(declared);
-        return Promise.resolve();
-      });
+      if (declared.has("commands")) expect(plugin.capabilities).not.toContain("sql");
+      if (declared.has("sessions")) {
+        expect(declared.has("sql") || declared.has("commands")).toBe(true);
+        expect(declared.has("schemaTree") || declared.has("keyValue")).toBe(true);
+      }
     });
 
-    it("givenPlugin_whenInspected_thenHasObjectEditorExactlyWhenObjectsDeclared", () => {
-      const objects = plugin.capabilities.includes("objects");
-      if (objects) expect(plugin.capabilities).toEqual(expect.arrayContaining(["sql", "schemaTree"]));
-      expect(plugin.language?.objects !== undefined).toBe(objects);
-    });
-
-    it("givenPlugin_whenInspected_thenHasRoutineCallExactlyWhenDeclared", () => {
-      const routineCall = plugin.capabilities.includes("routineCall");
-      if (routineCall) expect(plugin.capabilities).toEqual(expect.arrayContaining(["sql", "schemaTree"]));
-      expect(plugin.language?.routineCall !== undefined).toBe(routineCall);
-    });
+    it.runIf(plugin.capabilities.includes("transactions"))(
+      "givenSession_whenConnected_thenTransactionsStartInAutoModeAndClosed",
+      async () => {
+        await withSession(plugin, fixture, (session) => {
+          const transactions = service(session, "transactions");
+          expect(transactions.mode).toBe("auto");
+          expect(transactions.open).toBe(false);
+          return Promise.resolve();
+        });
+      },
+    );
 
     it.runIf(fixture.wrongPasswordConfig !== undefined)(
       "givenWrongPassword_whenConnecting_thenRejectsWithConnectionFailed",
@@ -1212,12 +1146,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         "givenSingleTableSelect_whenSourceRead_thenNamesTheTableAndItsColumns",
         async () => {
           await withSession(plugin, fixture, async (session) => {
-            const introspector = session.introspector;
-            const lang = language();
-            const selectSource = lang.selectSource?.bind(lang);
-            if (introspector === undefined || selectSource === undefined) return;
-            const catalog = await liveCompletionCatalog(introspector);
-            const source = await selectSource(`SELECT id, id + 1 AS next FROM ${TYPE_PROBE_TABLE}`, catalog);
+            const catalog = await liveCompletionCatalog(service(session, "schemaTree"));
+            const source = await language().selectSource(`SELECT id, id + 1 AS next FROM ${TYPE_PROBE_TABLE}`, catalog);
             expect(source).toEqual({
               kind: "table",
               path: catalogPathOf(fixture),
@@ -1229,13 +1159,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       );
 
       it("givenSavepoint_whenRolledBackToAndReleased_thenTheTransactionStaysOpen", async () => {
-        const lang = language();
-        const savepoint = lang.savepoint?.bind(lang);
-        if (savepoint === undefined) return;
         await withSession(plugin, fixture, async (session) => {
-          const transactions = session.transactions;
+          const transactions = session.services.transactions;
           if (transactions === undefined) return;
-          const statements = savepoint("table_craft_contract");
+          const statements = language().savepoint("table_craft_contract");
           await transactions.setMode("manual");
           try {
             await collect((await session.execute(statements.set)).rows);
@@ -1254,16 +1181,15 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       const run = async (session: Session, sql: string): Promise<Row[]> => collect((await session.execute(sql)).rows);
 
       function insertRowsOf(session: Session): (target: InsertTarget, rows: readonly InsertRow[]) => Promise<void> {
-        const insert = session.insertRows?.bind(session);
-        if (insert === undefined) throw new Error("A bulkInsert session needs insertRows.");
-        return insert;
+        const inserter = service(session, "bulkInsert");
+        return (target, rows) => inserter.insertRows(target, rows);
       }
 
       /** The copy table as the engine targets it: named and typed by the introspector. */
       async function copyTarget(session: Session): Promise<InsertTarget> {
         await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
         await run(session, typeProbeOf(fixture).copyTable);
-        const introspector = session.introspector;
+        const introspector = session.services.schemaTree;
         if (introspector === undefined) {
           const probe = await session.execute(`SELECT * FROM ${TYPE_PROBE_COPY_TABLE}`);
           await collect(probe.rows);
@@ -1285,7 +1211,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           try {
             await use(session, await copyTarget(session));
           } finally {
-            await session.transactions?.rollback();
+            await service(session, "transactions").rollback();
             await run(session, dropIfExists(TYPE_PROBE_COPY_TABLE));
           }
         });
@@ -1308,14 +1234,15 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const insert = insertRowsOf(session);
           const row = (id: string): InsertRow =>
             target.columns.map((column) => (column.name === fold("id") ? id : null));
-          await session.transactions?.setMode("manual");
+          const transactions = service(session, "transactions");
+          await transactions.setMode("manual");
 
           await insert(target, [row("1")]);
           const refused = await rejectionCode(insert(target, [row("2"), row("not a number")]));
-          const open = session.transactions?.open;
+          const open = transactions.open;
           await insert(target, [row("3")]);
-          await session.transactions?.commit();
-          await session.transactions?.setMode("auto");
+          await transactions.commit();
+          await transactions.setMode("auto");
 
           expect(refused).toBe("statementFailed");
           expect(open).toBe(true);
@@ -1343,12 +1270,13 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenCreateTable_whenEveryImportType_thenTableTakesSampleText", async () => {
         const dialect = plugin.language;
         if (dialect === undefined) throw new Error("A bulkInsert plugin needs language.");
+        const ddl = languageService(plugin, "bulkInsert");
         await withSession(plugin, fixture, async (session) => {
           const columns = IMPORT_KINDS.map((kind) => ({
             name: `${kind}_value`,
-            type: dialect.importType?.({ kind, integerDigits: 7, scale: 3 }) ?? "",
+            type: ddl.importType({ kind, integerDigits: 7, scale: 3 }),
           }));
-          const create = dialect.createTable?.(IMPORT_PROBE_TABLE, columns) ?? "";
+          const create = ddl.createTable(IMPORT_PROBE_TABLE, columns);
           await run(session, dropIfExists(IMPORT_PROBE_TABLE));
           try {
             expect(dialect.classify(create).kind).toBe("ddl");
@@ -1369,14 +1297,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       const path = (): readonly string[] => catalogPathOf(fixture);
 
       function editorOf(): ObjectEditor {
-        const editor = plugin.language?.objects;
-        if (editor === undefined) throw new Error("An objects plugin needs language.objects.");
-        return editor;
+        return languageService(plugin, "objects");
       }
 
       function introspectorOf(session: Session): Introspector {
-        if (session.introspector === undefined) throw new Error("An objects plugin needs an introspector.");
-        return session.introspector;
+        return service(session, "schemaTree");
       }
 
       async function relationOf(session: Session, name: string): Promise<Relation | undefined> {
@@ -1388,7 +1313,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       /** Runs a script as the engine does: prepare, the statements in one transaction where it says so, verify, finish. */
       async function apply(session: Session, script: DdlScript): Promise<void> {
         for (const sql of script.prepare) await run(session, sql);
-        const transactions = script.transactional ? session.transactions : undefined;
+        const transactions = script.transactional ? session.services.transactions : undefined;
         try {
           await transactions?.setMode("manual");
           try {
@@ -1648,8 +1573,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
     describe.runIf(plugin.capabilities.includes("transactions"))("transactions", () => {
       function transactionsOf(session: Session): Transactions {
-        if (session.transactions === undefined) throw new Error("A transactions session needs transactions.");
-        return session.transactions;
+        return service(session, "transactions");
       }
 
       async function rowsWithId(session: Session): Promise<number> {
@@ -1743,8 +1667,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const text = (value: string): string => dialect.literal(value, EDIT_PROBE_TEXT_TYPE);
         const key = (id: Row[number]): string => `${name("id")} = ${dialect.literal(id, EDIT_PROBE_KEY_TYPE)}`;
         await withSession(plugin, fixture, async (session) => {
-          const transactions = session.transactions;
-          if (transactions === undefined) throw new Error("A transactions session needs transactions.");
+          const transactions = service(session, "transactions");
           const read = async (): Promise<Row[]> => collect((await session.execute(EDIT_PROBE_SELECT)).rows);
           const affected = async (sql: string): Promise<number | null> => {
             const result = await session.execute(sql);
@@ -1752,7 +1675,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             return result.rowsAffected;
           };
           const qtyDefault =
-            (await session.introspector?.describe(catalogPathOf(fixture)))?.relations
+            (await session.services.schemaTree?.describe(catalogPathOf(fixture)))?.relations
               .find((relation) => relation.name === fold(EDIT_PROBE_TABLE))
               ?.columns.find((column) => column.name === fold("qty"))?.default ?? String(EDIT_PROBE_DEFAULT_QTY);
           const before = await read();
@@ -1801,9 +1724,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       async function withIntrospector(use: (introspector: Introspector) => Promise<void>): Promise<void> {
         await withSession(plugin, fixture, async (session) => {
-          const introspector = session.introspector;
-          if (introspector === undefined) throw new Error("A schemaTree session needs an introspector.");
-          await use(introspector);
+          await use(service(session, "schemaTree"));
         });
       }
 
@@ -1893,7 +1814,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenIntrospection_whenStatementRunAfter_thenSessionStillWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
-          await session.introspector?.describe(catalogFixture().path);
+          await service(session, "schemaTree").describe(catalogFixture().path);
           expect(await collect((await session.execute(selectOne)).rows)).toEqual([[1]]);
         });
       });
@@ -1917,9 +1838,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         ): Promise<void> {
           const { language } = completionFixture();
           await withSession(plugin, fixture, async (session) => {
-            const introspector = session.introspector;
-            if (introspector === undefined) throw new Error("A schemaTree session needs an introspector.");
-            await use(language, await liveCompletionCatalog(introspector, session.serverVersion));
+            await use(language, await liveCompletionCatalog(service(session, "schemaTree"), session.serverVersion));
           });
         }
 
@@ -2057,9 +1976,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       async function definitionOf(name: string, path = catalogFixture().path): Promise<string> {
         let definition = "";
         await withSession(plugin, fixture, async (session) => {
-          const read = session.introspector?.definition?.bind(session.introspector);
-          if (read === undefined) throw new Error("A ddl session needs introspector.definition.");
-          definition = await read(path, fold(name));
+          definition = await service(session, "ddl").definition(path, fold(name));
         });
         return definition;
       }
@@ -2094,8 +2011,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenUnknownRelation_whenReadingDefinition_thenDefinitionNotFound", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const pending = session.introspector?.definition?.(catalogFixture().path, MISSING_RELATION);
-          const failure: unknown = await pending?.catch((error: unknown) => error);
+          const pending = service(session, "ddl").definition(catalogFixture().path, MISSING_RELATION);
+          const failure: unknown = await pending.catch((error: unknown) => error);
           expect(isPluginError(failure) && failure.code).toBe("definitionNotFound");
           expect(failure instanceof Error && failure.message).toContain(MISSING_RELATION);
         });
@@ -2120,8 +2037,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           }
           const path = fixture.catalog.path;
           await withSession(plugin, fixture, async (session) => {
-            const introspector = session.introspector;
-            if (introspector === undefined) throw new Error("A schemaTree session needs an introspector.");
+            const introspector = service(session, "schemaTree");
             const catalog = await introspector.describe(path);
             await use(session, (statement, name) => {
               const relation = catalog.relations.find((candidate) => candidate.name === fold(name));
@@ -2155,8 +2071,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           "givenGeneratedInsert_whenExecutedInTransaction_thenInsertsOneRow",
           async () => {
             await withGenerator(async (session, generated) => {
-              const transactions = session.transactions;
-              if (transactions === undefined) throw new Error("A transactions session needs transactions.");
+              const transactions = service(session, "transactions");
               await transactions.setMode("manual");
               try {
                 const result = await session.execute(generated("insert", EDIT_PROBE_TABLE));
@@ -2189,17 +2104,13 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
     );
 
     describe.runIf(plugin.capabilities.includes("explain"))("explain", () => {
-      function explainable(): NonNullable<SqlLanguage["explainable"]> {
-        const language = plugin.language;
-        if (language?.explainable === undefined) {
-          throw new Error("A plugin that declares explain needs language.explainable.");
-        }
-        return (sql, options) => language.explainable?.(sql, options) ?? { ok: false, reason: "" };
+      function explainable(): LanguageServices["explain"]["explainable"] {
+        const check = languageService(plugin, "explain");
+        return (sql, options) => check.explainable(sql, options);
       }
 
       async function explained(session: Session, sql: string, analyze: boolean): Promise<ExplainedPlan> {
-        if (session.explain === undefined) throw new Error("An explain session needs explain.");
-        return session.explain(sql, { analyze });
+        return service(session, "explain").explain(sql, { analyze });
       }
 
       async function ordersRows(session: Session): Promise<number> {
@@ -2267,8 +2178,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
     describe.runIf(plugin.capabilities.includes("explainAnalyze"))("explainAnalyze", () => {
       async function analysed(session: Session, sql: string): Promise<ExplainedPlan> {
-        if (session.explain === undefined) throw new Error("An explain session needs explain.");
-        return session.explain(sql, { analyze: true });
+        return service(session, "explain").explain(sql, { analyze: true });
       }
 
       it("givenSelect_whenAnalysed_thenActualRowsPresent", async () => {
@@ -2281,11 +2191,10 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it.runIf(
         plugin.capabilities.includes("transactions") &&
-          plugin.language?.explainable?.(ANALYSED_UPDATE, { analyze: true }).ok === true,
+          plugin.language?.services.explain?.explainable(ANALYSED_UPDATE, { analyze: true }).ok === true,
       )("givenUpdateInManualTransaction_whenAnalysed_thenRolledBackLeavesRows", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const transactions = session.transactions;
-          if (transactions === undefined) throw new Error("A transactions session needs transactions.");
+          const transactions = service(session, "transactions");
           const total = async (): Promise<Row[]> => collect((await session.execute(ANALYSED_TOTAL)).rows);
           const before = await total();
           await transactions.setMode("manual");
@@ -2347,8 +2256,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       }
 
       async function current(session: Session): Promise<readonly string[] | null> {
-        if (session.currentNamespace === undefined) throw new Error("A currentNamespace session needs it.");
-        return session.currentNamespace();
+        return service(session, "currentNamespace").current();
       }
 
       it("givenFreshSession_whenCurrentNamespaceRead_thenIsCatalogPath", async () => {
@@ -2373,11 +2281,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      function switcher(): NonNullable<SqlLanguage["namespaceSwitch"]> {
-        const found = plugin.language?.namespaceSwitch;
-        if (found === undefined)
-          throw new Error("A plugin that declares currentNamespace needs language.namespaceSwitch.");
-        return found;
+      function switcher(): LanguageServices["currentNamespace"] {
+        return languageService(plugin, "currentNamespace");
       }
 
       it("givenSwitchStatementForTarget_whenExecuted_thenCurrentNamespaceIsTarget", async () => {
@@ -2385,7 +2290,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const written = switcher();
         await withSession(plugin, fixture, async (session) => {
           // A database switch reaches [database, default schema] on SQL Server, so the target may be a prefix.
-          const listed = (await session.introspector?.namespaces()) ?? [];
+          const listed = (await session.services.schemaTree?.namespaces()) ?? [];
           const target = listed
             .filter((namespace) => namespace.path.every((part, index) => part === path[index]))
             .filter((namespace) => switchableTo(written.targets, namespace))
@@ -2533,8 +2438,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       }
 
       function keyspaceOf(session: Session): Keyspace {
-        if (session.keyspace === undefined) throw new Error("keyValue needs session.keyspace");
-        return session.keyspace;
+        return service(session, "keyValue");
       }
 
       /** Every key of one pass, and how many batches it took. */
@@ -2760,7 +2664,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const started = Date.now();
         const running = rejectionCode(session.execute(sleepSql()));
         await delay(CANCEL_DELAY_MS);
-        await session.cancel?.();
+        await service(session, "cancel").cancel();
         const code = await running;
         expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
         return code;
@@ -2768,14 +2672,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenSession_whenInspected_thenImplementsCancel", async () => {
         await withSession(plugin, fixture, (session) => {
-          expect(typeof session.cancel).toBe("function");
+          expect(typeof service(session, "cancel").cancel).toBe("function");
           return Promise.resolve();
         });
       });
 
       it("givenIdleSession_whenCancelled_thenResolvesAndSessionWorks", async () => {
         await withSession(plugin, fixture, async (session) => {
-          await session.cancel?.();
+          await service(session, "cancel").cancel();
           await expectAlive(session);
         });
       });
@@ -2795,8 +2699,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenCancelReach_whenSessionOpens_thenMethodNamedAndReachKnown", async () => {
         await withSession(plugin, fixture, (session) => {
-          const reach = session.cancelReach;
-          if (reach === undefined) return Promise.resolve();
+          const { reach } = service(session, "cancel");
           expect(reach.method).toMatch(/\S/);
           expect(CANCEL_REACHES).toContain(reach.reaches);
           return Promise.resolve();
@@ -2807,7 +2710,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
     describe.runIf(!plugin.capabilities.includes("cancel"))("no cancel", () => {
       it("givenNoCancel_whenSessionOpens_thenNoCancelReach", async () => {
         await withSession(plugin, fixture, (session) => {
-          expect(session.cancelReach).toBeUndefined();
+          expect(session.services.cancel).toBeUndefined();
           return Promise.resolve();
         });
       });
@@ -2829,17 +2732,15 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       /** Runs `use` on a session whose server enforces a limit; a server without one has nothing to check. */
       async function withLimitedSession(use: (session: Session) => Promise<void>): Promise<void> {
         await withSession(plugin, fixture, async (session) => {
-          if (session.serverTimeout === null || session.serverTimeout === undefined) return;
+          if (service(session, "serverTimeout").limit === null) return;
           await use(session);
         });
       }
 
       it("givenSession_whenInspected_thenReportsServerTimeout", async () => {
         await withSession(plugin, fixture, (session) => {
-          expect(session.serverTimeout).not.toBeUndefined();
-          if (session.serverTimeout !== null && session.serverTimeout !== undefined) {
-            expect(session.serverTimeout.setting).toMatch(/\S/);
-          }
+          const { limit } = service(session, "serverTimeout");
+          if (limit !== null) expect(limit.setting).toMatch(/\S/);
           return Promise.resolve();
         });
       });
@@ -2881,7 +2782,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           const started = Date.now();
           const running = rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS));
           await delay(CANCEL_DELAY_MS);
-          await session.cancel?.();
+          await service(session, "cancel").cancel();
           expect(await running).toBe("cancelled");
           expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
           await expectAlive(session);
@@ -2895,8 +2796,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           plugin,
           fixture,
           async (session) => {
-            await session.ping?.();
-            await session.ping?.();
+            await service(session, "keepAlive").ping();
+            await service(session, "keepAlive").ping();
             await expectAlive(session);
           },
           { readOnly: false, keepAliveInitialDelayMs: KEEPALIVE_DELAY_MS },
@@ -2906,27 +2807,27 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       it("givenClosedSession_whenPinged_thenRejectsWithConnectionLost", async () => {
         const session = await connect(plugin, fixture.config);
         await session.close();
-        expect(await rejectionCode(session.ping?.() ?? Promise.resolve())).toBe("connectionLost");
+        expect(await rejectionCode(service(session, "keepAlive").ping())).toBe("connectionLost");
       });
     });
 
     describe.runIf(plugin.capabilities.includes("serverInfo"))("serverInfo", () => {
       it("givenEveryNode_whenServerInfo_thenTitledSectionsWithEntries", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const nodes = (await session.nodes?.()) ?? [];
+          const nodes = (await session.services.nodes?.list()) ?? [];
           for (const node of [null, ...nodes.map((listed) => listed.id)]) {
-            const info = await session.serverInfo?.(node);
-            expect(info?.sections.length).toBeGreaterThan(0);
-            for (const section of info?.sections ?? []) expect(section.title).not.toBe("");
-            expect(info?.sections.some((section) => section.entries.length > 0)).toBe(true);
-            if (node !== null) expect(info?.node).toBe(node);
+            const info = await service(session, "serverInfo").info(node);
+            expect(info.sections.length).toBeGreaterThan(0);
+            for (const section of info.sections) expect(section.title).not.toBe("");
+            expect(info.sections.some((section) => section.entries.length > 0)).toBe(true);
+            if (node !== null) expect(info.node).toBe(node);
           }
         });
       });
 
       it("givenSlowLog_whenRead_thenAtMostLimitNewestFirst", async () => {
         await withSession(plugin, fixture, async (session) => {
-          const entries = (await session.slowLog?.(null, SLOW_LOG_LIMIT)) ?? [];
+          const entries = await service(session, "serverInfo").slowLog(null, SLOW_LOG_LIMIT);
           expect(entries.length).toBeLessThanOrEqual(SLOW_LOG_LIMIT);
           const times = entries.map((entry) => entry.at);
           expect(times).toEqual([...times].sort().reverse());
@@ -2949,17 +2850,14 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       async function withMonitor(work: (monitor: SessionMonitor) => Promise<void>): Promise<void> {
         const session = await connect(plugin, sessionsFixture().monitorConfig);
         try {
-          if (session.sessions === undefined) throw new Error("A session of a sessions plugin has no monitor.");
-          await work(session.sessions);
+          await work(service(session, "sessions"));
         } finally {
           await session.close();
         }
       }
 
       function idOf(session: Session): string {
-        if (session.serverSessionId === undefined)
-          throw new Error("A session of a sessions plugin has no serverSessionId.");
-        return session.serverSessionId;
+        return service(session, "sessions").ownId;
       }
 
       async function listedUntil(
@@ -2989,7 +2887,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         try {
           await work(sleeper, running);
         } finally {
-          await sleeper.cancel?.();
+          await sleeper.services.cancel?.cancel();
           await running;
           await sleeper.close();
         }
@@ -3007,8 +2905,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenInstanceLookup_whenAsked_thenOwnRowListedUnderIt", async () => {
         await withSession(plugin, fixture, async (session) => {
-          if (session.findServerInstance === undefined) return;
-          const instance = await session.findServerInstance();
+          const sessions = service(session, "sessions");
+          if (sessions.findOwnInstance === undefined) return;
+          const instance = await sessions.findOwnInstance();
           expect(instance).not.toBeNull();
           await withMonitor(async (monitor) => {
             const { sessions } = await monitor.list();
@@ -3095,8 +2994,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         const waiter = await connect(plugin, fixture.config);
         let waiting: Promise<unknown> = Promise.resolve();
         try {
-          await holder.transactions?.setMode("manual");
-          await waiter.transactions?.setMode("manual");
+          await service(holder, "transactions").setMode("manual");
+          await service(waiter, "transactions").setMode("manual");
           await collect((await holder.execute(write)).rows);
           waiting = waiter.execute(write).then((result) => collect(result.rows));
           await withMonitor(async (monitor) => {
@@ -3104,9 +3003,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
             expect(row.blockedBy).toContain(idOf(holder));
           });
         } finally {
-          await holder.transactions?.rollback();
+          await service(holder, "transactions").rollback();
           await waiting.catch(() => undefined);
-          await waiter.transactions?.rollback();
+          await service(waiter, "transactions").rollback();
           await holder.close();
           await waiter.close();
         }
@@ -3121,11 +3020,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
           try {
             await withMonitor(async (monitor) => {
               const own = await present(monitor, idOf(session));
-              const listing = await session.sessions?.list();
-              expect(listing?.notes.some((note) => limited.note.test(note))).toBe(true);
-              expect(listing?.sessions.map((row) => row.id)).toContain(own.id);
+              const listing = await service(session, "sessions").list();
+              expect(listing.notes.some((note) => limited.note.test(note))).toBe(true);
+              expect(listing.sessions.map((row) => row.id)).toContain(own.id);
               const monitorIds = (await monitor.list()).sessions.map((row) => row.id);
-              const foreign = monitorIds.filter((id) => !listing?.sessions.some((row) => row.id === id));
+              const foreign = monitorIds.filter((id) => !listing.sessions.some((row) => row.id === id));
               expect(foreign.length).toBeGreaterThan(0);
             });
           } finally {
@@ -3143,8 +3042,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       }
 
       function introspectorOf(session: Session): Introspector {
-        if (session.introspector === undefined) throw new Error("A routineCall plugin needs an introspector.");
-        return session.introspector;
+        return service(session, "schemaTree");
       }
 
       async function seeded(session: Session): Promise<readonly Routine[]> {
@@ -3154,10 +3052,9 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       /** Runs the call as the console does: each statement split, bound with the call's values, in turn. */
       async function call(session: Session, routineCase: RoutineCase): Promise<Row[]> {
         const language = plugin.language;
-        const routineCall = language?.routineCall?.bind(language);
-        if (language === undefined || routineCall === undefined) {
-          throw new Error("A routineCall plugin needs language.routineCall.");
-        }
+        if (language === undefined) throw new Error("A routineCall plugin needs a language.");
+        const caller = languageService(plugin, "routineCall");
+        const routineCall: RoutineCaller["call"] = (...args) => caller.call(...args);
         const routine = (await seeded(session)).find(
           (candidate) =>
             candidate.name === routineCase.name &&
@@ -3217,7 +3114,8 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
 
       it("givenDefaultWithoutOne_whenCall_thenStatementFailed", async () => {
         const routineCase = routinesFixture().function;
-        const routineCall = plugin.language?.routineCall?.bind(plugin.language);
+        const caller = languageService(plugin, "routineCall");
+        const routineCall: RoutineCaller["call"] = (...args) => caller.call(...args);
         await withSession(plugin, fixture, async (session) => {
           const routine = (await seeded(session)).find(
             (candidate) => candidate.name === routineCase.name && candidate.signature === routineCase.signature,

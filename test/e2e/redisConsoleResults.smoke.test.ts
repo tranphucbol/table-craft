@@ -244,7 +244,7 @@ describe.runIf(DATABASES_ENABLED)("redis console results live test", () => {
 
       await pressChord(page, "Shift+P");
       await expect.poll(() => dialog(page).textContent()).toContain(`HSET ${HASH_KEY} name Bo`);
-      expect(await dialog(page).textContent()).toContain("as one MULTI");
+      expect(await dialog(page).textContent()).toContain("atomically; it cannot be undone.");
       await captureWindow(page, "06-edit-hash");
       await dialog(page).getByRole("button", { name: "Submit", exact: true }).click();
 

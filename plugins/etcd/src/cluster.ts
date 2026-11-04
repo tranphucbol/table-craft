@@ -2,8 +2,9 @@ import type {
   ClusterAlarm,
   ClusterEndpoint,
   ClusterHash,
-  ClusterManager,
+  ClusterMaintenance,
   ClusterMember,
+  ClusterMembers,
   ClusterSnapshot,
   ClusterStatus,
 } from "@table-craft/plugin-api";
@@ -21,7 +22,7 @@ const SNAPSHOT_LOW_WATER_CHUNKS = 64;
 const SNAPSHOT_FINAL_STATUS_TIMEOUT_MS = 5000;
 /** gRPC status code OK (grpc/doc/statuscodes.md). */
 const GRPC_STATUS_OK = 0;
-export class EtcdCluster implements ClusterManager {
+export class EtcdCluster implements ClusterMembers, ClusterMaintenance {
   constructor(
     readonly host: RuntimeHost,
     readonly connection: Connection,

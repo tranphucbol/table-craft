@@ -6,6 +6,7 @@ import {
   type ColumnMeta,
   type ForeignKey,
   type Index,
+  type DefinitionReader,
   type Introspector,
   type Key,
   type Namespace,
@@ -341,7 +342,7 @@ function toColumn(row: ColumnRow, index: number): ColumnMeta {
  * Reads `pg_catalog` rather than `information_schema`, which hides objects the user does not own
  * and is several times slower on a wide schema. One query per object family, joined in memory.
  */
-export function postgresIntrospector(client: pg.Client): Introspector {
+export function postgresIntrospector(client: pg.Client): Introspector & DefinitionReader {
   async function rows<T extends pg.QueryResultRow>(sql: string, values: unknown[] = []): Promise<T[]> {
     try {
       return (await client.query<T>(sql, values)).rows;

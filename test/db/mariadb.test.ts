@@ -18,7 +18,7 @@ describe.runIf(databaseEnabled("mariadb"))("mariadb server", () => {
     const session = await mysql.connect(MARIADB_CONFIG, { readOnly: false });
     try {
       expect(session.serverBrand).toBe("mariadb");
-      expect(session.cancelReach).toEqual({ method: "KILL QUERY", reaches: "statement" });
+      expect(session.services.cancel.reach).toEqual({ method: "KILL QUERY", reaches: "statement" });
     } finally {
       await session.close();
     }

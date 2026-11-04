@@ -3,12 +3,13 @@ import {
   PluginError,
   TlsSettingsError,
   z,
+  type CancelReach,
   type DatasourcePlugin,
   type Routine,
   type Session,
 } from "@table-craft/plugin-api";
 import type { PluginLoadResult } from "@table-craft/core";
-import sqlite from "@table-craft/plugin-sqlite";
+import sqlitePlugin from "@table-craft/plugin-sqlite";
 import { createEngine, probeDatasource } from "@table-craft/desktop/engine/engine.js";
 import { createLifetime } from "@table-craft/desktop/engine/lifetime.js";
 import type {
@@ -32,6 +33,7 @@ import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS, RESULT_WINDOW_ROWS } from "@tab
 import { fakeManifest, SQLITE_MANIFEST } from "../support/manifests.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 
+const sqlite: DatasourcePlugin = sqlitePlugin;
 const SQLITE_DIRECTORY = "plugins/sqlite";
 const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
 const LOADED_SQLITE: PluginLoadResult = {
@@ -59,6 +61,8 @@ const FORMAT_OPTIONS: FormatOptions = {
   alignAliases: true,
 };
 
+const CANCEL_REACH: CancelReach = { method: "test cancel", reaches: "statement" };
+
 /** Its one statement runs until cancelled; enough to drive `statement.cancel` without a database. */
 function cancellablePlugin(): { plugin: DatasourcePlugin; cancels: () => number } {
   let cancels = 0;
@@ -68,11 +72,16 @@ function cancellablePlugin(): { plugin: DatasourcePlugin; cancels: () => number 
       new Promise((_resolve, reject) => {
         stop = () => reject(new PluginError("cancelled", "cancelled by the test"));
       }),
-    cancel: () => {
-      cancels += 1;
-      stop?.();
-      stop = null;
-      return Promise.resolve();
+    services: {
+      cancel: {
+        cancel: () => {
+          cancels += 1;
+          stop?.();
+          stop = null;
+          return Promise.resolve();
+        },
+        reach: CANCEL_REACH,
+      },
     },
     close: () => Promise.resolve(),
     serverVersion: null,
@@ -80,6 +89,7 @@ function cancellablePlugin(): { plugin: DatasourcePlugin; cancels: () => number 
   const plugin: DatasourcePlugin = {
     id: CANCELLABLE_ID,
     capabilities: ["sql", "cancel"],
+    language: { ...sqlitePlugin.language, services: {} },
     connectionSchema: z.object({}),
     connect: () => Promise.resolve(session),
   };
@@ -240,7 +250,13 @@ describe("engine", () => {
     const connection = createEngine({
       datasource: DATASOURCE,
       plugins: [
-        { status: "unavailable", directory: SQLITE_DIRECTORY, manifest: LOADED_SQLITE.manifest, reason: "broken" },
+        {
+          status: "unavailable",
+          directory: SQLITE_DIRECTORY,
+          manifest: LOADED_SQLITE.manifest,
+          reason: "broken",
+          incompatibility: null,
+        },
       ],
     }).connect();
 
@@ -486,12 +502,16 @@ function countingSqlite(brokenSessions = 0): {
       const lost = (): never => {
         throw new PluginError("introspectionFailed", "Client has encountered a connection error and is not queryable");
       };
+      const { schemaTree } = session.services;
       return {
         execute: (sql) => session.execute(sql),
-        introspector:
-          opened <= brokenSessions && session.introspector !== undefined
-            ? { ...session.introspector, namespaces: lost, describe: lost }
-            : session.introspector,
+        services: {
+          ...session.services,
+          schemaTree:
+            opened <= brokenSessions && schemaTree !== undefined
+              ? { ...schemaTree, namespaces: lost, describe: lost }
+              : schemaTree,
+        },
         serverVersion: session.serverVersion,
         close: () => {
           closed += 1;
@@ -668,25 +688,33 @@ describe("engine routine.call", () => {
       capabilities: [...sqlite.capabilities, "routineCall"],
       language: {
         ...language,
-        routineCall: (routine, qualified, args) => {
-          if (args.length !== routine.parameters.length) throw new PluginError("statementFailed", "wrong count");
-          return {
-            sql: `SELECT ${qualified}(:amount);`,
-            params: { ":amount": args[0]?.kind === "value" ? args[0].value : null },
-          };
+        services: {
+          ...language.services,
+          routineCall: {
+            call: (routine, qualified, args) => {
+              if (args.length !== routine.parameters.length) throw new PluginError("statementFailed", "wrong count");
+              return {
+                sql: `SELECT ${qualified}(:amount);`,
+                params: { ":amount": args[0]?.kind === "value" ? args[0].value : null },
+              };
+            },
+          },
         },
       },
       connect: async (config, options) => {
         const session = await sqlite.connect(config, options);
-        const introspector = session.introspector;
+        const introspector = session.services.schemaTree;
         if (introspector === undefined) throw new Error("sqlite declares schemaTree");
         return {
           ...session,
           execute: (sql, params, executeOptions) => session.execute(sql, params, executeOptions),
           close: () => session.close(),
-          introspector: {
-            ...introspector,
-            describe: async (path) => ({ ...(await introspector.describe(path)), routines: [ROUTINE] }),
+          services: {
+            ...session.services,
+            schemaTree: {
+              ...introspector,
+              describe: async (path) => ({ ...(await introspector.describe(path)), routines: [ROUTINE] }),
+            },
           },
         };
       },
@@ -786,6 +814,7 @@ describe("probeDatasource", () => {
         const session = await sqlite.connect(config, options);
         return {
           execute: (sql, params) => session.execute(sql, params),
+          services: session.services,
           serverVersion: "1",
           tls,
           close: () => session.close(),

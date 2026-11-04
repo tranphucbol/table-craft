@@ -81,6 +81,11 @@ export interface DatasourceServiceOptions<Target> {
   readonly hosts: HostRegistry<Target>;
   /** Read on every use, so a plugin installed while the app runs is usable at once (decision 110). */
   readonly plugins: () => readonly PluginInfo[];
+  /**
+   * Installs the build for this TableCraft of a plugin downloaded for an older plugin API major;
+   * false when there is none to update (decision 155). Rejects when the update fails.
+   */
+  readonly updateOutdated?: (pluginId: string) => Promise<boolean>;
   readonly ephemeral: EphemeralDatasource | null;
   readonly newId: () => string;
   /** Deleting a datasource deletes its saved consoles (plan 006, decision 18). */
@@ -634,6 +639,19 @@ export async function createDatasourceService<Target>(
     datasource: Datasource,
     typed: Readonly<Record<string, string>>,
   ): Promise<Credentials | Extract<ConnectResult, { status: "failed" }>> {
+    const outdated = pluginOf(datasource.pluginId);
+    if (outdated?.needs === "pluginUpdate" && options.updateOutdated !== undefined) {
+      try {
+        await options.updateOutdated(datasource.pluginId);
+      } catch (cause) {
+        const why = cause instanceof Error ? cause.message : String(cause);
+        return {
+          status: "failed",
+          message: `The ${outdated.name} plugin must be updated for this TableCraft: ${why}`,
+          hint: "Check the network and connect again.",
+        };
+      }
+    }
     const plugin = pluginOf(datasource.pluginId);
     if (plugin === undefined || plugin.unavailableReason !== null) {
       const reason = plugin?.unavailableReason ?? `No plugin "${datasource.pluginId}" is installed.`;

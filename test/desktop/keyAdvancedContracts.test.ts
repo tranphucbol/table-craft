@@ -22,8 +22,7 @@ describe("advanced key contracts", () => {
     },
   );
   it("givenOptionalAdditions_whenOldSessionUsed_thenNoServiceIsRequired", () => {
-    type AddedServices = Pick<api.Session, "watch" | "leases" | "cluster" | "access" | "coordination" | "keyTransfer">;
-    expectTypeOf<Record<never, never>>().toExtend<AddedServices>();
+    expectTypeOf<Record<never, never>>().toExtend<api.Session["services"]>();
     expectTypeOf<Record<never, never>>().toExtend<Pick<api.CommandLanguage, "transactionBuilder">>();
     expectTypeOf<Record<never, never>>().toExtend<Pick<api.ConnectOptions, "transports">>();
     expectTypeOf<Record<never, never>>().toExtend<Pick<api.DatasourcePlugin, "connectionEndpoints">>();

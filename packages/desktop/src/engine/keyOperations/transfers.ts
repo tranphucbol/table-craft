@@ -15,7 +15,8 @@ import {
 } from "@table-craft/desktop/engine/protocol.js";
 import { KeyCaptures, type KeyCapture } from "./captures.js";
 import type { EngineOperationFiles } from "./files.js";
-import { type KeyOperationScope, definitelyNotApplied, invalidOperation, quietClose, serviceMethod } from "./scope.js";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
+import { type KeyOperationScope, definitelyNotApplied, invalidOperation, quietClose } from "./scope.js";
 import { type KeyTasks, type KeyJob } from "./tasks.js";
 import {
   exportHeader,
@@ -102,8 +103,7 @@ export function keyTransferOperations(
   const captures = new KeyCaptures(scope, files);
 
   function transfer(job: KeyJob): KeyTransfer {
-    if (job.session.keyTransfer === undefined) throw invalidOperation("The datasource has no key transfer service.");
-    return job.session.keyTransfer;
+    return serviceOf(job.session, "bulkTransfer");
   }
 
   return {
@@ -117,7 +117,7 @@ export function keyTransferOperations(
         const totals = { newKeys: 0n, changedKeys: 0n, sameKeys: 0n, conflicts: 0n };
         for await (const entries of chunks(capture, "ifUnchanged", 0n)) {
           scope.live();
-          const inspected = await serviceMethod(session.keyTransfer, "inspect")(entries);
+          const inspected = await serviceOf(session, "bulkTransfer").inspect(entries);
           for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += BigInt(inspected[key]);
         }
         return {
@@ -147,10 +147,7 @@ export function keyTransferOperations(
           job.check();
         }
         const service = transfer(job);
-        const identity = await serviceMethod(
-          service,
-          "exportPage",
-        )({
+        const identity = await service.exportPage({
           database: request.database,
           range: request.range,
           cursor: null,
@@ -194,16 +191,14 @@ export function keyTransferOperations(
           journal.uncertain = true;
           await save();
           job.beginWrite();
-          const result = await serviceMethod(service, "importChunk")(entries, request.policy).catch(
-            async (cause: unknown) => {
-              if (definitelyNotApplied(cause)) {
-                journal!.uncertain = false;
-                job.confirmed();
-                await save();
-              }
-              throw cause;
-            },
-          );
+          const result = await service.importChunk(entries, request.policy).catch(async (cause: unknown) => {
+            if (definitelyNotApplied(cause)) {
+              journal!.uncertain = false;
+              job.confirmed();
+              await save();
+            }
+            throw cause;
+          });
           if (BigInt(result.written) + BigInt(result.skipped) !== BigInt(entries.length))
             throw invalidOperation("The import chunk did not report a complete confirmed result.");
           journal.confirmedEntries = String(BigInt(journal.confirmedEntries) + BigInt(entries.length));
@@ -239,10 +234,7 @@ export function keyTransferOperations(
           };
           do {
             job.check();
-            const page = await serviceMethod(
-              service,
-              "exportPage",
-            )({
+            const page = await service.exportPage({
               database: request.database,
               range: request.range,
               cursor,

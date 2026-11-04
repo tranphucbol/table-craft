@@ -4,6 +4,8 @@
  * containers:
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/006 bun run test:smoke:db
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { join } from "node:path";
 import type { Page } from "playwright-core";
@@ -54,6 +56,7 @@ import {
 const captureWindow = evidenceFor("006");
 const captureSelection = evidenceFor("113");
 const captureSpinner = evidenceFor("112");
+const captureLive = evidenceFor("151");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };
@@ -474,20 +477,24 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
         expect.stringContaining("Rolled back"),
       ]);
       await captureWindow(page, "manual-rollback");
+      await captureLive(page, "01-cancel-transaction");
     },
     SCENARIO_TIMEOUT_MS,
   );
 
-  it(
-    "givenManualMode_whenInsertThenCommit_thenSecondConsoleSeesTheRow",
-    async () => {
-      const page = await launch(MYSQL);
+  it.each([
+    { datasource: MYSQL, evidence: "manual-commit" },
+    ...(WITHOUT_POSTGRES ? [] : [{ datasource: POSTGRES, evidence: "manual-commit-pg" }]),
+  ])(
+    "givenManualModeOn$datasource.pluginId_whenInsertThenCommit_thenSecondConsoleSeesTheRow",
+    async ({ datasource, evidence }) => {
+      const page = await launch(datasource);
       await chooseTransactionMode(page, "manual");
       await typeScript(page, INSERT_PROBE_ORDER);
       await runAll(page);
       await expect.poll(() => transactionBadge(page).count()).toBe(1);
 
-      await openConsoleOn(page, "mysql");
+      await openConsoleOn(page, datasource.id);
       await expect.poll(() => editorTabs(page).count()).toBe(2);
       await waitUntilReady(page);
       expect((await query(page, COUNT_PROBE_ORDER)).cells).toEqual(["0"]);
@@ -497,7 +504,8 @@ describe.runIf(DATABASES_ENABLED)("SQL console live test", () => {
       await editorTabs(page).nth(1).click();
 
       expect((await query(page, COUNT_PROBE_ORDER)).cells).toEqual(["1"]);
-      await captureWindow(page, "manual-commit");
+      await captureWindow(page, evidence);
+      if (datasource === POSTGRES) await captureLive(page, "01-transaction-commit");
     },
     SCENARIO_TIMEOUT_MS,
   );

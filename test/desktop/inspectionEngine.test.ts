@@ -36,12 +36,6 @@ function loaded(language: SqlLanguage | undefined): PluginLoadResult {
   };
 }
 
-function withoutInspect(): PluginLoadResult {
-  const language: SqlLanguage = { ...sqliteLanguage() };
-  delete language.inspect;
-  return loaded(language);
-}
-
 /** SQLite whose `inspect` reports `WITHOUT_WHERE` and records what it was asked with. */
 function recording(seen: { request?: InspectionRequest; current?: readonly string[] | null }): PluginLoadResult {
   return loaded({
@@ -73,16 +67,6 @@ function resultOf<T>(response: EngineResponse): T {
 }
 
 describe("engine inspection", () => {
-  it("givenPluginWithoutInspect_whenInspecting_thenNoProblems", async () => {
-    const engine = connection(withoutInspect());
-
-    const problems = resultOf<readonly Problem[]>(
-      await engine.handle({ id: 1, type: "inspection.inspect", text: TEXT }),
-    );
-
-    expect(problems).toEqual([]);
-  });
-
   it("givenPluginWithoutLanguage_whenInspecting_thenNoProblems", async () => {
     const engine = connection(loaded(undefined));
 

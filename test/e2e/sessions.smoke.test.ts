@@ -7,6 +7,8 @@
  *
  * The lock-wait scenarios hold a row of `sessions_live` from a connection outside the app, created
  * and dropped by this suite.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -48,6 +50,7 @@ import {
 } from "./harness.js";
 
 const captureWindow = evidenceFor("045");
+const captureLive = evidenceFor("151");
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL_ROOT: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_ROOT_CONFIG };
@@ -271,7 +274,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     "givenLockWaitOnRedPostgres_whenHolderTerminated_thenBlockedByShownAndPidTypedToConfirm",
     async () => {
       holder = await holdLock(PG_SERVER, "BEGIN");
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launchSaved(savedPostgres({ name: "pg-prod", color: "red" }));
       await startStatement(page, BLOCKED_UPDATE);
 
@@ -320,7 +323,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     "givenLockWaitOnMysql_whenHolderTerminated_thenBlockedByShownAndConfirmShowsKill",
     async () => {
       holder = await holdLock(MYSQL_SERVER, "START TRANSACTION");
-      const holderId = holder.serverSessionId ?? "";
+      const holderId = holder.services.sessions?.ownId ?? "";
       const page = await launch(MYSQL_ROOT);
       await startStatement(page, BLOCKED_UPDATE);
 
@@ -347,6 +350,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
       expect(await dialog.textContent()).toContain(`KILL ${holderId}`);
       expect(await dialog.getByLabel(`Type ${holderId} to confirm`).count()).toBe(0);
       await captureWindow(page, "mysql-terminate-confirm");
+      await captureLive(page, "02-sessions-kill-confirm");
       await dialog.getByRole("button", { name: "Terminate", exact: true }).click();
 
       await expect
@@ -354,6 +358,7 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
         .toBe(`Terminated session ${holderId}.`);
       await expect.poll(() => sessionRow(page, holderId).count(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(0);
       await captureWindow(page, "mysql-terminated");
+      await captureLive(page, "02-sessions-killed");
     },
     SCENARIO_TIMEOUT_MS,
   );
@@ -419,8 +424,8 @@ describe.runIf(DATABASES_ENABLED)("sessions live test", () => {
     "givenSleepOnTidb4_whenShowSessions_thenActiveWithoutCancelAndTerminateRuns",
     async () => {
       holder = await TIDB_SERVER.plugin.connect(TIDB_SERVER.config, { readOnly: false });
-      const holderId = holder.serverSessionId ?? "";
-      const holderInstance = await holder.findServerInstance?.();
+      const holderId = holder.services.sessions?.ownId ?? "";
+      const holderInstance = await holder.services.sessions?.findOwnInstance?.();
       if (holderInstance === undefined || holderInstance === null) {
         throw new Error("A TiDB 4 session finds the server it is on.");
       }

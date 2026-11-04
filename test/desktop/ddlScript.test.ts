@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PluginLoadResult } from "@table-craft/core";
 import type { DatasourcePlugin, NamespaceCatalog, Relation } from "@table-craft/plugin-api";
-import sqlite from "@table-craft/plugin-sqlite";
+import sqlitePlugin from "@table-craft/plugin-sqlite";
 import {
   assembleScript,
   orderForScript,
@@ -21,6 +21,7 @@ import { exportHarness, resultOf, startExport, type ExportHarness } from "../sup
 import { SQLITE_MANIFEST } from "../support/manifests.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 
+const sqlite: DatasourcePlugin = sqlitePlugin;
 const GENERATED_AT = Date.UTC(2026, 10, 3);
 const MAIN = ["main"];
 const SQLITE_RELATIONS = ["Line Items", "customers", "edit_probe", "no_key_probe", "orders", "type_probe"];
@@ -77,19 +78,21 @@ function gatedSqlite(): { plugin: DatasourcePlugin; release: () => void } {
     ...sqlite,
     connect: async (config, options) => {
       const session = await sqlite.connect(config, options);
-      const { introspector } = session;
+      const { ddl } = session.services;
       return {
         execute: (sql, params, executeOptions) => session.execute(sql, params, executeOptions),
-        introspector:
-          introspector === undefined
-            ? undefined
-            : {
-                ...introspector,
-                definition: async (definitionPath, name) => {
-                  await gate;
-                  return (await introspector.definition?.(definitionPath, name)) ?? "";
+        services: {
+          ...session.services,
+          ddl:
+            ddl === undefined
+              ? undefined
+              : {
+                  definition: async (definitionPath, name) => {
+                    await gate;
+                    return ddl.definition(definitionPath, name);
+                  },
                 },
-              },
+        },
         serverVersion: session.serverVersion,
         close: () => session.close(),
       };

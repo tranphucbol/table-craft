@@ -5,6 +5,8 @@
  *   bun run test:smoke:db
  *
  * With `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/NNN` it also saves one window PNG per scenario.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import { formatCell } from "@table-craft/desktop/renderer/grid/format.js";
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,6 +37,7 @@ import {
 
 const captureWindow = evidenceFor("002");
 const captureSpinner = evidenceFor("112");
+const captureLive = evidenceFor("151");
 
 const TYPE_PROBE_SQL = "SELECT * FROM type_probe ORDER BY id";
 const TYPE_PROBE_HEADERS = [
@@ -155,6 +158,7 @@ describe.runIf(DATABASES_ENABLED)("desktop against real databases", () => {
         expect(await cancel.isEnabled()).toBe(false);
         await expectNotSpinning(runButton(page));
         await captureWindow(page, `${target.name}-cancelled`);
+        if (target.name === "postgres") await captureLive(page, "01-cancel");
         await captureSpinner(page, `03-cancel-${target.name}-after`);
         await runStatement(page, TYPE_PROBE_SQL);
         expect((await gridText(page)).cells).toEqual(TYPE_PROBE_CELLS);

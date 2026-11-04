@@ -5,6 +5,7 @@ import {
   type ColumnMeta,
   type ForeignKey,
   type Index,
+  type DefinitionReader,
   type Introspector,
   type Key,
   type Namespace,
@@ -262,7 +263,7 @@ export function mssqlIntrospector(
   read: Reader,
   quoteIdentifier: (name: string) => string,
   nationalText: (value: string) => string,
-): Introspector {
+): Introspector & DefinitionReader {
   async function sets(sql: string, params: readonly (string | null)[] = []): Promise<ReadSet[]> {
     try {
       return await read(sql, params);

@@ -69,7 +69,7 @@ describe("sqlite plugin", () => {
       await session.execute("CREATE VIEW broken AS SELECT id FROM gone");
       await session.execute("DROP TABLE gone");
 
-      const introspector = session.introspector;
+      const introspector = session.services.schemaTree;
       if (introspector === undefined) throw new Error("The SQLite plugin introspects.");
       const catalog = await introspector.describe(["main"]);
 

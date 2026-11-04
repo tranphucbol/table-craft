@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { isPluginError, type Capability, type Session } from "@table-craft/plugin-api";
+import {
+  isPluginError,
+  type Capability,
+  type Session,
+  type SessionCapability,
+  type SessionServices,
+} from "@table-craft/plugin-api";
 import type { EngineContext } from "@table-craft/desktop/engine/context.js";
 import { connectDatasource } from "@table-craft/desktop/engine/connect.js";
 import { EngineFailure, helperRequestFailed } from "@table-craft/desktop/engine/failures.js";
+import { serviceOf } from "@table-craft/desktop/engine/services.js";
 
 export const KEY_RESOURCE_LIMIT = 32;
 const CLOSE_GRACE_MS = 3_000;
@@ -18,15 +25,6 @@ export function invalidOperation(message: string): EngineFailure {
     message,
     hint: "Refresh the datasource and check the operation's prerequisites.",
   });
-}
-
-export function requireMethod<T extends object, K extends keyof T>(
-  service: T | undefined,
-  key: K,
-  name: string,
-): T & Required<Pick<T, K>> {
-  if (typeof service?.[key] !== "function") throw invalidOperation(`The datasource does not provide ${name}.`);
-  return service as T & Required<Pick<T, K>>;
 }
 
 export function serviceMethod<T extends object, K extends keyof T>(service: T | undefined, key: K): NonNullable<T[K]> {
@@ -118,7 +116,11 @@ export class KeyOperationScope {
   }
 
   /** Admin work is serialized once, never routed through the retrying helper. */
-  run<T>(capability: Capability, write: boolean, work: (session: Session) => Promise<T>): Promise<T> {
+  run<C extends SessionCapability, T>(
+    capability: C,
+    write: boolean,
+    work: (service: SessionServices[C], session: Session) => Promise<T>,
+  ): Promise<T> {
     this.capability(capability);
     if (write) this.writable();
     if (this.queued >= MAX_QUEUED_OPERATIONS)
@@ -135,7 +137,7 @@ export class KeyOperationScope {
         const session = await this.admin;
         this.live();
         try {
-          return await work(session);
+          return await work(serviceOf(session, capability), session);
         } catch (cause) {
           if (
             isPluginError(cause) &&

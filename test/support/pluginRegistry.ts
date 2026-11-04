@@ -9,6 +9,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
+import { API_VERSION } from "@table-craft/plugin-api";
 import { manifestVersion } from "../../scripts/plugins/pack.js";
 
 const BLOCK = 512;
@@ -92,7 +93,7 @@ export function pluginPackageName(id: string): string {
 
 /** A plugin `.tgz` laid out as `scripts/plugins/pack.ts` lays it out. */
 export function pluginTarball(plugin: PluginPackage): Buffer {
-  const apiVersion = plugin.apiVersion ?? "1.0.0";
+  const apiVersion = plugin.apiVersion ?? API_VERSION;
   const name = plugin.name ?? pluginPackageName(plugin.id);
   const manifest = plugin.manifest ?? {
     ...(JSON.parse(readFileSync(SOURCE_MANIFEST(plugin.id), "utf8")) as Record<string, unknown>),
@@ -131,7 +132,7 @@ export interface RegistryRelease {
 export function release(plugin: PluginPackage, integrity?: string, bytes = pluginTarball(plugin)): RegistryRelease {
   return {
     version: plugin.version,
-    apiVersion: plugin.apiVersion ?? "1.0.0",
+    apiVersion: plugin.apiVersion ?? API_VERSION,
     pluginId: plugin.id,
     bytes,
     ...(integrity === undefined ? {} : { integrity }),

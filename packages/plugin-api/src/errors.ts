@@ -7,11 +7,11 @@ export const PLUGIN_ERROR_CODES = [
   "statementFailed",
   "introspectionFailed",
   "definitionNotFound",
-  /** `Session.explain` refused the statement; the message says why and what to explain instead. */
+  /** `Explainer.explain` refused the statement; the message says why and what to explain instead. */
   "explainUnsupported",
   /**
    * The connection was gone before the statement was sent, so the host may reconnect and run it
-   * again; `Session.ping` rejects with it too.
+   * again; `KeepAlive.ping` rejects with it too.
    */
   "connectionLost",
   /**

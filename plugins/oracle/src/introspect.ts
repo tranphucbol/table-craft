@@ -6,6 +6,7 @@ import {
   type ColumnMeta,
   type ForeignKey,
   type Index,
+  type DefinitionReader,
   type Introspector,
   type Key,
   type Namespace,
@@ -363,7 +364,7 @@ const PLAIN_PART = /^[A-Z][A-Z0-9_$#]*$/;
 export function oracleIntrospector(
   connection: oracledb.Connection,
   name: (identifier: string) => string,
-): Introspector {
+): Introspector & DefinitionReader {
   async function rows<T>(sql: string, binds: oracledb.BindParameters = {}): Promise<T[]> {
     try {
       const result = await connection.execute<T>(sql, binds, { outFormat: oracledb.OUT_FORMAT_OBJECT });

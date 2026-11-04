@@ -4,23 +4,21 @@ import {
   toWireInteger,
   toWireValue,
   z,
-  type Capability,
+  definePlugin,
   type Column,
   type ColumnOrigin,
   type ConnectOptions,
-  type DatasourcePlugin,
   type ExecuteOptions,
   type ExecuteResult,
   type ExplainedPlan,
   type ExplainOptions,
   type InsertRow,
   type InsertTarget,
-  type Introspector,
   type ParameterValue,
   type PluginErrorCode,
+  type PluginSession,
   type Row,
-  type Session,
-  type SqlLanguage,
+  type PluginLanguage,
   type TransactionMode,
   type Transactions,
   type WireValue,
@@ -57,15 +55,9 @@ import { sqliteObjects } from "./objects.js";
 
 const PLUGIN_ID = "sqlite";
 /** No `cancel`: node:sqlite runs a statement synchronously, so nothing could deliver the request. */
-const CAPABILITIES: readonly Capability[] = [
-  "sql",
-  "schemaTree",
-  "transactions",
-  "ddl",
-  "explain",
-  "bulkInsert",
-  "objects",
-];
+const CAPABILITIES = ["sql", "schemaTree", "transactions", "ddl", "explain", "bulkInsert", "objects"] as const;
+
+type SqliteCapability = (typeof CAPABILITIES)[number];
 
 /** Trigger bodies are `BEGIN … END` and hold semicolons. */
 const DIALECT: SqlDialectOptions = { blockKeywords: ["BEGIN"] };
@@ -82,7 +74,7 @@ const PLAIN_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 const KEYWORDS: readonly string[] = [...SQL_KEYWORDS, "GLOB", "PRAGMA"];
 
 /** No `explainAnalyze`: SQLite's `EXPLAIN QUERY PLAN` only plans, and nothing else reports run times. */
-const { explainable } = sqlExplainable({ dialect: DIALECT, name: "SQLite", verbs: EXPLAIN_VERBS, analyzeVerbs: [] });
+const explainCheck = sqlExplainable({ dialect: DIALECT, name: "SQLite", verbs: EXPLAIN_VERBS, analyzeVerbs: [] });
 
 const COMPLETER: CompleterOptions = {
   dialect: DIALECT,
@@ -93,7 +85,7 @@ const COMPLETER: CompleterOptions = {
   functions: SQLITE_FUNCTIONS,
 };
 
-const language: SqlLanguage = {
+const language: PluginLanguage<SqliteCapability> = {
   split: sqlSplitter(DIALECT),
   splitStream: sqlStatementStream(DIALECT),
   classify: (sql) => classifyTokens(sql, DIALECT),
@@ -105,28 +97,30 @@ const language: SqlLanguage = {
   ...sqlCompleter(COMPLETER),
   ...sqlInspector({ ...COMPLETER, reservedWords: SQLITE_RESERVED_WORDS }),
   ...sqlGenerator({ quoteIdentifier, updateDefault, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
-  explainable,
   ...sqlFormatter({ dialect: "sqlite", lexer: DIALECT, parameters: PARAMETERS.styles }),
   ...sqlParameters(PARAMETERS),
-  ...sqlImporter({
-    quoteIdentifier,
-    plainIdentifier: PLAIN_IDENTIFIER,
-    keywords: KEYWORDS,
-    types: {
-      boolean: "BOOLEAN",
-      integer: "INTEGER",
-      bigint: "INTEGER",
-      double: "REAL",
-      date: "DATE",
-      timestamp: "TIMESTAMP",
-      text: "TEXT",
-    },
-    // NUMERIC keeps text it cannot hold exactly, such as more than 15 significant digits, as text.
-    decimal: () => "NUMERIC",
-  }),
-  objects: sqliteObjects({
-    name: identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
-  }),
+  services: {
+    explain: explainCheck,
+    bulkInsert: sqlImporter({
+      quoteIdentifier,
+      plainIdentifier: PLAIN_IDENTIFIER,
+      keywords: KEYWORDS,
+      types: {
+        boolean: "BOOLEAN",
+        integer: "INTEGER",
+        bigint: "INTEGER",
+        double: "REAL",
+        date: "DATE",
+        timestamp: "TIMESTAMP",
+        text: "TEXT",
+      },
+      // NUMERIC keeps text it cannot hold exactly, such as more than 15 significant digits, as text.
+      decimal: () => "NUMERIC",
+    }),
+    objects: sqliteObjects({
+      name: identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
+    }),
+  },
 };
 
 const BEGIN_SQL = "BEGIN";
@@ -237,23 +231,22 @@ const READ_ONLY_SQL = "PRAGMA query_only = ON";
  * SQLite reports whether a transaction is open (`isTransaction`), so `open` is read, not tracked.
  * Everything runs synchronously, so every method has settled before it returns.
  */
-class SqliteSession implements Session {
+class SqliteSession implements PluginSession<SqliteCapability> {
   readonly #database: DatabaseSync;
   #mode: TransactionMode = "auto";
   readonly serverVersion: string | null;
   /** The manifest's one brand. */
   readonly serverBrand = "sqlite";
   readonly privateDatabase: boolean;
-  readonly introspector: Introspector;
-  readonly transactions: Transactions;
+  readonly services: PluginSession<SqliteCapability>["services"];
 
   constructor(config: SqliteConfig, options: ConnectOptions) {
     this.#database = new DatabaseSync(config.path);
     this.privateDatabase = config.path === MEMORY_PATH || config.path === "";
-    this.introspector = sqliteIntrospector(this.#database);
+    const introspector = sqliteIntrospector(this.#database);
     const database = this.#database;
     const mode = (): TransactionMode => this.#mode;
-    this.transactions = {
+    const transactions: Transactions = {
       setMode: (next) =>
         settle("statementFailed", () => {
           if (next === "auto" && database.isTransaction) throw new Error(OPEN_TRANSACTION_MESSAGE);
@@ -267,6 +260,13 @@ class SqliteSession implements Session {
       get open() {
         return database.isOpen && database.isTransaction;
       },
+    };
+    this.services = {
+      schemaTree: introspector,
+      ddl: introspector,
+      transactions,
+      explain: { explain: (sql, explainOptions) => this.#explain(sql, explainOptions) },
+      bulkInsert: { insertRows: (target, rows) => this.#insertRows(target, rows) },
     };
     if (options.readOnly) this.#database.exec(READ_ONLY_SQL);
     const row = this.#database.prepare(VERSION_SQL).get();
@@ -306,7 +306,7 @@ class SqliteSession implements Session {
     );
   }
 
-  insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
+  #insertRows(target: InsertTarget, rows: readonly InsertRow[]): Promise<void> {
     return settle("statementFailed", () => {
       if (rows.length === 0) return;
       const database = this.#database;
@@ -336,8 +336,8 @@ class SqliteSession implements Session {
     });
   }
 
-  async explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
-    const verdict = explainable(sql, options);
+  async #explain(sql: string, options: ExplainOptions): Promise<ExplainedPlan> {
+    const verdict = explainCheck.explainable(sql, options);
     if (!verdict.ok) throw new PluginError("explainUnsupported", verdict.reason);
     const statement = explainStatement(sql);
     const rows: Row[] = [];
@@ -356,16 +356,14 @@ class SqliteSession implements Session {
   }
 }
 
-const plugin: DatasourcePlugin = {
+export default definePlugin({
   id: PLUGIN_ID,
   capabilities: CAPABILITIES,
   language,
   connectionSchema,
   connect: (config, options) =>
     settle("connectionFailed", () => new SqliteSession(connectionSchema.parse(config), options)),
-};
-
-export default plugin;
+});
 
 /** The table column better-sqlite3 reads a result column from, or null for an expression (plan 026). */
 function originOf(column: StatementColumnMetadata): ColumnOrigin | null {

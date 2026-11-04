@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   PluginError,
+  type CancelReach,
   type Capability,
   type DatasourcePlugin,
   type Row,
@@ -13,11 +14,13 @@ import { createEngine } from "@table-craft/desktop/engine/engine.js";
 import type { EngineResponse, ExecutedStatement, TransactionState } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
+import { languageFor, USE_SWITCH } from "../support/declaredServices.js";
 import { fakeManifest } from "../support/manifests.js";
 
 const PLUGIN_ID = "slowclose";
 const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
 const CAPABILITIES: readonly Capability[] = ["sql", "cancel", "transactions", "currentNamespace"];
+const CANCEL_REACH: CancelReach = { method: "test cancel", reaches: "statement" };
 const MANY_ROWS = RESULT_PAGE_ROWS * 4;
 const SLOW_CLOSE_MS = 100;
 /** The engine's `CURSOR_CLOSE_GRACE_MS` with room for a loaded host. */
@@ -44,6 +47,7 @@ function slowClosePlugin() {
     ...sqlite,
     id: PLUGIN_ID,
     capabilities: CAPABILITIES,
+    language: languageFor(sqlite.language, CAPABILITIES, { currentNamespace: USE_SWITCH }),
     connect: () => {
       connects += 1;
       let busy = false;
@@ -89,34 +93,41 @@ function slowClosePlugin() {
             rowsAffected: null,
           });
         },
-        cancel: () => {
-          waiting?.(new PluginError("cancelled", "The statement was cancelled."));
-          waiting = null;
-          return Promise.resolve();
+        services: {
+          cancel: {
+            cancel: () => {
+              waiting?.(new PluginError("cancelled", "The statement was cancelled."));
+              waiting = null;
+              return Promise.resolve();
+            },
+            reach: CANCEL_REACH,
+          },
+          transactions: {
+            setMode: (next) => {
+              mode = next;
+              return Promise.resolve();
+            },
+            commit: () => {
+              if (busy) return Promise.reject(new PluginError("sessionBusy", BUSY_MESSAGE));
+              open = false;
+              return Promise.resolve();
+            },
+            rollback: () => {
+              open = false;
+              return Promise.resolve();
+            },
+            get mode() {
+              return mode;
+            },
+            get open() {
+              return open;
+            },
+          },
+          currentNamespace: {
+            current: () =>
+              busy ? Promise.reject(new PluginError("sessionBusy", BUSY_MESSAGE)) : Promise.resolve(["main"]),
+          },
         },
-        transactions: {
-          setMode: (next) => {
-            mode = next;
-            return Promise.resolve();
-          },
-          commit: () => {
-            if (busy) return Promise.reject(new PluginError("sessionBusy", BUSY_MESSAGE));
-            open = false;
-            return Promise.resolve();
-          },
-          rollback: () => {
-            open = false;
-            return Promise.resolve();
-          },
-          get mode() {
-            return mode;
-          },
-          get open() {
-            return open;
-          },
-        },
-        currentNamespace: () =>
-          busy ? Promise.reject(new PluginError("sessionBusy", BUSY_MESSAGE)) : Promise.resolve(["main"]),
         close: () => Promise.resolve(),
         serverVersion: "1",
       };

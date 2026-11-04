@@ -6,6 +6,7 @@ import {
   offsetOfPosition,
   type PlanNode,
   type ServerSession,
+  type ServerSessions,
   type Session,
   type SessionMonitor,
 } from "@table-craft/plugin-api";
@@ -78,17 +79,21 @@ async function listedUntil(
   ready: (row: ServerSession | undefined) => boolean,
 ): Promise<ServerSession | undefined> {
   const deadline = Date.now() + LISTED_WITHIN_MS;
-  const instance = instances.get(session) ?? session.serverInstance;
+  const instance = instances.get(session) ?? session.services.sessions?.ownInstance;
   for (;;) {
     const row = (await monitor.list()).sessions.find(
-      (listed) => listed.id === session.serverSessionId && listed.instance === instance,
+      (listed) => listed.id === session.services.sessions?.ownId && listed.instance === instance,
     );
     if (ready(row)) return row;
     if (Date.now() > deadline)
-      throw new Error(`Session ${String(session.serverSessionId)} never got there; last seen ${JSON.stringify(row)}.`);
+      throw new Error(
+        `Session ${String(session.services.sessions?.ownId)} never got there; last seen ${JSON.stringify(row)}.`,
+      );
     await new Promise((resolve) => setTimeout(resolve, LISTING_POLL_MS));
   }
 }
+
+type MonitoredSession = Session & { readonly services: { readonly sessions: ServerSessions } };
 
 const LOADED = { status: "loaded", directory: "plugins/mysql", manifest: MYSQL_MANIFEST, plugin: mysql } as const;
 
@@ -242,7 +247,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
 
-    expect(session.cancelReach).toEqual({ method: "connection reset", reaches: "connection" });
+    expect(session.services.cancel.reach).toEqual({ method: "connection reset", reaches: "connection" });
   });
 
   it("givenReadOnlySession_whenConnected_thenNoReadOnlyTransactionIsSet", async () => {
@@ -274,7 +279,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
       await expect(session.execute(sql)).rejects.toMatchObject({ code: "statementFailed" });
     }
     await expect(
-      session.insertRows?.(
+      session.services.bulkInsert.insertRows(
         {
           table: EVENTS_TABLE,
           columns: [
@@ -303,8 +308,8 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     cleanup.push(() => session.close());
     const sql = `UPDATE ${EVENTS_TABLE} SET state = 'gone'`;
 
-    const plan = await session.explain?.(sql, { analyze: false });
-    const analysed = session.explain?.(sql, { analyze: true });
+    const plan = await session.services.explain.explain(sql, { analyze: false });
+    const analysed = session.services.explain.explain(sql, { analyze: true });
 
     const warnings: string[] = [];
     const walk = (nodes: readonly PlanNode[]) => {
@@ -362,7 +367,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     cleanup.push(() => session.close());
     await withOrderEvents(session);
 
-    const plan = await session.explain?.(sql, { analyze: false });
+    const plan = await session.services.explain.explain(sql, { analyze: false });
 
     const operations: string[] = [];
     const walk = (nodes: readonly PlanNode[]) => {
@@ -382,7 +387,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     cleanup.push(() => session.close());
     await withOrderEvents(session);
 
-    const plan = await session.explain?.(
+    const plan = await session.services.explain.explain(
       `SELECT /*+ USE_INDEX(${EVENTS_TABLE}, ${EVENTS_INDEX}) */ * FROM ${EVENTS_TABLE} WHERE shop_id = 10`,
       { analyze: true },
     );
@@ -421,19 +426,20 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     cleanup.push(() => session.close());
     await withOrderEvents(session);
 
-    const described = await session.introspector?.describe([TIDB_DATABASE]);
+    const described = await session.services.schemaTree.describe([TIDB_DATABASE]);
 
     expect(described?.relations.map((relation) => relation.name)).toContain(EVENTS_TABLE);
     expect(described?.routines).toEqual([]);
   });
 
-  async function connected(): Promise<Session & { sessions: SessionMonitor }> {
-    const session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
+  async function connected(): Promise<MonitoredSession> {
+    const session: Session = await mysql.connect(TIDB_CONFIG, { readOnly: false });
     cleanup.push(() => session.close());
-    if (session.sessions === undefined) throw new Error("The mysql plugin declares sessions.");
-    const instance = await session.findServerInstance?.();
+    const sessions = session.services.sessions;
+    if (sessions === undefined) throw new Error("The mysql plugin declares sessions.");
+    const instance = await sessions.findOwnInstance?.();
     if (instance !== undefined && instance !== null) instances.set(session, instance);
-    return session as Session & { sessions: SessionMonitor };
+    return session as MonitoredSession;
   }
 
   it("givenTidb4_whenConnect_thenNoServerInstanceUntilAsked", async () => {
@@ -442,16 +448,16 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     cleanup.push(() => session.close());
 
     expect(sent.filter((sql) => sql.includes("CLUSTER_PROCESSLIST"))).toEqual([]);
-    expect(session.serverInstance).toBeUndefined();
-    expect(await session.findServerInstance?.()).toEqual(expect.any(String));
+    expect(session.services.sessions.ownInstance).toBeUndefined();
+    expect(await session.services.sessions.findOwnInstance?.()).toEqual(expect.any(String));
   });
 
   it("givenSleepOnTidb4_whenList_thenActiveWithoutCancel", async () => {
-    const monitor = (await connected()).sessions;
+    const monitor = (await connected()).services.sessions;
     const sleeper = await connected();
     const sleeping = sleeper.execute(SLEEP_SQL).catch(() => undefined);
     cleanup.push(() => sleeping);
-    cleanup.push(() => sleeper.cancel?.() ?? Promise.resolve());
+    cleanup.push(() => sleeper.services.cancel?.cancel() ?? Promise.resolve());
 
     const row = await listedUntil(monitor, sleeper, (listed) => listed?.state === "active");
     const { notes } = await monitor.list();
@@ -471,14 +477,14 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
   });
 
   it("givenOpenTransactionOnTidb4_whenList_thenIdleInTransactionWithAge", async () => {
-    const monitor = (await connected()).sessions;
+    const monitor = (await connected()).services.sessions;
     const holder = await connected();
-    await holder.transactions?.setMode("manual");
+    await holder.services.transactions?.setMode("manual");
     // With autocommit off TiDB opens the transaction at the first read of a stored table.
     for await (const _row of (await holder.execute(`SELECT COUNT(*) FROM ${EVENTS_TABLE}`)).rows) {
       // Drained, so the session sits idle in its transaction.
     }
-    cleanup.push(() => holder.transactions?.rollback() ?? Promise.resolve());
+    cleanup.push(() => holder.services.transactions?.rollback() ?? Promise.resolve());
 
     const row = await listedUntil(monitor, holder, (listed) => listed?.state === "idleInTransaction");
 
@@ -487,7 +493,7 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
 
   it("givenSessionOnTidb4_whenTerminate_thenGoneAfterInstanceCheck", async () => {
     const sent = spySql();
-    const monitor = (await connected()).sessions;
+    const monitor = (await connected()).services.sessions;
     const victim = await connected();
     const row = await listedUntil(monitor, victim, (listed) => listed !== undefined);
 
@@ -503,10 +509,10 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
 
   it("givenUnknownInstance_whenTerminateOnTidb4_thenRejectsWithoutKill", async () => {
     const sent = spySql();
-    const monitor = (await connected()).sessions;
+    const monitor = (await connected()).services.sessions;
     const victim = await connected();
 
-    const refused = monitor.terminateSession({ id: victim.serverSessionId ?? "", instance: "elsewhere:10080" });
+    const refused = monitor.terminateSession({ id: victim.services.sessions.ownId, instance: "elsewhere:10080" });
 
     await expect(refused).rejects.toMatchObject({ code: "statementFailed" });
     await expect(refused).rejects.toThrow(/nothing was killed/);
@@ -530,7 +536,11 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
     await expect(stopped).rejects.toMatchObject({ code: "timedOut" });
     await expect(stopped).rejects.toThrow(/TiDB stopped the statement at its 1\.5 s limit \(max_execution_time\)/);
     expect(Date.now() - started).toBeLessThan(SERVER_LIMIT_DEADLINE_MS);
-    expect(session.serverTimeout).toEqual({ setting: "max_execution_time", covers: "all", counts: "statement" });
+    expect(session.services.serverTimeout?.limit).toEqual({
+      setting: "max_execution_time",
+      covers: "all",
+      counts: "statement",
+    });
     expect(sent).toContain(`SET SESSION max_execution_time = ${String(SERVER_LIMIT_MS)}`);
     expect(sent.filter((sql) => /\bGLOBAL\b/i.test(sql))).toEqual([]);
     expect(await drained(session, "SELECT @@SESSION.max_execution_time ")).toEqual([["0"]]);
@@ -546,14 +556,16 @@ describe.runIf(databaseEnabled("tidb"))("tidb 4", () => {
   });
 
   it("givenServerEnforced_whenEngineCannotKill_thenServerStops", async () => {
-    const monitor = (await connected()).sessions;
+    const monitor = (await connected()).services.sessions;
     const sleeper = await connected();
-    const dropped = { serverSessionId: sleeper.serverSessionId, serverInstance: instances.get(sleeper) } as Session;
+    const dropped = {
+      services: { sessions: { ownId: sleeper.services.sessions.ownId, ownInstance: instances.get(sleeper) } },
+    } as Session;
     const sleeping = drained(sleeper, SLEEP_SQL, SERVER_LIMIT_MS).catch(() => undefined);
     cleanup.push(() => sleeping);
     await listedUntil(monitor, sleeper, (listed) => listed?.state === "active");
 
-    await sleeper.cancel?.();
+    await sleeper.services.cancel?.cancel();
     const started = Date.now();
     await listedUntil(monitor, dropped, (listed) => listed === undefined);
 

@@ -5,6 +5,8 @@
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/110 bun run test:smoke:db:headless:etcd test/e2e/etcd.smoke.test.ts
  *
  * Scratch keys live under `/live/etcd/` and are removed by the suite; seeded keys are only read.
+ *
+ * Plan 151's live test captures some of these scenarios with `TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/151`.
  */
 import type { Page } from "playwright-core";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -45,6 +47,7 @@ import {
 } from "./redisLive.js";
 
 const captureWindow = evidenceFor("110");
+const captureLive = evidenceFor("151");
 
 const ETCD: Datasource = { id: "etcd", pluginId: "etcd", config: ETCD_CONFIG };
 const ETCD35: Datasource = { id: "etcd35", pluginId: "etcd", config: ETCD35_CONFIG };
@@ -69,7 +72,7 @@ async function onEtcd(config: object, commands: readonly string[]): Promise<void
 async function valueOn(config: object, key: string): Promise<string | null> {
   const session = await etcd.connect(etcd.connectionSchema.parse(config), { readOnly: true });
   try {
-    const contents = await session.keyspace?.read(0, { text: key, hex: null }, { window: 1 });
+    const contents = await session.services.keyValue?.read(0, { text: key, hex: null }, { window: 1 });
     return typeof contents?.value === "string" ? contents.value : null;
   } finally {
     await session.close();
@@ -255,6 +258,7 @@ describe.runIf(DATABASES_ENABLED)("etcd live test", () => {
         .poll(() => cluster.locator("tbody tr").first().textContent(), { timeout: LAUNCH_TIMEOUT_MS })
         .toMatch(/^Reachableetcd-3-5\d+Leaderprimary/);
       expect(await cluster.getByRole("alert").count()).toBe(0);
+      await captureLive(page, "05-etcd-members-status");
       await cluster.getByRole("button", { name: "Server Details", exact: true }).click();
       const cards = page.getByTestId("server-cards");
       await expect.poll(() => cards.isVisible(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(true);

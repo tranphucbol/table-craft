@@ -16,6 +16,7 @@ import type { ElectronApplication, Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import mysql from "@table-craft/plugin-mysql";
 import postgres from "@table-craft/plugin-postgres";
+import type { DatasourcePlugin } from "@table-craft/plugin-api";
 import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 import {
@@ -47,7 +48,7 @@ import {
 
 const captureWindow = evidenceFor("041");
 
-type Plugin = typeof postgres;
+type Plugin = DatasourcePlugin;
 
 const POSTGRES: Datasource = { id: "pg", pluginId: "postgres", config: POSTGRES_CONFIG };
 const MYSQL: Datasource = { id: "mysql", pluginId: "mysql", config: MYSQL_CONFIG };

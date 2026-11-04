@@ -396,36 +396,3 @@ export function scriptTasks(options: ScriptTasksOptions = {}): ScriptTasks {
     },
   };
 }
-
-/**
- * A stream over `split` for a plugin without `splitStream`: it holds the whole file and splits at
- * the end, so the engine only offers it for files up to `SCRIPT_WHOLE_FILE_MAX_BYTES`.
- */
-export function wholeFileStream(
-  split: (text: string) => readonly { from: number; to: number; sql: string }[],
-): StatementStream {
-  const pieces: string[] = [];
-  return {
-    push(text) {
-      pieces.push(text);
-      return [];
-    },
-    end() {
-      const text = pieces.join("");
-      let line = 1;
-      let lineStart = 0;
-      let cursor = 0;
-      return split(text).map((span) => {
-        for (let at = text.indexOf("\n", cursor); at >= 0 && at < span.from; at = text.indexOf("\n", at + 1)) {
-          line += 1;
-          lineStart = at + 1;
-        }
-        cursor = span.from;
-        return { ...span, line, column: span.from - lineStart + 1 };
-      });
-    },
-  };
-}
-
-/** The largest file a plugin without `splitStream` can run as a script, held whole in the engine. */
-export const SCRIPT_WHOLE_FILE_MAX_BYTES = 32 * 1024 * 1024;
