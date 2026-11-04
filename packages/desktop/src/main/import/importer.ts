@@ -1,6 +1,13 @@
 import { basename } from "node:path";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import {
+  BEEKEEPER_BUSY,
+  BeekeeperFormatError,
+  isSqliteHeader,
+  readBeekeeperDatabase,
+  scanBeekeeper,
+} from "@table-craft/desktop/main/import/beekeeper.js";
+import {
   readDataGripFile,
   scanDataGrip,
   type DataGripPasswordStore,
@@ -21,11 +28,12 @@ import {
   scanTablePro,
   type TableProGroup,
 } from "@table-craft/desktop/main/import/tablepro.js";
-import type {
-  ForeignApp,
-  ForeignConnection,
-  ImportEnvironment,
-  PasswordSource,
+import {
+  ImportBusyError,
+  type ForeignApp,
+  type ForeignConnection,
+  type ImportEnvironment,
+  type PasswordSource,
 } from "@table-craft/desktop/main/import/types.js";
 import {
   WORKBENCH_CONNECTIONS_FILE,
@@ -65,10 +73,12 @@ const PICK_TABLECRAFT_FILE = "Pick a file TableCraft exported.";
 const UPDATE_TABLECRAFT = "Install the latest TableCraft, then import the file again.";
 const NOTHING_PASTED = "The clipboard holds no TableCraft data sources.";
 const COPY_FIRST = "Copy data sources in TableCraft's Database pane, then paste again.";
+const PICK_BEEKEEPER_FILE = "Pick the app.db in Beekeeper Studio's data folder.";
 const LABELS: Readonly<Record<ForeignApp, string>> = {
   datagrip: "DataGrip",
   tablepro: "TablePro",
   workbench: "MySQL Workbench",
+  beekeeper: "Beekeeper Studio",
 };
 
 export interface ImporterOptions {
@@ -171,6 +181,7 @@ export function createImporter(options: ImporterOptions): Importer {
     connections: readonly ForeignConnection[],
     store: DataGripPasswordStore | null,
     keePass: KeePassRead,
+    folders: readonly string[] = [],
   ): ImportPreview {
     const context = { plugins: service.plugins(), existing: existing(), availability: availabilityFor(store, keePass) };
     const entries = connections.map((connection) => ({
@@ -178,7 +189,7 @@ export function createImporter(options: ImporterOptions): Importer {
       mapped: mapConnection(connection, context),
       secrets: {},
     }));
-    return keep(app, entries, keePass, []);
+    return keep(app, entries, keePass, folders);
   }
 
   function keep(
@@ -256,6 +267,18 @@ export function createImporter(options: ImporterOptions): Importer {
     return keep("tablecraft", entries, null, file.folders);
   }
 
+  async function previewBeekeeper(path: string, secrets: boolean): Promise<ImportPreview> {
+    try {
+      const read = await readBeekeeperDatabase(environment.files, path, { secrets, home: environment.home });
+      return remember("beekeeper", read.connections, null, null, read.folders);
+    } catch (cause) {
+      if (cause instanceof BeekeeperFormatError) throw new DatasourceError(cause.message, PICK_BEEKEEPER_FILE);
+      if (cause instanceof ImportBusyError)
+        throw new DatasourceError(BEEKEEPER_BUSY, "Close Beekeeper Studio, then pick the file again.");
+      throw cause;
+    }
+  }
+
   async function previewFile(path: string, read: ReadOptions): Promise<ImportPreview> {
     const extension = path.toLowerCase();
     if (extension.endsWith(JSON_FILE_EXTENSION)) {
@@ -281,6 +304,7 @@ export function createImporter(options: ImporterOptions): Importer {
     const bytes = await environment.files.readBytes(path);
     if (bytes === null)
       throw new DatasourceError(`${basename(path)} could not be read.`, "Check the file still exists.");
+    if (isSqliteHeader(bytes)) return previewBeekeeper(path, read.skipSecrets !== true);
     const text = new TextDecoder().decode(bytes);
     if (isDatasourceFile(text)) return previewTableCraft(text, basename(path), read);
     try {
@@ -297,11 +321,13 @@ export function createImporter(options: ImporterOptions): Importer {
       const dataGrip = await scanDataGrip(environment);
       const tablePro = await scanTablePro(environment, await options.tableProGroups());
       const workbench = await scanWorkbench(environment);
+      const beekeeper = await scanBeekeeper(environment, { secrets: false });
       log.info("import scan", {
         datagrip: dataGrip.connections.length,
         datagripProjects: dataGrip.projects,
         tablepro: tablePro.connections.length,
         workbench: workbench.connections.length,
+        beekeeper: beekeeper.connections.length,
       });
       return [
         {
@@ -330,6 +356,14 @@ export function createImporter(options: ImporterOptions): Importer {
             ? credentials.label
             : "In Workbench's encrypted vault, which TableCraft cannot read; asked for on connect",
         },
+        {
+          app: "beekeeper",
+          label: LABELS.beekeeper,
+          found: beekeeper.found,
+          count: beekeeper.connections.length,
+          locations: beekeeper.path === null ? beekeeper.looked : [beekeeper.path],
+          passwords: beekeeper.problem ?? "In Beekeeper's app.db; TableCraft decrypts them on import",
+        },
       ];
     },
     async preview(request) {
@@ -343,6 +377,12 @@ export function createImporter(options: ImporterOptions): Importer {
       }
       if (request.source === "workbench")
         return remember("workbench", (await scanWorkbench(environment)).connections, null, null);
+      if (request.source === "beekeeper") {
+        const scan = await scanBeekeeper(environment, { secrets: true });
+        if (scan.problem !== undefined)
+          throw new DatasourceError(scan.problem, "Close Beekeeper Studio, then choose it again.");
+        return remember("beekeeper", scan.connections, null, null, scan.folders);
+      }
       const scan = await scanTablePro(environment, await options.tableProGroups());
       return remember("tablepro", scan.connections, null, null);
     },
@@ -392,8 +432,12 @@ export function createImporter(options: ImporterOptions): Importer {
           request.importPasswords && draft.ssh?.auth === "password" && connection !== null && connection.ssh !== null
             ? await read(connection.ssh.password)
             : null;
+        const passphraseSource = draft.ssh?.auth === "key" ? connection?.ssh?.passphrase : undefined;
+        const passphrase =
+          request.importPasswords && passphraseSource !== undefined ? await read(passphraseSource) : null;
         if (password !== null && mapped.passwordKey !== null) secrets[mapped.passwordKey] = password;
         if (sshPassword !== null) secrets[SSH_SECRET_KEYS.password] = sshPassword;
+        if (passphrase !== null) secrets[SSH_SECRET_KEYS.passphrase] = passphrase;
         if (mapped.passwordKey !== null && secrets[mapped.passwordKey] !== undefined) withPasswords += 1;
         items.push({ draft: { ...draft, name, folder }, secrets });
         progress({
