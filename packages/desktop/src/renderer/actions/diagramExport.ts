@@ -20,6 +20,17 @@ import {
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
 
+/**
+ * The editor island remaps `--tc-panel` to the canvas colour (`shell/islands.ts`), so the palette is
+ * resolved on the diagram's own surface; read on the document root, tables would export lighter
+ * than they are drawn.
+ */
+const DIAGRAM_SURFACE = ".tc-diagram";
+
+function surface(): HTMLElement {
+  return document.querySelector<HTMLElement>(DIAGRAM_SURFACE) ?? document.documentElement;
+}
+
 function placedOf(diagram: DiagramTab) {
   const state = useDiagrams.getState();
   const graph = diagramGraphOf(state, diagram);
@@ -39,14 +50,15 @@ export function diagramImageOf(diagram: DiagramTab): DiagramImage | null {
   const placed = placedOf(diagram);
   if (placed === null) return null;
   const { shown, layout } = placed;
-  const metrics = readMetrics();
+  const root = surface();
+  const metrics = readMetrics(root);
   return diagramSvg({
     graph: shown,
     positions: layout.positions,
     sizes: tableSizes(shown.tables, layout.columns, metrics),
     mode: layout.columns,
     metrics,
-    palette: readPalette(),
+    palette: readPalette(root),
   });
 }
 
