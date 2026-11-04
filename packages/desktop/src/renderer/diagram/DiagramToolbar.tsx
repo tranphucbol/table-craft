@@ -97,6 +97,7 @@ export function DiagramToolbar({
         label="Diagram columns"
         testId="diagram-columns"
         variant="inline"
+        className="shrink-0"
         value={mode}
         options={COLUMN_OPTIONS}
         onChange={(value) => invoke(DIAGRAM_ACTION_IDS.columns, { mode: value })}
@@ -115,7 +116,7 @@ export function DiagramToolbar({
       <ActionButton actionId={DIAGRAM_ACTION_IDS.exportPng} compact />
       <ToolbarDivider />
       <Legend />
-      <span data-testid="diagram-status" className="ml-auto truncate">
+      <span data-testid="diagram-status" className="ml-auto truncate" title={status}>
         {status}
       </span>
       {anchor === null ? null : (
