@@ -64,14 +64,14 @@ database state. Each data source gets its own engine, a utility process that loa
 runs queries. The renderer is a pure view that reaches its engine over a `MessagePort`; every
 capability is a message in `packages/desktop/src/engine/protocol.ts`.
 
-| Folder                 | Holds                                                                       |
-| :--------------------- | :-------------------------------------------------------------------------- |
-| `packages/plugin-api/` | The plugin contract: types, schemas, capabilities, the shared SQL kit       |
-| `packages/core/`       | The plugin loader, sessions, result sets, edits, history, the catalog cache |
-| `packages/desktop/`    | The Electron app: `main/`, `preload/`, `engine/` and `renderer/`            |
-| `plugins/<id>/`        | One datasource plugin each: MySQL, SQLite, PostgreSQL, Redis, Oracle, MSSQL |
-| `test/`                | Vitest suites, the database fixtures and the Playwright harness             |
-| `docs/`                | The guide, the specification, the design system and the decisions           |
+| Folder                 | Holds                                                                                     |
+| :--------------------- | :---------------------------------------------------------------------------------------- |
+| `packages/plugin-api/` | The plugin contract: types, schemas, capabilities, the shared SQL kit                     |
+| `packages/core/`       | The plugin loader, sessions, result sets, edits, history, the catalog cache               |
+| `packages/desktop/`    | The Electron app: `main/`, `preload/`, `engine/` and `renderer/`                          |
+| `plugins/<id>/`        | One datasource plugin each: MySQL, SQLite, PostgreSQL, Redis, Oracle, MSSQL, etcd, DuckDB |
+| `test/`                | Vitest suites, the database fixtures and the Playwright harness                           |
+| `docs/`                | The guide, the specification, the design system and the decisions                         |
 
 [AGENTS.md](AGENTS.md#layout) maps every folder in more detail.
 
@@ -103,7 +103,10 @@ Each rule has a decision record that says why.
   reaches it only through `serviceOf` and `hasService` in `packages/desktop/src/engine/services.ts`;
   ESLint refuses `.services` anywhere else in the engine and core.
 - Code that Electron runs uses Node APIs, and drivers are Node-compatible
-  ([001](docs/decisions/001-electron-with-bun-as-the-toolchain.md)).
+  ([001](docs/decisions/001-electron-with-bun-as-the-toolchain.md)). A native driver is N-API,
+  loads only when the plugin connects, and ships one package per platform
+  ([156](docs/decisions/156-native-drivers-ship-one-package-per-platform.md)); after changing the
+  pinned DuckDB, rerun `bun plugins/duckdb/scripts/vocabulary.ts`.
 - Colours, spacing and fonts come from the [design tokens](docs/design/design-system.md), never
   literals in a component. Other magic values are named module constants.
 - TypeScript is strict ESM. Errors are typed and say what to do next.

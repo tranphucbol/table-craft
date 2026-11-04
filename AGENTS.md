@@ -4,7 +4,7 @@ TableCraft (this repository, `table-craft`) is a desktop database IDE in the spi
 DataGrip: connections, a database explorer, SQL consoles, a result grid and a table data editor.
 Users read "TableCraft"; identifiers keep `table-craft` (decision 037). It is a Bun workspace
 written in TypeScript, shipped as an Electron app. Databases are reached through datasource
-plugins loaded at runtime; MySQL and SQLite ship in the box, PostgreSQL, Oracle, SQL Server, Redis and etcd download on
+plugins loaded at runtime; MySQL and SQLite ship in the box, PostgreSQL, Oracle, SQL Server, DuckDB, Redis and etcd download on
 demand. Read `docs/design/specification.md` for the v1 scope and `docs/decisions/` before changing
 the process model, the plugin contract, or where data lives.
 
@@ -174,7 +174,7 @@ packages/desktop/          @table-craft/desktop, the Electron app
                            settings, `appearance/` applies them as CSS variables,
                            `dialogs/Settings.tsx` edits them
 plugins/<id>/              datasource plugins (@table-craft/plugin-<id>): mysql and
-                           sqlite built in, postgres, oracle, mssql, redis and etcd optional (`BUILT_IN_PLUGINS`,
+                           sqlite built in, postgres, oracle, mssql, redis, etcd and duckdb optional (`BUILT_IN_PLUGINS`,
                            `OPTIONAL_PLUGINS` in `vite.plugins.config.ts`, decision 108;
                            an optional one builds to `dist/optional-plugins/`, loads in
                            development runs and downloads from npm). Each depends on
@@ -186,7 +186,12 @@ plugins/<id>/              datasource plugins (@table-craft/plugin-<id>): mysql 
                            `session.ts`, `routing.ts` (per-node routing), `keyspace.ts`,
                            `read.ts`, `apply.ts`, `features.ts` and `resp2.ts`
                            (version fallbacks); its `*.generated.ts` come from
-                           `scripts/command-docs.ts`
+                           `scripts/command-docs.ts`. `duckdb` carries a native N-API
+                           driver (decision 156): Vite copies `duckdb.node` beside
+                           `index.js`, the driver loads only in `connect`, and
+                           `plugins:pack` makes one package per platform
+                           (`scripts/plugins/native.ts`); its function list comes from
+                           `scripts/vocabulary.ts`
 scripts/agent-cost/        `report.ts`: steps, context and cost of an agent session, read
                            from the OpenCode session store
 scripts/api-report/        the plugin-api surface report and its check against the last

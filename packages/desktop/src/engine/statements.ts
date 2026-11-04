@@ -53,7 +53,13 @@ import type {
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { serverTimeoutOptions } from "@table-craft/desktop/engine/serverLimit.js";
-import { inTransaction, notDeclared, serviceOf } from "@table-craft/desktop/engine/services.js";
+import {
+  hasLanguageService,
+  inTransaction,
+  languageServiceOf,
+  notDeclared,
+  serviceOf,
+} from "@table-craft/desktop/engine/services.js";
 
 const REPLY_COLUMN = "value";
 const SCORE_COLUMN = "score";
@@ -103,7 +109,9 @@ function reportedColumn(column: Column, index: number): ColumnMeta {
 }
 
 function savepointsOf(language: SqlLanguage): ((name: string) => SavepointStatements) | undefined {
-  return language.savepoint.bind(language);
+  if (!hasLanguageService(language, "savepoints")) return undefined;
+  const writer = languageServiceOf(language, "savepoints");
+  return (name) => writer.savepoint(name);
 }
 
 /** What runs SQL on a console session: statements, explain, the table editor, its edits and transactions. */

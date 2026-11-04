@@ -578,6 +578,7 @@ services:
       - node-modules-oracle:/work/plugins/oracle/node_modules
       - node-modules-mssql:/work/plugins/mssql/node_modules
       - node-modules-etcd:/work/plugins/etcd/node_modules
+      - node-modules-duckdb:/work/plugins/duckdb/node_modules
       - bun-cache:/root/.bun/install/cache
       - electron-cache:/root/.cache/electron
 
@@ -690,6 +691,7 @@ volumes:
   node-modules-oracle:
   node-modules-mssql:
   node-modules-etcd:
+  node-modules-duckdb:
   # Downloads only, shared by every checkout; node_modules stay per checkout.
   bun-cache:
     name: table-craft-e2e-bun-cache

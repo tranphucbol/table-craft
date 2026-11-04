@@ -5,7 +5,7 @@
  */
 import { sep } from "node:path";
 import type { PluginRoot } from "@table-craft/core";
-import { PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js";
+import { hostPlatform, packageFor, PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import {
   createPluginInstaller,
@@ -40,6 +40,8 @@ export interface PluginServiceOptions {
   readonly usedBy: (pluginId: string) => readonly string[];
   readonly onChanged: (state: PluginsState) => void;
   readonly log: Logger;
+  /** `<process.platform>-<process.arch>`; a native plugin without a build for it is not offered. */
+  readonly platform?: string;
 }
 
 export interface PluginService {
@@ -77,6 +79,7 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
   let managed: ManagedPlugin[] = [];
   let installed: InstalledPlugins = { plugins: [], report: [] };
   const log = options.log;
+  const platform = options.platform ?? hostPlatform();
 
   function roots(): PluginRoot[] {
     return [
@@ -124,9 +127,14 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
   function state(): PluginsState {
     return {
       plugins: plugins(),
-      catalog: PLUGIN_CATALOG.map((entry) => {
+      catalog: PLUGIN_CATALOG.flatMap((entry) => {
+        const packageName = packageFor(entry, platform);
+        if (packageName === null) return [];
+        const { platforms: _platforms, ...offered } = entry;
         const plugin = installed.plugins.find((info) => info.id === entry.id && info.unavailableReason === null);
-        return { ...entry, installedVersion: plugin?.version ?? null, install: installer.progress(entry.id) };
+        return [
+          { ...offered, packageName, installedVersion: plugin?.version ?? null, install: installer.progress(entry.id) },
+        ];
       }),
     };
   }
@@ -159,6 +167,7 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     usedBy: options.usedBy,
     onChanged: changed,
     log,
+    platform,
   });
 
   /** Resolves once the windows were told about the install, so the caller's answer is current. */

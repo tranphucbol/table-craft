@@ -1,0 +1,42 @@
+{
+  "id": "duckdb",
+  "name": "DuckDB",
+  "version": "0.0.0",
+  "apiVersion": "2.0.0",
+  "entry": "index.js",
+  "capabilities": ["sql", "cancel", "schemaTree", "transactions", "ddl", "explain", "explainAnalyze", "bulkInsert"],
+  "highlight": "postgresql",
+  "brands": [{ "id": "duckdb", "name": "DuckDB" }],
+  "connection": {
+    "fields": [
+      {
+        "key": "path",
+        "label": "File",
+        "kind": "file",
+        "required": true,
+        "placeholder": "/path/to/data.duckdb, a .parquet or .csv file, or :memory:"
+      },
+      {
+        "key": "readOnlyFile",
+        "label": "Open the file read-only",
+        "kind": "checkbox",
+        "default": false,
+        "group": "advanced"
+      },
+      {
+        "key": "downloadExtensions",
+        "label": "Let DuckDB download extensions it needs",
+        "kind": "checkbox",
+        "default": true,
+        "group": "advanced"
+      }
+    ],
+    "url": {
+      "schemes": ["duckdb"],
+      "form": "file",
+      "parts": {
+        "path": "path"
+      }
+    }
+  }
+}

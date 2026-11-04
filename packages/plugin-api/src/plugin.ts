@@ -51,6 +51,7 @@ export const CAPABILITIES = [
   "maintenance",
   "coordination",
   "bulkTransfer",
+  "savepoints",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
@@ -552,11 +553,6 @@ export interface SqlLanguageBase {
    * (plan 026). Never rejects: what it cannot read is `readOnly`. `sqlCompleter` in `@table-craft/plugin-api/sql` implements it.
    */
   selectSource(sql: string, catalog: CompletionCatalog): Promise<SelectSource>;
-  /**
-   * The savepoint statements that let edits joining an open transaction undo only themselves when
-   * one is refused. `sqlSavepoints` implements it.
-   */
-  savepoint(name: string): SavepointStatements;
 }
 
 /** How a session moves to another namespace from the console's switcher (decision 060). */

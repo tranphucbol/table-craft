@@ -3,7 +3,7 @@
  * `dist/optional-plugins/<id>/`, beside its manifest, so the engine finds it through the same
  * loader as a user plugin (decision 005) and never imports it.
  */
-import { copyFile } from "node:fs/promises";
+import { copyFile, readdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { defineConfig, type Plugin } from "vite";
@@ -23,7 +23,7 @@ export const BUILT_IN_PLUGINS = ["sqlite", "mysql"] as const;
  * Published to npm and downloaded on demand (decisions 108-110). A development run and the smoke
  * harness load them from `dist/optional-plugins/`; the packaged app never does.
  */
-export const OPTIONAL_PLUGINS = ["postgres", "redis", "oracle", "mssql", "etcd"] as const;
+export const OPTIONAL_PLUGINS = ["postgres", "redis", "oracle", "mssql", "etcd", "duckdb"] as const;
 type BuiltPlugin = (typeof BUILT_IN_PLUGINS)[number] | (typeof OPTIONAL_PLUGINS)[number];
 /** pg's optional libpq binding; pg only loads it when asked for `pg.native`, which no plugin does. */
 const OPTIONAL_DRIVER_MODULES = ["pg-native"];
@@ -92,6 +92,49 @@ function inlineProtos(id: BuiltPlugin): Plugin[] {
   ];
 }
 
+const NATIVE_DRIVER_PACKAGE = "@duckdb/node-api";
+/** The package whose `duckdb.js` picks `@duckdb/node-bindings-<platform>-<arch>` at load. */
+const NATIVE_BINDING_PACKAGE = "@duckdb/node-bindings";
+/** The files of a `@duckdb/node-bindings-<platform>-<arch>` package the binding needs beside it. */
+export const NATIVE_FILES = ["duckdb.node", "libduckdb.dylib", "libduckdb.so", "duckdb.dll"] as const;
+const NATIVE_SHIM_ID = "\0table-craft:duckdb-binding";
+/**
+ * The binding loads from beside the bundle, where each platform's package puts its own files
+ * (decision 156). An ES module, so Rolldown wraps it lazily: nothing opens it until the driver is
+ * first imported, and a plugin of another platform still loads.
+ */
+const NATIVE_SHIM = [
+  'import { createRequire } from "node:module";',
+  'export default createRequire(import.meta.url)("./duckdb.node");',
+].join("\n");
+
+function hostBindingDirectory(id: BuiltPlugin): string {
+  const fromPlugin = createRequire(resolve(PLUGINS_SOURCE_ROOT, id, "package.json"));
+  const fromDriver = createRequire(fromPlugin.resolve(NATIVE_DRIVER_PACKAGE));
+  const fromBinding = createRequire(fromDriver.resolve(`${NATIVE_BINDING_PACKAGE}/package.json`));
+  const host = `${NATIVE_BINDING_PACKAGE}-${process.platform}-${process.arch}`;
+  return dirname(fromBinding.resolve(`${host}/package.json`));
+}
+
+function nativeBinding(id: BuiltPlugin, outDir: string): Plugin[] {
+  if (id !== "duckdb") return [];
+  return [
+    {
+      name: "table-craft:duckdb-native-binding",
+      enforce: "pre",
+      resolveId: (source) => (source === NATIVE_BINDING_PACKAGE ? NATIVE_SHIM_ID : null),
+      load: (moduleId) => (moduleId === NATIVE_SHIM_ID ? NATIVE_SHIM : null),
+      async writeBundle() {
+        const from = hostBindingDirectory(id);
+        const present = new Set(await readdir(from));
+        for (const file of NATIVE_FILES) {
+          if (present.has(file)) await copyFile(resolve(from, file), resolve(outDir, file));
+        }
+      },
+    },
+  ];
+}
+
 function copyManifest(id: BuiltPlugin, outDir: string): Plugin {
   return {
     name: "table-craft:copy-plugin-manifest",
@@ -121,7 +164,7 @@ export default defineConfig(({ mode }) => {
   }
   const outDir = resolve(isBuiltInPlugin(mode) ? BUILT_IN_OUT_DIR : OPTIONAL_OUT_DIR, mode);
   return {
-    plugins: [...inlineProtos(mode), copyManifest(mode, outDir)],
+    plugins: [...inlineProtos(mode), ...nativeBinding(mode, outDir), copyManifest(mode, outDir)],
     resolve: { alias: ALIASES, mainFields: NODE_MAIN_FIELDS, conditions: NODE_CONDITIONS },
     build: {
       target: BUILD_TARGET,
