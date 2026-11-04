@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DescribedCatalog } from "@table-craft/desktop/engine/protocol.js";
+import { DEFAULT_DIAGRAM_STATE } from "@table-craft/desktop/diagrams/state.js";
 import { openDiagramIn } from "@table-craft/desktop/renderer/actions/diagramCommands.js";
 import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { createCatalogStore } from "@table-craft/desktop/renderer/state/catalog.js";
@@ -233,7 +234,12 @@ function diagramStores() {
   } as unknown as EngineClient;
   const connect = () => Promise.resolve(client);
   const catalog = createCatalogStore({ connect });
-  return { tabs: createTabsStore(), diagrams: createDiagramsStore({ connect, catalog: () => catalog }), calls };
+  const persistence = { read: () => Promise.resolve(DEFAULT_DIAGRAM_STATE), save: () => Promise.resolve() };
+  return {
+    tabs: createTabsStore(),
+    diagrams: createDiagramsStore({ connect, catalog: () => catalog, persistence }),
+    calls,
+  };
 }
 
 describe("diagram tabs", () => {

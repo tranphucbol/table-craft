@@ -20,7 +20,14 @@ import { KeyEdge, type KeyFlowEdge } from "@table-craft/desktop/renderer/diagram
 import { useDiagramMetrics } from "@table-craft/desktop/renderer/diagram/metrics.js";
 import { TableNode, type TableFlowNode } from "@table-craft/desktop/renderer/diagram/TableNode.js";
 import { registerViewport } from "@table-craft/desktop/renderer/diagram/viewports.js";
-import { diagramGraph, edgeLabel, shownGraph } from "@table-craft/desktop/renderer/model/diagram.js";
+import {
+  diagramGraph,
+  EDGE_ORIGINS,
+  hiddenKeysOf,
+  edgeLabel,
+  shownGraph,
+  type EdgeOrigin,
+} from "@table-craft/desktop/renderer/model/diagram.js";
 import {
   elkGraph,
   placeNew,
@@ -45,15 +52,30 @@ const FIT_PADDING = 0.1;
 const DOT_GAP_PX = 20;
 
 /** What a right click landed on, which picks the menu. */
-type MenuTarget = { readonly kind: "table" } | { readonly kind: "pane" };
+type MenuTarget = { readonly kind: "table" } | { readonly kind: "edge" } | { readonly kind: "pane" };
 
-const TABLE_MENU: readonly (string | null)[] = [DIAGRAM_ACTION_IDS.openTable, DIAGRAM_ACTION_IDS.goToDdl];
+const TABLE_MENU: readonly (string | null)[] = [
+  DIAGRAM_ACTION_IDS.openTable,
+  DIAGRAM_ACTION_IDS.goToDdl,
+  null,
+  DIAGRAM_ACTION_IDS.addRelationshipFrom,
+  DIAGRAM_ACTION_IDS.hideTable,
+];
+/** Only what applies to the edge shows: an inferred key hides or is kept, a virtual one is deleted. */
+const EDGE_MENU: readonly (string | null)[] = [
+  DIAGRAM_ACTION_IDS.hideKey,
+  DIAGRAM_ACTION_IDS.keepKey,
+  DIAGRAM_ACTION_IDS.deleteRelationship,
+];
 const PANE_MENU: readonly (string | null)[] = [
   DIAGRAM_ACTION_IDS.fit,
   DIAGRAM_ACTION_IDS.relayout,
   null,
   DIAGRAM_ACTION_IDS.toggleInferred,
   DIAGRAM_ACTION_IDS.tables,
+  DIAGRAM_ACTION_IDS.hiddenKeys,
+  null,
+  DIAGRAM_ACTION_IDS.addRelationship,
 ];
 
 function MenuItem({ actionId }: { readonly actionId: string }) {
@@ -69,9 +91,22 @@ function MenuItem({ actionId }: { readonly actionId: string }) {
   );
 }
 
-function MenuItems({ items }: { readonly items: readonly (string | null)[] }) {
+function MenuItems({
+  items,
+  enabledOnly = false,
+}: {
+  readonly items: readonly (string | null)[];
+  readonly enabledOnly?: boolean;
+}) {
   useSyncExternalStore(subscribeToActions, () => items.map((id) => (id === null ? "" : registry.isEnabled(id))).join());
-  return items.map((id, index) =>
+  const shown = enabledOnly ? items.filter((id) => id === null || registry.isEnabled(id)) : items;
+  if (!shown.some((id) => id !== null))
+    return (
+      <ContextMenu.Item disabled className={MENU_ITEM}>
+        Declared by the database
+      </ContextMenu.Item>
+    );
+  return shown.map((id, index) =>
     id === null ? (
       <ContextMenu.Separator key={`separator-${String(index)}`} className={MENU_SEPARATOR} />
     ) : (
@@ -99,7 +134,9 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
   const tab = useDiagrams((state) => state.tabs[diagramId]);
   const datasourceId = tab?.datasourceId ?? "";
   const key = pathKey(tab?.path ?? []);
-  const state = useDiagrams((all) => all.states[datasourceId]) ?? DEFAULT_DIAGRAM_STATE;
+  const loadedState = useDiagrams((all) => all.states[datasourceId]);
+  const state = loadedState ?? DEFAULT_DIAGRAM_STATE;
+  const failure = useDiagrams((all) => all.failures[datasourceId]) ?? null;
   const layout = state.layouts[key];
   const relayouts = useDiagrams((all) => all.relayouts[diagramId] ?? 0);
   const namespace = useCatalog((catalog) => catalog.catalogs[datasourceId]?.namespaceStates[key]);
@@ -112,9 +149,15 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
 
   const described = namespace?.described ?? null;
   const inferred = tab?.inferred ?? null;
+  const ready = described !== null && inferred !== null && loadedState !== undefined;
   const graph = useMemo(
-    () => (described === null || inferred === null ? null : diagramGraph({ catalog: described, inferred, state })),
-    [described, inferred, state],
+    () =>
+      !ready || described === null || inferred === null ? null : diagramGraph({ catalog: described, inferred, state }),
+    [ready, described, inferred, state],
+  );
+  const keys = useMemo(
+    () => (!ready || described === null || inferred === null ? null : hiddenKeysOf(described, inferred, state)),
+    [ready, described, inferred, state],
   );
   const localIds = useMemo(
     () => graph?.tables.filter((table) => table.kind !== "external").map((table) => table.id) ?? null,
@@ -244,12 +287,11 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
   const localCount = localIds?.length ?? 0;
   const shownLocal = shown?.tables.filter((table) => table.kind !== "external").length ?? 0;
   const counts = shown === null ? null : countByOrigin(shown.edges);
-  const status =
-    described === null || inferred === null
-      ? "Reading the schema…"
-      : request !== null
-        ? "Laying out…"
-        : `${String(shownLocal)} of ${plural(localCount, "table")} · ${counts ?? ""}`;
+  const status = !ready
+    ? "Reading the schema…"
+    : request !== null
+      ? "Laying out…"
+      : `${String(shownLocal)} of ${plural(localCount, "table")} · ${counts ?? ""}`;
   const empty =
     graph !== null && localCount === 0
       ? `${tab.namespace} has no tables.`
@@ -269,13 +311,18 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
         pickerOpen={tab.pickerOpen}
         tables={graph?.tables.filter((table) => table.kind !== "external") ?? []}
         hidden={layout?.hiddenTables ?? []}
+        hiddenKeysOpen={tab.hiddenKeysOpen}
+        hiddenKeys={keys?.hidden ?? []}
+        missingKeys={keys?.missing ?? []}
         status={status}
       />
-      {error === null && layoutError === null ? null : (
-        <div role="alert" className="border-b border-line bg-panel px-gap py-1 break-words text-danger">
-          {error?.message ?? layoutError}
-          {error === null ? null : <span className="text-ink-muted"> {error.hint}</span>}
-        </div>
+      {[error, failure, layoutError === null ? null : { message: layoutError, hint: "" }].map((shown, index) =>
+        shown === null ? null : (
+          <div key={index} role="alert" className="border-b border-line bg-panel px-gap py-1 break-words text-danger">
+            {shown.message}
+            {shown.hint === "" ? null : <span className="text-ink-muted"> {shown.hint}</span>}
+          </div>
+        ),
       )}
       <ContextMenu.Root>
         <ContextMenu.Trigger asChild>
@@ -295,6 +342,10 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
               onNodeContextMenu={(_event, node) => {
                 useDiagrams.getState().select(diagramId, node.id);
                 setMenu({ kind: "table" });
+              }}
+              onEdgeContextMenu={(_event, edge) => {
+                useDiagrams.getState().selectEdge(diagramId, edge.id);
+                setMenu({ kind: "edge" });
               }}
               onPaneClick={() => useDiagrams.getState().select(diagramId, null)}
               onPaneContextMenu={() => setMenu({ kind: "pane" })}
@@ -324,7 +375,10 @@ function DiagramCanvas({ diagramId }: { readonly diagramId: string }) {
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
           <ContextMenu.Content className={WIDE_MENU_CONTENT}>
-            <MenuItems items={menu.kind === "table" ? TABLE_MENU : PANE_MENU} />
+            <MenuItems
+              items={menu.kind === "table" ? TABLE_MENU : menu.kind === "edge" ? EDGE_MENU : PANE_MENU}
+              enabledOnly={menu.kind === "edge"}
+            />
           </ContextMenu.Content>
         </ContextMenu.Portal>
       </ContextMenu.Root>
@@ -336,9 +390,11 @@ function plural(count: number, noun: string): string {
   return `${String(count)} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-function countByOrigin(edges: readonly { readonly origin: string }[]): string {
-  const declared = edges.filter((edge) => edge.origin === "declared").length;
-  const inferred = edges.filter((edge) => edge.origin === "inferred").length;
-  const virtual = edges.filter((edge) => edge.origin === "virtual").length;
-  return `${plural(edges.length, "key")} (${String(declared)} declared, ${String(inferred)} inferred, ${String(virtual)} virtual)`;
+function countByOrigin(edges: readonly { readonly origin: EdgeOrigin }[]): string {
+  if (edges.length === 0) return "no keys";
+  const parts = EDGE_ORIGINS.flatMap((origin) => {
+    const count = edges.filter((edge) => edge.origin === origin).length;
+    return count === 0 ? [] : [`${String(count)} ${origin}`];
+  });
+  return `${plural(edges.length, "key")}: ${parts.join(", ")}`;
 }

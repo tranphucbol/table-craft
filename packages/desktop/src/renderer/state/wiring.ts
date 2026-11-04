@@ -132,6 +132,7 @@ export function wireStores({
         tabs.getState().close(diagramId);
         diagrams?.getState().close(diagramId);
       }
+      diagrams?.getState().forget(id);
       for (const keyId of keyTabs === undefined ? [] : keyTabsOf(keyTabs.getState().tabs, id)) {
         tabs.getState().close(keyId);
         keyTabs?.getState().close(keyId);

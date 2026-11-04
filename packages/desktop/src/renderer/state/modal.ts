@@ -229,7 +229,39 @@ export type ModalRequest =
       readonly warnings: readonly string[];
       readonly preview: (args: readonly RoutineArgument[]) => Promise<RoutineCall>;
       readonly highlight: string | null | undefined;
+    }
+  | {
+      /** Add Relationship (plan 152 decision 7): a virtual key's two ends; resolves `relationshipAnswer`. */
+      readonly kind: "relationship";
+      readonly title: string;
+      /** The namespace's tables, either end's choices. */
+      readonly tables: readonly RelationshipTable[];
+      /** The source table chosen when the dialog opens: the table the menu was opened on. */
+      readonly from: string | null;
     };
+
+/** A table Add Relationship can join; its primary key fills the target columns in. */
+export interface RelationshipTable {
+  readonly name: string;
+  readonly columns: readonly string[];
+  readonly primaryKey: readonly string[];
+}
+
+/** What the Add Relationship dialog answers: the source columns and the target columns they reference, pair by pair. */
+export interface RelationshipAnswer {
+  readonly from: string;
+  readonly columns: readonly string[];
+  readonly to: string;
+  readonly targetColumns: readonly string[];
+}
+
+export function relationshipAnswer(answer: RelationshipAnswer): string {
+  return JSON.stringify(answer);
+}
+
+export function parseRelationshipAnswer(answer: string): RelationshipAnswer {
+  return JSON.parse(answer) as RelationshipAnswer;
+}
 
 /** A table a foreign key can reference. */
 export interface DesignTarget {
