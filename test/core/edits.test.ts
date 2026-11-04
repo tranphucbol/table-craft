@@ -52,7 +52,6 @@ const LANGUAGE: SqlLanguage = {
   emptyInsert: defaultValuesInsert,
   updateDefault: defaultKeyword,
   inspect: () => Promise.resolve([]),
-  savepoint: sqlSavepoints(quoteIdentifierWith('"')),
   services: {},
   ...sqlCompleter({
     dialect: {},

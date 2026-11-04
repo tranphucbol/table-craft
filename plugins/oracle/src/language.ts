@@ -67,6 +67,7 @@ export const CAPABILITIES = [
   "serverMessages",
   "sessions",
   "routineCall",
+  "savepoints",
 ] as const;
 
 export type OracleCapability = (typeof CAPABILITIES)[number];
@@ -102,7 +103,6 @@ export const language: PluginLanguage<OracleCapability> = {
   /** Oracle has no `DEFAULT VALUES`; the session rewrites it to name one column `DEFAULT`. */
   emptyInsert: defaultValuesInsert,
   updateDefault: defaultKeyword,
-  savepoint: sqlSavepoints(quoteIdentifier),
   ...sqlCompleter(COMPLETER),
   ...sqlInspector({ ...COMPLETER, reservedWords: ORACLE_RESERVED_WORDS }),
   ...sqlGenerator({
@@ -125,5 +125,6 @@ export const language: PluginLanguage<OracleCapability> = {
     currentNamespace: namespaceSwitcher("alterSessionSchema", quoteIdentifier),
     objects: oracleObjects({ name: writeName, text: textLiteral }),
     routineCall: { call: oracleRoutineCall(writeName) },
+    savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
   },
 };

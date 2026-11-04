@@ -93,6 +93,7 @@ const CAPABILITIES = [
   "sessions",
   "routineCall",
   "serverTimeout",
+  "savepoints",
 ] as const;
 
 type PostgresCapability = (typeof CAPABILITIES)[number];
@@ -140,7 +141,6 @@ const language: PluginLanguage<PostgresCapability> = {
   literal: (value) => sqlLiteral(value, LITERALS),
   emptyInsert: defaultValuesInsert,
   updateDefault: defaultKeyword,
-  savepoint: sqlSavepoints(quoteIdentifier),
   ...sqlCompleter(COMPLETER),
   ...sqlInspector({ ...COMPLETER, reservedWords: POSTGRES_RESERVED_WORDS }),
   ...sqlGenerator({
@@ -166,6 +166,7 @@ const language: PluginLanguage<PostgresCapability> = {
       text: (value) => sqlLiteral(value, LITERALS),
     }),
     routineCall: { call: postgresRoutineCall(writeName) },
+    savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
   },
 };
 

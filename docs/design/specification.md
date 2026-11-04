@@ -169,6 +169,7 @@ encrypted and, under a tunnel, passes the configured host as `ConnectOptions.ser
 | `nodes`            | `services.nodes.list()` lists the servers; `ExecuteOptions.node` runs a command on one, on every primary or by key (decision 114); requires `sql` or `commands`                                                                                                                  | `nodes` exists exactly when declared                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `serverInfo`       | `services.serverInfo.info(node)` answers titled sections of figures and `services.serverInfo.slowLog(node, limit)` the slowest commands (decision 114); requires `sql` or `commands`                                                                                             | both exist exactly when declared; every node and the null node answer titled sections with entries; the slow log holds at most the limit, newest first                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `routineCall`      | `language.services.routineCall.call(routine, qualifiedName, args)` writes the console text that calls a described routine, every value a named `:marker` in `params` (decision 090); requires `sql` and `schemaTree`                                                             | `routineCall` exists exactly when declared; the fixture's routines describe with their parameters, modes, defaults and result; a function call returns its result; a NULL argument binds as NULL; a procedure's OUT values come back as the last statement's row; a skipped default takes it; DEFAULT on a parameter without one throws `statementFailed`                                                                                                                                                                                                                                                                                                     |
+| `savepoints`       | `language.services.savepoints.savepoint(name)` writes the statements that set, roll back to and release a savepoint, so console edits in an open transaction undo only themselves; requires `sql` and `transactions`                                                             | `savepoints` exists exactly when declared; a savepoint set, rolled back to and released inside a manual transaction leaves it open                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Every plugin, whatever it declares, is checked with `serviceProblems`: the keys of
 `session.services` and `language.services` equal the declared capabilities, `language` comes
@@ -238,7 +239,6 @@ interface SqlLanguage {
   inspect(request: InspectionRequest, catalog: CompletionCatalog): Promise<readonly Problem[]>; // sqlInspector
   signatureAt(request: CompletionRequest, catalog: CompletionCatalog): Promise<SignatureHelp | null>; // the call at the caret; sqlCompleter (decision 098)
   selectSource(sql: string, catalog: CompletionCatalog): Promise<SelectSource>; // the one table a plain SELECT reads; sqlCompleter
-  savepoint(name: string): SavepointStatements; // { set, rollback, release }; sqlSavepoints
   readonly services: Partial<LanguageServices>; // exactly the declared language-side keys
 }
 
@@ -251,6 +251,7 @@ interface LanguageServices {
   }; // sqlImporter
   objects: ObjectEditor;
   routineCall: { call(routine: Routine, qualifiedName: string, args: readonly RoutineArgument[]): RoutineCall };
+  savepoints: { savepoint(name: string): SavepointStatements }; // { set, rollback, release }; sqlSavepoints
 }
 
 type SelectSource =
@@ -1251,7 +1252,7 @@ no edit; any other answer leaves the whole result read-only and the toolbar says
 
 Edits run on the console's own session and follow its transaction mode. In auto mode Submit runs
 them in one transaction and commits, exactly like the table editor. In manual mode they run inside
-the console's transaction under a savepoint (`language.savepoint`) and stay uncommitted until
+the console's transaction under a savepoint (`language.services.savepoints`) and stay uncommitted until
 Commit or Rollback; a rejected edit rolls back to the savepoint only, so the rest of the
 transaction survives. After a submit the console re-runs the statement in place. Run, Explain,
 Rerun, sort, a filter change while sorted, closing the console, disconnecting and quitting with

@@ -1,5 +1,6 @@
 import type { FormatOptions, ParameterStyle, SqlLanguage } from "@table-craft/plugin-api";
 import {
+  duckdb,
   formatDialect,
   mysql,
   plsql,
@@ -13,7 +14,7 @@ import { formatAligned } from "./layout.js";
 import { Lexer, separatorLineAt, wordOf, type SqlDialectOptions } from "./tokens.js";
 
 /** The `sql-formatter` dialects plugins may name (decisions 042 and 100). */
-export const FORMAT_DIALECTS = { postgresql, mysql, sqlite, plsql, transactsql } as const satisfies Record<
+export const FORMAT_DIALECTS = { postgresql, mysql, sqlite, plsql, transactsql, duckdb } as const satisfies Record<
   string,
   DialectOptions
 >;

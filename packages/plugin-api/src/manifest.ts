@@ -348,6 +348,13 @@ export const pluginManifestSchema = z
       !manifest.capabilities.includes("routineCall") ||
       (manifest.capabilities.includes("sql") && manifest.capabilities.includes("schemaTree")),
     { message: "the routineCall capability requires sql and schemaTree", path: ["capabilities"] },
+  )
+  // A savepoint only exists inside a transaction the console opened (decision 155).
+  .refine(
+    (manifest) =>
+      !manifest.capabilities.includes("savepoints") ||
+      (manifest.capabilities.includes("sql") && manifest.capabilities.includes("transactions")),
+    { message: "the savepoints capability requires sql and transactions", path: ["capabilities"] },
   );
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;

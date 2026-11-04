@@ -779,6 +779,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         bulkInsert: ["transactions"],
         objects: ["sql", "schemaTree"],
         routineCall: ["sql", "schemaTree"],
+        savepoints: ["sql", "transactions"],
       };
       for (const [capability, needed] of Object.entries(needs)) {
         if (declared.has(capability as Capability))
@@ -1158,23 +1159,25 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         },
       );
 
-      it("givenSavepoint_whenRolledBackToAndReleased_thenTheTransactionStaysOpen", async () => {
-        await withSession(plugin, fixture, async (session) => {
-          const transactions = session.services.transactions;
-          if (transactions === undefined) return;
-          const statements = language().savepoint("table_craft_contract");
-          await transactions.setMode("manual");
-          try {
-            await collect((await session.execute(statements.set)).rows);
-            await collect((await session.execute(statements.rollback)).rows);
-            await collect((await session.execute(statements.release)).rows);
-            expect(transactions.open).toBe(true);
-          } finally {
-            await transactions.rollback();
-            await transactions.setMode("auto");
-          }
-        });
-      });
+      it.runIf(plugin.capabilities.includes("savepoints"))(
+        "givenSavepoint_whenRolledBackToAndReleased_thenTheTransactionStaysOpen",
+        async () => {
+          await withSession(plugin, fixture, async (session) => {
+            const transactions = service(session, "transactions");
+            const statements = languageService(plugin, "savepoints").savepoint("table_craft_contract");
+            await transactions.setMode("manual");
+            try {
+              await collect((await session.execute(statements.set)).rows);
+              await collect((await session.execute(statements.rollback)).rows);
+              await collect((await session.execute(statements.release)).rows);
+              expect(transactions.open).toBe(true);
+            } finally {
+              await transactions.rollback();
+              await transactions.setMode("auto");
+            }
+          });
+        },
+      );
     });
 
     describe.runIf(plugin.capabilities.includes("bulkInsert"))("bulkInsert", () => {

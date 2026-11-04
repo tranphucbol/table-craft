@@ -12,11 +12,15 @@ and no path that loads a 1.x plugin.
   that capability's whole session-side part (`services.cancel` is `{ cancel(), reach }`,
   `services.sessions` holds `ownId` beside the monitor, `services.ddl` is the `DefinitionReader`
   that left `Introspector`). `SqlLanguage.services` is the same for the language-side part
-  (`explain`, `currentNamespace`, `bulkInsert`, `objects`, `routineCall`). Nothing a capability
+  (`explain`, `currentNamespace`, `bulkInsert`, `objects`, `routineCall`, `savepoints`). Nothing a capability
   brings lives anywhere else. `Session` keeps only what every session has or what is a fact of the
   connection: `execute`, `close`, `serverVersion`, `serverBrand?`, `privateDatabase?`, `tls?`.
   `sql` and `commands` are `plugin.language` and `plugin.commandLanguage`; `explainAnalyze`,
   `serverMessages` and `revisions` are flags with no service.
+- **Savepoints are a capability** (plan 152). `savepoints` brings `language.services.savepoints`;
+  a dialect without savepoints, such as DuckDB, leaves it out, and console edits in its open
+  transaction are refused instead of half undone. It was `SqlLanguage.savepoint`, required, before
+  any stable release shipped 2.0.0.
 - **Present exactly when declared, both ways.** The keys of `session.services` equal the declared
   session-side capabilities and the keys of `language.services` the language-side ones. A service
   is an object, never `null`: a fact about the server (no timeout setting) is a field inside it

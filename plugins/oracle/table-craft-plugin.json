@@ -18,7 +18,8 @@
     "objects",
     "serverMessages",
     "sessions",
-    "routineCall"
+    "routineCall",
+    "savepoints"
   ],
   "highlight": "plsql",
   "brands": [{ "id": "oracle", "name": "Oracle" }],
