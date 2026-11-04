@@ -351,6 +351,83 @@ describe("plugin service", () => {
     registry = await startRegistry();
   });
 
+  describe("outdated plugins", () => {
+    const OLDER_HOST = "1.10.0";
+    const OLDER_API = "1.0.0";
+    const OLD_RELEASE = release({ id: "postgres", version: "1.0.0", apiVersion: OLDER_API });
+    const NEW_RELEASE = release({ id: "postgres", version: "2.0.0" });
+
+    /** A profile an older TableCraft left: postgres 1.0.0, built for plugin API 1.x. */
+    async function seedOlder(how: "registry" | "file"): Promise<void> {
+      registry.publish(PACKAGE, [OLD_RELEASE]);
+      const older = service(registry.url, { hostVersion: OLDER_HOST });
+      await older.start();
+      if (how === "registry") await older.install("postgres");
+      else await older.installFile(pluginTarball({ id: "postgres", version: "1.0.0", apiVersion: OLDER_API }));
+      changes = [];
+      records = [];
+    }
+
+    const postgresOf = (plugins: PluginService) => plugins.plugins().find((plugin) => plugin.id === "postgres");
+
+    it("givenManagedPluginOnOlderMajor_whenInstallMissing_thenReinstalledFromRegistry", async () => {
+      await seedOlder("registry");
+      registry.publish(PACKAGE, [OLD_RELEASE, NEW_RELEASE]);
+      const plugins = await started();
+      expect(postgresOf(plugins)).toMatchObject({
+        needs: "pluginUpdate",
+        unavailableReason: "Built for an older TableCraft. Updating…",
+      });
+      expect(plugins.outdated()).toEqual(["postgres"]);
+
+      await plugins.installMissing([]);
+
+      expect(postgresOf(plugins)).toMatchObject({ version: "2.0.0", unavailableReason: null, needs: null });
+      expect(plugins.outdated()).toEqual([]);
+      expect(messages()).toContain("plugin outdated; updating");
+    });
+
+    it("givenFileInstalledPluginOnOlderMajor_whenInstallMissing_thenLeftUnavailable", async () => {
+      await seedOlder("file");
+      registry.publish(PACKAGE, [OLD_RELEASE, NEW_RELEASE]);
+      const plugins = await started();
+
+      await plugins.installMissing(["postgres"]);
+
+      expect(plugins.outdated()).toEqual([]);
+      expect(postgresOf(plugins)).toMatchObject({ version: "1.0.0", needs: "pluginUpdate" });
+      expect(postgresOf(plugins)?.unavailableReason).toContain("an older major");
+      expect(await plugins.updateOutdated("postgres")).toBe(false);
+    });
+
+    it("givenNoCompatibleVersionYet_whenInstallMissing_thenFailedStateAndRetryLater", async () => {
+      await seedOlder("registry");
+      const plugins = await started();
+
+      await plugins.installMissing([]);
+
+      expect(plugins.state().catalog[0]?.install.status).toBe("failed");
+      expect(postgresOf(plugins)?.unavailableReason).toMatch(/^Update failed: /);
+      await expect(plugins.updateOutdated("postgres")).rejects.toBeInstanceOf(PluginInstallError);
+
+      registry.publish(PACKAGE, [OLD_RELEASE, NEW_RELEASE]);
+      expect(await plugins.updateOutdated("postgres")).toBe(true);
+      expect(postgresOf(plugins)).toMatchObject({ version: "2.0.0", unavailableReason: null });
+    });
+
+    it("givenAutomaticChecksOff_whenLaunchedWithOutdatedPlugin_thenStillUpdated", async () => {
+      await seedOlder("registry");
+      registry.publish(PACKAGE, [OLD_RELEASE, NEW_RELEASE]);
+      const plugins = await started();
+
+      // The launch call `startBackground` makes before it builds the schedule `checkAutomatically` gates.
+      await plugins.installMissing([]);
+
+      expect(postgresOf(plugins)).toMatchObject({ version: "2.0.0", unavailableReason: null });
+      expect(registry.requests.some((path) => path.includes("postgres-2.0.0.tgz"))).toBe(true);
+    });
+  });
+
   it("givenLeftoversOnDisk_whenPruned_thenStagingOrphansAndOldVersionsGo", async () => {
     const plugins = await started();
     await plugins.install("postgres");

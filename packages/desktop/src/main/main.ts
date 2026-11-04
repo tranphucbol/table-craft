@@ -549,7 +549,6 @@ function createWindow(settings: SettingsService): void {
   window.once("ready-to-show", () => {
     window.show();
     updateSchedule?.start();
-    pluginStore?.startBackground();
   });
   closeGuard.guard(window);
   window.on("closed", () => mcpSupervisor?.windowsChanged());
@@ -831,6 +830,7 @@ void app.whenReady().then(async () => {
     secrets,
     hosts,
     plugins: () => plugins.service.plugins(),
+    updateOutdated: (pluginId) => plugins.service.updateOutdated(pluginId),
     ephemeral,
     newId: randomUUID,
     consoles,
@@ -870,6 +870,8 @@ void app.whenReady().then(async () => {
     },
   });
   settingsService = settings;
+  // After the settings: the download reads the registry URL and channel from them.
+  plugins.startBackground();
   const settingsWarning = settings.snapshot().warning;
   if (settingsWarning !== null) mainLog.child("settings").warn("settings file set aside", { warning: settingsWarning });
   const datasourcesWarning = service.list().warning;

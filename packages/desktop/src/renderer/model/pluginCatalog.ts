@@ -3,6 +3,7 @@ import type {
   CatalogPlugin,
   PluginInfo,
   PluginInstallState,
+  PluginNeed,
   PluginSource,
 } from "@table-craft/desktop/preload/bridge.js";
 import { formatBytes } from "@table-craft/desktop/renderer/model/format.js";
@@ -24,14 +25,31 @@ export const SOURCE_LABELS: Readonly<Record<PluginSource, string>> = {
   user: "Your plugin",
 };
 
-/** The catalog entry for `pluginId` while no plugin with that id is installed; it can be downloaded. */
+/** What makes `pluginId` usable when every installed plugin with that id is unavailable for its API version. */
+export function pluginNeed(plugins: readonly PluginInfo[], pluginId: string): PluginNeed | null {
+  const installed = plugins.filter((plugin) => plugin.id === pluginId);
+  if (installed.some((plugin) => plugin.unavailableReason === null)) return null;
+  return installed.find((plugin) => plugin.needs !== null)?.needs ?? null;
+}
+
+/**
+ * The catalog entry for `pluginId` while no plugin with that id is installed, or only one built for
+ * an older TableCraft (decision 155); it can be downloaded.
+ */
 export function missingPlugin(
   catalog: readonly CatalogPlugin[],
   plugins: readonly PluginInfo[],
   pluginId: string,
 ): CatalogPlugin | undefined {
-  if (plugins.some((plugin) => plugin.id === pluginId)) return undefined;
+  if (plugins.some((plugin) => plugin.id === pluginId) && pluginNeed(plugins, pluginId) !== "pluginUpdate") {
+    return undefined;
+  }
   return catalog.find((entry) => entry.id === pluginId);
+}
+
+/** True when the only plugins installed for `pluginId` need a newer TableCraft. */
+export function needsNewerApp(plugins: readonly PluginInfo[], pluginId: string): boolean {
+  return pluginNeed(plugins, pluginId) === "appUpdate";
 }
 
 /** Each product the installed plugins speak, and the downloadable plugins not installed, by name. */
@@ -79,17 +97,40 @@ export interface MissingText {
   readonly title: string;
 }
 
-/** What a data source whose plugin is missing shows: a short state, with the whole story as its tooltip. */
-export function missingText(entry: CatalogPlugin): MissingText {
+export const NEWER_APP_TEXT: MissingText = {
+  text: "Needs a newer TableCraft",
+  title: "This plugin was built for a newer TableCraft. Update TableCraft to use it.",
+};
+
+/**
+ * What a data source whose plugin is missing, or built for an older TableCraft (`outdated`), shows:
+ * a short state, with the whole story as its tooltip.
+ */
+export function missingText(entry: CatalogPlugin, outdated = false): MissingText {
   const { install } = entry;
-  if (install.status === "failed") return { text: "Install failed", title: `${install.message} ${install.hint}` };
+  if (install.status === "failed") {
+    return { text: outdated ? "Update failed" : "Install failed", title: `${install.message} ${install.hint}` };
+  }
   if (install.status === "installing") {
-    return { text: `Installing…${percentText(install)}`, title: installText(entry) ?? "" };
+    const text = `${outdated ? "Updating" : "Installing"}…${percentText(install)}`;
+    return { text, title: outdated ? `Updating ${entry.name}…${percentText(install)}` : (installText(entry) ?? "") };
+  }
+  if (outdated) {
+    return {
+      text: "Update needed",
+      title: `The ${entry.name} plugin was built for an older TableCraft. Update downloads the build for this one.`,
+    };
   }
   return {
     text: "Plugin missing",
     title: `The ${entry.name} plugin is not installed. Install downloads it; Settings → Plugins manages plugins.`,
   };
+}
+
+/** Why an installed plugin cannot be used, as the Plugins page says it; null when it can. */
+export function unavailableText(plugin: PluginInfo): string | null {
+  if (plugin.unavailableReason === null) return null;
+  return plugin.needs === "appUpdate" ? `${NEWER_APP_TEXT.text}.` : plugin.unavailableReason;
 }
 
 /** "PostgreSQL 1.4.0 · Downloaded". */

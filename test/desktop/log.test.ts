@@ -371,6 +371,7 @@ describe("diagnostics", () => {
     source: "managed",
     version: "1.0.0",
     unavailableReason: null,
+    needs: null,
     capabilities: [],
     highlight: "postgresql",
     brands: [{ id: "postgresql", name: "PostgreSQL" }],
