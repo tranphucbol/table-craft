@@ -16,7 +16,13 @@ import { join } from "node:path";
 import { zip } from "@table-craft/desktop/main/log/zip.js";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
-import { MYSQL_CONFIG, POSTGRES_CONFIG, WITHOUT_POSTGRES } from "../support/databases.js";
+import {
+  MYSQL_BEHIND_BASTION,
+  MYSQL_CONFIG,
+  POSTGRES_CONFIG,
+  SSH_BASTION,
+  WITHOUT_POSTGRES,
+} from "../support/databases.js";
 import {
   DATAGRIP_IDS,
   dataGripService,
@@ -57,7 +63,10 @@ import {
 const captureWindow = evidenceFor("035");
 const captureFoundation = evidenceFor("053");
 const captureWorkbench = evidenceFor("143");
-const captureBeekeeper = evidenceFor("150");
+const captureBeekeeperNow = evidenceFor("150");
+/** Run in the page: dialogs fade in, so a capture waits for every finite animation. */
+const ANIMATIONS_FINISHED =
+  "Promise.all(document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity).map((animation) => animation.finished))";
 
 const PASSWORD = MYSQL_CONFIG.password;
 const HOME_PREFIX = "table-craft-import-home-";
@@ -100,6 +109,23 @@ function beekeeperLiveConnections(sqlitePath: string): BeekeeperRow[] {
       ...(typeof row.name === "string" ? signIn[row.name] : undefined),
     })),
     {
+      id: 10,
+      createdAt: "2026-01-05 10:09:00",
+      name: "Tunnelled MySQL",
+      connectionType: "mysql",
+      ...MYSQL_BEHIND_BASTION,
+      username: MYSQL_CONFIG.user,
+      password: MYSQL_CONFIG.password,
+      defaultDatabase: MYSQL_CONFIG.database,
+      sshEnabled: 1,
+      sshHost: SSH_BASTION.host,
+      sshPort: SSH_BASTION.port,
+      sshUsername: SSH_BASTION.user,
+      sshMode: "keyfile",
+      sshKeyfile: SSH_BASTION.keyPath,
+      sshKeyfilePassword: SSH_BASTION.passphrase,
+    },
+    {
       id: 9,
       createdAt: "2026-01-05 10:08:00",
       name: "Behind jump host",
@@ -118,6 +144,11 @@ function beekeeperLiveConnections(sqlitePath: string): BeekeeperRow[] {
 
 /** Every row but the cloud workspace's, which the reader leaves out. */
 const BEEKEEPER_LOCAL_CONNECTIONS = beekeeperLiveConnections("").filter((row) => row.workspaceId === undefined).length;
+
+async function captureBeekeeper(page: Page, name: string): Promise<void> {
+  await page.evaluate(ANIMATIONS_FINISHED);
+  await captureBeekeeperNow(page, name);
+}
 
 function importDialog(page: Page) {
   return page.getByRole("dialog", { name: "Import Data Sources" });
@@ -481,9 +512,16 @@ describe.runIf(DATABASES_ENABLED)("import data sources live test", () => {
       await expect.poll(() => form.getByLabel("SSH host", { exact: true }).inputValue()).toBe("jump.test");
       await expect.poll(() => form.getByLabel("SSH user", { exact: true }).inputValue()).toBe("deploy");
       await form.getByLabel("SSH user", { exact: true }).scrollIntoViewIfNeeded();
-      await captureBeekeeper(page, "05-ssh");
       await page.keyboard.press("Escape");
       await form.waitFor({ state: "detached" });
+
+      await connect(page, "Tunnelled MySQL");
+      const hostKey = page.getByRole("dialog", { name: "Unknown SSH Host Key" });
+      await hostKey.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+      await hostKey.getByRole("button", { name: "Trust", exact: true }).click();
+      await connected(page, "Tunnelled MySQL");
+      expect(await secretPrompt(page, "Tunnelled MySQL").count()).toBe(0);
+      await captureBeekeeper(page, "05-ssh");
 
       await openImport(page);
       await importDialog(page).getByTestId("import-source-beekeeper").click();
