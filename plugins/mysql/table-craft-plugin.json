@@ -19,7 +19,8 @@
     "serverMessages",
     "sessions",
     "routineCall",
-    "serverTimeout"
+    "serverTimeout",
+    "savepoints"
   ],
   "highlight": "mysql",
   "brands": [

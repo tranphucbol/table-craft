@@ -11,6 +11,7 @@ import type {
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
 import { SQLITE_MANIFEST } from "../support/manifests.js";
+import { languageFor } from "../support/declaredServices.js";
 import { seededSqliteFile } from "../support/sqliteFixture.js";
 
 const LOADED_SQLITE: PluginLoadResult = {
@@ -29,7 +30,14 @@ function resultOf<T>(response: EngineResponse): T {
   return response.result as T;
 }
 
-async function opened(readOnly = false) {
+const WITHOUT_SAVEPOINTS = sqlite.capabilities.filter((capability) => capability !== "savepoints");
+const LOADED_WITHOUT_SAVEPOINTS: PluginLoadResult = {
+  ...LOADED_SQLITE,
+  manifest: { ...SQLITE_MANIFEST, capabilities: WITHOUT_SAVEPOINTS },
+  plugin: { ...sqlite, capabilities: WITHOUT_SAVEPOINTS, language: languageFor(sqlite.language, WITHOUT_SAVEPOINTS) },
+};
+
+async function opened(readOnly = false, loaded = LOADED_SQLITE) {
   const engine = createEngine({
     datasource: {
       id: "seeded",
@@ -38,7 +46,7 @@ async function opened(readOnly = false) {
       readOnly,
       keepAliveSeconds: 0,
     },
-    plugins: [LOADED_SQLITE],
+    plugins: [loaded],
   });
   const connection = engine.connect();
   const sessionId = resultOf<{ sessionId: string }>(await connection.handle({ id: 1, type: "session.open" })).sessionId;
@@ -170,6 +178,38 @@ describe("engine console result editing", () => {
     ]);
 
     expect(response).toMatchObject({ type: "engine.error", error: { code: "editRejected", statementIndex: 0 } });
+  });
+
+  it("givenNoSavepointsService_whenEditsInOpenTransaction_thenRefusedWithCommitHint", async () => {
+    const { connection, sessionId } = await opened(false, LOADED_WITHOUT_SAVEPOINTS);
+    await transactionMode(connection, sessionId, "manual");
+    const executed = await run(connection, sessionId, "SELECT id, label FROM edit_probe ORDER BY id");
+    await editable(connection, executed.handle);
+
+    const response = await submit(connection, sessionId, executed.handle, [{ kind: "delete", row: 1 }]);
+    const count = await run(connection, sessionId, "SELECT count(*) FROM edit_probe");
+
+    expect(response).toMatchObject({ type: "engine.error", error: { code: "invalidRequest" } });
+    expect(response.type === "engine.error" && response.error.hint).toContain("Commit or roll back");
+    expect(count.firstWindow.rows).toEqual([[2]]);
+  });
+
+  it("givenSavepointsService_whenEditRejected_thenOnlyEditsUndone", async () => {
+    const { connection, sessionId } = await opened();
+    await transactionMode(connection, sessionId, "manual");
+    await run(connection, sessionId, "UPDATE edit_probe SET label = 'kept' WHERE id = 1");
+    const executed = await run(connection, sessionId, "SELECT id, label FROM edit_probe ORDER BY id");
+    await editable(connection, executed.handle);
+    await run(connection, sessionId, "DELETE FROM edit_probe WHERE id = 2");
+
+    const response = await submit(connection, sessionId, executed.handle, [
+      { kind: "update", row: 0, values: [{ column: 1, value: { kind: "text", text: "undone" } }] },
+      { kind: "update", row: 1, values: [{ column: 1, value: { kind: "text", text: "lost" } }] },
+    ]);
+    const labels = await run(connection, sessionId, "SELECT label FROM edit_probe ORDER BY id");
+
+    expect(response).toMatchObject({ type: "engine.error", error: { code: "editRejected", statementIndex: 1 } });
+    expect(labels.firstWindow.rows).toEqual([["kept"]]);
   });
 
   it("givenResultNeverAskedIfEditable_whenSubmitted_thenInvalidRequest", async () => {

@@ -5,9 +5,12 @@
  *   bun run test:smoke
  */
 import { spawnSync } from "node:child_process";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadPlugins } from "@table-craft/core";
+import { MANIFEST_FILE } from "@table-craft/plugin-api";
 import { describe, expect, it } from "vitest";
 import { SMOKE_ENABLED } from "./harness.js";
 
@@ -20,6 +23,7 @@ const ROOT_OF: Readonly<Record<string, string>> = {
   oracle: OPTIONAL_PLUGINS_ROOT,
   mssql: OPTIONAL_PLUGINS_ROOT,
   etcd: OPTIONAL_PLUGINS_ROOT,
+  duckdb: OPTIONAL_PLUGINS_ROOT,
 };
 const PLUGIN_ENTRY_FILE = "index.js";
 /** Port 1 (tcpmux) is reserved and closed on any machine running these tests. */
@@ -48,8 +52,10 @@ try {
 }
 `;
 
-function probe(pluginId: string, config: unknown, sql?: string): unknown {
-  const entry = pathToFileURL(join(ROOT_OF[pluginId] ?? BUILT_PLUGINS_ROOT, pluginId, PLUGIN_ENTRY_FILE)).href;
+function probe(pluginId: string, config: unknown, sql?: string, directory?: string): unknown {
+  const entry = pathToFileURL(
+    join(directory ?? join(ROOT_OF[pluginId] ?? BUILT_PLUGINS_ROOT, pluginId), PLUGIN_ENTRY_FILE),
+  ).href;
   const child = spawnSync(
     process.execPath,
     ["--input-type=module", "-", entry, JSON.stringify(config), ...(sql === undefined ? [] : [sql])],
@@ -75,7 +81,7 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
 
     expect(results.filter((result) => result.status === "unavailable")).toEqual([]);
     expect(results.map((result) => result.manifest?.id)).toEqual(
-      expect.arrayContaining(["postgres", "redis", "oracle", "mssql", "etcd"]),
+      expect.arrayContaining(["postgres", "redis", "oracle", "mssql", "etcd", "duckdb"]),
     );
   });
 
@@ -96,5 +102,26 @@ describe.runIf(SMOKE_ENABLED)("built plugin bundles", () => {
 
   it("givenBuiltSqliteBundle in a plain ES module_whenOpeningInMemory_thenSelectsALiteral", () => {
     expect(probe("sqlite", IN_MEMORY)).toEqual({ rows: [[1]] });
+  });
+
+  it("givenBuiltDuckdbBundle in a plain ES module_whenOpeningInMemory_thenItsBindingRunsALiteral", () => {
+    expect(probe("duckdb", IN_MEMORY, "SELECT 42 AS answer")).toEqual({ rows: [[42]] });
+  });
+
+  it("givenDuckdbBundleWithoutItsBinding_whenLoadedAndConnected_thenLoadsAndSaysToReinstall", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "table-craft-duckdb-bare-"));
+    try {
+      for (const file of [PLUGIN_ENTRY_FILE, MANIFEST_FILE]) {
+        await copyFile(join(OPTIONAL_PLUGINS_ROOT, "duckdb", file), join(directory, file));
+      }
+
+      expect((await loadPlugins([{ directory }]))[0]?.status).toBe("loaded");
+      expect(probe("duckdb", IN_MEMORY, undefined, directory)).toMatchObject({
+        code: "connectionFailed",
+        message: expect.stringContaining("install it again") as unknown,
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

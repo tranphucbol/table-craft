@@ -17,6 +17,8 @@
       "@table-craft/plugin-mssql": ["plugins/mssql/src/index.ts"],
       "@table-craft/plugin-mssql/functions": ["plugins/mssql/src/functions/index.ts"],
       "@table-craft/plugin-mssql/*": ["plugins/mssql/src/*"],
+      "@table-craft/plugin-duckdb": ["plugins/duckdb/src/index.ts"],
+      "@table-craft/plugin-duckdb/*": ["plugins/duckdb/src/*"],
       "@table-craft/plugin-etcd": ["plugins/etcd/src/index.ts"],
       "@table-craft/plugin-etcd/*": ["plugins/etcd/src/*"],
       "@table-craft/plugin-postgres": ["plugins/postgres/src/index.ts"],

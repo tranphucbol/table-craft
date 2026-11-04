@@ -28,7 +28,8 @@ but it does keep the statements [agents](agents.md) sent, as the query history d
 TableCraft talks only to GitHub, to [check for updates](install.md#updates), and to the npm registry, to
 [download plugins](plugins.md#databases-in-the-box-and-on-demand), and sends nothing about you to either;
 turn **Check for updates automatically** off and it asks only when you choose **Help → Check for
-Updates…** or install a plugin.
+Updates…** or install a plugin. DuckDB itself downloads extensions from `extensions.duckdb.org`
+when a query needs one; turn that off per data source ([DuckDB](duckdb.md)).
 
 [Agent notifications](agents.md) go through your system's notification centre, which may keep
 them; they name the client and the data source, never a statement, key or reason.

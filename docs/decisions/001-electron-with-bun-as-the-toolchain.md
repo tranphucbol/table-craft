@@ -1,6 +1,6 @@
 # 001: Electron, with Bun as the toolchain
 
-Status: Accepted
+Status: Accepted. Amended by 156: a native N-API driver ships one package per platform.
 
 ## Decision
 

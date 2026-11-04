@@ -1,6 +1,6 @@
 # 110: The app installs plugins from the npm registry
 
-Status: Accepted. Plan 057. Amended by 155: a registry plugin built for an older major is missing, and installs at launch.
+Status: Accepted. Plan 057. Amended by 155: a registry plugin built for an older major is missing, and installs at launch. Amended by 156: a native plugin installs the package for this platform.
 
 ## Decision
 

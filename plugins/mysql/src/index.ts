@@ -110,6 +110,7 @@ const CAPABILITIES = [
   "sessions",
   "routineCall",
   "serverTimeout",
+  "savepoints",
 ] as const;
 
 type MysqlCapability = (typeof CAPABILITIES)[number];
@@ -158,7 +159,6 @@ const language: PluginLanguage<MysqlCapability> = {
   literal: (value) => sqlLiteral(value, LITERALS),
   emptyInsert: (table) => `INSERT INTO ${table} () VALUES ()`,
   updateDefault: defaultKeyword,
-  savepoint: sqlSavepoints(quoteIdentifier),
   ...sqlCompleter(COMPLETER),
   ...sqlInspector({ ...COMPLETER, reservedWords: MYSQL_RESERVED_WORDS }),
   ...sqlGenerator({
@@ -184,6 +184,7 @@ const language: PluginLanguage<MysqlCapability> = {
       text: (value) => sqlLiteral(value, LITERALS),
     }),
     routineCall: { call: mysqlRoutineCall(writeName) },
+    savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
   },
 };
 

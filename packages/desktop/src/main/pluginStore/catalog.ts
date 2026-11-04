@@ -15,6 +15,26 @@ export interface CatalogEntry {
   readonly schemes: readonly string[];
   /** The packed `.tgz` (`bun run plugins:pack` prints it), rounded up; what the download entry shows. */
   readonly approximateBytes: number;
+  /**
+   * Set for a plugin with a native driver, published as one `<packageName>-<platform>` package per
+   * platform listed (decision 156); absent for a plugin that runs everywhere from one package.
+   */
+  readonly platforms?: readonly NativePlatform[];
+}
+
+/** The `<process.platform>-<process.arch>` pairs a native plugin is published for (decision 156). */
+export const NATIVE_PLATFORMS = [
+  "darwin-arm64",
+  "darwin-x64",
+  "linux-x64",
+  "linux-arm64",
+  "win32-x64",
+  "win32-arm64",
+] as const;
+export type NativePlatform = (typeof NATIVE_PLATFORMS)[number];
+
+export function hostPlatform(): string {
+  return `${process.platform}-${process.arch}`;
 }
 
 /** Packages in this scope, installed through the app, are official: no confirmation (decision 110). */
@@ -65,10 +85,25 @@ export const PLUGIN_CATALOG: readonly CatalogEntry[] = [
     schemes: ["etcd", "etcds"],
     approximateBytes: 400_000,
   },
+  {
+    id: "duckdb",
+    name: "DuckDB",
+    packageName: officialPackage("duckdb"),
+    brands: [{ id: "duckdb", name: "DuckDB" }],
+    schemes: ["duckdb"],
+    approximateBytes: 29_000_000,
+    platforms: NATIVE_PLATFORMS,
+  },
 ];
 
 export function catalogEntry(id: string): CatalogEntry | undefined {
   return PLUGIN_CATALOG.find((entry) => entry.id === id);
+}
+
+/** The package `entry` downloads as on `platform`; null when none is published for it. */
+export function packageFor(entry: CatalogEntry, platform: string): string | null {
+  if (entry.platforms === undefined) return entry.packageName;
+  return (entry.platforms as readonly string[]).includes(platform) ? `${entry.packageName}-${platform}` : null;
 }
 
 /** The downloadable plugin that reads `scheme:` URLs, for an import that finds no installed one. */

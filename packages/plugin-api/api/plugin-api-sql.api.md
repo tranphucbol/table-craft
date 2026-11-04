@@ -41,7 +41,7 @@ interface ExplainableOptions {
   readonly verbs: readonly string[];
 }
 
-const FORMAT_DIALECTS: { readonly postgresql: DialectOptions; readonly mysql: DialectOptions; readonly sqlite: DialectOptions; readonly plsql: DialectOptions; readonly transactsql: DialectOptions; };
+const FORMAT_DIALECTS: { readonly postgresql: DialectOptions; readonly mysql: DialectOptions; readonly sqlite: DialectOptions; readonly plsql: DialectOptions; readonly transactsql: DialectOptions; readonly duckdb: DialectOptions; };
 
 const FUNCTION_CATEGORIES: readonly [ "string", "numeric", "datetime", "json", "aggregate", "window", "information", "encryption", "locking", "spatial", "xml", "control", "misc", "server" ];
 

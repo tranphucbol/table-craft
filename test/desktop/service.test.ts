@@ -130,6 +130,7 @@ describe("listPlugins", () => {
     const plugins = await listPlugins([BUILT_IN_PLUGINS]);
 
     expect(plugins.map((plugin) => plugin.id).sort()).toEqual([
+      "duckdb",
       "etcd",
       "mssql",
       "mysql",

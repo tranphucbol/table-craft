@@ -86,7 +86,8 @@ export type Capability =
   | "members"
   | "maintenance"
   | "coordination"
-  | "bulkTransfer";
+  | "bulkTransfer"
+  | "savepoints";
 
 /** Mirrors `ServerTimeout` in plugin-api: what the server stops by itself at a statement limit (decision 129). */
 export interface ServerTimeout {
