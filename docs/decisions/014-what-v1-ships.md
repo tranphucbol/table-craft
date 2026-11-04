@@ -29,7 +29,7 @@ Status: Accepted
 
 **v1.1**: SSH tunnels, saved query files.
 
-**Later**: ER diagrams, schema compare and migrations, data import, a plugin marketplace,
+**Later**: schema compare and migrations, data import, a plugin marketplace,
 Redis / MongoDB plugins, a CLI, AI assistance, Git integration, a debugger, notebooks,
 Docker / Kubernetes integration.
 
@@ -47,3 +47,4 @@ contract, which is the part that must be right before third parties build on it.
 - The plans 002 to 014 follow this list in order; see `docs/plans/`.
 - Amended by decision 039: the daily-friction release (plans 017 to 026) adds to this list.
 - Amended by decision 069: the must-have release (plans 036 to 048) adds to this list.
+- Amended by decision 157: plan 152 ships the ER diagram, so it leaves the Later list.

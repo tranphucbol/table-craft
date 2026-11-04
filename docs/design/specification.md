@@ -618,6 +618,7 @@ handles belong to the port that created them and are released when it closes.
 | `session.close`         | `sessionId`                                                                                       | `null`; releases the session's handles, then closes it                                                                                             |
 | `catalog.namespaces`    | `refresh?`                                                                                        | `Namespace[]`                                                                                                                                      |
 | `catalog.describe`      | `path`, `refresh?`                                                                                | `{ catalog, introspectedAt, elapsedMs }`                                                                                                           |
+| `catalog.inferredKeys`  | `path`                                                                                            | `InferredKey[]` (`id`, `relation`, `columns`, `target`) over the cached description, sorted by `id`; needs `schemaTree`; see ER diagram            |
 | `catalog.qualifiedName` | `path`, `name`                                                                                    | the plugin's quoting, e.g. `"public"."orders"`                                                                                                     |
 | `catalog.definition`    | `path`, `name`                                                                                    | the relation's DDL text, read anew each time; needs `ddl`; see DDL and SQL generation                                                              |
 | `catalog.script`        | `path`, `kinds`, `title`                                                                          | `SchemaScript { text, relations, failed }`: the namespace's DDL in creation order; needs `ddl`; see DDL and SQL generation                         |
@@ -1941,6 +1942,95 @@ Drop… to a relation's menu, New Table… (and New Schema… or New Database…
 Rename… and Drop… to a routine's or sequence's, each only where the plugin's object features say
 it can (plan 024, decision 052).
 
+## ER diagram
+
+Plan 152, decision 157. A diagram draws one namespace's tables, views and materialized views with
+the keys between them. It opens from **Diagrams → Show Diagram** (`⌥⇧⌘U`, `Ctrl+Alt+Shift+U`) on a
+schema or its Tables node, when the plugin declares `schemaTree`, in an editor tab of kind
+`diagram` titled after the namespace, one per datasource and namespace; opening it again focuses
+it. The tab reads the namespace through `catalog.describe` and `catalog.inferredKeys`, and again
+whenever the renderer's catalog re-describes it; Refresh Diagram synchronizes the namespace.
+
+Edges have three origins. **Declared** keys come from `Relation.foreignKeys` and draw solid.
+**Inferred** keys come from `catalog.inferredKeys` and draw dashed in muted ink. **Virtual** keys
+are added by the user and draw dotted in the accent colour. Each edge is a step path from the
+source column's row to the target column's row, with a crow's foot at the source, a bar at the
+target and a ring when a source column is nullable. A declared key into another namespace
+draws its target as a faded, header-only table named `namespace.table`. Inferred and virtual keys
+are drawn nowhere else: completion, Go to Referenced Row, the explorer and the MCP tools read
+declared keys only.
+
+`inferForeignKeys` (`packages/core/src/catalog/inferKeys.ts`) tokenises names on `_`, `-`, space
+and camel or Pascal boundaries, and for each column of each table, other than columns already the
+source of a declared key:
+
+1. A candidate target is every table with a single-column primary key, or failing that a
+   single-column unique key; its suffix is that column's tokens.
+2. The column matches when its tokens are `stem + suffix`, or equal the key column's when that is
+   not bare `id` and the column is not its own table's sole primary key. A bare `id` matches
+   nothing.
+3. The stem names the table with its last token in its plural forms (`x`, `xs`, `xes`,
+   `y → ies`). When the full stem names no table, leading tokens drop one at a time
+   (`shipping_address_id` → `address`), and the longest stem that names a table wins.
+4. `parent_id` matches its own table when that table's key is `id`.
+5. Both columns must share a type class (`columnTypeClass`).
+6. Two tables matching at the same stem length is no edge.
+
+Views are never the source or target of an inferred key, and inference never crosses namespaces.
+`person_id` finds no `people`; such a key is added as a virtual key.
+
+The layout is ELK's `layered` algorithm, left to right, in a Web Worker; each keyed column is a
+port in row order, so edges cross between rows as little as it can. Tables are draggable and their
+positions save per namespace. A table new since the last save is laid out with the others and its
+block placed right of the saved ones; Re-layout drops the saved positions after a confirm. Tables
+show **All Columns**, **Keys Only** (primary keys and the columns of drawn edges) or **Names Only**,
+saved per namespace: All Columns up to 40 tables, Keys Only above. Above 200 tables the diagram
+opens with none shown and the **Tables** picker open. Below 45 % zoom tables draw their header
+only.
+
+The toolbar reads Refresh, Fit, Zoom In, Zoom Out, Re-layout, the column mode, Show Inferred Keys,
+Tables, Add Relationship…, Hidden Keys…, Export as SVG… and Export as PNG…, then the legend and a
+status such as `8 of 8 tables · 7 keys: 7 inferred`. A click selects a table and highlights its
+edges; a double click opens its data. A table's menu reads Open Table Data, Go to DDL, Add
+Relationship From Here… and Hide Table; an inferred edge's reads Hide Inferred Key and Keep as
+Virtual Key (which turns it into a virtual key); a virtual edge's reads Delete Virtual Key. Hidden
+Keys… lists this namespace's hidden inferred keys with Restore, and virtual keys whose table is gone
+as missing, with Delete. Add Relationship… asks for a source table and columns and a target table
+and as many columns; choosing a target fills its primary key.
+
+Export draws every shown table and edge as plain SVG from the same geometry, cropped to the
+tables plus 24 px, in the colours and fonts the diagram shows; PNG rasterises it at 2×, smaller
+when a side would pass 16384 px, and says so. Both save through the native dialog, named
+`<namespace>.svg` or `.png`.
+
+| Action id                     | Title                       | Region               |
+| ----------------------------- | --------------------------- | -------------------- |
+| `diagram.show`                | Show Diagram                | Database tool window |
+| `diagram.refresh`             | Refresh Diagram             | diagram tab          |
+| `diagram.fit`                 | Fit Diagram                 | diagram tab          |
+| `diagram.zoomIn`              | Zoom In Diagram             | diagram tab          |
+| `diagram.zoomOut`             | Zoom Out Diagram            | diagram tab          |
+| `diagram.relayout`            | Re-layout Diagram           | diagram tab          |
+| `diagram.columns`             | Diagram Columns…            | diagram tab          |
+| `diagram.toggleInferred`      | Show Inferred Keys          | diagram tab          |
+| `diagram.tables`              | Diagram Tables…             | diagram tab          |
+| `diagram.openTable`           | Open Table Data             | diagram tab, a table |
+| `diagram.goToDdl`             | Go to DDL                   | diagram tab, a table |
+| `diagram.hideKey`             | Hide Inferred Key           | diagram tab, an edge |
+| `diagram.keepKey`             | Keep as Virtual Key         | diagram tab, an edge |
+| `diagram.hiddenKeys`          | Hidden Keys…                | diagram tab          |
+| `diagram.restoreKeys`         | Restore Hidden Keys         | diagram tab          |
+| `diagram.addRelationship`     | Add Relationship…           | diagram tab          |
+| `diagram.addRelationshipFrom` | Add Relationship From Here… | diagram tab, a table |
+| `diagram.deleteRelationship`  | Delete Virtual Key          | diagram tab, an edge |
+| `diagram.hideTable`           | Hide Table                  | diagram tab, a table |
+| `diagram.exportSvg`           | Export Diagram as SVG…      | diagram tab          |
+| `diagram.exportPng`           | Export Diagram as PNG…      | diagram tab          |
+
+Every diagram action needs `schemaTree`; Go to DDL also needs `ddl`. Only Show Diagram has a
+chord. The diagram takes every colour, font and size from the `--tc-*` variables, so a theme,
+density or font change repaints it in place.
+
 ## Execute a routine
 
 **Execute Routine…** (`catalog.executeRoutine`) on a routine's context menu, or in Find Action with
@@ -2940,3 +3030,12 @@ Ask before writes, which can both turn the chip amber. No MCP action has a defau
 ## Storage
 
 Decision 010.
+
+The ER diagram's state is `<userData>/diagrams.json` (plan 152, decision 157), main's, version 1:
+per datasource id, `inferKeys`, `hiddenKeys`, `virtualKeys` and, per `JSON.stringify(path)`,
+`positions`, `hiddenTables` and `columns`. The renderer reads it once per datasource
+over `table-craft:diagrams.get` and writes a datasource's whole state 500 ms after its last change
+over `table-craft:diagrams.save`; an ephemeral datasource is never written. A file that is unreadable
+or fails the schema is renamed `diagrams.json.corrupt-<ts>` and logged once, and the diagrams start
+empty. Deleting a datasource drops its entry. Exports go through
+`table-craft:diagrams.export-image`, which shows the save dialog and writes the bytes.
