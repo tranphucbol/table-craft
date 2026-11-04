@@ -106,7 +106,7 @@ describe("ResultStore", () => {
     expect(store.window(handle, WINDOW_OFFSET).rows[0]).toEqual([WINDOW_OFFSET]);
   });
 
-  it("givenOpenCursor_whenFetchAll_thenStopsAtCapWithCursorClosed", async () => {
+  it("givenOpenCursor_whenFetchAll_thenStopsAtCapWithCursorHeldForExport", async () => {
     let returned = false;
     const store = new ResultStore();
     const { handle } = await store.put(
@@ -118,8 +118,45 @@ describe("ResultStore", () => {
     const state = await store.fetchMore(handle, { all: true });
 
     expect(state).toEqual({ rowCount: RESULT_FETCH_ALL_CAP, complete: false, cursorOpen: false });
-    expect(returned).toBe(true);
+    expect(store.holdsCursor(handle)).toBe(true);
+    expect(returned).toBe(false);
     expect(await store.fetchMore(handle, { all: true })).toEqual(state);
+    expect(await store.fetchMore(handle, { all: false })).toEqual(state);
+  });
+
+  it("givenCappedResult_whenDrained_thenRowsPastTheCapFollow", async () => {
+    const store = new ResultStore();
+    const limits = { pageRows: PER_CALL_PAGE, fetchAllCap: PER_CALL_CAP };
+    const { handle } = await store.put(resultOf(ROW_COUNT), limits);
+    await store.fetchMore(handle, { all: true, ...limits });
+
+    const rest = await store.drain(handle, async (rows) => {
+      const values: Row[] = [];
+      for await (const row of rows) values.push(row);
+      return values;
+    });
+
+    expect(rest).toHaveLength(ROW_COUNT - PER_CALL_CAP);
+    expect(rest[0]).toEqual([PER_CALL_CAP]);
+    expect(store.holdsCursor(handle)).toBe(false);
+  });
+
+  it("givenCappedResult_whenCursorClosed_thenIteratorReturned", async () => {
+    let returned = false;
+    const store = new ResultStore();
+    const limits = { pageRows: PER_CALL_PAGE, fetchAllCap: PER_CALL_CAP };
+    const { handle } = await store.put(
+      resultOf(ROW_COUNT, () => {
+        returned = true;
+      }),
+      limits,
+    );
+    await store.fetchMore(handle, { all: true, ...limits });
+
+    await store.closeCursor(handle);
+
+    expect(returned).toBe(true);
+    expect(store.holdsCursor(handle)).toBe(false);
   });
 
   it("givenOpenCursor_whenSessionRunsAnotherStatement_thenCursorClosedRowsKept", async () => {

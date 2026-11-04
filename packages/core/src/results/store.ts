@@ -23,7 +23,7 @@ import {
 export const RESULT_WINDOW_ROWS = 500;
 /** Rows read when a statement runs and on each Fetch Next Page (decision 025). */
 export const RESULT_PAGE_ROWS = 500;
-/** Rows a result may hold; Fetch All stops here and closes the cursor (decision 025). */
+/** Rows a result may hold; Fetch All stops here, leaving the rest to an export (decision 025). */
 export const RESULT_FETCH_ALL_CAP = 100_000;
 
 export type ResultHandle = string;
@@ -81,8 +81,13 @@ interface StoredResult {
   readonly messages: readonly ServerMessage[];
   classes: readonly TypeClass[];
   readonly rows: Row[];
-  /** Open until the rows run out, the cap is reached, or the session moves on. */
+  /** Open until the rows run out or the session moves on. */
   iterator: AsyncIterator<Row> | null;
+  /**
+   * The cap is reached: fetching is over, but the iterator stays open so an export still drains
+   * the rows past the cap instead of losing them.
+   */
+  capped: boolean;
   /** Read past the last held row, so `complete` is known without another round trip. */
   lookahead: { readonly row: Row } | null;
   complete: boolean;
@@ -117,7 +122,11 @@ function unknownHandle(handle: ResultHandle): CoreError {
 }
 
 function stateOf(stored: StoredResult): ResultState {
-  const state = { rowCount: stored.rows.length, complete: stored.complete, cursorOpen: stored.iterator !== null };
+  const state = {
+    rowCount: stored.rows.length,
+    complete: stored.complete,
+    cursorOpen: stored.iterator !== null && !stored.capped,
+  };
   return stored.complete && stored.messages.length > 0 ? { ...state, messages: stored.messages } : state;
 }
 
@@ -143,6 +152,7 @@ export class ResultStore {
       classes: [],
       rows: [],
       iterator: result.rows[Symbol.asyncIterator](),
+      capped: false,
       lookahead: null,
       complete: false,
       keys: [],
@@ -178,7 +188,7 @@ export class ResultStore {
   fetchMore(handle: ResultHandle, options: FetchOptions): Promise<ResultState> {
     const stored = this.#stored(handle);
     const fetch = stored.fetching.then(async () => {
-      if (stored.iterator === null) return stateOf(stored);
+      if (stored.iterator === null || stored.capped) return stateOf(stored);
       const { pageRows, fetchAllCap } = { ...this.#limits, ...definedLimits(options) };
       const target = options.all ? fetchAllCap : stored.rows.length + pageRows;
       try {
@@ -319,6 +329,14 @@ export class ResultStore {
   }
 
   /**
+   * Whether the result still holds its cursor: open for fetching, or past the cap and kept for an
+   * export to drain. Either way the session is busy until it closes.
+   */
+  holdsCursor(handle: ResultHandle): boolean {
+    return this.#stored(handle).iterator !== null;
+  }
+
+  /**
    * Hands the open cursor to `use` and forgets it, for an export that drains it past the cap.
    * Yields the lookahead row first. The result is complete when `use` resolves.
    */
@@ -414,7 +432,7 @@ export class ResultStore {
       return;
     }
     stored.lookahead = { row: next.value };
-    if (rows.length >= fetchAllCap) await this.#close(stored);
+    if (rows.length >= fetchAllCap) stored.capped = true;
   }
 
   async #close(stored: StoredResult): Promise<void> {

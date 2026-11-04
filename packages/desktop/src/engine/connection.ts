@@ -288,7 +288,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
 
   function track(handle: string, state: ResultState): ResultState {
     const owner = handles.get(handle);
-    if (owner !== undefined && !state.cursorOpen && cursors.get(owner) === handle) cursors.delete(owner);
+    if (owner !== undefined && !results.holdsCursor(handle) && cursors.get(owner) === handle) cursors.delete(owner);
     return state;
   }
 
@@ -361,14 +361,14 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
       return {
         ...base,
         origin: "rerun",
-        estimate: state.cursorOpen ? null : state.rowCount,
+        estimate: state.complete ? state.rowCount : null,
         retryable: true,
         drains: null,
         open: () => exportRowsOf(sql),
       };
     }
     const held = results.rows(handle);
-    if (!state.cursorOpen) {
+    if (!results.holdsCursor(handle)) {
       return {
         ...base,
         origin: "memory",
