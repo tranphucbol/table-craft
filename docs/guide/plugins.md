@@ -27,6 +27,14 @@ etcd (3.5 and later), about 400 KB, as
 - A saved data source whose plugin is missing shows greyed in the Database pane with **Install**.
   After an update from a version that had PostgreSQL built in, TableCraft installs it in the
   background on the first start, with no question.
+- A downloaded plugin built for an older plugin API than this TableCraft cannot run, so it is
+  treated as missing: TableCraft downloads the build for this version as soon as it starts, even
+  with automatic checks off, and the data source shows **Updating…**. Connecting waits for it. If
+  the download fails, the data source shows **Update failed** with **Retry**, and connecting says
+  the plugin must be updated. A plugin you built or installed from a file is left alone and listed
+  as unavailable until you rebuild it.
+- A plugin built for a newer plugin API shows **Needs a newer TableCraft**, with **Check for
+  Updates**.
 - **Settings → Plugins** lists the built-in plugins, the downloaded ones with their version,
   **Update** and **Remove** (refused while a data source uses the plugin, naming it), and your
   own. With **Check for updates automatically** on, downloaded plugins are checked every 2 hours and
