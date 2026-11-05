@@ -1,7 +1,9 @@
 /**
  * The npm registry, read the way npm does (decision 110): one packument per package, the newest
  * version whose `tableCraft.apiVersion` this host accepts, and its tarball checked against the
- * packument's sha512 before anything is unpacked.
+ * packument's sha512 before anything is unpacked. A private registry (decision 158) may need a
+ * token, may sit under a path, and may answer GitLab's thinner packument: no `tableCraft`, a SHA-1
+ * `shasum` instead of an `integrity`.
  */
 import { createHash } from "node:crypto";
 import { API_VERSION, incompatibility, isCompatible } from "@table-craft/plugin-api";
@@ -18,10 +20,28 @@ export const MAX_TARBALL_BYTES = 64 * 1024 * 1024;
  */
 const PACKUMENT_ACCEPT = "application/json";
 const SHA512 = "sha512-";
+const SHA1 = "sha1-";
 const NOT_FOUND = 404;
+const UNAUTHORIZED = new Set([401, 403]);
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
 const RELEASE = /^(\d+)\.(\d+)\.(\d+)$/;
 
-export type RegistryFetch = (url: string, init: { readonly headers?: Record<string, string> }) => Promise<Response>;
+export const UNAUTHORIZED_HINT = "Set the registry's token in Settings → Plugins (a GitLab token with read_api).";
+
+export type RegistryFetch = (
+  url: string,
+  init: { readonly headers?: Record<string, string>; readonly redirect?: "manual" },
+) => Promise<Response>;
+
+/** Where a packument or tarball comes from, and what it may be sent. */
+export interface RegistryAccess {
+  readonly url: string;
+  /** Null for the official registry and a registry without a stored token. */
+  readonly token: string | null;
+  /** True for a private registry: SHA-1 accepted, tarball metadata read from the package. */
+  readonly private: boolean;
+}
 
 /** The parts of one packument version TableCraft reads. */
 export interface RegistryVersion {
@@ -31,9 +51,21 @@ export interface RegistryVersion {
   readonly integrity: string;
 }
 
+/** One version of a private package worth trying, newest first; `tableCraft` null means read the tarball. */
+export interface RegistryCandidate {
+  readonly version: string;
+  readonly tarball: string;
+  readonly dist: { readonly integrity?: string; readonly shasum?: string };
+  readonly tableCraft: { readonly id: string; readonly apiVersion: string } | null;
+}
+
 /** https anywhere; plain http only to this machine, where the tests' registry runs. */
 export function registryUrlAllowed(url: string): boolean {
   return registryUrlError(url) === null;
+}
+
+export function officialRegistry(url: string): RegistryAccess {
+  return { url, token: null, private: false };
 }
 
 function insecure(url: string): PluginInstallError {
@@ -49,10 +81,34 @@ export function packumentUrl(registry: string, packageName: string): string {
   return `${registry.replace(/\/+$/, "")}/${packageName.replace("/", "%2f")}`;
 }
 
-async function request(fetch: RegistryFetch, url: string, headers?: Record<string, string>): Promise<Response> {
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
+
+/** `headers` plus the bearer token, only when `url` is on the registry's own origin. */
+export function authorizedHeaders(
+  access: RegistryAccess,
+  url: string,
+  headers: Record<string, string> = {},
+): Record<string, string> {
+  if (access.token === null || originOf(url) !== originOf(access.url)) return { ...headers };
+  return { ...headers, authorization: `Bearer ${access.token}` };
+}
+
+class CrossOriginRedirect extends Error {
+  constructor(readonly location: string) {
+    super(`redirected to ${location}`);
+  }
+}
+
+async function send(fetch: RegistryFetch, url: string, init: Parameters<RegistryFetch>[1]): Promise<Response> {
   if (!registryUrlAllowed(url)) throw insecure(url);
   try {
-    return await fetch(url, headers === undefined ? {} : { headers });
+    return await fetch(url, init);
   } catch (cause) {
     throw new PluginInstallError(
       "offline",
@@ -60,6 +116,51 @@ async function request(fetch: RegistryFetch, url: string, headers?: Record<strin
       OFFLINE_HINT,
     );
   }
+}
+
+function initOf(headers: Record<string, string>): Parameters<RegistryFetch>[1] {
+  return Object.keys(headers).length === 0 ? {} : { headers };
+}
+
+/**
+ * The official registry is fetched as before. A private one follows redirects by hand, one hop at
+ * a time, and never off the origin a request carrying the token went to. A packument never leaves
+ * the registry's origin at all: GitLab forwards a package it does not hold to npmjs, where a
+ * stranger may own the same name.
+ */
+async function request(
+  fetch: RegistryFetch,
+  access: RegistryAccess,
+  url: string,
+  options: { readonly headers?: Record<string, string>; readonly stayOnOrigin?: boolean } = {},
+): Promise<Response> {
+  if (!access.private) return send(fetch, url, initOf(authorizedHeaders(access, url, options.headers)));
+  let current = url;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    const headers = authorizedHeaders(access, current, options.headers);
+    const response = await send(fetch, current, { ...initOf(headers), redirect: "manual" });
+    const location = response.headers.get("location");
+    if (!REDIRECTS.has(response.status) || location === null) return response;
+    const next = new URL(location, current).href;
+    const leaves = originOf(next) !== originOf(current);
+    if (leaves && (options.stayOnOrigin === true || headers.authorization !== undefined)) {
+      throw new CrossOriginRedirect(next);
+    }
+    current = next;
+  }
+  throw new PluginInstallError(
+    "offline",
+    `The plugin registry redirected more than ${String(MAX_REDIRECTS)} times.`,
+    "Check the registry's address in Settings → Plugins.",
+  );
+}
+
+function unauthorized(registry: string, status: number): PluginInstallError {
+  return new PluginInstallError(
+    "unauthorized",
+    `The plugin registry ${registry} refused the request (${String(status)}).`,
+    UNAUTHORIZED_HINT,
+  );
 }
 
 function releaseParts(version: string): readonly number[] | null {
@@ -120,14 +221,73 @@ export function pickVersion(
       "Check the registry in Settings → Plugins, or install the plugin from a file.",
     );
   }
-  const why = incompatibility(newest.apiVersion, hostVersion);
+  throw incompatibleError(packageName, newest.version, newest.apiVersion, hostVersion);
+}
+
+function readCandidate(raw: unknown): RegistryCandidate | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const entry = raw as {
+    version?: unknown;
+    tableCraft?: { id?: unknown; apiVersion?: unknown };
+    dist?: { tarball?: unknown; integrity?: unknown; shasum?: unknown };
+  };
+  const { version, tableCraft, dist } = entry;
+  if (typeof version !== "string" || typeof dist?.tarball !== "string") return null;
+  const integrity = typeof dist.integrity === "string" ? dist.integrity : undefined;
+  const shasum = typeof dist.shasum === "string" ? dist.shasum : undefined;
+  if (integrity === undefined && shasum === undefined) return null;
+  const declared =
+    typeof tableCraft?.id === "string" && typeof tableCraft.apiVersion === "string"
+      ? { id: tableCraft.id, apiVersion: tableCraft.apiVersion }
+      : null;
+  return {
+    version,
+    tarball: dist.tarball,
+    dist: { ...(integrity === undefined ? {} : { integrity }), ...(shasum === undefined ? {} : { shasum }) },
+    tableCraft: declared,
+  };
+}
+
+/**
+ * The versions of a private package on `channel`, newest first, that carry a tarball and a
+ * checksum. A version without `tableCraft` stays in: GitLab drops the field, so the installer
+ * reads it from the tarball instead.
+ */
+export function candidateVersions(
+  packument: unknown,
+  packageName: string,
+  channel: ReleaseChannel,
+): RegistryCandidate[] {
+  const versions = (packument as { versions?: unknown } | null)?.versions;
+  const candidates = Object.values(typeof versions === "object" && versions !== null ? versions : {})
+    .map(readCandidate)
+    .filter((entry): entry is RegistryCandidate => entry !== null && onChannel(entry.version, channel))
+    .sort((left, right) => compareVersions(right.version, left.version));
+  if (candidates.length > 0) return candidates;
+  throw new PluginInstallError(
+    "notFound",
+    `The registry has no ${channel} release of ${packageName} with a checksum.`,
+    channel === "stable"
+      ? "Check the package name; for a beta, set Updates → Channel to beta in Settings."
+      : "Check the package name and that the registry holds a published version.",
+  );
+}
+
+/** The error `pickVersion` gives when the newest version needs another plugin API. */
+export function incompatibleError(
+  packageName: string,
+  version: string,
+  apiVersion: string,
+  hostVersion: string = API_VERSION,
+): PluginInstallError {
+  const why = incompatibility(apiVersion, hostVersion);
   const hint =
     why === "newer"
       ? "Update TableCraft, then install the plugin again."
       : "Install a version of the plugin built for this TableCraft, from a file.";
-  throw new PluginInstallError(
+  return new PluginInstallError(
     "incompatible",
-    `${packageName} ${newest.version} needs plugin API ${newest.apiVersion}; this TableCraft provides ${hostVersion}.`,
+    `${packageName} ${version} needs plugin API ${apiVersion}; this TableCraft provides ${hostVersion}.`,
     hint,
   );
 }
@@ -139,16 +299,34 @@ export function isNewerRelease(version: string, than: string): boolean {
   return left !== null && (right === null || newer(left, right));
 }
 
-export async function fetchPackument(fetch: RegistryFetch, registry: string, packageName: string): Promise<unknown> {
-  const url = packumentUrl(registry, packageName);
-  const response = await request(fetch, url, { accept: PACKUMENT_ACCEPT });
-  if (response.status === NOT_FOUND) {
-    throw new PluginInstallError(
-      "notFound",
-      `${packageName} is not on the registry ${registry}.`,
-      "Check the registry in Settings → Plugins, or install the plugin from a file.",
-    );
+function notOnRegistry(packageName: string, access: RegistryAccess): PluginInstallError {
+  return new PluginInstallError(
+    "notFound",
+    `${packageName} is not on the registry ${access.url}.`,
+    access.private && access.token === null
+      ? `Check the package name; a registry that hides packages from strangers needs a token. ${UNAUTHORIZED_HINT}`
+      : "Check the registry in Settings → Plugins, or install the plugin from a file.",
+  );
+}
+
+export async function fetchPackument(
+  fetch: RegistryFetch,
+  access: RegistryAccess,
+  packageName: string,
+): Promise<unknown> {
+  const registry = access.url;
+  let response: Response;
+  try {
+    response = await request(fetch, access, packumentUrl(registry, packageName), {
+      headers: { accept: PACKUMENT_ACCEPT },
+      stayOnOrigin: true,
+    });
+  } catch (cause) {
+    if (cause instanceof CrossOriginRedirect) throw notOnRegistry(packageName, access);
+    throw cause;
   }
+  if (response.status === NOT_FOUND) throw notOnRegistry(packageName, access);
+  if (UNAUTHORIZED.has(response.status)) throw unauthorized(registry, response.status);
   if (!response.ok) {
     throw new PluginInstallError(
       "offline",
@@ -178,10 +356,22 @@ function tooLarge(): PluginInstallError {
 /** Downloads the tarball, reporting bytes as they arrive; the integrity is checked by the caller. */
 export async function downloadTarball(
   fetch: RegistryFetch,
+  access: RegistryAccess,
   url: string,
   onProgress: (received: number, total: number | null) => void,
 ): Promise<Buffer> {
-  const response = await request(fetch, url);
+  let response: Response;
+  try {
+    response = await request(fetch, access, url);
+  } catch (cause) {
+    if (!(cause instanceof CrossOriginRedirect)) throw cause;
+    throw new PluginInstallError(
+      "insecureUrl",
+      `The plugin download was redirected to ${originOf(cause.location) ?? cause.location}, away from the registry it was authorized for, so it stopped there.`,
+      "Nothing was installed. Ask the registry's administrator to serve packages from its own address.",
+    );
+  }
+  if (UNAUTHORIZED.has(response.status)) throw unauthorized(access.url, response.status);
   if (!response.ok || response.body === null) {
     throw new PluginInstallError("offline", `The plugin download answered ${String(response.status)}.`, OFFLINE_HINT);
   }
@@ -209,19 +399,49 @@ export async function downloadTarball(
   return Buffer.concat(chunks);
 }
 
-/** Checks `bytes` against an SRI string such as the packument's `dist.integrity`; only sha512 counts. */
-export function checkIntegrity(bytes: Uint8Array, integrity: string, packageName: string): void {
-  const expected = integrity
+function hashesOf(integrity: string | undefined, prefix: string): string[] {
+  return (integrity ?? "")
     .split(/\s+/)
-    .filter((hash) => hash.startsWith(SHA512))
-    .map((hash) => hash.slice(SHA512.length));
-  const actual = createHash("sha512").update(bytes).digest("base64");
-  if (expected.includes(actual)) return;
+    .filter((hash) => hash.startsWith(prefix))
+    .map((hash) => hash.slice(prefix.length));
+}
+
+function mismatch(packageName: string, algorithm: string): PluginInstallError {
+  return new PluginInstallError(
+    "integrity",
+    `The download of ${packageName} does not match the registry's ${algorithm} checksum, so it was not installed.`,
+    "Nothing was installed. Try again later; if it persists, the registry or a proxy is altering the package.",
+  );
+}
+
+/**
+ * Checks `bytes` against the packument's `dist`. A sha512 `integrity` always decides when there is
+ * one. Without it, `allowSha1` (private registries only, decision 158) accepts a SHA-1 from
+ * `integrity` or the hex `shasum` GitLab gives; the official registry always has sha512.
+ */
+export function checkIntegrity(
+  bytes: Uint8Array,
+  dist: { readonly integrity?: string; readonly shasum?: string },
+  packageName: string,
+  allowSha1: boolean,
+): void {
+  const sha512 = hashesOf(dist.integrity, SHA512);
+  if (sha512.length > 0) {
+    if (sha512.includes(createHash("sha512").update(bytes).digest("base64"))) return;
+    throw mismatch(packageName, "sha512");
+  }
+  const sha1 = createHash("sha1").update(bytes);
+  const sha1Hashes = [
+    ...hashesOf(dist.integrity, SHA1),
+    ...(dist.shasum === undefined ? [] : [Buffer.from(dist.shasum, "hex").toString("base64")]),
+  ];
+  if (allowSha1 && sha1Hashes.length > 0) {
+    if (sha1Hashes.includes(sha1.digest("base64"))) return;
+    throw mismatch(packageName, "SHA-1");
+  }
   throw new PluginInstallError(
     "integrity",
-    expected.length === 0
-      ? `The registry gave no sha512 checksum for ${packageName}, so it was not installed.`
-      : `The download of ${packageName} does not match the registry's sha512 checksum, so it was not installed.`,
+    `The registry gave no sha512 checksum for ${packageName}, so it was not installed.`,
     "Nothing was installed. Try again later; if it persists, the registry or a proxy is altering the package.",
   );
 }

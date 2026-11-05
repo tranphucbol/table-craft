@@ -21,6 +21,7 @@ import {
   downloadTarball,
   fetchPackument,
   isNewerRelease,
+  officialRegistry,
   pickVersion,
   type RegistryFetch,
 } from "@table-craft/desktop/main/pluginStore/registry.js";
@@ -179,17 +180,18 @@ export function createPluginInstaller(options: InstallerOptions): PluginInstalle
     const entry = officialEntry(id);
     const packageName = packageOf(entry);
     const registry = options.registryUrl();
-    const packument = await fetchPackument(options.fetch, registry, packageName);
+    const access = officialRegistry(registry);
+    const packument = await fetchPackument(options.fetch, access, packageName);
     const picked = pickVersion(packument, id, packageName, options.hostVersion, options.channel?.() ?? "stable");
     const current = (await listManaged(options.root)).find((plugin) => plugin.id === id);
     if (current?.source === "registry" && (await keeps(current, picked.version))) {
       return { id, version: current.version, changed: false };
     }
     log.info("plugin download started", { pluginId: id, version: picked.version, registry });
-    const bytes = await downloadTarball(options.fetch, picked.tarball, (received, total) =>
+    const bytes = await downloadTarball(options.fetch, access, picked.tarball, (received, total) =>
       setProgress(id, { status: "installing", received, total }),
     );
-    checkIntegrity(bytes, picked.integrity, packageName);
+    checkIntegrity(bytes, { integrity: picked.integrity }, packageName, false);
     const files = readPackageTarball(bytes);
     const meta = readPackageJson(files);
     if (meta.id !== id || meta.name !== packageName || meta.version !== picked.version) {

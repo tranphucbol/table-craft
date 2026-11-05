@@ -145,45 +145,95 @@ export function release(plugin: PluginPackage, integrity?: string, bytes = plugi
   };
 }
 
+export interface LoopbackRequest {
+  readonly path: string;
+  /** `127.0.0.1` for the registry's own origin, `localhost` for the stand-in other origin. */
+  readonly host: string;
+  readonly authorization: string | undefined;
+}
+
 export interface LoopbackRegistry {
+  /** The registry's address, with its path prefix. */
   readonly url: string;
+  /** The same server reached as `localhost`: another origin, as a CDN or npmjs would be. */
+  readonly otherOrigin: string;
   /** Request paths in arrival order. */
   readonly requests: string[];
+  /** Every request with the host it was sent to and its Authorization header. */
+  readonly received: LoopbackRequest[];
   publish(packageName: string, releases: readonly RegistryRelease[]): void;
   /** Answers every request after `delayMs`, so a test can see the progress state. */
   slowDown(delayMs: number): void;
   close(): Promise<void>;
 }
 
+export interface RegistryOptions {
+  /** A path the registry lives under, as GitLab's `/api/v4/packages/npm`. */
+  readonly prefix?: string;
+  /** A bearer token the registry's origin requires: none answers 404, another 401, as GitLab does. */
+  readonly token?: string;
+  /**
+   * GitLab's packument: no `tableCraft`, no `integrity`, a hex SHA-1 `shasum`; and a package it
+   * does not hold answers a 302 to another origin, as GitLab forwards it to npmjs.
+   */
+  readonly gitlab?: boolean;
+  /** Packuments name tarballs on the other origin. */
+  readonly tarballsElsewhere?: boolean;
+  /** Tarballs answer a redirect to the same path on the other origin. */
+  readonly redirectTarballs?: boolean;
+}
+
+const OTHER_HOST = "localhost";
+const REDIRECT = 302;
+
 function tarballFile(packageName: string, version: string): string {
   return `${packageName.replace("@", "").replace("/", "-")}-${version}.tgz`;
 }
 
+function sha1Hex(bytes: Uint8Array): string {
+  return createHash("sha1").update(bytes).digest("hex");
+}
+
 export async function startRegistry(
   packages: Readonly<Record<string, readonly RegistryRelease[]>> = {},
+  options: RegistryOptions = {},
 ): Promise<LoopbackRegistry> {
   const published = new Map<string, readonly RegistryRelease[]>(Object.entries(packages));
   const requests: string[] = [];
+  const received: LoopbackRequest[] = [];
+  const prefix = options.prefix ?? "";
   let delayMs = 0;
   let base = "";
+  let other = "";
+
+  function dist(name: string, entry: RegistryRelease): Record<string, string> {
+    const tarball = `${options.tarballsElsewhere === true ? other : base}${prefix}/tarballs/${tarballFile(name, entry.version)}`;
+    if (options.gitlab === true) return { tarball, shasum: sha1Hex(entry.bytes) };
+    return { tarball, integrity: entry.integrity ?? sha512(entry.bytes) };
+  }
 
   function packument(name: string, abbreviated: boolean): unknown {
     const releases = published.get(name) ?? [];
+    const declared = !abbreviated && options.gitlab !== true;
     const versions = Object.fromEntries(
       releases.map((entry) => [
         entry.version,
         {
           name,
           version: entry.version,
-          ...(abbreviated ? {} : { tableCraft: { id: entry.pluginId, apiVersion: entry.apiVersion } }),
-          dist: {
-            tarball: `${base}/tarballs/${tarballFile(name, entry.version)}`,
-            integrity: entry.integrity ?? sha512(entry.bytes),
-          },
+          ...(declared ? { tableCraft: { id: entry.pluginId, apiVersion: entry.apiVersion } } : {}),
+          dist: dist(name, entry),
         },
       ]),
     );
     return { name, "dist-tags": { latest: releases.at(-1)?.version }, versions };
+  }
+
+  /** Null when the request may go on; otherwise the status the registry refuses it with. */
+  function refusal(host: string, authorization: string | undefined): number | null {
+    if (options.token === undefined || host === OTHER_HOST) return null;
+    if (authorization === undefined) return 404;
+    return authorization === `Bearer ${options.token}` ? null : 401;
   }
 
   function tarballBytes(file: string): Buffer | undefined {
@@ -195,10 +245,20 @@ export async function startRegistry(
   }
 
   const server: Server = createServer((request, response) => {
-    const path = request.url ?? "/";
-    requests.push(path);
+    const fullPath = request.url ?? "/";
+    const host = (request.headers.host ?? "").replace(/:\d+$/, "");
+    const authorization = request.headers.authorization;
+    requests.push(fullPath);
+    received.push({ path: fullPath, host, authorization });
     const answer = () => {
+      if (!fullPath.startsWith(`${prefix}/`)) return response.writeHead(404).end();
+      const path = fullPath.slice(prefix.length);
+      const refused = refusal(host, authorization);
+      if (refused !== null) return response.writeHead(refused, { "content-type": "application/json" }).end("{}");
       if (path.startsWith("/tarballs/")) {
+        if (options.redirectTarballs === true && host !== OTHER_HOST) {
+          return response.writeHead(REDIRECT, { location: `${other}${fullPath}` }).end();
+        }
         const bytes = tarballBytes(path.slice("/tarballs/".length));
         if (bytes === undefined) return response.writeHead(404).end();
         return response
@@ -206,6 +266,9 @@ export async function startRegistry(
           .end(bytes);
       }
       const name = decodeURIComponent(path.slice(1));
+      if (!published.has(name) && options.gitlab === true && host !== OTHER_HOST) {
+        return response.writeHead(REDIRECT, { location: `${other}/${path.slice(1)}` }).end();
+      }
       if (!published.has(name)) return response.writeHead(404, { "content-type": "application/json" }).end("{}");
       const abbreviated = (request.headers.accept ?? "").includes(ABBREVIATED_PACKUMENT);
       return response
@@ -216,10 +279,14 @@ export async function startRegistry(
     else setTimeout(answer, delayMs);
   });
   await new Promise<void>((resolve) => server.listen(0, LOOPBACK, resolve));
-  base = `http://${LOOPBACK}:${String((server.address() as AddressInfo).port)}`;
+  const port = String((server.address() as AddressInfo).port);
+  base = `http://${LOOPBACK}:${port}`;
+  other = `http://${OTHER_HOST}:${port}`;
   return {
-    url: base,
+    url: `${base}${prefix}`,
+    otherOrigin: other,
     requests,
+    received,
     publish: (name, releases) => published.set(name, releases),
     slowDown: (ms) => {
       delayMs = ms;
