@@ -10,6 +10,7 @@ import type { SettingsChanged } from "@table-craft/desktop/preload/bridge.js";
 import {
   DEFAULT_SETTINGS,
   readSettings,
+  registryEntryError,
   withInspection,
   type Settings,
 } from "@table-craft/desktop/settings/settings.js";
@@ -54,7 +55,18 @@ const CHOSEN: Settings = {
   },
   log: { level: "debug" },
   updates: { checkAutomatically: false, channel: "beta" },
-  plugins: { registryUrl: "http://127.0.0.1:4873" },
+  plugins: {
+    registryUrl: "http://127.0.0.1:4873",
+    registries: [
+      {
+        id: "company",
+        name: "Company registry",
+        url: "https://gitlab.example.com/api/v4/packages/npm",
+        scopes: ["@acme"],
+        packages: ["@acme/tablecraft-plugin-example"],
+      },
+    ],
+  },
   mcp: {
     enabled: true,
     port: 48_000,
@@ -381,6 +393,43 @@ describe("settings document", () => {
     expect(readSettings({ ...CHOSEN, keymap }).keymap).toEqual(keymap);
     expect(settingsSchema.safeParse({ ...CHOSEN, keymap }).success).toBe(true);
     expect(settingsSchema.safeParse({ ...CHOSEN, keymap: { "console.run": ["Hyper+X"] } }).success).toBe(false);
+  });
+
+  it("givenTablecraftScope_whenPrivateRegistry_thenRefused", () => {
+    const [company] = CHOSEN.plugins.registries;
+    if (company === undefined) throw new Error("CHOSEN has a registry");
+    const claimsOfficial = { ...company, scopes: ["@acme", "@tablecraft-app"] };
+
+    expect(registryEntryError(claimsOfficial, [])).toContain("@tablecraft-app");
+    expect(readSettings({ ...CHOSEN, plugins: { ...CHOSEN.plugins, registries: [claimsOfficial] } }).plugins).toEqual({
+      ...CHOSEN.plugins,
+      registries: [],
+    });
+    expect(
+      settingsSchema.safeParse({ ...CHOSEN, plugins: { ...CHOSEN.plugins, registries: [claimsOfficial] } }).success,
+    ).toBe(false);
+  });
+
+  it("givenScopeClaimedTwice_whenReading_thenSecondDropped", () => {
+    const [company] = CHOSEN.plugins.registries;
+    if (company === undefined) throw new Error("CHOSEN has a registry");
+    const mirror = { id: "mirror", name: "Mirror", url: "https://npm.example.com", scopes: ["@acme"], packages: [] };
+    const other = { ...mirror, id: "other", name: "Other", scopes: ["@other"] };
+
+    const read = readSettings({ ...CHOSEN, plugins: { ...CHOSEN.plugins, registries: [company, mirror, other] } });
+
+    expect(read.plugins.registries).toEqual([company, other]);
+    expect(registryEntryError(mirror, [company])).toBe("@acme already comes from Company registry.");
+  });
+
+  it("givenPackageOutsideScopes_whenReading_thenPackageDropped", () => {
+    const [company] = CHOSEN.plugins.registries;
+    if (company === undefined) throw new Error("CHOSEN has a registry");
+    const stray = { ...company, packages: [...company.packages, "@other/plugin", "unscoped"] };
+
+    expect(readSettings({ ...CHOSEN, plugins: { ...CHOSEN.plugins, registries: [stray] } }).plugins).toEqual(
+      CHOSEN.plugins,
+    );
   });
 });
 

@@ -25,6 +25,7 @@ import {
   pickVersion,
   type RegistryFetch,
 } from "@table-craft/desktop/main/pluginStore/registry.js";
+import { readPackageJson, type PackageJson } from "@table-craft/desktop/main/pluginStore/packageFile.js";
 import { readPackageTarball, type PackageFile } from "@table-craft/desktop/main/pluginStore/tarball.js";
 import { compareVersions } from "@table-craft/desktop/main/update/manifest.js";
 import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
@@ -36,8 +37,6 @@ export type InstallProgress =
   | { readonly status: "failed"; readonly message: string; readonly hint: string };
 
 const IDLE: InstallProgress = { status: "idle" };
-const PACKAGE_JSON = "package.json";
-const MANIFEST_FILE = "table-craft-plugin.json";
 
 export interface InstallerOptions {
   /** `<userData>/managed-plugins`. */
@@ -76,40 +75,6 @@ export interface PluginInstaller {
   /** Installs a newer compatible version of each registry plugin; failures are logged, never thrown. */
   updateAll(): Promise<InstallOutcome[]>;
   managed(): Promise<ManagedPlugin[]>;
-}
-
-export interface PackageJson {
-  readonly name: string;
-  readonly version: string;
-  readonly id: string;
-  /** The platform a native plugin's package is built for; absent for one that runs everywhere. */
-  readonly platform?: string;
-}
-
-/** The package a `.tgz` holds, read before the trust confirmation names it; throws when it is not a plugin. */
-export function inspectPackage(bytes: Uint8Array): PackageJson {
-  return readPackageJson(readPackageTarball(bytes));
-}
-
-function readPackageJson(files: readonly PackageFile[]): PackageJson {
-  const invalid = (why: string) =>
-    new PluginInstallError("invalid", `The file is not a TableCraft plugin package: ${why}.`, "Pick a plugin's .tgz.");
-  const file = files.find((entry) => entry.path === PACKAGE_JSON);
-  if (file === undefined) throw invalid("it has no package.json");
-  if (!files.some((entry) => entry.path === MANIFEST_FILE)) throw invalid(`it has no ${MANIFEST_FILE}`);
-  let json: { name?: unknown; version?: unknown; tableCraft?: { id?: unknown; platform?: unknown } };
-  try {
-    json = JSON.parse(file.data.toString("utf8")) as typeof json;
-  } catch {
-    throw invalid("its package.json is not JSON");
-  }
-  const { name, version, tableCraft } = json;
-  if (typeof name !== "string" || typeof version !== "string" || typeof tableCraft?.id !== "string") {
-    throw invalid("its package.json has no name, version or tableCraft.id");
-  }
-  const platform = tableCraft.platform;
-  if (platform !== undefined && typeof platform !== "string") throw invalid("its tableCraft.platform is not a string");
-  return { name, version, id: tableCraft.id, ...(platform === undefined ? {} : { platform }) };
 }
 
 function failureOf(cause: unknown): { message: string; hint: string } {

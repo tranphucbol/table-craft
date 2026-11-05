@@ -3,7 +3,7 @@
  * Install from File flow and its trust confirmation (decision 006) are tested without a window.
  */
 import { OFFICIAL_SCOPE } from "@table-craft/desktop/main/pluginStore/catalog.js";
-import { inspectPackage, type PackageJson } from "@table-craft/desktop/main/pluginStore/installer.js";
+import { inspectPackage, type PackageJson } from "@table-craft/desktop/main/pluginStore/packageFile.js";
 import type { PluginService } from "@table-craft/desktop/main/pluginStore/service.js";
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
 import type { InstallFileResult } from "@table-craft/desktop/preload/bridge.js";

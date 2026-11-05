@@ -12,7 +12,9 @@ import { createPluginService, type PluginService } from "@table-craft/desktop/ma
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
 import { CHECK_INTERVAL_MS } from "@table-craft/desktop/main/update/overrides.js";
 import { createUpdateSchedule, type UpdateSchedule } from "@table-craft/desktop/main/update/schedule.js";
+import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
 import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
+import type { PluginRegistry } from "@table-craft/desktop/settings/settings.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import type { PluginsState } from "@table-craft/desktop/preload/bridge.js";
 
@@ -39,6 +41,9 @@ export interface PluginStoreOptions {
   /** The app's update channel; plugins follow it. */
   readonly channel: () => ReleaseChannel;
   readonly checkAutomatically: () => boolean;
+  readonly registries: () => readonly PluginRegistry[];
+  /** Where each private registry's token is kept (decision 158). */
+  readonly secrets: Pick<SecretStore, "registryToken" | "setRegistryToken" | "clearRegistryToken">;
   /** The saved data sources, read when a plugin is removed or found missing. */
   readonly datasources: () => readonly { readonly pluginId: string; readonly name: string }[];
   readonly onChanged: (state: PluginsState) => void;
@@ -94,6 +99,8 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     registryUrl: options.registryUrl,
     channel: options.channel,
     fetch: (url, init) => net.fetch(url, init),
+    registries: options.registries,
+    registryToken: (registryId) => options.secrets.registryToken(registryId),
     usedBy,
     onChanged: options.onChanged,
     log,

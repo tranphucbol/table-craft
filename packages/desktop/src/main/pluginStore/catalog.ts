@@ -4,6 +4,7 @@
  * `OPTIONAL_PLUGINS` and to each plugin's manifest.
  */
 import type { Brand } from "@table-craft/plugin-api";
+import { OFFICIAL_PLUGIN_SCOPE, packageScope, type PluginRegistry } from "@table-craft/desktop/settings/settings.js";
 
 export interface CatalogEntry {
   readonly id: string;
@@ -20,6 +21,8 @@ export interface CatalogEntry {
    * platform listed (decision 156); absent for a plugin that runs everywhere from one package.
    */
   readonly platforms?: readonly NativePlatform[];
+  /** The private registry it comes from (decision 158); absent for an official plugin. */
+  readonly registryId?: string;
 }
 
 /** The `<process.platform>-<process.arch>` pairs a native plugin is published for (decision 156). */
@@ -38,7 +41,7 @@ export function hostPlatform(): string {
 }
 
 /** Packages in this scope, installed through the app, are official: no confirmation (decision 110). */
-export const OFFICIAL_SCOPE = "@tablecraft-app/";
+export const OFFICIAL_SCOPE = `${OFFICIAL_PLUGIN_SCOPE}/`;
 
 export function officialPackage(id: string): string {
   return `${OFFICIAL_SCOPE}plugin-${id}`;
@@ -104,6 +107,16 @@ export function catalogEntry(id: string): CatalogEntry | undefined {
 export function packageFor(entry: CatalogEntry, platform: string): string | null {
   if (entry.platforms === undefined) return entry.packageName;
   return (entry.platforms as readonly string[]).includes(platform) ? `${entry.packageName}-${platform}` : null;
+}
+
+/**
+ * The private registry `packageName`'s scope routes to (decision 158); null for the npm registry,
+ * which also always serves `@tablecraft-app` because settings never let a registry claim it.
+ */
+export function registryFor(packageName: string, registries: readonly PluginRegistry[]): PluginRegistry | null {
+  const scope = packageScope(packageName);
+  if (scope === null) return null;
+  return registries.find((registry) => registry.scopes.includes(scope)) ?? null;
 }
 
 /** The downloadable plugin that reads `scheme:` URLs, for an import that finds no installed one. */
