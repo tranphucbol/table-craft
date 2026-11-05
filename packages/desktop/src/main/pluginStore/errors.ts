@@ -11,7 +11,9 @@ export type PluginInstallFailure =
   | "insecureUrl"
   | "inUse"
   | "builtIn"
-  | "unsupportedPlatform";
+  | "unsupportedPlatform"
+  | "unauthorized"
+  | "cancelled";
 
 /** A failure the user can act on; `hint` says what to do next, as `DatasourceError`'s does. */
 export class PluginInstallError extends Error {
@@ -20,6 +22,8 @@ export class PluginInstallError extends Error {
     readonly failure: PluginInstallFailure,
     message: string,
     readonly hint: string,
+    /** The registry's HTTP status when it refused the token, for the Registries card. */
+    readonly httpStatus: number | null = null,
   ) {
     super(message);
   }

@@ -33,50 +33,51 @@ Settings live in `settings.json` in your [profile folder](data-and-privacy.md). 
 dialog writes it; you can also edit it by hand, and a field that is missing or out of range falls
 back to its default without affecting the others.
 
-| Field                                  | Values                                                                                          | Default                                        |
-| :------------------------------------- | :---------------------------------------------------------------------------------------------- | :--------------------------------------------- |
-| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](themes.md), `user:<file stem>`   | `system`                                       |
-| `appearance.density`                   | `comfortable`, `compact`                                                                        | `comfortable`                                  |
-| `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                              | `system`                                       |
-| `appearance.windowStyle`               | `islands`, `classic`                                                                            | `islands`                                      |
-| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                     | `false`                                        |
-| `appearance.brandIcons`                | `true`, `false`; database logos on data sources                                                 | `true`                                         |
-| `appearance.brandIconColor`            | `brand`, `gray`; the logos' colour                                                              | `brand`                                        |
-| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
-| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 13                                     |
-| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                               | `null`, 12                                     |
-| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                           | `aligned`                                      |
-| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                  | `upper`                                        |
-| `editor.format.indentWidth`            | 1–8 spaces                                                                                      | 2                                              |
-| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                 | 1                                              |
-| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                  | `true`                                         |
-| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                          | `true`                                         |
-| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                             | `[]`                                           |
-| `keymap`                               | action id to its chords, such as `"console.run": ["Ctrl+Enter"]`; `[]` for none                 | `{}`                                           |
-| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                              | `true`                                         |
-| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                              | 0                                              |
-| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                              | 5                                              |
-| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure   | `ask`                                          |
-| `data.nullText`                        | 1–16 characters                                                                                 | `<null>`                                       |
-| `data.stripedRows`                     | `true`, `false`                                                                                 | `true`                                         |
-| `data.groupDigits`                     | `true`, `false`                                                                                 | `false`                                        |
-| `data.detectJson`                      | `true`, `false`; open a text value holding a JSON object or array formatted in the value panel  | `true`                                         |
-| `data.pageRows`                        | 10–10,000                                                                                       | 500                                            |
-| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                            | 100,000                                        |
-| `data.aggregates`                      | which of `count`, `distinct`, `sum`, `avg`, `min`, `max` the grid's selection line shows        | `["count","distinct","sum","avg","min","max"]` |
-| `data.blobLimitMb`                     | 1–128; the largest file, in MiB, Load from File puts into a binary cell, and Save to File reads | 16                                             |
-| `log.level`                            | `info`, `debug`                                                                                 | `info`                                         |
-| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                               | 120                                            |
-| `data.watchRetention`                  | 1,000–100,000; events retained per new watch                                                    | 10,000                                         |
-| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and every 2 hours                          | `true`                                         |
-| `updates.channel`                      | `auto`, `stable`, `beta`; `auto` follows the build you run. Plugins follow it too               | `auto`                                         |
-| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from  | `https://registry.npmjs.org`                   |
-| `mcp.clients`                          | `{ "name", "allowed" }` per MCP client you answered; [Allow or Block](agents.md)                | `[]`                                           |
-| `mcp.enabled`                          | `true`, `false`; run the [MCP server](agents.md) for AI agents                                  | `false`                                        |
-| `mcp.notifications`                    | `true`, `false`; a system notification and dock badge while an agent waits in the background    | `true`                                         |
-| `mcp.port`                             | 1,024–65,535; the port it listens on, on 127.0.0.1 only                                         | 47,820                                         |
-| `mcp.rowCap`                           | 1–1,000; the most rows one agent answer carries                                                 | 100                                            |
-| `mcp.statementTimeoutSeconds`          | 1–3,600; an agent's statement running longer is stopped, by the database too where it can       | 120                                            |
+| Field                                  | Values                                                                                                | Default                                        |
+| :------------------------------------- | :---------------------------------------------------------------------------------------------------- | :--------------------------------------------- |
+| `appearance.theme`                     | `system`, `dark`, `light`, `highContrast`, an id from [Themes](themes.md), `user:<file stem>`         | `system`                                       |
+| `appearance.density`                   | `comfortable`, `compact`                                                                              | `comfortable`                                  |
+| `appearance.motion`                    | `system`, `full`, `reduced`, `off`                                                                    | `system`                                       |
+| `appearance.windowStyle`               | `islands`, `classic`                                                                                  | `islands`                                      |
+| `appearance.systemTitleBar`            | `true`, `false`; read when the window opens                                                           | `false`                                        |
+| `appearance.brandIcons`                | `true`, `false`; database logos on data sources                                                       | `true`                                         |
+| `appearance.brandIconColor`            | `brand`, `gray`; the logos' colour                                                                    | `brand`                                        |
+| `appearance.fonts.ui`                  | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                                     | `null`, 13                                     |
+| `appearance.fonts.editor`              | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                                     | `null`, 13                                     |
+| `appearance.fonts.grid`                | `family`: a font name, or `null` for the built-in; `sizePx`: 8–32                                     | `null`, 12                                     |
+| `editor.format.style`                  | `aligned`, `standard`; how Reformat Code lays SQL out                                                 | `aligned`                                      |
+| `editor.format.keywordCase`            | `upper`, `lower`, `preserve`; how Reformat Code cases keywords                                        | `upper`                                        |
+| `editor.format.indentWidth`            | 1–8 spaces                                                                                            | 2                                              |
+| `editor.format.linesBetweenStatements` | 0–5 blank lines                                                                                       | 1                                              |
+| `editor.format.alignAliases`           | `true`, `false`; line up `AS` in a select list (aligned style)                                        | `true`                                         |
+| `editor.inspections.enabled`           | `true`, `false`; check SQL as you type                                                                | `true`                                         |
+| `editor.inspections.disabled`          | inspection ids to skip, such as `SqlRedundantAlias`                                                   | `[]`                                           |
+| `keymap`                               | action id to its chords, such as `"console.run": ["Ctrl+Enter"]`; `[]` for none                       | `{}`                                           |
+| `console.parameters`                   | `true`, `false`; ask for `:name`, `?` and `$1` values before a run                                    | `true`                                         |
+| `console.statementTimeoutSeconds`      | 0–86,400; a console statement running longer is cancelled; 0 waits                                    | 0                                              |
+| `console.sessionsRefreshSeconds`       | 1–3,600; how often a Sessions tab with Auto-refresh on lists again                                    | 5                                              |
+| `console.runAllOnError`                | `ask`, `stop`, `continue`; what a run of several statements or a SQL script does on a failure         | `ask`                                          |
+| `data.nullText`                        | 1–16 characters                                                                                       | `<null>`                                       |
+| `data.stripedRows`                     | `true`, `false`                                                                                       | `true`                                         |
+| `data.groupDigits`                     | `true`, `false`                                                                                       | `false`                                        |
+| `data.detectJson`                      | `true`, `false`; open a text value holding a JSON object or array formatted in the value panel        | `true`                                         |
+| `data.pageRows`                        | 10–10,000                                                                                             | 500                                            |
+| `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                                  | 100,000                                        |
+| `data.aggregates`                      | which of `count`, `distinct`, `sum`, `avg`, `min`, `max` the grid's selection line shows              | `["count","distinct","sum","avg","min","max"]` |
+| `data.blobLimitMb`                     | 1–128; the largest file, in MiB, Load from File puts into a binary cell, and Save to File reads       | 16                                             |
+| `log.level`                            | `info`, `debug`                                                                                       | `info`                                         |
+| `data.exportStallSeconds`              | 10–3,600; an export or import the database stalls this long fails                                     | 120                                            |
+| `data.watchRetention`                  | 1,000–100,000; events retained per new watch                                                          | 10,000                                         |
+| `updates.checkAutomatically`           | `true`, `false`; look for a new version after launch and every 2 hours                                | `true`                                         |
+| `updates.channel`                      | `auto`, `stable`, `beta`; `auto` follows the build you run. Plugins follow it too                     | `auto`                                         |
+| `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from        | `https://registry.npmjs.org`                   |
+| `plugins.registries`                   | `{ "id", "name", "url", "scopes", "packages" }` per [private registry](plugins.md#private-registries) | `[]`                                           |
+| `mcp.clients`                          | `{ "name", "allowed" }` per MCP client you answered; [Allow or Block](agents.md)                      | `[]`                                           |
+| `mcp.enabled`                          | `true`, `false`; run the [MCP server](agents.md) for AI agents                                        | `false`                                        |
+| `mcp.notifications`                    | `true`, `false`; a system notification and dock badge while an agent waits in the background          | `true`                                         |
+| `mcp.port`                             | 1,024–65,535; the port it listens on, on 127.0.0.1 only                                               | 47,820                                         |
+| `mcp.rowCap`                           | 1–1,000; the most rows one agent answer carries                                                       | 100                                            |
+| `mcp.statementTimeoutSeconds`          | 1–3,600; an agent's statement running longer is stopped, by the database too where it can             | 120                                            |
 
 A theme of your own is a JSON file in `themes/` in the profile folder. It names any bundled theme,
 by its id from [Themes](themes.md), as its base and overrides any of its colour tokens; it then

@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import {
   checkIntegrity,
   downloadTarball,
+  officialRegistry,
   type RegistryFetch,
 } from "../../packages/desktop/src/main/pluginStore/registry.js";
 import { readPackageTarball, type PackageFile } from "../../packages/desktop/src/main/pluginStore/tarball.js";
@@ -95,15 +96,16 @@ export async function fetchBinding(id: string, platform: string, options: FetchO
   const cached = join(cache, `${name.replace(/^@/, "").replace("/", "-")}-${locked.version}.tgz`);
   if (existsSync(cached)) {
     const bytes = readFileSync(cached);
-    checkIntegrity(bytes, locked.integrity, name);
+    checkIntegrity(bytes, { integrity: locked.integrity }, name, false);
     return bindingFiles(name, locked.version, bytes);
   }
   const bytes = await downloadTarball(
     options.fetch,
+    officialRegistry(options.registry),
     tarballUrl(options.registry, name, locked.version),
     () => undefined,
   );
-  checkIntegrity(bytes, locked.integrity, name);
+  checkIntegrity(bytes, { integrity: locked.integrity }, name, false);
   mkdirSync(cache, { recursive: true });
   writeFileSync(cached, bytes);
   return bindingFiles(name, locked.version, bytes);

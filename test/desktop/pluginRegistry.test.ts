@@ -1,13 +1,19 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import {
+  authorizedHeaders,
+  candidateVersions,
   checkIntegrity,
   downloadTarball,
   fetchPackument,
   isNewerRelease,
+  officialRegistry,
   packumentUrl,
   pickVersion,
   registryUrlAllowed,
+  UNAUTHORIZED_HINT,
+  type RegistryAccess,
   type RegistryFetch,
 } from "@table-craft/desktop/main/pluginStore/registry.js";
 import { readPackageTarball } from "@table-craft/desktop/main/pluginStore/tarball.js";
@@ -210,14 +216,15 @@ describe("plugin registry", () => {
     const published = release({ id: "postgres", version: "1.0.0" });
     const registry = await startRegistry({ [PACKAGE]: [published] });
     try {
-      const document = await fetchPackument(loopbackFetch, registry.url, PACKAGE);
+      const access = officialRegistry(registry.url);
+      const document = await fetchPackument(loopbackFetch, access, PACKAGE);
       const picked = pickVersion(document, "postgres", PACKAGE);
       const progress: number[] = [];
-      const bytes = await downloadTarball(loopbackFetch, picked.tarball, (received) => progress.push(received));
+      const bytes = await downloadTarball(loopbackFetch, access, picked.tarball, (received) => progress.push(received));
 
       expect(bytes.equals(published.bytes)).toBe(true);
       expect(progress.at(-1)).toBe(published.bytes.length);
-      expect(() => checkIntegrity(bytes, picked.integrity, PACKAGE)).not.toThrow();
+      expect(() => checkIntegrity(bytes, { integrity: picked.integrity }, PACKAGE, false)).not.toThrow();
     } finally {
       await registry.close();
     }
@@ -226,7 +233,8 @@ describe("plugin registry", () => {
   it("givenUnknownPackage_whenFetched_thenNotFound", async () => {
     const registry = await startRegistry();
     try {
-      expect((await rejectionOf(fetchPackument(loopbackFetch, registry.url, PACKAGE))).failure).toBe("notFound");
+      const error = await rejectionOf(fetchPackument(loopbackFetch, officialRegistry(registry.url), PACKAGE));
+      expect(error.failure).toBe("notFound");
     } finally {
       await registry.close();
     }
@@ -236,7 +244,7 @@ describe("plugin registry", () => {
     const registry = await startRegistry();
     await registry.close();
 
-    const error = await rejectionOf(fetchPackument(loopbackFetch, registry.url, PACKAGE));
+    const error = await rejectionOf(fetchPackument(loopbackFetch, officialRegistry(registry.url), PACKAGE));
     expect(error.failure).toBe("offline");
     expect(error.hint).toContain("Install from File");
   });
@@ -248,7 +256,8 @@ describe("plugin registry", () => {
       return Promise.reject(new Error("unreachable"));
     };
 
-    expect((await rejectionOf(fetchPackument(spy, "http://registry.npmjs.org", PACKAGE))).failure).toBe("insecureUrl");
+    const error = await rejectionOf(fetchPackument(spy, officialRegistry("http://registry.npmjs.org"), PACKAGE));
+    expect(error.failure).toBe("insecureUrl");
     expect(called).toBe(false);
   });
 
@@ -256,8 +265,139 @@ describe("plugin registry", () => {
     const bytes = pluginTarball({ id: "postgres", version: "1.0.0" });
     const other = pluginTarball({ id: "postgres", version: "1.0.1" });
 
-    expect(failureOf(() => checkIntegrity(bytes, sha512(other), PACKAGE))).toBe("integrity");
-    expect(failureOf(() => checkIntegrity(bytes, "sha1-abc", PACKAGE))).toBe("integrity");
-    expect(() => checkIntegrity(bytes, `sha1-abc ${sha512(bytes)}`, PACKAGE)).not.toThrow();
+    expect(failureOf(() => checkIntegrity(bytes, { integrity: sha512(other) }, PACKAGE, false))).toBe("integrity");
+    expect(failureOf(() => checkIntegrity(bytes, { integrity: "sha1-abc" }, PACKAGE, false))).toBe("integrity");
+    expect(() => checkIntegrity(bytes, { integrity: `sha1-abc ${sha512(bytes)}` }, PACKAGE, false)).not.toThrow();
+  });
+});
+
+describe("private registry", () => {
+  const PRIVATE = "@acme/tablecraft-plugin-example";
+  const TOKEN = "glpat-test-token";
+  const PREFIX = "/api/v4/packages/npm";
+  const example = () => release({ id: "example", version: "1.0.0", name: PRIVATE, manifest: { id: "example" } });
+
+  function privateAccess(url: string, token: string | null = TOKEN): RegistryAccess {
+    return { url, token, private: true };
+  }
+
+  it("givenPathPrefix_whenFetchingPackument_thenUrlKeepsPrefix", async () => {
+    const registry = await startRegistry({ [PRIVATE]: [example()] }, { prefix: PREFIX });
+    try {
+      const document = await fetchPackument(loopbackFetch, privateAccess(registry.url, null), PRIVATE);
+
+      expect((document as { name: string }).name).toBe(PRIVATE);
+      expect(registry.requests).toEqual([`${PREFIX}/@acme%2ftablecraft-plugin-example`]);
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("givenToken_whenSameOrigin_thenAuthorizationSent", async () => {
+    const registry = await startRegistry({ [PRIVATE]: [example()] }, { prefix: PREFIX, token: TOKEN, gitlab: true });
+    try {
+      const access = privateAccess(registry.url);
+      const [candidate] = candidateVersions(await fetchPackument(loopbackFetch, access, PRIVATE), PRIVATE, "stable");
+      await downloadTarball(loopbackFetch, access, candidate?.tarball ?? "", () => undefined);
+
+      expect(registry.received.map((request) => request.authorization)).toEqual([`Bearer ${TOKEN}`, `Bearer ${TOKEN}`]);
+      expect(authorizedHeaders(access, "https://elsewhere.example/x")).toEqual({});
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("givenToken_whenTarballOnOtherOrigin_thenNoAuthorization", async () => {
+    const published = example();
+    const registry = await startRegistry({ [PRIVATE]: [published] }, { token: TOKEN, tarballsElsewhere: true });
+    try {
+      const access = privateAccess(registry.url);
+      const [candidate] = candidateVersions(await fetchPackument(loopbackFetch, access, PRIVATE), PRIVATE, "stable");
+      const bytes = await downloadTarball(loopbackFetch, access, candidate?.tarball ?? "", () => undefined);
+
+      expect(bytes.equals(published.bytes)).toBe(true);
+      const tarballRequest = registry.received.at(-1);
+      expect(tarballRequest?.host).toBe("localhost");
+      expect(tarballRequest?.authorization).toBeUndefined();
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("givenCrossOriginRedirect_whenTokenSet_thenRefused", async () => {
+    const registry = await startRegistry({ [PRIVATE]: [example()] }, { token: TOKEN, redirectTarballs: true });
+    try {
+      const access = privateAccess(registry.url);
+      const [candidate] = candidateVersions(await fetchPackument(loopbackFetch, access, PRIVATE), PRIVATE, "stable");
+      const error = await rejectionOf(
+        downloadTarball(loopbackFetch, access, candidate?.tarball ?? "", () => undefined),
+      );
+
+      expect(error.failure).toBe("insecureUrl");
+      expect(registry.received.some((request) => request.host === "localhost")).toBe(false);
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("given401_whenFetching_thenUnauthorizedWithTokenHint", async () => {
+    const registry = await startRegistry({ [PRIVATE]: [example()] }, { token: TOKEN });
+    try {
+      const error = await rejectionOf(fetchPackument(loopbackFetch, privateAccess(registry.url, "revoked"), PRIVATE));
+
+      expect(error.failure).toBe("unauthorized");
+      expect(error.hint).toBe(UNAUTHORIZED_HINT);
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("givenShasumOnly_whenPrivate_thenSha1Checked", () => {
+    const bytes = pluginTarball({ id: "postgres", version: "1.0.0" });
+    const other = pluginTarball({ id: "postgres", version: "1.0.1" });
+    const shasum = (data: Buffer) => createHash("sha1").update(data).digest("hex");
+
+    expect(() => checkIntegrity(bytes, { shasum: shasum(bytes) }, PRIVATE, true)).not.toThrow();
+    expect(failureOf(() => checkIntegrity(bytes, { shasum: shasum(other) }, PRIVATE, true))).toBe("integrity");
+    expect(
+      failureOf(() => checkIntegrity(bytes, { integrity: sha512(other), shasum: shasum(bytes) }, PRIVATE, true)),
+    ).toBe("integrity");
+  });
+
+  it("givenShasumOnly_whenOfficial_thenIntegrityError", () => {
+    const bytes = pluginTarball({ id: "postgres", version: "1.0.0" });
+
+    const shasum = createHash("sha1").update(bytes).digest("hex");
+    expect(failureOf(() => checkIntegrity(bytes, { shasum }, PACKAGE, false))).toBe("integrity");
+  });
+
+  it("givenUnknownPackage_whenRedirectedToNpmjs_thenNotFound", async () => {
+    const registry = await startRegistry({}, { prefix: PREFIX, token: TOKEN, gitlab: true });
+    try {
+      const error = await rejectionOf(fetchPackument(loopbackFetch, privateAccess(registry.url), PRIVATE));
+
+      expect(error.failure).toBe("notFound");
+      expect(registry.received.some((request) => request.host === "localhost")).toBe(false);
+    } finally {
+      await registry.close();
+    }
+  });
+
+  it("givenGitlabPackument_whenListed_thenNewestFirstWithoutTableCraft", () => {
+    const document = {
+      versions: {
+        "1.0.0": { version: "1.0.0", dist: { tarball: "t/1", shasum: "aa" } },
+        "1.1.0": { version: "1.1.0", dist: { tarball: "t/2", shasum: "bb" } },
+        "1.2.0": { version: "1.2.0", dist: { tarball: "t/3" } },
+        "1.3.0-beta.1": { version: "1.3.0-beta.1", dist: { tarball: "t/4", shasum: "cc" } },
+      },
+    };
+
+    expect(candidateVersions(document, PRIVATE, "stable").map((entry) => [entry.version, entry.tableCraft])).toEqual([
+      ["1.1.0", null],
+      ["1.0.0", null],
+    ]);
+    expect(candidateVersions(document, PRIVATE, "beta")[0]?.version).toBe("1.3.0-beta.1");
+    expect(failureOf(() => candidateVersions({ versions: {} }, PRIVATE, "stable"))).toBe("notFound");
   });
 });

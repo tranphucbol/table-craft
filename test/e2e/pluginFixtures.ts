@@ -5,7 +5,13 @@
  */
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { pluginPackageName, release, type RegistryRelease } from "../support/pluginRegistry.js";
+import {
+  EXAMPLE_PLUGIN_ID,
+  examplePlugin,
+  pluginPackageName,
+  release,
+  type RegistryRelease,
+} from "../support/pluginRegistry.js";
 import { logLines, type LoggedLine } from "./updateServer.js";
 
 const OPTIONAL_PLUGINS = resolve(import.meta.dirname, "../../packages/desktop/dist/optional-plugins");
@@ -13,6 +19,8 @@ const MANAGED_PLUGINS_DIRECTORY = "managed-plugins";
 const MANIFEST_FILE = "table-craft-plugin.json";
 const ENTRY_FILE = "index.js";
 const PLUGINS_SCOPE = "plugins";
+const EXAMPLE_BASE = "postgres";
+const EXAMPLE_BASE_ENTRY = "base.js";
 export const HOST_PLATFORM = `${process.platform}-${process.arch}`;
 /** A port nothing listens on: the registry is unreachable without any request leaving the machine. */
 export const UNREACHABLE_REGISTRY = "http://127.0.0.1:9";
@@ -27,6 +35,16 @@ function builtFile(id: string, file: string): Buffer {
 /** A registry release of the optional plugin `id` as the development build bundled it. */
 export function builtRelease(id: string, version: string, integrity?: string): RegistryRelease {
   return release({ id, version, indexJs: builtFile(id, ENTRY_FILE) }, integrity);
+}
+
+/**
+ * `@acme/tablecraft-plugin-example` at `version` that really runs: the built PostgreSQL plugin under
+ * the id `example`, as a company's own plugin would be, so a smoke scenario can connect through it.
+ */
+export function builtExampleRelease(version: string): RegistryRelease {
+  const indexJs = `import base from "./${EXAMPLE_BASE_ENTRY}";\nexport default Object.assign(Object.create(base), { id: "${EXAMPLE_PLUGIN_ID}" });\n`;
+  const extra = [{ path: `package/${EXAMPLE_BASE_ENTRY}`, data: builtFile(EXAMPLE_BASE, ENTRY_FILE) }];
+  return release({ ...examplePlugin(version), indexJs, extra });
 }
 
 /** The host's package of a native plugin (decision 156): the bundle and the binding the build copied beside it. */

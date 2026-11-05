@@ -45,6 +45,8 @@
   --spacing-row: var(--tc-row-height);
   /* A segment inside its group's 1px border, so the group stands one row tall like a Button. */
   --spacing-segment: calc(var(--tc-row-height) - 2px);
+  /* Settings → Plugins only, whose cards and hints read cramped at a plain row (plan 154). */
+  --spacing-row-loose: calc(var(--tc-row-height) + 6px);
   --spacing-cell: var(--tc-cell-padding);
   --spacing-gap: var(--tc-gap);
   --spacing-column-max: var(--tc-grid-column-max-width);

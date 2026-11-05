@@ -4,7 +4,8 @@ import { writeAtomically, type FileSystem } from "@table-craft/desktop/main/file
 import type { SecretMode } from "@table-craft/desktop/preload/bridge.js";
 
 export const SECRETS_FILE = "secrets.json";
-const SECRETS_VERSION = 1;
+const SECRETS_VERSION = 2;
+const FIRST_SECRETS_VERSION = 1;
 const JSON_INDENT = 2;
 
 /** `safeStorage`, injected so tests can run without a keychain and make one unavailable. */
@@ -30,9 +31,11 @@ export class SecretStoreError extends Error {
 }
 
 const fileSchema = z.strictObject({
-  version: z.literal(SECRETS_VERSION),
+  version: z.union([z.literal(FIRST_SECRETS_VERSION), z.literal(SECRETS_VERSION)]),
   /** Ciphertext by datasource id, then by field key. */
   secrets: z.record(z.string(), z.record(z.string(), z.string())),
+  /** Ciphertext of each plugin registry's token, by registry id (decision 158). */
+  registries: z.record(z.string(), z.string()).optional(),
 });
 
 type Secrets = Record<string, Record<string, string>>;
@@ -47,6 +50,10 @@ export interface SecretStore {
   get(datasourceId: string, key: string, mode: SecretMode): string | undefined;
   clear(datasourceId: string, key: string): Promise<void>;
   clearAll(datasourceId: string): Promise<void>;
+  /** A plugin registry's token, always kept Forever: it is refused when encryption is unavailable. */
+  setRegistryToken(registryId: string, token: string): Promise<void>;
+  registryToken(registryId: string): string | undefined;
+  clearRegistryToken(registryId: string): Promise<void>;
 }
 
 export interface SecretStoreOptions {
@@ -67,9 +74,10 @@ export async function createSecretStore(options: SecretStoreOptions): Promise<Se
   const parsed = text === null ? null : fileSchema.safeParse(safeJson(text));
   // An unreadable secrets file behaves like a lost keychain: every Forever secret is asked for again.
   const persisted: Secrets = parsed?.success === true ? parsed.data.secrets : {};
+  const registries: Record<string, string> = parsed?.success === true ? { ...parsed.data.registries } : {};
 
   async function persist(): Promise<void> {
-    const file = { version: SECRETS_VERSION, secrets: persisted };
+    const file = { version: SECRETS_VERSION, secrets: persisted, registries };
     await writeAtomically(options.files, path, `${JSON.stringify(file, null, JSON_INDENT)}\n`);
   }
 
@@ -88,8 +96,7 @@ export async function createSecretStore(options: SecretStoreOptions): Promise<Se
     return true;
   }
 
-  function decrypted(datasourceId: string, key: string): string | undefined {
-    const cipherText = persisted[datasourceId]?.[key];
+  function decrypted(cipherText: string | undefined): string | undefined {
     if (cipherText === undefined || !options.cipher.isAvailable()) return undefined;
     try {
       return options.cipher.decrypt(cipherText);
@@ -126,7 +133,7 @@ export async function createSecretStore(options: SecretStoreOptions): Promise<Se
     get(datasourceId, key, mode) {
       if (mode === "never") return undefined;
       if (mode === "untilRestart") return memory.get(datasourceId)?.get(key);
-      return decrypted(datasourceId, key);
+      return decrypted(persisted[datasourceId]?.[key]);
     },
     async clear(datasourceId, key) {
       if (forget(datasourceId, key)) await persist();
@@ -135,6 +142,24 @@ export async function createSecretStore(options: SecretStoreOptions): Promise<Se
       memory.delete(datasourceId);
       if (persisted[datasourceId] === undefined) return;
       delete persisted[datasourceId];
+      await persist();
+    },
+    async setRegistryToken(registryId, token) {
+      if (!options.cipher.isAvailable()) {
+        throw new SecretStoreError(
+          ENCRYPTION_UNAVAILABLE_REASON,
+          "A registry token is only kept encrypted; make the system keychain available and try again.",
+        );
+      }
+      registries[registryId] = options.cipher.encrypt(token);
+      await persist();
+    },
+    registryToken(registryId) {
+      return decrypted(registries[registryId]);
+    },
+    async clearRegistryToken(registryId) {
+      if (registries[registryId] === undefined) return;
+      delete registries[registryId];
       await persist();
     },
   };

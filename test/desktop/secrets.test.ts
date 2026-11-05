@@ -67,7 +67,42 @@ describe("secret store", () => {
     await store.changeMode(ID, KEY, "forever", "untilRestart");
 
     expect(store.get(ID, KEY, "untilRestart")).toBe(SECRET);
-    expect(JSON.parse(files.contents.get(PATH) ?? "")).toEqual({ version: 1, secrets: {} });
+    expect(JSON.parse(files.contents.get(PATH) ?? "")).toEqual({ version: 2, secrets: {}, registries: {} });
+  });
+
+  it("givenRegistryToken_whenSaved_thenNotInSettingsAndReadBack", async () => {
+    const { files, cipher, store } = await secrets();
+
+    await store.setRegistryToken("company", SECRET);
+    const reopened = await createSecretStore({ directory: DIRECTORY, files, cipher });
+
+    expect(files.contents.get(PATH)).not.toContain(SECRET);
+    expect([...files.contents.keys()]).toEqual([PATH]);
+    expect(reopened.registryToken("company")).toBe(SECRET);
+    await reopened.clearRegistryToken("company");
+    expect(reopened.registryToken("company")).toBeUndefined();
+    expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({ registries: {} });
+  });
+
+  it("givenEncryptionUnavailable_whenSavingRegistryToken_thenRefused", async () => {
+    const cipher = fakeCipher();
+    cipher.available = false;
+    const { files, store } = await secrets(memoryFiles(), cipher);
+
+    await expect(store.setRegistryToken("company", SECRET)).rejects.toThrow(SecretStoreError);
+    expect(files.contents.has(PATH)).toBe(false);
+  });
+
+  it("givenOldSecretsFile_whenOpened_thenDatasourceSecretsKept", async () => {
+    const cipher = fakeCipher();
+    const old = JSON.stringify({ version: 1, secrets: { [ID]: { [KEY]: cipher.encrypt(SECRET) } } });
+    const files = memoryFiles({ [PATH]: old });
+
+    const store = await createSecretStore({ directory: DIRECTORY, files, cipher });
+    await store.setRegistryToken("company", "glpat-test");
+
+    expect(store.get(ID, KEY, "forever")).toBe(SECRET);
+    expect(JSON.parse(files.contents.get(PATH) ?? "")).toMatchObject({ version: 2, secrets: { [ID]: {} } });
   });
 
   it("givenStoredSecrets_whenClearedForDatasource_thenAllGone", async () => {

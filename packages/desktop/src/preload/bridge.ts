@@ -82,8 +82,12 @@ export const INVOKE_CHANNELS = {
   listPlugins: "table-craft:plugins.list",
   pluginsState: "table-craft:plugins.state",
   installPlugin: "table-craft:plugins.install",
+  installPluginPackage: "table-craft:plugins.install-package",
   installPluginFile: "table-craft:plugins.install-file",
   removePlugin: "table-craft:plugins.remove",
+  testPluginRegistry: "table-craft:plugins.test-registry",
+  setRegistryToken: "table-craft:plugins.set-registry-token",
+  clearRegistryToken: "table-craft:plugins.clear-registry-token",
   connectEngine: "table-craft:engine.connect",
   authorizeEngine: "table-craft:engine.authorize",
   disconnectEngine: "table-craft:engine.disconnect",
@@ -291,11 +295,50 @@ export interface CatalogPlugin {
   /** The version loaded from any root; null when the plugin is not installed. */
   readonly installedVersion: string | null;
   readonly install: PluginInstallState;
+  /** The private registry it comes from (decision 158); absent for an official plugin. */
+  readonly registryId?: string;
+}
+
+/** The last time main reached a private registry, by Test or by a download; kept in memory only. */
+export type RegistryCheck =
+  | { readonly status: "reached"; readonly at: number }
+  | { readonly status: "refused"; readonly at: number; readonly httpStatus: number }
+  | { readonly status: "failed"; readonly at: number; readonly message: string };
+
+/** A private registry as the renderer sees it: whether a token is stored, never the token (decision 020). */
+export interface PluginRegistryState {
+  readonly id: string;
+  readonly name: string;
+  readonly url: string;
+  readonly scopes: readonly string[];
+  readonly packages: readonly string[];
+  readonly tokenStored: boolean;
+  /** sha1 once a download from it carried only `dist.shasum`, as GitLab's packages do. */
+  readonly integrity: "sha512" | "sha1";
+  readonly check: RegistryCheck | null;
+  /** Ids of the plugins installed from it. */
+  readonly plugins: readonly string[];
 }
 
 export interface PluginsState {
   readonly plugins: readonly PluginInfo[];
   readonly catalog: readonly CatalogPlugin[];
+  readonly registries: readonly PluginRegistryState[];
+  /** Plugins installed from a private registry that is gone or no longer names them: they stop updating. */
+  readonly registryRemoved: readonly string[];
+  /** Installs by package name still running or failed, for the "By package name" row. */
+  readonly packageInstalls: readonly { readonly packageName: string; readonly install: PluginInstallState }[];
+}
+
+/**
+ * What Test connection checks: a saved registry (`registryId` with `token` null uses its stored
+ * token) or the Add/Edit form's draft, whose typed token is sent once and not kept.
+ */
+export interface RegistryTestRequest {
+  readonly registryId: string | null;
+  readonly url: string;
+  readonly scopes: readonly string[];
+  readonly token: string | null;
 }
 
 /** Install from File: what was installed, or nothing when the user cancelled the dialog or the confirmation. */
@@ -746,10 +789,20 @@ export interface TableCraftBridge {
   pluginsState(): Promise<InvokeResult<PluginsState>>;
   /** Downloads the catalog plugin's newest compatible version; resolves once it is installed or failed. */
   installPlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  /**
+   * Installs a package the user typed from the private registry its scope routes to (decision 158),
+   * after main's native confirmation; a declined confirmation resolves with the unchanged state.
+   */
+  installPluginPackage(packageName: string): Promise<InvokeResult<PluginsState>>;
   /** The native open dialog for a `.tgz`, then the trust confirmation (decision 006), then the install. */
   installPluginFile(): Promise<InvokeResult<InstallFileResult>>;
   /** Refused while a saved data source uses the plugin. */
   removePlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  /** One packument request to the registry (decision 158); a saved registry's result also shows on its card. */
+  testPluginRegistry(request: RegistryTestRequest): Promise<InvokeResult<RegistryCheck>>;
+  /** Stores a saved registry's token encrypted in main; the renderer never reads it back (decision 020). */
+  setRegistryToken(registryId: string, token: string): Promise<InvokeResult<PluginsState>>;
+  clearRegistryToken(registryId: string): Promise<InvokeResult<PluginsState>>;
   onPluginsChanged(listener: (state: PluginsState) => void): () => void;
   /**
    * Starts or reuses the datasource's engine. On `connected`, the port arrives as a window

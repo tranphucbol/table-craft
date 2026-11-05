@@ -26,6 +26,8 @@ export interface ManagedPlugin {
   readonly packageName: string;
   readonly source: ManagedSource;
   readonly directory: string;
+  /** The private registry a `registry` download came from (decision 158); absent for the npm registry. */
+  readonly registry?: string;
 }
 
 function codeOf(error: unknown): unknown {
@@ -48,16 +50,23 @@ async function readCurrent(root: string, id: string): Promise<ManagedPlugin | nu
     if (codeOf(error) === MISSING_FILE) return null;
     throw error;
   }
-  let json: { version?: unknown; packageName?: unknown; source?: unknown };
+  let json: { version?: unknown; packageName?: unknown; source?: unknown; registry?: unknown };
   try {
     json = JSON.parse(text) as typeof json;
   } catch {
     return null;
   }
-  const { version, packageName, source } = json;
+  const { version, packageName, source, registry } = json;
   if (typeof version !== "string" || !safeSegment(version) || typeof packageName !== "string") return null;
   if (!isManagedSource(source)) return null;
-  return { id, version, packageName, source, directory: join(root, id, version) };
+  return {
+    id,
+    version,
+    packageName,
+    source,
+    directory: join(root, id, version),
+    ...(source === "registry" && typeof registry === "string" ? { registry } : {}),
+  };
 }
 
 async function names(directory: string): Promise<string[]> {
@@ -96,6 +105,7 @@ export interface StageRequest {
   readonly version: string;
   readonly packageName: string;
   readonly source: ManagedSource;
+  readonly registry?: string;
   readonly files: readonly PackageFile[];
   /** Null when the unpacked folder may be loaded; otherwise why not. Main reads manifests only (decision 006). */
   readonly check: (directory: string) => Promise<string | null>;
@@ -129,7 +139,12 @@ export async function installManaged(root: string, request: StageRequest): Promi
     }
     await rm(target, { recursive: true, force: true });
     await rename(staging, target);
-    const current = { version, packageName: request.packageName, source: request.source };
+    const current = {
+      version,
+      packageName: request.packageName,
+      source: request.source,
+      ...(request.registry === undefined ? {} : { registry: request.registry }),
+    };
     const currentPath = join(pluginRoot, CURRENT_FILE);
     await writeFile(`${currentPath}${TEMPORARY_SUFFIX}`, JSON.stringify(current, null, 2));
     await rename(`${currentPath}${TEMPORARY_SUFFIX}`, currentPath);
@@ -138,7 +153,14 @@ export async function installManaged(root: string, request: StageRequest): Promi
     if ((await readCurrent(root, id)) === null) await rm(pluginRoot, { recursive: true, force: true });
     throw diskFull(cause) ?? cause;
   }
-  return { id, version, packageName: request.packageName, source: request.source, directory: target };
+  return {
+    id,
+    version,
+    packageName: request.packageName,
+    source: request.source,
+    directory: target,
+    ...(request.registry === undefined ? {} : { registry: request.registry }),
+  };
 }
 
 export async function removeManaged(root: string, id: string): Promise<void> {

@@ -111,7 +111,7 @@ import {
 } from "@table-craft/desktop/main/update/updater.js";
 import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { effectiveChannel } from "@table-craft/desktop/settings/channel.js";
-import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS } from "@table-craft/desktop/settings/settings.js";
+import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS, withRegistryPackage } from "@table-craft/desktop/settings/settings.js";
 import {
   DENSITIES,
   resolveTheme,
@@ -254,6 +254,15 @@ function protectedSecrets(store: SecretStore): SecretStore {
       const value = store.get(datasourceId, key, mode);
       if (value !== undefined) logHub.redactor.remember(value);
       return value;
+    },
+    setRegistryToken(registryId, token) {
+      logHub.redactor.remember(token);
+      return store.setRegistryToken(registryId, token);
+    },
+    registryToken(registryId) {
+      const token = store.registryToken(registryId);
+      if (token !== undefined) logHub.redactor.remember(token);
+      return token;
     },
   };
 }
@@ -768,6 +777,8 @@ void app.whenReady().then(async () => {
       .warn("history file unreadable; moved aside", { file: HISTORY_FILE, movedTo: history.recoveredFrom });
   }
   app.on("will-quit", () => history.close());
+  // safeStorage answers only once the app is ready.
+  const secrets = protectedSecrets(await createSecretStore({ directory, files, cipher }));
   const plugins = createPluginStore({
     userData: directory,
     builtInRoot: paths.builtInPlugins,
@@ -781,14 +792,22 @@ void app.whenReady().then(async () => {
         appVersion,
       ),
     checkAutomatically: () => settingsService?.snapshot().settings.updates.checkAutomatically ?? true,
+    registries: () => settingsService?.snapshot().settings.plugins.registries ?? [],
+    secrets,
+    async addPackage(registryId, packageName) {
+      if (settingsService === null) return;
+      const current = settingsService.snapshot().settings;
+      await settingsService.write({
+        ...current,
+        plugins: withRegistryPackage(current.plugins, registryId, packageName),
+      });
+    },
     datasources: () => savedDatasources(),
     onChanged: (state) => broadcast(CHANNELS.pluginsChanged, state),
     log: mainLog.child("plugins"),
   });
   pluginStore = plugins;
   await plugins.start();
-  // safeStorage answers only once the app is ready.
-  const secrets = protectedSecrets(await createSecretStore({ directory, files, cipher }));
   const service = await createDatasourceService<PortTarget>({
     store: createDatasourceStore({ directory, files }),
     secrets,
@@ -831,9 +850,11 @@ void app.whenReady().then(async () => {
       broadcast(CHANNELS.settingsChanged, changed);
       for (const listener of settingsListeners) listener(changed.settings);
       plugins.setAutomatic(changed.settings.updates.checkAutomatically);
+      void plugins.service.registriesChanged();
     },
   });
   settingsService = settings;
+  await plugins.service.registriesChanged();
   // After the settings: the download reads the registry URL and channel from them.
   plugins.startBackground();
   const settingsWarning = settings.snapshot().warning;

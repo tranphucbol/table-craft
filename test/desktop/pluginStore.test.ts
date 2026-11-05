@@ -2,11 +2,17 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MANIFEST_FILE } from "@table-craft/plugin-api";
+import { API_VERSION, MANIFEST_FILE, parseVersion } from "@table-craft/plugin-api";
 import { createLogger, type LogRecord } from "@table-craft/desktop/log/record.js";
 import { PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js";
-import { confirmationText, createPluginChannels } from "@table-craft/desktop/main/pluginStore/channels.js";
+import {
+  confirmationText,
+  createPluginChannels,
+  privateConfirmationText,
+} from "@table-craft/desktop/main/pluginStore/channels.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
+import type { PrivateInstallRequest } from "@table-craft/desktop/main/pluginStore/installer.js";
+import { PLUGIN_PACKAGES_FILE } from "@table-craft/desktop/main/pluginStore/knownPackages.js";
 import { listManaged, pruneManaged } from "@table-craft/desktop/main/pluginStore/managed.js";
 import {
   createPluginService,
@@ -14,15 +20,27 @@ import {
   type PluginServiceOptions,
 } from "@table-craft/desktop/main/pluginStore/service.js";
 import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
+import { withRegistryPackage, type PluginRegistry } from "@table-craft/desktop/settings/settings.js";
 import type { PluginsState } from "@table-craft/desktop/preload/bridge.js";
 import { OPTIONAL_PLUGINS } from "../../packages/desktop/vite.plugins.config.js";
-import { pluginTarball, release, sha512, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
+import {
+  EXAMPLE_PACKAGE,
+  EXAMPLE_PLUGIN_ID,
+  examplePlugin,
+  pluginTarball,
+  release,
+  sha512,
+  startRegistry,
+  type LoopbackRegistry,
+} from "../support/pluginRegistry.js";
 
 const PACKAGE = "@tablecraft-app/plugin-postgres";
 const OUTSIDE_CATALOG = "clickhouse";
 const HOST = "linux-x64";
 const DUCKDB_PACKAGE = `@tablecraft-app/plugin-duckdb-${HOST}`;
 const SOURCE_PLUGINS = "plugins";
+const HOST_API = parseVersion(API_VERSION)!;
+const NEWER_API = `${String(HOST_API.major)}.${String(HOST_API.minor + 1)}.0`;
 
 let profile: string;
 let registry: LoopbackRegistry;
@@ -44,10 +62,7 @@ function managedRoot(): string {
   return join(profile, "managed-plugins");
 }
 
-function service(
-  registryUrl = registry.url,
-  extra: Pick<PluginServiceOptions, "channel" | "hostVersion" | "platform"> = {},
-): PluginService {
+function service(registryUrl = registry.url, extra: Partial<PluginServiceOptions> = {}): PluginService {
   return createPluginService({
     platform: HOST,
     ...extra,
@@ -63,10 +78,7 @@ function service(
   });
 }
 
-async function started(
-  registryUrl?: string,
-  extra: Pick<PluginServiceOptions, "platform"> = {},
-): Promise<PluginService> {
+async function started(registryUrl?: string, extra: Partial<PluginServiceOptions> = {}): Promise<PluginService> {
   const plugins = service(registryUrl, extra);
   await plugins.start();
   return plugins;
@@ -192,6 +204,18 @@ describe("plugin service", () => {
     expect(changes.at(-1)?.catalog[0]).toMatchObject({ installedVersion: "1.0.0", install: { status: "idle" } });
     expect(changes.some((state) => state.catalog[0]?.install.status === "installing")).toBe(true);
     expect(messages()).toEqual(expect.arrayContaining(["plugin download started", "plugin installed"]));
+  });
+
+  it("givenOldCurrentJson_whenListing_thenOfficialRegistryAssumed", async () => {
+    const directory = join(managedRoot(), "postgres", "1.0.0");
+    await mkdir(directory, { recursive: true });
+    const current = { version: "1.0.0", packageName: PACKAGE, source: "registry" };
+    await writeFile(join(managedRoot(), "postgres", "current.json"), JSON.stringify(current));
+
+    const [listed] = await listManaged(managedRoot());
+
+    expect(listed).toEqual({ id: "postgres", ...current, directory });
+    expect(listed?.registry).toBeUndefined();
   });
 
   it("givenInstalledVersion_whenInstalledAgain_thenNothingIsDownloaded", async () => {
@@ -583,4 +607,344 @@ describe("plugin catalog", () => {
       expect(entry.schemes).toEqual(manifest.connection?.url?.schemes ?? []);
     },
   );
+});
+
+describe("private registries", () => {
+  const TOKEN = "glpat-test-token";
+  const PREFIX = "/api/v4/packages/npm";
+  const COMPANY = "company";
+  let company: LoopbackRegistry;
+  let registries: readonly PluginRegistry[];
+  let asked: PrivateInstallRequest[];
+  let accept: boolean;
+  let token: string | undefined;
+
+  beforeEach(async () => {
+    company = await startRegistry(
+      { [EXAMPLE_PACKAGE]: [release(examplePlugin("1.0.0"))] },
+      { prefix: PREFIX, token: TOKEN, gitlab: true },
+    );
+    registries = [{ id: COMPANY, name: "Company registry", url: company.url, scopes: ["@acme"], packages: [] }];
+    asked = [];
+    accept = true;
+    token = TOKEN;
+  });
+
+  afterEach(async () => {
+    await company.close();
+  });
+
+  function privateOptions(): Partial<PluginServiceOptions> {
+    return {
+      registries: () => registries,
+      registryToken: (id) => (id === COMPANY ? token : undefined),
+      confirm: (request) => {
+        asked.push(request);
+        return Promise.resolve(accept);
+      },
+      addPackage: (registryId, packageName) => {
+        registries = withRegistryPackage({ registryUrl: registry.url, registries }, registryId, packageName).registries;
+        return Promise.resolve();
+      },
+    };
+  }
+
+  const startedPrivate = () => started(registry.url, privateOptions());
+
+  const tarballRequests = () => company.requests.filter((path) => path.includes(".tgz"));
+
+  async function current(id: string): Promise<unknown> {
+    return JSON.parse(await readFile(join(managedRoot(), id, "current.json"), "utf8"));
+  }
+
+  it("givenPackageName_whenFirstInstall_thenConfirmationAsked", async () => {
+    const plugins = await startedPrivate();
+
+    const outcome = await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    expect(outcome).toEqual({ id: EXAMPLE_PLUGIN_ID, version: "1.0.0", changed: true });
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({
+      pluginId: EXAMPLE_PLUGIN_ID,
+      name: "Example",
+      packageName: EXAMPLE_PACKAGE,
+      version: "1.0.0",
+      registry: { id: COMPANY, name: "Company registry" },
+      brands: [{ id: EXAMPLE_PLUGIN_ID, name: "Example DB" }],
+    });
+    expect(await current(EXAMPLE_PLUGIN_ID)).toEqual({
+      version: "1.0.0",
+      packageName: EXAMPLE_PACKAGE,
+      source: "registry",
+      registry: COMPANY,
+    });
+    expect(plugins.plugins().find((plugin) => plugin.id === EXAMPLE_PLUGIN_ID)).toMatchObject({
+      source: "managed",
+      unavailableReason: null,
+    });
+  });
+
+  it("givenDeclinedConfirmation_whenInstalling_thenNothingInstalled", async () => {
+    accept = false;
+    const plugins = await startedPrivate();
+    const channels = createPluginChannels({
+      service: plugins,
+      choose: () => Promise.resolve(null),
+      readFile: () => Promise.reject(new Error("no file")),
+      confirm: () => Promise.resolve(false),
+    });
+
+    const state = await channels.installPackage(EXAMPLE_PACKAGE);
+
+    expect(asked).toHaveLength(1);
+    expect(await listManaged(managedRoot())).toEqual([]);
+    expect(registries[0]?.packages).toEqual([]);
+    expect(state.packageInstalls).toEqual([]);
+    expect(messages()).toContain("plugin install cancelled");
+  });
+
+  it("givenUnconfiguredScope_whenInstallingPackage_thenRefusedBeforeDownload", async () => {
+    const plugins = await startedPrivate();
+
+    const error = await rejectionOf(plugins.installPackage("@other/tablecraft-plugin-example"));
+
+    expect(error.failure).toBe("notFound");
+    expect(error.message).toContain("@other");
+    expect(company.requests).toEqual([]);
+    expect(registry.requests).toEqual([]);
+    expect(plugins.state().packageInstalls).toMatchObject([
+      { packageName: "@other/tablecraft-plugin-example", install: { status: "failed" } },
+    ]);
+  });
+
+  it.each([
+    ["postgres", "an official plugin"],
+    ["sqlite", "a built-in plugin"],
+  ])("givenBuiltInOrOfficialId_whenInstallingPackage_thenRefused (%s, %s)", async (id) => {
+    const packageName = `@acme/tablecraft-plugin-${id}`;
+    company.publish(packageName, [release({ id, version: "1.0.0", name: packageName })]);
+    const plugins = await startedPrivate();
+
+    const error = await rejectionOf(plugins.installPackage(packageName));
+
+    expect(error.failure).toBe("builtIn");
+    expect(asked).toEqual([]);
+    expect(await listManaged(managedRoot())).toEqual([]);
+  });
+
+  it("givenGitlabPackument_whenInstalling_thenNewestCompatibleFromTarball", async () => {
+    company.publish(EXAMPLE_PACKAGE, [release(examplePlugin("1.0.0")), release(examplePlugin("1.1.0"))]);
+    const plugins = await startedPrivate();
+
+    const outcome = await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    expect(outcome.version).toBe("1.1.0");
+    expect(tarballRequests()).toHaveLength(1);
+    expect(company.received.every((request) => request.authorization === `Bearer ${TOKEN}`)).toBe(true);
+    expect(plugins.state().registries).toMatchObject([
+      { id: COMPANY, tokenStored: true, integrity: "sha1", check: { status: "reached" }, plugins: [EXAMPLE_PLUGIN_ID] },
+    ]);
+  });
+
+  it("givenNewestNeedsNewerApi_whenInstalling_thenOlderCompatibleInstalled", async () => {
+    company.publish(EXAMPLE_PACKAGE, [release(examplePlugin("1.0.0")), release(examplePlugin("1.1.0", NEWER_API))]);
+    const plugins = await startedPrivate();
+
+    const outcome = await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    expect(outcome.version).toBe("1.0.0");
+    expect(tarballRequests()).toHaveLength(2);
+  });
+
+  it("givenEveryVersionNeedsNewerApi_whenInstalling_thenIncompatibleAfterThreeDownloads", async () => {
+    company.publish(
+      EXAMPLE_PACKAGE,
+      ["1.0.0", "1.1.0", "1.2.0", "1.3.0"].map((version) => release(examplePlugin(version, NEWER_API))),
+    );
+    const plugins = await startedPrivate();
+
+    const error = await rejectionOf(plugins.installPackage(EXAMPLE_PACKAGE));
+
+    expect(error.failure).toBe("incompatible");
+    expect(error.message).toContain("1.3.0");
+    expect(tarballRequests()).toHaveLength(3);
+  });
+
+  it("givenInstalledPackage_whenInstalled_thenAddedToRegistryPackages", async () => {
+    const plugins = await startedPrivate();
+
+    await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    expect(registries[0]?.packages).toEqual([EXAMPLE_PACKAGE]);
+    expect(JSON.parse(await readFile(join(profile, PLUGIN_PACKAGES_FILE), "utf8"))).toMatchObject({
+      [EXAMPLE_PACKAGE]: { id: EXAMPLE_PLUGIN_ID, name: "Example" },
+    });
+    expect(plugins.state().catalog.find((entry) => entry.id === EXAMPLE_PLUGIN_ID)).toMatchObject({
+      packageName: EXAMPLE_PACKAGE,
+      registryId: COMPANY,
+      installedVersion: "1.0.0",
+    });
+  });
+
+  it("givenInstalledFromPrivate_whenUpdateAll_thenUpdatedWithoutAsking", async () => {
+    const plugins = await startedPrivate();
+    await plugins.installPackage(EXAMPLE_PACKAGE);
+    company.publish(EXAMPLE_PACKAGE, [release(examplePlugin("1.0.0")), release(examplePlugin("1.1.0"))]);
+
+    const outcomes = await plugins.updateAll();
+
+    expect(outcomes).toEqual([{ id: EXAMPLE_PLUGIN_ID, version: "1.1.0", changed: true }]);
+    expect(asked).toHaveLength(1);
+    expect(await current(EXAMPLE_PLUGIN_ID)).toMatchObject({ version: "1.1.0", registry: COMPANY });
+  });
+
+  it("givenCurrentVersion_whenUpdateAll_thenNothingDownloaded", async () => {
+    const plugins = await startedPrivate();
+    await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    const outcomes = await plugins.updateAll();
+
+    expect(outcomes).toEqual([{ id: EXAMPLE_PLUGIN_ID, version: "1.0.0", changed: false }]);
+    expect(tarballRequests()).toHaveLength(1);
+  });
+
+  it("givenRegistryRemoved_whenUpdateAll_thenSkipped", async () => {
+    const plugins = await startedPrivate();
+    await plugins.installPackage(EXAMPLE_PACKAGE);
+    registries = [];
+    const before = company.requests.length;
+
+    expect(await plugins.updateAll()).toEqual([]);
+
+    expect(company.requests).toHaveLength(before);
+    expect(plugins.state().registryRemoved).toEqual([EXAMPLE_PLUGIN_ID]);
+    expect(plugins.plugins().some((plugin) => plugin.id === EXAMPLE_PLUGIN_ID)).toBe(true);
+  });
+
+  it("givenMissingDatasourcePlugin_whenRegistryNamesItsPackage_thenInstallMissingOffersIt", async () => {
+    registries = [{ ...registries[0]!, packages: [EXAMPLE_PACKAGE] }];
+    await writeFile(
+      join(profile, PLUGIN_PACKAGES_FILE),
+      JSON.stringify({
+        [EXAMPLE_PACKAGE]: { id: EXAMPLE_PLUGIN_ID, name: "Example", brands: [], schemes: [], bytes: 1 },
+      }),
+    );
+    const plugins = await startedPrivate();
+
+    expect(plugins.state().catalog.find((entry) => entry.id === EXAMPLE_PLUGIN_ID)).toMatchObject({
+      registryId: COMPANY,
+      installedVersion: null,
+    });
+    await plugins.install(EXAMPLE_PLUGIN_ID);
+
+    expect(asked).toHaveLength(1);
+    expect(plugins.plugins().find((plugin) => plugin.id === EXAMPLE_PLUGIN_ID)?.unavailableReason).toBeNull();
+  });
+
+  it("givenRefusedToken_whenInstalling_thenRegistryMarkedRefused", async () => {
+    token = "glpat-wrong";
+    const plugins = await startedPrivate();
+
+    const error = await rejectionOf(plugins.installPackage(EXAMPLE_PACKAGE));
+
+    expect(error.failure).toBe("unauthorized");
+    expect(plugins.state().registries[0]?.check).toMatchObject({ status: "refused", httpStatus: 401 });
+  });
+
+  it("givenNoToken_whenPackageNotFound_thenRegistryNotMarkedReached", async () => {
+    token = undefined;
+    const plugins = await startedPrivate();
+
+    const error = await rejectionOf(plugins.installPackage(EXAMPLE_PACKAGE));
+
+    expect(error.failure).toBe("notFound");
+    expect(error.hint).toContain("needs a token");
+    expect(plugins.state().registries[0]?.check).toBeNull();
+  });
+
+  it("givenServedPackage_whenTested_thenPackumentReadWithTheStoredToken", async () => {
+    registries = [{ ...registries[0]!, packages: [EXAMPLE_PACKAGE] }];
+    const plugins = await startedPrivate();
+
+    const check = await plugins.testRegistry({ registryId: COMPANY, url: company.url, scopes: ["@acme"], token: null });
+
+    expect(check.status).toBe("reached");
+    expect(company.received.at(-1)).toMatchObject({
+      path: `${PREFIX}/@acme%2ftablecraft-plugin-example`,
+      authorization: `Bearer ${TOKEN}`,
+    });
+    expect(plugins.state().registries[0]?.check).toMatchObject({ status: "reached" });
+  });
+
+  it("givenWrongDraftToken_whenTested_thenRefusedAndSavedCheckUntouched", async () => {
+    registries = [{ ...registries[0]!, packages: [EXAMPLE_PACKAGE] }];
+    const plugins = await startedPrivate();
+
+    const check = await plugins.testRegistry({
+      registryId: COMPANY,
+      url: company.url,
+      scopes: ["@acme"],
+      token: "glpat-wrong",
+    });
+
+    expect(check).toMatchObject({ status: "refused", httpStatus: 401 });
+    expect(plugins.state().registries[0]?.check).toBeNull();
+  });
+
+  it("givenNoServedPackage_whenTested_thenProbeNotFoundReadsAsReached", async () => {
+    const plugins = await startedPrivate();
+
+    const check = await plugins.testRegistry({ registryId: null, url: company.url, scopes: ["@acme"], token: TOKEN });
+
+    expect(check.status).toBe("reached");
+    expect(company.requests.at(-1)).toBe(`${PREFIX}/@acme%2ftablecraft-registry-check`);
+  });
+
+  it("givenRegistryRemoved_whenRegistriesChanged_thenTokenForgottenAndPluginKept", async () => {
+    const stored: (string | null)[] = [];
+    const plugins = await started(registry.url, {
+      ...privateOptions(),
+      storeToken: (id, value) => {
+        stored.push(`${id}:${String(value)}`);
+        return Promise.resolve();
+      },
+    });
+    await plugins.registriesChanged();
+    await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    registries = [];
+    await plugins.registriesChanged();
+
+    expect(stored).toEqual([`${COMPANY}:null`]);
+    expect(plugins.state().registryRemoved).toEqual([EXAMPLE_PLUGIN_ID]);
+    expect(plugins.plugins().find((plugin) => plugin.id === EXAMPLE_PLUGIN_ID)?.unavailableReason).toBeNull();
+  });
+});
+
+describe("private install confirmation", () => {
+  it("givenRequest_whenText_thenNamesPackageVersionRegistryAndSize", () => {
+    const text = privateConfirmationText({
+      pluginId: EXAMPLE_PLUGIN_ID,
+      name: "Example",
+      packageName: EXAMPLE_PACKAGE,
+      version: "1.0.0",
+      registry: {
+        id: "company",
+        name: "Company registry",
+        url: "https://gitlab.example.com/api/v4/packages/npm",
+        scopes: ["@acme"],
+        packages: [],
+      },
+      brands: [{ id: EXAMPLE_PLUGIN_ID, name: "Example DB" }],
+      bytes: 2 * 1024 * 1024,
+    });
+
+    expect(text.message).toBe(
+      `Install Example (${EXAMPLE_PACKAGE}) from Company registry? It runs with TableCraft's access to your files and network.`,
+    );
+    expect(text.detail).toContain("Version: 1.0.0 (newest that fits)");
+    expect(text.detail).toContain("Adds: Example DB data sources (Example)");
+    expect(text.detail).toContain("Size: 2.0 MB");
+    expect(text.detail).toContain("You're asked once per package.");
+  });
 });
