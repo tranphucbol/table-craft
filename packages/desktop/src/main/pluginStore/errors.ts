@@ -22,6 +22,8 @@ export class PluginInstallError extends Error {
     readonly failure: PluginInstallFailure,
     message: string,
     readonly hint: string,
+    /** The registry's HTTP status when it refused the token, for the Registries card. */
+    readonly httpStatus: number | null = null,
   ) {
     super(message);
   }

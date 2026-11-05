@@ -8,6 +8,7 @@ import type { PluginRoot } from "@table-craft/core";
 import {
   catalogEntry,
   hostPlatform,
+  installedRegistry,
   packageFor,
   PLUGIN_CATALOG,
 } from "@table-craft/desktop/main/pluginStore/catalog.js";
@@ -21,6 +22,8 @@ import {
   createPluginInstaller,
   type InstallOutcome,
   type PluginInstaller,
+  type PrivateInstallRequest,
+  type RegistryOutcome,
 } from "@table-craft/desktop/main/pluginStore/installer.js";
 import { listManaged, pruneManaged, type ManagedPlugin } from "@table-craft/desktop/main/pluginStore/managed.js";
 import type { RegistryFetch } from "@table-craft/desktop/main/pluginStore/registry.js";
@@ -56,6 +59,10 @@ export interface PluginServiceOptions {
   readonly channel?: () => ReleaseChannel;
   /** Names of the saved data sources on the plugin. */
   readonly usedBy: (pluginId: string) => readonly string[];
+  /** Asked before a plugin's first install from a private registry; refused when absent. */
+  readonly confirm?: (request: PrivateInstallRequest) => Promise<boolean>;
+  /** Adds an installed package to its registry's `packages` in settings. */
+  readonly addPackage?: (registryId: string, packageName: string) => Promise<void>;
   readonly onChanged: (state: PluginsState) => void;
   readonly log: Logger;
   /** `<process.platform>-<process.arch>`; a native plugin without a build for it is not offered. */
@@ -74,6 +81,8 @@ export interface PluginService {
   report(): readonly PluginReport[];
   state(): PluginsState;
   install(pluginId: string): Promise<InstallOutcome>;
+  /** A package a private registry serves (decision 158); rejects with `cancelled` when the user declined. */
+  installPackage(packageName: string): Promise<InstallOutcome>;
   installFile(bytes: Uint8Array): Promise<InstallOutcome>;
   remove(pluginId: string): Promise<void>;
   updateAll(): Promise<InstallOutcome[]>;
@@ -104,6 +113,7 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
   const packagesFile = join(dirname(options.managedRoot), PLUGIN_PACKAGES_FILE);
   const checks = new Map<string, RegistryCheck>();
   const weakIntegrity = new Set<string>();
+  const typed = new Set<string>();
   const log = options.log;
   const platform = options.platform ?? hostPlatform();
 
@@ -126,14 +136,19 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
   const managedAt = (directory: string) =>
     managed.find((plugin) => directory === plugin.directory || within(directory, plugin.directory));
 
+  /** A registry download, official or from a private registry that still names it (decision 158). */
+  function updatable(plugin: ManagedPlugin | undefined): boolean {
+    if (plugin?.source !== "registry") return false;
+    if (plugin.registry === undefined) return PLUGIN_CATALOG.some((entry) => entry.id === plugin.id);
+    return registryOf(plugin) !== null;
+  }
+
   /** Only a registry download is replaced: a plugin installed from a file stays what its user chose. */
   function outdated(): string[] {
     const ids = installed.plugins
       .filter(
         (plugin, index) =>
-          plugin.needs === "pluginUpdate" &&
-          PLUGIN_CATALOG.some((entry) => entry.id === plugin.id) &&
-          managedAt(installed.report[index]?.directory ?? "")?.source === "registry",
+          plugin.needs === "pluginUpdate" && updatable(managedAt(installed.report[index]?.directory ?? "")),
       )
       .map((plugin) => plugin.id)
       .filter((id) => !installed.plugins.some((plugin) => plugin.id === id && plugin.unavailableReason === null));
@@ -154,11 +169,25 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
   const usableVersion = (id: string) =>
     installed.plugins.find((info) => info.id === id && info.unavailableReason === null)?.version ?? null;
 
-  /** Its registry still configured and still naming its package; otherwise the plugin stops updating. */
-  function registryOf(plugin: ManagedPlugin): PluginRegistry | null {
-    if (plugin.registry === undefined) return null;
-    const registry = registries().find((entry) => entry.id === plugin.registry);
-    return registry?.packages.includes(plugin.packageName) === true ? registry : null;
+  const registryOf = (plugin: ManagedPlugin) => installedRegistry(plugin, registries());
+
+  function reached(registryId: string, outcome: RegistryOutcome): void {
+    const at = Date.now();
+    if (outcome.ok) {
+      checks.set(registryId, { status: "reached", at });
+      if (outcome.integrity === "sha1") weakIntegrity.add(registryId);
+      if (outcome.integrity === "sha512") weakIntegrity.delete(registryId);
+      return;
+    }
+    const error = outcome.error;
+    if (!(error instanceof PluginInstallError)) return;
+    if (error.failure === "unauthorized") {
+      checks.set(registryId, { status: "refused", at, httpStatus: error.httpStatus ?? 0 });
+    } else if (error.failure === "offline" || error.failure === "insecureUrl") {
+      checks.set(registryId, { status: "failed", at, message: error.message });
+    } else {
+      checks.set(registryId, { status: "reached", at });
+    }
   }
 
   function privateCatalog(): CatalogPlugin[] {
@@ -216,6 +245,9 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
       registryRemoved: managed
         .filter((plugin) => plugin.registry !== undefined && registryOf(plugin) === null)
         .map((plugin) => plugin.id),
+      packageInstalls: [...typed]
+        .map((packageName) => ({ packageName, install: installer.progress(packageName) }))
+        .filter((entry) => entry.install.status !== "idle"),
     };
   }
 
@@ -249,6 +281,12 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     onChanged: changed,
     log,
     platform,
+    registries,
+    registryToken: (registryId) => options.registryToken?.(registryId),
+    packagesFile,
+    ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
+    ...(options.addPackage === undefined ? {} : { addPackage: options.addPackage }),
+    reached,
   });
 
   /** Resolves once the windows were told about the install, so the caller's answer is current. */
@@ -270,6 +308,10 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     report: () => installed.report,
     state,
     install: (pluginId) => settled(installer.install(pluginId)),
+    installPackage(packageName) {
+      typed.add(packageName);
+      return settled(installer.installPackage(packageName));
+    },
     installFile: (bytes) => settled(installer.installFile(bytes)),
     remove(pluginId) {
       if (!managed.some((plugin) => plugin.id === pluginId)) {

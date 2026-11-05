@@ -6,7 +6,12 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BrowserWindow, dialog, net, type OpenDialogOptions, type WebContents } from "electron";
-import { createPluginChannels, confirmationText } from "@table-craft/desktop/main/pluginStore/channels.js";
+import {
+  confirmationText,
+  createPluginChannels,
+  privateConfirmationText,
+} from "@table-craft/desktop/main/pluginStore/channels.js";
+import type { PrivateInstallRequest } from "@table-craft/desktop/main/pluginStore/installer.js";
 import { MANAGED_PLUGINS_DIRECTORY } from "@table-craft/desktop/main/pluginStore/managed.js";
 import { createPluginService, type PluginService } from "@table-craft/desktop/main/pluginStore/service.js";
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
@@ -29,6 +34,7 @@ const FIRST_PLUGIN_CHECK_MS = 60_000;
 const INSTALL_BUTTON = 0;
 const PLUGIN_FILE_FILTERS = [{ name: "Plugin package", extensions: ["tgz"] }];
 const FILE_DIALOG_TITLE = "Install Plugin from File";
+const REGISTRY_DIALOG_TITLE = "Install Plugin from Registry";
 
 export interface PluginStoreOptions {
   readonly userData: string;
@@ -44,6 +50,8 @@ export interface PluginStoreOptions {
   readonly registries: () => readonly PluginRegistry[];
   /** Where each private registry's token is kept (decision 158). */
   readonly secrets: Pick<SecretStore, "registryToken" | "setRegistryToken" | "clearRegistryToken">;
+  /** Adds a package installed by name to its registry's `packages` in settings. */
+  readonly addPackage: (registryId: string, packageName: string) => Promise<void>;
   /** The saved data sources, read when a plugin is removed or found missing. */
   readonly datasources: () => readonly { readonly pluginId: string; readonly name: string }[];
   readonly onChanged: (state: PluginsState) => void;
@@ -91,6 +99,19 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     options.developmentRoot !== null && options.environment[DEVELOPMENT_PLUGINS_ENV] !== "0"
       ? [options.developmentRoot]
       : [];
+  async function confirmPrivate(request: PrivateInstallRequest): Promise<boolean> {
+    const parent = BrowserWindow.getFocusedWindow();
+    const box = {
+      type: "warning" as const,
+      title: REGISTRY_DIALOG_TITLE,
+      buttons: ["Install", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+      ...privateConfirmationText(request),
+    };
+    const answer = parent === null ? await dialog.showMessageBox(box) : await dialog.showMessageBox(parent, box);
+    return answer.response === INSTALL_BUTTON;
+  }
   const service = createPluginService({
     builtInRoot: options.builtInRoot,
     developmentRoots,
@@ -101,6 +122,8 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     fetch: (url, init) => net.fetch(url, init),
     registries: options.registries,
     registryToken: (registryId) => options.secrets.registryToken(registryId),
+    confirm: confirmPrivate,
+    addPackage: options.addPackage,
     usedBy,
     onChanged: options.onChanged,
     log,

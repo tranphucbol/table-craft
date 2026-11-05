@@ -254,6 +254,18 @@ export function registryEntryError(entry: PluginRegistry, others: readonly Plugi
   return stray === undefined ? null : `${stray} is not in one of the registry's scopes.`;
 }
 
+/** `plugins` with `packageName` added to registry `registryId`'s packages, as an install by name records it. */
+export function withRegistryPackage(plugins: PluginSettings, registryId: string, packageName: string): PluginSettings {
+  return {
+    ...plugins,
+    registries: plugins.registries.map((registry) =>
+      registry.id !== registryId || registry.packages.includes(packageName)
+        ? registry
+        : { ...registry, packages: [...registry.packages, packageName] },
+    ),
+  };
+}
+
 function strings(value: unknown): string[] {
   return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string"))] : [];
 }
