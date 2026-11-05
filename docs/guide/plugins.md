@@ -76,4 +76,7 @@ installs from there by its scope, while official plugins keep coming from npm.
 - A refused token turns the registry's card red; paste a new one there. Removing a registry
   forgets its token and keeps its plugins installed, but they stop updating.
 
+How routing, tokens and checksums work is in
+[decision 158](../decisions/158-private-plugin-registries.md).
+
 To write a plugin of your own, see [Writing plugins](writing-plugins.md).
