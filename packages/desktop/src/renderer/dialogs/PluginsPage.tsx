@@ -100,7 +100,7 @@ function RegistryField() {
             const next = event.target.value.trim();
             const valid = registryUrlError(next) === null;
             edit(event.target.value, valid ? next : registryUrl);
-            if (valid) update((current) => ({ ...current, plugins: { registryUrl: next } }));
+            if (valid) update((current) => ({ ...current, plugins: { ...current.plugins, registryUrl: next } }));
           }}
         />
       </FieldRow>

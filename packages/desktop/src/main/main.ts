@@ -255,6 +255,15 @@ function protectedSecrets(store: SecretStore): SecretStore {
       if (value !== undefined) logHub.redactor.remember(value);
       return value;
     },
+    setRegistryToken(registryId, token) {
+      logHub.redactor.remember(token);
+      return store.setRegistryToken(registryId, token);
+    },
+    registryToken(registryId) {
+      const token = store.registryToken(registryId);
+      if (token !== undefined) logHub.redactor.remember(token);
+      return token;
+    },
   };
 }
 
@@ -768,6 +777,8 @@ void app.whenReady().then(async () => {
       .warn("history file unreadable; moved aside", { file: HISTORY_FILE, movedTo: history.recoveredFrom });
   }
   app.on("will-quit", () => history.close());
+  // safeStorage answers only once the app is ready.
+  const secrets = protectedSecrets(await createSecretStore({ directory, files, cipher }));
   const plugins = createPluginStore({
     userData: directory,
     builtInRoot: paths.builtInPlugins,
@@ -781,14 +792,14 @@ void app.whenReady().then(async () => {
         appVersion,
       ),
     checkAutomatically: () => settingsService?.snapshot().settings.updates.checkAutomatically ?? true,
+    registries: () => settingsService?.snapshot().settings.plugins.registries ?? [],
+    secrets,
     datasources: () => savedDatasources(),
     onChanged: (state) => broadcast(CHANNELS.pluginsChanged, state),
     log: mainLog.child("plugins"),
   });
   pluginStore = plugins;
   await plugins.start();
-  // safeStorage answers only once the app is ready.
-  const secrets = protectedSecrets(await createSecretStore({ directory, files, cipher }));
   const service = await createDatasourceService<PortTarget>({
     store: createDatasourceStore({ directory, files }),
     secrets,

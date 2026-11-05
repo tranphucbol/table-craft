@@ -127,7 +127,9 @@ describe("plugin catalog", () => {
       rememberServer: () => Promise.resolve(),
     });
 
-    store.getState().applyPlugins({ plugins: [SQLITE_PLUGIN], catalog: [entry()] });
+    store
+      .getState()
+      .applyPlugins({ plugins: [SQLITE_PLUGIN], catalog: [entry()], registries: [], registryRemoved: [] });
 
     expect(store.getState().plugins).toEqual([SQLITE_PLUGIN]);
     expect(store.getState().catalog.map((item) => item.id)).toEqual(["postgres"]);

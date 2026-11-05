@@ -291,11 +291,37 @@ export interface CatalogPlugin {
   /** The version loaded from any root; null when the plugin is not installed. */
   readonly installedVersion: string | null;
   readonly install: PluginInstallState;
+  /** The private registry it comes from (decision 158); absent for an official plugin. */
+  readonly registryId?: string;
+}
+
+/** The last time main reached a private registry, by Test or by a download; kept in memory only. */
+export type RegistryCheck =
+  | { readonly status: "reached"; readonly at: number }
+  | { readonly status: "refused"; readonly at: number; readonly httpStatus: number }
+  | { readonly status: "failed"; readonly at: number; readonly message: string };
+
+/** A private registry as the renderer sees it: whether a token is stored, never the token (decision 020). */
+export interface PluginRegistryState {
+  readonly id: string;
+  readonly name: string;
+  readonly url: string;
+  readonly scopes: readonly string[];
+  readonly packages: readonly string[];
+  readonly tokenStored: boolean;
+  /** sha1 once a download from it carried only `dist.shasum`, as GitLab's packages do. */
+  readonly integrity: "sha512" | "sha1";
+  readonly check: RegistryCheck | null;
+  /** Ids of the plugins installed from it. */
+  readonly plugins: readonly string[];
 }
 
 export interface PluginsState {
   readonly plugins: readonly PluginInfo[];
   readonly catalog: readonly CatalogPlugin[];
+  readonly registries: readonly PluginRegistryState[];
+  /** Plugins installed from a private registry that is gone or no longer names them: they stop updating. */
+  readonly registryRemoved: readonly string[];
 }
 
 /** Install from File: what was installed, or nothing when the user cancelled the dialog or the confirmation. */

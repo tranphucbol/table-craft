@@ -3,9 +3,19 @@
  * plugin roots the engines boot with, so a plugin installed while the app runs loads on the next
  * session open without a restart, while running engines keep what they imported.
  */
-import { sep } from "node:path";
+import { dirname, join, sep } from "node:path";
 import type { PluginRoot } from "@table-craft/core";
-import { hostPlatform, packageFor, PLUGIN_CATALOG } from "@table-craft/desktop/main/pluginStore/catalog.js";
+import {
+  catalogEntry,
+  hostPlatform,
+  packageFor,
+  PLUGIN_CATALOG,
+} from "@table-craft/desktop/main/pluginStore/catalog.js";
+import {
+  PLUGIN_PACKAGES_FILE,
+  readKnownPackages,
+  type KnownPackage,
+} from "@table-craft/desktop/main/pluginStore/knownPackages.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import {
   createPluginInstaller,
@@ -22,7 +32,15 @@ import {
 } from "@table-craft/desktop/main/plugins.js";
 import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
-import type { PluginInfo, PluginSource, PluginsState } from "@table-craft/desktop/preload/bridge.js";
+import type {
+  CatalogPlugin,
+  PluginInfo,
+  PluginRegistryState,
+  PluginSource,
+  PluginsState,
+  RegistryCheck,
+} from "@table-craft/desktop/preload/bridge.js";
+import type { PluginRegistry } from "@table-craft/desktop/settings/settings.js";
 
 export interface PluginServiceOptions {
   readonly builtInRoot: string;
@@ -42,6 +60,10 @@ export interface PluginServiceOptions {
   readonly log: Logger;
   /** `<process.platform>-<process.arch>`; a native plugin without a build for it is not offered. */
   readonly platform?: string;
+  /** The private registries of settings (decision 158); none when absent. */
+  readonly registries?: () => readonly PluginRegistry[];
+  /** A private registry's stored token, read from the secret store at each request. */
+  readonly registryToken?: (registryId: string) => string | undefined;
 }
 
 export interface PluginService {
@@ -78,6 +100,10 @@ function within(directory: string, root: string): boolean {
 export function createPluginService(options: PluginServiceOptions): PluginService {
   let managed: ManagedPlugin[] = [];
   let installed: InstalledPlugins = { plugins: [], report: [] };
+  let known: ReadonlyMap<string, KnownPackage> = new Map();
+  const packagesFile = join(dirname(options.managedRoot), PLUGIN_PACKAGES_FILE);
+  const checks = new Map<string, RegistryCheck>();
+  const weakIntegrity = new Set<string>();
   const log = options.log;
   const platform = options.platform ?? hostPlatform();
 
@@ -124,22 +150,77 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     });
   }
 
+  const registries = () => options.registries?.() ?? [];
+  const usableVersion = (id: string) =>
+    installed.plugins.find((info) => info.id === id && info.unavailableReason === null)?.version ?? null;
+
+  /** Its registry still configured and still naming its package; otherwise the plugin stops updating. */
+  function registryOf(plugin: ManagedPlugin): PluginRegistry | null {
+    if (plugin.registry === undefined) return null;
+    const registry = registries().find((entry) => entry.id === plugin.registry);
+    return registry?.packages.includes(plugin.packageName) === true ? registry : null;
+  }
+
+  function privateCatalog(): CatalogPlugin[] {
+    return registries().flatMap((registry) =>
+      registry.packages.flatMap((packageName) => {
+        const entry = known.get(packageName);
+        if (entry === undefined || catalogEntry(entry.id) !== undefined) return [];
+        return [
+          {
+            id: entry.id,
+            name: entry.name,
+            packageName,
+            schemes: entry.schemes,
+            brands: entry.brands,
+            approximateBytes: entry.bytes,
+            installedVersion: usableVersion(entry.id),
+            install: installer.progress(entry.id),
+            registryId: registry.id,
+          },
+        ];
+      }),
+    );
+  }
+
+  function registryStates(): PluginRegistryState[] {
+    return registries().map((registry) => ({
+      ...registry,
+      tokenStored: options.registryToken?.(registry.id) !== undefined,
+      integrity: weakIntegrity.has(registry.id) ? "sha1" : "sha512",
+      check: checks.get(registry.id) ?? null,
+      plugins: managed.filter((plugin) => registryOf(plugin)?.id === registry.id).map((plugin) => plugin.id),
+    }));
+  }
+
   function state(): PluginsState {
     return {
       plugins: plugins(),
-      catalog: PLUGIN_CATALOG.flatMap((entry) => {
-        const packageName = packageFor(entry, platform);
-        if (packageName === null) return [];
-        const { platforms: _platforms, ...offered } = entry;
-        const plugin = installed.plugins.find((info) => info.id === entry.id && info.unavailableReason === null);
-        return [
-          { ...offered, packageName, installedVersion: plugin?.version ?? null, install: installer.progress(entry.id) },
-        ];
-      }),
+      catalog: [
+        ...PLUGIN_CATALOG.flatMap((entry) => {
+          const packageName = packageFor(entry, platform);
+          if (packageName === null) return [];
+          const { platforms: _platforms, ...offered } = entry;
+          return [
+            {
+              ...offered,
+              packageName,
+              installedVersion: usableVersion(entry.id),
+              install: installer.progress(entry.id),
+            },
+          ];
+        }),
+        ...privateCatalog(),
+      ],
+      registries: registryStates(),
+      registryRemoved: managed
+        .filter((plugin) => plugin.registry !== undefined && registryOf(plugin) === null)
+        .map((plugin) => plugin.id),
     };
   }
 
   async function rediscover(): Promise<void> {
+    known = await readKnownPackages(packagesFile);
     managed = await listManaged(options.managedRoot);
     installed = await discoverInstalled(roots(), sourceOf, (directory) => managedAt(directory)?.version);
   }

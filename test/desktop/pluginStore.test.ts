@@ -194,6 +194,18 @@ describe("plugin service", () => {
     expect(messages()).toEqual(expect.arrayContaining(["plugin download started", "plugin installed"]));
   });
 
+  it("givenOldCurrentJson_whenListing_thenOfficialRegistryAssumed", async () => {
+    const directory = join(managedRoot(), "postgres", "1.0.0");
+    await mkdir(directory, { recursive: true });
+    const current = { version: "1.0.0", packageName: PACKAGE, source: "registry" };
+    await writeFile(join(managedRoot(), "postgres", "current.json"), JSON.stringify(current));
+
+    const [listed] = await listManaged(managedRoot());
+
+    expect(listed).toEqual({ id: "postgres", ...current, directory });
+    expect(listed?.registry).toBeUndefined();
+  });
+
   it("givenInstalledVersion_whenInstalledAgain_thenNothingIsDownloaded", async () => {
     const plugins = await started();
     await plugins.install("postgres");

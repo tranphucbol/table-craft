@@ -146,9 +146,23 @@ export interface UpdateSettings {
   readonly channel: UpdateChannelSetting;
 }
 
+/** A private npm registry that serves the packages of its scopes (decision 158). */
+export interface PluginRegistry {
+  /** Keys the registry's token in `secrets.json` and the `registry` of a plugin installed from it. */
+  readonly id: string;
+  readonly name: string;
+  readonly url: string;
+  /** npm scopes such as `@acme`, each claimed by one registry; never `@tablecraft-app`. */
+  readonly scopes: readonly string[];
+  /** Packages installed from it; updates and missing datasource plugins only look at these. */
+  readonly packages: readonly string[];
+}
+
 export interface PluginSettings {
   /** The npm registry downloadable plugins come from (decision 110); https, or http on this machine. */
   readonly registryUrl: string;
+  /** Private registries by scope; every other scope comes from `registryUrl`. */
+  readonly registries: readonly PluginRegistry[];
 }
 
 export interface McpSettings {
@@ -194,6 +208,74 @@ export function registryUrlError(url: string): string | null {
   if (parsed.protocol === "https:") return null;
   if (parsed.protocol === "http:" && LOOPBACK_HOSTS.includes(parsed.hostname)) return null;
   return "The registry address must start with https:// (plain http only for this machine).";
+}
+
+/** The scope official plugins are published under; only the npm registry serves it (decision 158). */
+export const OFFICIAL_PLUGIN_SCOPE = "@tablecraft-app";
+const REGISTRY_ID = /^[a-z][a-z0-9-]*$/;
+const REGISTRY_SCOPE = /^@[a-z0-9][a-z0-9._-]*$/;
+const SCOPED_PACKAGE = /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
+const REGISTRY_NAME_MAX_LENGTH = 80;
+
+/** A scoped npm package name such as `@acme/tablecraft-plugin-example`; only those come from a private registry. */
+export function isScopedPackageName(name: string): boolean {
+  return SCOPED_PACKAGE.test(name);
+}
+
+/** `@acme` for `@acme/tablecraft-plugin-example`, null for an unscoped name. */
+export function packageScope(packageName: string): string | null {
+  return isScopedPackageName(packageName) ? packageName.slice(0, packageName.indexOf("/")) : null;
+}
+
+/** Null when `scope` may be added to a registry whose fellow registries are `others`. */
+export function registryScopeError(scope: string, others: readonly PluginRegistry[]): string | null {
+  if (!REGISTRY_SCOPE.test(scope)) return `${scope} is not an npm scope; write it like @acme.`;
+  if (scope === OFFICIAL_PLUGIN_SCOPE) return `${OFFICIAL_PLUGIN_SCOPE} always comes from the npm registry.`;
+  const owner = others.find((other) => other.scopes.includes(scope));
+  return owner === undefined ? null : `${scope} already comes from ${owner.name}.`;
+}
+
+/** Null when `entry` may sit beside `others`, the other private registries. */
+export function registryEntryError(entry: PluginRegistry, others: readonly PluginRegistry[]): string | null {
+  if (!REGISTRY_ID.test(entry.id)) return "A registry id is lower-case letters, digits and dashes.";
+  if (others.some((other) => other.id === entry.id)) return `Another registry already has the id ${entry.id}.`;
+  if (entry.name.trim() === "") return "Enter a name for the registry.";
+  if (entry.name.length > REGISTRY_NAME_MAX_LENGTH) {
+    return `A registry name is at most ${REGISTRY_NAME_MAX_LENGTH} characters.`;
+  }
+  const urlError = registryUrlError(entry.url);
+  if (urlError !== null) return urlError;
+  if (entry.scopes.length === 0) return "Add at least one scope, such as @acme.";
+  for (const scope of entry.scopes) {
+    const scopeError = registryScopeError(scope, others);
+    if (scopeError !== null) return scopeError;
+  }
+  const stray = entry.packages.find((name) => !entry.scopes.includes(packageScope(name) ?? ""));
+  return stray === undefined ? null : `${stray} is not in one of the registry's scopes.`;
+}
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value) ? [...new Set(value.filter((item): item is string => typeof item === "string"))] : [];
+}
+
+/** Keeps every entry that is valid beside the ones before it; a scope claimed twice drops the later registry. */
+function readRegistries(value: unknown): PluginRegistry[] {
+  if (!Array.isArray(value)) return [];
+  const accepted: PluginRegistry[] = [];
+  for (const item of value) {
+    const fields = record(item);
+    if (typeof fields.id !== "string" || typeof fields.name !== "string" || typeof fields.url !== "string") continue;
+    const scopes = strings(fields.scopes);
+    const entry: PluginRegistry = {
+      id: fields.id,
+      name: fields.name,
+      url: fields.url,
+      scopes,
+      packages: strings(fields.packages).filter((name) => scopes.includes(packageScope(name) ?? "")),
+    };
+    if (registryEntryError(entry, accepted) === null) accepted.push(entry);
+  }
+  return accepted;
 }
 
 export type FontRole = keyof FontSettings;
@@ -277,6 +359,7 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   plugins: {
     registryUrl: DEFAULT_REGISTRY_URL,
+    registries: [],
   },
   mcp: {
     enabled: false,
@@ -557,6 +640,7 @@ export function readSettings(input: unknown): Settings {
         typeof plugins.registryUrl === "string" && registryUrlError(plugins.registryUrl) === null
           ? plugins.registryUrl
           : defaults.plugins.registryUrl,
+      registries: readRegistries(plugins.registries),
     },
     mcp: {
       enabled: typeof mcp.enabled === "boolean" ? mcp.enabled : defaults.mcp.enabled,
