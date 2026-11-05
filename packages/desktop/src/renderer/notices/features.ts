@@ -39,4 +39,9 @@ export const FEATURE_NOTICES: readonly FeatureNotice[] = [
     body: "Open a DuckDB database, or a Parquet or zstd CSV file, as a data source.",
     action: { label: "New Data Source", actionId: ACTION_IDS.newDatasource },
   },
+  {
+    id: "er-diagram",
+    title: "See a schema as an ER diagram",
+    body: "Right-click a schema, then Diagrams › Show Diagram. Keys the database does not declare are guessed.",
+  },
 ];
