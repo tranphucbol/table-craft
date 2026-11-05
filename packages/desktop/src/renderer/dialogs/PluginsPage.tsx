@@ -1,10 +1,12 @@
 import { useId, useState } from "react";
 import type { CatalogPlugin, PluginInfo, PluginInstallState } from "@table-craft/desktop/preload/bridge.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
 import {
   PLUGIN_ACTION_IDS,
   type PackageArgs,
   type PluginArgs,
+  type PluginRemoveArgs,
 } from "@table-craft/desktop/renderer/actions/pluginActions.js";
 import { Button, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
@@ -12,11 +14,14 @@ import {
   LooseNote,
   LooseRow,
   LooseTitle,
+  OriginBadge,
 } from "@table-craft/desktop/renderer/dialogs/pluginsParts.js";
 import { RegistriesSection } from "@table-craft/desktop/renderer/dialogs/RegistriesSection.js";
 import {
   downloadLabel,
+  downloadSize,
   installText,
+  pluginOrigin,
   registryLabel,
   registryOfPlugin,
   registryUpdateFailure,
@@ -27,7 +32,14 @@ import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { DatasourceGlyph } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
+import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
+import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 import { isScopedPackageName, packageScope } from "@table-craft/desktop/settings/settings.js";
+
+const ROW_CLASS = "flex w-full min-w-0 items-center gap-cell";
+const VERSION_CLASS = "min-w-16 shrink-0 tabular-nums";
+const STATUS_CLASS = "flex min-w-0 flex-1 items-center gap-cell";
 
 function InstallStatus({ text, install }: { readonly text: string | null; readonly install: PluginInstallState }) {
   if (text === null) return null;
@@ -48,43 +60,84 @@ function Progress({ entry }: { readonly entry: CatalogPlugin | undefined }) {
   return <InstallStatus text={installText(entry)} install={entry.install} />;
 }
 
+function RowIconButton({
+  label,
+  icon,
+  danger = false,
+  disabled,
+  onClick,
+}: {
+  readonly label: string;
+  readonly icon: ActionIcon;
+  readonly danger?: boolean;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}) {
+  const Icon = ACTION_ICONS[icon];
+  return (
+    <Tooltip label={label} side="bottom">
+      <button
+        type="button"
+        aria-label={label}
+        disabled={disabled}
+        className={cn(ICON_BUTTON, danger && "enabled:hover:text-danger")}
+        onClick={onClick}
+      >
+        <Icon aria-hidden className="size-icon" />
+      </button>
+    </Tooltip>
+  );
+}
+
 function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly entry: CatalogPlugin | undefined }) {
   const registries = useDatasources((state) => state.registries);
   const registryRemoved = useDatasources((state) => state.registryRemoved);
   const args: PluginArgs = { pluginId: plugin.id };
+  const removeArgs: PluginRemoveArgs = { pluginId: plugin.id, source: plugin.source === "user" ? "user" : "managed" };
   const busy = entry?.install.status === "installing";
   const registryFailure = registryUpdateFailure(registryOfPlugin(registries, plugin.id), entry?.install);
   return (
     <LooseRow label={plugin.name}>
-      <span data-plugin-row={plugin.id} className="flex min-w-0 items-center gap-cell">
+      <span data-plugin-row={plugin.id} className={ROW_CLASS}>
         <DatasourceGlyph brand={plugin.brands[0] ?? null} className="size-icon shrink-0" />
-        <span className="shrink-0">{plugin.version ?? ""}</span>
-        <span className="shrink-0 text-ink-muted">{registryLabel(plugin, registries, registryRemoved)}</span>
-        {plugin.unavailableReason === null ? null : (
-          <span title={plugin.unavailableReason} className="truncate text-danger">
-            {unavailableText(plugin)}
-          </span>
-        )}
-        {registryFailure !== null ? (
-          <span
-            role="alert"
-            title={entry?.install.status === "failed" ? `${entry.install.message} ${entry.install.hint}` : undefined}
-            className="truncate text-danger"
-          >
-            {registryFailure}
-          </span>
-        ) : (
-          <Progress entry={entry} />
-        )}
+        <span className={VERSION_CLASS}>{plugin.version ?? ""}</span>
+        <OriginBadge origin={pluginOrigin(plugin, registries, registryRemoved)}>
+          {registryLabel(plugin, registries, registryRemoved)}
+        </OriginBadge>
+        <span className={STATUS_CLASS}>
+          {plugin.unavailableReason === null ? null : (
+            <span title={plugin.unavailableReason} className="truncate text-danger">
+              {unavailableText(plugin)}
+            </span>
+          )}
+          {registryFailure !== null ? (
+            <span
+              role="alert"
+              title={entry?.install.status === "failed" ? `${entry.install.message} ${entry.install.hint}` : undefined}
+              className="truncate text-danger"
+            >
+              {registryFailure}
+            </span>
+          ) : (
+            <Progress entry={entry} />
+          )}
+        </span>
         {plugin.source === "managed" && entry !== undefined ? (
-          <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}>
-            Update
-          </Button>
+          <RowIconButton
+            label="Update"
+            icon="update"
+            disabled={busy}
+            onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}
+          />
         ) : null}
-        {plugin.source === "managed" ? (
-          <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.remove, args)}>
-            Remove
-          </Button>
+        {plugin.source === "managed" || plugin.source === "user" ? (
+          <RowIconButton
+            label="Remove"
+            icon="delete"
+            danger
+            disabled={busy}
+            onClick={() => invoke(PLUGIN_ACTION_IDS.remove, removeArgs)}
+          />
         ) : null}
       </span>
     </LooseRow>
@@ -95,16 +148,19 @@ function DownloadRow({ entry }: { readonly entry: CatalogPlugin }) {
   const args: PluginArgs = { pluginId: entry.id };
   return (
     <LooseRow label={entry.name}>
-      <span data-plugin-row={entry.id} className="flex min-w-0 items-center gap-cell">
+      <span data-plugin-row={entry.id} className={ROW_CLASS}>
         <DatasourceGlyph brand={entry.brands[0] ?? null} tone="muted" className="size-icon shrink-0" />
-        <span className="shrink-0 text-ink-muted">{entry.packageName}</span>
-        <Progress entry={entry} />
-        <Button
+        <span className="min-w-0 truncate text-ink-muted">{entry.packageName}</span>
+        <span className={STATUS_CLASS}>
+          <Progress entry={entry} />
+        </span>
+        <span className="shrink-0 text-ink-muted tabular-nums">{downloadSize(entry)}</span>
+        <RowIconButton
+          label={downloadLabel(entry)}
+          icon="download"
           disabled={entry.install.status === "installing"}
           onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}
-        >
-          {downloadLabel(entry)}
-        </Button>
+        />
       </span>
     </LooseRow>
   );
@@ -168,8 +224,12 @@ export function PluginsPage() {
   return (
     <div className={cn("col-span-2", LOOSE_GRID_CLASS)}>
       <LooseTitle>Installed</LooseTitle>
-      {plugins.map((plugin) => (
-        <InstalledRow key={plugin.id} plugin={plugin} entry={catalog.find((candidate) => candidate.id === plugin.id)} />
+      {plugins.map((plugin, index) => (
+        <InstalledRow
+          key={`${String(index)}:${plugin.id}`}
+          plugin={plugin}
+          entry={catalog.find((candidate) => candidate.id === plugin.id)}
+        />
       ))}
       <LooseNote>Downloaded plugins update in the background while “Check for updates automatically” is on.</LooseNote>
       <LooseTitle>Available</LooseTitle>
