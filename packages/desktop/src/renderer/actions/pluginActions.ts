@@ -1,4 +1,4 @@
-import type { RegistryTestRequest } from "@table-craft/desktop/preload/bridge.js";
+import type { RegistryTestRequest, RemovablePluginSource } from "@table-craft/desktop/preload/bridge.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -27,6 +27,11 @@ export const PLUGIN_ACTION_IDS = {
 
 export interface PluginArgs {
   readonly pluginId: string;
+}
+
+/** Remove's arguments; `user` takes the folder of your own plugin rather than the downloaded copy. */
+export interface PluginRemoveArgs extends PluginArgs {
+  readonly source?: RemovablePluginSource;
 }
 
 export interface PackageArgs {
@@ -60,6 +65,10 @@ function hasString<K extends string>(args: unknown, key: K): args is Record<K, s
 
 function isPluginArgs(args: unknown): args is PluginArgs {
   return hasString(args, "pluginId");
+}
+
+function sourceOf(args: PluginArgs): RemovablePluginSource {
+  return (args as PluginRemoveArgs).source === "user" ? "user" : "managed";
 }
 
 function isRegistrySaveArgs(args: unknown): args is RegistrySaveArgs {
@@ -114,17 +123,20 @@ async function installFile(): Promise<void> {
   );
 }
 
-async function remove(pluginId: string): Promise<void> {
+async function remove(pluginId: string, source: RemovablePluginSource): Promise<void> {
   const name = nameOf(pluginId);
   const confirmed = await useModal.getState().ask({
     kind: "confirm",
     title: "Remove Plugin",
-    message: `Remove ${name}? You can download it again from Settings → Plugins.`,
+    message:
+      source === "user"
+        ? `Remove ${name}? Its folder in your plugins folder moves to the Trash.`
+        : `Remove ${name}? You can download it again from Settings → Plugins.`,
     confirm: "Remove",
     destructive: true,
   });
   if (confirmed === null) return;
-  const answer = await bridge().removePlugin(pluginId);
+  const answer = await bridge().removePlugin(pluginId, source);
   if (!answer.ok) await notice(`Could not remove ${name}`, answer.error.message, answer.error.hint);
 }
 
@@ -230,12 +242,12 @@ export const PLUGIN_ACTIONS: readonly AnyAction[] = [
     icon: "download",
     run: installFile,
   }),
-  defineAction<PluginArgs | undefined>({
+  defineAction<PluginRemoveArgs | undefined>({
     id: PLUGIN_ACTION_IDS.remove,
     title: "Remove Plugin",
     category: "App",
     icon: "delete",
-    run: (_context, args) => (isPluginArgs(args) ? remove(args.pluginId) : showPlugins()),
+    run: (_context, args) => (isPluginArgs(args) ? remove(args.pluginId, sourceOf(args)) : showPlugins()),
   }),
   defineAction<PackageArgs | undefined>({
     id: PLUGIN_ACTION_IDS.installPackage,

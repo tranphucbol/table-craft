@@ -421,6 +421,81 @@ describe("plugin service", () => {
     expect((await rejectionOf(plugins.remove("sqlite"))).failure).toBe("builtIn");
   });
 
+  describe("your own plugins", () => {
+    async function ownPlugin(folder: string, id = "postgres"): Promise<string> {
+      const directory = join(profile, "plugins", folder);
+      await mkdir(directory, { recursive: true });
+      const manifest = JSON.parse(await readFile(join(SOURCE_PLUGINS, "postgres", MANIFEST_FILE), "utf8")) as object;
+      await writeFile(join(directory, MANIFEST_FILE), JSON.stringify({ ...manifest, id }));
+      return directory;
+    }
+
+    it("givenOwnPlugin_whenRemoved_thenItsFolderGoesToTheTrash", async () => {
+      const directory = await ownPlugin("my-postgres");
+      const trashed: string[] = [];
+      const plugins = await started(undefined, {
+        trash: async (path) => {
+          trashed.push(path);
+          await rm(path, { recursive: true });
+        },
+      });
+
+      await plugins.remove("postgres", "user");
+
+      expect(trashed).toEqual([directory]);
+      expect(plugins.plugins().map((plugin) => plugin.id)).toEqual(["sqlite"]);
+      expect(changes.at(-1)?.plugins.map((plugin) => plugin.id)).toEqual(["sqlite"]);
+      expect(records.find((record) => record.msg === "plugin removed")).toMatchObject({ directory });
+    });
+
+    it("givenDatasourceOnOwnPlugin_whenRemoved_thenRefusedAndKept", async () => {
+      await ownPlugin("my-postgres");
+      users = { postgres: ["shop"] };
+      const plugins = await started();
+
+      const error = await rejectionOf(plugins.remove("postgres", "user"));
+
+      expect(error.failure).toBe("inUse");
+      expect(error.message).toContain('"shop"');
+      expect(await readdir(join(profile, "plugins"))).toEqual(["my-postgres"]);
+    });
+
+    it("givenOwnCopyShadowedByADownload_whenRemoved_thenOnlyTheOwnCopyGoesThoughInUse", async () => {
+      await ownPlugin("my-postgres");
+      const plugins = await started();
+      await plugins.install("postgres");
+      users = { postgres: ["shop"] };
+      expect(plugins.plugins().find((plugin) => plugin.source === "user")?.unavailableReason).toContain("Duplicate");
+
+      await plugins.remove("postgres", "user");
+
+      expect(plugins.plugins().map((plugin) => [plugin.id, plugin.source])).toEqual([
+        ["sqlite", "builtIn"],
+        ["postgres", "managed"],
+      ]);
+      expect(await readdir(join(profile, "plugins"))).toEqual([]);
+    });
+
+    it("givenTrashFails_whenRemoved_thenRefusedSayingToDeleteTheFolder", async () => {
+      await ownPlugin("my-postgres");
+      const plugins = await started(undefined, { trash: () => Promise.reject(new Error("no Trash here")) });
+
+      const error = await rejectionOf(plugins.remove("postgres", "user"));
+
+      expect(error.failure).toBe("notRemoved");
+      expect(error.message).toContain("no Trash here");
+      expect(plugins.plugins().map((plugin) => plugin.id)).toEqual(["sqlite", "postgres"]);
+    });
+
+    it("givenNoOwnCopy_whenRemovedAsOwn_thenRefused", async () => {
+      const plugins = await started();
+      await plugins.install("postgres");
+
+      expect((await rejectionOf(plugins.remove("postgres", "user"))).failure).toBe("notRemoved");
+      expect(await listManaged(managedRoot())).toHaveLength(1);
+    });
+  });
+
   it("givenSavedDatasourceOnAMissingCatalogPlugin_whenMissingInstalled_thenItIsDownloaded", async () => {
     users = { postgres: ["shop"] };
     const plugins = await started();

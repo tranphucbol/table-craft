@@ -3,7 +3,8 @@
  * plugin roots the engines boot with, so a plugin installed while the app runs loads on the next
  * session open without a restart, while running engines keep what they imported.
  */
-import { dirname, join, sep } from "node:path";
+import { rm } from "node:fs/promises";
+import { dirname, join, resolve, sep } from "node:path";
 import type { PluginRoot } from "@table-craft/core";
 import {
   catalogEntry,
@@ -43,6 +44,7 @@ import type {
   PluginsState,
   RegistryCheck,
   RegistryTestRequest,
+  RemovablePluginSource,
 } from "@table-craft/desktop/preload/bridge.js";
 import { checkedPackage, checkRegistry } from "@table-craft/desktop/main/pluginStore/registryCheck.js";
 import type { PluginRegistry } from "@table-craft/desktop/settings/settings.js";
@@ -75,6 +77,8 @@ export interface PluginServiceOptions {
   readonly registryToken?: (registryId: string) => string | undefined;
   /** Stores a registry's token, or forgets it for null. */
   readonly storeToken?: (registryId: string, token: string | null) => Promise<void>;
+  /** Moves a folder of your own plugins to the Trash; deletes it when absent. */
+  readonly trash?: (directory: string) => Promise<void>;
 }
 
 export interface PluginService {
@@ -88,7 +92,11 @@ export interface PluginService {
   /** A package a private registry serves (decision 158); rejects with `cancelled` when the user declined. */
   installPackage(packageName: string): Promise<InstallOutcome>;
   installFile(bytes: Uint8Array): Promise<InstallOutcome>;
-  remove(pluginId: string): Promise<void>;
+  /**
+   * A downloaded plugin, or for `user` the folder of your own that holds it, which goes to the
+   * Trash. Refused while a data source uses the copy that loads.
+   */
+  remove(pluginId: string, source?: RemovablePluginSource): Promise<void>;
   updateAll(): Promise<InstallOutcome[]>;
   /**
    * Downloads each catalog plugin a saved data source names and no root provides (decision 110),
@@ -305,6 +313,38 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
     reached,
   });
 
+  async function removeOwn(pluginId: string): Promise<void> {
+    const index = installed.plugins.findIndex((plugin) => plugin.id === pluginId && plugin.source === "user");
+    const plugin = installed.plugins[index];
+    const directory = installed.report[index]?.directory;
+    if (plugin === undefined || directory === undefined || resolve(dirname(directory)) !== resolve(options.userRoot)) {
+      throw new PluginInstallError(
+        "notRemoved",
+        `"${pluginId}" is not in your plugins folder.`,
+        "Reopen Settings → Plugins to see what is installed now.",
+      );
+    }
+    const users = plugin.unavailableReason === null ? options.usedBy(pluginId) : [];
+    if (users.length > 0) {
+      throw new PluginInstallError(
+        "inUse",
+        `The plugin is used by ${users.map((name) => `"${name}"`).join(", ")}.`,
+        "Delete those data sources first, then remove the plugin.",
+      );
+    }
+    try {
+      await (options.trash ?? ((path: string) => rm(path, { recursive: true, force: true })))(directory);
+    } catch (cause) {
+      throw new PluginInstallError(
+        "notRemoved",
+        `Could not move ${directory} to the Trash: ${cause instanceof Error ? cause.message : String(cause)}`,
+        "Quit TableCraft and delete the folder yourself.",
+      );
+    }
+    log.info("plugin removed", { pluginId, directory });
+    changed(true);
+  }
+
   /** Resolves once the windows were told about the install, so the caller's answer is current. */
   async function settled<T>(work: Promise<T>): Promise<T> {
     const result = await work;
@@ -329,13 +369,14 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
       return settled(installer.installPackage(packageName));
     },
     installFile: (bytes) => settled(installer.installFile(bytes)),
-    remove(pluginId) {
+    remove(pluginId, source = "managed") {
+      if (source === "user") return settled(removeOwn(pluginId));
       if (!managed.some((plugin) => plugin.id === pluginId)) {
         return Promise.reject(
           new PluginInstallError(
             "builtIn",
             `"${pluginId}" was not downloaded, so TableCraft does not remove it.`,
-            "A built-in plugin goes with the app; delete a user plugin's folder from the profile's plugins folder.",
+            "A built-in plugin goes with the app; a plugin of your own has its own Remove in Settings → Plugins.",
           ),
         );
       }

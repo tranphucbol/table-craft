@@ -13,7 +13,8 @@ export type PluginInstallFailure =
   | "builtIn"
   | "unsupportedPlatform"
   | "unauthorized"
-  | "cancelled";
+  | "cancelled"
+  | "notRemoved";
 
 /** A failure the user can act on; `hint` says what to do next, as `DatasourceError`'s does. */
 export class PluginInstallError extends Error {
