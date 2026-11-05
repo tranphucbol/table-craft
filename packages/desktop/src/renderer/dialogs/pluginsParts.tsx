@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { PluginOrigin } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 
 /**
@@ -81,6 +82,29 @@ export function RegistryCard({
       </div>
       <div className={LOOSE_GRID_CLASS}>{children}</div>
     </section>
+  );
+}
+
+// Whole class names, so Tailwind finds them when it scans the source.
+const ORIGIN_TINT: Readonly<Record<PluginOrigin, string>> = {
+  builtIn: "bg-ink-muted/15 text-ink-muted",
+  development: "bg-ds-orange/25 text-ink",
+  managed: "bg-ds-blue/25 text-ink",
+  user: "bg-ds-violet/25 text-ink",
+  registry: "bg-ds-green/25 text-ink",
+  registryRemoved: "bg-warning/20 text-warning",
+};
+
+/** An installed plugin's source as a tinted badge, one colour per origin. */
+export function OriginBadge({ origin, children }: { readonly origin: PluginOrigin; readonly children: string }) {
+  return (
+    <span
+      data-plugin-origin={origin}
+      title={children}
+      className={cn("max-w-40 min-w-24 shrink-0 truncate rounded px-cell text-center", ORIGIN_TINT[origin])}
+    >
+      {children}
+    </span>
   );
 }
 
