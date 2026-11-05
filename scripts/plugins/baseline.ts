@@ -9,6 +9,7 @@ import {
   checkIntegrity,
   downloadTarball,
   fetchPackument,
+  officialRegistry,
   type RegistryFetch,
 } from "../../packages/desktop/src/main/pluginStore/registry.js";
 import { BETA_VERSION, type ReleaseChannel } from "../../packages/desktop/src/settings/channel.js";
@@ -58,7 +59,7 @@ export async function baselineFor(
 ): Promise<Baseline | null> {
   let packument: unknown;
   try {
-    packument = await fetchPackument(fetch, registry, packageName);
+    packument = await fetchPackument(fetch, officialRegistry(registry), packageName);
   } catch (cause) {
     if (cause instanceof PluginInstallError && cause.failure === "notFound") return null;
     throw cause;
@@ -67,7 +68,7 @@ export async function baselineFor(
     .filter((entry) => channelTakes(channel, entry.version))
     .sort((left, right) => compareVersions(right.version, left.version));
   if (newest === undefined) return null;
-  const bytes = await downloadTarball(fetch, newest.tarball, () => undefined);
-  checkIntegrity(bytes, newest.integrity, packageName);
+  const bytes = await downloadTarball(fetch, officialRegistry(registry), newest.tarball, () => undefined);
+  checkIntegrity(bytes, { integrity: newest.integrity }, packageName, false);
   return { version: newest.version, integrity: newest.integrity, bytes };
 }
