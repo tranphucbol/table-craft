@@ -1,29 +1,29 @@
 {
   "schema": 1,
-  "version": "1.28.0-beta.2",
+  "version": "1.30.0-beta.1",
   "channel": "beta",
-  "notesUrl": "https://github.com/tranphucbol/table-craft/releases/tag/v1.28.0-beta.2",
+  "notesUrl": "https://github.com/tranphucbol/table-craft/releases/tag/v1.30.0-beta.1",
   "minimumVersion": null,
   "assets": {
     "darwin-arm64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.28.0-beta.2/TableCraft-1.28.0-beta.2-arm64.zip",
-      "size": 126947544,
-      "sha256": "d436afa8b3f3c14db74a68b266f765212b45f92fd732505284809b43730e9c4b"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.30.0-beta.1/TableCraft-1.30.0-beta.1-arm64.zip",
+      "size": 127537803,
+      "sha256": "64960f0d3b071f703aefcaba5eb53bea2a3cd6bdfa3a65e557514144ac22e25e"
     },
     "win32-x64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.28.0-beta.2/TableCraft-1.28.0-beta.2-x64.exe",
-      "size": 106900657,
-      "sha256": "268743e170df1fab9c0acb2417a7c782401c60f558e9037480dec60d3b1a9b7c"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.30.0-beta.1/TableCraft-1.30.0-beta.1-x64.exe",
+      "size": 107344108,
+      "sha256": "2bf02d9fb6c0e2046a7b858e8f00632617c2c2fd2b5b7150a8c1f6327e0f1129"
     },
     "darwin-x64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.28.0-beta.2/TableCraft-1.28.0-beta.2-x64.zip",
-      "size": 132610869,
-      "sha256": "59ca456ff98c6f6fa477e5e6bdcb5a7ca5f1414df0885f4f19ea7f78e6f55669"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.30.0-beta.1/TableCraft-1.30.0-beta.1-x64.zip",
+      "size": 133201097,
+      "sha256": "ea6f61538a89cb9e4fc14060ca427026e9d0b26b1e2f27a25a938dbe1015a56b"
     },
     "linux-x64": {
-      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.28.0-beta.2/TableCraft-1.28.0-beta.2-x86_64.AppImage",
-      "size": 132274577,
-      "sha256": "eb068360fbc5dab9c877bd7e2272d58269c2acb0cde30d9c3d8aa11e86b38614"
+      "url": "https://github.com/tranphucbol/table-craft/releases/download/v1.30.0-beta.1/TableCraft-1.30.0-beta.1-x86_64.AppImage",
+      "size": 132873365,
+      "sha256": "91114e8d3c190b32c8286ec8382839e940c8198c8dc8365ff91549427b74b454"
     }
   }
 }
