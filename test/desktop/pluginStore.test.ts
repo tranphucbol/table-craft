@@ -617,7 +617,7 @@ describe("private registries", () => {
   let registries: readonly PluginRegistry[];
   let asked: PrivateInstallRequest[];
   let accept: boolean;
-  let token: string;
+  let token: string | undefined;
 
   beforeEach(async () => {
     company = await startRegistry(
@@ -849,6 +849,17 @@ describe("private registries", () => {
 
     expect(error.failure).toBe("unauthorized");
     expect(plugins.state().registries[0]?.check).toMatchObject({ status: "refused", httpStatus: 401 });
+  });
+
+  it("givenNoToken_whenPackageNotFound_thenRegistryNotMarkedReached", async () => {
+    token = undefined;
+    const plugins = await startedPrivate();
+
+    const error = await rejectionOf(plugins.installPackage(EXAMPLE_PACKAGE));
+
+    expect(error.failure).toBe("notFound");
+    expect(error.hint).toContain("needs a token");
+    expect(plugins.state().registries[0]?.check).toBeNull();
   });
 
   it("givenServedPackage_whenTested_thenPackumentReadWithTheStoredToken", async () => {

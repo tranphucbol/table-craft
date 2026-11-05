@@ -17,9 +17,9 @@ import { RegistriesSection } from "@table-craft/desktop/renderer/dialogs/Registr
 import {
   downloadLabel,
   installText,
-  REFUSED_UPDATE_TEXT,
   registryLabel,
   registryOfPlugin,
+  registryUpdateFailure,
   unavailableText,
 } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -53,7 +53,7 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
   const registryRemoved = useDatasources((state) => state.registryRemoved);
   const args: PluginArgs = { pluginId: plugin.id };
   const busy = entry?.install.status === "installing";
-  const refused = registryOfPlugin(registries, plugin.id)?.check?.status === "refused";
+  const registryFailure = registryUpdateFailure(registryOfPlugin(registries, plugin.id), entry?.install);
   return (
     <LooseRow label={plugin.name}>
       <span data-plugin-row={plugin.id} className="flex min-w-0 items-center gap-cell">
@@ -65,9 +65,13 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
             {unavailableText(plugin)}
           </span>
         )}
-        {refused && entry?.install.status !== "installing" ? (
-          <span role="alert" className="truncate text-danger">
-            {REFUSED_UPDATE_TEXT}
+        {registryFailure !== null ? (
+          <span
+            role="alert"
+            title={entry?.install.status === "failed" ? `${entry.install.message} ${entry.install.hint}` : undefined}
+            className="truncate text-danger"
+          >
+            {registryFailure}
           </span>
         ) : (
           <Progress entry={entry} />

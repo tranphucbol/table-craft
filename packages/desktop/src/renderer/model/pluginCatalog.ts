@@ -143,6 +143,22 @@ export function pluginVersionText(plugin: PluginInfo): string {
 
 export const REGISTRY_REMOVED_TEXT = "Registry removed";
 export const REFUSED_UPDATE_TEXT = "Update failed: the registry refused the token.";
+export const NO_TOKEN_UPDATE_TEXT = "Update failed: the registry has no token.";
+
+/**
+ * The short reason a private plugin's update failed, when its registry's token explains it. Without
+ * a token GitLab answers 404 rather than 401, so a failure then reads as a missing token, not as a
+ * missing package.
+ */
+export function registryUpdateFailure(
+  registry: PluginRegistryState | undefined,
+  install: PluginInstallState | undefined,
+): string | null {
+  if (registry === undefined || install?.status === "installing") return null;
+  if (registry.check?.status === "refused") return REFUSED_UPDATE_TEXT;
+  if (!registry.tokenStored && install?.status === "failed") return NO_TOKEN_UPDATE_TEXT;
+  return null;
+}
 
 /**
  * Where an installed plugin comes from, as its row says it: the name of the private registry it
