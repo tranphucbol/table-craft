@@ -5,7 +5,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron";
+import { BrowserWindow, dialog, shell, type OpenDialogOptions, type WebContents } from "electron";
 import {
   confirmationText,
   createPluginChannels,
@@ -129,6 +129,7 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
         : options.secrets.setRegistryToken(registryId, token),
     confirm: confirmPrivate,
     addPackage: options.addPackage,
+    trash: (directory) => shell.trashItem(directory),
     usedBy,
     onChanged: options.onChanged,
     log,

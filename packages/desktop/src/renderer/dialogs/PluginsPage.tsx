@@ -5,6 +5,7 @@ import {
   PLUGIN_ACTION_IDS,
   type PackageArgs,
   type PluginArgs,
+  type PluginRemoveArgs,
 } from "@table-craft/desktop/renderer/actions/pluginActions.js";
 import { Button, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import {
@@ -52,6 +53,7 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
   const registries = useDatasources((state) => state.registries);
   const registryRemoved = useDatasources((state) => state.registryRemoved);
   const args: PluginArgs = { pluginId: plugin.id };
+  const removeArgs: PluginRemoveArgs = { pluginId: plugin.id, source: plugin.source === "user" ? "user" : "managed" };
   const busy = entry?.install.status === "installing";
   const registryFailure = registryUpdateFailure(registryOfPlugin(registries, plugin.id), entry?.install);
   return (
@@ -81,8 +83,8 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
             Update
           </Button>
         ) : null}
-        {plugin.source === "managed" ? (
-          <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.remove, args)}>
+        {plugin.source === "managed" || plugin.source === "user" ? (
+          <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.remove, removeArgs)}>
             Remove
           </Button>
         ) : null}
@@ -168,8 +170,12 @@ export function PluginsPage() {
   return (
     <div className={cn("col-span-2", LOOSE_GRID_CLASS)}>
       <LooseTitle>Installed</LooseTitle>
-      {plugins.map((plugin) => (
-        <InstalledRow key={plugin.id} plugin={plugin} entry={catalog.find((candidate) => candidate.id === plugin.id)} />
+      {plugins.map((plugin, index) => (
+        <InstalledRow
+          key={`${String(index)}:${plugin.id}`}
+          plugin={plugin}
+          entry={catalog.find((candidate) => candidate.id === plugin.id)}
+        />
       ))}
       <LooseNote>Downloaded plugins update in the background while “Check for updates automatically” is on.</LooseNote>
       <LooseTitle>Available</LooseTitle>

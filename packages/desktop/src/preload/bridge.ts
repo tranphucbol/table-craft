@@ -229,6 +229,9 @@ export interface ParsedUrl {
  */
 export type PluginSource = "builtIn" | "development" | "managed" | "user";
 
+/** The copies Settings → Plugins can remove: a downloaded plugin, or a folder of your own. */
+export type RemovablePluginSource = Extract<PluginSource, "managed" | "user">;
+
 /** Mirrors `Brand` in plugin-api: a database product a plugin speaks, by its simple-icons slug. */
 export interface Brand {
   readonly id: string;
@@ -797,7 +800,8 @@ export interface TableCraftBridge {
   /** The native open dialog for a `.tgz`, then the trust confirmation (decision 006), then the install. */
   installPluginFile(): Promise<InvokeResult<InstallFileResult>>;
   /** Refused while a saved data source uses the plugin. */
-  removePlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  /** `user` moves the folder of your own plugin to the Trash; otherwise the downloaded copy goes. */
+  removePlugin(pluginId: string, source: RemovablePluginSource): Promise<InvokeResult<PluginsState>>;
   /** One packument request to the registry (decision 158); a saved registry's result also shows on its card. */
   testPluginRegistry(request: RegistryTestRequest): Promise<InvokeResult<RegistryCheck>>;
   /** Stores a saved registry's token encrypted in main; the renderer never reads it back (decision 020). */

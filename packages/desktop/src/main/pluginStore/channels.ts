@@ -58,8 +58,8 @@ export function createPluginChannels<Sender>(options: PluginChannelOptions<Sende
       const outcome = await service.installFile(bytes);
       return { status: "installed", pluginId: outcome.id, version: outcome.version };
     },
-    async remove(pluginId) {
-      await service.remove(pluginId);
+    async remove(pluginId, source) {
+      await service.remove(pluginId, source);
       return service.state();
     },
     testRegistry: (request) => service.testRegistry(request),
