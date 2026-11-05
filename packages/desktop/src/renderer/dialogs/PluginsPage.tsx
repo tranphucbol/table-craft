@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { CatalogPlugin, PluginInfo, PluginInstallState } from "@table-craft/desktop/preload/bridge.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
+import type { ActionIcon } from "@table-craft/desktop/renderer/actions/registry.js";
 import {
   PLUGIN_ACTION_IDS,
   type PackageArgs,
@@ -28,6 +29,9 @@ import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { DatasourceGlyph } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
+import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.js";
+import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
+import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 import { isScopedPackageName, packageScope } from "@table-craft/desktop/settings/settings.js";
 
 function InstallStatus({ text, install }: { readonly text: string | null; readonly install: PluginInstallState }) {
@@ -47,6 +51,35 @@ function InstallStatus({ text, install }: { readonly text: string | null; readon
 function Progress({ entry }: { readonly entry: CatalogPlugin | undefined }) {
   if (entry === undefined) return null;
   return <InstallStatus text={installText(entry)} install={entry.install} />;
+}
+
+function RowIconButton({
+  label,
+  icon,
+  danger = false,
+  disabled,
+  onClick,
+}: {
+  readonly label: string;
+  readonly icon: ActionIcon;
+  readonly danger?: boolean;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}) {
+  const Icon = ACTION_ICONS[icon];
+  return (
+    <Tooltip label={label} side="bottom">
+      <button
+        type="button"
+        aria-label={label}
+        disabled={disabled}
+        className={cn(ICON_BUTTON, danger && "enabled:hover:text-danger")}
+        onClick={onClick}
+      >
+        <Icon aria-hidden className="size-icon" />
+      </button>
+    </Tooltip>
+  );
 }
 
 function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly entry: CatalogPlugin | undefined }) {
@@ -79,14 +112,21 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
           <Progress entry={entry} />
         )}
         {plugin.source === "managed" && entry !== undefined ? (
-          <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}>
-            Update
-          </Button>
+          <RowIconButton
+            label="Update"
+            icon="update"
+            disabled={busy}
+            onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}
+          />
         ) : null}
         {plugin.source === "managed" || plugin.source === "user" ? (
-          <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.remove, removeArgs)}>
-            Remove
-          </Button>
+          <RowIconButton
+            label="Remove"
+            icon="delete"
+            danger
+            disabled={busy}
+            onClick={() => invoke(PLUGIN_ACTION_IDS.remove, removeArgs)}
+          />
         ) : null}
       </span>
     </LooseRow>
