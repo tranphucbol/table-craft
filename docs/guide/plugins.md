@@ -41,7 +41,8 @@ etcd (3.5 and later), about 400 KB, as
   Updates**.
 - **Settings → Plugins** lists the built-in plugins, the downloaded ones with their version,
   **Update** and **Remove** (refused while a data source uses the plugin, naming it), and your
-  own. With **Check for updates automatically** on, downloaded plugins are checked every 2 hours and
+  own with **Remove**, which moves the plugin's folder to the Trash. A copy of your own that a
+  downloaded plugin of the same id shadows can always be removed. With **Check for updates automatically** on, downloaded plugins are checked every 2 hours and
   a newer compatible version is used from the next connection.
 - Offline, or behind a firewall: every release attaches the plugin `.tgz` files. Choose **Install
   from File…** in Settings → Plugins; TableCraft asks before installing any file, and refuses a
