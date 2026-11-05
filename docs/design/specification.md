@@ -60,14 +60,16 @@ Main installs one from the registry in `plugins.registryUrl` (default
 `https://registry.npmjs.org`, `https://` only, plain `http://` only to this machine): the newest
 release the host's API accepts, its sha512 `dist.integrity` checked before unpacking, every entry
 inside `package/`, staged and checked before `current.json` points at it (decision 110). A new
-plugin is used by the next engine that starts, with no restart.
+plugin is used by the next engine that starts, with no restart. A company's
+own plugins install by package name from the private registry that serves their scope
+(`plugins.registries`), with an encrypted token sent only to that registry (decision 158).
 
-| Where               | What the user sees                                                                                                       |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Data Sources **+**  | installed kinds, then catalog entries with "Download (about N KB)"; a download shows progress, then the form             |
-| Database pane       | a datasource whose plugin is missing, greyed, with Install (Retry after a failure)                                       |
-| Import Data Sources | an unsupported row whose scheme a catalog plugin reads offers Install, then maps again                                   |
-| Settings → Plugins  | built-ins (locked), downloaded (version, Update, Remove, refused while used), user plugins, Install from File…, registry |
+| Where               | What the user sees                                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Data Sources **+**  | installed kinds, then catalog entries with "Download (about N KB)"; a download shows progress, then the form                                                             |
+| Database pane       | a datasource whose plugin is missing, greyed, with Install (Retry after a failure)                                                                                       |
+| Import Data Sources | an unsupported row whose scheme a catalog plugin reads offers Install, then maps again                                                                                   |
+| Settings → Plugins  | built-ins (locked), downloaded (version, Update, Remove, refused while used), user plugins, Install from File…, registry, private registries and install by package name |
 
 On start, a saved datasource whose plugin is missing and in the catalog installs it in the
 background with no prompt, so users upgrading from a version with PostgreSQL built in keep it.
