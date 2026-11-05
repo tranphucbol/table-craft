@@ -4,9 +4,11 @@ import type {
   PluginInfo,
   PluginInstallState,
   PluginNeed,
+  PluginRegistryState,
   PluginSource,
+  RegistryCheck,
 } from "@table-craft/desktop/preload/bridge.js";
-import { formatBytes } from "@table-craft/desktop/renderer/model/format.js";
+import { formatBytes, relativeTime } from "@table-craft/desktop/renderer/model/format.js";
 
 const PERCENT = 100;
 
@@ -137,4 +139,46 @@ export function unavailableText(plugin: PluginInfo): string | null {
 export function pluginVersionText(plugin: PluginInfo): string {
   const version = plugin.version === null ? "" : ` ${plugin.version}`;
   return `${plugin.name}${version} · ${SOURCE_LABELS[plugin.source]}`;
+}
+
+export const REGISTRY_REMOVED_TEXT = "Registry removed";
+export const REFUSED_UPDATE_TEXT = "Update failed: the registry refused the token.";
+
+/**
+ * Where an installed plugin comes from, as its row says it: the name of the private registry it
+ * was installed from, "Registry removed" once that registry is gone (plan 154), else its source.
+ */
+export function registryLabel(
+  plugin: PluginInfo,
+  registries: readonly PluginRegistryState[],
+  registryRemoved: readonly string[],
+): string {
+  if (plugin.source !== "managed") return SOURCE_LABELS[plugin.source];
+  if (registryRemoved.includes(plugin.id)) return REGISTRY_REMOVED_TEXT;
+  return registries.find((registry) => registry.plugins.includes(plugin.id))?.name ?? SOURCE_LABELS.managed;
+}
+
+/** The private registry `pluginId` was installed from, while it is configured. */
+export function registryOfPlugin(
+  registries: readonly PluginRegistryState[],
+  pluginId: string,
+): PluginRegistryState | undefined {
+  return registries.find((registry) => registry.plugins.includes(pluginId));
+}
+
+/** "Reached 3 min ago", "Token refused (401) just now", "Unreachable 2 min ago". */
+export function registryCheckText(check: RegistryCheck, now: number): string {
+  const when = relativeTime(check.at, now);
+  if (check.status === "reached") return `Reached ${when}`;
+  if (check.status === "refused") return `Token refused (${String(check.httpStatus)}) ${when}`;
+  return `Unreachable ${when}`;
+}
+
+/** The host a registry's token is sent to: "gitlab.example.com". */
+export function registryHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
