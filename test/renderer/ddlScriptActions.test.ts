@@ -109,7 +109,9 @@ describe("generate DDL actions", () => {
 
     const menu = menuFor(selecting(PUBLIC_PATH, namespaceKey("pg", PUBLIC_PATH), POSTGRES_PLUGIN));
 
-    expect(menu.some((entry) => typeof entry === "object" && entry !== null)).toBe(false);
+    expect(
+      menu.some((entry) => typeof entry === "object" && entry !== null && entry.label === SQL_SCRIPTS_MENU.label),
+    ).toBe(false);
   });
 
   it("givenNamespaceNode_whenScoped_thenEveryRelationKind", () => {

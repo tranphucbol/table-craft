@@ -117,6 +117,14 @@ export interface DescribedCatalog {
   readonly elapsedMs: number;
 }
 
+/** Mirrors `InferredKey` in core: a key the names and types suggest, drawn only in the ER diagram (plan 152). */
+export interface InferredKey {
+  readonly id: string;
+  readonly relation: string;
+  readonly columns: readonly string[];
+  readonly target: { readonly relation: string; readonly columns: readonly string[] };
+}
+
 /** Mirrors `COMPLETION_KINDS` in plugin-api. */
 export const COMPLETION_KINDS = [
   "namespace",

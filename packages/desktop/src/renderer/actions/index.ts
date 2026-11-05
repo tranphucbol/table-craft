@@ -18,6 +18,7 @@ import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDataSourcesDialog } from "@table-craft/desktop/renderer/state/dataSourcesDialog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
+import { useDiagrams } from "@table-craft/desktop/renderer/state/diagrams.js";
 import { useLayout } from "@table-craft/desktop/renderer/state/layout.js";
 import { useModal } from "@table-craft/desktop/renderer/state/modal.js";
 import { useObjects } from "@table-craft/desktop/renderer/state/objects.js";
@@ -57,6 +58,7 @@ const STORES = [
   useDatasources,
   useCatalog,
   useDdl,
+  useDiagrams,
   useLayout,
   usePalette,
   useDataSourcesDialog,

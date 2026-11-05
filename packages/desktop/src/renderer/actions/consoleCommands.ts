@@ -21,6 +21,7 @@ import {
   useConsoles,
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
+import { closeDiagram } from "@table-craft/desktop/renderer/actions/diagramCommands.js";
 import { capabilitiesOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { createFileConsoles } from "@table-craft/desktop/renderer/state/fileConsoles.js";
 import { assertConsoleTextPersistable } from "@table-craft/desktop/renderer/state/consolePersistence.js";
@@ -388,6 +389,7 @@ export async function closeTabs(ids: readonly string[], close: () => readonly Ta
     else if (tab.kind === "key") useKeyTabs.getState().close(tab.id);
     else if (tab.kind === "server") useServer.getState().close(tab.id);
     else if (tab.kind === "keyAdmin") useKeyAdmin.getState().close(tab.id);
+    else if (tab.kind === "diagram") closeDiagram(tab.id);
     else useDdl.getState().close(tab.id);
   }
 }

@@ -90,7 +90,16 @@ export type ActionIcon =
   | "more"
   | "tabs"
   | "runSettings"
-  | "bell";
+  | "bell"
+  | "diagram"
+  | "fit"
+  | "zoomIn"
+  | "zoomOut"
+  | "layout"
+  | "inferredKeys"
+  | "tables"
+  | "exportSvg"
+  | "exportPng";
 
 export interface Action<A = void> {
   readonly id: string;

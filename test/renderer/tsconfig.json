@@ -17,6 +17,6 @@
       "@codemirror/*": ["packages/desktop/node_modules/@codemirror/*"]
     }
   },
-  "include": ["**/*.ts"],
+  "include": ["**/*.ts", "../../packages/desktop/src/renderer/vite-env.d.ts"],
   "exclude": []
 }

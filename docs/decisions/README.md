@@ -149,3 +149,4 @@ started, not when it is merged.
 | 154 | [Shortcuts are overrides in settings.json, and the menu follows them](154-shortcuts-are-overrides-and-the-menu-follows-them.md)                                        |
 | 155 | [Plugin API 2.0: a capability is a key](155-plugin-api-2-capabilities-are-keys.md)                                                                                     |
 | 156 | [A native driver ships one package per platform](156-native-drivers-ship-one-package-per-platform.md)                                                                  |
+| 157 | [The ER diagram draws React Flow over an ELK layout, and inferred keys stay in it](157-er-diagram-and-inferred-keys.md)                                                |

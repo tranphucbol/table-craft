@@ -9,7 +9,6 @@ import {
   app,
   BrowserWindow,
   clipboard,
-  dialog,
   ipcMain,
   Menu,
   MessageChannelMain,
@@ -19,8 +18,6 @@ import {
   screen,
   shell,
   utilityProcess,
-  type OpenDialogOptions,
-  type SaveDialogOptions,
   type UtilityProcess,
   type WebContents,
 } from "electron";
@@ -28,6 +25,13 @@ import { createKnownHosts, expandHome, openQueryHistory, type HistoryRun } from 
 import { windowChrome } from "@table-craft/desktop/main/chrome.js";
 import { createCloseGuard } from "@table-craft/desktop/main/closeGuard.js";
 import { createConsoleFiles, type DirectoryFileSystem } from "@table-craft/desktop/main/consoleFiles.js";
+import {
+  chooseFile,
+  chooseSqlFiles,
+  exportDiagramImage,
+  openFile,
+  saveFile,
+} from "@table-craft/desktop/main/fileDialogs.js";
 import { datasourceFromEnvironment } from "@table-craft/desktop/main/datasource.js";
 import { createDatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import { createHostKeyService } from "@table-craft/desktop/main/hostKeys.js";
@@ -49,6 +53,7 @@ import {
 } from "@table-craft/desktop/main/mcp.js";
 import { PrivateOperations } from "@table-craft/desktop/main/privateOperations.js";
 import { createSnippetsService } from "@table-craft/desktop/main/snippets.js";
+import { createDiagramsService } from "@table-craft/desktop/main/diagrams.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 import {
   DIAGNOSTICS_HISTORY_RUNS,
@@ -155,14 +160,6 @@ const STDIO_SCOPE = "stdio";
 /** What the terminal mirror prints: warnings and errors, so `bun run desktop` shows what it did before the log. */
 const MIRROR_LEVEL = "warn";
 const DIAGNOSTICS_TITLE = "Export Diagnostics";
-const IMPORT_FILE_FILTERS = [
-  { name: "Delimited text", extensions: ["csv", "tsv", "txt"] },
-  { name: "All files", extensions: ["*"] },
-];
-const SQL_FILE_FILTERS = [
-  { name: "SQL files", extensions: ["sql"] },
-  { name: "All files", extensions: ["*"] },
-];
 const UTF8 = "utf8";
 const MISSING_FILE = "ENOENT";
 const CIPHER_ENCODING = "base64";
@@ -556,39 +553,6 @@ function createWindow(settings: SettingsService): void {
   void window.loadFile(paths.rendererIndex);
 }
 
-async function saveFile(contents: WebContents, title: string, defaultName: string): Promise<string | null> {
-  const parent = BrowserWindow.fromWebContents(contents);
-  const options: SaveDialogOptions = { title, defaultPath: defaultName, properties: ["createDirectory"] };
-  const picked = parent === null ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(parent, options);
-  return picked.canceled || picked.filePath === "" ? null : picked.filePath;
-}
-
-async function chooseFile(contents: WebContents, title: string): Promise<string | null> {
-  const parent = BrowserWindow.fromWebContents(contents);
-  const options: OpenDialogOptions = { title, properties: ["openFile", "promptToCreate"] };
-  const picked = parent === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
-  return picked.canceled ? null : (picked.filePaths[0] ?? null);
-}
-
-/** The open dialog for one existing file: one to import, or with `anyFile` one to load into a binary cell. */
-async function openFile(contents: WebContents, title: string, anyFile = false): Promise<string | null> {
-  const parent = BrowserWindow.fromWebContents(contents);
-  const options: OpenDialogOptions = {
-    title,
-    properties: ["openFile"],
-    ...(anyFile ? {} : { filters: IMPORT_FILE_FILTERS }),
-  };
-  const picked = parent === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
-  return picked.canceled ? null : (picked.filePaths[0] ?? null);
-}
-
-async function chooseSqlFiles(contents: WebContents, title: string): Promise<readonly string[]> {
-  const parent = BrowserWindow.fromWebContents(contents);
-  const options: OpenDialogOptions = { title, properties: ["openFile", "multiSelections"], filters: SQL_FILE_FILTERS };
-  const picked = parent === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
-  return picked.canceled ? [] : picked.filePaths;
-}
-
 function menuTarget(): BrowserWindow | null {
   return BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
 }
@@ -937,6 +901,11 @@ void app.whenReady().then(async () => {
       files,
       onChanged: (snippets) => broadcast(CHANNELS.snippetsChanged, snippets),
     }),
+    diagrams: createDiagramsService({
+      directory,
+      files,
+      onWarning: (warning) => mainLog.child("diagrams").warn("diagrams file set aside", { warning }),
+    }),
     async openThemesFolder() {
       await files.makeDirectory(themes.path);
       const failure = await shell.openPath(themes.path);
@@ -946,6 +915,7 @@ void app.whenReady().then(async () => {
     openFile: (contents, title) => openFile(contents, title),
     openAnyFile: (contents, title) => openFile(contents, title, true),
     saveFile,
+    exportDiagramImage,
     revealFile: (path) => shell.showItemInFolder(path),
     answerHostKey,
     answerClose(sender, proceed) {

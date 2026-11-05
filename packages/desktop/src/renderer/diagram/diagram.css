@@ -1,0 +1,146 @@
+/*
+ * The ER diagram's look (plan 152 decision 17): React Flow's structural sheet only, every colour, font
+ * and size from the --tc-* variables applyAppearance writes, so a theme, density or font change repaints
+ * the open diagram in place.
+ */
+@import "@xyflow/react/dist/base.css";
+
+.tc-diagram {
+  --xy-background-color: var(--tc-canvas);
+  --xy-background-pattern-color: var(--tc-border);
+  --xy-edge-stroke: var(--tc-ink-muted);
+  --xy-edge-stroke-selected: var(--tc-accent);
+  --xy-handle-background-color: transparent;
+  --xy-node-color: var(--tc-ink);
+  --xy-node-border: none;
+  --xy-node-border-selected: none;
+  --xy-selection-background-color: var(--tc-selection);
+  --xy-selection-border: 1px solid var(--tc-accent);
+  --xy-attribution-background-color: transparent;
+  background: var(--tc-canvas);
+  color: var(--tc-ink);
+  font-family: var(--tc-font-ui);
+  font-size: var(--tc-font-ui-size);
+}
+
+.tc-diagram .react-flow__handle {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.tc-diagram .react-flow__node {
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.tc-diagram-table {
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: var(--tc-popover-radius);
+  background: var(--tc-panel);
+  box-shadow: inset 0 0 0 1px var(--tc-border);
+  cursor: grab;
+}
+
+.tc-diagram-table[data-selected="true"] {
+  box-shadow: inset 0 0 0 2px var(--tc-accent);
+}
+
+.tc-diagram-table[data-kind="external"] {
+  opacity: 0.7;
+  box-shadow: inset 0 0 0 1px var(--tc-border);
+}
+
+.tc-diagram-header {
+  display: flex;
+  align-items: center;
+  gap: var(--tc-cell-padding);
+  height: var(--tc-row-height);
+  padding: 0 var(--tc-cell-padding);
+  background: var(--tc-raised);
+  box-shadow: inset 0 -1px 0 0 var(--tc-border);
+  color: var(--tc-ink);
+  font-family: var(--tc-font-ui);
+  font-size: var(--tc-font-ui-size);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tc-diagram-table[data-selected="true"] .tc-diagram-header {
+  background: var(--tc-selection);
+}
+
+.tc-diagram-row {
+  display: flex;
+  align-items: center;
+  gap: var(--tc-cell-padding);
+  height: var(--tc-row-height);
+  padding: 0 var(--tc-cell-padding);
+  font-family: var(--tc-font-grid);
+  font-size: var(--tc-font-grid-size);
+  white-space: nowrap;
+}
+
+.tc-diagram-icon {
+  flex: none;
+  width: var(--tc-icon);
+  height: var(--tc-icon);
+  color: var(--tc-ink-muted);
+}
+
+.tc-diagram-icon[data-marker="primary"] {
+  color: var(--tc-key-icon);
+}
+
+.tc-diagram-icon[data-marker="foreign"] {
+  color: var(--tc-accent);
+}
+
+.tc-diagram-column {
+  flex: auto;
+  color: var(--tc-ink);
+}
+
+.tc-diagram-type {
+  flex: none;
+  color: var(--tc-ink-muted);
+}
+
+.tc-diagram-edge {
+  fill: none;
+  stroke: var(--tc-ink-muted);
+  stroke-width: 1.5;
+}
+
+.tc-diagram-edge[data-edge-origin="virtual"] {
+  stroke: var(--tc-accent);
+}
+
+.tc-diagram-edge[data-selected="true"] {
+  stroke: var(--tc-accent);
+  stroke-width: 2.5;
+}
+
+.tc-diagram-edge[data-edge-origin="inferred"] .tc-diagram-edge-line {
+  stroke-dasharray: 6 4;
+}
+
+.tc-diagram-edge[data-edge-origin="virtual"] .tc-diagram-edge-line {
+  stroke-dasharray: 1.5 3;
+  stroke-linecap: round;
+}
+
+.tc-diagram-edge-ring {
+  fill: var(--tc-canvas);
+}
+
+.tc-diagram-edge-hit {
+  stroke: transparent;
+  stroke-width: 12;
+}
+
+.tc-diagram-legend-swatch {
+  width: calc(var(--tc-icon) * 1.5);
+  height: var(--tc-icon);
+}
