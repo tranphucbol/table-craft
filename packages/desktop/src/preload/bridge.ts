@@ -85,6 +85,9 @@ export const INVOKE_CHANNELS = {
   installPluginPackage: "table-craft:plugins.install-package",
   installPluginFile: "table-craft:plugins.install-file",
   removePlugin: "table-craft:plugins.remove",
+  testPluginRegistry: "table-craft:plugins.test-registry",
+  setRegistryToken: "table-craft:plugins.set-registry-token",
+  clearRegistryToken: "table-craft:plugins.clear-registry-token",
   connectEngine: "table-craft:engine.connect",
   authorizeEngine: "table-craft:engine.authorize",
   disconnectEngine: "table-craft:engine.disconnect",
@@ -325,6 +328,17 @@ export interface PluginsState {
   readonly registryRemoved: readonly string[];
   /** Installs by package name still running or failed, for the "By package name" row. */
   readonly packageInstalls: readonly { readonly packageName: string; readonly install: PluginInstallState }[];
+}
+
+/**
+ * What Test connection checks: a saved registry (`registryId` with `token` null uses its stored
+ * token) or the Add/Edit form's draft, whose typed token is sent once and not kept.
+ */
+export interface RegistryTestRequest {
+  readonly registryId: string | null;
+  readonly url: string;
+  readonly scopes: readonly string[];
+  readonly token: string | null;
 }
 
 /** Install from File: what was installed, or nothing when the user cancelled the dialog or the confirmation. */
@@ -784,6 +798,11 @@ export interface TableCraftBridge {
   installPluginFile(): Promise<InvokeResult<InstallFileResult>>;
   /** Refused while a saved data source uses the plugin. */
   removePlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  /** One packument request to the registry (decision 158); a saved registry's result also shows on its card. */
+  testPluginRegistry(request: RegistryTestRequest): Promise<InvokeResult<RegistryCheck>>;
+  /** Stores a saved registry's token encrypted in main; the renderer never reads it back (decision 020). */
+  setRegistryToken(registryId: string, token: string): Promise<InvokeResult<PluginsState>>;
+  clearRegistryToken(registryId: string): Promise<InvokeResult<PluginsState>>;
   onPluginsChanged(listener: (state: PluginsState) => void): () => void;
   /**
    * Starts or reuses the datasource's engine. On `connected`, the port arrives as a window

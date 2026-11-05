@@ -42,7 +42,9 @@ import type {
   PluginSource,
   PluginsState,
   RegistryCheck,
+  RegistryTestRequest,
 } from "@table-craft/desktop/preload/bridge.js";
+import { checkedPackage, checkRegistry } from "@table-craft/desktop/main/pluginStore/registryCheck.js";
 import type { PluginRegistry } from "@table-craft/desktop/settings/settings.js";
 
 export interface PluginServiceOptions {
@@ -71,6 +73,8 @@ export interface PluginServiceOptions {
   readonly registries?: () => readonly PluginRegistry[];
   /** A private registry's stored token, read from the secret store at each request. */
   readonly registryToken?: (registryId: string) => string | undefined;
+  /** Stores a registry's token, or forgets it for null. */
+  readonly storeToken?: (registryId: string, token: string | null) => Promise<void>;
 }
 
 export interface PluginService {
@@ -98,6 +102,15 @@ export interface PluginService {
    * running; false when it is not outdated. Rejects when the update fails.
    */
   updateOutdated(pluginId: string): Promise<boolean>;
+  /** Test connection; a saved registry tested with its stored token keeps the result for its card. */
+  testRegistry(request: RegistryTestRequest): Promise<RegistryCheck>;
+  /** Stores or, for null, forgets a registry's token; its last check no longer applies. */
+  setRegistryToken(registryId: string, token: string | null): Promise<void>;
+  /**
+   * Settings changed: when the registries did, forgets the token and the check of each registry no
+   * longer listed (decision 158) and tells the windows, since the registries are part of the state.
+   */
+  registriesChanged(): Promise<void>;
 }
 
 const UPDATING_REASON = "Built for an older TableCraft. Updating…";
@@ -114,6 +127,8 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
   const checks = new Map<string, RegistryCheck>();
   const weakIntegrity = new Set<string>();
   const typed = new Set<string>();
+  let listed: ReadonlySet<string> | null = null;
+  let listedJson: string | null = null;
   const log = options.log;
   const platform = options.platform ?? hostPlatform();
 
@@ -344,6 +359,47 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
       if (!outdated().includes(pluginId)) return false;
       await settled(installer.install(pluginId));
       return true;
+    },
+    async testRegistry(request) {
+      const saved = registries().find((registry) => registry.id === request.registryId);
+      const packageName = checkedPackage(saved?.packages ?? [], request.scopes);
+      const stored = request.registryId === null ? undefined : options.registryToken?.(request.registryId);
+      const token = request.token ?? stored ?? null;
+      if (packageName === null) {
+        return { status: "failed", at: Date.now(), message: "Add a scope, such as @acme, to test the registry." };
+      }
+      const check = await checkRegistry(
+        options.fetch,
+        { url: request.url, token, private: true },
+        packageName,
+        !(saved?.packages.includes(packageName) ?? false),
+      );
+      log.info("plugin registry tested", { registry: request.url, packageName, status: check.status });
+      if (saved !== undefined && saved.url === request.url && request.token === null) {
+        checks.set(saved.id, check);
+        options.onChanged(state());
+      }
+      return check;
+    },
+    async setRegistryToken(registryId, token) {
+      await options.storeToken?.(registryId, token);
+      checks.delete(registryId);
+      options.onChanged(state());
+    },
+    async registriesChanged() {
+      const json = JSON.stringify(registries());
+      if (json === listedJson) return;
+      listedJson = json;
+      const ids = new Set(registries().map((registry) => registry.id));
+      const gone = listed === null ? [] : [...listed].filter((id) => !ids.has(id));
+      listed = ids;
+      for (const id of gone) {
+        checks.delete(id);
+        weakIntegrity.delete(id);
+        await options.storeToken?.(id, null);
+        log.info("plugin registry removed", { registryId: id });
+      }
+      options.onChanged(state());
     },
   };
 }
