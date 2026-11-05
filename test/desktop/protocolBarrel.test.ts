@@ -140,6 +140,7 @@ const METHODS = [
   "objects.apply",
   "catalog.namespaces",
   "catalog.describe",
+  "catalog.inferredKeys",
   "catalog.qualifiedName",
   "catalog.definition",
   "catalog.script",

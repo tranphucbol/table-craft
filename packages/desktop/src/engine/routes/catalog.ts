@@ -1,3 +1,4 @@
+import { inferForeignKeys } from "@table-craft/core";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
 import { serviceOf } from "@table-craft/desktop/engine/services.js";
@@ -7,6 +8,8 @@ export function catalogRoutes(connection: ConnectionContext): RoutesFor<"catalog
   return {
     "catalog.namespaces": ({ refresh }) => introspect(({ cache }) => cache.namespaces(refresh)),
     "catalog.describe": ({ path, refresh }) => introspect(({ cache }) => cache.describe(path, refresh)),
+    "catalog.inferredKeys": ({ path }) =>
+      introspect(async ({ cache }) => inferForeignKeys((await cache.describe(path, false)).catalog)),
     "catalog.qualifiedName": ({ path, name }) =>
       introspect(({ session }) => serviceOf(session, "schemaTree").qualifiedName(path, name)),
     "catalog.definition": ({ path, name }) => definitionOf(path, name),

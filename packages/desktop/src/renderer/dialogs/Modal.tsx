@@ -5,6 +5,7 @@ import { LOG_ACTION_IDS } from "@table-craft/desktop/renderer/actions/logActions
 import { Button, CONTENT_CLASS, OVERLAY_CLASS, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { useModal, type ModalItem, type ModalRequest } from "@table-craft/desktop/renderer/state/modal.js";
 import { ExecuteRoutine } from "@table-craft/desktop/renderer/dialogs/ExecuteRoutine.js";
+import { RelationshipDialog } from "@table-craft/desktop/renderer/diagram/RelationshipDialog.js";
 import { ExportData } from "@table-craft/desktop/renderer/dialogs/ExportData.js";
 import { ImportData } from "@table-craft/desktop/renderer/dialogs/ImportData.js";
 import { ObjectChange } from "@table-craft/desktop/renderer/dialogs/ObjectChange.js";
@@ -33,6 +34,7 @@ const MODAL_WIDTHS: Readonly<Record<ModalRequest["kind"], string>> = {
   tableDesign: "w-dialog",
   objectChange: "w-generator",
   routine: "w-generator",
+  relationship: "w-generator",
 };
 
 type PickerKind =
@@ -45,7 +47,8 @@ type PickerKind =
   | "import"
   | "tableDesign"
   | "objectChange"
-  | "routine";
+  | "routine"
+  | "relationship";
 
 function Items({ items }: { readonly items: readonly ModalItem[] }) {
   return (
@@ -207,6 +210,8 @@ export function Modal() {
             <ObjectChange request={pending.request} />
           ) : pending.request.kind === "routine" ? (
             <ExecuteRoutine request={pending.request} />
+          ) : pending.request.kind === "relationship" ? (
+            <RelationshipDialog request={pending.request} />
           ) : (
             <Body request={pending.request} />
           )}

@@ -1,11 +1,19 @@
 import { describe, expect, it } from "vitest";
+import type { DescribedCatalog } from "@table-craft/desktop/engine/protocol.js";
+import { DEFAULT_DIAGRAM_STATE } from "@table-craft/desktop/diagrams/state.js";
+import { openDiagramIn } from "@table-craft/desktop/renderer/actions/diagramCommands.js";
+import type { EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
+import { createCatalogStore } from "@table-craft/desktop/renderer/state/catalog.js";
+import { createDiagramsStore } from "@table-craft/desktop/renderer/state/diagrams.js";
 import {
+  activeTab,
   CLOSED_TABS_LIMIT,
   createTabsStore,
   rightTabIds,
   type ClosedConsole,
   type Tab,
 } from "@table-craft/desktop/renderer/state/tabs.js";
+import { PG_NAMESPACES, PUBLIC_CATALOG, PUBLIC_PATH } from "./catalogFixtures.js";
 
 function console(id: string): Tab {
   return { id, kind: "console", title: id };
@@ -210,3 +218,54 @@ function ids(store: ReturnType<typeof createTabsStore>): string[] {
 function closedConsole(name: string): ClosedConsole {
   return { datasourceId: "pg", name, sql: "select 1" };
 }
+
+/** An engine that describes `public` and counts the inferred-key reads. */
+function diagramStores() {
+  const calls: string[] = [];
+  const client = {
+    call(type: string): Promise<unknown> {
+      calls.push(type);
+      if (type === "catalog.namespaces") return Promise.resolve(PG_NAMESPACES);
+      if (type === "catalog.describe") return Promise.resolve(PUBLIC_CATALOG satisfies DescribedCatalog);
+      return Promise.resolve([]);
+    },
+    fail: () => undefined,
+    onEvent: () => () => undefined,
+  } as unknown as EngineClient;
+  const connect = () => Promise.resolve(client);
+  const catalog = createCatalogStore({ connect });
+  const persistence = { read: () => Promise.resolve(DEFAULT_DIAGRAM_STATE), save: () => Promise.resolve() };
+  return {
+    tabs: createTabsStore(),
+    diagrams: createDiagramsStore({ connect, catalog: () => catalog, persistence }),
+    calls,
+  };
+}
+
+describe("diagram tabs", () => {
+  const PUBLIC_TARGET = { datasourceId: "pg", path: PUBLIC_PATH, namespace: "public" };
+
+  it("givenNamespace_whenShowDiagram_thenTabDescribesAndReadsInferredKeys", async () => {
+    const { tabs, diagrams, calls } = diagramStores();
+
+    await openDiagramIn({ tabs, diagrams }, PUBLIC_TARGET);
+
+    const tab = activeTab(tabs.getState());
+    expect(tab).toMatchObject({ kind: "diagram", title: "public" });
+    expect(diagrams.getState().tabs[tab?.id ?? ""]).toMatchObject({ inferred: [], loading: false, error: null });
+    expect(calls).toEqual(expect.arrayContaining(["catalog.describe", "catalog.inferredKeys"]));
+  });
+
+  it("givenDiagramTabOpen_whenShowDiagramAgain_thenFocusesExisting", async () => {
+    const { tabs, diagrams, calls } = diagramStores();
+    await openDiagramIn({ tabs, diagrams }, PUBLIC_TARGET);
+    const first = activeTab(tabs.getState())?.id;
+    tabs.getState().open(console("c"));
+
+    await openDiagramIn({ tabs, diagrams }, { ...PUBLIC_TARGET, path: [...PUBLIC_PATH] });
+
+    expect(tabs.getState().tabs.filter((tab) => tab.kind === "diagram")).toHaveLength(1);
+    expect(activeTab(tabs.getState())?.id).toBe(first);
+    expect(calls.filter((call) => call === "catalog.inferredKeys")).toHaveLength(1);
+  });
+});

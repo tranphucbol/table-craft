@@ -3,6 +3,7 @@ import type { Tab, TabKind } from "@table-craft/desktop/renderer/state/tabs.js";
 import {
   ConsoleIcon,
   DdlIcon,
+  DiagramIcon,
   KeyTabIcon,
   ServerTabIcon,
   SessionsIcon,
@@ -17,6 +18,7 @@ const TAB_ICONS = {
   key: KeyTabIcon,
   server: ServerTabIcon,
   keyAdmin: ServerTabIcon,
+  diagram: DiagramIcon,
 } as const satisfies Record<TabKind, unknown>;
 
 export function TabIcon({ kind }: { readonly kind: TabKind }) {

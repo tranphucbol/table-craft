@@ -2,9 +2,9 @@ import { create } from "zustand";
 
 /**
  * A SQL console, a table open in the data editor (plan 008), a relation's DDL (plan 010), a key or
- * a server's figures (plan 058).
+ * a server's figures (plan 058), or a namespace's ER diagram (plan 152).
  */
-export type TabKind = "console" | "table" | "ddl" | "sessions" | "key" | "server" | "keyAdmin";
+export type TabKind = "console" | "table" | "ddl" | "sessions" | "key" | "server" | "keyAdmin" | "diagram";
 
 export const EDITOR_GROUPS = ["left", "right"] as const;
 export type EditorGroupId = (typeof EDITOR_GROUPS)[number];

@@ -710,6 +710,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     path: namespacePath,
     refresh: z.boolean().optional(),
   }),
+  z.strictObject({ id: requestId, type: z.literal("catalog.inferredKeys"), path: namespacePath }),
   z.strictObject({
     id: requestId,
     type: z.literal("catalog.qualifiedName"),
