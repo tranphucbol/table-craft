@@ -1,13 +1,25 @@
-import { useId } from "react";
-import type { CatalogPlugin, PluginInfo } from "@table-craft/desktop/preload/bridge.js";
+import { useId, useState } from "react";
+import type { CatalogPlugin, PluginInfo, PluginInstallState } from "@table-craft/desktop/preload/bridge.js";
 import { invoke } from "@table-craft/desktop/renderer/actions/index.js";
-import { PLUGIN_ACTION_IDS, type PluginArgs } from "@table-craft/desktop/renderer/actions/pluginActions.js";
-import { Button, FieldRow, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
-import { FieldError, SectionTitle, update, useDraft } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
+import {
+  PLUGIN_ACTION_IDS,
+  type PackageArgs,
+  type PluginArgs,
+} from "@table-craft/desktop/renderer/actions/pluginActions.js";
+import { Button, TextInput } from "@table-craft/desktop/renderer/dialogs/parts.js";
+import {
+  LOOSE_GRID_CLASS,
+  LooseNote,
+  LooseRow,
+  LooseTitle,
+} from "@table-craft/desktop/renderer/dialogs/pluginsParts.js";
+import { RegistriesSection } from "@table-craft/desktop/renderer/dialogs/RegistriesSection.js";
 import {
   downloadLabel,
   installText,
-  SOURCE_LABELS,
+  REFUSED_UPDATE_TEXT,
+  registryLabel,
+  registryOfPlugin,
   unavailableText,
 } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -15,16 +27,15 @@ import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import { ActionButton } from "@table-craft/desktop/renderer/ui/ActionButton.js";
 import { DatasourceGlyph } from "@table-craft/desktop/renderer/ui/brandIcons.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
-import { registryUrlError } from "@table-craft/desktop/settings/settings.js";
+import { isScopedPackageName, packageScope } from "@table-craft/desktop/settings/settings.js";
 
-function Progress({ entry }: { readonly entry: CatalogPlugin | undefined }) {
-  const text = entry === undefined ? null : installText(entry);
-  if (entry === undefined || text === null) return null;
-  const failed = entry.install.status === "failed";
+function InstallStatus({ text, install }: { readonly text: string | null; readonly install: PluginInstallState }) {
+  if (text === null) return null;
+  const failed = install.status === "failed";
   return (
     <span
       role={failed ? "alert" : "status"}
-      title={entry.install.status === "failed" ? entry.install.hint : undefined}
+      title={install.status === "failed" ? install.hint : undefined}
       className={cn("truncate", failed ? "text-danger" : "text-ink-muted")}
     >
       {text}
@@ -32,21 +43,35 @@ function Progress({ entry }: { readonly entry: CatalogPlugin | undefined }) {
   );
 }
 
+function Progress({ entry }: { readonly entry: CatalogPlugin | undefined }) {
+  if (entry === undefined) return null;
+  return <InstallStatus text={installText(entry)} install={entry.install} />;
+}
+
 function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly entry: CatalogPlugin | undefined }) {
+  const registries = useDatasources((state) => state.registries);
+  const registryRemoved = useDatasources((state) => state.registryRemoved);
   const args: PluginArgs = { pluginId: plugin.id };
   const busy = entry?.install.status === "installing";
+  const refused = registryOfPlugin(registries, plugin.id)?.check?.status === "refused";
   return (
-    <FieldRow label={plugin.name}>
+    <LooseRow label={plugin.name}>
       <span data-plugin-row={plugin.id} className="flex min-w-0 items-center gap-cell">
         <DatasourceGlyph brand={plugin.brands[0] ?? null} className="size-icon shrink-0" />
         <span className="shrink-0">{plugin.version ?? ""}</span>
-        <span className="shrink-0 text-ink-muted">{SOURCE_LABELS[plugin.source]}</span>
+        <span className="shrink-0 text-ink-muted">{registryLabel(plugin, registries, registryRemoved)}</span>
         {plugin.unavailableReason === null ? null : (
           <span title={plugin.unavailableReason} className="truncate text-danger">
             {unavailableText(plugin)}
           </span>
         )}
-        <Progress entry={entry} />
+        {refused && entry?.install.status !== "installing" ? (
+          <span role="alert" className="truncate text-danger">
+            {REFUSED_UPDATE_TEXT}
+          </span>
+        ) : (
+          <Progress entry={entry} />
+        )}
         {plugin.source === "managed" && entry !== undefined ? (
           <Button disabled={busy} onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}>
             Update
@@ -58,14 +83,14 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
           </Button>
         ) : null}
       </span>
-    </FieldRow>
+    </LooseRow>
   );
 }
 
 function DownloadRow({ entry }: { readonly entry: CatalogPlugin }) {
   const args: PluginArgs = { pluginId: entry.id };
   return (
-    <FieldRow label={entry.name}>
+    <LooseRow label={entry.name}>
       <span data-plugin-row={entry.id} className="flex min-w-0 items-center gap-cell">
         <DatasourceGlyph brand={entry.brands[0] ?? null} tone="muted" className="size-icon shrink-0" />
         <span className="shrink-0 text-ink-muted">{entry.packageName}</span>
@@ -77,71 +102,87 @@ function DownloadRow({ entry }: { readonly entry: CatalogPlugin }) {
           {downloadLabel(entry)}
         </Button>
       </span>
-    </FieldRow>
+    </LooseRow>
   );
 }
 
-function RegistryField() {
-  const registryUrl = useSettings((state) => state.settings.plugins.registryUrl);
+/** Where a typed package would come from: "From Company registry (scope @acme)". */
+function routeHint(packageName: string, registries: readonly { name: string; scopes: readonly string[] }[]): string {
+  const scope = packageScope(packageName);
+  const owner = scope === null ? undefined : registries.find((registry) => registry.scopes.includes(scope));
+  if (owner !== undefined && scope !== null) return `From ${owner.name} (scope ${scope})`;
+  const configured = registries.flatMap((registry) => registry.scopes);
+  if (configured.length === 0) return "Add a registry below for the package’s scope first.";
+  if (scope === null) return `A package of a scope a registry below serves: ${configured.join(", ")}.`;
+  return `No registry below serves ${scope}; they serve ${configured.join(", ")}.`;
+}
+
+function PackageRow() {
   const id = useId();
-  const errorId = useId();
-  const { text, edit } = useDraft(registryUrl, (value) => value);
-  const error = registryUrlError(text);
+  const [text, setText] = useState("");
+  const registries = useSettings((state) => state.settings.plugins.registries);
+  const packageInstalls = useDatasources((state) => state.packageInstalls);
+  const packageName = text.trim();
+  const valid = isScopedPackageName(packageName);
+  const routed = valid && registries.some((registry) => registry.scopes.includes(packageScope(packageName) ?? ""));
+  const install = packageInstalls.find((candidate) => candidate.packageName === packageName)?.install;
+  const args: PackageArgs = { packageName };
+  const status =
+    install === undefined || install.status === "idle"
+      ? null
+      : install.status === "failed"
+        ? install.message
+        : `Installing ${packageName}…`;
   return (
-    <>
-      <FieldRow label="Registry" htmlFor={id}>
-        <TextInput
-          id={id}
-          className="flex-1"
-          aria-invalid={error !== null}
-          aria-describedby={error === null ? undefined : errorId}
-          value={text}
-          onChange={(event) => {
-            const next = event.target.value.trim();
-            const valid = registryUrlError(next) === null;
-            edit(event.target.value, valid ? next : registryUrl);
-            if (valid) update((current) => ({ ...current, plugins: { ...current.plugins, registryUrl: next } }));
-          }}
-        />
-      </FieldRow>
-      <FieldError id={errorId} error={error} />
-      <p className="col-start-2 text-ink-muted">
-        Where TableCraft downloads its plugins from: the public npm registry, or a mirror of it your company runs.
-      </p>
-    </>
+    <LooseRow label="By package name" htmlFor={id} hint={routeHint(packageName, registries)}>
+      <TextInput
+        id={id}
+        className="min-w-0 flex-1"
+        placeholder="@scope/package-name"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && routed) invoke(PLUGIN_ACTION_IDS.installPackage, args);
+        }}
+      />
+      {install === undefined ? null : <InstallStatus text={status} install={install} />}
+      <Button
+        disabled={!routed || install?.status === "installing"}
+        onClick={() => invoke(PLUGIN_ACTION_IDS.installPackage, args)}
+      >
+        Install…
+      </Button>
+    </LooseRow>
   );
 }
 
-/** Settings → Plugins: what is installed and from where, what can be downloaded, and the registry. */
+/** Settings → Plugins: what is installed and from where, what can be downloaded, and the registries. */
 export function PluginsPage() {
   const plugins = useDatasources((state) => state.plugins);
   const catalog = useDatasources((state) => state.catalog);
   const downloadable = catalog.filter((entry) => !plugins.some((plugin) => plugin.id === entry.id));
   return (
-    <>
-      <SectionTitle>Installed</SectionTitle>
+    <div className={cn("col-span-2", LOOSE_GRID_CLASS)}>
+      <LooseTitle>Installed</LooseTitle>
       {plugins.map((plugin) => (
         <InstalledRow key={plugin.id} plugin={plugin} entry={catalog.find((candidate) => candidate.id === plugin.id)} />
       ))}
-      <p className="col-start-2 text-ink-muted">
-        Downloaded plugins update in the background while “Check for updates automatically” is on.
-      </p>
-      <SectionTitle>Available</SectionTitle>
+      <LooseNote>Downloaded plugins update in the background while “Check for updates automatically” is on.</LooseNote>
+      <LooseTitle>Available</LooseTitle>
       {downloadable.length === 0 ? (
-        <p className="col-start-2 text-ink-muted">Every plugin TableCraft offers is installed.</p>
+        <LooseNote>Every plugin TableCraft offers is installed.</LooseNote>
       ) : (
         downloadable.map((entry) => <DownloadRow key={entry.id} entry={entry} />)
       )}
-      <SectionTitle>From a file</SectionTitle>
-      <FieldRow label="Package">
+      <PackageRow />
+      <RegistriesSection />
+      <LooseTitle>From a file</LooseTitle>
+      <LooseRow
+        label="Package"
+        hint="For a machine without the registry: a plugin’s .tgz from the release page. A plugin runs with TableCraft’s access to your files and network, so install only ones you trust."
+      >
         <ActionButton actionId={PLUGIN_ACTION_IDS.installFile} />
-      </FieldRow>
-      <p className="col-start-2 text-ink-muted">
-        For a machine without the registry: a plugin’s .tgz from the release page. A plugin runs with TableCraft’s
-        access to your files and network, so install only ones you trust.
-      </p>
-      <SectionTitle>Registry</SectionTitle>
-      <RegistryField />
-    </>
+      </LooseRow>
+    </div>
   );
 }

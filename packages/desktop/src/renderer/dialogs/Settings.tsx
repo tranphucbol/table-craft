@@ -151,7 +151,11 @@ const RESTORE: Readonly<Record<SettingsPage, (current: Settings) => Settings>> =
     ...withFont(current, "grid", DEFAULT_SETTINGS.appearance.fonts.grid),
     data: DEFAULT_SETTINGS.data,
   }),
-  plugins: (current) => ({ ...current, plugins: DEFAULT_SETTINGS.plugins }),
+  // The registries are the user's own entries with their tokens, not preferences to reset.
+  plugins: (current) => ({
+    ...current,
+    plugins: { ...current.plugins, registryUrl: DEFAULT_SETTINGS.plugins.registryUrl },
+  }),
   mcp: (current) => ({ ...current, mcp: DEFAULT_SETTINGS.mcp }),
   advanced: (current) => ({ ...current, log: DEFAULT_SETTINGS.log }),
 };
