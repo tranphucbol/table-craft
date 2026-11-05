@@ -156,6 +156,32 @@ The plugin API follows semver and stays backward compatible within a major versi
 - A new optional method is called only when your plugin has it or declares its capability, never
   because of your `apiVersion`.
 
+## Publishing to a private registry
+
+A plugin for your company alone can live in its own npm registry, such as GitLab's package
+registry, instead of npm:
+
+- Name the package in a scope your registry serves, such as `@acme/tablecraft-plugin-example`.
+- Put `table-craft-plugin.json` and the built `index.js` in the package, and declare the plugin in
+  `package.json`, as `scripts/plugins/pack.ts` does for the official ones:
+
+  ```json
+  {
+    "name": "@acme/tablecraft-plugin-example",
+    "version": "1.0.0",
+    "type": "module",
+    "main": "index.js",
+    "tableCraft": { "id": "example", "apiVersion": "2.0.0" }
+  }
+  ```
+
+- The id must not be a built-in or official plugin's id. TableCraft reads `tableCraft` from the
+  tarball when the registry leaves it out of the packument, as GitLab does, and picks the newest
+  version whose `apiVersion` it accepts. Pre-releases (`1.1.0-beta.1`) install only for users on
+  the beta channel.
+- Publish with `npm publish` to the registry, then tell users the package name and the registry's
+  address and scope, which they add as described in [Private registries](plugins.md#private-registries).
+
 ## From 1.x to 2.0
 
 Plugin API 2.0 groups everything a capability brings under its key. TableCraft on plugin API 2.0 refuses a
