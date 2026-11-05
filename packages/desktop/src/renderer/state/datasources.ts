@@ -14,6 +14,7 @@ import {
   type DatasourceList,
   type DatasourceView,
   type CatalogPlugin,
+  type PluginRegistryState,
   type EngineExited,
   type PluginInfo,
   type PluginsState,
@@ -77,6 +78,10 @@ export interface DatasourcesState {
   readonly plugins: readonly PluginInfo[];
   /** The plugins TableCraft can download, with each one's install progress (decision 110). */
   readonly catalog: readonly CatalogPlugin[];
+  /** The private plugin registries, with whether each has a token (decision 158). */
+  readonly registries: readonly PluginRegistryState[];
+  readonly registryRemoved: readonly string[];
+  readonly packageInstalls: PluginsState["packageInstalls"];
   readonly encryption: DatasourceList["encryption"];
   readonly warning: string | null;
   readonly connections: Readonly<Record<string, Connection>>;
@@ -276,6 +281,9 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       datasources: [],
       plugins: [],
       catalog: [],
+      registries: [],
+      registryRemoved: [],
+      packageInstalls: [],
       encryption: { available: true, reason: null },
       warning: null,
       connections: {},
@@ -313,8 +321,8 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
         set({ plugins });
       },
 
-      applyPlugins({ plugins, catalog }) {
-        set({ plugins, catalog });
+      applyPlugins({ plugins, catalog, registries, registryRemoved, packageInstalls }) {
+        set({ plugins, catalog, registries, registryRemoved, packageInstalls });
       },
 
       select(selection) {

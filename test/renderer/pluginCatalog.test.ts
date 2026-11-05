@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { CatalogPlugin, PluginInstallState } from "@table-craft/desktop/preload/bridge.js";
+import type { CatalogPlugin, PluginInstallState, PluginRegistryState } from "@table-craft/desktop/preload/bridge.js";
 import {
   downloadLabel,
   installText,
   missingPlugin,
   missingText,
   needsNewerApp,
+  NO_TOKEN_UPDATE_TEXT,
   pickerEntries,
   pluginVersionText,
+  REFUSED_UPDATE_TEXT,
+  registryUpdateFailure,
   unavailableText,
 } from "@table-craft/desktop/renderer/model/pluginCatalog.js";
 import { createDatasourcesStore } from "@table-craft/desktop/renderer/state/datasources.js";
@@ -127,9 +130,46 @@ describe("plugin catalog", () => {
       rememberServer: () => Promise.resolve(),
     });
 
-    store.getState().applyPlugins({ plugins: [SQLITE_PLUGIN], catalog: [entry()] });
+    store.getState().applyPlugins({
+      plugins: [SQLITE_PLUGIN],
+      catalog: [entry()],
+      registries: [],
+      registryRemoved: [],
+      packageInstalls: [],
+    });
 
     expect(store.getState().plugins).toEqual([SQLITE_PLUGIN]);
     expect(store.getState().catalog.map((item) => item.id)).toEqual(["postgres"]);
+  });
+});
+
+describe("private registry update failures", () => {
+  const FAILED: PluginInstallState = { status: "failed", message: "Not on the registry.", hint: "Set a token." };
+  const company: PluginRegistryState = {
+    id: "company",
+    name: "Company registry",
+    url: "https://gitlab.example.com/api/v4/packages/npm",
+    scopes: ["@acme"],
+    packages: ["@acme/tablecraft-plugin-example"],
+    tokenStored: true,
+    integrity: "sha1",
+    check: null,
+    plugins: ["example"],
+  };
+
+  it("givenNoToken_whenUpdateFailed_thenRowSaysTheRegistryHasNoToken", () => {
+    expect(registryUpdateFailure({ ...company, tokenStored: false }, FAILED)).toBe(NO_TOKEN_UPDATE_TEXT);
+  });
+
+  it("givenRefusedToken_whenNotInstalling_thenRowSaysTheTokenWasRefused", () => {
+    const refused = { ...company, check: { status: "refused", at: 0, httpStatus: 401 } } as const;
+
+    expect(registryUpdateFailure(refused, { status: "idle" })).toBe(REFUSED_UPDATE_TEXT);
+    expect(registryUpdateFailure(refused, { status: "installing", received: 0, total: null })).toBeNull();
+  });
+
+  it("givenStoredToken_whenUpdateFailed_thenTheFailureItselfIsShown", () => {
+    expect(registryUpdateFailure(company, FAILED)).toBeNull();
+    expect(registryUpdateFailure(undefined, FAILED)).toBeNull();
   });
 });

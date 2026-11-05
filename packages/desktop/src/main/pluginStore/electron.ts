@@ -1,18 +1,26 @@
 /**
- * The plugin store wired to Electron (decision 110): `net.fetch` honours the system proxy as the
+ * The plugin store wired to Electron (decision 110): `net` honours the system proxy as the
  * app updater does, the dialogs are native, and the background update rides the updater's 2-hour
  * schedule.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BrowserWindow, dialog, net, type OpenDialogOptions, type WebContents } from "electron";
-import { createPluginChannels, confirmationText } from "@table-craft/desktop/main/pluginStore/channels.js";
+import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron";
+import {
+  confirmationText,
+  createPluginChannels,
+  privateConfirmationText,
+} from "@table-craft/desktop/main/pluginStore/channels.js";
+import type { PrivateInstallRequest } from "@table-craft/desktop/main/pluginStore/installer.js";
 import { MANAGED_PLUGINS_DIRECTORY } from "@table-craft/desktop/main/pluginStore/managed.js";
+import { netFetch } from "@table-craft/desktop/main/pluginStore/netFetch.js";
 import { createPluginService, type PluginService } from "@table-craft/desktop/main/pluginStore/service.js";
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
 import { CHECK_INTERVAL_MS } from "@table-craft/desktop/main/update/overrides.js";
 import { createUpdateSchedule, type UpdateSchedule } from "@table-craft/desktop/main/update/schedule.js";
+import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
 import type { ReleaseChannel } from "@table-craft/desktop/settings/channel.js";
+import type { PluginRegistry } from "@table-craft/desktop/settings/settings.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import type { PluginsState } from "@table-craft/desktop/preload/bridge.js";
 
@@ -27,6 +35,7 @@ const FIRST_PLUGIN_CHECK_MS = 60_000;
 const INSTALL_BUTTON = 0;
 const PLUGIN_FILE_FILTERS = [{ name: "Plugin package", extensions: ["tgz"] }];
 const FILE_DIALOG_TITLE = "Install Plugin from File";
+const REGISTRY_DIALOG_TITLE = "Install Plugin from Registry";
 
 export interface PluginStoreOptions {
   readonly userData: string;
@@ -39,6 +48,11 @@ export interface PluginStoreOptions {
   /** The app's update channel; plugins follow it. */
   readonly channel: () => ReleaseChannel;
   readonly checkAutomatically: () => boolean;
+  readonly registries: () => readonly PluginRegistry[];
+  /** Where each private registry's token is kept (decision 158). */
+  readonly secrets: Pick<SecretStore, "registryToken" | "setRegistryToken" | "clearRegistryToken">;
+  /** Adds a package installed by name to its registry's `packages` in settings. */
+  readonly addPackage: (registryId: string, packageName: string) => Promise<void>;
   /** The saved data sources, read when a plugin is removed or found missing. */
   readonly datasources: () => readonly { readonly pluginId: string; readonly name: string }[];
   readonly onChanged: (state: PluginsState) => void;
@@ -86,6 +100,19 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     options.developmentRoot !== null && options.environment[DEVELOPMENT_PLUGINS_ENV] !== "0"
       ? [options.developmentRoot]
       : [];
+  async function confirmPrivate(request: PrivateInstallRequest): Promise<boolean> {
+    const parent = BrowserWindow.getFocusedWindow();
+    const box = {
+      type: "warning" as const,
+      title: REGISTRY_DIALOG_TITLE,
+      buttons: ["Install", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+      ...privateConfirmationText(request),
+    };
+    const answer = parent === null ? await dialog.showMessageBox(box) : await dialog.showMessageBox(parent, box);
+    return answer.response === INSTALL_BUTTON;
+  }
   const service = createPluginService({
     builtInRoot: options.builtInRoot,
     developmentRoots,
@@ -93,7 +120,15 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     userRoot: join(options.userData, USER_PLUGINS_DIRECTORY),
     registryUrl: options.registryUrl,
     channel: options.channel,
-    fetch: (url, init) => net.fetch(url, init),
+    fetch: netFetch,
+    registries: options.registries,
+    registryToken: (registryId) => options.secrets.registryToken(registryId),
+    storeToken: (registryId, token) =>
+      token === null
+        ? options.secrets.clearRegistryToken(registryId)
+        : options.secrets.setRegistryToken(registryId, token),
+    confirm: confirmPrivate,
+    addPackage: options.addPackage,
     usedBy,
     onChanged: options.onChanged,
     log,

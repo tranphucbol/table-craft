@@ -55,4 +55,28 @@ versions** checked in Settings → Advanced), refuses a download whose sha512
 does not match the registry's, and keeps each version in `managed-plugins/` in the profile folder
 ([decision 110](../decisions/110-the-app-installs-plugins-from-the-registry.md)).
 
+## Private registries
+
+A plugin your company publishes to its own npm registry, such as GitLab's package registry,
+installs from there by its scope, while official plugins keep coming from npm.
+
+- In **Settings → Plugins → Registries**, choose **+ Add registry** and fill in a name, the
+  registry's npm address, such as `https://gitlab.example.com/api/v4/packages/npm`, its scopes,
+  such as `@acme`, and a token. For GitLab, a personal or group access token with `read_api`.
+  **Test connection** checks the address and the token before you save. A scope belongs to one
+  registry, and `@tablecraft-app` always comes from npm.
+- The token is kept encrypted by the system keychain, never in `settings.json`, never shown again,
+  and sent only to the registry's own host: a download that leaves it goes without the token.
+- Under **Available**, type the package name, such as `@acme/tablecraft-plugin-example`, and
+  choose **Install…**. TableCraft picks the newest version this TableCraft can run, shows what it
+  adds and asks once before installing a package from a private registry. Updates come from the
+  same registry without asking again.
+- GitLab publishes only a sha-1 checksum, which TableCraft checks for a private registry; a
+  package from npm still needs its sha512.
+- A refused token turns the registry's card red; paste a new one there. Removing a registry
+  forgets its token and keeps its plugins installed, but they stop updating.
+
+How routing, tokens and checksums work is in
+[decision 158](../decisions/158-private-plugin-registries.md).
+
 To write a plugin of your own, see [Writing plugins](writing-plugins.md).

@@ -3,7 +3,9 @@
  * Install from File flow and its trust confirmation (decision 006) are tested without a window.
  */
 import { OFFICIAL_SCOPE } from "@table-craft/desktop/main/pluginStore/catalog.js";
-import { inspectPackage, type PackageJson } from "@table-craft/desktop/main/pluginStore/installer.js";
+import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
+import { inspectPackage, type PackageJson } from "@table-craft/desktop/main/pluginStore/packageFile.js";
+import type { PrivateInstallRequest } from "@table-craft/desktop/main/pluginStore/installer.js";
 import type { PluginService } from "@table-craft/desktop/main/pluginStore/service.js";
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
 import type { InstallFileResult } from "@table-craft/desktop/preload/bridge.js";
@@ -39,6 +41,14 @@ export function createPluginChannels<Sender>(options: PluginChannelOptions<Sende
       await service.install(pluginId);
       return service.state();
     },
+    async installPackage(packageName) {
+      try {
+        await service.installPackage(packageName);
+      } catch (cause) {
+        if (!(cause instanceof PluginInstallError && cause.failure === "cancelled")) throw cause;
+      }
+      return service.state();
+    },
     async installFile(sender) {
       const path = await options.choose(sender);
       if (path === null) return CANCELLED;
@@ -52,6 +62,39 @@ export function createPluginChannels<Sender>(options: PluginChannelOptions<Sende
       await service.remove(pluginId);
       return service.state();
     },
+    testRegistry: (request) => service.testRegistry(request),
+    async setRegistryToken(registryId, token) {
+      await service.setRegistryToken(registryId, token.trim());
+      return service.state();
+    },
+    async clearRegistryToken(registryId) {
+      await service.setRegistryToken(registryId, null);
+      return service.state();
+    },
+  };
+}
+
+const KIB = 1024;
+
+function sizeText(bytes: number): string {
+  if (bytes < KIB * KIB) return `${String(Math.max(1, Math.round(bytes / KIB)))} KB`;
+  return `${(bytes / KIB / KIB).toFixed(1)} MB`;
+}
+
+/** The confirmation before a plugin's first install from a private registry (decision 158). */
+export function privateConfirmationText(request: PrivateInstallRequest): { message: string; detail: string } {
+  const products = request.brands.map((brand) => brand.name).join(", ");
+  return {
+    message: `Install ${request.name} (${request.packageName}) from ${request.registry.name}? It runs with TableCraft's access to your files and network.`,
+    detail: [
+      `Package: ${request.packageName}`,
+      `Version: ${request.version} (newest that fits)`,
+      `Registry: ${request.registry.name} (${request.registry.url})`,
+      `Adds: ${products === "" ? request.name : `${products} data sources (${request.name})`}`,
+      `Size: ${sizeText(request.bytes)}`,
+      "",
+      "Updates come from the same registry. You're asked once per package.",
+    ].join("\n"),
   };
 }
 
