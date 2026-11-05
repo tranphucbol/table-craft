@@ -200,7 +200,8 @@ export function createPluginService(options: PluginServiceOptions): PluginServic
       checks.set(registryId, { status: "refused", at, httpStatus: error.httpStatus ?? 0 });
     } else if (error.failure === "offline" || error.failure === "insecureUrl") {
       checks.set(registryId, { status: "failed", at, message: error.message });
-    } else {
+    } else if (error.failure !== "notFound" || options.registryToken?.(registryId) !== undefined) {
+      // Without a token, GitLab answers 404 for packages it serves, so a 404 then proves nothing.
       checks.set(registryId, { status: "reached", at });
     }
   }

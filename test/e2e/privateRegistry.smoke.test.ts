@@ -254,8 +254,17 @@ describe.runIf(SMOKE_ENABLED)("private plugin registries", () => {
       await captureWindow(next, "05-updated-without-asking");
 
       const company = card(next, REGISTRY_NAME);
-      await company.getByRole("button", { name: "Replace", exact: true }).click();
-      await company.getByLabel("Paste a new token", { exact: true }).fill(WRONG_TOKEN);
+      await company.getByRole("button", { name: "Forget", exact: true }).click();
+      await expect.poll(() => company.textContent()).not.toContain("Stored, encrypted");
+      await pluginRow(next, EXAMPLE_PLUGIN_ID).getByRole("button", { name: "Update", exact: true }).click();
+      await expect
+        .poll(() => pluginRow(next, EXAMPLE_PLUGIN_ID).textContent(), { timeout: LAUNCH_TIMEOUT_MS })
+        .toContain("Update failed: the registry has no token.");
+      expect(await company.textContent()).not.toContain("Reached");
+      await pluginRow(next, EXAMPLE_PLUGIN_ID).scrollIntoViewIfNeeded();
+      await captureWindow(next, "06a-no-token-update-failed");
+
+      await company.getByLabel("Token", { exact: true }).fill(WRONG_TOKEN);
       await company.getByRole("button", { name: "Replace", exact: true }).click();
       await company.getByRole("button", { name: "Test", exact: true }).click();
       await expect
