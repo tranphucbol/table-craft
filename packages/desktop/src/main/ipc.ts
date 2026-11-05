@@ -41,6 +41,7 @@ import {
   type PluginsState,
   type RegistryCheck,
   type RegistryTestRequest,
+  type RemovablePluginSource,
   type ReleaseNotesRequest,
   type DeleteDatasourcesRequest,
   type SaveDatasourceRequest,
@@ -196,6 +197,7 @@ const mcpContextReply = z.strictObject({
 });
 const mcpClientRequest = z.strictObject({ client: z.enum(MCP_CLIENTS) });
 const pluginRequest = z.strictObject({ pluginId: z.string().min(1) });
+const pluginRemoveRequest = z.strictObject({ pluginId: z.string().min(1), source: z.enum(["managed", "user"]) });
 const pluginPackageRequest = z.strictObject({ packageName: z.string().refine(isScopedPackageName) });
 const registryId = z.string().regex(REGISTRY_ID_PATTERN);
 const registryTestRequest = z.strictObject({
@@ -295,7 +297,7 @@ export interface PluginChannels<Sender> {
   installPackage(packageName: string): Promise<PluginsState>;
   /** Main shows the file dialog and the trust confirmation (decision 006) in the sender's window. */
   installFile(sender: Sender): Promise<InstallFileResult>;
-  remove(pluginId: string): Promise<PluginsState>;
+  remove(pluginId: string, source: RemovablePluginSource): Promise<PluginsState>;
   testRegistry(request: RegistryTestRequest): Promise<RegistryCheck>;
   setRegistryToken(registryId: string, token: string): Promise<PluginsState>;
   clearRegistryToken(registryId: string): Promise<PluginsState>;
@@ -387,7 +389,7 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
     plugins.installPackage(packageName),
   );
   handle(INVOKE_CHANNELS.installPluginFile, noRequest, (_request, sender) => plugins.installFile(sender));
-  handle(INVOKE_CHANNELS.removePlugin, pluginRequest, ({ pluginId }) => plugins.remove(pluginId));
+  handle(INVOKE_CHANNELS.removePlugin, pluginRemoveRequest, ({ pluginId, source }) => plugins.remove(pluginId, source));
   handle(INVOKE_CHANNELS.testPluginRegistry, registryTestRequest, (request) => plugins.testRegistry(request));
   handle(INVOKE_CHANNELS.setRegistryToken, registryTokenRequest, ({ registryId, token }) =>
     plugins.setRegistryToken(registryId, token),
