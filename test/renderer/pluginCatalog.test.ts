@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { CatalogPlugin, PluginInstallState, PluginRegistryState } from "@table-craft/desktop/preload/bridge.js";
 import {
   downloadLabel,
+  downloadSize,
   installText,
   missingPlugin,
   missingText,
   needsNewerApp,
   NO_TOKEN_UPDATE_TEXT,
   pickerEntries,
+  pluginOrigin,
   pluginVersionText,
   REFUSED_UPDATE_TEXT,
   registryUpdateFailure,
@@ -114,6 +116,7 @@ describe("plugin catalog", () => {
 
   it("givenApproximateSize_whenLabelled_thenAboutThatMuch", () => {
     expect(downloadLabel(entry())).toBe("Download (about 781.3 KB)");
+    expect(downloadSize(entry())).toBe("about 781.3 KB");
   });
 
   it("givenDownloadedPlugin_whenLabelled_thenVersionAndSource", () => {
@@ -171,5 +174,15 @@ describe("private registry update failures", () => {
   it("givenStoredToken_whenUpdateFailed_thenTheFailureItselfIsShown", () => {
     expect(registryUpdateFailure(company, FAILED)).toBeNull();
     expect(registryUpdateFailure(undefined, FAILED)).toBeNull();
+  });
+
+  it("givenPluginsFromEachSource_whenOriginRead_thenEachHasItsOwnBadge", () => {
+    const example = { ...POSTGRES_PLUGIN, id: "example" };
+
+    expect(pluginOrigin(SQLITE_PLUGIN, [company], [])).toBe("builtIn");
+    expect(pluginOrigin({ ...POSTGRES_PLUGIN, source: "user" }, [company], [])).toBe("user");
+    expect(pluginOrigin(POSTGRES_PLUGIN, [company], [])).toBe("managed");
+    expect(pluginOrigin(example, [company], [])).toBe("registry");
+    expect(pluginOrigin(example, [], ["example"])).toBe("registryRemoved");
   });
 });

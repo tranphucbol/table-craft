@@ -14,11 +14,14 @@ import {
   LooseNote,
   LooseRow,
   LooseTitle,
+  OriginBadge,
 } from "@table-craft/desktop/renderer/dialogs/pluginsParts.js";
 import { RegistriesSection } from "@table-craft/desktop/renderer/dialogs/RegistriesSection.js";
 import {
   downloadLabel,
+  downloadSize,
   installText,
+  pluginOrigin,
   registryLabel,
   registryOfPlugin,
   registryUpdateFailure,
@@ -33,6 +36,10 @@ import { ICON_BUTTON } from "@table-craft/desktop/renderer/ui/iconButtonClasses.
 import { ACTION_ICONS } from "@table-craft/desktop/renderer/ui/icons.js";
 import { Tooltip } from "@table-craft/desktop/renderer/ui/Tooltip.js";
 import { isScopedPackageName, packageScope } from "@table-craft/desktop/settings/settings.js";
+
+const ROW_CLASS = "flex w-full min-w-0 items-center gap-cell";
+const VERSION_CLASS = "min-w-16 shrink-0 tabular-nums";
+const STATUS_CLASS = "flex min-w-0 flex-1 items-center gap-cell";
 
 function InstallStatus({ text, install }: { readonly text: string | null; readonly install: PluginInstallState }) {
   if (text === null) return null;
@@ -91,26 +98,30 @@ function InstalledRow({ plugin, entry }: { readonly plugin: PluginInfo; readonly
   const registryFailure = registryUpdateFailure(registryOfPlugin(registries, plugin.id), entry?.install);
   return (
     <LooseRow label={plugin.name}>
-      <span data-plugin-row={plugin.id} className="flex min-w-0 items-center gap-cell">
+      <span data-plugin-row={plugin.id} className={ROW_CLASS}>
         <DatasourceGlyph brand={plugin.brands[0] ?? null} className="size-icon shrink-0" />
-        <span className="shrink-0">{plugin.version ?? ""}</span>
-        <span className="shrink-0 text-ink-muted">{registryLabel(plugin, registries, registryRemoved)}</span>
-        {plugin.unavailableReason === null ? null : (
-          <span title={plugin.unavailableReason} className="truncate text-danger">
-            {unavailableText(plugin)}
-          </span>
-        )}
-        {registryFailure !== null ? (
-          <span
-            role="alert"
-            title={entry?.install.status === "failed" ? `${entry.install.message} ${entry.install.hint}` : undefined}
-            className="truncate text-danger"
-          >
-            {registryFailure}
-          </span>
-        ) : (
-          <Progress entry={entry} />
-        )}
+        <span className={VERSION_CLASS}>{plugin.version ?? ""}</span>
+        <OriginBadge origin={pluginOrigin(plugin, registries, registryRemoved)}>
+          {registryLabel(plugin, registries, registryRemoved)}
+        </OriginBadge>
+        <span className={STATUS_CLASS}>
+          {plugin.unavailableReason === null ? null : (
+            <span title={plugin.unavailableReason} className="truncate text-danger">
+              {unavailableText(plugin)}
+            </span>
+          )}
+          {registryFailure !== null ? (
+            <span
+              role="alert"
+              title={entry?.install.status === "failed" ? `${entry.install.message} ${entry.install.hint}` : undefined}
+              className="truncate text-danger"
+            >
+              {registryFailure}
+            </span>
+          ) : (
+            <Progress entry={entry} />
+          )}
+        </span>
         {plugin.source === "managed" && entry !== undefined ? (
           <RowIconButton
             label="Update"
@@ -137,16 +148,19 @@ function DownloadRow({ entry }: { readonly entry: CatalogPlugin }) {
   const args: PluginArgs = { pluginId: entry.id };
   return (
     <LooseRow label={entry.name}>
-      <span data-plugin-row={entry.id} className="flex min-w-0 items-center gap-cell">
+      <span data-plugin-row={entry.id} className={ROW_CLASS}>
         <DatasourceGlyph brand={entry.brands[0] ?? null} tone="muted" className="size-icon shrink-0" />
-        <span className="shrink-0 text-ink-muted">{entry.packageName}</span>
-        <Progress entry={entry} />
-        <Button
+        <span className="min-w-0 truncate text-ink-muted">{entry.packageName}</span>
+        <span className={STATUS_CLASS}>
+          <Progress entry={entry} />
+        </span>
+        <span className="shrink-0 text-ink-muted tabular-nums">{downloadSize(entry)}</span>
+        <RowIconButton
+          label={downloadLabel(entry)}
+          icon="download"
           disabled={entry.install.status === "installing"}
           onClick={() => invoke(PLUGIN_ACTION_IDS.install, args)}
-        >
-          {downloadLabel(entry)}
-        </Button>
+        />
       </span>
     </LooseRow>
   );

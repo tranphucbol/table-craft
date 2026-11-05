@@ -75,9 +75,14 @@ export function entryName(entry: PickerEntry): string {
   return entry.brand?.name ?? entry.plugin.name;
 }
 
+/** "about 781.3 KB". */
+export function downloadSize(entry: CatalogPlugin): string {
+  return `about ${formatBytes(entry.approximateBytes)}`;
+}
+
 /** "Download (about 781.3 KB)". */
 export function downloadLabel(entry: CatalogPlugin): string {
-  return `Download (about ${formatBytes(entry.approximateBytes)})`;
+  return `Download (${downloadSize(entry)})`;
 }
 
 /** "Installing PostgreSQL… 40%" while it downloads, the failure after, null when idle. */
@@ -172,6 +177,19 @@ export function registryLabel(
   if (plugin.source !== "managed") return SOURCE_LABELS[plugin.source];
   if (registryRemoved.includes(plugin.id)) return REGISTRY_REMOVED_TEXT;
   return registries.find((registry) => registry.plugins.includes(plugin.id))?.name ?? SOURCE_LABELS.managed;
+}
+
+/** Where an installed plugin comes from, for the colour of its source badge. */
+export type PluginOrigin = PluginSource | "registry" | "registryRemoved";
+
+export function pluginOrigin(
+  plugin: PluginInfo,
+  registries: readonly PluginRegistryState[],
+  registryRemoved: readonly string[],
+): PluginOrigin {
+  if (plugin.source !== "managed") return plugin.source;
+  if (registryRemoved.includes(plugin.id)) return "registryRemoved";
+  return registries.some((registry) => registry.plugins.includes(plugin.id)) ? "registry" : "managed";
 }
 
 /** The private registry `pluginId` was installed from, while it is configured. */
