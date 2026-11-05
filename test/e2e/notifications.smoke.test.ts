@@ -278,22 +278,22 @@ describe.runIf(SMOKE_ENABLED)("notification bell live test", () => {
   );
 
   it(
-    "givenUnseenFeature_whenOpenSettings_thenSettingsOnAdvanced",
+    "givenUnseenFeature_whenOpenSettings_thenSettingsOnPlugins",
     async () => {
       const { page } = await relaunchWith(
-        (stored) => ({ ...stored, features: stored.features.filter((id) => id !== "beta-channel") }),
+        (stored) => ({ ...stored, features: stored.features.filter((id) => id !== "private-registries") }),
         { appearance: { theme: "dark" } },
       );
 
       await openBell(page);
-      const feature = notice(page, "feature:beta-channel");
+      const feature = notice(page, "feature:private-registries");
       await feature.waitFor();
       await captureWindow(page, "04-feature-notice");
       await feature.getByTestId("notice-action").click();
 
       const settings = page.getByRole("dialog", { name: "Settings" });
       await settings.waitFor();
-      expect(await settings.getByRole("tab", { name: "Advanced", exact: true }).getAttribute("aria-selected")).toBe(
+      expect(await settings.getByRole("tab", { name: "Plugins", exact: true }).getAttribute("aria-selected")).toBe(
         "true",
       );
       await settled(settings);
