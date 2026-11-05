@@ -850,9 +850,11 @@ void app.whenReady().then(async () => {
       broadcast(CHANNELS.settingsChanged, changed);
       for (const listener of settingsListeners) listener(changed.settings);
       plugins.setAutomatic(changed.settings.updates.checkAutomatically);
+      void plugins.service.registriesChanged();
     },
   });
   settingsService = settings;
+  await plugins.service.registriesChanged();
   // After the settings: the download reads the registry URL and channel from them.
   plugins.startBackground();
   const settingsWarning = settings.snapshot().warning;

@@ -212,7 +212,9 @@ export function registryUrlError(url: string): string | null {
 
 /** The scope official plugins are published under; only the npm registry serves it (decision 158). */
 export const OFFICIAL_PLUGIN_SCOPE = "@tablecraft-app";
-const REGISTRY_ID = /^[a-z][a-z0-9-]*$/;
+export const REGISTRY_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
+const REGISTRY_ID = REGISTRY_ID_PATTERN;
+const FALLBACK_REGISTRY_ID = "registry";
 const REGISTRY_SCOPE = /^@[a-z0-9][a-z0-9._-]*$/;
 const SCOPED_PACKAGE = /^@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
 const REGISTRY_NAME_MAX_LENGTH = 80;
@@ -252,6 +254,18 @@ export function registryEntryError(entry: PluginRegistry, others: readonly Plugi
   }
   const stray = entry.packages.find((name) => !entry.scopes.includes(packageScope(name) ?? ""));
   return stray === undefined ? null : `${stray} is not in one of the registry's scopes.`;
+}
+
+/** An id for a new registry named `name`, from its letters and digits, unique among `others`. */
+export function newRegistryId(name: string, others: readonly PluginRegistry[]): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^[^a-z]+|-+$/g, "");
+  const base = slug === "" ? FALLBACK_REGISTRY_ID : slug;
+  let id = base;
+  for (let suffix = 2; others.some((other) => other.id === id); suffix += 1) id = `${base}-${String(suffix)}`;
+  return id;
 }
 
 /** `plugins` with `packageName` added to registry `registryId`'s packages, as an install by name records it. */

@@ -68,6 +68,9 @@ const bridge: TableCraftBridge = {
   installPluginPackage: (packageName) => invoke(INVOKE_CHANNELS.installPluginPackage, { packageName }),
   installPluginFile: () => invoke(INVOKE_CHANNELS.installPluginFile),
   removePlugin: (pluginId) => invoke(INVOKE_CHANNELS.removePlugin, { pluginId }),
+  testPluginRegistry: (request) => invoke(INVOKE_CHANNELS.testPluginRegistry, request),
+  setRegistryToken: (registryId, token) => invoke(INVOKE_CHANNELS.setRegistryToken, { registryId, token }),
+  clearRegistryToken: (registryId) => invoke(INVOKE_CHANNELS.clearRegistryToken, { registryId }),
   onPluginsChanged: (listener) => subscribe<PluginsState>(CHANNELS.pluginsChanged, listener),
   connectEngine: (datasourceId, secrets, mode) =>
     invoke(INVOKE_CHANNELS.connectEngine, { datasourceId, secrets, mode }),

@@ -850,6 +850,64 @@ describe("private registries", () => {
     expect(error.failure).toBe("unauthorized");
     expect(plugins.state().registries[0]?.check).toMatchObject({ status: "refused", httpStatus: 401 });
   });
+
+  it("givenServedPackage_whenTested_thenPackumentReadWithTheStoredToken", async () => {
+    registries = [{ ...registries[0]!, packages: [EXAMPLE_PACKAGE] }];
+    const plugins = await startedPrivate();
+
+    const check = await plugins.testRegistry({ registryId: COMPANY, url: company.url, scopes: ["@acme"], token: null });
+
+    expect(check.status).toBe("reached");
+    expect(company.received.at(-1)).toMatchObject({
+      path: `${PREFIX}/@acme%2ftablecraft-plugin-example`,
+      authorization: `Bearer ${TOKEN}`,
+    });
+    expect(plugins.state().registries[0]?.check).toMatchObject({ status: "reached" });
+  });
+
+  it("givenWrongDraftToken_whenTested_thenRefusedAndSavedCheckUntouched", async () => {
+    registries = [{ ...registries[0]!, packages: [EXAMPLE_PACKAGE] }];
+    const plugins = await startedPrivate();
+
+    const check = await plugins.testRegistry({
+      registryId: COMPANY,
+      url: company.url,
+      scopes: ["@acme"],
+      token: "glpat-wrong",
+    });
+
+    expect(check).toMatchObject({ status: "refused", httpStatus: 401 });
+    expect(plugins.state().registries[0]?.check).toBeNull();
+  });
+
+  it("givenNoServedPackage_whenTested_thenProbeNotFoundReadsAsReached", async () => {
+    const plugins = await startedPrivate();
+
+    const check = await plugins.testRegistry({ registryId: null, url: company.url, scopes: ["@acme"], token: TOKEN });
+
+    expect(check.status).toBe("reached");
+    expect(company.requests.at(-1)).toBe(`${PREFIX}/@acme%2ftablecraft-registry-check`);
+  });
+
+  it("givenRegistryRemoved_whenRegistriesChanged_thenTokenForgottenAndPluginKept", async () => {
+    const stored: (string | null)[] = [];
+    const plugins = await started(registry.url, {
+      ...privateOptions(),
+      storeToken: (id, value) => {
+        stored.push(`${id}:${String(value)}`);
+        return Promise.resolve();
+      },
+    });
+    await plugins.registriesChanged();
+    await plugins.installPackage(EXAMPLE_PACKAGE);
+
+    registries = [];
+    await plugins.registriesChanged();
+
+    expect(stored).toEqual([`${COMPANY}:null`]);
+    expect(plugins.state().registryRemoved).toEqual([EXAMPLE_PLUGIN_ID]);
+    expect(plugins.plugins().find((plugin) => plugin.id === EXAMPLE_PLUGIN_ID)?.unavailableReason).toBeNull();
+  });
 });
 
 describe("private install confirmation", () => {

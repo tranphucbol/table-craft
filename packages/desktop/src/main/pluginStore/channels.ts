@@ -62,6 +62,15 @@ export function createPluginChannels<Sender>(options: PluginChannelOptions<Sende
       await service.remove(pluginId);
       return service.state();
     },
+    testRegistry: (request) => service.testRegistry(request),
+    async setRegistryToken(registryId, token) {
+      await service.setRegistryToken(registryId, token.trim());
+      return service.state();
+    },
+    async clearRegistryToken(registryId) {
+      await service.setRegistryToken(registryId, null);
+      return service.state();
+    },
   };
 }
 

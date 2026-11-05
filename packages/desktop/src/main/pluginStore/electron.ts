@@ -1,11 +1,11 @@
 /**
- * The plugin store wired to Electron (decision 110): `net.fetch` honours the system proxy as the
+ * The plugin store wired to Electron (decision 110): `net` honours the system proxy as the
  * app updater does, the dialogs are native, and the background update rides the updater's 2-hour
  * schedule.
  */
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { BrowserWindow, dialog, net, type OpenDialogOptions, type WebContents } from "electron";
+import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron";
 import {
   confirmationText,
   createPluginChannels,
@@ -13,6 +13,7 @@ import {
 } from "@table-craft/desktop/main/pluginStore/channels.js";
 import type { PrivateInstallRequest } from "@table-craft/desktop/main/pluginStore/installer.js";
 import { MANAGED_PLUGINS_DIRECTORY } from "@table-craft/desktop/main/pluginStore/managed.js";
+import { netFetch } from "@table-craft/desktop/main/pluginStore/netFetch.js";
 import { createPluginService, type PluginService } from "@table-craft/desktop/main/pluginStore/service.js";
 import type { PluginChannels } from "@table-craft/desktop/main/ipc.js";
 import { CHECK_INTERVAL_MS } from "@table-craft/desktop/main/update/overrides.js";
@@ -119,9 +120,13 @@ export function createPluginStore(options: PluginStoreOptions): PluginStore {
     userRoot: join(options.userData, USER_PLUGINS_DIRECTORY),
     registryUrl: options.registryUrl,
     channel: options.channel,
-    fetch: (url, init) => net.fetch(url, init),
+    fetch: netFetch,
     registries: options.registries,
     registryToken: (registryId) => options.secrets.registryToken(registryId),
+    storeToken: (registryId, token) =>
+      token === null
+        ? options.secrets.clearRegistryToken(registryId)
+        : options.secrets.setRegistryToken(registryId, token),
     confirm: confirmPrivate,
     addPackage: options.addPackage,
     usedBy,
