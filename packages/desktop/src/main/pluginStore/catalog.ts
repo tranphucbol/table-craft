@@ -119,6 +119,19 @@ export function registryFor(packageName: string, registries: readonly PluginRegi
   return registries.find((registry) => registry.scopes.includes(scope)) ?? null;
 }
 
+/**
+ * The registry a plugin was installed from, while it is still configured and still names the
+ * plugin's package (decision 158); otherwise null, and the plugin stops updating.
+ */
+export function installedRegistry(
+  plugin: { readonly registry?: string; readonly packageName: string },
+  registries: readonly PluginRegistry[],
+): PluginRegistry | null {
+  if (plugin.registry === undefined) return null;
+  const registry = registries.find((entry) => entry.id === plugin.registry);
+  return registry?.packages.includes(plugin.packageName) === true ? registry : null;
+}
+
 /** The downloadable plugin that reads `scheme:` URLs, for an import that finds no installed one. */
 export function catalogEntryForScheme(scheme: string): CatalogEntry | undefined {
   return PLUGIN_CATALOG.find((entry) => entry.schemes.includes(scheme));

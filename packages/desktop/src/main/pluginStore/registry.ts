@@ -160,6 +160,7 @@ function unauthorized(registry: string, status: number): PluginInstallError {
     "unauthorized",
     `The plugin registry ${registry} refused the request (${String(status)}).`,
     UNAUTHORIZED_HINT,
+    status,
   );
 }
 
@@ -424,10 +425,10 @@ export function checkIntegrity(
   dist: { readonly integrity?: string; readonly shasum?: string },
   packageName: string,
   allowSha1: boolean,
-): void {
+): "sha512" | "sha1" {
   const sha512 = hashesOf(dist.integrity, SHA512);
   if (sha512.length > 0) {
-    if (sha512.includes(createHash("sha512").update(bytes).digest("base64"))) return;
+    if (sha512.includes(createHash("sha512").update(bytes).digest("base64"))) return "sha512";
     throw mismatch(packageName, "sha512");
   }
   const sha1 = createHash("sha1").update(bytes);
@@ -436,7 +437,7 @@ export function checkIntegrity(
     ...(dist.shasum === undefined ? [] : [Buffer.from(dist.shasum, "hex").toString("base64")]),
   ];
   if (allowSha1 && sha1Hashes.length > 0) {
-    if (sha1Hashes.includes(sha1.digest("base64"))) return;
+    if (sha1Hashes.includes(sha1.digest("base64"))) return "sha1";
     throw mismatch(packageName, "SHA-1");
   }
   throw new PluginInstallError(

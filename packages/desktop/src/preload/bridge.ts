@@ -82,6 +82,7 @@ export const INVOKE_CHANNELS = {
   listPlugins: "table-craft:plugins.list",
   pluginsState: "table-craft:plugins.state",
   installPlugin: "table-craft:plugins.install",
+  installPluginPackage: "table-craft:plugins.install-package",
   installPluginFile: "table-craft:plugins.install-file",
   removePlugin: "table-craft:plugins.remove",
   connectEngine: "table-craft:engine.connect",
@@ -322,6 +323,8 @@ export interface PluginsState {
   readonly registries: readonly PluginRegistryState[];
   /** Plugins installed from a private registry that is gone or no longer names them: they stop updating. */
   readonly registryRemoved: readonly string[];
+  /** Installs by package name still running or failed, for the "By package name" row. */
+  readonly packageInstalls: readonly { readonly packageName: string; readonly install: PluginInstallState }[];
 }
 
 /** Install from File: what was installed, or nothing when the user cancelled the dialog or the confirmation. */
@@ -772,6 +775,11 @@ export interface TableCraftBridge {
   pluginsState(): Promise<InvokeResult<PluginsState>>;
   /** Downloads the catalog plugin's newest compatible version; resolves once it is installed or failed. */
   installPlugin(pluginId: string): Promise<InvokeResult<PluginsState>>;
+  /**
+   * Installs a package the user typed from the private registry its scope routes to (decision 158),
+   * after main's native confirmation; a declined confirmation resolves with the unchanged state.
+   */
+  installPluginPackage(packageName: string): Promise<InvokeResult<PluginsState>>;
   /** The native open dialog for a `.tgz`, then the trust confirmation (decision 006), then the install. */
   installPluginFile(): Promise<InvokeResult<InstallFileResult>>;
   /** Refused while a saved data source uses the plugin. */

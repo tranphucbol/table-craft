@@ -111,7 +111,7 @@ import {
 } from "@table-craft/desktop/main/update/updater.js";
 import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { effectiveChannel } from "@table-craft/desktop/settings/channel.js";
-import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS } from "@table-craft/desktop/settings/settings.js";
+import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS, withRegistryPackage } from "@table-craft/desktop/settings/settings.js";
 import {
   DENSITIES,
   resolveTheme,
@@ -794,6 +794,14 @@ void app.whenReady().then(async () => {
     checkAutomatically: () => settingsService?.snapshot().settings.updates.checkAutomatically ?? true,
     registries: () => settingsService?.snapshot().settings.plugins.registries ?? [],
     secrets,
+    async addPackage(registryId, packageName) {
+      if (settingsService === null) return;
+      const current = settingsService.snapshot().settings;
+      await settingsService.write({
+        ...current,
+        plugins: withRegistryPackage(current.plugins, registryId, packageName),
+      });
+    },
     datasources: () => savedDatasources(),
     onChanged: (state) => broadcast(CHANNELS.pluginsChanged, state),
     log: mainLog.child("plugins"),

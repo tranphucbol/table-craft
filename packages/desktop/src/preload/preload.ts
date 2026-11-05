@@ -65,6 +65,7 @@ const bridge: TableCraftBridge = {
   listPlugins: () => invoke(INVOKE_CHANNELS.listPlugins),
   pluginsState: () => invoke(INVOKE_CHANNELS.pluginsState),
   installPlugin: (pluginId) => invoke(INVOKE_CHANNELS.installPlugin, { pluginId }),
+  installPluginPackage: (packageName) => invoke(INVOKE_CHANNELS.installPluginPackage, { packageName }),
   installPluginFile: () => invoke(INVOKE_CHANNELS.installPluginFile),
   removePlugin: (pluginId) => invoke(INVOKE_CHANNELS.removePlugin, { pluginId }),
   onPluginsChanged: (listener) => subscribe<PluginsState>(CHANNELS.pluginsChanged, listener),

@@ -81,6 +81,7 @@ export interface DatasourcesState {
   /** The private plugin registries, with whether each has a token (decision 158). */
   readonly registries: readonly PluginRegistryState[];
   readonly registryRemoved: readonly string[];
+  readonly packageInstalls: PluginsState["packageInstalls"];
   readonly encryption: DatasourceList["encryption"];
   readonly warning: string | null;
   readonly connections: Readonly<Record<string, Connection>>;
@@ -282,6 +283,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
       catalog: [],
       registries: [],
       registryRemoved: [],
+      packageInstalls: [],
       encryption: { available: true, reason: null },
       warning: null,
       connections: {},
@@ -319,8 +321,8 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
         set({ plugins });
       },
 
-      applyPlugins({ plugins, catalog, registries, registryRemoved }) {
-        set({ plugins, catalog, registries, registryRemoved });
+      applyPlugins({ plugins, catalog, registries, registryRemoved, packageInstalls }) {
+        set({ plugins, catalog, registries, registryRemoved, packageInstalls });
       },
 
       select(selection) {

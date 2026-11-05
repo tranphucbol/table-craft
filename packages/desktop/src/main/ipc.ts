@@ -57,7 +57,11 @@ import {
   type McpStatus,
   type McpUserControl,
 } from "@table-craft/desktop/settings/mcp.js";
-import { MCP_ROW_CAP_RANGE, MCP_TIMEOUT_SECONDS_RANGE } from "@table-craft/desktop/settings/settings.js";
+import {
+  isScopedPackageName,
+  MCP_ROW_CAP_RANGE,
+  MCP_TIMEOUT_SECONDS_RANGE,
+} from "@table-craft/desktop/settings/settings.js";
 
 /** Every record from `log.write` is the renderer's, whatever it claims (plan 017 decision 8). */
 const RENDERER_PROCESS = "renderer";
@@ -188,6 +192,7 @@ const mcpContextReply = z.strictObject({
 });
 const mcpClientRequest = z.strictObject({ client: z.enum(MCP_CLIENTS) });
 const pluginRequest = z.strictObject({ pluginId: z.string().min(1) });
+const pluginPackageRequest = z.strictObject({ packageName: z.string().refine(isScopedPackageName) });
 const importPreviewRequest = z.union([
   z.strictObject({ source: z.enum(SCANNED_APPS) }),
   z.strictObject({
@@ -265,10 +270,16 @@ export interface McpChannels {
   contextReply(requestId: number, context: McpActiveConsole | null): void;
 }
 
-/** Downloaded plugins behind the `plugins.*` channels (decision 110); package names never come from the renderer. */
+/**
+ * Downloaded plugins behind the `plugins.*` channels (decision 110). The only package name from the
+ * renderer is one the user typed for a private registry (decision 158): main routes it by its
+ * scope to a registry settings name, and never sends it to the npm registry.
+ */
 export interface PluginChannels<Sender> {
   state(): PluginsState;
   install(pluginId: string): Promise<PluginsState>;
+  /** Main asks its native confirmation before a package's first install from a registry. */
+  installPackage(packageName: string): Promise<PluginsState>;
   /** Main shows the file dialog and the trust confirmation (decision 006) in the sender's window. */
   installFile(sender: Sender): Promise<InstallFileResult>;
   remove(pluginId: string): Promise<PluginsState>;
@@ -356,6 +367,9 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   const { plugins } = options;
   handle(INVOKE_CHANNELS.pluginsState, noRequest, () => plugins.state());
   handle(INVOKE_CHANNELS.installPlugin, pluginRequest, ({ pluginId }) => plugins.install(pluginId));
+  handle(INVOKE_CHANNELS.installPluginPackage, pluginPackageRequest, ({ packageName }) =>
+    plugins.installPackage(packageName),
+  );
   handle(INVOKE_CHANNELS.installPluginFile, noRequest, (_request, sender) => plugins.installFile(sender));
   handle(INVOKE_CHANNELS.removePlugin, pluginRequest, ({ pluginId }) => plugins.remove(pluginId));
   handle(INVOKE_CHANNELS.saveDatasource, saveRequest, (request) => service.save(request));

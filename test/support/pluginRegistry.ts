@@ -121,6 +121,33 @@ export function pluginTarball(plugin: PluginPackage): Buffer {
   ]);
 }
 
+/** A placeholder third-party package, as a company would publish to its own registry (decision 158). */
+export const EXAMPLE_PACKAGE = "@acme/tablecraft-plugin-example";
+export const EXAMPLE_PLUGIN_ID = "example";
+const EXAMPLE_BASE = "postgres";
+
+/**
+ * `@acme/tablecraft-plugin-example` at `version`: the PostgreSQL plugin's manifest under another id
+ * and name, so it passes the manifest check without shipping a real driver.
+ */
+export function examplePlugin(version: string, apiVersion = API_VERSION): PluginPackage {
+  const source = JSON.parse(readFileSync(SOURCE_MANIFEST(EXAMPLE_BASE), "utf8")) as Record<string, unknown>;
+  return {
+    id: EXAMPLE_PLUGIN_ID,
+    version,
+    apiVersion,
+    name: EXAMPLE_PACKAGE,
+    manifest: {
+      ...source,
+      id: EXAMPLE_PLUGIN_ID,
+      name: "Example",
+      brands: [{ id: EXAMPLE_PLUGIN_ID, name: "Example DB" }],
+      version: manifestVersion(version),
+      apiVersion,
+    },
+  };
+}
+
 export function sha512(bytes: Uint8Array): string {
   return `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 }
