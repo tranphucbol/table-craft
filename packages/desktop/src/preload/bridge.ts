@@ -21,11 +21,10 @@ import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import type {
   AgentAccess,
   AgentPolicy,
-  McpActiveConsole,
   McpClient,
-  McpConsoleRequest,
-  McpContextRequest,
   McpStatus,
+  McpUiAnswer,
+  McpUiDelivery,
   McpUserControl,
 } from "@table-craft/desktop/settings/mcp.js";
 import type { Settings } from "@table-craft/desktop/settings/settings.js";
@@ -61,8 +60,7 @@ export const CHANNELS = {
   pluginsChanged: "table-craft:plugins.changed",
   /** Main to every window: the MCP server, its clients or its approvals changed; the payload is an `McpStatus`. */
   mcpStatus: "table-craft:mcp.status-changed",
-  mcpContextRequest: "table-craft:mcp.context-request",
-  mcpOpenConsole: "table-craft:mcp.open-console",
+  mcpUiRequest: "table-craft:mcp.ui-request",
 } as const;
 
 /** Renderer to main, through `ipcRenderer.invoke`; each answers with an `InvokeResult`. */
@@ -151,7 +149,7 @@ export const INVOKE_CHANNELS = {
   rememberServer: "table-craft:datasources.remember-server",
   setAgentPolicy: "table-craft:datasources.set-agent-policy",
   mcpCopyToken: "table-craft:mcp.copy-token",
-  mcpContextReply: "table-craft:mcp.context-reply",
+  mcpUiAnswer: "table-craft:mcp.ui-answer",
   mcpStatus: "table-craft:mcp.status",
   mcpControl: "table-craft:mcp.control",
   mcpCopyClientConfig: "table-craft:mcp.copy-client-config",
@@ -954,10 +952,9 @@ export interface TableCraftBridge {
    */
   rememberServer(datasourceId: string, seen: ServerSeen): Promise<InvokeResult<null>>;
   mcpCopyToken(): Promise<InvokeResult<null>>;
-  /** Answers main's `onMcpContextRequest`; null when no console is focused. */
-  mcpContextReply(requestId: number, context: McpActiveConsole | null): Promise<InvokeResult<null>>;
-  onMcpContextRequest(listener: (request: McpContextRequest) => void): () => void;
-  onMcpOpenConsole(listener: (request: McpConsoleRequest) => void): () => void;
+  /** Answers main's `onMcpUiRequest` (plan 156). */
+  mcpUiAnswer(requestId: number, answer: McpUiAnswer): Promise<InvokeResult<null>>;
+  onMcpUiRequest(listener: (delivery: McpUiDelivery) => void): () => void;
   mcpStatus(): Promise<InvokeResult<McpStatus>>;
   onMcpStatus(listener: (status: McpStatus) => void): () => void;
   mcpControl(control: McpUserControl): Promise<InvokeResult<null>>;

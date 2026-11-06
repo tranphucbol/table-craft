@@ -17,7 +17,7 @@ import {
   type WindowState,
 } from "@table-craft/desktop/preload/bridge.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
-import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
+import type { McpStatus, McpUiDelivery } from "@table-craft/desktop/settings/mcp.js";
 import type { TextSnippet } from "@table-craft/desktop/snippets/snippets.js";
 
 /** Structural, because this program has no DOM lib and preload is the one place that needs it. */
@@ -161,9 +161,8 @@ const bridge: TableCraftBridge = {
   mcpRegenerateToken: () => invoke(INVOKE_CHANNELS.mcpRegenerateToken),
   setAgentPolicy: (datasourceId, policy) => invoke(INVOKE_CHANNELS.setAgentPolicy, { datasourceId, policy }),
   mcpCopyToken: () => invoke(INVOKE_CHANNELS.mcpCopyToken),
-  mcpContextReply: (requestId, context) => invoke(INVOKE_CHANNELS.mcpContextReply, { requestId, context }),
-  onMcpContextRequest: (listener) => subscribe<McpContextRequest>(CHANNELS.mcpContextRequest, listener),
-  onMcpOpenConsole: (listener) => subscribe<McpConsoleRequest>(CHANNELS.mcpOpenConsole, listener),
+  mcpUiAnswer: (requestId, answer) => invoke(INVOKE_CHANNELS.mcpUiAnswer, { requestId, answer }),
+  onMcpUiRequest: (listener) => subscribe<McpUiDelivery>(CHANNELS.mcpUiRequest, listener),
 };
 
 contextBridge.exposeInMainWorld(BRIDGE_KEY, bridge);

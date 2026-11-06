@@ -74,6 +74,7 @@ const CHOSEN: Settings = {
     statementTimeoutSeconds: 45,
     clients: [{ name: "Claude Code", allowed: true }],
     notifications: false,
+    allowFocus: false,
   },
   keymap: { "console.run": ["Ctrl+Enter"], "console.format": [] },
 };
@@ -355,6 +356,7 @@ describe("settings document", () => {
       statementTimeoutSeconds: 120,
       clients: [],
       notifications: true,
+      allowFocus: true,
     });
   });
 

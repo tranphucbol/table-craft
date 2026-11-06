@@ -11,14 +11,25 @@ import {
 export const AUTOSAVE_DELAY_MS = 500;
 const NAME_SEPARATOR = "_";
 
-/** `console`, then `console_1`, `console_2`…: the first that `used` does not hold. */
-export function firstFreeName(used: Iterable<string>): string {
+/** `console`, then `console_1`, `console_2`…: the first that `used` does not hold; `base` replaces `console`. */
+export function firstFreeName(used: Iterable<string>, base: string = DEFAULT_CONSOLE_NAME): string {
   const taken = new Set(used);
-  if (!taken.has(DEFAULT_CONSOLE_NAME)) return DEFAULT_CONSOLE_NAME;
+  if (!taken.has(base)) return base;
   for (let n = 1; ; n++) {
-    const name = `${DEFAULT_CONSOLE_NAME}${NAME_SEPARATOR}${n}`;
+    const name = `${base}${NAME_SEPARATOR}${n}`;
     if (!taken.has(name)) return name;
   }
+}
+
+/** A console name main accepts (`CONSOLE_NAME_PATTERN`, `main/consoleFiles.ts`), with room for a `_n` suffix. */
+const MAX_BASE_CHARS = 58;
+const NAME_UNSAFE = /[^\w.-]/g;
+const ONLY_DOTS = /^\.*$/;
+
+/** An agent's title as a console file name (plan 156): unsafe characters become `_`; null when none is left. */
+export function consoleNameFrom(title: string): string | null {
+  const name = title.replace(NAME_UNSAFE, NAME_SEPARATOR).slice(0, MAX_BASE_CHARS);
+  return ONLY_DOTS.test(name) ? null : name;
 }
 
 /** Saved consoles no tab has open, by name (plan 011 decision 14): what Open Closed Console lists. */

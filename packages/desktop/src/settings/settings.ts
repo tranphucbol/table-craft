@@ -178,6 +178,8 @@ export interface McpSettings {
   readonly clients: readonly McpKnownClient[];
   /** A system notification and a dock badge while an agent waits and no window is focused (decision 143). */
   readonly notifications: boolean;
+  /** Whether an agent may bring the window forward when it opens or edits a console (plan 156). */
+  readonly allowFocus: boolean;
 }
 
 export interface Settings {
@@ -394,6 +396,7 @@ export const DEFAULT_SETTINGS: Settings = {
     statementTimeoutSeconds: 120,
     clients: [],
     notifications: true,
+    allowFocus: true,
   },
   keymap: {},
 };
@@ -677,6 +680,7 @@ export function readSettings(input: unknown): Settings {
         : defaults.mcp.statementTimeoutSeconds,
       clients: Array.isArray(mcp.clients) ? knownClients(mcp.clients) : defaults.mcp.clients,
       notifications: typeof mcp.notifications === "boolean" ? mcp.notifications : defaults.mcp.notifications,
+      allowFocus: typeof mcp.allowFocus === "boolean" ? mcp.allowFocus : defaults.mcp.allowFocus,
     },
     keymap: readKeymap(root.keymap),
   };

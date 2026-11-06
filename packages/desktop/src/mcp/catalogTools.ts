@@ -78,7 +78,8 @@ async function resolvePath(
   );
 }
 
-async function relationsOf(
+/** The schema's path and its tables and views, on an exposed datasource whose plugin reads a schema tree. */
+export async function relationsOf(
   context: ToolContext,
   named: string,
   schema: string,

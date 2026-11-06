@@ -451,6 +451,7 @@ export function McpSettingsPage() {
   const status = useMcp((state) => state.status);
   const enabledId = useId();
   const notificationsId = useId();
+  const allowFocusId = useId();
   const setMcp = (patch: Partial<Settings["mcp"]>) =>
     update((current) => ({ ...current, mcp: { ...current.mcp, ...patch } }));
   return (
@@ -540,6 +541,18 @@ export function McpSettingsPage() {
       </FieldRow>
       <p className="col-start-2 text-ink-muted">
         Only while TableCraft is in the background. The notification never shows the statement.
+      </p>
+      <FieldRow label="Focus" htmlFor={allowFocusId}>
+        <Switch
+          id={allowFocusId}
+          label="Let agents bring TableCraft forward"
+          testId="mcp-allow-focus"
+          checked={mcp.allowFocus}
+          onChange={(allowFocus) => setMcp({ allowFocus })}
+        />
+      </FieldRow>
+      <p className="col-start-2 text-ink-muted">
+        When an agent opens or edits a console and asks for focus. Off, the tab still opens; the window stays put.
       </p>
       <SectionTitle>Connect a client</SectionTitle>
       <ClientSnippet port={mcp.port} />

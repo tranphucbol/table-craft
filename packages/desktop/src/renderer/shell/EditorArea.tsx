@@ -15,6 +15,7 @@ import { AdminView } from "@table-craft/desktop/renderer/keyAdmin/AdminView.js";
 import { ServerTab } from "@table-craft/desktop/renderer/server/ServerTab.js";
 import { deferTabDrag } from "@table-craft/desktop/renderer/model/tabDrag.js";
 import { fileSourceOf, isDirty, useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
+import { AgentConsoleBadge } from "@table-craft/desktop/renderer/ui/AgentAccessBadge.js";
 import { SessionsView } from "@table-craft/desktop/renderer/sessions/SessionsView.js";
 import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import {
@@ -141,6 +142,7 @@ function TabButton({
     return session !== undefined && isDirty(session);
   });
   const isConsole = useConsoles((state) => tab.kind === "console" && state.consoles[tab.id] !== undefined);
+  const agent = useConsoles((state) => (tab.kind === "console" ? (state.consoles[tab.id]?.agent ?? null) : null));
   const others = useTabs((state) => otherTabIds(groupStrip(state, groupOf(tab)), tab.id).length > 0);
   const right = useTabs((state) => rightTabIds(groupStrip(state, groupOf(tab)), tab.id).length > 0);
   const unpinned = useTabs((state) => unpinnedTabIds(groupStrip(state, groupOf(tab))).length > 0);
@@ -199,6 +201,7 @@ function TabButton({
           >
             <TabIcon kind={tab.kind} />
             {label}
+            {agent === null ? null : <AgentConsoleBadge client={agent.client} />}
             {dirty ? (
               <span
                 data-testid="tab-dirty"
