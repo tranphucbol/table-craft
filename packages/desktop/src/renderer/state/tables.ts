@@ -428,7 +428,12 @@ export function createTablesStore(dependencies: TablesDependencies) {
           ...paging,
           ...limit,
         });
-        ended({ outcome: "success", rowCount: answer.statement.rowCount, message: null, sql: answer.sql });
+        ended({
+          outcome: "success",
+          rowCount: answer.statement.rowCount,
+          message: null,
+          sql: answer.statement.sent ?? answer.sql,
+        });
         const latest = get().tables[id];
         if (latest === undefined) return false;
         const previous = latest.result;

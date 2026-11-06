@@ -34,6 +34,7 @@ import {
   STALE_CATALOG_REASON,
   explainFailed,
   messageOf,
+  sentInstead,
   sessionBusy,
   statementFailed,
   transactionLost,
@@ -179,10 +180,12 @@ export function statementRunners(live: LiveContext) {
             })
             .then(async (result) => {
               const put = await results.put(heldOf(result), paging);
+              const sent = bound.sql === sql ? sentInstead(result.sent, sql) : undefined;
               return {
                 ...put,
                 ...(result.reply === undefined ? {} : { reply: result.reply }),
                 ...(result.source === undefined ? {} : { source: result.source }),
+                ...(sent === undefined ? {} : { sent }),
               };
             }),
         (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),

@@ -1,4 +1,4 @@
-import { errorPositionOf, offsetOfPosition, PluginError } from "@table-craft/plugin-api";
+import { errorPositionOf, offsetOfPosition, PluginError, sentStatementOf } from "@table-craft/plugin-api";
 import { serverErrorPosition as mssqlErrorPosition } from "@table-craft/plugin-mssql/errorPosition";
 import { syntaxErrorPosition } from "@table-craft/plugin-mysql/errorPosition";
 import { serverErrorPosition } from "@table-craft/plugin-postgres/errorPosition";
@@ -27,6 +27,15 @@ describe("error positions in the contract", () => {
     });
     expect(errorPositionOf(foreign)).toBeUndefined();
     expect(errorPositionOf(new Error("x"))).toBeUndefined();
+  });
+
+  it("givenSentTextInOptions_whenReadAcrossBundles_thenShapeChecked", () => {
+    expect(sentStatementOf(new PluginError("timedOut", "x", { sent: "SELECT /*+ X */ 1" }))).toBe("SELECT /*+ X */ 1");
+    expect(sentStatementOf(new PluginError("timedOut", "x"))).toBeUndefined();
+    expect(sentStatementOf(new PluginError("timedOut", "x", { sent: "" }))).toBeUndefined();
+    const foreign = Object.assign(new Error("x"), { name: "PluginError", code: "timedOut", sent: 7 });
+    expect(sentStatementOf(foreign)).toBeUndefined();
+    expect(sentStatementOf(Object.assign(new Error("x"), { sent: "SELECT 1" }))).toBeUndefined();
   });
 
   it("givenLineAndColumn_whenOffset_thenCountsFromLineStartAndClamps", () => {

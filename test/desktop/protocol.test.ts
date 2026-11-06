@@ -223,7 +223,7 @@ describe("engine protocol", () => {
     expectTypeOf<
       Omit<
         protocol.ExecutedStatement,
-        "firstWindow" | "transactionOpen" | "namespace" | "reconnected" | "reply" | "source"
+        "firstWindow" | "transactionOpen" | "namespace" | "reconnected" | "reply" | "source" | "sent"
       >
     >().toEqualTypeOf<ResultSummary>();
     expectTypeOf<NonNullable<protocol.ExecutedStatement["reply"]>>().toEqualTypeOf<CommandReply>();

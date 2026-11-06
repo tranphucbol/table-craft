@@ -115,6 +115,12 @@ export interface ExecuteResult {
    * keyless and multi-key commands. Only a `keyValue` plugin sets it.
    */
   readonly source?: KeySource;
+  /**
+   * The text the plugin sent the server, when it is not the `sql` it was given, such as the
+   * statement with an optimizer hint the plugin added: the host shows it in the query history and
+   * Services instead. Leave it out when the plugin sent `sql` as it is.
+   */
+  readonly sent?: string;
 }
 
 /** A scalar reply to a command (decision 112). */

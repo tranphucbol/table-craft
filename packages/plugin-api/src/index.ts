@@ -56,6 +56,7 @@ export {
   PluginError,
   type PluginErrorCode,
   type PluginErrorOptions,
+  sentStatementOf,
   TlsSettingsError,
 } from "./errors.js";
 export {

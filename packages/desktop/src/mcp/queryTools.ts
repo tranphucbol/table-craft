@@ -239,14 +239,15 @@ export function createQueryTools(context: ToolContext): QueryTools {
               }),
             ),
         );
-        record("success", executed.columns.length === 0 ? executed.rowsAffected : executed.rowCount, null, ran);
+        const rows = executed.columns.length === 0 ? executed.rowsAffected : executed.rowCount;
+        record("success", rows, null, executed.sent ?? ran);
         return await answer(datasource, executed);
       } catch (cause) {
         const text = statement?.sql ?? sql;
         if (cause instanceof ToolFailure)
           record(cause.outcome === "error" ? "error" : "cancelled", null, cause.message, text);
         else if (cause instanceof EngineCallError)
-          record(cause.code === "cancelled" ? "cancelled" : "error", null, cause.message, text);
+          record(cause.code === "cancelled" ? "cancelled" : "error", null, cause.message, cause.sent ?? text);
         throw cause;
       }
     },

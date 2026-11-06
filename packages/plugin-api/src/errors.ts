@@ -44,12 +44,18 @@ export type ErrorPosition = { readonly offset: number } | { readonly line: numbe
 export interface PluginErrorOptions extends ErrorOptions {
   /** Leave it out when the database did not say; the host then underlines nothing. */
   readonly position?: ErrorPosition;
+  /**
+   * The text the plugin sent the server, when it is not the `sql` it was given, as
+   * `ExecuteResult.sent`; the position still points into the `sql` it was given.
+   */
+  readonly sent?: string;
 }
 
 /** What a plugin throws when the host should react to the kind of failure, not just show it. */
 export class PluginError extends Error {
   override readonly name = "PluginError";
   readonly position: ErrorPosition | undefined;
+  readonly sent?: string;
 
   constructor(
     readonly code: PluginErrorCode,
@@ -58,6 +64,7 @@ export class PluginError extends Error {
   ) {
     super(message, options);
     this.position = options?.position;
+    if (options?.sent !== undefined) this.sent = options.sent;
   }
 }
 
@@ -87,6 +94,16 @@ export function errorPositionOf(error: unknown): ErrorPosition | undefined {
   if (isWholeAtLeast(offset, 0)) return { offset };
   if (isWholeAtLeast(line, 1) && isWholeAtLeast(column, 1)) return { line, column };
   return undefined;
+}
+
+/**
+ * The text a plugin said it sent with a `PluginError`, checked by shape like `errorPositionOf`;
+ * anything but a non-empty string reads as none.
+ */
+export function sentStatementOf(error: unknown): string | undefined {
+  if (!isPluginError(error)) return undefined;
+  const sent: unknown = (error as { sent?: unknown }).sent;
+  return typeof sent === "string" && sent !== "" ? sent : undefined;
 }
 
 /** `position` as a 0-based offset into `text`, clamped to the text. */

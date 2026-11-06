@@ -447,6 +447,102 @@ describe("engine", () => {
   });
 });
 
+const HINTING_ID = "hinting";
+const HINT = "/*+ LIMIT_TIME(1000) */";
+const FAILING = /^SELECT FAIL$/;
+
+/** SQLite that adds a hint to each SELECT it sends, and says so, like a plugin that stops reads at a limit. */
+function hintingPlugin(): DatasourcePlugin {
+  const hinted = (sql: string) => sql.replace(/^SELECT/, `SELECT ${HINT}`);
+  return {
+    ...sqlite,
+    id: HINTING_ID,
+    connect: async (config, connectOptions) => {
+      const session = await sqlite.connect(config, connectOptions);
+      return {
+        ...session,
+        execute: async (sql, params, options) => {
+          const sent = hinted(sql);
+          if (FAILING.test(sql)) throw new PluginError("timedOut", "stopped at the limit", { sent });
+          const result = await session.execute(sql, params, options);
+          return sent === sql ? result : { ...result, sent };
+        },
+      };
+    },
+  };
+}
+
+function connectedToHinting() {
+  const loaded: PluginLoadResult = {
+    status: "loaded",
+    directory: "plugins/hinting",
+    manifest: { ...SQLITE_MANIFEST, id: HINTING_ID },
+    plugin: hintingPlugin(),
+  };
+  return createEngine({ datasource: { ...DATASOURCE, pluginId: HINTING_ID }, plugins: [loaded] }).connect();
+}
+
+describe("engine statement.execute sent text", () => {
+  it("givenPluginAddedAHint_whenExecuted_thenTheSentTextComesBack", async () => {
+    const connection = connectedToHinting();
+    const sessionId = await openSession(connection);
+
+    const executed = resultOf<ExecutedStatement>(
+      await connection.handle({ id: 2, type: "statement.execute", ...PAGING, sessionId, sql: "SELECT 1 AS one" }),
+    );
+
+    expect(executed.sent).toBe(`SELECT ${HINT} 1 AS one`);
+    expect(executed.firstWindow.rows).toEqual([[1]]);
+  });
+
+  it("givenPluginSentTheTextAsGiven_whenExecuted_thenNoSentText", async () => {
+    const connection = connectedToHinting();
+    const sessionId = await openSession(connection);
+
+    const executed = resultOf<ExecutedStatement>(
+      await connection.handle({ id: 2, type: "statement.execute", ...PAGING, sessionId, sql: "VALUES (1)" }),
+    );
+
+    expect(executed).not.toHaveProperty("sent");
+  });
+
+  it("givenBoundParameters_whenPluginAddedAHint_thenNoSentText", async () => {
+    const connection = connectedToHinting();
+    const sessionId = await openSession(connection);
+
+    const executed = resultOf<ExecutedStatement>(
+      await connection.handle({
+        id: 2,
+        type: "statement.execute",
+        ...PAGING,
+        sessionId,
+        sql: "SELECT :v AS v",
+        parameters: { ":v": "secret" },
+      }),
+    );
+
+    expect(executed).not.toHaveProperty("sent");
+  });
+
+  it("givenPluginErrorWithSentText_whenItFails_thenTheErrorCarriesIt", async () => {
+    const connection = connectedToHinting();
+    const sessionId = await openSession(connection);
+
+    const response = await connection.handle({
+      id: 2,
+      type: "statement.execute",
+      ...PAGING,
+      sessionId,
+      sql: "SELECT FAIL",
+    });
+
+    expect(response).toMatchObject({
+      type: "engine.error",
+      error: { code: "statementTimedOut", sent: `SELECT ${HINT} FAIL` },
+    });
+  });
+});
+
 describe("engine credentials (decision 149)", () => {
   const UNREACHABLE = { ...DATASOURCE, config: { path: "/nonexistent-table-craft-directory/db.sqlite" } };
 

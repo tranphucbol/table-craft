@@ -136,6 +136,10 @@ A plugin's result columns may name their type class (`typeClass`: `integer`, `fl
 `boolean`, `temporal`, `json`, `bytes` or `text`), which then decides how the grid aligns, sorts
 and exports them ahead of the type name; SQL Server's `bit`, for one, is a boolean.
 
+A plugin that sends the server other text than `execute` was given, such as a statement with a
+hint it added, returns that text as the result's `sent`, or passes `sent` to the `PluginError` it
+throws (plugin API 2.1). The query history and Services then show what reached the server.
+
 The shared SQL kit in `@table-craft/plugin-api/sql` also reads Oracle and SQL Server scripts when a
 plugin turns on their dialect options: `[bracketed]` names, `q'[…]'` and `N'…'` strings, `GO` and
 `/` separator lines, and `:1` or `@p1` placeholders.

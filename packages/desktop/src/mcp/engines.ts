@@ -20,6 +20,8 @@ export class EngineCallError extends Error {
     readonly code: string,
     message: string,
     readonly hint: string | null,
+    /** The text the plugin sent instead of the statement, as `EngineError.sent`. */
+    readonly sent?: string,
   ) {
     super(message);
     this.name = "EngineCallError";
@@ -52,7 +54,8 @@ export function engineClient(port: EnginePort): { readonly call: EngineCall; rea
     if (waiting === undefined) return;
     pending.delete(data.id);
     if (data.type === "engine.error") {
-      waiting.reject(new EngineCallError(data.error.code, data.error.message, data.error.hint));
+      const { code, message, hint, sent } = data.error;
+      waiting.reject(new EngineCallError(code, message, hint, sent));
     } else {
       waiting.resolve(data.result);
     }

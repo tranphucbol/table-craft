@@ -605,6 +605,8 @@ export interface EngineError {
    * request's own (bound parameters, Explain).
    */
   readonly position?: number;
+  /** For a failed statement: the text the plugin sent instead, as `ExecutedStatement.sent`. */
+  readonly sent?: string;
 }
 
 export interface EngineErrorMessage {
