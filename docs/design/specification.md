@@ -598,6 +598,7 @@ handles belong to the port that created them and are released when it closes.
 | `result.sort`           | `handle`, `keys: { column, direction }[]`                                                         | `ResultState`; windows read through the new order, `[]` restores it                                                                                |
 | `result.extract`        | `handle`, `extractor`, `rows: { from, to }[]`, `columns`                                          | the text, rows in sorted order; with a local filter, `rows` count shown rows                                                                       |
 | `result.aggregate`      | `handle`, `rows: { from, to }[]`, `columns`                                                       | `SelectionAggregates { cells, distinct, kind, sum, avg, min, max }` over the shown rows; see Result grid                                           |
+| `result.chart`          | `handle`, `spec: ChartSpec`                                                                       | `ChartData { axis, categories, series, rows, skipped, truncated }` over the shown rows; see Result grid, Chart                                     |
 | `result.cellBytes`      | `handle`, `row`, `column`, `maxBytes`                                                             | the cell's whole `bytes` value, re-read by key when the grid holds a preview; refused past `maxBytes`                                              |
 | `result.saveBytes`      | `handle`, `row`, `column`, `path`, `maxBytes`                                                     | the bytes written; the engine writes the whole value to the absolute `path`                                                                        |
 | `result.loadBytes`      | `handle`, `path`, `maxBytes`                                                                      | `StagedBytes { id, length, preview }`; the file stays in the engine for the result's edits until it is released                                    |
@@ -1199,7 +1200,7 @@ header and row-number gutter, virtualized rows, and an optional value panel on t
 
 **Paging.** A statement answers with its first page, Settings' page size (500 by default), and an
 open cursor (decision 025). The toolbar reads, left to right: Fetch Next Page, Fetch All, Rerun, Cancel fetch
-while a fetch runs, the state label, then the extractor select, Copy, Export Data… and Value Panel.
+while a fetch runs, the state label, then the extractor select, Copy, Export Data…, Transpose, Value Panel and Chart.
 
 | Label                                    | When                                                           |
 | ---------------------------------------- | -------------------------------------------------------------- |
@@ -1301,6 +1302,39 @@ and the records as columns, virtualised sideways; the flag belongs to the result
 survives Rerun. Selection, focus, the editor and pending edits keep record and column coordinates,
 so ← → move between records and ↑ ↓ between columns, and an edit in the transposed view hits the
 same buffered cell.
+
+**Chart.** Plan 155, decision 160. `grid.toggleChart` (⌥⌘C, or the toolbar's Chart toggle) draws
+the tab's shown rows, its local sort and filter included, as a chart in place of the rows; the
+value panel and Transpose step aside. The renderer sends a `ChartSpec` (`kind`, `x`, `y[]`,
+`groupBy`, `aggregate`, `bins`) with `result.chart`, and core's `chartData` folds the rows the
+engine holds into series. Kinds and their axes:
+
+| Kind      | X axis                                    | Values                                 |
+| --------- | ----------------------------------------- | -------------------------------------- |
+| Bar       | categories, dates included                | one or more, folded by the aggregate   |
+| Line/Area | time for a date column, value for numbers | one or more; categories fold as a bar  |
+| Pie       | categories, the largest 19 and Other      | one, folded by the aggregate           |
+| Scatter   | time or value                             | one or more points per row             |
+| Histogram | bins on round edges near the chosen count | one numeric column                     |
+| Stock     | categories                                | four: open, high, low, close (candles) |
+
+The first chart is suggested from the column types: open/high/low/close with a date gives Stock, a
+date gives Line, a text column Bar, two numbers Scatter, one number Histogram; a result with no
+numeric column says `Nothing to plot`. Values prefer numeric columns whose names do not read as
+keys (`id`, `*_id`). Categories keep their first order and stop at 1,000, series at 20. Rows whose
+value is `NULL` or not a number are skipped and counted. Dates plot on their wall-clock digits as
+UTC, so a chart never shifts them by the machine's zone. The chart re-asks 250 ms after the spec,
+the row count, the sort or the view changes, dropping stale answers. A status line reads
+`Plotting 500 rows · more on the server; Fetch All to plot every row`, then truncations and skipped
+rows. The spec belongs to the result tab and survives Rerun when its columns are still there.
+
+ECharts (decision 160) draws on a canvas loaded on first use; series take the datasource tints,
+axes and text the theme's ink and border, candles `--tc-success` up and `--tc-danger` down, and a
+theme or density change repaints in place. Time and value axes zoom with the wheel; a slider shows
+from 60 points, and **Reset Chart Zoom** appears once zoomed. **Export Chart as PNG…**
+(`grid.exportChart`, in the chart bar) saves the drawing at twice its pixels on the canvas colour
+through `charts.export-image`. The plot is `role="img"` named like `Bar chart of total by country,
+12 bars`.
 
 **Export.** `grid.export`, and `explorer.export` on a table or view, open the Export dialog:
 format (the five extractors and Excel (XLSX)), columns (the visible ones checked) and file, with

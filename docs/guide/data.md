@@ -45,6 +45,26 @@ to open text raw by default.
 
 ![Find, filter and aggregate in the grid](../media/grid-helpers.gif)
 
+### Chart
+
+**Show Chart** (`⌥⌘C`, or **Chart** in the grid's toolbar) draws the rows you have fetched as a
+chart, in a console result and in the table editor alike. It picks a kind from the columns: a date
+and a number give a line over time, a text column and a number a bar per value, two numbers a
+scatter, one number a histogram, and open, high, low and close columns beside a date a stock
+chart. The chart bar above it switches between Bar, Line, Area, Pie, Scatter, Histogram and Stock,
+and picks the X axis, the values (**+ Value** adds a series), a **Group by** column that splits
+them into series, how rows with the same label fold (sum, average, count, minimum or maximum), and
+a histogram's bins; a kind the columns cannot draw says what it needs when you point at it.
+
+The chart follows the grid: it plots the rows the grid shows, after its sort and local filter, and
+redraws as you **Fetch All**. The line under it says how many rows it plots, whether more wait on
+the server, and how many it skipped because the value was `NULL` or not a number. Zoom a time or
+number axis with the wheel, then **Reset Chart Zoom**. **Export Chart as PNG…**, at the right of the
+chart bar, saves the drawing. The chart keeps its settings when you rerun the statement, as long
+as its columns are still there, and takes the colours of the current theme.
+
+![A query drawn as a chart](../media/chart.gif)
+
 See [Result grid](../design/specification.md#result-grid).
 
 ## Table data editor
