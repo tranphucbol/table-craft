@@ -2,14 +2,16 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync }
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { API_VERSION, MANIFEST_FILE } from "@table-craft/plugin-api";
+import { API_VERSION, MANIFEST_FILE, parseVersion } from "@table-craft/plugin-api";
 import { afterEach, describe, expect, it } from "vitest";
 import { readPackageTarball } from "@table-craft/desktop/main/pluginStore/tarball.js";
 import { checkPackage, checkPackages, PackageCheckError } from "../../scripts/plugins/check.js";
 import { npmPack, packAll, PLUGIN_KEYWORD, stagePlugin } from "../../scripts/plugins/pack.js";
 import { pluginPackageName, release, startRegistry, type LoopbackRegistry } from "../support/pluginRegistry.js";
 
-const FROZEN_SQLITE = join(import.meta.dirname, "..", "support", "frozen-plugins", `sqlite-${API_VERSION}`);
+/** Plugins are frozen once per major (decision 107), so a minor bump of the host keeps this one. */
+const FROZEN_API_VERSION = `${String(parseVersion(API_VERSION)?.major)}.0.0`;
+const FROZEN_SQLITE = join(import.meta.dirname, "..", "support", "frozen-plugins", `sqlite-${FROZEN_API_VERSION}`);
 const VERSION = "1.4.2";
 const PACKED_FILES = ["LICENSE", "README.md", "index.js", "package.json", MANIFEST_FILE];
 const NPM_TIMEOUT_MS = 60_000;
@@ -53,7 +55,7 @@ describe("plugin packages", () => {
       type: "module",
       main: "index.js",
       license: "MIT",
-      tableCraft: { id: "sqlite", apiVersion: API_VERSION },
+      tableCraft: { id: "sqlite", apiVersion: FROZEN_API_VERSION },
       repository: { type: "git", directory: "plugins/sqlite" },
     });
     expect(json.keywords).toContain(PLUGIN_KEYWORD);

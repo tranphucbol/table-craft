@@ -122,6 +122,19 @@ describe("MCP tools", () => {
     ]);
   });
 
+  it("givenPluginSentAHintedStatement_whenQueried_thenHistoryRecordsTheSentText", async () => {
+    const hinted = (sql: string) => sql.replace("SELECT", "SELECT /*+ MAX_EXECUTION_TIME(1000) */");
+    const harness = agentHarness([SHOP], { sentOf: hinted });
+
+    await harness.call("run_query", { datasource: "shop", sql: "SELECT name FROM customers" });
+    await harness.call("run_query", { datasource: "shop", sql: "SELECT nope FROM customers" });
+
+    expect(harness.history).toMatchObject([
+      { sql: "SELECT /*+ MAX_EXECUTION_TIME(1000) */ name FROM customers", outcome: "success" },
+      { sql: "SELECT /*+ MAX_EXECUTION_TIME(1000) */ nope FROM customers", outcome: "error" },
+    ]);
+  });
+
   it("givenRowsWithinTheCap_whenQueried_thenNoHandleIsKept", async () => {
     const harness = agentHarness([SHOP]);
 

@@ -91,6 +91,12 @@ export interface ExecutedStatement extends ResultState {
   readonly reply?: CommandReply;
   /** The one key the command read, when the plugin can tell (decision 119). */
   readonly source?: KeySource;
+  /**
+   * The text the plugin sent instead of the request's `sql`, such as one with a hint it added;
+   * history and Services record it. Absent when the plugin sent the request's own text, and
+   * whenever parameters were bound, so their values never reach the history as text.
+   */
+  readonly sent?: string;
 }
 
 /** A lost session the engine replaced with a new one under the same `sessionId`. */

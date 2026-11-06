@@ -40,7 +40,11 @@ import {
 const captureWindow = evidenceFor("056");
 const writeEvidence = evidenceTextFor("056");
 
-const FROZEN_DIRECTORY = join(import.meta.dirname, `../support/frozen-plugins/sqlite-${API_VERSION}`);
+/** Plugins are frozen once per major (decision 107), so a minor bump of the host keeps this one. */
+const FROZEN_DIRECTORY = join(
+  import.meta.dirname,
+  `../support/frozen-plugins/sqlite-${String(parseVersion(API_VERSION)?.major)}.0.0`,
+);
 const MANIFEST_FILE = "table-craft-plugin.json";
 const ENTRY_FILE = "index.js";
 /** The bundle's own id constant; a copy under another id must change it with the manifest. */
@@ -165,7 +169,9 @@ describe.runIf(SMOKE_ENABLED)("plugin API live test", () => {
       const found = () => pluginLines(userDataDir).filter(({ line }) => line.msg === "plugin found");
       // A development run also loads the optional plugins it built, so only the built-ins are certain.
       await expect.poll(() => found().map(({ line }) => line.id)).toEqual(expect.arrayContaining(BUILT_IN_IDS));
-      expect(found().filter(({ line }) => line.apiVersion !== API_VERSION)).toEqual([]);
+      expect(
+        found().filter(({ line }) => BUILT_IN_IDS.includes(String(line.id)) && line.apiVersion !== API_VERSION),
+      ).toEqual([]);
       await captureWindow(page, "01-sqlite-on-api-1-0-0");
     },
     SCENARIO_TIMEOUT_MS,

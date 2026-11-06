@@ -688,6 +688,11 @@ type Admission =
   | { readonly kind: "managed"; readonly route: ConsoleIntentRoute; readonly safeLabel: string }
   | { readonly kind: "refused"; readonly error: EngineError };
 
+/** The text a plugin sent instead of the statement: history and Services record it, so a hint it added shows. */
+function sentEnd(sent: string | undefined): Pick<ExecutionEnd, "label" | "sql"> {
+  return sent === undefined ? {} : { label: firstLine(sent), sql: sent };
+}
+
 function privateError(error: EngineError): EngineError {
   return { code: error.code, ...PRIVATE_FAILED };
 }
@@ -863,6 +868,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         outcome: cancelled ? "cancelled" : "error",
         rowCount: null,
         message: cancelled ? null : error.message,
+        ...sentEnd(error.sent),
       };
     }
 
@@ -1262,7 +1268,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             outcome: "success",
             rowCount: rowsOf(executed),
             message: null,
-            ...(label === null ? messagesOf(executed) : {}),
+            ...(label === null ? { ...messagesOf(executed), ...sentEnd(executed.sent) } : {}),
           });
           log(id, {
             sql,
@@ -2151,6 +2157,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               rowCount: rowsOf(executed),
               message: null,
               ...messagesOf(executed),
+              ...sentEnd(executed.sent),
             });
             ended = null;
             log(id, {

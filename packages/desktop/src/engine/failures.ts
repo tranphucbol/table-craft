@@ -1,5 +1,12 @@
 import { CoreError, EditRejectedError, TunnelError } from "@table-craft/core";
-import { errorPositionOf, isPluginError, isTlsSettingsError, offsetOfPosition, z } from "@table-craft/plugin-api";
+import {
+  errorPositionOf,
+  isPluginError,
+  isTlsSettingsError,
+  offsetOfPosition,
+  sentStatementOf,
+  z,
+} from "@table-craft/plugin-api";
 import {
   STATEMENT_CANCELLED_MESSAGE,
   KEY_HISTORY_MAX_BYTES,
@@ -64,10 +71,23 @@ export function positionIn(sent: string, cause: unknown): number | undefined {
 }
 
 /**
- * `sent` is the text the plugin ran, when it is also the request's own `sql`: only then does the
- * plugin's error position point into the user's text (decision 082).
+ * `own` is the text the plugin was given, when it is also the request's own `sql`: only then does
+ * the plugin's error position point into the user's text (decision 082), and only then is the text
+ * the plugin says it sent instead reported, so bound values never reach the history as text.
  */
-export function statementFailed(cause: unknown, readOnly: boolean, sent?: string): EngineFailure {
+export function statementFailed(cause: unknown, readOnly: boolean, own?: string): EngineFailure {
+  const failure = failedStatement(cause, readOnly, own);
+  const sent = own === undefined ? undefined : sentInstead(sentStatementOf(cause), own);
+  if (sent === undefined || failure.error.sent !== undefined) return failure;
+  return new EngineFailure({ ...failure.error, sent }, failure.cause);
+}
+
+/** What a plugin says it sent, when it is text other than what it was given. */
+export function sentInstead(sent: unknown, given: string): string | undefined {
+  return typeof sent === "string" && sent !== "" && sent !== given ? sent : undefined;
+}
+
+function failedStatement(cause: unknown, readOnly: boolean, own: string | undefined): EngineFailure {
   if (cause instanceof EngineFailure) return cause;
   if (isPluginError(cause) && cause.code === "connectionLost") {
     return new EngineFailure({ code: "connectionLost", message: cause.message, hint: RECONNECT_HINT }, cause);
@@ -82,7 +102,7 @@ export function statementFailed(cause: unknown, readOnly: boolean, sent?: string
   if (cause instanceof TunnelError) {
     return new EngineFailure({ code: cause.code, message: cause.message, hint: cause.hint }, cause);
   }
-  const position = sent === undefined ? undefined : positionIn(sent, cause);
+  const position = own === undefined ? undefined : positionIn(own, cause);
   return new EngineFailure(
     {
       code: "statementFailed",

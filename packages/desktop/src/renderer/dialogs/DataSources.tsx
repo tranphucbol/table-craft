@@ -160,8 +160,15 @@ interface FieldProps {
   readonly plugin?: PluginInfo;
 }
 
-function PlainField({ field, draft, onChange, onPasteUrl, hint }: FieldProps & { readonly hint?: string | null }) {
+function PlainField({
+  field,
+  draft,
+  onChange,
+  onPasteUrl,
+  hint: ownHint,
+}: FieldProps & { readonly hint?: string | null }) {
   const id = useId();
+  const hint = ownHint ?? field.hint;
   const value = draft.values[field.key];
   const set = (next: string | boolean) => onChange({ values: { ...draft.values, [field.key]: next } });
   if (field.kind === "checkbox") {

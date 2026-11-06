@@ -318,6 +318,21 @@ describe("pluginManifestSchema url", () => {
   });
 });
 
+describe("pluginManifestSchema hint", () => {
+  const parses = (fields: readonly unknown[]): boolean =>
+    pluginManifestSchema.safeParse({ ...VALID_MANIFEST, connection: { fields } }).success;
+
+  it("givenFieldWithHint_whenParsed_thenHintKept", () => {
+    const timeout = { key: "timeout", label: "Timeout (s)", kind: "number", hint: "Blank waits 60 s." };
+    const parsed = pluginManifestSchema.parse({ ...VALID_MANIFEST, connection: { fields: [timeout] } });
+    expect(parsed.connection.fields[0]?.hint).toBe("Blank waits 60 s.");
+  });
+
+  it("givenEmptyHint_whenParsed_thenRejected", () => {
+    expect(parses([{ ...HOST, hint: "" }])).toBe(false);
+  });
+});
+
 describe("pluginManifestSchema visibleWhen", () => {
   const MODE = {
     key: "mode",

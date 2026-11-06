@@ -26,6 +26,8 @@ export class EngineRequestError extends Error {
   /** Where in the sent SQL the database said the statement went wrong (decision 082). */
   readonly position: number | undefined;
   readonly keyConflict: KeyConflictSnapshot | undefined;
+  /** The text the plugin sent instead of the request's own. */
+  readonly sent: string | undefined;
 
   constructor(error: EngineError, requestId: number | null = null) {
     super(error.message);
@@ -34,6 +36,7 @@ export class EngineRequestError extends Error {
     this.requestId = requestId;
     this.position = error.position;
     this.keyConflict = error.keyConflict;
+    this.sent = error.sent;
   }
 }
 

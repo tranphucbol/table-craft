@@ -115,6 +115,7 @@ dialog lists every plugin, an unavailable one with its reason. A connection fiel
 | `default`     | string, number or boolean                                  | Optional; prefilled in a new datasource                                                                             |
 | `required`    | boolean                                                    | Optional; the dialog refuses to save it blank                                                                       |
 | `placeholder` | string                                                     | Optional                                                                                                            |
+| `hint`        | string                                                     | Optional; shown in an (i) beside the input (plugin API 2.1)                                                         |
 | `options`     | `{ value, label }[]`                                       | For `select`                                                                                                        |
 | `group`       | `general` or `advanced`                                    | Optional, `general` by default; Advanced is its own section                                                         |
 | `secret`      | boolean                                                    | Kept by main per decision 020; required for `password`                                                              |
@@ -2084,6 +2085,13 @@ destructive confirmation or Parameters dialog was declined, `Nothing to run`, ta
 `TABLE_CRAFT_DATASOURCE` datasource. A table submit is one entry with source `table` whose text is
 its statements, each ending in `;`, one per line; a failed one is recorded with outcome error and
 the database's message, its text previewed again from the same edits.
+
+A plugin that sends the server other text than it was given, such as a statement with an optimizer
+hint it added, says so in `ExecuteResult.sent`, or `sent` on its `PluginError` (plugin API 2.1).
+The engine passes it on as `ExecutedStatement.sent` or `EngineError.sent`, and history, the
+execution in Services (its label and Copy SQL) and an agent's history entry show that text instead,
+so the hint is there to read and to run again. It is dropped when parameters were bound, since the
+plugin then received text with the values in it.
 
 Query History… (`⌥⌘E`) works on the active console's datasource or the selected one in the Database
 tool window, whose context menu lists it after New Console. The dialog is a `ListPicker`

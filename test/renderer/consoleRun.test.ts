@@ -26,6 +26,8 @@ import type { HistoryEntry } from "@table-craft/desktop/preload/bridge.js";
 
 const SESSION_ID = "s1";
 const ANSWER_AFTER_MS = 10_000;
+/** What a fake plugin adds to a statement naming HINTED, and reports as sent. */
+const HINT = "/*+ MAX_EXECUTION_TIME(1000) */";
 
 const LEADING_COMMENTS = /^(?:\s|--[^\n]*(?:\n|$))*/;
 
@@ -129,6 +131,7 @@ function fakeEngine() {
             new EngineRequestError({ code: "statementTimedOut", message: "timed out", hint: "Run it again." }),
           );
         }
+        const sent = sql.includes("HINTED") ? sql.replace("SELECT", `SELECT ${HINT}`) : undefined;
         if (sql.includes("FAIL")) {
           return Promise.reject(
             new EngineRequestError({
@@ -136,6 +139,7 @@ function fakeEngine() {
               message: "syntax error",
               hint: "Fix the SQL.",
               position: sql.indexOf("FAIL"),
+              ...(sent === undefined ? {} : { sent }),
             }),
           );
         }
@@ -159,6 +163,7 @@ function fakeEngine() {
           ...(uses ? { namespace } : {}),
           ...(sql.includes("WARN") ? { messages: WARNINGS } : {}),
           ...(sql.includes("RECONNECT") ? { reconnected: { namespace: ["public"], namespaceLost: true } } : {}),
+          ...(sent === undefined ? {} : { sent }),
         };
         return Promise.resolve(result);
       }
@@ -800,6 +805,23 @@ describe("console history and executions", () => {
     expect(executions.getState().byTab.c1?.map((execution) => [execution.label, execution.outcome])).toEqual([
       ["SELECT FAIL", "error"],
       ["SELECT 1", "success"],
+    ]);
+  });
+
+  it("givenPluginSentAHintedStatement_whenRun_thenHistoryAndServicesShowTheSentText", async () => {
+    const { store, recorded, executions } = await opened("SELECT 'HINTED';\nSELECT 'HINTED FAIL';", {
+      onError: "continue",
+    });
+
+    await store.getState().run("c1", "all");
+
+    expect(recorded.map((entry) => [entry.sql, entry.outcome])).toEqual([
+      [`SELECT ${HINT} 'HINTED'`, "success"],
+      [`SELECT ${HINT} 'HINTED FAIL'`, "error"],
+    ]);
+    expect(executions.getState().byTab.c1?.map((execution) => [execution.label, execution.sql])).toEqual([
+      [`SELECT ${HINT} 'HINTED FAIL'`, `SELECT ${HINT} 'HINTED FAIL'`],
+      [`SELECT ${HINT} 'HINTED'`, `SELECT ${HINT} 'HINTED'`],
     ]);
   });
 

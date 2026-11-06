@@ -184,6 +184,8 @@ export interface ConnectionField {
   readonly default?: string | number | boolean | undefined;
   readonly required?: boolean | undefined;
   readonly placeholder?: string | undefined;
+  /** Shown in an (i) beside the field. */
+  readonly hint?: string | undefined;
   readonly options?: readonly { readonly value: string; readonly label: string }[] | undefined;
   readonly group?: "general" | "advanced" | undefined;
   readonly secret?: boolean | undefined;

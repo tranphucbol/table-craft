@@ -1,4 +1,5 @@
 import type { PluginLoadResult } from "@table-craft/core";
+import { PluginError, type DatasourcePlugin } from "@table-craft/plugin-api";
 import sqlite from "@table-craft/plugin-sqlite";
 import { createEngine, type EngineConnection } from "@table-craft/desktop/engine/engine.js";
 import type { OpenedSession } from "@table-craft/desktop/engine/protocol.js";
@@ -18,6 +19,29 @@ const LOADED_SQLITE: PluginLoadResult = {
   manifest: SQLITE_MANIFEST,
   plugin: sqlite,
 };
+
+/** SQLite that reports `sentOf(sql)` as the text it sent, as a plugin adding a hint does. */
+function sendingSqlite(sentOf: (sql: string) => string): PluginLoadResult {
+  const base: DatasourcePlugin = sqlite;
+  const plugin: DatasourcePlugin = {
+    ...base,
+    connect: async (config, connectOptions) => {
+      const session = await base.connect(config, connectOptions);
+      return {
+        ...session,
+        execute: async (sql, params, options) => {
+          const sent = sentOf(sql);
+          try {
+            return { ...(await session.execute(sql, params, options)), sent };
+          } catch (cause) {
+            throw new PluginError("statementFailed", cause instanceof Error ? cause.message : String(cause), { sent });
+          }
+        },
+      };
+    },
+  };
+  return { status: "loaded", directory: "plugins/sqlite", manifest: SQLITE_MANIFEST, plugin };
+}
 
 /** A caller as the server makes one per `tools/call`, with its own approval wait. */
 export function agentCaller(): Caller {
@@ -76,7 +100,7 @@ export interface AgentHarness {
 /** The MCP tools over one seeded SQLite file per datasource id, with approvals the test answers. */
 export function agentHarness(
   datasources: readonly AgentDatasource[],
-  options: { readOnly?: boolean } = {},
+  options: { readOnly?: boolean; sentOf?: (sql: string) => string } = {},
 ): AgentHarness {
   const path = seededSqliteFile();
   const history: AgentHistoryEntry[] = [];
@@ -105,7 +129,7 @@ export function agentHarness(
           readOnly: options.readOnly ?? false,
           keepAliveSeconds: 0,
         },
-        plugins: [LOADED_SQLITE],
+        plugins: [options.sentOf === undefined ? LOADED_SQLITE : sendingSqlite(options.sentOf)],
       });
       const connection = engine.connect();
       return Promise.resolve(

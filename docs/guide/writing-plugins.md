@@ -75,7 +75,7 @@ export default definePlugin({
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "2.0.0",
+  "apiVersion": "2.1.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -117,6 +117,10 @@ export default definePlugin({
 what the picker and the tree call it. The New Data Source picker lists one row per brand, and a
 session's `serverBrand` says which one the server is.
 
+`connection.fields` draws the connection form. A field's optional `hint` (plugin API 2.1) puts an
+(i) beside it: say what the field does, its unit, and what blank means, such as how a timeout
+applies.
+
 `connection.network` names the fields that hold the server's address (a text host, a number port and
 optionally a number of seconds to wait). A plugin that declares it gets the SSH tunnel: TableCraft
 opens the tunnel and hands the plugin `127.0.0.1` and the forwarded port in those fields, so the
@@ -131,6 +135,10 @@ configured host as `serverName`, which a `verify-full` check must use instead of
 A plugin's result columns may name their type class (`typeClass`: `integer`, `float`, `decimal`,
 `boolean`, `temporal`, `json`, `bytes` or `text`), which then decides how the grid aligns, sorts
 and exports them ahead of the type name; SQL Server's `bit`, for one, is a boolean.
+
+A plugin that sends the server other text than `execute` was given, such as a statement with a
+hint it added, returns that text as the result's `sent`, or passes `sent` to the `PluginError` it
+throws (plugin API 2.1). The query history and Services then show what reached the server.
 
 The shared SQL kit in `@table-craft/plugin-api/sql` also reads Oracle and SQL Server scripts when a
 plugin turns on their dialect options: `[bracketed]` names, `q'[…]'` and `N'…'` strings, `GO` and
@@ -171,7 +179,7 @@ registry, instead of npm:
     "version": "1.0.0",
     "type": "module",
     "main": "index.js",
-    "tableCraft": { "id": "example", "apiVersion": "2.0.0" }
+    "tableCraft": { "id": "example", "apiVersion": "2.1.0" }
   }
   ```
 

@@ -32,13 +32,14 @@ const UNEXPECTED_HINT = "Restart the app; if it happens again, report it.";
 
 export function toError(cause: unknown): EngineError {
   if (cause instanceof EngineRequestError) {
-    const { code, message, hint, position, keyConflict } = cause;
+    const { code, message, hint, position, keyConflict, sent } = cause;
     return {
       code,
       message,
       hint,
       ...(position === undefined ? {} : { position }),
       ...(keyConflict === undefined ? {} : { keyConflict }),
+      ...(sent === undefined ? {} : { sent }),
     };
   }
   return { code: "internal", message: cause instanceof Error ? cause.message : String(cause), hint: UNEXPECTED_HINT };
