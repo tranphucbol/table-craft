@@ -707,6 +707,9 @@ setting, limits a statement until its first page arrives: past it the engine can
 With `serverEnforced: true` beside it, on a session whose `serverTimeout` is not null, the engine
 also sends `serverTimeoutMs` so the server stops the statement by itself (decision 129); a
 statement the server stops answers `statementTimedOut` with the plugin's message, on any route.
+Without `cancel` the engine arms no timer, so for a plugin with `serverTimeout` and no `cancel`
+the renderer always sets `serverEnforced`, and the database alone stops the statement (decision
+159).
 Before a statement on a session idle for the keepalive interval, a `keepAlive` plugin's `ping`
 runs, bounded by `PING_TIMEOUT_MS`; a failed ping, or an `execute` rejecting `connectionLost`,
 opens a new session, restores manual mode, and runs the statement there; the result carries
@@ -2244,10 +2247,11 @@ sorted by name, the order it showed before. A file that is not JSON, fails the s
 the reason once. Two optional keys sit beside `readOnly` (decision 054): `keepAliveSeconds`
 (0–7,200; absent means 30, 0 turns keepalive off) and `statementTimeoutSeconds` (0–86,400; absent
 follows the `console.statementTimeoutSeconds` setting, 0 waits). The Data Sources dialog shows
-them in Advanced, the first for a plugin with `keepAlive`, the second for one with `cancel`.
-`enforceTimeoutOnServer: true` (stored only when true, decision 129) has the database stop console,
-table editor and Explain statements at that limit too; its checkbox needs `serverTimeout`, and the
-hint under it says what the tested server stops. `agentTimeoutSeconds` (1–3,600) is the agents'
+them in Advanced, the first for a plugin with `keepAlive`, the second for one with `cancel` or
+`serverTimeout`. `enforceTimeoutOnServer: true` (stored only when true, decision 129) has the
+database stop console, table editor and Explain statements at that limit too; its checkbox needs
+`serverTimeout`, and the hint under it says what the tested server stops. Without `cancel` the
+checkbox is ticked and locked and nothing is stored: the database is the only stop (decision 159). `agentTimeoutSeconds` (1–3,600) is the agents'
 override (MCP). `lastServer: { version, timeout?, cancel?, seenAt }` is the last server a console
 connect, Test Connection or agent session saw (decision 131): its version, its own limit
 (`timeout`, `null` when it has none, left out when the plugin did not report it), how `cancel`

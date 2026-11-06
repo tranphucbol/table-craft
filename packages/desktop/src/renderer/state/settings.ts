@@ -16,6 +16,7 @@ import type {
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { rendererLog } from "@table-craft/desktop/renderer/log/log.js";
 import type { CellFormats } from "@table-craft/desktop/renderer/grid/format.js";
+import type { StatementTimeoutKind } from "@table-craft/desktop/renderer/model/runSettings.js";
 import {
   DEFAULT_SETTINGS,
   type RunAllOnError,
@@ -214,11 +215,15 @@ export function statementTimeoutOf(
   return datasource?.statementTimeoutSeconds ?? useSettings.getState().settings.console.statementTimeoutSeconds;
 }
 
-/** Whether the datasource has the database stop its console and grid statements at that limit too (decision 129). */
+/**
+ * Whether the database is asked to stop the datasource's console and grid statements at that
+ * limit: when the user ticked it (decision 129), and always when only the database can (decision 159).
+ */
 export function serverEnforcedOf(
   datasource: { readonly enforceTimeoutOnServer?: true | undefined } | undefined,
+  kind: StatementTimeoutKind,
 ): boolean {
-  return datasource?.enforceTimeoutOnServer === true;
+  return kind === "server" || datasource?.enforceTimeoutOnServer === true;
 }
 
 /** The limit a request carries: nothing at 0, and the database asked only for a real limit. */

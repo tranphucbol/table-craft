@@ -15,7 +15,7 @@ import { NamespaceSwitcher } from "@table-craft/desktop/renderer/console/Namespa
 import { ResultTabs } from "@table-craft/desktop/renderer/console/ResultTabs.js";
 import { RunOnPicker } from "@table-craft/desktop/renderer/console/RunOnPicker.js";
 import { RunSettingsButton } from "@table-craft/desktop/renderer/console/RunSettings.js";
-import { causedByRunSettings } from "@table-craft/desktop/renderer/model/runSettings.js";
+import { causedByRunSettings, timeoutKindOf } from "@table-craft/desktop/renderer/model/runSettings.js";
 import { RUN_SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/runSettingsActions.js";
 import { TxControls } from "@table-craft/desktop/renderer/console/TxControls.js";
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
@@ -250,7 +250,7 @@ export function Console({ consoleId }: { readonly consoleId: string }) {
         <div className="flex shrink-0 items-center gap-1">
           <ActionButton actionId={HISTORY_ACTION_IDS.show} compact />
           {capabilities.includes("sql") ? <ActionButton actionId={ACTION_IDS.reformat} compact /> : null}
-          <RunSettingsButton consoleId={consoleId} session={session} timeouts={capabilities.includes("cancel")} />
+          <RunSettingsButton consoleId={consoleId} session={session} timeouts={timeoutKindOf(capabilities)} />
         </div>
         {capabilities.includes("transactions") ? (
           <>

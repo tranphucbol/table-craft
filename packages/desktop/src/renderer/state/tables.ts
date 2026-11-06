@@ -40,7 +40,7 @@ import {
   committedInput,
 } from "@table-craft/desktop/renderer/model/resultEdits.js";
 import { clampSelection, type GridSelection } from "@table-craft/desktop/renderer/model/gridSelection.js";
-import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { capabilitiesOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { NO_EXPORTS, useExports, type ExportStarter } from "@table-craft/desktop/renderer/state/exports.js";
 import {
   NO_EXECUTION_REPORTER,
@@ -56,6 +56,7 @@ import {
   type ResultSearch,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
+import { timeoutKindOf } from "@table-craft/desktop/renderer/model/runSettings.js";
 import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import {
   currentFormats,
@@ -811,7 +812,11 @@ export const useTables = createTablesStore({
   connect: (datasourceId) => useDatasources.getState().connect(datasourceId),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),
-  serverEnforced: (datasourceId) => serverEnforcedOf(datasourceById(useDatasources.getState(), datasourceId)),
+  serverEnforced: (datasourceId) => {
+    const state = useDatasources.getState();
+    const datasource = datasourceById(state, datasourceId);
+    return serverEnforcedOf(datasource, timeoutKindOf(capabilitiesOf(state.plugins, datasource?.pluginId ?? "")));
+  },
   executions: {
     start: (tabId, start) => useExecutions.getState().start(tabId, start),
     finish: (tabId, executionId, end) => useExecutions.getState().finish(tabId, executionId, end),

@@ -1,4 +1,4 @@
-import type { ResultPaging } from "@table-craft/desktop/engine/protocol.js";
+import type { Capability, ResultPaging } from "@table-craft/desktop/engine/protocol.js";
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
 import {
   PAGE_ROWS_RANGE,
@@ -22,6 +22,17 @@ export interface RunSettings {
 }
 
 export const DEFAULT_RUN_SETTINGS: RunSettings = { rows: { kind: "default" }, timeout: { kind: "default" } };
+
+/**
+ * Who stops a statement at its timeout (decision 159): the engine cancels it (`app`), only the
+ * database stops it because the plugin cannot cancel (`server`), or nothing does (`none`).
+ */
+export type StatementTimeoutKind = "app" | "server" | "none";
+
+export function timeoutKindOf(capabilities: readonly Capability[]): StatementTimeoutKind {
+  if (capabilities.includes("cancel")) return "app";
+  return capabilities.includes("serverTimeout") ? "server" : "none";
+}
 
 /** 0 is None, a choice of its own, so a custom timeout starts at one second. */
 export const RUN_TIMEOUT_RANGE: NumberRange = { min: 1, max: STATEMENT_TIMEOUT_SECONDS_RANGE.max };
