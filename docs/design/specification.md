@@ -2688,6 +2688,7 @@ Plan 013, decisions 012 and 032. Preferences are `<userData>/settings.json`, own
 | `data.groupDigits`                     | boolean                                                                                         | `false`       |
 | `data.pageRows`                        | 10–10,000                                                                                       | 500           |
 | `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                            | 100,000       |
+| `mcp.allowFocus`                       | boolean; an agent may raise the window when it opens or edits a console (decision 161)          | `true`        |
 | `mcp.clients`                          | `{ name, allowed }` per client answered ([Agents (MCP)](#agents-mcp))                           | `[]`          |
 | `mcp.enabled`                          | boolean; serve AI agents ([Agents (MCP)](#agents-mcp))                                          | `false`       |
 | `mcp.port`                             | 1,024–65,535, on 127.0.0.1                                                                      | 47,820        |
@@ -2986,7 +2987,7 @@ than one statement. `read` runs on the agent's read-only session (`session.open`
 `ddl` and `other` are refused under `askReads` and `read`, and under `ask` wait for approval, then
 run on the agent's writable session; `transaction` is refused. Under `askReads`, `get_key` waits
 too; the catalog tools, `scan_keys`, resources, `explain`, `format_sql`, `check_sql`,
-`open_in_console`, `get_active_context` and `fetch_rows` on an approved handle never do. Statements time out
+`open_in_console`, `get_active_context`, the console and window tools and `fetch_rows` on an approved handle never do. Statements time out
 after `mcp.statementTimeoutSeconds` (default 120) or the datasource's `agentTimeoutSeconds`, and
 always ask the server to stop them there too (decision 129). Rows come back as a fixed-width text table and as `structuredContent` (cells
 cut at 1000 characters); when more rows exist the result is kept under a handle (`r1`, …, at most
@@ -3040,7 +3041,24 @@ SQL (decision 008). `agentRowCap` (1–1,000) overrides `rowCap`, and `agentTime
 `get_key` (`keyValue`: `keyspace.scan` up to 20 batches, `keyspace.open` on the read session),
 `open_in_console` (main sends the text to the focused window, which opens a console; never runs
 it), `get_active_context` (the focused console's text, selection and schema, only when its
-datasource is exposed; the window answers within 5 seconds). On a `commands` datasource `run_query`
+datasource is exposed; the window answers within 5 seconds).
+
+**Consoles agents drive (decision 161).** The host and the windows talk through one request kind,
+`mcp.uiRequest` to main (`target` `focused` or `{ window }`, the sender's `webContents` id) and
+`mcp.uiAnswer` back; main relays, raises the window when the request sets `focus` and
+`mcp.allowFocus` allows it, and holds nothing. `open_in_console` takes `schema`, `title` (the file
+name, sanitised, suffixed when taken) and `focus`, and answers a handle (`c1`, …), the revision
+and whether the schema applied. The host keeps handle → MCP session, window and datasource; a
+handle of another session reads as unknown, and a session's end releases its consoles, whose
+windows drop the **AI** tab marker. `edit_console` takes up to 50 exact `{ oldText, newText }`
+edits applied in order (each must match once) or a whole `text` with the `revision` it was read
+at, plus an optional `select`; the window applies it as one undo step, bumps the revision and
+refuses `notFound`, `ambiguous`, `stale` or `selectNotFound` without a change. `read_console`
+and `list_consoles` answer the session's own consoles. `open_table` opens the table editor with
+`where` and `orderBy` checked to form one read through `script.split`; on an `askReads`
+datasource they are only typed into the bars. `reveal_in_explorer` selects a schema, table or
+column in the Database pane. A window that does not answer within 5 seconds reads as silent, one
+that closed as gone. On a `commands` datasource `run_query`
 takes one command. **Resources** `tablecraft://<datasource>[/<schema>[/<table>]]` (list, two
 templates, read; an unexposed one answers -32002) and **prompts** `explore_datasource` and
 `write_query`.
