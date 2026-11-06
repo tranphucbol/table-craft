@@ -42,7 +42,9 @@ connection dropped, saying so in Output; a statement running when the network go
 within one keepalive interval instead of hanging. A **statement timeout** (Settings → Editor →
 Running, or per data source under Advanced) cancels a console statement that runs too long, and
 **Also have the database stop it** under it hands the limit to MySQL, MariaDB, TiDB or PostgreSQL
-too, so the statement stops even when TableCraft cannot reach the server; exports
+too, so the statement stops even when TableCraft cannot reach the server. A plugin that cannot
+cancel but can have its database stop a statement shows the field with that box ticked and
+locked: the database is the only thing that stops it there. Exports
 and imports are not cut by it and are never reconnected mid-way, they stop only when the database
 answers nothing for the Transfer stall timeout (Settings → Data Editor → Export and import). An
 open transaction is never replaced silently: if its connection drops, the error says its changes

@@ -50,7 +50,12 @@ import {
   toSaveRequest,
   type FormDraft,
 } from "@table-craft/desktop/renderer/model/datasourceForm.js";
-import { serverLimitText, serverTimeoutText } from "@table-craft/desktop/renderer/model/format.js";
+import {
+  serverLimitText,
+  serverOnlyTimeoutText,
+  serverTimeoutText,
+} from "@table-craft/desktop/renderer/model/format.js";
+import { timeoutKindOf } from "@table-craft/desktop/renderer/model/runSettings.js";
 import { useSettings } from "@table-craft/desktop/renderer/state/settings.js";
 import {
   connectionFieldHelp,
@@ -74,6 +79,8 @@ const KEEPALIVE_HINT =
 const TIMEOUT_HINT =
   "A console statement that runs longer is cancelled. 0 waits forever. Blank follows Settings → Editor → Running.";
 const NO_SERVER_TIMEOUT_HINT = "This data source's plugin cannot ask the database to stop statements.";
+const SERVER_ONLY_TIMEOUT_HINT =
+  "The database stops a console statement that runs longer; TableCraft cannot cancel here. 0 waits forever. Blank follows Settings → Editor → Running.";
 const URL_SEPARATOR = "://";
 const READ_ONLY_HINT = "A guard against accidents, not a security boundary: use a read-only database user for that.";
 const LOAD_ON_DEMAND_HINT =
@@ -369,7 +376,9 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
   const spec = plugin?.url ?? null;
   const capabilities = plugin?.capabilities ?? [];
   const keepAlive = capabilities.includes("keepAlive");
-  const timeout = capabilities.includes("cancel");
+  const timeoutKind = timeoutKindOf(capabilities);
+  const timeout = timeoutKind !== "none";
+  const serverOnly = timeoutKind === "server";
   const enforceable = capabilities.includes("serverTimeout");
   const browsesKeys = capabilities.includes("keyValue");
   const onPasteUrl = (field: ConnectionField, text: string): boolean => {
@@ -477,7 +486,11 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
               </FieldRow>
             ) : null}
             {timeout ? (
-              <FieldRow label="Statement timeout (s)" htmlFor={timeoutId} hint={TIMEOUT_HINT}>
+              <FieldRow
+                label="Statement timeout (s)"
+                htmlFor={timeoutId}
+                hint={serverOnly ? SERVER_ONLY_TIMEOUT_HINT : TIMEOUT_HINT}
+              >
                 <TextInput
                   id={timeoutId}
                   className="w-24"
@@ -491,7 +504,13 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
             {timeout ? (
               <FieldRow
                 label=""
-                hint={enforceable ? serverTimeoutText(serverTimeout) : NO_SERVER_TIMEOUT_HINT}
+                hint={
+                  serverOnly
+                    ? serverOnlyTimeoutText(serverTimeout)
+                    : enforceable
+                      ? serverTimeoutText(serverTimeout)
+                      : NO_SERVER_TIMEOUT_HINT
+                }
                 hintLabel="About having the database stop it"
                 hintTestId="server-timeout-hint"
               >
@@ -499,8 +518,8 @@ function DraftForm({ draft, plugin, folders, onChange, onUrl, serverTimeout, end
                   <input
                     type="checkbox"
                     data-testid="enforce-timeout-on-server"
-                    disabled={!enforceable}
-                    checked={enforceable && draft.enforceTimeoutOnServer}
+                    disabled={!enforceable || serverOnly}
+                    checked={serverOnly || (enforceable && draft.enforceTimeoutOnServer)}
                     onChange={(event) => onChange({ enforceTimeoutOnServer: event.target.checked })}
                   />
                   <span>Also have the database stop it</span>

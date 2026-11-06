@@ -9,8 +9,10 @@ import {
   pagingWith,
   runSettingsSummary,
   runTimeoutError,
+  timeoutKindOf,
   timeoutWith,
 } from "@table-craft/desktop/renderer/model/runSettings.js";
+import { serverEnforcedOf, statementLimit } from "@table-craft/desktop/renderer/state/settings.js";
 
 const BASE = { pageRows: 500, fetchAllCap: 100_000 };
 
@@ -90,5 +92,32 @@ describe("run settings", () => {
     [1.5, false],
   ])("givenTimeout_%d_thenValid_%s", (seconds, valid) => {
     expect(runTimeoutError(seconds) === null).toBe(valid);
+  });
+
+  it.each([
+    [["sql", "cancel"], "app"],
+    [["sql", "cancel", "serverTimeout"], "app"],
+    [["sql", "serverTimeout"], "server"],
+    [["sql"], "none"],
+  ] as const)("givenCapabilities_%o_thenTimeoutKind_%s", (capabilities, kind) => {
+    expect(timeoutKindOf(capabilities)).toBe(kind);
+  });
+
+  it.each([
+    [undefined, "server", true],
+    [{}, "server", true],
+    [{}, "app", false],
+    [{ enforceTimeoutOnServer: true } as const, "app", true],
+    [{}, "none", false],
+  ] as const)("givenDatasource_%o_kind_%s_thenServerEnforced_%s", (datasource, kind, enforced) => {
+    expect(serverEnforcedOf(datasource, kind)).toBe(enforced);
+  });
+
+  it("givenServerKindTimeout_whenLimit_thenDatabaseAskedToStopIt", () => {
+    expect(statementLimit(4, serverEnforcedOf({}, timeoutKindOf(["sql", "serverTimeout"])))).toEqual({
+      timeoutSeconds: 4,
+      serverEnforced: true,
+    });
+    expect(statementLimit(0, serverEnforcedOf({}, "server"))).toEqual({});
   });
 });

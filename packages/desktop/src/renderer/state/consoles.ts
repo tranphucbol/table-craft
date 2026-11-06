@@ -92,7 +92,7 @@ import {
   type ConsoleEdits,
   type ConsoleResultEdits,
 } from "@table-craft/desktop/renderer/state/consoleEdits.js";
-import { datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { capabilitiesOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { NO_EXPORTS, useExports, type ExportStarter } from "@table-craft/desktop/renderer/state/exports.js";
 import {
   NO_EXECUTION_REPORTER,
@@ -118,6 +118,7 @@ import {
   DEFAULT_RUN_SETTINGS,
   fetchesAll,
   pagingWith,
+  timeoutKindOf,
   timeoutWith,
   withRunSettingsHint,
   type RunSettings,
@@ -2412,7 +2413,11 @@ export const useConsoles = createConsolesStore({
   chooseDatasource: () => chooseDatasourceInDialog(),
   exports: useExports.getState(),
   statementTimeout: (datasourceId) => statementTimeoutOf(datasourceById(useDatasources.getState(), datasourceId)),
-  serverEnforced: (datasourceId) => serverEnforcedOf(datasourceById(useDatasources.getState(), datasourceId)),
+  serverEnforced: (datasourceId) => {
+    const state = useDatasources.getState();
+    const datasource = datasourceById(state, datasourceId);
+    return serverEnforcedOf(datasource, timeoutKindOf(capabilitiesOf(state.plugins, datasource?.pluginId ?? "")));
+  },
   now: () => performance.now(),
   confirmDestructive: askDestructive,
   confirmAnalyse: askAnalyse,

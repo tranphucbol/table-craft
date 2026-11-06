@@ -5,7 +5,7 @@ import { SETTINGS_ACTION_IDS, type ShowSettingsArgs } from "@table-craft/desktop
 import { useConsoleDatasource } from "@table-craft/desktop/renderer/console/useConsoleDatasource.js";
 import { FIELD_GRID_CLASS } from "@table-craft/desktop/renderer/dialogs/parts.js";
 import { NumberField } from "@table-craft/desktop/renderer/dialogs/settingsParts.js";
-import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
+import { formatCount, serverOnlyTimeoutText } from "@table-craft/desktop/renderer/model/format.js";
 import {
   DEFAULT_RUN_SETTINGS,
   effectiveRunSettings,
@@ -17,6 +17,7 @@ import {
   runTimeoutError,
   type RowsChoice,
   type RunSettings,
+  type StatementTimeoutKind,
   type TimeoutChoice,
 } from "@table-craft/desktop/renderer/model/runSettings.js";
 import type { ConsoleSession } from "@table-craft/desktop/renderer/state/consoles.js";
@@ -40,9 +41,14 @@ const FIRST_CUSTOM_TIMEOUT_SECONDS = 30;
 const POPOVER_LABEL = "Run settings for this console";
 const POPOVER_TITLE = "Run Settings";
 const NO_TIMEOUT_TEXT = "This data source cannot cancel a statement, so it has no timeout.";
+const NONE_TEXT: Readonly<Record<StoppedBy, string>> = {
+  app: "Runs until it ends or you cancel it.",
+  server: "Runs until it ends; this data source cannot be cancelled.",
+};
 
 type RowsKind = RowsChoice["kind"];
 type TimeoutKind = TimeoutChoice["kind"];
+type StoppedBy = Exclude<StatementTimeoutKind, "none">;
 
 const ROWS_OPTIONS: readonly SegmentedOption<RowsKind>[] = [
   { value: "default", label: "Default" },
@@ -131,7 +137,15 @@ function RowsGroup({ rows }: { readonly rows: RowsChoice }) {
   );
 }
 
-function TimeoutGroup({ consoleId, timeout }: { readonly consoleId: string; readonly timeout: TimeoutChoice }) {
+function TimeoutGroup({
+  consoleId,
+  timeout,
+  stoppedBy,
+}: {
+  readonly consoleId: string;
+  readonly timeout: TimeoutChoice;
+  readonly stoppedBy: StoppedBy;
+}) {
   const datasource = useConsoleDatasource(consoleId);
   // Subscribed so the note follows a change in Settings while the popover is open.
   useSettings((state) => state.settings.console.statementTimeoutSeconds);
@@ -173,7 +187,12 @@ function TimeoutGroup({ consoleId, timeout }: { readonly consoleId: string; read
           />
         </div>
       ) : null}
-      {timeout.kind === "none" ? <Note>Runs until it ends or you cancel it.</Note> : null}
+      {timeout.kind === "none" ? <Note>{NONE_TEXT[stoppedBy]}</Note> : null}
+      {stoppedBy === "server" ? (
+        <p data-testid="run-settings-server-note" className="whitespace-normal text-ink-muted">
+          {serverOnlyTimeoutText(datasource?.lastServer?.timeout)}
+        </p>
+      ) : null}
     </Group>
   );
 }
@@ -187,7 +206,7 @@ function RunSettingsPopover({
   readonly consoleId: string;
   readonly session: ConsoleSession;
   readonly anchor: PopoverAnchor;
-  readonly timeouts: boolean;
+  readonly timeouts: StatementTimeoutKind;
 }) {
   const { runSettings } = session;
   return (
@@ -202,12 +221,12 @@ function RunSettingsPopover({
         <div className={POPOVER_HEADER}>{POPOVER_TITLE}</div>
         <div className={POPOVER_BODY}>
           <RowsGroup rows={runSettings.rows} />
-          {timeouts ? (
-            <TimeoutGroup consoleId={consoleId} timeout={runSettings.timeout} />
-          ) : (
+          {timeouts === "none" ? (
             <Group title="Statement timeout">
               <Note>{NO_TIMEOUT_TEXT}</Note>
             </Group>
+          ) : (
+            <TimeoutGroup consoleId={consoleId} timeout={runSettings.timeout} stoppedBy={timeouts} />
           )}
         </div>
         <div className={POPOVER_FOOTER}>
@@ -238,8 +257,11 @@ export function RunSettingsButton({
 }: {
   readonly consoleId: string;
   readonly session: ConsoleSession;
-  /** Whether the plugin can cancel, without which no timeout is offered (decision 054). */
-  readonly timeouts: boolean;
+  /**
+   * Who stops a statement at the timeout; none is offered when neither the plugin cancels nor its
+   * database stops it (decisions 054, 159).
+   */
+  readonly timeouts: StatementTimeoutKind;
 }) {
   const open = useRunSettingsPopover((state) => state.consoleId === consoleId);
   const holder = useRef<HTMLSpanElement>(null);
@@ -247,7 +269,8 @@ export function RunSettingsButton({
   const pageRows = useSettings((state) => state.settings.data.pageRows);
   const datasource = useConsoleDatasource(consoleId);
   useSettings((state) => state.settings.console.statementTimeoutSeconds);
-  const own: RunSettings = timeouts ? session.runSettings : { ...session.runSettings, timeout: { kind: "default" } };
+  const own: RunSettings =
+    timeouts === "none" ? { ...session.runSettings, timeout: { kind: "default" } } : session.runSettings;
   const summary = runSettingsSummary(
     effectiveRunSettings(own, { pageRows, timeoutSeconds: statementTimeoutOf(datasource) }),
   );

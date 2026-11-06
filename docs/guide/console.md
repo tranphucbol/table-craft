@@ -120,7 +120,9 @@ timeout wins over the data source's. Changes apply from the next statement and s
 console until you close it; a dot on the gear says the console has its own settings, and its
 tooltip names them. A result read with the console's page size says so beside its row count, and a
 statement stopped by the console's timeout offers **Run Settings…** beside **Run Again**. A data
-source that cannot cancel a statement has no timeout to set. **Restore Defaults** goes back to
+source that cannot cancel a statement but whose database can stop one itself still offers the
+timeout, and the popover says what the database stops; one that can do neither has no timeout to
+set. **Restore Defaults** goes back to
 Settings.
 
 ## Explain

@@ -341,3 +341,18 @@ export function serverTimeoutText(serverTimeout: ServerTimeout | null | undefine
     ? `The database stops ${what} at the limit, counting while rows wait to be read.`
     : `The database stops ${what} that works past the limit.`;
 }
+
+/**
+ * What stops a statement on a data source whose plugin cannot cancel, so only its database can
+ * (decision 159): unknown until a connect or test (`undefined`), nothing without a server limit (`null`).
+ */
+export function serverOnlyTimeoutText(serverTimeout: ServerTimeout | null | undefined): string {
+  if (serverTimeout === undefined) {
+    return "TableCraft cannot cancel here; only the database stops a statement. Connect to see what it stops.";
+  }
+  if (serverTimeout === null) {
+    return "TableCraft cannot cancel here, and this server has no limit of its own: statements run to the end.";
+  }
+  const rest = serverTimeout.covers === "all" ? "" : " Other statements run to the end.";
+  return `TableCraft cannot cancel here; the database stops ${SERVER_COVERS_TEXT[serverTimeout.covers]} at the limit with ${serverTimeout.setting}.${rest}`;
+}
