@@ -79,8 +79,8 @@ export interface ContractFixture {
      */
     readonly slowRead?: (seconds: number) => string;
     /**
-     * Sets the session's own statement limit to `ms`, as a DBA's per-user default would; required
-     * with `slowRead`.
+     * Sets the session's own statement limit to `ms`, as a DBA's per-user default would; the case
+     * that the lower of the two limits wins is skipped without one, for a server that refuses `SET`.
      */
     readonly sessionTimeout?: (ms: number) => string;
     /**
@@ -2767,12 +2767,11 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenOwnLowerLimit_whenHigherAsked_thenOwnStops", async () => {
+      const sessionTimeout = fixture.statements?.sessionTimeout;
+      it.runIf(sessionTimeout !== undefined)("givenOwnLowerLimit_whenHigherAsked_thenOwnStops", async () => {
         await withLimitedSession(async (session) => {
-          const own = fixture.statements?.sessionTimeout;
-          if (own === undefined)
-            throw new Error("A server with a serverTimeout needs fixture.statements.sessionTimeout.");
-          await runToEnd(session, own(SERVER_LIMIT_MS));
+          if (sessionTimeout === undefined) return;
+          await runToEnd(session, sessionTimeout(SERVER_LIMIT_MS));
           const started = Date.now();
           const code = await rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS));
           expect(code).toBe("timedOut");
@@ -2780,17 +2779,20 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         });
       });
 
-      it("givenServerTimeout_whenCancelled_thenCancelledNotTimedOut", async () => {
-        await withLimitedSession(async (session) => {
-          const started = Date.now();
-          const running = rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS));
-          await delay(CANCEL_DELAY_MS);
-          await service(session, "cancel").cancel();
-          expect(await running).toBe("cancelled");
-          expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
-          await expectAlive(session);
-        });
-      });
+      it.runIf(plugin.capabilities.includes("cancel"))(
+        "givenServerTimeout_whenCancelled_thenCancelledNotTimedOut",
+        async () => {
+          await withLimitedSession(async (session) => {
+            const started = Date.now();
+            const running = rejectionCode(runToEnd(session, slowRead(SLOW_READ_SECONDS), UNREACHED_LIMIT_MS));
+            await delay(CANCEL_DELAY_MS);
+            await service(session, "cancel").cancel();
+            expect(await running).toBe("cancelled");
+            expect(Date.now() - started).toBeLessThan(CANCEL_DEADLINE_MS);
+            await expectAlive(session);
+          });
+        },
+      );
     });
 
     describe.runIf(plugin.capabilities.includes("keepAlive"))("keepAlive", () => {
