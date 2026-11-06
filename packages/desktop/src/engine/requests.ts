@@ -1,4 +1,13 @@
-import { EXPORT_FORMATS, EXTRACTOR_KINDS, IMPORT_ENCODINGS, IMPORT_ESCAPES } from "@table-craft/core";
+import {
+  CHART_AGGREGATES,
+  CHART_KINDS,
+  EXPORT_FORMATS,
+  EXTRACTOR_KINDS,
+  HISTOGRAM_MAX_BINS,
+  HISTOGRAM_MIN_BINS,
+  IMPORT_ENCODINGS,
+  IMPORT_ESCAPES,
+} from "@table-craft/core";
 import {
   FORMAT_STYLES,
   GENERATED_STATEMENTS,
@@ -551,6 +560,19 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     handle,
     rows: z.array(z.strictObject({ from: index, to: index })),
     columns,
+  }),
+  z.strictObject({
+    id: requestId,
+    type: z.literal("result.chart"),
+    handle,
+    spec: z.strictObject({
+      kind: z.enum(CHART_KINDS),
+      x: index.nullable(),
+      y: columns,
+      groupBy: index.nullable(),
+      aggregate: z.enum(CHART_AGGREGATES),
+      bins: z.number().int().min(HISTOGRAM_MIN_BINS).max(HISTOGRAM_MAX_BINS).nullable(),
+    }),
   }),
   z.strictObject({
     id: requestId,

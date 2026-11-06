@@ -121,6 +121,7 @@ const METHODS = [
   "result.editable",
   "result.extract",
   "result.aggregate",
+  "result.chart",
   "result.cellBytes",
   "result.saveBytes",
   "result.loadBytes",

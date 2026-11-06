@@ -68,6 +68,26 @@ export {
 } from "./results/compare.js";
 export { aggregateCells, type SelectionAggregates } from "./results/aggregate.js";
 export {
+  CHART_AGGREGATES,
+  CHART_KINDS,
+  CHART_MAX_CATEGORIES,
+  CHART_MAX_SERIES,
+  HISTOGRAM_MAX_BINS,
+  HISTOGRAM_MIN_BINS,
+  PIE_MAX_SLICES,
+  PIE_OTHER_LABEL,
+  binEdges,
+  chartData,
+  chartSpecProblem,
+  type ChartAggregate,
+  type ChartAxis,
+  type ChartData,
+  type ChartKind,
+  type ChartSeries,
+  type ChartSpec,
+  type ChartTruncation,
+} from "./results/chart.js";
+export {
   RESULT_FETCH_ALL_CAP,
   RESULT_PAGE_ROWS,
   RESULT_WINDOW_ROWS,

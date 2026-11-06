@@ -1,9 +1,11 @@
-import { aggregateCells, cellClipboardText, project, rowWriter } from "@table-craft/core";
+import { aggregateCells, cellClipboardText, chartData, chartSpecProblem, project, rowWriter } from "@table-craft/core";
 import type { Row } from "@table-craft/plugin-api";
 import type { ConnectionContext } from "@table-craft/desktop/engine/connection.js";
 import { EngineFailure, SERVER_SORT_HINT, statementFailed } from "@table-craft/desktop/engine/failures.js";
 import type { RowRange } from "@table-craft/desktop/engine/protocol.js";
 import type { RoutesFor } from "@table-craft/desktop/engine/routes/types.js";
+
+const CHART_SPEC_HINT = "Pick the columns the chart kind takes in the chart bar, or switch to another kind.";
 
 function rowsIn(rows: readonly Row[], ranges: readonly RowRange[]): Row[] {
   return ranges.flatMap((range) => rows.slice(range.from, Math.max(range.from, range.to)));
@@ -87,6 +89,16 @@ export function resultRoutes(connection: ConnectionContext): RoutesFor<"result">
           columns.map((column) => classes[column] ?? "text"),
         ),
       );
+    },
+    "result.chart": ({ handle, spec }) => {
+      const owned = ownedHandle(handle);
+      const named = [spec.x, ...spec.y, spec.groupBy].filter((column) => column !== null);
+      chosenColumns(owned, named);
+      const problem = chartSpecProblem(spec);
+      if (problem !== null)
+        throw new EngineFailure({ code: "invalidRequest", message: problem, hint: CHART_SPEC_HINT });
+      const names = results.columns(owned).map((column) => column.name);
+      return Promise.resolve(chartData(results.shownRows(owned), results.classes(owned), names, spec));
     },
     "result.editable": (request) => resultEditable(request),
     "result.cellBytes": (request) => cellBytes(request),
