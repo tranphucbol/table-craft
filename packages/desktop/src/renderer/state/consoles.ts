@@ -50,6 +50,12 @@ import {
 } from "@table-craft/desktop/renderer/model/parameters.js";
 import { landedIn } from "@table-craft/desktop/renderer/model/consoleNamespace.js";
 import { caretAfterReformat } from "@table-craft/desktop/renderer/model/reformat.js";
+import {
+  applyAgentEdit,
+  type AgentEditOutcome,
+  type TextChange,
+} from "@table-craft/desktop/renderer/model/agentEdits.js";
+import type { AgentEdit } from "@table-craft/desktop/settings/mcp.js";
 import type { ValueFormat } from "@table-craft/desktop/renderer/model/valueFormats.js";
 import {
   serverMessageText,
@@ -272,6 +278,12 @@ export interface ConsoleSession {
   readonly status: ConsoleStatus;
   readonly error: EngineError | null;
   readonly sql: string;
+  /** Goes up on every change of `sql`; an agent's whole-text replace names the one it read (plan 156). */
+  readonly revision: number;
+  /** The agent that opened the console and may edit it, until its session ends (plan 156). */
+  readonly agent: AgentMark | null;
+  /** An agent's edit for the editor to apply as one undo step; the editor clears it once applied. */
+  readonly agentChange: AgentChange | null;
   readonly privacyReset: number;
   /** The editor's main selection; empty is a caret. */
   readonly selection: TextSpan;
@@ -310,6 +322,19 @@ export interface Insertion {
   readonly seq: number;
 }
 
+export interface AgentMark {
+  /** The MCP host's handle, such as `c1`. */
+  readonly handle: string;
+  /** The agent's client name, for the tab's marker; null when it gave none. */
+  readonly client: string | null;
+}
+
+export interface AgentChange {
+  readonly change: TextChange;
+  readonly selection: TextSpan;
+  readonly seq: number;
+}
+
 export interface Replacement {
   readonly from: number;
   readonly to: number;
@@ -340,6 +365,7 @@ export interface OpenOptions {
   readonly source?: ConsoleSource;
   /** The namespace to switch to once the session opens; a remembered attachment's. */
   readonly namespace?: readonly string[] | null;
+  readonly agent?: AgentMark;
 }
 
 export interface ConsolesState extends ConsoleEdits {
@@ -393,6 +419,12 @@ export interface ConsolesState extends ConsoleEdits {
   readonly reformat: (id: string) => Promise<void>;
   /** The editor applied, or skipped as stale, the replacement numbered `seq`. */
   readonly replaced: (id: string, seq: number) => void;
+  /** Applies an agent's edit to the text, mounted or not; null when no console has the id. */
+  readonly agentEdit: (id: string, edit: AgentEdit, select: string | null) => AgentEditOutcome | null;
+  /** The editor applied, or skipped as already in its text, the agent change numbered `seq`. */
+  readonly agentChanged: (id: string, seq: number) => void;
+  /** The agents' sessions ended: their consoles become the user's alone. */
+  readonly releaseAgent: (handles: readonly string[]) => void;
   /**
    * Runs what `scope` picks, one statement after another, opening a session first when it has none.
    * `preset` answers the Parameters dialog and binds even with detection off (plan 046 decision 6).
@@ -617,6 +649,9 @@ function newConsole(datasourceId: string, name: string, sql: string, connect: bo
     jump: null,
     insertion: null,
     replacement: null,
+    revision: 0,
+    agent: null,
+    agentChange: null,
     parameterValues: {},
     edits: {},
     errorMarks: [],
@@ -1720,6 +1755,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               parameterValues: options.parameterValues ?? session.parameterValues,
               source: options.source ?? session.source,
               pendingNamespace: options.namespace ?? null,
+              agent: options.agent ?? null,
             },
           },
         });
@@ -1812,7 +1848,9 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       },
 
       setSql(id, sql) {
-        patch(id, { sql });
+        const current = get().consoles[id];
+        if (current === undefined || current.sql === sql) return;
+        patch(id, { sql, revision: current.revision + 1 });
       },
 
       scrub(id) {
@@ -1820,10 +1858,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
         if (current === undefined) return;
         patch(id, {
           sql: "",
+          revision: current.revision + 1,
           privacyReset: current.privacyReset + 1,
           selection: { from: 0, to: 0 },
           insertion: null,
           replacement: null,
+          agentChange: null,
           errorMarks: [],
           parameterValues: {},
         });
@@ -1890,6 +1930,34 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       inserted(id, seq) {
         if (get().consoles[id]?.insertion?.seq !== seq) return;
         patch(id, { insertion: null });
+      },
+
+      agentEdit(id, edit, select) {
+        const current = get().consoles[id];
+        if (current === undefined) return null;
+        const outcome = applyAgentEdit(current.sql, current.revision, edit, select);
+        if (!outcome.ok) return outcome;
+        flashes += 1;
+        const { change, selection } = outcome;
+        patch(id, {
+          sql: outcome.text,
+          revision: outcome.text === current.sql ? current.revision : current.revision + 1,
+          selection,
+          agentChange: { change, selection, seq: flashes },
+          flash: { from: change.from, to: change.from + change.insert.length, seq: flashes },
+        });
+        return outcome;
+      },
+
+      agentChanged(id, seq) {
+        if (get().consoles[id]?.agentChange?.seq !== seq) return;
+        patch(id, { agentChange: null });
+      },
+
+      releaseAgent(handles) {
+        const released = new Set(handles);
+        for (const [id, session] of Object.entries(get().consoles))
+          if (session.agent !== null && released.has(session.agent.handle)) patch(id, { agent: null });
       },
 
       marksMoved(id, errorMarks) {

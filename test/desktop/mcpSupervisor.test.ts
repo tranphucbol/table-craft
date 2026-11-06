@@ -18,11 +18,13 @@ import {
   MCP_SERVER_SEEN_MESSAGE,
   MCP_SHUTDOWN_MESSAGE,
   MCP_STATUS_MESSAGE,
+  MCP_UI_ANSWER_MESSAGE,
+  MCP_UI_REQUEST_MESSAGE,
   type MainToMcp,
 } from "@table-craft/desktop/mcp/messages.js";
 import type { DatasourceView, ServerSeen } from "@table-craft/desktop/preload/bridge.js";
 import type { McpSettings } from "@table-craft/desktop/settings/settings.js";
-import { tokenHint, type McpStatus } from "@table-craft/desktop/settings/mcp.js";
+import { tokenHint, type McpStatus, type McpUiDelivery, type McpUiTarget } from "@table-craft/desktop/settings/mcp.js";
 import { fakeCipher, memoryFiles } from "../support/memoryFiles.js";
 
 const ON: McpSettings = {
@@ -32,6 +34,7 @@ const ON: McpSettings = {
   statementTimeoutSeconds: 120,
   clients: [],
   notifications: true,
+  allowFocus: true,
 };
 const OFF: McpSettings = { ...ON, enabled: false };
 const SILENT = createLogger({ process: "main", scope: "test", sink: () => undefined });
@@ -123,8 +126,7 @@ async function supervised(patch: Partial<McpSupervisorOptions> = {}) {
     forward: () => undefined,
     windowsOpen: () => true,
     writeClipboard: (text) => clipboard.push(text),
-    openConsole: () => true,
-    askContext: () => true,
+    askWindow: () => true,
     newToken: () => `tc_token${String((tokens += 1))}`,
     serverVersion: "1.0.0",
     log: SILENT,
@@ -213,6 +215,7 @@ describe("MCP supervisor", () => {
       rowCap: 5,
       timeoutSeconds: 120,
       clients: [],
+      allowFocus: true,
     });
   });
 
@@ -228,6 +231,7 @@ describe("MCP supervisor", () => {
       rowCap: 100,
       timeoutSeconds: 30,
       clients: [],
+      allowFocus: true,
     });
   });
 
@@ -264,6 +268,58 @@ describe("MCP supervisor", () => {
     expect(statuses.at(-1)).toEqual(relayed);
     expect(supervisor.status()).toEqual(relayed);
     expect(recorded).toEqual([{ ...entry, source: "agent" }]);
+  });
+
+  it("givenUiRequestForWindow_whenRelayed_thenSentToThatWindowOnly", async () => {
+    const asked: [McpUiTarget, McpUiDelivery][] = [];
+    const { supervisor, processes } = await supervised({
+      askWindow: (target, delivery) => {
+        asked.push([target, delivery]);
+        return true;
+      },
+    });
+    await supervisor.start();
+    const request = { kind: "read", handles: ["c1"] } as const;
+
+    processes[0]?.send({ kind: MCP_UI_REQUEST_MESSAGE, requestId: 4, target: { window: 9 }, request });
+    supervisor.uiAnswer(4, 9, { kind: "consoles", consoles: [] });
+
+    expect(asked).toEqual([[{ window: 9 }, { requestId: 4, request }]]);
+    expect(processes[0]?.posted.at(-1)).toEqual({
+      kind: MCP_UI_ANSWER_MESSAGE,
+      requestId: 4,
+      window: 9,
+      answer: { kind: "consoles", consoles: [] },
+    });
+  });
+
+  it("givenGoneWindow_whenUiRequest_thenAnsweredGone", async () => {
+    const { supervisor, processes } = await supervised({ askWindow: () => false });
+    await supervisor.start();
+
+    processes[0]?.send({
+      kind: MCP_UI_REQUEST_MESSAGE,
+      requestId: 5,
+      target: "focused",
+      request: { kind: "activeContext" },
+    });
+
+    expect(processes[0]?.posted.at(-1)).toEqual({
+      kind: MCP_UI_ANSWER_MESSAGE,
+      requestId: 5,
+      window: null,
+      answer: null,
+    });
+  });
+
+  it("givenAllowFocusChange_whenRunning_thenConfigSentWithoutRestart", async () => {
+    const { supervisor, processes } = await supervised();
+    await supervisor.start();
+
+    await supervisor.settingsChanged({ ...ON, allowFocus: false });
+
+    expect(processes).toHaveLength(1);
+    expect(processes[0]?.posted.at(-1)).toMatchObject({ kind: MCP_CONFIG_MESSAGE, allowFocus: false });
   });
 
   it("givenServerSeen_whenExposed_thenRemembered", async () => {

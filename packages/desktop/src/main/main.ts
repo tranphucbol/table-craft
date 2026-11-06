@@ -69,6 +69,7 @@ import { createLogWriter, LOG_DIRECTORY, nodeLogFiles } from "@table-craft/deskt
 import { zip } from "@table-craft/desktop/main/log/zip.js";
 import { createApplicationMenu } from "@table-craft/desktop/main/menu.js";
 import { createElectronMcpNotices } from "@table-craft/desktop/main/mcpNoticesElectron.js";
+import { askMcpWindow } from "@table-craft/desktop/main/mcpWindows.js";
 import { FILE_ATTACHMENTS_FILE, createFileAttachments } from "@table-craft/desktop/main/fileAttachments.js";
 import { createSqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
 import { createLoneAlt, menuButtonAnchor, popupApplicationMenu } from "@table-craft/desktop/main/menuPopup.js";
@@ -110,7 +111,7 @@ import {
   UPDATE_SCOPE,
   type Updater,
 } from "@table-craft/desktop/main/update/updater.js";
-import type { McpConsoleRequest, McpContextRequest, McpStatus } from "@table-craft/desktop/settings/mcp.js";
+import type { McpStatus } from "@table-craft/desktop/settings/mcp.js";
 import { effectiveChannel } from "@table-craft/desktop/settings/channel.js";
 import { DEFAULT_REGISTRY_URL, DEFAULT_SETTINGS, withRegistryPackage } from "@table-craft/desktop/settings/settings.js";
 import {
@@ -332,14 +333,6 @@ type BroadcastState = DatasourceList | EngineExited | SettingsChanged | UpdateSt
 
 function broadcast(channel: string, payload: BroadcastState | readonly (LogRecord | TextSnippet)[]): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send(channel, payload);
-}
-
-/** The focused window, else any; false when none is open (MCP console tools, decision 127). */
-function sendToFocused(channel: string, payload: McpConsoleRequest | McpContextRequest): boolean {
-  const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
-  if (window === undefined || window.isDestroyed()) return false;
-  window.webContents.send(channel, payload);
-  return true;
 }
 
 let savedDatasources: () => readonly Datasource[] = () => [];
@@ -890,8 +883,7 @@ void app.whenReady().then(async () => {
     },
     windowsOpen: () => BrowserWindow.getAllWindows().some((window) => !window.isDestroyed()),
     writeClipboard: (text) => clipboard.writeText(text),
-    openConsole: (request) => sendToFocused(CHANNELS.mcpOpenConsole, request),
-    askContext: (requestId) => sendToFocused(CHANNELS.mcpContextRequest, { requestId }),
+    askWindow: askMcpWindow,
     newToken: newMcpToken,
     serverVersion: appVersion,
     log: mainLog.child(MCP_LOG_PROCESS),
@@ -1006,7 +998,7 @@ void app.whenReady().then(async () => {
       copyClientConfig: (client) => mcp.copyClientConfig(client),
       regenerateToken: () => mcp.regenerateToken(),
       copyToken: () => mcp.copyToken(),
-      contextReply: (requestId, context) => mcp.contextReply(requestId, context),
+      uiAnswer: (sender, requestId, answer) => mcp.uiAnswer(requestId, sender.id, answer),
     },
     updates: {
       state: () => updates.state(),

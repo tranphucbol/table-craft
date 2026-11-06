@@ -28,3 +28,16 @@ export function AgentAccessBadge({ datasource }: { readonly datasource: Datasour
     </span>
   );
 }
+
+/** `AI` on the tab of a console an agent opened and may still edit (plan 156 decision 16). */
+export function AgentConsoleBadge({ client }: { readonly client: string | null }) {
+  return (
+    <span
+      data-testid="tab-agent"
+      title={`Opened by ${client ?? "an AI agent"}; it can edit this console`}
+      className={cn("shrink-0 rounded border border-accent px-0.5 font-ui font-semibold text-accent", CAP_CENTRED)}
+    >
+      AI
+    </span>
+  );
+}

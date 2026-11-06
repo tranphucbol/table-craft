@@ -204,6 +204,9 @@ export interface OpenTableOptions {
   /** False for a tab restored at launch: it stays disconnected until Reload. */
   readonly connect?: boolean;
   readonly where?: string;
+  readonly orderBy?: string;
+  /** Fill the bars without reading by them, for the user to apply (plan 156 decision 11). */
+  readonly draftOnly?: boolean;
 }
 
 export interface TablesDependencies {
@@ -276,16 +279,15 @@ export function cellText(session: TableSession, cell: BufferCell): string {
 }
 
 /** Disconnected until its first read opens a session. */
-function newTable(target: TableTarget, where: string): TableSession {
-  const clauses = { ...EMPTY_CLAUSES, where };
+function newTable(target: TableTarget, applied: TableClauses, draft: TableClauses): TableSession {
   return {
     ...target,
     path: [...target.path],
     sessionId: null,
     status: "disconnected",
     error: null,
-    applied: clauses,
-    draft: clauses,
+    applied,
+    draft,
     queryError: null,
     editable: null,
     columns: [],
@@ -410,12 +412,17 @@ export function createTablesStore(dependencies: TablesDependencies) {
       return status === "disconnected" || status === "failed" ? status : "ready";
     }
 
-    async function read(id: string, clauses: TableClauses, sort: readonly SortKey[]): Promise<boolean> {
+    async function read(
+      id: string,
+      clauses: TableClauses,
+      sort: readonly SortKey[],
+      draft: TableClauses = clauses,
+    ): Promise<boolean> {
       const session = await ready(id);
       const current = get().tables[id];
       if (session === null || current === undefined) return false;
       const { client, sessionId } = session;
-      patch(id, { status: "loading", error: null, draft: clauses });
+      patch(id, { status: "loading", error: null, draft });
       const ended = started(id, LOAD_LABEL, null);
       try {
         cursorClosed(id);
@@ -465,7 +472,7 @@ export function createTablesStore(dependencies: TablesDependencies) {
           previous === null ? undefined : carriedChart(previous.chart, names(previous.columns), names(fresh.columns));
         patch(id, {
           applied: clauses,
-          draft: clauses,
+          draft,
           queryError: null,
           editable: answer.editable,
           columns: answer.columns,
@@ -502,8 +509,10 @@ export function createTablesStore(dependencies: TablesDependencies) {
 
       async open(id, target, options = {}) {
         const connect = options.connect ?? true;
-        set({ tables: { ...get().tables, [id]: newTable(target, options.where ?? "") } });
-        if (connect) await read(id, { ...EMPTY_CLAUSES, where: options.where ?? "" }, []);
+        const draft = { where: options.where ?? "", orderBy: options.orderBy ?? "" };
+        const applied = options.draftOnly === true ? EMPTY_CLAUSES : draft;
+        set({ tables: { ...get().tables, [id]: newTable(target, applied, draft) } });
+        if (connect) await read(id, applied, [], draft);
       },
 
       close(id) {

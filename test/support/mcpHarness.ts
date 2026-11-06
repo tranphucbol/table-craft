@@ -9,7 +9,9 @@ import { createAgentEngines, type EnginePort } from "@table-craft/desktop/mcp/en
 import type { AgentDatasource, AgentHistoryEntry } from "@table-craft/desktop/mcp/messages.js";
 import { createTools, type Tools } from "@table-craft/desktop/mcp/tools.js";
 import { approvalWait, type Caller, type ToolContext, type ToolResult } from "@table-craft/desktop/mcp/toolKit.js";
-import type { McpActiveConsole, McpConsoleRequest } from "@table-craft/desktop/settings/mcp.js";
+import { createConsoleOwners, type ConsoleOwners } from "@table-craft/desktop/mcp/consoleOwners.js";
+import type { McpActiveConsole } from "@table-craft/desktop/settings/mcp.js";
+import { fakeWindow, type FakeWindow } from "./fakeWindow.js";
 import { SQLITE_MANIFEST } from "./manifests.js";
 import { seededSqliteFile } from "./sqliteFixture.js";
 
@@ -44,8 +46,8 @@ function sendingSqlite(sentOf: (sql: string) => string): PluginLoadResult {
 }
 
 /** A caller as the server makes one per `tools/call`, with its own approval wait. */
-export function agentCaller(): Caller {
-  return { sessionId: "mcp-1", clientName: "Claude Code", waits: approvalWait() };
+export function agentCaller(sessionId = "mcp-1"): Caller {
+  return { sessionId, clientName: "Claude Code", waits: approvalWait() };
 }
 
 /** An engine port in the same process: what a `MessagePortMain` carries, without Electron. */
@@ -81,10 +83,12 @@ export interface AgentHarness {
   readonly history: AgentHistoryEntry[];
   readonly path: string;
   readonly runs: Runs;
-  /** What open_in_console handed to the window. */
-  readonly opened: McpConsoleRequest[];
+  /** The one window the console tools reach. */
+  readonly window: FakeWindow;
+  readonly owners: ConsoleOwners;
   setActiveConsole(active: McpActiveConsole | null): void;
   setWindows(open: boolean): void;
+  setAllowFocus(allowed: boolean): void;
   setDatasources(next: readonly AgentDatasource[]): void;
   setRowCap(rowCap: number): void;
   setTimeoutSeconds(seconds: number): void;
@@ -94,7 +98,8 @@ export interface AgentHarness {
   readonly seen: { readonly datasourceId: string; readonly opened: OpenedSession }[];
   /** Every request the tools sent to an engine, in order. */
   readonly requests: { readonly type: string; readonly timeoutSeconds?: number; readonly serverEnforced?: boolean }[];
-  call(name: Parameters<Tools["call"]>[0], args: unknown): Promise<ToolResult>;
+  /** Calls as session `mcp-1`, or as `caller` when given. */
+  call(name: Parameters<Tools["call"]>[0], args: unknown, caller?: Caller): Promise<ToolResult>;
 }
 
 /** The MCP tools over one seeded SQLite file per datasource id, with approvals the test answers. */
@@ -110,9 +115,9 @@ export function agentHarness(
   const requests: AgentHarness["requests"] = [];
   const seen: AgentHarness["seen"][number][] = [];
   let clock = 0;
-  let windows = true;
-  let activeConsole: McpActiveConsole | null = null;
-  const opened: McpConsoleRequest[] = [];
+  let allowFocus = true;
+  const window = fakeWindow();
+  const owners = createConsoleOwners();
   const runs = createRuns(
     () => undefined,
     () => clock,
@@ -153,14 +158,9 @@ export function agentHarness(
     timeoutSeconds: () => timeoutSeconds,
     now: () => (clock += 1),
     runs,
-    consoles: {
-      open(request) {
-        if (!windows) return false;
-        opened.push(request);
-        return true;
-      },
-      active: () => Promise.resolve(activeConsole),
-    },
+    windows: window,
+    owners,
+    allowFocus: () => allowFocus,
   };
   const tools = createTools(context);
   return {
@@ -170,19 +170,21 @@ export function agentHarness(
     history,
     path,
     runs,
-    opened,
+    window,
+    owners,
     seen,
-    setActiveConsole: (active) => (activeConsole = active),
+    setActiveConsole: (active) => (window.active = active),
     setWindows: (open) => {
-      windows = open;
+      window.open = open;
       approvals.setWindows(open);
     },
+    setAllowFocus: (allowed) => (allowFocus = allowed),
     setDatasources: (next) => (exposed = next),
     setRowCap: (next) => (rowCap = next),
     setTimeoutSeconds: (next) => (timeoutSeconds = next),
     advance: (ms) => (clock += ms),
     requests,
-    call: async (name, args) => (await tools.call(name, args, agentCaller())).result,
+    call: async (name, args, caller = agentCaller()) => (await tools.call(name, args, caller)).result,
   };
 }
 

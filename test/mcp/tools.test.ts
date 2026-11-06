@@ -48,12 +48,19 @@ describe("MCP tools", () => {
       "get_key",
       "open_in_console",
       "get_active_context",
+      "edit_console",
+      "read_console",
+      "list_consoles",
+      "open_table",
+      "reveal_in_explorer",
     ]);
     for (const tool of TOOL_DEFINITIONS) {
       expect(tool.inputSchema.type).toBe("object");
       expect(tool.inputSchema).not.toHaveProperty("$schema");
     }
     expect(TOOL_DEFINITIONS.find((tool) => tool.name === "run_query")?.annotations.readOnlyHint).toBe(false);
+    for (const name of ["edit_console", "read_console", "list_consoles", "open_table", "reveal_in_explorer"])
+      expect(TOOL_DEFINITIONS.find((tool) => tool.name === name)?.annotations.readOnlyHint).toBe(true);
   });
 
   it("givenOneDatasourceOff_whenListingDatasources_thenOnlyExposedOnesAreNamed", async () => {

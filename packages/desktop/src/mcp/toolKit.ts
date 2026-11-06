@@ -4,7 +4,8 @@ import { APPROVAL_REFUSALS, type ApprovalRequest, type Approvals } from "@table-
 import type { Runs } from "@table-craft/desktop/mcp/activity.js";
 import { NOT_EXPOSED_REASON } from "@table-craft/desktop/mcp/access.js";
 import type { Capability, StatementLimit } from "@table-craft/desktop/engine/protocol.js";
-import type { McpActiveConsole, McpCallOutcome, McpConsoleRequest } from "@table-craft/desktop/settings/mcp.js";
+import type { ConsoleOwners } from "@table-craft/desktop/mcp/consoleOwners.js";
+import type { McpCallOutcome, McpUiAnswer, McpUiRequest, McpUiTarget } from "@table-craft/desktop/settings/mcp.js";
 
 /** Who called a tool: the MCP session and the name its client gave at `initialize`. */
 export interface Caller {
@@ -30,12 +31,15 @@ export function approvalWait(): ApprovalWait {
   };
 }
 
-/** The user's windows, as the console tools reach them through main. */
-export interface ConsoleBridge {
-  /** False when no window is open to show it. */
-  open(request: McpConsoleRequest): boolean;
-  /** The focused console, or null when none is focused or no window answers in time. */
-  active(): Promise<McpActiveConsole | null>;
+/** How a UI request ended: the window's answer, no such window, or none in time (`UI_TIMEOUT_MS`). */
+export type UiReply =
+  | { readonly status: "answered"; readonly window: number; readonly answer: McpUiAnswer }
+  | { readonly status: "gone" }
+  | { readonly status: "silent" };
+
+/** The user's windows, as the window tools reach them through main (decision 161). */
+export interface WindowBridge {
+  ask(target: McpUiTarget, request: McpUiRequest): Promise<UiReply>;
 }
 
 export interface ToolContext {
@@ -43,7 +47,11 @@ export interface ToolContext {
   readonly engines: AgentEngines;
   readonly approvals: Approvals;
   readonly runs: Runs;
-  readonly consoles: ConsoleBridge;
+  readonly windows: WindowBridge;
+  /** The consoles agents opened, by handle and session. */
+  readonly owners: ConsoleOwners;
+  /** Whether the user lets an agent's `focus: true` bring the window forward. */
+  readonly allowFocus: () => boolean;
   readonly record: (entry: AgentHistoryEntry) => void;
   /** The server-wide row limit; a datasource's own wins (`rowCapOf`). */
   readonly rowCap: () => number;

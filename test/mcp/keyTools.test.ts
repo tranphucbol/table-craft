@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createRuns } from "@table-craft/desktop/mcp/activity.js";
 import { APPROVAL_REFUSALS, createApprovals } from "@table-craft/desktop/mcp/approvals.js";
+import { createConsoleOwners } from "@table-craft/desktop/mcp/consoleOwners.js";
 import type { AgentEngine, AgentEngines, SessionMode } from "@table-craft/desktop/mcp/engines.js";
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
 import { createTools } from "@table-craft/desktop/mcp/tools.js";
@@ -62,7 +63,9 @@ function keyHarness(datasource: AgentDatasource = CACHE) {
       () => undefined,
       () => clock,
     ),
-    consoles: { open: () => true, active: () => Promise.resolve(null) },
+    windows: { ask: () => Promise.resolve({ status: "gone" }) },
+    owners: createConsoleOwners(),
+    allowFocus: () => true,
   };
   const tools = createTools(context);
   return {

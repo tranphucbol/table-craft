@@ -1,3 +1,4 @@
+import type { Namespace } from "@table-craft/desktop/engine/protocol.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
 import { settleAdminRenewals } from "@table-craft/desktop/renderer/keyAdmin/actions.js";
 import { useKeyAdmin } from "@table-craft/desktop/renderer/keyAdmin/store.js";
@@ -9,6 +10,7 @@ import {
   bridgeConsoleFiles,
   closedConsoleNames,
   ConsoleFileFailure,
+  consoleNameFrom,
   firstFreeName,
   unwrap,
   type ConsoleFileAccess,
@@ -19,6 +21,7 @@ import {
   openTransactions,
   SCRATCH,
   useConsoles,
+  type AgentMark,
 } from "@table-craft/desktop/renderer/state/consoles.js";
 import { useDdl } from "@table-craft/desktop/renderer/state/ddl.js";
 import { closeDiagram } from "@table-craft/desktop/renderer/actions/diagramCommands.js";
@@ -82,15 +85,47 @@ export async function nodeConsoleNamespace(
   datasourceId: string,
   path: readonly string[],
 ): Promise<readonly string[] | null> {
+  const targets = await namespaceTargets(datasourceId);
+  return targets === null ? null : consoleNamespaceFor(path, targets);
+}
+
+/** Where a console on the datasource can switch to; null when its plugin cannot switch, empty when they cannot be listed. */
+export async function namespaceTargets(datasourceId: string): Promise<readonly Namespace[] | null> {
   const state = useDatasources.getState();
   const view = datasourceById(state, datasourceId);
   if (view === undefined || !capabilitiesOf(state.plugins, view.pluginId).includes(CURRENT_NAMESPACE)) return null;
   try {
     const client = await state.connect(datasourceId);
-    return consoleNamespaceFor(path, await client.call("namespace.targets", {}));
+    return await client.call("namespace.targets", {});
   } catch {
-    return null;
+    return [];
   }
+}
+
+/**
+ * Opens a console an agent asked for (plan 156): named after its title when it gave one, in
+ * `namespace`, marked as the agent's, with the caret at the end; answers its tab id.
+ */
+export function openAgentConsole(
+  datasourceId: string,
+  options: {
+    readonly sql: string;
+    readonly title: string | null;
+    readonly namespace: readonly string[] | null;
+    readonly agent: AgentMark | null;
+  },
+): Promise<string> {
+  const { sql, namespace, agent } = options;
+  return allocateConsole(
+    datasourceId,
+    (tab) => useTabs.getState().open(tab),
+    (id, name) => {
+      const consoles = useConsoles.getState();
+      void consoles.open(id, datasourceId, { name, sql, namespace, ...(agent === null ? {} : { agent }) });
+      consoles.setSelection(id, { from: sql.length, to: sql.length });
+    },
+    options.title === null ? undefined : (consoleNameFrom(options.title) ?? undefined),
+  );
 }
 
 /**
@@ -121,12 +156,13 @@ function allocateConsole(
   datasourceId: string,
   place: (tab: Tab) => void,
   open: (id: string, name: string) => void,
+  base?: string,
 ): Promise<string> {
   const groupId = groupOf(activeTab(useTabs.getState()));
   const previous = allocating.get(datasourceId) ?? Promise.resolve();
   const opened = previous.then(async () => {
     const saved = persists(datasourceId) ? await files.list(datasourceId).catch(() => []) : [];
-    const name = firstFreeName([...saved, ...openNames(datasourceId)]);
+    const name = firstFreeName([...saved, ...openNames(datasourceId)], base);
     const tab = { ...newTab(name), groupId };
     place(tab);
     open(tab.id, name);

@@ -58,7 +58,7 @@ import {
   marksChanged,
   setErrorMarks,
 } from "@table-craft/desktop/renderer/console/errorMarks.js";
-import { insertionAt, replacementAt } from "@table-craft/desktop/renderer/console/insertion.js";
+import { agentChangeAt, insertionAt, replacementAt } from "@table-craft/desktop/renderer/console/insertion.js";
 import { applyEditorJump } from "@table-craft/desktop/renderer/console/editorJump.js";
 import {
   connectedInspector,
@@ -220,6 +220,7 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
   const jump = useConsoles((state) => state.consoles[consoleId]?.jump ?? null);
   const insertion = useConsoles((state) => state.consoles[consoleId]?.insertion ?? null);
   const replacement = useConsoles((state) => state.consoles[consoleId]?.replacement ?? null);
+  const agentChange = useConsoles((state) => state.consoles[consoleId]?.agentChange ?? null);
   const marks = useConsoles((state) => state.consoles[consoleId]?.errorMarks ?? NO_MARKS);
   const namespace = useConsoles((state) => state.consoles[consoleId]?.namespace ?? null);
   const status = useDatasources((state) =>
@@ -403,6 +404,16 @@ export function Editor({ consoleId }: { readonly consoleId: string }) {
       effects: languageRef.current.reconfigure([highlighterOf(plugin), placeholder(placeholderText(plugin))]),
     });
   }, [plugin]);
+
+  // Before the text sync below, which would otherwise replace the whole doc and lose the undo step.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (view === null || agentChange === null) return;
+    const latest = useConsoles.getState().consoles[consoleId]?.sql ?? "";
+    const spec = agentChangeAt(view.state, agentChange, latest);
+    if (spec !== null) view.dispatch(spec);
+    useConsoles.getState().agentChanged(consoleId, agentChange.seq);
+  }, [consoleId, agentChange]);
 
   useEffect(() => {
     const view = viewRef.current;

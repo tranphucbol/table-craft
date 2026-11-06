@@ -18,6 +18,10 @@ let tablesOpened = 0;
 /** Open Data's argument: the table, and a WHERE to open it filtered with (foreign-key navigation). */
 export interface OpenTableArgs extends TableTarget {
   readonly where?: string;
+  /** An agent's ORDER BY (plan 156); kept from the open tab when absent. */
+  readonly orderBy?: string;
+  /** Put `where` and `orderBy` in the bars without reading by them; the user applies them. */
+  readonly draftOnly?: boolean;
 }
 
 function sameTable(a: TableTarget, b: TableTarget): boolean {
@@ -48,14 +52,18 @@ export async function openTable(args: OpenTableArgs): Promise<void> {
   const existing = Object.entries(tables).find(([, session]) => sameTable(session, args))?.[0];
   if (existing !== undefined) {
     useTabs.getState().activate(existing);
-    if (args.where === undefined) return;
-    const session = tables[existing];
-    await filterTable(existing, { where: args.where, orderBy: session?.applied.orderBy ?? "" });
+    if (args.where === undefined && args.orderBy === undefined) return;
+    const applied = tables[existing]?.applied;
+    const clauses = { where: args.where ?? applied?.where ?? "", orderBy: args.orderBy ?? applied?.orderBy ?? "" };
+    if (args.draftOnly === true) useTables.getState().setDraft(existing, clauses);
+    else await filterTable(existing, clauses);
     return;
   }
   const tab = newTab(args.relation);
   useTabs.getState().open(tab);
-  await useTables.getState().open(tab.id, args, { where: args.where });
+  await useTables
+    .getState()
+    .open(tab.id, args, { where: args.where, orderBy: args.orderBy, draftOnly: args.draftOnly });
 }
 
 /** Reopens the table tabs the layout remembers, each disconnected until Reload (decision 2). */

@@ -29,3 +29,14 @@ export function consoleNamespaceFor(path: readonly string[], targets: readonly N
   }
   return found;
 }
+
+/**
+ * The target an agent's `schema` names (plan 156): its dotted path, else the one target whose last
+ * part it is, as `list_schemas` names schemas; null when none or several match.
+ */
+export function namespaceNamed(targets: readonly Namespace[], schema: string): readonly string[] | null {
+  const exact = targets.find((target) => target.path.join(NAMESPACE_SEPARATOR) === schema);
+  if (exact !== undefined) return exact.path;
+  const byName = targets.filter((target) => target.path[target.path.length - 1] === schema);
+  return byName.length === 1 ? (byName[0]?.path ?? null) : null;
+}
