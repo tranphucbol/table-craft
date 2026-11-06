@@ -313,7 +313,7 @@ describe("plugin service", () => {
 
   it("givenStableChannelAndBetaInstalledIncompatible_whenUpdateAll_thenInstallsStable", async () => {
     registry.publish(PACKAGE, [
-      release({ id: "postgres", version: "1.0.0" }),
+      release({ id: "postgres", version: "1.0.0", apiVersion: "2.0.0" }),
       release({ id: "postgres", version: "1.1.0-beta.1", apiVersion: "2.1.0" }),
     ]);
     const beta = service(registry.url, { channel: () => "beta", hostVersion: "2.1.0" });
