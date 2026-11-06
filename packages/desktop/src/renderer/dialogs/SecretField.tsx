@@ -24,7 +24,7 @@ export function SecretField({ field, draft, encryption, onChange }: SecretFieldP
   const mode = draft.secretModes[field.key] ?? "never";
   const stored = draft.storedSecrets.includes(field.key);
   return (
-    <FieldRow label={field.label} htmlFor={id}>
+    <FieldRow label={field.label} htmlFor={id} hint={field.hint}>
       <TextInput
         id={id}
         type="password"

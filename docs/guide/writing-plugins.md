@@ -75,7 +75,7 @@ export default definePlugin({
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "2.0.0",
+  "apiVersion": "2.1.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -116,6 +116,10 @@ export default definePlugin({
 [Simple Icons](https://simpleicons.org) slug, which picks the logo TableCraft draws, and `name` is
 what the picker and the tree call it. The New Data Source picker lists one row per brand, and a
 session's `serverBrand` says which one the server is.
+
+`connection.fields` draws the connection form. A field's optional `hint` (plugin API 2.1) puts an
+(i) beside it: say what the field does, its unit, and what blank means, such as how a timeout
+applies.
 
 `connection.network` names the fields that hold the server's address (a text host, a number port and
 optionally a number of seconds to wait). A plugin that declares it gets the SSH tunnel: TableCraft
@@ -171,7 +175,7 @@ registry, instead of npm:
     "version": "1.0.0",
     "type": "module",
     "main": "index.js",
-    "tableCraft": { "id": "example", "apiVersion": "2.0.0" }
+    "tableCraft": { "id": "example", "apiVersion": "2.1.0" }
   }
   ```
 

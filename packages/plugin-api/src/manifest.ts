@@ -34,6 +34,8 @@ export const connectionFieldSchema = z.strictObject({
   default: z.union([z.string(), z.number(), z.boolean()]).optional(),
   required: z.boolean().optional(),
   placeholder: z.string().optional(),
+  /** Explains the field in an (i) beside it: what it does, its unit, and what blank means. */
+  hint: z.string().min(1).optional(),
   /** The choices of a `select`, in display order. */
   options: z
     .array(z.strictObject({ value: z.string(), label: z.string().min(1) }))

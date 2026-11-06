@@ -4,6 +4,9 @@
  *
  *   TABLE_CRAFT_EVIDENCE_DIR=docs/evidence/remember-prompted-secrets bun run test:smoke:headless test/e2e/dataSourceHints.smoke.test.ts
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { API_VERSION, MANIFEST_FILE, parseVersion } from "@table-craft/plugin-api";
 import type { Page } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -16,6 +19,7 @@ import {
   launchApp,
   newProfile,
   SCENARIO_TIMEOUT_MS,
+  seedPlugin,
   SMOKE_ENABLED,
   setWindowSize,
   toolWindow,
@@ -26,6 +30,37 @@ import {
 const SHORT_WINDOW = { width: EVIDENCE_WINDOW.width, height: 560 } as const;
 const WHEEL_PX = 300;
 const captureWindow = evidenceFor("remember-prompted-secrets");
+const FROZEN_DIRECTORY = join(
+  import.meta.dirname,
+  `../support/frozen-plugins/sqlite-${String(parseVersion(API_VERSION)?.major)}.0.0`,
+);
+const ENTRY_FILE = "index.js";
+const BUNDLED_ID = 'var PLUGIN_ID = "sqlite";';
+const HINTED = { id: "hinted-sqlite", name: "Hinted SQLite" } as const;
+const FIELD_HINT = "The database file; blank refuses to connect.";
+
+/** The frozen SQLite plugin under another id, its File field carrying a `hint` as a third party would write it. */
+function seedHintedPlugin(userDataDir: string): void {
+  const manifest = JSON.parse(readFileSync(join(FROZEN_DIRECTORY, MANIFEST_FILE), "utf8")) as {
+    readonly brands: readonly Record<string, unknown>[];
+    readonly connection: { readonly fields: readonly Record<string, unknown>[] };
+  };
+  const bundle = readFileSync(join(FROZEN_DIRECTORY, ENTRY_FILE), "utf8");
+  if (!bundle.includes(BUNDLED_ID)) throw new Error(`The frozen bundle no longer holds ${BUNDLED_ID}.`);
+  seedPlugin(userDataDir, HINTED.id, {
+    [MANIFEST_FILE]: JSON.stringify({
+      ...manifest,
+      ...HINTED,
+      apiVersion: API_VERSION,
+      brands: manifest.brands.map((brand) => ({ ...brand, name: HINTED.name })),
+      connection: {
+        ...manifest.connection,
+        fields: manifest.connection.fields.map((field) => ({ ...field, hint: FIELD_HINT })),
+      },
+    }),
+    [ENTRY_FILE]: bundle.replace(BUNDLED_ID, `var PLUGIN_ID = "${HINTED.id}";`),
+  });
+}
 
 interface Scroller {
   readonly scrollTop: number;
@@ -40,8 +75,12 @@ describe.runIf(SMOKE_ENABLED)("Data Sources form scroll and hints", () => {
     await closeApp(current?.app);
   }, CLOSE_HOOK_TIMEOUT_MS);
 
-  async function openForm(kind: string, size: { readonly width: number; readonly height: number }): Promise<Page> {
-    running = await launchApp(null, { userDataDir: newProfile() });
+  async function openForm(
+    kind: string,
+    size: { readonly width: number; readonly height: number },
+    userDataDir = newProfile(),
+  ): Promise<Page> {
+    running = await launchApp(null, { userDataDir });
     await setWindowSize(running.app, size);
     const { page } = running;
     await toolWindow(page, "Database").waitFor({ timeout: LAUNCH_TIMEOUT_MS });
@@ -105,6 +144,23 @@ describe.runIf(SMOKE_ENABLED)("Data Sources form scroll and hints", () => {
 
       await expect.poll(() => page.getByRole("tooltip").textContent()).toContain("Test Connection checks");
       await captureWindow(page, "08-etcd-form-endpoints-hint-tooltip");
+    },
+    SCENARIO_TIMEOUT_MS,
+  );
+
+  it(
+    "givenPluginFieldWithHint_whenInfoHovered_thenThePluginsHintShows",
+    async () => {
+      const userDataDir = newProfile();
+      seedHintedPlugin(userDataDir);
+      const page = await openForm(HINTED.name, EVIDENCE_WINDOW, userDataDir);
+      const info = dataSourcesDialog(page).getByRole("button", { name: "About File", exact: true });
+      await info.waitFor({ timeout: LAUNCH_TIMEOUT_MS });
+
+      await info.hover();
+
+      await expect.poll(() => page.getByRole("tooltip").textContent()).toContain(FIELD_HINT);
+      await captureWindow(page, "09-plugin-field-hint-tooltip");
     },
     SCENARIO_TIMEOUT_MS,
   );

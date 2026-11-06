@@ -115,6 +115,7 @@ dialog lists every plugin, an unavailable one with its reason. A connection fiel
 | `default`     | string, number or boolean                                  | Optional; prefilled in a new datasource                                                                             |
 | `required`    | boolean                                                    | Optional; the dialog refuses to save it blank                                                                       |
 | `placeholder` | string                                                     | Optional                                                                                                            |
+| `hint`        | string                                                     | Optional; shown in an (i) beside the input (plugin API 2.1)                                                         |
 | `options`     | `{ value, label }[]`                                       | For `select`                                                                                                        |
 | `group`       | `general` or `advanced`                                    | Optional, `general` by default; Advanced is its own section                                                         |
 | `secret`      | boolean                                                    | Kept by main per decision 020; required for `password`                                                              |
