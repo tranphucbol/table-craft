@@ -1,6 +1,6 @@
 # 129: The database backs the statement limit where it can
 
-Status: Accepted. Amends 054. Amended by 131.
+Status: Accepted. Amends 054. Amended by 131 and 159.
 
 ## Decision
 
