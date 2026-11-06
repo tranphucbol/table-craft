@@ -83,6 +83,7 @@ below shows the defaults.
 | Select All Occurrences    | `⌥⇧⌘J`  | `Ctrl+Alt+Shift+J`     |
 | Find in Result            | `⌘F`    | `Ctrl+F`               |
 | Transpose                 | `⌥⌘T`   | `Ctrl+Alt+T`           |
+| Show Chart                | `⌥⌘C`   | `Ctrl+Alt+C`           |
 | Toggle JSON View          | `⌥⌘J`   | `Ctrl+Alt+J`           |
 | Toggle Boolean            | `Space` | `Space`                |
 | Settings…                 | `⌘,`    | `Ctrl+,`               |

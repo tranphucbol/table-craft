@@ -1,6 +1,6 @@
 /**
  * The README GIFs plan 061 added, one per feature section that had none: modifying a table, the
- * console's inspections and Run All, the grid's find, local filters and aggregates, CSV import,
+ * console's inspections and Run All, the grid's find, local filters and aggregates, the chart view, CSV import,
  * Import Data Sources, Execute Routine, Sessions, and the two Redis views. Recorded the same way
  * as `readme.media.test.ts`, by the same `bun run readme:media`.
  */
@@ -35,6 +35,7 @@ import {
   PASSWORD,
   READ_PAUSE_MS,
   resultState,
+  resultToolbarButton,
   scene,
   selectInTree,
   setConsoleText,
@@ -96,6 +97,45 @@ function gridCell(page: Page, row: number, column: number): Locator {
 
 function header(page: Page, column: string): Locator {
   return page.locator(`[role="columnheader"][data-column-name="${column}"]`);
+}
+
+const WEEKLY_REVENUE = `SELECT date_trunc('week', o.placed_at)::date AS week, p.category,
+  sum(i.quantity * i.unit_price) AS revenue
+FROM orders AS o
+  JOIN order_items AS i ON i.order_id = o.id
+  JOIN products AS p ON p.id = i.product_id
+GROUP BY 1, 2
+ORDER BY 1, 2`;
+/** The chart's refresh delay, the engine round trip and the animation. */
+const DRAW_TIMEOUT_MS = 5_000;
+const RESULTS_GROWTH_PX = 190;
+const DRAG_STEPS = 8;
+
+function plot(page: Page): Locator {
+  return page.locator('[data-testid="chart-view"] [role="img"]');
+}
+
+async function chartDrawn(page: Page, kind: string): Promise<void> {
+  await expect.poll(() => plot(page).getAttribute("data-chart-kind"), { timeout: DRAW_TIMEOUT_MS }).toBe(kind);
+  await expect.poll(() => plot(page).getAttribute("data-chart-settled"), { timeout: DRAW_TIMEOUT_MS }).toBe("true");
+}
+
+/** Drags the console's split up off camera, so the chart gets the height the editor does not need. */
+async function growResults(page: Page): Promise<void> {
+  const box = await page.locator('[role="separator"]:has(+ [data-testid="console-results"])').boundingBox();
+  if (box === null) throw new Error("The console has no split to drag.");
+  const x = box.x + box.width / 2;
+  const handle = box.y + box.height / 2;
+  await page.mouse.move(x, handle);
+  await page.mouse.down();
+  await page.mouse.move(x, handle - RESULTS_GROWTH_PX, { steps: DRAG_STEPS });
+  await page.mouse.up();
+}
+
+/** Opens one of the chart bar's dropdowns and picks a column by name, for the reader to follow. */
+async function chooseVisibly(page: Page, testId: string, column: string): Promise<void> {
+  await clickVisibly(page, page.getByTestId(testId));
+  await clickVisibly(page, page.getByRole("option", { name: column, exact: true }));
 }
 
 function keyRows(page: Page, kind: string): Locator {
@@ -242,6 +282,36 @@ mediaSuite("README feature media", () => {
       await clickVisibly(page, gridCell(page, 0, 1));
       await pressVisibly(page, "Mod+Alt+T");
       await page.locator("[data-transposed]").waitFor();
+    },
+  });
+
+  scene("chart", {
+    setup: async ({ page }) => {
+      await connect(page, SHOP, PASSWORD);
+      await openConsole(page, SHOP);
+      await setConsoleText(page, WEEKLY_REVENUE);
+      await page.keyboard.press("Escape");
+      await growResults(page);
+      await sqlEditor(page).click();
+    },
+    run: async ({ page }) => {
+      await pressVisibly(page, "Mod+Enter");
+      await waitForRows(page, /^\d+ rows/);
+      await pause(page);
+      await clickVisibly(page, resultToolbarButton(page, "Show Chart"));
+      await chartDrawn(page, "line");
+      await pause(page);
+      await chooseVisibly(page, "chart-group-by", "category");
+      await expect.poll(() => plot(page).getAttribute("data-chart-series"), { timeout: DRAW_TIMEOUT_MS }).toBe("5");
+      await chartDrawn(page, "line");
+      await pointAt(page, plot(page));
+      await pause(page, READ_PAUSE_MS);
+      await clickVisibly(page, page.locator('[data-chart-kind-option="pie"]'));
+      await chartDrawn(page, "pie");
+      await chooseVisibly(page, "chart-x", "category");
+      await chartDrawn(page, "pie");
+      await expect.poll(() => plot(page).getAttribute("aria-label")).toMatch(/^Pie chart of revenue by category/);
+      await pause(page, READ_PAUSE_MS);
     },
   });
 

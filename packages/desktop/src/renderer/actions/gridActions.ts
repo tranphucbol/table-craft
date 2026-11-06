@@ -114,6 +114,8 @@ type ResultHost = Pick<
   | "select"
   | "extract"
   | "aggregate"
+  | "chart"
+  | "setChart"
   | "cellBytes"
   | "saveBytes"
   | "loadBytes"
@@ -390,7 +392,7 @@ export const GRID_ACTIONS: readonly AnyAction[] = [
     icon: "valuePanel",
     shortcut: "Shift+Enter",
     shortcutRegion: "grid",
-    when: (context) => shown(context) !== null,
+    when: (context) => shown(context) !== null && context.result?.chart?.shown !== true,
     run: () => useLayout.getState().toggleValuePanel(),
   }),
   defineAction({

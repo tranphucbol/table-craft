@@ -17,6 +17,8 @@ import type { AppliedChange, DdlScript, ObjectChange, ObjectFeatures, TableDesig
 import type {
   FoundMatch,
   CellBytes,
+  ChartData,
+  ChartSpec,
   ResultState,
   ResultWindow,
   SelectionAggregates,
@@ -189,6 +191,11 @@ export interface EngineCalls extends KeyAdvancedCalls {
   "result.aggregate": {
     params: { readonly handle: string; readonly rows: readonly RowRange[]; readonly columns: readonly number[] };
     result: SelectionAggregates;
+  };
+  /** The shown rows shaped into the series `spec` draws (plan 155); the rows stay here. */
+  "result.chart": {
+    params: { readonly handle: string; readonly spec: ChartSpec };
+    result: ChartData;
   };
   /**
    * Every byte of the cell at held row `row`, read again by the row's key when the result holds

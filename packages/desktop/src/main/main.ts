@@ -28,6 +28,7 @@ import { createConsoleFiles, type DirectoryFileSystem } from "@table-craft/deskt
 import {
   chooseFile,
   chooseSqlFiles,
+  exportChartImage,
   exportDiagramImage,
   openFile,
   saveFile,
@@ -937,6 +938,7 @@ void app.whenReady().then(async () => {
     openAnyFile: (contents, title) => openFile(contents, title, true),
     saveFile,
     exportDiagramImage,
+    exportChartImage,
     revealFile: (path) => shell.showItemInFolder(path),
     answerHostKey,
     answerClose(sender, proceed) {

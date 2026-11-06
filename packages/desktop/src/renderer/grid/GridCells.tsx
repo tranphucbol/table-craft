@@ -49,6 +49,7 @@ export interface GridHost {
   readonly search: (ownerId: string, resultId: string, change: (search: ResultSearch) => ResultSearch) => Promise<void>;
   readonly aggregate: ResultWindows["aggregate"];
   readonly cellBytes: ResultWindows["cellBytes"];
+  readonly chart: ResultWindows["chart"];
 }
 
 /** The cell open for editing: its grid row, result column and text. */

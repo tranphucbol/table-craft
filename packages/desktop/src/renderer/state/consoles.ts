@@ -113,6 +113,7 @@ import {
   type ResultSearch,
   type ResultTab,
 } from "@table-craft/desktop/renderer/state/resultTab.js";
+import { carriedChart } from "@table-craft/desktop/renderer/model/chartSpec.js";
 import { createResultWindows, toError, type ResultWindows } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import {
   DEFAULT_RUN_SETTINGS,
@@ -444,6 +445,9 @@ export interface ConsolesState extends ConsoleEdits {
     rows: readonly RowRange[],
     columns: readonly number[],
   ) => Promise<SelectionAggregates | null>;
+  /** The series of the shown rows for a chart, or null when the result is gone (plan 155). */
+  readonly chart: ResultWindows["chart"];
+  readonly setChart: ResultWindows["setChart"];
   /** Every byte of a held cell, for an image preview; null when the engine refused. */
   readonly cellBytes: ResultWindows["cellBytes"];
   /** Writes a held cell's bytes to a file main chose (plan 043). */
@@ -2180,6 +2184,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               const names = (columns: readonly Column[]) => columns.map((column) => column.name);
               const layout = carriedLayout(latest.layout, names(latest.columns), names(fresh.columns));
               const kept = layout === latest.layout;
+              const chart = carriedChart(latest.chart, names(latest.columns), names(fresh.columns));
               const sort = kept ? latest.sort : [];
               const state =
                 sort.length > 0 ? await client.call("result.sort", { handle: fresh.handle, keys: [...sort] }) : fresh;
@@ -2189,6 +2194,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
                 pinned: latest.pinned,
                 ...(latest.valueFormat === undefined ? {} : { valueFormat: latest.valueFormat }),
                 layout,
+                ...(chart === undefined ? {} : { chart }),
                 autoChars: kept ? latest.autoChars : fresh.autoChars,
                 sort,
                 windows: sort.length > 0 ? {} : fresh.windows,
@@ -2221,6 +2227,8 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
 
       extract: windows.extract,
       aggregate: windows.aggregate,
+      chart: windows.chart,
+      setChart: windows.setChart,
       cellBytes: windows.cellBytes,
       saveBytes: windows.saveBytes,
       loadBytes: windows.loadBytes,

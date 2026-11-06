@@ -8,6 +8,9 @@ import {
   type EditSurface,
 } from "@table-craft/desktop/renderer/actions/resultEditing.js";
 import { bridge } from "@table-craft/desktop/renderer/bridge.js";
+import { exportChart } from "@table-craft/desktop/renderer/actions/chartExport.js";
+import { chartInstance } from "@table-craft/desktop/renderer/chart/instances.js";
+import type { ChartSpec } from "@table-craft/desktop/engine/protocol.js";
 import {
   blobLimitBytes,
   focusedBinaryCell,
@@ -30,6 +33,10 @@ export const GRID_HELPER_ACTION_IDS = {
   copyAggregates: "grid.copyAggregates",
   toggleAggregate: "grid.toggleAggregate",
   transpose: "grid.transpose",
+  toggleChart: "grid.toggleChart",
+  setChart: "grid.setChart",
+  resetChartZoom: "grid.resetChartZoom",
+  exportChart: "grid.exportChart",
   saveBytes: "grid.saveBytes",
   loadBytes: "grid.loadBytes",
 } as const;
@@ -61,6 +68,21 @@ function loadable(
   if (focus === undefined || column === undefined || target.result.typeClasses[column] !== "bytes") return null;
   const cell = { row: focus.row, column };
   return canWriteCell(surface.target, cell) ? { target, surface, cell } : null;
+}
+
+/** The shown result while its chart replaces the rows. */
+function charted(context: ActionContext): ShownResult | null {
+  const target = shown(context);
+  return target?.result.chart?.shown === true ? target : null;
+}
+
+/** Whether the shown result draws its rows, which Transpose and the value panel work on. */
+export function showsRows(context: ActionContext): boolean {
+  return shown(context) !== null && charted(context) === null;
+}
+
+export interface ChartArgs {
+  readonly spec: ChartSpec;
 }
 
 export interface AggregateArgs {
@@ -111,12 +133,67 @@ export const GRID_HELPER_ACTIONS: readonly AnyAction[] = [
     icon: "transpose",
     shortcut: "Mod+Alt+T",
     shortcutRegion: "grid",
-    when: (context) => shown(context) !== null,
+    when: showsRows,
     run: (context) => {
       const target = shown(context);
       if (target === null) return;
       const { layout } = target.result;
       target.host.setLayout(target.ownerId, target.result.id, { ...layout, transposed: layout.transposed !== true });
+    },
+  }),
+  defineAction({
+    id: GRID_HELPER_ACTION_IDS.toggleChart,
+    title: "Show Chart",
+    category: "Result Grid",
+    icon: "chart",
+    shortcut: "Mod+Alt+C",
+    shortcutRegion: "grid",
+    when: (context) => shown(context) !== null,
+    run: (context) => {
+      const target = shown(context);
+      if (target === null) return;
+      const { chart } = target.result;
+      target.host.setChart(target.ownerId, target.result.id, {
+        shown: chart?.shown !== true,
+        spec: chart?.spec ?? null,
+      });
+    },
+  }),
+  defineAction<ChartArgs | undefined>({
+    id: GRID_HELPER_ACTION_IDS.setChart,
+    title: "Change Chart",
+    category: "Result Grid",
+    inPalette: false,
+    when: (context) => charted(context) !== null,
+    run: (context, args) => {
+      const target = charted(context);
+      if (target === null || args === undefined) return;
+      target.host.setChart(target.ownerId, target.result.id, { shown: true, spec: args.spec });
+    },
+  }),
+  defineAction({
+    id: GRID_HELPER_ACTION_IDS.resetChartZoom,
+    title: "Reset Chart Zoom",
+    category: "Result Grid",
+    icon: "fit",
+    when: (context) => charted(context) !== null,
+    run: (context) => {
+      const target = charted(context);
+      if (target === null) return;
+      chartInstance(target.ownerId, target.result.id)?.dispatchAction({ type: "dataZoom", start: 0, end: 100 });
+    },
+  }),
+  defineAction({
+    id: GRID_HELPER_ACTION_IDS.exportChart,
+    title: "Export Chart as PNG…",
+    category: "Result Grid",
+    icon: "exportPng",
+    when: (context) => charted(context) !== null,
+    run: async (context) => {
+      const target = charted(context);
+      const chart = target === null ? undefined : chartInstance(target.ownerId, target.result.id);
+      if (chart === undefined) return;
+      await exportChart(chart, context.activeTab?.title ?? "");
     },
   }),
   defineAction({
