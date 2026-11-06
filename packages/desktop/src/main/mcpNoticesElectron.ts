@@ -2,9 +2,9 @@ import { app, BrowserWindow, Notification } from "electron";
 import { CHANNELS } from "@table-craft/desktop/preload/bridge.js";
 import type { Logger } from "@table-craft/desktop/log/record.js";
 import { createMcpNotices, type McpNotices } from "@table-craft/desktop/main/mcpNotices.js";
+import { raiseWindow } from "@table-craft/desktop/main/mcpWindows.js";
 import { MCP_NOTICE_ACTIONS, type McpNotice } from "@table-craft/desktop/settings/mcpNotice.js";
 
-const MAC_PLATFORM = "darwin";
 const WINDOWS_PLATFORM = "win32";
 /** The `appId` of `electron-builder.yml`; Windows shows no toast from an app without one. */
 const APP_USER_MODEL_ID = "dev.table-craft.desktop";
@@ -12,10 +12,7 @@ const APP_USER_MODEL_ID = "dev.table-craft.desktop";
 function revealWindow(opens: McpNotice["opens"]): void {
   const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
   if (window === undefined || window.isDestroyed()) return;
-  if (window.isMinimized()) window.restore();
-  window.show();
-  window.focus();
-  if (process.platform === MAC_PLATFORM) app.focus({ steal: true });
+  raiseWindow(window);
   window.webContents.send(CHANNELS.invokeAction, MCP_NOTICE_ACTIONS[opens]);
 }
 

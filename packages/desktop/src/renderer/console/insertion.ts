@@ -1,6 +1,8 @@
 import { isolateHistory } from "@codemirror/commands";
 import type { EditorState, TransactionSpec } from "@codemirror/state";
-import type { Replacement } from "@table-craft/desktop/renderer/state/consoles.js";
+import type { AgentChange, Replacement } from "@table-craft/desktop/renderer/state/consoles.js";
+
+const AGENT_EVENT = "input.agent";
 
 /**
  * Applies a reformat as one undo step (plan 019 decision 2); null when the text it was computed
@@ -29,6 +31,25 @@ export function insertionAt(state: EditorState, text: string): TransactionSpec {
     selection: { anchor: from + text.length },
     scrollIntoView: true,
     userEvent: "input.paste",
+    annotations: isolateHistory.of("full"),
+  };
+}
+
+/**
+ * Applies an agent's edit as one undo step (plan 156), without taking focus; null when the view's
+ * text plus the change is not `latest`, as when edits arrived while the editor was unmounted, and
+ * the whole-text sync must catch up instead.
+ */
+export function agentChangeAt(state: EditorState, agentChange: AgentChange, latest: string): TransactionSpec | null {
+  const { change, selection } = agentChange;
+  const { doc } = state;
+  if (change.to > doc.length) return null;
+  if (doc.sliceString(0, change.from) + change.insert + doc.sliceString(change.to) !== latest) return null;
+  return {
+    changes: change,
+    selection: { anchor: selection.from, head: selection.to },
+    scrollIntoView: true,
+    userEvent: AGENT_EVENT,
     annotations: isolateHistory.of("full"),
   };
 }

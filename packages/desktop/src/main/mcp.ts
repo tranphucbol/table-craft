@@ -9,8 +9,6 @@ import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
 import {
   MCP_BOOT_MESSAGE,
   MCP_CONFIG_MESSAGE,
-  MCP_CONTEXT_ANSWER_MESSAGE,
-  MCP_CONTEXT_REQUEST_MESSAGE,
   MCP_CONTROL_MESSAGE,
   MCP_DATASOURCES_MESSAGE,
   MCP_ENGINE_ANSWER_MESSAGE,
@@ -18,10 +16,11 @@ import {
   MCP_ENGINE_REQUEST_MESSAGE,
   MCP_HISTORY_MESSAGE,
   MCP_LOG_MESSAGE,
-  MCP_OPEN_CONSOLE_MESSAGE,
   MCP_SERVER_SEEN_MESSAGE,
   MCP_SHUTDOWN_MESSAGE,
   MCP_STATUS_MESSAGE,
+  MCP_UI_ANSWER_MESSAGE,
+  MCP_UI_REQUEST_MESSAGE,
   type AgentDatasource,
   type EngineAnswer,
   type MainToMcp,
@@ -34,10 +33,11 @@ import {
   mcpClientConfig,
   stoppedStatus,
   tokenHint,
-  type McpActiveConsole,
   type McpClient,
-  type McpConsoleRequest,
   type McpStatus,
+  type McpUiAnswer,
+  type McpUiDelivery,
+  type McpUiTarget,
   type McpUserControl,
 } from "@table-craft/desktop/settings/mcp.js";
 import type { McpSettings } from "@table-craft/desktop/settings/settings.js";
@@ -88,10 +88,8 @@ export interface McpSupervisorOptions {
   readonly forward: (record: unknown, process: string) => void;
   readonly windowsOpen: () => boolean;
   readonly writeClipboard: (text: string) => void;
-  /** Shows the text in a new console of the focused window; false when no window is open. */
-  readonly openConsole: (request: McpConsoleRequest) => boolean;
-  /** Asks the focused window for its console; false when no window is open. */
-  readonly askContext: (requestId: number) => boolean;
+  /** Hands a UI request to its window (plan 156); false when that window is not open. */
+  readonly askWindow: (target: McpUiTarget, delivery: McpUiDelivery) => boolean;
   readonly newToken: () => string;
   readonly serverVersion: string;
   readonly log: Logger;
@@ -111,8 +109,8 @@ export interface McpSupervisor {
   control(control: McpUserControl): void;
   copyClientConfig(client: McpClient): Promise<void>;
   copyToken(): Promise<void>;
-  /** A window's answer to `askContext`. */
-  contextReply(requestId: number, context: McpActiveConsole | null): void;
+  /** A window's answer to `askWindow`; `window` is the one that answered. */
+  uiAnswer(requestId: number, window: number, answer: McpUiAnswer): void;
   regenerateToken(): Promise<void>;
   stop(): Promise<void>;
 }
@@ -244,12 +242,14 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
       case MCP_LOG_MESSAGE:
         options.forward(message.record, MCP_LOG_PROCESS);
         return;
-      case MCP_OPEN_CONSOLE_MESSAGE:
-        options.openConsole({ datasourceId: message.datasourceId, sql: message.sql });
-        return;
-      case MCP_CONTEXT_REQUEST_MESSAGE:
-        if (!options.askContext(message.requestId))
-          process.postMessage({ kind: MCP_CONTEXT_ANSWER_MESSAGE, requestId: message.requestId, context: null });
+      case MCP_UI_REQUEST_MESSAGE:
+        if (!options.askWindow(message.target, { requestId: message.requestId, request: message.request }))
+          process.postMessage({
+            kind: MCP_UI_ANSWER_MESSAGE,
+            requestId: message.requestId,
+            window: null,
+            answer: null,
+          });
         return;
     }
   }
@@ -287,6 +287,7 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
       rowCap: settings.rowCap,
       timeoutSeconds: settings.statementTimeoutSeconds,
       clients: settings.clients,
+      allowFocus: settings.allowFocus,
     });
     options.log.info("mcp host started", { port: settings.port });
   }
@@ -325,13 +326,15 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
       if (
         previous.rowCap !== next.rowCap ||
         previous.statementTimeoutSeconds !== next.statementTimeoutSeconds ||
-        previous.clients !== next.clients
+        previous.clients !== next.clients ||
+        previous.allowFocus !== next.allowFocus
       )
         running?.process.postMessage({
           kind: MCP_CONFIG_MESSAGE,
           rowCap: next.rowCap,
           timeoutSeconds: next.statementTimeoutSeconds,
           clients: next.clients,
+          allowFocus: next.allowFocus,
         });
       return Promise.resolve();
     },
@@ -358,8 +361,8 @@ export function createMcpSupervisor(options: McpSupervisorOptions): McpSuperviso
     async copyToken() {
       options.writeClipboard(await token());
     },
-    contextReply(requestId, context) {
-      running?.process.postMessage({ kind: MCP_CONTEXT_ANSWER_MESSAGE, requestId, context });
+    uiAnswer(requestId, window, answer) {
+      running?.process.postMessage({ kind: MCP_UI_ANSWER_MESSAGE, requestId, window, answer });
     },
     regenerateToken: () =>
       queue(async () => {

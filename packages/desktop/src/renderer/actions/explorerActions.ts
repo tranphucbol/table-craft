@@ -4,7 +4,12 @@ import { ACTION_IDS } from "@table-craft/desktop/renderer/actions/appActions.js"
 import type { ActionContext } from "@table-craft/desktop/renderer/actions/context.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { folderPaths } from "@table-craft/desktop/renderer/model/datasourceTree.js";
-import { columnRevealKeys, revealKeys } from "@table-craft/desktop/renderer/model/explorerTree.js";
+import {
+  columnRevealKeys,
+  datasourceKey,
+  namespaceKey,
+  revealKeys,
+} from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { useDatasources, type TreeSelection } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useKeys } from "@table-craft/desktop/renderer/state/keys.js";
@@ -50,29 +55,68 @@ function isRevealArgs(args: unknown): args is RevealArgs {
   return typeof args === "object" && args !== null && "datasourceId" in args && "path" in args && "name" in args;
 }
 
+/** What an agent's `reveal_in_explorer` selects (plan 156): a schema, or a relation or its column in it. */
+export interface RevealNode {
+  readonly datasourceId: string;
+  readonly path: readonly string[];
+  readonly relation: { readonly name: string; readonly kind: RelationKind } | null;
+  readonly column: string | null;
+}
+
+/**
+ * Opens the Database pane, expands down to `node` and selects it; keyboard focus moves to the pane
+ * only with `focus`, so an agent's reveal leaves the user's typing where it was.
+ */
+export function revealNode(node: RevealNode, focus: boolean): void {
+  if (!useLayout.getState().layout.visible.database) useLayout.getState().toggle("database");
+  const { datasourceId, path, relation } = node;
+  if (relation === null) {
+    const keys = path.map((_, index) => namespaceKey(datasourceId, path.slice(0, index + 1)));
+    useCatalog.getState().expandAll([datasourceKey(datasourceId), ...keys.slice(0, -1)]);
+    useDatasources.getState().select({
+      kind: "catalog",
+      id: datasourceId,
+      key: keys[keys.length - 1] ?? datasourceKey(datasourceId),
+      path,
+      name: path[path.length - 1] ?? "",
+    });
+  } else {
+    selectRelation({
+      datasourceId,
+      path,
+      name: relation.name,
+      kind: relation.kind,
+      ...(node.column === null ? {} : { column: node.column }),
+    });
+  }
+  if (focus) useCatalog.getState().requestFocus();
+}
+
+function selectRelation(target: RevealArgs): void {
+  const relation = { name: target.name, kind: target.kind };
+  const keys =
+    target.column === undefined
+      ? revealKeys(target.datasourceId, target.path, relation)
+      : columnRevealKeys(target.datasourceId, target.path, relation, target.column);
+  useCatalog.getState().expandAll(keys.slice(0, -1));
+  useDatasources.getState().select({
+    kind: "catalog",
+    id: target.datasourceId,
+    key: keys[keys.length - 1] ?? "",
+    path: target.path,
+    name: target.name,
+  });
+}
+
 /**
  * Opens the Database pane, expands down to `target` and selects and focuses it; without a target,
  * selects the context's datasource. Go to Declaration lands here too (plan 009 decision 14).
  */
 export function revealInDatabase(context: ActionContext, target: RevealArgs | null): void {
   if (!context.toolWindows.database) useLayout.getState().toggle("database");
-  if (target !== null) {
-    const relation = { name: target.name, kind: target.kind };
-    const keys =
-      target.column === undefined
-        ? revealKeys(target.datasourceId, target.path, relation)
-        : columnRevealKeys(target.datasourceId, target.path, relation, target.column);
-    useCatalog.getState().expandAll(keys.slice(0, -1));
-    useDatasources.getState().select({
-      kind: "catalog",
-      id: target.datasourceId,
-      key: keys[keys.length - 1] ?? "",
-      path: target.path,
-      name: target.name,
-    });
-  } else if (context.datasource !== null) {
+  if (target !== null) selectRelation(target);
+  else if (context.datasource !== null)
     useDatasources.getState().select({ kind: "datasource", id: context.datasource.view.id });
-  }
   useCatalog.getState().requestFocus();
 }
 

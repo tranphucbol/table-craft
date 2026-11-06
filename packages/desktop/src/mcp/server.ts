@@ -27,7 +27,8 @@ const INSTRUCTIONS = [
   "Explore with list_schemas, list_tables and describe_table before writing SQL, and use the datasource's dialect.",
   "run_query takes one statement. Reads return a capped preview; page with fetch_rows. A write waits for the user to approve it in TableCraft, so say why in `reason`.",
   "For Redis and other key-value datasources use scan_keys and get_key; run_query takes one command there.",
-  "To hand a statement to the user instead of running it, use open_in_console.",
+  "To hand a statement to the user instead of running it, use open_in_console; to change it afterwards, use edit_console on the handle it returned rather than opening another console.",
+  "To show the user a table or an object, use open_table or reveal_in_explorer.",
 ].join(" ");
 
 export const HTTP_OK = 200;

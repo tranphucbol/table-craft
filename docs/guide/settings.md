@@ -72,6 +72,7 @@ back to its default without affecting the others.
 | `updates.channel`                      | `auto`, `stable`, `beta`; `auto` follows the build you run. Plugins follow it too                     | `auto`                                         |
 | `plugins.registryUrl`                  | an `https://` npm registry (plain `http://` only on this machine); where plugins download from        | `https://registry.npmjs.org`                   |
 | `plugins.registries`                   | `{ "id", "name", "url", "scopes", "packages" }` per [private registry](plugins.md#private-registries) | `[]`                                           |
+| `mcp.allowFocus`                       | `true`, `false`; let an agent bring the window forward when it opens or edits a console               | `true`                                         |
 | `mcp.clients`                          | `{ "name", "allowed" }` per MCP client you answered; [Allow or Block](agents.md)                      | `[]`                                           |
 | `mcp.enabled`                          | `true`, `false`; run the [MCP server](agents.md) for AI agents                                        | `false`                                        |
 | `mcp.notifications`                    | `true`, `false`; a system notification and dock badge while an agent waits in the background          | `true`                                         |

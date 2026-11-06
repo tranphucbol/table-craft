@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  consoleNameFrom,
   createAutosave,
   firstFreeName,
   type ConsoleFileAccess,
@@ -57,6 +58,17 @@ describe("console files", () => {
     expect(firstFreeName([])).toBe("console");
     expect(firstFreeName(["console", "console_1", "console_3"])).toBe("console_2");
     expect(firstFreeName(["console_1"])).toBe("console");
+  });
+
+  it("givenTitleHint_whenOpened_thenNamedFromHint", () => {
+    expect(consoleNameFrom("Top customers by revenue")).toBe("Top_customers_by_revenue");
+    expect(consoleNameFrom("..")).toBeNull();
+    expect(consoleNameFrom("x".repeat(80))).toHaveLength(58);
+  });
+
+  it("givenTakenHint_whenOpened_thenSuffixed", () => {
+    expect(firstFreeName(["orders"], "orders")).toBe("orders_1");
+    expect(firstFreeName(["console"], "orders")).toBe("orders");
   });
 
   it("givenTyping_whenItPauses_thenOnlyTheLastTextIsWritten", () => {

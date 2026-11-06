@@ -164,6 +164,7 @@ async function bootedHost(
     timeoutSeconds: 120,
     windows: true,
     clients,
+    allowFocus: true,
     datasources: [{ id: "shop", name: "Shop", pluginId: "sqlite", comment: null, access }],
   });
   await started.ready();
@@ -211,7 +212,7 @@ describe("MCP over HTTP", () => {
       sessionId,
     );
 
-    expect((listed.body as { result: { tools: unknown[] } }).result.tools).toHaveLength(15);
+    expect((listed.body as { result: { tools: unknown[] } }).result.tools).toHaveLength(20);
     expect(called.body).toMatchObject({ id: 3, result: { structuredContent: { rows: [{ n: 3 }] } } });
     expect(history).toMatchObject([{ datasourceId: "shop", outcome: "success", rowCount: 1 }]);
     expect(statuses.at(-1)?.clients[0]?.lastCall).toMatchObject({
@@ -227,7 +228,13 @@ describe("MCP over HTTP", () => {
 
     const called = rpc(port, COUNT_ORDERS, sessionId);
     await expect.poll(() => statuses.at(-1)?.pendingClients.map((client) => client.name)).toEqual(["claude-code"]);
-    host?.handle({ kind: MCP_CONFIG_MESSAGE, rowCap: 10, timeoutSeconds: 120, clients: KNOWN_CLIENTS });
+    host?.handle({
+      kind: MCP_CONFIG_MESSAGE,
+      rowCap: 10,
+      timeoutSeconds: 120,
+      clients: KNOWN_CLIENTS,
+      allowFocus: true,
+    });
 
     expect((await called).body).toMatchObject({ id: 3, result: { structuredContent: { rows: [{ n: 3 }] } } });
     expect(statuses.at(-1)?.pendingClients).toEqual([]);

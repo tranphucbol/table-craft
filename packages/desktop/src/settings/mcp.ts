@@ -199,15 +199,103 @@ export interface McpActiveConsole {
   readonly namespace: readonly string[] | null;
 }
 
-/** What `open_in_console` asks a window to do: a new console with the text, not run. */
-export interface McpConsoleRequest {
+/** Which window a UI request goes to: the focused one (else the first), or one by its web contents id. */
+export type McpUiTarget = "focused" | { readonly window: number };
+
+/** An agent's change to a console it opened (plan 156): exact find/replace edits, or the whole text at a revision. */
+export type AgentEdit =
+  | {
+      readonly kind: "replace";
+      readonly edits: readonly { readonly oldText: string; readonly newText: string }[];
+    }
+  | { readonly kind: "whole"; readonly text: string; readonly revision: number };
+
+export type AgentEditRefusal = "notFound" | "ambiguous" | "stale" | "selectNotFound";
+
+/** A console an agent opened, as its window reports it. */
+export interface McpConsoleView {
+  readonly handle: string;
+  readonly title: string;
   readonly datasourceId: string;
+  readonly namespace: readonly string[] | null;
   readonly sql: string;
+  readonly selectionFrom: number;
+  readonly selectionTo: number;
+  /** Goes up on every change of the text, the user's or the agent's. */
+  readonly revision: number;
+  /** Whether it is the window's active tab. */
+  readonly active: boolean;
 }
 
-/** Main asks the focused window for its console; it answers through `mcp.context-reply`. */
-export interface McpContextRequest {
+/** How a requested schema landed in a new console. */
+export type McpSchemaOutcome = "applied" | "unsupported" | "unknown";
+
+/**
+ * What the MCP host asks a window to do (plan 156). `focus` is already false when the user does not
+ * let agents bring the window forward; main raises the window for a request that carries it.
+ */
+export type McpUiRequest =
+  | {
+      readonly kind: "open";
+      /** Null for a console the user opened from Agent Activity: no agent owns it. */
+      readonly handle: string | null;
+      readonly client: string | null;
+      readonly datasourceId: string;
+      readonly sql: string;
+      readonly schema: string | null;
+      readonly title: string | null;
+      readonly focus: boolean;
+    }
+  | { readonly kind: "activeContext" }
+  | {
+      readonly kind: "edit";
+      readonly handle: string;
+      readonly edit: AgentEdit;
+      readonly select: string | null;
+      readonly focus: boolean;
+    }
+  | { readonly kind: "read"; readonly handles: readonly string[] }
+  | { readonly kind: "release"; readonly handles: readonly string[] }
+  | {
+      readonly kind: "openTable";
+      readonly datasourceId: string;
+      readonly path: readonly string[];
+      readonly table: string;
+      readonly where: string | null;
+      readonly orderBy: string | null;
+      /** Fill the bars and leave reading them to the user, on an ask-before-reads datasource. */
+      readonly draftOnly: boolean;
+      readonly focus: boolean;
+    }
+  | {
+      readonly kind: "reveal";
+      readonly datasourceId: string;
+      readonly path: readonly string[];
+      readonly relation: { readonly name: string; readonly kind: "table" | "view" | "materializedView" } | null;
+      readonly column: string | null;
+      readonly focus: boolean;
+    };
+
+export type McpUiAnswer =
+  | { readonly kind: "opened"; readonly console: McpConsoleView; readonly schema: McpSchemaOutcome | null }
+  | { readonly kind: "context"; readonly context: McpActiveConsole | null }
+  | {
+      readonly kind: "edited";
+      /** Null when no console with the handle is open. */
+      readonly console: McpConsoleView | null;
+      readonly refusal: {
+        readonly reason: AgentEditRefusal;
+        readonly index: number | null;
+        readonly matches: number;
+      } | null;
+    }
+  | { readonly kind: "consoles"; readonly consoles: readonly McpConsoleView[] }
+  | { readonly kind: "done" };
+
+/** Main hands a window one UI request; it answers through `mcp.ui-answer`. */
+export interface McpUiDelivery {
   readonly requestId: number;
+  readonly request: McpUiRequest;
 }
 
 /** Agent Activity keeps this many calls, newest first. */
