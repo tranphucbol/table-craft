@@ -99,7 +99,8 @@ export type ActionIcon =
   | "inferredKeys"
   | "tables"
   | "exportSvg"
-  | "exportPng";
+  | "exportPng"
+  | "chart";
 
 export interface Action<A = void> {
   readonly id: string;

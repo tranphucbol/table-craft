@@ -138,7 +138,7 @@ export interface KeyTab extends KeyTarget {
   readonly notice: string | null;
 }
 
-export interface KeyTabsState {
+export interface KeyTabsState extends KeyTabsHost {
   readonly setLease: (id: string, lease: KeyLeaseAssignment) => void;
   readonly editMerge: (id: string, text: string) => void;
   readonly chooseMerge: (id: string, path: string, side: "theirs" | "yours") => void;
@@ -164,16 +164,6 @@ export interface KeyTabsState {
   readonly fetchMore: (id: string, resultId: string, all: boolean) => Promise<void>;
   readonly stopFetch: (id: string, resultId: string) => Promise<void>;
   readonly sort: (id: string, resultId: string, keys: readonly SortKey[]) => Promise<void>;
-  readonly setLayout: KeyTabsHost["setLayout"];
-  readonly select: KeyTabsHost["select"];
-  readonly extract: KeyTabsHost["extract"];
-  readonly aggregate: KeyTabsHost["aggregate"];
-  readonly cellBytes: KeyTabsHost["cellBytes"];
-  readonly saveBytes: KeyTabsHost["saveBytes"];
-  readonly loadBytes: KeyTabsHost["loadBytes"];
-  readonly exportTo: KeyTabsHost["exportTo"];
-  readonly search: KeyTabsHost["search"];
-  readonly findNext: KeyTabsHost["findNext"];
   readonly beginEdit: (id: string, cell: BufferCell, text?: string) => void;
   readonly changeEdit: (id: string, text: string) => void;
   readonly commitEdit: (id: string) => boolean;
@@ -204,6 +194,8 @@ interface KeyTabsHost {
   readonly select: (id: string, resultId: string, selection: ResultTab["selection"]) => void;
   readonly extract: ResultWindows["extract"];
   readonly aggregate: ResultWindows["aggregate"];
+  readonly chart: ResultWindows["chart"];
+  readonly setChart: ResultWindows["setChart"];
   readonly cellBytes: ResultWindows["cellBytes"];
   readonly saveBytes: ResultWindows["saveBytes"];
   readonly loadBytes: ResultWindows["loadBytes"];
@@ -721,6 +713,8 @@ export function createKeyTabsStore(dependencies: KeyTabsDependencies) {
 
       extract: windows.extract,
       aggregate: windows.aggregate,
+      chart: windows.chart,
+      setChart: windows.setChart,
       cellBytes: windows.cellBytes,
       saveBytes: windows.saveBytes,
       loadBytes: windows.loadBytes,

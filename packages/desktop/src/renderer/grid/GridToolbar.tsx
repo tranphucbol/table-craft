@@ -136,6 +136,7 @@ export function GridToolbar({
       <ActionButton actionId={GRID_ACTION_IDS.export} compact />
       <ActionButton actionId={GRID_HELPER_ACTION_IDS.transpose} compact pressed={result.layout.transposed === true} />
       <ActionButton actionId={GRID_ACTION_IDS.toggleValuePanel} compact pressed={valuePanel} />
+      <ActionButton actionId={GRID_HELPER_ACTION_IDS.toggleChart} compact pressed={result.chart?.shown === true} />
     </div>
   );
 }

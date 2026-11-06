@@ -1,5 +1,7 @@
 import {
   RESULT_WINDOW_ROWS,
+  type ChartData,
+  type ChartSpec,
   type EngineError,
   type ExportFormat,
   type ExportTask,
@@ -15,6 +17,7 @@ import {
 import { EngineRequestError, type EngineClient } from "@table-craft/desktop/renderer/engine/client.js";
 import { widerChars } from "@table-craft/desktop/renderer/grid/widths.js";
 import type { ExportStarter } from "@table-craft/desktop/renderer/state/exports.js";
+import type { ResultChart } from "@table-craft/desktop/renderer/model/chartSpec.js";
 import { visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { selectCell } from "@table-craft/desktop/renderer/model/gridSelection.js";
 import {
@@ -66,6 +69,9 @@ export interface ResultOwner {
   readonly datasourceOf: (ownerId: string) => string | undefined;
   readonly exports: ExportStarter;
 }
+
+/** The series a chart draws, or why the engine would not shape them. */
+export type ChartAnswer = { readonly data: ChartData } | { readonly error: EngineError };
 
 /** Whether Fetch Next Page and Fetch All can run on the tab. */
 export function canFetch(result: ResultTab): boolean {
@@ -212,6 +218,23 @@ export function createResultWindows(owner: ResultOwner) {
     return client
       .call("result.aggregate", { handle: result.handle, rows: [...rows], columns: [...columns] })
       .catch(() => null);
+  }
+
+  /** The series of the shown rows for `spec` (plan 155); null when the result is gone. */
+  async function chart(ownerId: string, resultId: string, spec: ChartSpec): Promise<ChartAnswer | null> {
+    const result = owner.result(ownerId, resultId);
+    const client = owner.client(ownerId);
+    if (result === undefined || client === undefined || result.stale) return null;
+    try {
+      return { data: await client.call("result.chart", { handle: result.handle, spec }) };
+    } catch (cause) {
+      return { error: toError(cause) };
+    }
+  }
+
+  /** Shows or hides the tab's chart and sets what it draws; the chart lives as long as the tab. */
+  function setChart(ownerId: string, resultId: string, chart: ResultChart): void {
+    owner.update(ownerId, resultId, (latest) => ({ ...latest, chart }));
   }
 
   /** Every byte of a held cell, for the value panel's image preview; null when the engine refused. */
@@ -411,6 +434,8 @@ export function createResultWindows(owner: ResultOwner) {
     stopFetch,
     extract,
     aggregate,
+    chart,
+    setChart,
     cellBytes,
     saveBytes,
     loadBytes,

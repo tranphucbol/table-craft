@@ -83,6 +83,7 @@ const bridge: TableCraftBridge = {
   readDiagrams: (datasourceId) => invoke(INVOKE_CHANNELS.readDiagrams, { datasourceId }),
   saveDiagrams: (datasourceId, state) => invoke(INVOKE_CHANNELS.saveDiagrams, { datasourceId, state }),
   exportDiagramImage: (request) => invoke(INVOKE_CHANNELS.exportDiagramImage, request),
+  exportChartImage: (request) => invoke(INVOKE_CHANNELS.exportChartImage, request),
   revealFile: (path) => invoke(INVOKE_CHANNELS.revealFile, { path }),
   listConsoles: (datasourceId) => invoke(INVOKE_CHANNELS.listConsoles, { datasourceId }),
   readConsole: (datasourceId, name) => invoke(INVOKE_CHANNELS.readConsole, { datasourceId, name }),

@@ -5,6 +5,7 @@
  */
 import type { UserThemeEntry } from "@table-craft/desktop/appearance/themes.js";
 import type { MoveRequest } from "@table-craft/desktop/datasourceTree/arrange.js";
+import type { ChartImageRequest } from "@table-craft/desktop/charts/state.js";
 import type { DiagramImageRequest, DiagramState } from "@table-craft/desktop/diagrams/state.js";
 import type {
   Capability,
@@ -99,6 +100,7 @@ export const INVOKE_CHANNELS = {
   readDiagrams: "table-craft:diagrams.get",
   saveDiagrams: "table-craft:diagrams.save",
   exportDiagramImage: "table-craft:diagrams.export-image",
+  exportChartImage: "table-craft:charts.export-image",
   listConsoles: "table-craft:consoles.list",
   readConsole: "table-craft:consoles.read",
   writeConsole: "table-craft:consoles.write",
@@ -846,6 +848,8 @@ export interface TableCraftBridge {
   saveDiagrams(datasourceId: string, state: DiagramState): Promise<InvokeResult<null>>;
   /** The save dialog for an exported diagram; answers the path written, or null when cancelled. */
   exportDiagramImage(request: DiagramImageRequest): Promise<InvokeResult<string | null>>;
+  /** The save dialog for a result's chart as a PNG; answers the path written, or null when cancelled (plan 155). */
+  exportChartImage(request: ChartImageRequest): Promise<InvokeResult<string | null>>;
   /** The console names saved for the datasource, sorted (plan 006). */
   listConsoles(datasourceId: string): Promise<InvokeResult<readonly string[]>>;
   /** A saved console's text; null when none of that name is saved. */
