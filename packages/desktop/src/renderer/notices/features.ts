@@ -8,11 +8,6 @@ import type { FeatureNotice } from "@table-craft/desktop/renderer/model/notices.
  */
 export const FEATURE_NOTICES: readonly FeatureNotice[] = [
   {
-    id: "er-diagram",
-    title: "See a schema as an ER diagram",
-    body: "Right-click a schema, then Diagrams › Show Diagram. Keys the database does not declare are guessed.",
-  },
-  {
     id: "private-registries",
     title: "Install plugins from your company's registry",
     body: "Add a private npm registry, such as GitLab's, and install a plugin by its package name.",
