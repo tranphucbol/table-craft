@@ -1,4 +1,3 @@
-import { SETTINGS_ACTION_IDS } from "@table-craft/desktop/renderer/actions/settingsActions.js";
 import type { FeatureNotice } from "@table-craft/desktop/renderer/model/notices.js";
 
 /**
@@ -7,12 +6,6 @@ import type { FeatureNotice } from "@table-craft/desktop/renderer/model/notices.
  * two releases later (`RELEASING.md`).
  */
 export const FEATURE_NOTICES: readonly FeatureNotice[] = [
-  {
-    id: "private-registries",
-    title: "Install plugins from your company's registry",
-    body: "Add a private npm registry, such as GitLab's, and install a plugin by its package name.",
-    action: { label: "Plugins", actionId: SETTINGS_ACTION_IDS.show, args: { page: "plugins" } },
-  },
   {
     id: "result-charts",
     title: "See a result as a chart",
