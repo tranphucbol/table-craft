@@ -46,7 +46,7 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
   the focused console when its data source is exposed, and scan and read Redis keys. They can also
   read `tablecraft://<data source>/<schema>/<table>` resources and two prompts.
 - **Consoles an agent opens.** **open in console** can name the console, set its schema and bring
-  the window forward. The tab carries **AI** while the agent stays connected, and only that agent
+  the window forward. The tab carries a robot icon while the agent stays connected, and only that agent
   can read or change it: **edit console** swaps exact text or the whole text, and refuses when you
   typed in the meantime and its text no longer matches. Each edit is one undo step, and nothing in
   the console ever runs. Agents can also open a table's data, filtered and sorted, and select a

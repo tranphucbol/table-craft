@@ -3050,7 +3050,7 @@ datasource is exposed; the window answers within 5 seconds).
 name, sanitised, suffixed when taken) and `focus`, and answers a handle (`c1`, …), the revision
 and whether the schema applied. The host keeps handle → MCP session, window and datasource; a
 handle of another session reads as unknown, and a session's end releases its consoles, whose
-windows drop the **AI** tab marker. `edit_console` takes up to 50 exact `{ oldText, newText }`
+windows drop the robot tab marker. `edit_console` takes up to 50 exact `{ oldText, newText }`
 edits applied in order (each must match once) or a whole `text` with the `revision` it was read
 at, plus an optional `select`; the window applies it as one undo step, bumps the revision and
 refuses `notFound`, `ambiguous`, `stale` or `selectNotFound` without a change. `read_console`

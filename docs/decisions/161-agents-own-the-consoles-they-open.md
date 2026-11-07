@@ -17,7 +17,7 @@ host run) and owns that console for as long as its MCP session lives. The MCP ho
   step, as one isolated undo step, and refuses with the reason (`notFound`, `ambiguous`, `stale`,
   `selectNotFound`) without changing anything.
 - When the session ends or the host stops, its handles are dropped and the windows clear the
-  **AI** tab marker. The console and its text stay with the user.
+  robot tab marker. The console and its text stay with the user.
 - All window traffic is one request/answer pair, `mcp.uiRequest` and `mcp.uiAnswer`, carrying a
   typed union. A request targets the focused window or a window id; main stamps the sender's
   `webContents` id on every answer, and the host remembers it per handle. A window that does not
