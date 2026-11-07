@@ -27,6 +27,7 @@ import type {
   ResultWindow,
   RoutineCall,
   SelectionAggregates,
+  ChartData,
   TransactionState,
   ViewState,
 } from "@table-craft/desktop/engine/protocol.js";
@@ -1326,6 +1327,75 @@ describe("engine results", () => {
     });
 
     expect(resultOf<SelectionAggregates>(aggregates)).toMatchObject({ cells: 2, sum: "5", min: 2, max: 3 });
+  });
+
+  it("givenSortedAndFilteredResult_whenChartRequested_thenShownRowsInViewOrder", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(
+      connection,
+      sessionId,
+      "SELECT 'b' AS name, 2 AS n UNION ALL SELECT 'a', 1 UNION ALL SELECT 'c', 3",
+    );
+
+    await connection.handle({ id: 5, type: "result.sort", handle, keys: [{ column: 1, direction: "desc" }] });
+    await connection.handle({
+      id: 6,
+      type: "result.view",
+      handle,
+      spec: {
+        find: null,
+        rowsOnly: false,
+        filters: [{ column: 0, op: "notEquals", text: "a" }],
+        columns: [0, 1],
+        formats: { groupDigits: false },
+      },
+    });
+    const chart = await connection.handle({
+      id: 7,
+      type: "result.chart",
+      handle,
+      spec: { kind: "bar", x: 0, y: [1], groupBy: null, aggregate: "sum", bins: null },
+    });
+
+    expect(resultOf<ChartData>(chart)).toMatchObject({
+      categories: ["c", "b"],
+      series: [{ name: "n", values: [3, 2] }],
+      rows: 2,
+    });
+  });
+
+  it("givenUnknownColumn_whenChartRequested_thenInvalidRequest", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(connection, sessionId, "SELECT 1 AS n");
+
+    const response = await connection.handle({
+      id: 6,
+      type: "result.chart",
+      handle,
+      spec: { kind: "bar", x: 0, y: [4], groupBy: null, aggregate: "sum", bins: null },
+    });
+
+    expect(response).toMatchObject({ id: 6, type: "engine.error", error: { code: "invalidRequest" } });
+  });
+
+  it("givenPieWithTwoValues_whenChartRequested_thenInvalidRequestNamingOneValue", async () => {
+    const connection = connected();
+    const sessionId = await openSession(connection);
+    const { handle } = await execute(connection, sessionId, "SELECT 'a' AS name, 1 AS x, 2 AS y");
+
+    const response = await connection.handle({
+      id: 6,
+      type: "result.chart",
+      handle,
+      spec: { kind: "pie", x: 0, y: [1, 2], groupBy: null, aggregate: "sum", bins: null },
+    });
+
+    expect(response).toMatchObject({
+      type: "engine.error",
+      error: { code: "invalidRequest", message: "A pie chart takes exactly one value column." },
+    });
   });
 
   it("givenSqlInsertExtractor_whenExtracted_thenPluginQuotesNamesAndValues", async () => {

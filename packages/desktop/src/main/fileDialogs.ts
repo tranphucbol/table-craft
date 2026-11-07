@@ -1,5 +1,6 @@
 import { writeFile } from "node:fs/promises";
 import { BrowserWindow, dialog, type OpenDialogOptions, type SaveDialogOptions, type WebContents } from "electron";
+import type { ChartImageRequest } from "@table-craft/desktop/charts/state.js";
 import type { DiagramImageFormat, DiagramImageRequest } from "@table-craft/desktop/diagrams/state.js";
 
 const IMPORT_FILE_FILTERS = [
@@ -33,6 +34,23 @@ export async function exportDiagramImage(contents: WebContents, request: Diagram
     title: DIAGRAM_IMAGE_TITLES[request.format],
     defaultPath: request.defaultName,
     filters: [DIAGRAM_IMAGE_FILTERS[request.format]],
+    properties: ["createDirectory"],
+  };
+  const picked = parent === null ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(parent, options);
+  if (picked.canceled || picked.filePath === "") return null;
+  await writeFile(picked.filePath, request.data);
+  return picked.filePath;
+}
+
+const CHART_IMAGE_TITLE = "Export Chart as PNG";
+const CHART_IMAGE_FILTER = { name: "PNG image", extensions: ["png"] };
+
+export async function exportChartImage(contents: WebContents, request: ChartImageRequest): Promise<string | null> {
+  const parent = BrowserWindow.fromWebContents(contents);
+  const options: SaveDialogOptions = {
+    title: CHART_IMAGE_TITLE,
+    defaultPath: request.defaultName,
+    filters: [CHART_IMAGE_FILTER],
     properties: ["createDirectory"],
   };
   const picked = parent === null ? await dialog.showSaveDialog(options) : await dialog.showSaveDialog(parent, options);

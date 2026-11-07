@@ -81,6 +81,52 @@ export interface SelectionAggregates {
   readonly max: WireValue;
 }
 
+/** Mirrors `CHART_KINDS` in core. */
+export const CHART_KINDS = ["bar", "line", "area", "pie", "scatter", "histogram", "stock"] as const;
+export type ChartKind = (typeof CHART_KINDS)[number];
+/** Mirrors `CHART_AGGREGATES` in core. */
+export const CHART_AGGREGATES = ["sum", "avg", "count", "min", "max"] as const;
+export type ChartAggregate = (typeof CHART_AGGREGATES)[number];
+/** Mirrors `HISTOGRAM_MIN_BINS` and `HISTOGRAM_MAX_BINS` in core. */
+export const HISTOGRAM_MIN_BINS = 5;
+export const HISTOGRAM_MAX_BINS = 100;
+
+/** Mirrors `ChartSpec` in core: what to draw, as result column indices (plan 155). */
+export interface ChartSpec {
+  readonly kind: ChartKind;
+  readonly x: number | null;
+  readonly y: readonly number[];
+  readonly groupBy: number | null;
+  readonly aggregate: ChartAggregate;
+  readonly bins: number | null;
+}
+
+export type ChartAxis = "category" | "time" | "value";
+
+/** Mirrors `ChartSeries` in core. */
+export interface ChartSeries {
+  readonly name: string;
+  readonly values?: readonly (number | null)[];
+  readonly points?: readonly (readonly number[])[];
+}
+
+/** Mirrors `ChartTruncation` in core. */
+export interface ChartTruncation {
+  readonly what: "categories" | "series" | "slices";
+  readonly shown: number;
+  readonly total: number;
+}
+
+/** Mirrors `ChartData` in core: the series the engine shaped from the shown rows. */
+export interface ChartData {
+  readonly axis: ChartAxis;
+  readonly categories: readonly string[] | null;
+  readonly series: readonly ChartSeries[];
+  readonly rows: number;
+  readonly skipped: number;
+  readonly truncated: readonly ChartTruncation[];
+}
+
 /** A cell's bytes, every one of them, as lower-case hex (plan 043). */
 export interface CellBytes {
   readonly kind: "bytes";

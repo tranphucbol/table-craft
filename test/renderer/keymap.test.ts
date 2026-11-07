@@ -376,6 +376,7 @@ describe("grid keymap", () => {
       ["Shift+Enter", "gridFind"],
       ["Escape", "gridFind"],
       ["Mod+Alt+T", "grid"],
+      ["Mod+Alt+C", "grid"],
       ["Mod+B", "grid"],
     ]);
   });

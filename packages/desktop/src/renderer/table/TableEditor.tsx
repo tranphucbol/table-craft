@@ -78,6 +78,10 @@ function TablePanel({
 
 function Footer({ session }: { readonly session: TableSession }) {
   const pending = pendingText(pendingCount(session.buffer));
+  const quiet =
+    pending === null && session.count === null && session.notice === null && STATUS_TEXT[session.status] === "";
+  // Under a chart, whose own status line already ends the tab, an empty footer is a blank strip.
+  if (quiet && session.result?.chart?.shown === true) return null;
   return (
     <div className="flex h-row shrink-0 items-center gap-gap border-t border-line bg-panel px-gap text-ink-muted">
       {pending === null ? null : (

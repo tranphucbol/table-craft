@@ -18,6 +18,7 @@ import {
 } from "@table-craft/desktop/engine/protocol.js";
 import type { CellFormats } from "@table-craft/desktop/renderer/grid/format.js";
 import { columnChars } from "@table-craft/desktop/renderer/grid/widths.js";
+import type { ResultChart } from "@table-craft/desktop/renderer/model/chartSpec.js";
 import { initialLayout, visibleColumns, type ColumnLayout } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import type { HeldRows } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
@@ -96,6 +97,8 @@ export interface ResultTab extends ResultState {
   readonly source?: KeySource;
   /** The value panel's format for a command result with no source key; it lasts as long as the tab. */
   readonly valueFormat?: ValueFormat;
+  /** The chart drawn instead of the rows (plan 155); absent until first shown. */
+  readonly chart?: ResultChart;
 }
 
 /** Whether a find query is live, so windows carry the cells it matches. */

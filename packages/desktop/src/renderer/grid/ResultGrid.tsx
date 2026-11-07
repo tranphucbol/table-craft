@@ -23,6 +23,7 @@ import { TransposedRows } from "@table-craft/desktop/renderer/grid/TransposedRow
 import { AggregateLine } from "@table-craft/desktop/renderer/grid/AggregateLine.js";
 import { FocusedBytes, type FocusedBytesReader } from "@table-craft/desktop/renderer/grid/BytesView.js";
 import { GridToolbar } from "@table-craft/desktop/renderer/grid/GridToolbar.js";
+import { ChartView } from "@table-craft/desktop/renderer/chart/ChartView.js";
 import { ValuePanel } from "@table-craft/desktop/renderer/grid/ValuePanel.js";
 import { widerChars } from "@table-craft/desktop/renderer/grid/widths.js";
 import { focusedBinaryCell } from "@table-craft/desktop/renderer/model/binaryCells.js";
@@ -121,6 +122,7 @@ export function ResultGrid({
     [host, ownerId, resultId, held, focusColumn],
   );
   const transposed = result.layout.transposed === true;
+  const charted = result.chart?.shown === true;
   const area = useRef<HTMLDivElement>(null);
   const shownTransposed = useRef(transposed);
   // Transposing by its chord unmounts the focused grid; hand the keyboard to the one that replaced it.
@@ -150,56 +152,67 @@ export function ResultGrid({
           {staleText ?? STALE_TEXT}
         </div>
       ) : null}
+      {charted ? <ChartView ownerId={ownerId} result={result} host={host} /> : null}
       <FocusedBytes.Provider value={readBytes}>
-        <Group
-          elementRef={area}
-          orientation="horizontal"
-          className="min-h-0 flex-1"
-          onLayoutChanged={(_layout, meta) => {
-            const size = valuePanelRef.current?.getSize();
-            if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeValuePanel(size.inPixels);
-          }}
-        >
-          <Panel id={`${panelIds}rows`} minSize={MIN_ROWS_PX} className="flex" style={PANEL_STYLE}>
-            {transposed ? (
-              <TransposedRows
-                key={result.handle}
-                ownerId={ownerId}
-                result={result}
-                visible={visible}
-                host={host}
-                edits={edits}
-              />
-            ) : (
-              <Rows key={result.handle} ownerId={ownerId} result={result} visible={visible} host={host} edits={edits} />
-            )}
-          </Panel>
-          {valuePanel ? <Handle axis="vertical" label="Value panel" /> : null}
-          {valuePanel ? (
-            <Panel
-              id={`${panelIds}value`}
-              panelRef={valuePanelRef}
-              defaultSize={valuePanelPx}
-              minSize={MIN_VALUE_PANEL_PX}
-              maxSize={MAX_VALUE_PANEL_SIZE}
-              groupResizeBehavior="preserve-pixel-size"
-              className="flex"
-              style={PANEL_STYLE}
-            >
-              {panel !== undefined ? (
-                panel(focus === null || focusColumn === undefined ? null : { row: focus.row, column: focusColumn })
+        {/* The group sets its own inline display, so hiding it under the chart takes a wrapper. */}
+        <div className={charted ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+          <Group
+            elementRef={area}
+            orientation="horizontal"
+            className="min-h-0 flex-1"
+            onLayoutChanged={(_layout, meta) => {
+              const size = valuePanelRef.current?.getSize();
+              if (meta.isUserInteraction && size !== undefined) useLayout.getState().resizeValuePanel(size.inPixels);
+            }}
+          >
+            <Panel id={`${panelIds}rows`} minSize={MIN_ROWS_PX} className="flex" style={PANEL_STYLE}>
+              {transposed ? (
+                <TransposedRows
+                  key={result.handle}
+                  ownerId={ownerId}
+                  result={result}
+                  visible={visible}
+                  host={host}
+                  edits={edits}
+                />
               ) : (
-                <ValuePanel
-                  column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
-                  value={focusValue}
-                  jsonOwner={jsonOwnerKey(ownerId, result.handle)}
+                <Rows
+                  key={result.handle}
+                  ownerId={ownerId}
+                  result={result}
+                  visible={visible}
+                  host={host}
+                  edits={edits}
                 />
               )}
             </Panel>
-          ) : null}
-        </Group>
+            {valuePanel ? <Handle axis="vertical" label="Value panel" /> : null}
+            {valuePanel ? (
+              <Panel
+                id={`${panelIds}value`}
+                panelRef={valuePanelRef}
+                defaultSize={valuePanelPx}
+                minSize={MIN_VALUE_PANEL_PX}
+                maxSize={MAX_VALUE_PANEL_SIZE}
+                groupResizeBehavior="preserve-pixel-size"
+                className="flex"
+                style={PANEL_STYLE}
+              >
+                {panel !== undefined ? (
+                  panel(focus === null || focusColumn === undefined ? null : { row: focus.row, column: focusColumn })
+                ) : (
+                  <ValuePanel
+                    column={focusColumn === undefined ? null : (result.columns[focusColumn] ?? null)}
+                    value={focusValue}
+                    jsonOwner={jsonOwnerKey(ownerId, result.handle)}
+                  />
+                )}
+              </Panel>
+            ) : null}
+          </Group>
+        </div>
       </FocusedBytes.Provider>
-      <AggregateLine ownerId={ownerId} result={result} host={host} />
+      {charted ? null : <AggregateLine ownerId={ownerId} result={result} host={host} />}
     </div>
   );
 }

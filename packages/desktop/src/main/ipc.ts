@@ -15,6 +15,7 @@ import {
   type SnippetsService,
 } from "@table-craft/desktop/main/snippets.js";
 import { DatasourceError, type DatasourceService } from "@table-craft/desktop/main/service.js";
+import type { ChartImageRequest } from "@table-craft/desktop/charts/state.js";
 import { DIAGRAM_IMAGE_FORMATS, type DiagramImageRequest } from "@table-craft/desktop/diagrams/state.js";
 import { DiagramsError, diagramStateSchema, type DiagramsService } from "@table-craft/desktop/main/diagrams.js";
 import type { DatasourceExportChannels } from "@table-craft/desktop/main/datasourceExport.js";
@@ -115,6 +116,10 @@ const diagramImageRequest = z.strictObject({
   data: z.instanceof(Uint8Array),
   defaultName: z.string().min(1),
 }) satisfies z.ZodType<DiagramImageRequest>;
+const chartImageRequest = z.strictObject({
+  data: z.instanceof(Uint8Array),
+  defaultName: z.string().min(1),
+}) satisfies z.ZodType<ChartImageRequest>;
 const consoleListRequest = z.strictObject({ datasourceId: z.string().min(1) });
 const consoleRequest = z.strictObject({ datasourceId: z.string().min(1), name: z.string().min(1) });
 const consoleWriteRequest = z.strictObject({
@@ -257,6 +262,7 @@ export interface IpcOptions<Sender> {
   readonly diagrams: DiagramsService;
   /** Asks where to save an exported diagram and writes it there; null when the user cancels. */
   readonly exportDiagramImage: (sender: Sender, request: DiagramImageRequest) => Promise<string | null>;
+  readonly exportChartImage: (sender: Sender, request: ChartImageRequest) => Promise<string | null>;
   /** Creates `<userData>/themes/` if missing and shows it in the file manager. */
   readonly openThemesFolder: () => Promise<void>;
   readonly appInfo: () => AppInfo;
@@ -441,6 +447,9 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
   );
   handle(INVOKE_CHANNELS.exportDiagramImage, diagramImageRequest, (request, sender) =>
     options.exportDiagramImage(sender, request),
+  );
+  handle(INVOKE_CHANNELS.exportChartImage, chartImageRequest, (request, sender) =>
+    options.exportChartImage(sender, request),
   );
   handle(INVOKE_CHANNELS.readDiagrams, readDiagramsRequest, ({ datasourceId }) => options.diagrams.get(datasourceId));
   handle(INVOKE_CHANNELS.saveDiagrams, saveDiagramsRequest, async ({ datasourceId, state }) => {

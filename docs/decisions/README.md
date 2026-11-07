@@ -152,3 +152,4 @@ started, not when it is merged.
 | 157 | [The ER diagram draws React Flow over an ELK layout, and inferred keys stay in it](157-er-diagram-and-inferred-keys.md)                                                |
 | 158 | [Private plugin registries](158-private-plugin-registries.md)                                                                                                          |
 | 159 | [A datasource that cannot cancel gets a timeout its database enforces](159-a-datasource-that-cannot-cancel-gets-a-timeout-its-database-enforces.md)                    |
+| 160 | [Charts draw with ECharts, and the engine shapes the series](160-charts-draw-with-echarts-and-the-engine-shapes-the-series.md)                                         |

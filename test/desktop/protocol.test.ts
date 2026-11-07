@@ -5,7 +5,11 @@ import {
   type FormatSettings,
 } from "@table-craft/desktop/settings/settings.js";
 import {
+  CHART_AGGREGATES,
+  CHART_KINDS,
   EXTRACTOR_KINDS,
+  HISTOGRAM_MAX_BINS,
+  HISTOGRAM_MIN_BINS,
   HISTORY_OUTCOMES,
   HISTORY_SOURCES,
   IMPORT_ENCODINGS,
@@ -15,6 +19,8 @@ import {
   RESULT_WINDOW_ROWS,
   SSH_AUTH_METHODS,
   type CachedCatalog,
+  type ChartData,
+  type ChartSpec,
   type InferredKey,
   type CellInput,
   type CoreErrorCode,
@@ -186,6 +192,17 @@ describe("engine protocol", () => {
     expectTypeOf<protocol.TypeClass>().toEqualTypeOf<TypeClass>();
     expectTypeOf<protocol.ExtractorKind>().toEqualTypeOf<ExtractorKind>();
     expect(protocol.EXTRACTOR_KINDS).toEqual(EXTRACTOR_KINDS);
+  });
+
+  it("givenChartTypes_whenComparedWithCore_thenIdentical", () => {
+    expectTypeOf<protocol.ChartSpec>().toEqualTypeOf<ChartSpec>();
+    expectTypeOf<protocol.ChartData>().toEqualTypeOf<ChartData>();
+    expect(protocol.CHART_KINDS).toEqual(CHART_KINDS);
+    expect(protocol.CHART_AGGREGATES).toEqual(CHART_AGGREGATES);
+    expect([protocol.HISTOGRAM_MIN_BINS, protocol.HISTOGRAM_MAX_BINS]).toEqual([
+      HISTOGRAM_MIN_BINS,
+      HISTOGRAM_MAX_BINS,
+    ]);
   });
 
   it("givenViewTypes_whenComparedWithCore_thenIdentical", () => {
