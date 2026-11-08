@@ -54,6 +54,8 @@ const CREATE_PR_SKILL = ".agents/skills/create-pr/SKILL.md";
 const GUIDE_DIRECTORY = "docs/guide";
 const README_LINE_BUDGET = 200;
 const MEDIA_DIRECTORY = "docs/media";
+const REMOTE_IMAGE = /^https:\/\//;
+const REMOTE_IMAGE_HOSTS = ["https://img.shields.io/", "https://github.com/tranphucbol/table-craft/actions/"];
 const HEADING = /^(#{1,6}) (.+)$/;
 const FENCE = "```";
 const MARKDOWN = ".md";
@@ -143,6 +145,11 @@ function images(markdown: string): string[] {
   ];
 }
 
+/** Images shipped in the repository; the remote ones are badges. */
+function localImages(markdown: string): string[] {
+  return images(markdown).filter((image) => !REMOTE_IMAGE.test(image));
+}
+
 function scriptsNamed(file: string): string[] {
   return [...read(file).matchAll(/\bbun run (\w[\w:-]*)/g)].map((match) => match[1] ?? "");
 }
@@ -226,14 +233,25 @@ function rangeText(range: NumberRange): string {
 describe("user docs", () => {
   it("givenUserDocs_whenImagesListed_thenEveryFileExistsRelativeToItsPage", () => {
     for (const file of userDocs()) {
-      for (const image of images(read(file))) {
+      for (const image of localImages(read(file))) {
         expect(existsSync(join(ROOT, fromRoot(file, image))), `${file}: ${image} exists`).toBe(true);
       }
     }
   });
 
+  it("givenUserDocs_whenRemoteImagesListed_thenEachComesFromAnAllowedBadgeHost", () => {
+    for (const file of userDocs()) {
+      for (const image of images(read(file)).filter((image) => REMOTE_IMAGE.test(image))) {
+        expect(
+          REMOTE_IMAGE_HOSTS.some((host) => image.startsWith(host)),
+          `${file}: ${image} is a badge from ${REMOTE_IMAGE_HOSTS.join(" or ")}`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("givenUserDocs_whenImagesListed_thenMediaHoldsOnlyTheirGifs", () => {
-    const shown = new Set(userDocs().flatMap((file) => images(read(file)).map((image) => fromRoot(file, image))));
+    const shown = new Set(userDocs().flatMap((file) => localImages(read(file)).map((image) => fromRoot(file, image))));
     const gifs = readdirSync(join(ROOT, MEDIA_DIRECTORY)).map((file) => `${MEDIA_DIRECTORY}/${file}`);
 
     expect([...gifs].sort(), `${MEDIA_DIRECTORY} holds only the GIFs the user docs show`).toEqual(
