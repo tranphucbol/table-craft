@@ -1,19 +1,59 @@
-<p align="center"><img src="packages/desktop/build/icon.png" alt="TableCraft logo" width="128"></p>
+<div align="center">
+
+<img src="packages/desktop/build/icon.png" alt="TableCraft logo" width="128">
 
 # TableCraft
 
-A desktop database IDE in the spirit of JetBrains DataGrip, for PostgreSQL, MySQL, SQLite, Oracle,
-SQL Server, DuckDB, Redis and etcd.
+**A desktop database IDE in the spirit of JetBrains DataGrip**
+
 Connections, a database explorer, SQL consoles with schema-aware completion, a result grid, a table
-data editor, DDL and SQL generation, query history and EXPLAIN plans, in one Electron app. Databases
-are reached through datasource plugins loaded at runtime.
+data editor, DDL and SQL generation, query history and EXPLAIN plans. Databases are reached through
+[datasource plugins](#supported-databases) loaded at runtime.
+
+[![Release](https://img.shields.io/github/v/release/tranphucbol/table-craft?color=orange)](https://github.com/tranphucbol/table-craft/releases/latest)
+[![License](https://img.shields.io/github/license/tranphucbol/table-craft?color=blue)](LICENSE)
+[![Built with TypeScript](https://img.shields.io/badge/Built_with-TypeScript-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Built with Electron](https://img.shields.io/badge/Built_with-Electron-47848F?logo=electron&logoColor=white)](https://www.electronjs.org)
+[![CI](https://github.com/tranphucbol/table-craft/actions/workflows/ci.yml/badge.svg)](https://github.com/tranphucbol/table-craft/actions/workflows/ci.yml)
+[![Downloads](https://img.shields.io/github/downloads/tranphucbol/table-craft/total)](https://github.com/tranphucbol/table-craft/releases)
+
+**[Releases](https://github.com/tranphucbol/table-craft/releases)** ·
+**[Documentation](#documentation)** ·
+**[Contributing](CONTRIBUTING.md)** ·
+**[Report a bug](https://github.com/tranphucbol/table-craft/issues/new)**
+
+[Supported databases](#supported-databases) · [Highlights](#highlights) · [Install](#install) ·
+[Quick start](#quick-start) · [How it works](#how-it-works) · [Agents](docs/guide/agents.md) ·
+[License](#license)
+
+</div>
 
 ![How it works](docs/media/how-it-works.gif)
+
+## Supported databases
+
+| Database                       | Plugin                                                                                                                                                        | Since                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| SQLite                         | In the box                                                                                                                                                    | [v0.1.0](https://github.com/tranphucbol/table-craft/releases/tag/v0.1.0)   |
+| MySQL, MariaDB, TiDB           | In the box                                                                                                                                                    | [v0.1.0](https://github.com/tranphucbol/table-craft/releases/tag/v0.1.0)   |
+| PostgreSQL                     | [![npm](https://img.shields.io/npm/v/@tablecraft-app/plugin-postgres?label=npm)](https://www.npmjs.com/package/@tablecraft-app/plugin-postgres)               | [v0.1.0](https://github.com/tranphucbol/table-craft/releases/tag/v0.1.0)   |
+| [Redis](docs/guide/redis.md)   | [![npm](https://img.shields.io/npm/v/@tablecraft-app/plugin-redis?label=npm)](https://www.npmjs.com/package/@tablecraft-app/plugin-redis)                     | [v1.3.0](https://github.com/tranphucbol/table-craft/releases/tag/v1.3.0)   |
+| [Oracle](docs/guide/oracle.md) | [![npm](https://img.shields.io/npm/v/@tablecraft-app/plugin-oracle?label=npm)](https://www.npmjs.com/package/@tablecraft-app/plugin-oracle)                   | [v1.11.0](https://github.com/tranphucbol/table-craft/releases/tag/v1.11.0) |
+| SQL Server, Azure SQL          | [![npm](https://img.shields.io/npm/v/@tablecraft-app/plugin-mssql?label=npm)](https://www.npmjs.com/package/@tablecraft-app/plugin-mssql)                     | [v1.11.0](https://github.com/tranphucbol/table-craft/releases/tag/v1.11.0) |
+| [etcd](docs/guide/etcd.md)     | [![npm](https://img.shields.io/npm/v/@tablecraft-app/plugin-etcd?label=npm)](https://www.npmjs.com/package/@tablecraft-app/plugin-etcd)                       | [v1.18.0](https://github.com/tranphucbol/table-craft/releases/tag/v1.18.0) |
+| [DuckDB](docs/guide/duckdb.md) | [![npm](https://img.shields.io/npm/v/@tablecraft-app/plugin-duckdb-darwin-arm64?label=npm)](https://www.npmjs.com/search?q=%40tablecraft-app%2Fplugin-duckdb) | [v1.28.0](https://github.com/tranphucbol/table-craft/releases/tag/v1.28.0) |
+
+In the box means the plugin ships inside the app and works offline; the others download from npm the
+first time you add such a data source ([Plugins](docs/guide/plugins.md)).
 
 ## Highlights
 
 - [DataGrip's keymap and layout](docs/guide/shortcuts.md#search-everywhere): tool windows, `⇧⇧` Search Everywhere, `⇧⌘A`
   Find Action, and the chords your hands already know.
+- [Import your connections](docs/guide/connections.md#import-from-datagrip-tablepro-mysql-workbench-or-beekeeper-studio):
+  from DataGrip, TablePro, MySQL Workbench or Beekeeper Studio, with SSH tunnels, folders and colours.
+- [An MCP server for AI agents](docs/guide/agents.md): Claude Code, OpenCode or Cursor list schemas and run
+  queries; each data source starts off, and writes wait for your approval.
 - [Completion that knows your schema](docs/guide/completion.md): tables after `FROM`, whole join
   conditions after `JOIN`, and the columns of an alias after `o.`.
 - [A table editor that shows its SQL](docs/guide/data.md#table-data-editor): edit cells, add and delete rows, preview
