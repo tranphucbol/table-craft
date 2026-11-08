@@ -41,7 +41,6 @@ const CLIP_AREA: Box = {
 /** The clip's last frame stays this long, so its result can be read before the cross-fade. */
 const HOLD_SECONDS = 1.2;
 const CROSSFADE_SECONDS = 0.5;
-const FADE_IN_SECONDS = 0.6;
 const FADE_OUT_SECONDS = 0.8;
 const ENCODING = ["-c:v", "libx264", "-preset", "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-r", String(FPS)];
 const SILENCE = "anullsrc=channel_layout=stereo:sample_rate=48000";
@@ -158,7 +157,10 @@ async function segment(page: Page, shot: Shot, index: number, iconUrl: string): 
   return { file, seconds: probe(file).seconds };
 }
 
-/** Cross-fades the segments in order, fades the whole in and out, and adds the silent track. */
+/**
+ * Cross-fades the segments in order, fades the end out, and adds the silent track. The start
+ * does not fade in: GitHub's player shows the first frame until play, and a fade makes it black.
+ */
 function crossfade(segments: readonly Segment[]): void {
   const filters: string[] = [];
   let previous = "[0:v]";
@@ -173,8 +175,7 @@ function crossfade(segments: readonly Segment[]): void {
   });
   const total = offset + (segments.at(-1)?.seconds ?? 0);
   filters.push(
-    `${previous}fade=t=in:st=0:d=${String(FADE_IN_SECONDS)},` +
-      `fade=t=out:st=${(total - FADE_OUT_SECONDS).toFixed(3)}:d=${String(FADE_OUT_SECONDS)}[video]`,
+    `${previous}fade=t=out:st=${(total - FADE_OUT_SECONDS).toFixed(3)}:d=${String(FADE_OUT_SECONDS)}[video]`,
   );
   ffmpeg([
     ...segments.flatMap((segment) => ["-i", segment.file]),
