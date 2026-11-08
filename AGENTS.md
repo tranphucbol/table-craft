@@ -53,6 +53,11 @@ unset). The next run recreates and reseeds them. Never take down another checkou
   `agents-approval` the `opencode` CLI signed in to a model (`README_OPENCODE_MODEL`, default
   `anthropic/claude-sonnet-5-5`), `agents-warp` that and Warp on macOS, Screen Recording allowed for
   the terminal; `README_MEDIA=explain,grid` re-records only those. Re-record after a UI change a GIF shows
+- `bun run demo:video` - the README's demo video: records the scenes of
+  `scripts/demo-video/storyboard.ts` as lossless clips (`README_MEDIA_CLIPS`, same needs as
+  `readme:media`) and cuts them with title cards into `dist/demo-video/tablecraft-demo.mp4`;
+  `README_MEDIA=<scene>` re-records one clip, `-- --cut` only cuts (needs Google Chrome). The README
+  links the MP4 as a GitHub `user-attachments` upload; it is never committed
 - `bun run api:check` - regenerate the plugin-api surface reports (`packages/plugin-api/api/`),
   fail when they differ from the committed ones, and check `API_VERSION` against the reports at
   the last `v*` tag (decision 107); `bun run test` runs the same. `bun run api:report` rewrites the

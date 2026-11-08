@@ -22,12 +22,14 @@ import { promisify } from "node:util";
 import type { ElectronApplication, Page } from "playwright-core";
 import {
   alignedLists,
+  CLIP_FPS,
   type Frame,
   GIF_FPS,
   GIF_PALETTE,
   type Recording,
+  recordingClips,
   startScreencast,
-  writeGif,
+  writeMedia,
 } from "./recorder.js";
 
 const runCommand = promisify(execFile);
@@ -258,7 +260,8 @@ export function endCaptures(): void {
 }
 
 interface ScreenCapture {
-  stop(): Promise<{ readonly frames: readonly Frame[]; readonly directory: string }>;
+  /** `heightPx` is the frames' height: the window's in points for a GIF, in pixels for a clip. */
+  stop(): Promise<{ readonly frames: readonly Frame[]; readonly directory: string; readonly heightPx: number }>;
 }
 
 /** Films `bounds` of the main screen with ffmpeg until `stop`, each kept frame timed by the wall clock. */
@@ -294,12 +297,17 @@ async function captureScreen(bounds: Bounds): Promise<ScreenCapture> {
     }),
   );
   const startSeconds = await started;
+  const shrink = recordingClips() ? 1 : scale;
   return {
     async stop() {
       ffmpeg.stdin.end("q");
       await exited;
       try {
-        return { directory, frames: await keptFrames(movie, directory, scale, startSeconds) };
+        return {
+          directory,
+          frames: await keptFrames(movie, directory, scale, shrink, startSeconds),
+          heightPx: shrink === 1 ? pixels(bounds.height) : bounds.height,
+        };
       } finally {
         rmSync(movie, { force: true });
       }
@@ -315,12 +323,19 @@ function showinfoTimes(stderr: string): string[] {
 }
 
 /**
- * The frames of `movie` that show something new, at the window's size in points. The OpenCode TUI
- * never holds still: a spinner and a shimmering title in its top row, a progress bar and counters
- * in its bottom one. Masked out, they no longer count as change, so the time a model thinks holds
- * one frame that `maxFrameSeconds` can shorten.
+ * The frames of `movie` that show something new, `shrink` times smaller than filmed: the window's
+ * size in points when `shrink` is the screen's scale. The OpenCode TUI never holds still: a spinner
+ * and a shimmering title in its top row, a progress bar and counters in its bottom one. Masked out,
+ * they no longer count as change, so the time a model thinks holds one frame that
+ * `maxFrameSeconds` can shorten.
  */
-async function keptFrames(movie: string, directory: string, scale: number, startSeconds: number): Promise<Frame[]> {
+async function keptFrames(
+  movie: string,
+  directory: string,
+  scale: number,
+  shrink: number,
+  startSeconds: number,
+): Promise<Frame[]> {
   const mask = MASKED_ROWS.map(
     ([top, height]) =>
       `drawbox=x=0:y=${top < 0 ? `ih-${String(-top * scale)}` : String(top * scale)}:w=iw:h=${String(height * scale)}:color=black:t=fill`,
@@ -343,7 +358,7 @@ async function keptFrames(movie: string, directory: string, scale: number, start
       "-i",
       movie,
       "-vf",
-      `scale=iw/${String(scale)}:-2:flags=area,showinfo`,
+      `scale=iw/${String(shrink)}:-2:flags=area,showinfo`,
       "-fps_mode",
       "passthrough",
       join(frames, "%05d.png"),
@@ -386,13 +401,16 @@ export async function recordBeside(
           writeFileSync(file, list.script);
           return file;
         });
-        const height = terminal.bounds.height;
-        const filter =
+        const sideBySide = (height: number) =>
           `[0:v]scale=-2:${String(height)}:flags=lanczos,setsar=1[terminal];` +
           `[1:v]scale=-2:${String(height)}:flags=lanczos,setsar=1[app];` +
-          `[terminal][app]hstack=inputs=2,fps=${String(GIF_FPS)},` +
-          `scale=${String(widthPx)}:-2:flags=lanczos,${GIF_PALETTE}`;
-        const path = writeGif(name, window.directory, files, filter);
+          `[terminal][app]hstack=inputs=2`;
+        const path = writeMedia(name, window.directory, files, {
+          gif:
+            `${sideBySide(terminal.bounds.height)},fps=${String(GIF_FPS)},` +
+            `scale=${String(widthPx)}:-2:flags=lanczos,${GIF_PALETTE}`,
+          clip: `${sideBySide(filmed.heightPx)},fps=${String(CLIP_FPS)}`,
+        });
         return { path, bytes: statSync(path).size, seconds: lists[0]?.seconds ?? 0 };
       } finally {
         rmSync(window.directory, { recursive: true, force: true });

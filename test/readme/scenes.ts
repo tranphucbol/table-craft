@@ -33,6 +33,7 @@ import {
   GIFS_MAX_BYTES,
   MEDIA_DIRECTORY,
   type Recording,
+  recordingClips,
   requireFfmpeg,
   startRecording,
 } from "./recorder.js";
@@ -124,11 +125,13 @@ export interface SceneScript {
   readonly timeoutMs?: number;
   /** Records more than the app's window, such as a terminal beside it; the window alone otherwise. */
   readonly record?: (scene: Scene) => Promise<Recording>;
+  /** A clip of the demo video (`README_MEDIA_CLIPS`) that no page shows as a GIF. */
+  readonly videoOnly?: boolean;
 }
 
 export function scene(name: string, script: SceneScript) {
   const { setup, run, withoutShop = false, alsoSaved = [], shop = {}, settings, env, maxFrameSeconds } = script;
-  const skipped = ONLY.length > 0 && !ONLY.includes(name);
+  const skipped = (ONLY.length > 0 && !ONLY.includes(name)) || (script.videoOnly === true && !recordingClips());
   it.skipIf(skipped)(
     name,
     async () => {
@@ -153,8 +156,9 @@ export function scene(name: string, script: SceneScript) {
       });
       await pause(page, END_PAUSE_MS);
       const gif = await recording.stop(name, maxFrameSeconds);
-      recorded.push(gif);
       expect(statSync(gif.path).size).toBe(gif.bytes);
+      if (recordingClips()) return;
+      recorded.push(gif);
       expect(gif.bytes, `${name}.gif is ${String(gif.bytes)} bytes`).toBeLessThanOrEqual(GIF_MAX_BYTES);
       expect(gif.seconds, `${name}.gif lasts ${gif.seconds.toFixed(1)} s`).toBeLessThanOrEqual(MAX_GIF_SECONDS);
     },

@@ -44,6 +44,7 @@ bun run api:check              # the plugin API surface against the last release
 bun run format                 # Prettier
 bun run desktop:package        # an installer for this machine
 bun run readme:media           # re-record the GIFs of the README and the guide
+bun run demo:video             # record and cut the README's demo video
 ```
 
 Two environment variables keep a development run away from your own profile:
@@ -241,6 +242,16 @@ platform. `verify` and the macOS packages must pass; Windows and Linux are best-
   runs the real `opencode` CLI, so it needs OpenCode signed in to a model; `README_OPENCODE_MODEL`
   picks it. `agents-warp` runs the OpenCode TUI in a Warp window beside the app and films it, so it
   also needs macOS, Warp, and Screen Recording allowed for the terminal running the suite.
+- The README opens with a demo video cut by `bun run demo:video` into
+  `dist/demo-video/tablecraft-demo.mp4`. [scripts/demo-video/storyboard.ts](scripts/demo-video/storyboard.ts)
+  lists its title cards and the scenes it films; `README_MEDIA_CLIPS` makes those scenes record
+  lossless 60 fps clips instead of GIFs, and `how-it-works` records only for the video.
+  `README_MEDIA=agents-warp bun run demo:video` re-records one clip and keeps the rest, and
+  `bun run demo:video -- --cut` only cuts. Watch the agent clips before you cut: they film a real
+  model, so a take with a failed tool call is worth recording again. Cutting needs Google Chrome
+  for the cards. GitHub plays a README video only from its own attachments, so the MP4 is not
+  committed: drop it into a GitHub comment box and put the `user-attachments` link it gives in the
+  README.
 - A choice a future reader would otherwise reopen gets a record in [docs/decisions](docs/decisions/),
   from its `TEMPLATE.md`, and a row in its index.
 - `docs/plans/` and `docs/evidence/` are local working files and are never committed
