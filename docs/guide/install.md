@@ -1,14 +1,15 @@
 # Install
 
-Installers are published on the [Releases](https://github.com/tranphucbol/table-craft/releases)
-page. Once installed, TableCraft [updates itself](#updates).
+Download the latest build for your platform below, or pick any version on the
+[Releases](https://github.com/tranphucbol/table-craft/releases) page. Once installed, TableCraft
+[updates itself](#updates).
 
-| Platform              | File                                   |
-| :-------------------- | :------------------------------------- |
-| macOS (Apple silicon) | `TableCraft-<version>-arm64.dmg`       |
-| macOS (Intel)         | `TableCraft-<version>-x64.dmg`         |
-| Windows x64           | `TableCraft-<version>-x64.exe`         |
-| Linux x64             | `TableCraft-<version>-x86_64.AppImage` |
+| Platform              | Download                                                                                                                       |
+| :-------------------- | :----------------------------------------------------------------------------------------------------------------------------- |
+| macOS (Apple silicon) | [`TableCraft-arm64.dmg`](https://github.com/tranphucbol/table-craft/releases/latest/download/TableCraft-arm64.dmg)             |
+| macOS (Intel)         | [`TableCraft-x64.dmg`](https://github.com/tranphucbol/table-craft/releases/latest/download/TableCraft-x64.dmg)                 |
+| Windows x64           | [`TableCraft-x64.exe`](https://github.com/tranphucbol/table-craft/releases/latest/download/TableCraft-x64.exe)                 |
+| Linux x64             | [`TableCraft-x86_64.AppImage`](https://github.com/tranphucbol/table-craft/releases/latest/download/TableCraft-x86_64.AppImage) |
 
 The builds are not signed with a paid certificate, so the first launch needs one extra step:
 

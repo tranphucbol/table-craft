@@ -214,6 +214,16 @@ jobs:
         env:
           TABLE_CRAFT_UPDATE_SIGNING_KEY: ${{ secrets.TABLE_CRAFT_UPDATE_SIGNING_KEY }}
         run: bun packages/desktop/scripts/update-manifest.ts --tag "$GITHUB_REF_NAME" --assets installers --out installers
+      # The README links each installer as releases/latest/download/<name>, which needs a name that
+      # stays the same from one release to the next. After the manifest, so it names only the
+      # versioned files the updater downloads; before the checksums, so they cover the copies too.
+      - name: Copy the installers under names without the version
+        run: |
+          shopt -s nullglob
+          version="${GITHUB_REF_NAME#v}"
+          for file in installers/TableCraft-"$version"-*.{dmg,exe,AppImage}; do
+            cp "$file" "${file/-$version-/-}"
+          done
       # Decision 135: the same globs as `gh release create` below, so SHA256SUMS lists every asset.
       - name: Write the checksums
         run: bun packages/desktop/scripts/checksums.ts --out installers/SHA256SUMS installers/* plugin-packages/*.tgz
