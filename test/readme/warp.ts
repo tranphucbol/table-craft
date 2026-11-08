@@ -231,16 +231,21 @@ async function newWindow(before: ReadonlySet<number>): Promise<Bounds> {
   throw new Error(`Warp opened no window for the launch configuration "${LAUNCH_NAME}" in time.`);
 }
 
-/** Puts the app's window right of `beside`, its content as tall as `beside`, within the screen. */
-export async function placeBeside(app: ElectronApplication, beside: Bounds, gap: number): Promise<void> {
+/**
+ * Puts the app's window right of `beside`, its content as tall as `beside` and as wide as the screen
+ * leaves, or `minWidth` when that is wider: the GIF takes the app from its screencast, which keeps
+ * painting the part past the screen's edge.
+ */
+export async function placeBeside(app: ElectronApplication, beside: Bounds, gap: number, minWidth = 0): Promise<void> {
   await app.evaluate(
-    ({ BrowserWindow, screen }, { beside, gap }) => {
+    ({ BrowserWindow, screen }, { beside, gap, minWidth }) => {
       const window = BrowserWindow.getAllWindows()[0];
       const area = screen.getPrimaryDisplay().workArea;
       const x = beside.x + beside.width + gap;
-      window?.setContentBounds({ x, y: beside.y, width: area.x + area.width - x, height: beside.height });
+      const width = Math.max(area.x + area.width - x, minWidth);
+      window?.setContentBounds({ x, y: beside.y, width, height: beside.height });
     },
-    { beside, gap },
+    { beside, gap, minWidth },
   );
 }
 
@@ -358,7 +363,12 @@ async function keptFrames(movie: string, directory: string, scale: number, start
  * Records `terminal` from the screen and the app from its screencast, side by side on one
  * timeline from the moment the TUI shows: the terminal left, the app right, at the terminal's height.
  */
-export async function recordBeside(app: ElectronApplication, page: Page, terminal: WarpTerminal): Promise<Recording> {
+export async function recordBeside(
+  app: ElectronApplication,
+  page: Page,
+  terminal: WarpTerminal,
+  widthPx = SIDE_BY_SIDE_WIDTH_PX,
+): Promise<Recording> {
   const screen = await captureScreen(terminal.bounds);
   const screencast = await startScreencast(app, page);
   const recorded = Date.now() / 1000;
@@ -381,7 +391,7 @@ export async function recordBeside(app: ElectronApplication, page: Page, termina
           `[0:v]scale=-2:${String(height)}:flags=lanczos,setsar=1[terminal];` +
           `[1:v]scale=-2:${String(height)}:flags=lanczos,setsar=1[app];` +
           `[terminal][app]hstack=inputs=2,fps=${String(GIF_FPS)},` +
-          `scale=${String(SIDE_BY_SIDE_WIDTH_PX)}:-2:flags=lanczos,${GIF_PALETTE}`;
+          `scale=${String(widthPx)}:-2:flags=lanczos,${GIF_PALETTE}`;
         const path = writeGif(name, window.directory, files, filter);
         return { path, bytes: statSync(path).size, seconds: lists[0]?.seconds ?? 0 };
       } finally {

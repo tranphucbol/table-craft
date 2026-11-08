@@ -53,6 +53,9 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
   table or column in the Database pane; on a data source set to ask before reads, the filter is
   only typed into the bars for you to apply. Turn **Let agents bring TableCraft forward** off in
   Settings → MCP Server (`mcp.allowFocus`) to keep the window where it is.
+
+  ![OpenCode in a terminal drafts a console, edits it and opens orders filtered](../media/agents-consoles.gif)
+
 - **Watching.** The chip's popover lists connected clients and their last call, with Pause, Agent
   Activity (every call this run, filtered by client and outcome) and Settings. Services shows an
   **Agents** node with each statement still running and a Cancel. A call's time leaves out the
