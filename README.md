@@ -28,7 +28,7 @@ data editor, DDL and SQL generation, query history and EXPLAIN plans. Databases 
 
 </div>
 
-![How it works](docs/media/how-it-works.gif)
+https://github.com/user-attachments/assets/9aec53fe-6fcd-40dc-ab79-4fe0cacb6dc4
 
 ## Supported databases
 

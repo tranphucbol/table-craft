@@ -34,6 +34,23 @@ export const GIF_PALETTE =
   "[frames][palette]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle";
 const GIF_FILTER = `fps=${String(GIF_FPS)},scale=${String(GIF_WIDTH_PX)}:-1:flags=lanczos,${GIF_PALETTE}`;
 
+/**
+ * `README_MEDIA_CLIPS=<folder>` records the demo video's clips instead of the GIFs: each scene writes
+ * `<folder>/<name>.mkv` at the window's own pixels and 60 fps, for `scripts/demo-video` to cut
+ * together. A GIF's 256 colours and 12 fps turn to mush once scaled up to a 1080p video.
+ */
+export const CLIPS_DIRECTORY = process.env["README_MEDIA_CLIPS"] ?? "";
+export const CLIP_FPS = 60;
+const CLIP_EXTENSION = ".mkv";
+const GIF_EXTENSION = ".gif";
+/** Lossless, so the video's own encode is the only lossy step. */
+const CLIP_ENCODING = ["-c:v", "libx264", "-preset", "veryfast", "-qp", "0", "-pix_fmt", "yuv444p"];
+const CLIP_FILTER = `fps=${String(CLIP_FPS)}`;
+
+export function recordingClips(): boolean {
+  return CLIPS_DIRECTORY !== "";
+}
+
 export interface Frame {
   readonly file: string;
   /** Seconds, as CDP's `ScreencastFrameMetadata.timestamp`. */
@@ -48,7 +65,8 @@ export interface Gif {
 
 export interface Recording {
   /**
-   * Stops the screencast and writes `docs/media/<name>.gif`. `maxFrameSeconds` shortens every
+   * Stops the screencast and writes `docs/media/<name>.gif`, or the clip of `README_MEDIA_CLIPS`
+   * while it is set. `maxFrameSeconds` shortens every
    * frame held longer, for a scene that waits on something outside the app, such as a model.
    */
   stop(name: string, maxFrameSeconds?: number): Promise<Gif>;
@@ -206,12 +224,25 @@ export async function startScreencast(app: ElectronApplication, page: Page): Pro
   };
 }
 
-/** Writes `docs/media/<name>.gif` from ffmpeg concat lists in `directory`, through `filter`. */
-export function writeGif(name: string, directory: string, lists: readonly string[], filter: string): string {
-  mkdirSync(MEDIA_DIRECTORY, { recursive: true });
-  const path = join(MEDIA_DIRECTORY, `${name}.gif`);
+export interface MediaFilters {
+  readonly gif: string;
+  readonly clip: string;
+}
+
+/**
+ * Writes `docs/media/<name>.gif` from ffmpeg concat lists in `directory` through `filters.gif`, or
+ * the demo video's clip through `filters.clip` while `README_MEDIA_CLIPS` is set.
+ */
+export function writeMedia(name: string, directory: string, lists: readonly string[], filters: MediaFilters): string {
+  const clip = recordingClips();
+  const folder = clip ? resolve(CLIPS_DIRECTORY) : MEDIA_DIRECTORY;
+  mkdirSync(folder, { recursive: true });
+  const path = join(folder, `${name}${clip ? CLIP_EXTENSION : GIF_EXTENSION}`);
   const inputs = lists.flatMap((list) => ["-f", "concat", "-safe", "0", "-i", list]);
-  execFileSync(FFMPEG, ["-y", "-v", "error", ...inputs, "-filter_complex", filter, "-loop", "0", path], {
+  const output = clip
+    ? ["-filter_complex", filters.clip, ...CLIP_ENCODING]
+    : ["-filter_complex", filters.gif, "-loop", "0"];
+  execFileSync(FFMPEG, ["-y", "-v", "error", ...inputs, ...output, path], {
     cwd: directory,
     stdio: ["ignore", "ignore", "pipe"],
   });
@@ -227,7 +258,7 @@ export async function startRecording(app: ElectronApplication, page: Page): Prom
       try {
         const list = concatList(frames, endSeconds, maxFrameSeconds);
         writeFileSync(join(directory, CONCAT_LIST), list.script);
-        const path = writeGif(name, directory, [CONCAT_LIST], GIF_FILTER);
+        const path = writeMedia(name, directory, [CONCAT_LIST], { gif: GIF_FILTER, clip: CLIP_FILTER });
         return { path, bytes: statSync(path).size, seconds: list.seconds };
       } finally {
         rmSync(directory, { recursive: true, force: true });

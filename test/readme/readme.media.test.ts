@@ -65,6 +65,7 @@ import { SHOP_DATABASE } from "./shop.js";
 
 mediaSuite("README media", () => {
   scene("how-it-works", {
+    videoOnly: true,
     setup: async ({ page }) => {
       await connect(page, SHOP, PASSWORD);
     },
