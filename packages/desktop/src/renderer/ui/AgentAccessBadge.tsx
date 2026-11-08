@@ -3,6 +3,7 @@ import { useMcp } from "@table-craft/desktop/renderer/state/mcp.js";
 import { AGENT_ACCESS_LABELS, effectiveAccess } from "@table-craft/desktop/settings/mcp.js";
 import { cn } from "@table-craft/desktop/renderer/ui/cn.js";
 import { CAP_CENTRED } from "@table-craft/desktop/renderer/ui/KeyTypeBadge.js";
+import { AgentIcon } from "@table-craft/desktop/renderer/ui/icons.js";
 
 /**
  * `AI` beside a datasource agents can reach while the MCP server runs (plans 117, 120): muted for
@@ -25,6 +26,16 @@ export function AgentAccessBadge({ datasource }: { readonly datasource: Datasour
       )}
     >
       AI
+    </span>
+  );
+}
+
+/** A robot on the tab of a console an agent opened and may still edit (plan 156 decision 16). */
+export function AgentConsoleBadge({ client }: { readonly client: string | null }) {
+  const label = `Opened by ${client ?? "an AI agent"}; it can edit this console`;
+  return (
+    <span data-testid="tab-agent" role="img" aria-label={label} title={label} className="flex shrink-0 text-accent">
+      <AgentIcon aria-hidden className="size-icon" />
     </span>
   );
 }

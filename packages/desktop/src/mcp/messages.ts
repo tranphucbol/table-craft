@@ -2,10 +2,11 @@ import type { ServerSeen } from "@table-craft/desktop/engine/protocol.js";
 import type { LogRecord } from "@table-craft/desktop/log/record.js";
 import type {
   AgentAccess,
-  McpActiveConsole,
-  McpConsoleRequest,
   McpKnownClient,
   McpStatus,
+  McpUiAnswer,
+  McpUiDelivery,
+  McpUiTarget,
   McpUserControl,
 } from "@table-craft/desktop/settings/mcp.js";
 
@@ -27,12 +28,10 @@ export const MCP_STATUS_MESSAGE = "mcp.status";
 export const MCP_CONTROL_MESSAGE = "mcp.control";
 /** MCP host → main: one agent statement for the query history. */
 export const MCP_HISTORY_MESSAGE = "mcp.history";
-/** MCP host → main: open a console with this text in the focused window (`open_in_console`). */
-export const MCP_OPEN_CONSOLE_MESSAGE = "mcp.openConsole";
-/** MCP host → main: ask the focused window for its console (`get_active_context`). */
-export const MCP_CONTEXT_REQUEST_MESSAGE = "mcp.contextRequest";
-/** Main → MCP host: the window's answer, null when no console is focused or no window is open. */
-export const MCP_CONTEXT_ANSWER_MESSAGE = "mcp.contextAnswer";
+/** MCP host → main: a request for a window, the only agent traffic main relays (decision 161). */
+export const MCP_UI_REQUEST_MESSAGE = "mcp.uiRequest";
+/** Main → MCP host: the window's answer, stamped with the window it came from; null when it is gone. */
+export const MCP_UI_ANSWER_MESSAGE = "mcp.uiAnswer";
 /** MCP host → main: what a server said of itself when an agent session opened (decision 131). */
 export const MCP_SERVER_SEEN_MESSAGE = "mcp.server-seen";
 export const MCP_LOG_MESSAGE = "mcp.log";
@@ -61,6 +60,8 @@ export interface McpConfig {
   readonly rowCap: number;
   readonly timeoutSeconds: number;
   readonly clients: readonly McpKnownClient[];
+  /** Whether an agent's `focus: true` may bring the window forward (`settings.mcp.allowFocus`). */
+  readonly allowFocus: boolean;
 }
 
 export interface McpBoot extends McpConfig {
@@ -99,9 +100,10 @@ export type MainToMcp =
   | { readonly kind: typeof MCP_ENGINE_ANSWER_MESSAGE; readonly requestId: number; readonly answer: EngineAnswer }
   | ({ readonly kind: typeof MCP_CONTROL_MESSAGE } & McpControl)
   | {
-      readonly kind: typeof MCP_CONTEXT_ANSWER_MESSAGE;
+      readonly kind: typeof MCP_UI_ANSWER_MESSAGE;
       readonly requestId: number;
-      readonly context: McpActiveConsole | null;
+      readonly window: number | null;
+      readonly answer: McpUiAnswer | null;
     }
   | { readonly kind: typeof MCP_SHUTDOWN_MESSAGE };
 
@@ -110,6 +112,5 @@ export type McpToMain =
   | { readonly kind: typeof MCP_STATUS_MESSAGE; readonly status: McpStatus }
   | { readonly kind: typeof MCP_HISTORY_MESSAGE; readonly entry: AgentHistoryEntry }
   | ({ readonly kind: typeof MCP_SERVER_SEEN_MESSAGE; readonly datasourceId: string } & ServerSeen)
-  | ({ readonly kind: typeof MCP_OPEN_CONSOLE_MESSAGE } & McpConsoleRequest)
-  | { readonly kind: typeof MCP_CONTEXT_REQUEST_MESSAGE; readonly requestId: number }
+  | ({ readonly kind: typeof MCP_UI_REQUEST_MESSAGE; readonly target: McpUiTarget } & McpUiDelivery)
   | { readonly kind: typeof MCP_LOG_MESSAGE; readonly record: LogRecord };

@@ -45,6 +45,17 @@ TableCraft, and every agent statement is kept in the query history, tagged with 
   hand a statement to a new console for you to run (**open in console**, which never runs it), read
   the focused console when its data source is exposed, and scan and read Redis keys. They can also
   read `tablecraft://<data source>/<schema>/<table>` resources and two prompts.
+- **Consoles an agent opens.** **open in console** can name the console, set its schema and bring
+  the window forward. The tab carries a robot icon while the agent stays connected, and only that agent
+  can read or change it: **edit console** swaps exact text or the whole text, and refuses when you
+  typed in the meantime and its text no longer matches. Each edit is one undo step, and nothing in
+  the console ever runs. Agents can also open a table's data, filtered and sorted, and select a
+  table or column in the Database pane; on a data source set to ask before reads, the filter is
+  only typed into the bars for you to apply. Turn **Let agents bring TableCraft forward** off in
+  Settings → MCP Server (`mcp.allowFocus`) to keep the window where it is.
+
+  ![OpenCode in a terminal drafts a console, edits it and opens orders filtered](../media/agents-consoles.gif)
+
 - **Watching.** The chip's popover lists connected clients and their last call, with Pause, Agent
   Activity (every call this run, filtered by client and outcome) and Settings. Services shows an
   **Agents** node with each statement still running and a Cancel. A call's time leaves out the

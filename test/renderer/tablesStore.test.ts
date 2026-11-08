@@ -10,6 +10,7 @@ import { selectCell } from "@table-craft/desktop/renderer/model/gridSelection.js
 import { createExecutionsStore } from "@table-craft/desktop/renderer/state/executions.js";
 import {
   createTablesStore,
+  type OpenTableOptions,
   pendingOf,
   refusedBars,
   submittedScript,
@@ -126,7 +127,7 @@ function tableEngine(options: EngineOptions = {}) {
   return { client: { call } as unknown as EngineClient, call };
 }
 
-async function openedTable(options: EngineOptions = {}) {
+async function openedTable(options: EngineOptions = {}, open: OpenTableOptions = {}) {
   const engine = tableEngine(options);
   const executions = createExecutionsStore();
   const recorded: HistoryEntry[] = [];
@@ -138,7 +139,7 @@ async function openedTable(options: EngineOptions = {}) {
     executions: executions.getState(),
     record: (entry) => recorded.push(entry),
   });
-  await store.getState().open("t1", TARGET);
+  await store.getState().open("t1", TARGET, open);
   const session = () => {
     const found = store.getState().tables.t1;
     if (found === undefined) throw new Error("no table tab");
@@ -167,6 +168,14 @@ describe("tables store", () => {
     expect(session().status).toBe("ready");
     expect(session().result?.rowCount).toBe(2);
     expect(session().editable).toEqual(IDENTITY);
+  });
+
+  it("givenDraftOnlyFilter_whenOpened_thenRowsReadUnfilteredAndBarsKeepTheDraft", async () => {
+    const { session, calls } = await openedTable({}, { where: "id > 1", orderBy: "id DESC", draftOnly: true });
+
+    expect(calls("table.query")).toEqual([expect.objectContaining({ where: "", orderBy: "" })]);
+    expect(session().applied).toEqual({ where: "", orderBy: "" });
+    expect(session().draft).toEqual({ where: "id > 1", orderBy: "id DESC" });
   });
 
   it("givenOpenCursor_whenFetchAll_thenServicesLoadRowShowsAllRows", async () => {

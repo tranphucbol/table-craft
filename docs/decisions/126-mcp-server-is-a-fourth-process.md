@@ -51,3 +51,5 @@ methods; a few hundred lines of `node:http` are smaller and easier to fence.
   status chip turns red until the user picks another.
 - `open_in_console` and `get_active_context` reach the focused window through main, which relays
   one message each way; that is the one place main carries agent traffic, and it holds no state.
+  Decision 161 folds that traffic into one `mcp.uiRequest`/`mcp.uiAnswer` pair for every window
+  tool.

@@ -4,12 +4,14 @@
  * real OpenCode CLI on a real model (`opencode.ts`), configured with what Settings copied; a
  * transcript drawn over the window shows what it called and said, the side of the conversation the
  * app's window does not hold. The third is the same run in the OpenCode TUI, in a Warp window filmed
- * beside the app (`warp.ts`, macOS only). Recorded by `bun run readme:media` like the others.
+ * beside the app (`warp.ts`, macOS only). The fourth, in Warp too, has OpenCode draft and edit a
+ * console of its own and open a table filtered (plan 156). Recorded by `bun run readme:media` like
+ * the others.
  */
 import type { ElectronApplication, Page } from "playwright-core";
 import { beforeAll, expect } from "vitest";
 import { freePort } from "../e2e/mcpAgent.js";
-import { chooseOption, findAction, LAUNCH_TIMEOUT_MS, optionValue, showServices } from "../e2e/harness.js";
+import { chooseOption, editorTabs, findAction, LAUNCH_TIMEOUT_MS, optionValue, showServices } from "../e2e/harness.js";
 import { callLine, EVENT_LOG, opencodeModel, OpencodeFolder, requireOpencode, resultLine } from "./opencode.js";
 import { clickVisibly, pause, pointAt } from "./pace.js";
 import { connect, datasourceRow, mediaSuite, PASSWORD, READ_PAUSE_MS, scene, SHOP } from "./scenes.js";
@@ -21,6 +23,11 @@ const OPENCODE_CLIENT = "opencode";
 const TOKEN_PATTERN = /Bearer (tc_[\w-]+)/;
 
 const PROMPT = "In TableCraft's shop database, restock the products that are nearly sold out (stock under 5) to 50.";
+const CONSOLES_PROMPT =
+  "In TableCraft's shop database, draft a query in a new console for the 5 customers who spent the most " +
+  "(its customer_revenue view has their spend), " +
+  "then edit that console to add each one's city. Then open the orders table filtered to the top customer. " +
+  "Do not run the console.";
 /** A model thinks for seconds with nothing on screen moving; the GIF holds such a frame this long. */
 const MAX_THINKING_SECONDS = 1;
 const AGENT_SCENE_TIMEOUT_MS = 300_000;
@@ -29,6 +36,10 @@ const POLL_MS = 200;
 const FINISHED_POLL_MS = 1_000;
 /** Between the terminal and the app's window, which the GIF shows apart anyway. */
 const WINDOW_GAP = 4;
+/** Room for the Database pane, the console and the table beside the terminal, however little the screen leaves. */
+const WARP_APP_WIDTH = 1_100;
+/** Wider than the side-by-side default, as the app's window is. */
+const WARP_GIF_WIDTH_PX = 1_600;
 /** The write in the Services tree, where the app logs every call an agent made. */
 const WRITE_SHOWN = /^UPDATE (public\.)?products/;
 
@@ -218,6 +229,22 @@ mediaSuite("README agent media", () => {
   });
 
   let terminal: WarpTerminal | null = null;
+  const closeWarp = async () => {
+    endCaptures();
+    terminal?.close();
+    terminal = null;
+    await folder?.dispose();
+    folder = null;
+  };
+  /** Whether OpenCode's TUI is still on its turn; asking runs its CLI twice, so at most once a second. */
+  const opencodeWorking = () => {
+    let checked = 0;
+    return async () => {
+      if (Date.now() - checked < FINISHED_POLL_MS) return true;
+      checked = Date.now();
+      return !(await folder!.finished());
+    };
+  };
   scene("agents-warp", {
     shop: { agentAccess: "ask" },
     settings: () => ({ mcp: { enabled: true, port, clients: [{ name: OPENCODE_CLIENT, allowed: true }] } }),
@@ -230,27 +257,40 @@ mediaSuite("README agent media", () => {
       await connect(page, SHOP, PASSWORD);
       folder = new OpencodeFolder(await copiedConfig(app, page));
       terminal = await openWarp(folder.directory, PROMPT);
-      await placeBeside(app, terminal.bounds, WINDOW_GAP);
+      await placeBeside(app, terminal.bounds, WINDOW_GAP, WARP_APP_WIDTH);
     },
-    record: ({ app, page }) => recordBeside(app, page, terminal!),
-    teardown: async () => {
-      endCaptures();
-      terminal?.close();
-      terminal = null;
-      await folder?.dispose();
-      folder = null;
-    },
+    record: ({ app, page }) => recordBeside(app, page, terminal!, WARP_GIF_WIDTH_PX),
+    teardown: closeWarp,
     run: async ({ page }) => {
       terminal!.start();
-      let checked = 0;
-      const working = async () => {
-        if (Date.now() - checked < FINISHED_POLL_MS) return true;
-        checked = Date.now();
-        return !(await folder!.finished());
-      };
-      const approvals = await approveWrites(page, working);
+      const approvals = await approveWrites(page, opencodeWorking());
       expect(approvals, "OpenCode never wrote; see its window").toBeGreaterThan(0);
       await showWrite(page);
+    },
+  });
+
+  scene("agents-consoles", {
+    shop: { agentAccess: "read" },
+    settings: () => ({ mcp: { enabled: true, port, clients: [{ name: OPENCODE_CLIENT, allowed: true }] } }),
+    maxFrameSeconds: MAX_THINKING_SECONDS,
+    timeoutMs: AGENT_SCENE_TIMEOUT_MS,
+    setup: async ({ app, page }) => {
+      requireOpencode();
+      requireWarp();
+      await expect.poll(() => chip(page).isVisible(), { timeout: LAUNCH_TIMEOUT_MS }).toBe(true);
+      await connect(page, SHOP, PASSWORD);
+      folder = new OpencodeFolder(await copiedConfig(app, page));
+      terminal = await openWarp(folder.directory, CONSOLES_PROMPT);
+      await placeBeside(app, terminal.bounds, WINDOW_GAP, WARP_APP_WIDTH);
+    },
+    record: ({ app, page }) => recordBeside(app, page, terminal!, WARP_GIF_WIDTH_PX),
+    teardown: closeWarp,
+    run: async ({ page }) => {
+      terminal!.start();
+      const working = opencodeWorking();
+      await pointAtAgentMarker(page, working);
+      while (await working()) await page.waitForTimeout(POLL_MS);
+      await showAgentConsole(page);
     },
   });
 });
@@ -286,6 +326,31 @@ async function approveWrites(
     approvals += 1;
   }
   return approvals;
+}
+
+/** Points at the robot on the agent's console tab once it shows, while the agent works. */
+async function pointAtAgentMarker(page: Page, working: () => Promise<boolean>): Promise<void> {
+  const marker = page.getByTestId("tab-agent").first();
+  while (await working()) {
+    if (await marker.isVisible()) {
+      await pointAt(page, marker);
+      return;
+    }
+    await page.waitForTimeout(POLL_MS);
+  }
+}
+
+/**
+ * Ends on the console the agent drafted and edited, back in front of the table it opened, its tab
+ * still marked: the TUI stays connected, so the console stays the agent's.
+ */
+async function showAgentConsole(page: Page): Promise<void> {
+  await pause(page);
+  const drafted = editorTabs(page).first();
+  await clickVisibly(page, drafted);
+  await expect.poll(() => drafted.getAttribute("aria-selected")).toBe("true");
+  await pointAt(page, drafted.getByTestId("tab-agent"));
+  await pause(page, READ_PAUSE_MS);
 }
 
 /** Ends on the write in the Services tree, where the app logs every call an agent made. */

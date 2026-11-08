@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACTIVITY_TARGET_CHARS, createActivity, createRuns } from "@table-craft/desktop/mcp/activity.js";
 import { ADMISSION_REFUSALS, createClientGate } from "@table-craft/desktop/mcp/clients.js";
+import { byWindow, createConsoleOwners } from "@table-craft/desktop/mcp/consoleOwners.js";
 
 const NOW = 1_000;
 const TIMEOUT_MS = 60_000;
@@ -164,5 +165,43 @@ describe("agent activity and runs", () => {
     expect(await runs.cancel("run-1")).toBe(false);
     release();
     expect(await work).toBe("done");
+  });
+});
+
+describe("console owners", () => {
+  const owned = (handle: string, sessionId: string, window = 1) => ({
+    handle,
+    sessionId,
+    window,
+    datasourceId: "shop",
+  });
+
+  it("givenTwoSessions_whenFound_thenOnlyTheOwnerSeesItsConsole", () => {
+    const owners = createConsoleOwners();
+    const first = owners.next();
+    owners.claim(owned(first, "a"));
+
+    expect(owners.find("a", first)?.handle).toBe(first);
+    expect(owners.find("b", first)).toBeNull();
+    expect(owners.next()).not.toBe(first);
+  });
+
+  it("givenSessionEnds_whenReleased_thenItsConsolesGroupedByWindow", () => {
+    const owners = createConsoleOwners();
+    owners.claim(owned("c1", "a", 1));
+    owners.claim(owned("c2", "a", 2));
+    owners.claim(owned("c3", "a", 1));
+    owners.claim(owned("c4", "b", 1));
+
+    const ended = owners.endSession("a");
+
+    expect(byWindow(ended)).toEqual(
+      new Map([
+        [1, ["c1", "c3"]],
+        [2, ["c2"]],
+      ]),
+    );
+    expect(owners.ofSession("a")).toEqual([]);
+    expect(owners.clear().map((entry) => entry.handle)).toEqual(["c4"]);
   });
 });

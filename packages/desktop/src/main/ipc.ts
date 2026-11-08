@@ -4,6 +4,7 @@ import { ConsoleFileError, type ConsoleFiles } from "@table-craft/desktop/main/c
 import type { MoveRequest } from "@table-craft/desktop/datasourceTree/arrange.js";
 import { draftSchema, serverSeenSchema } from "@table-craft/desktop/main/datasources.js";
 import { logWriteRequest } from "@table-craft/desktop/main/log/schema.js";
+import { mcpUiAnswerSchema } from "@table-craft/desktop/main/mcpUiAnswer.js";
 import { PluginInstallError } from "@table-craft/desktop/main/pluginStore/errors.js";
 import { SecretStoreError } from "@table-craft/desktop/main/secrets.js";
 import { SqlFileError, type SqlFileChannels } from "@table-craft/desktop/main/sqlFiles.js";
@@ -56,9 +57,9 @@ import {
   APPROVAL_ANSWERS,
   MCP_CLIENTS,
   type AgentPolicy,
-  type McpActiveConsole,
   type McpClient,
   type McpStatus,
+  type McpUiAnswer,
   type McpUserControl,
 } from "@table-craft/desktop/settings/mcp.js";
 import {
@@ -186,20 +187,7 @@ const agentPolicyRequest = z.strictObject({
     timeoutSeconds: z.number().int().min(MCP_TIMEOUT_SECONDS_RANGE.min).max(MCP_TIMEOUT_SECONDS_RANGE.max).nullable(),
   }) satisfies z.ZodType<AgentPolicy>,
 });
-/** A console's text crosses to the MCP host only up to this; `get_active_context` cuts it further. */
-const MAX_CONTEXT_CHARS = 1_000_000;
-const mcpContextReply = z.strictObject({
-  requestId: z.number().int().positive(),
-  context: z
-    .strictObject({
-      datasourceId: z.string().min(1),
-      sql: z.string().max(MAX_CONTEXT_CHARS),
-      selectionFrom: z.number().int().nonnegative(),
-      selectionTo: z.number().int().nonnegative(),
-      namespace: z.array(z.string()).readonly().nullable(),
-    })
-    .nullable() satisfies z.ZodType<McpActiveConsole | null>,
-});
+const mcpUiAnswer = z.strictObject({ requestId: z.number().int().positive(), answer: mcpUiAnswerSchema });
 const mcpClientRequest = z.strictObject({ client: z.enum(MCP_CLIENTS) });
 const pluginRequest = z.strictObject({ pluginId: z.string().min(1) });
 const pluginRemoveRequest = z.strictObject({ pluginId: z.string().min(1), source: z.enum(["managed", "user"]) });
@@ -278,17 +266,18 @@ export interface IpcOptions<Sender> {
   readonly importer: ImportChannels<Sender>;
   readonly datasourceFiles: DatasourceExportChannels<Sender>;
   readonly plugins: PluginChannels<Sender>;
-  readonly mcp: McpChannels;
+  readonly mcp: McpChannels<Sender>;
 }
 
 /** The MCP server behind the `mcp.*` channels (decision 126); the token never crosses to a window. */
-export interface McpChannels {
+export interface McpChannels<Sender> {
   status(): McpStatus;
   control(control: McpUserControl): void;
   copyClientConfig(client: McpClient): Promise<void>;
   regenerateToken(): Promise<void>;
   copyToken(): Promise<void>;
-  contextReply(requestId: number, context: McpActiveConsole | null): void;
+  /** A window's answer to an agent's UI request; `sender` names the window (plan 156). */
+  uiAnswer(sender: Sender, requestId: number, answer: McpUiAnswer): void;
 }
 
 /**
@@ -642,8 +631,8 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
     await service.setAgentPolicy(datasourceId, policy);
     return null;
   });
-  handle(INVOKE_CHANNELS.mcpContextReply, mcpContextReply, ({ requestId, context }) => {
-    mcp.contextReply(requestId, context);
+  handle(INVOKE_CHANNELS.mcpUiAnswer, mcpUiAnswer, ({ requestId, answer }, sender) => {
+    mcp.uiAnswer(sender, requestId, answer);
     return null;
   });
 }

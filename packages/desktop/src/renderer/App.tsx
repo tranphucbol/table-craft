@@ -42,7 +42,7 @@ import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { installUpdateState } from "@table-craft/desktop/renderer/state/update.js";
 import { installMcpState } from "@table-craft/desktop/renderer/state/mcp.js";
 import { installNotices } from "@table-craft/desktop/renderer/state/notices.js";
-import { installMcpConsoleRelay } from "@table-craft/desktop/renderer/actions/mcpConsole.js";
+import { installMcpUiRelay } from "@table-craft/desktop/renderer/actions/mcpConsole.js";
 import { installWindowState } from "@table-craft/desktop/renderer/state/windowState.js";
 import { installDatasourceSync } from "@table-craft/desktop/renderer/state/wiring.js";
 import { TooltipProvider } from "@table-craft/desktop/renderer/ui/Tooltip.js";
@@ -126,7 +126,7 @@ export function App() {
 
   useEffect(() => installUpdateState(), []);
   useEffect(() => installMcpState(), []);
-  useEffect(() => installMcpConsoleRelay(), []);
+  useEffect(() => installMcpUiRelay(), []);
 
   return (
     <TooltipProvider>

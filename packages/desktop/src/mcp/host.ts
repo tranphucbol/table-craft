@@ -10,18 +10,17 @@ import { listen, type HttpListener } from "@table-craft/desktop/mcp/http.js";
 import {
   MCP_BOOT_MESSAGE,
   MCP_CONFIG_MESSAGE,
-  MCP_CONTEXT_ANSWER_MESSAGE,
-  MCP_CONTEXT_REQUEST_MESSAGE,
   MCP_CONTROL_MESSAGE,
   MCP_DATASOURCES_MESSAGE,
   MCP_ENGINE_ANSWER_MESSAGE,
   MCP_ENGINE_PORT_MESSAGE,
   MCP_ENGINE_REQUEST_MESSAGE,
   MCP_HISTORY_MESSAGE,
-  MCP_OPEN_CONSOLE_MESSAGE,
   MCP_SERVER_SEEN_MESSAGE,
   MCP_SHUTDOWN_MESSAGE,
   MCP_STATUS_MESSAGE,
+  MCP_UI_ANSWER_MESSAGE,
+  MCP_UI_REQUEST_MESSAGE,
   type AgentDatasource,
   type EngineAnswer,
   type McpBoot,
@@ -30,12 +29,14 @@ import {
   type McpToMain,
 } from "@table-craft/desktop/mcp/messages.js";
 import { createMcpServer, type McpServer } from "@table-craft/desktop/mcp/server.js";
-import { ToolFailure } from "@table-craft/desktop/mcp/toolKit.js";
+import { createConsoleOwners } from "@table-craft/desktop/mcp/consoleOwners.js";
+import { releaseConsoles } from "@table-craft/desktop/mcp/consoleTools.js";
+import { ToolFailure, type ToolContext, type UiReply } from "@table-craft/desktop/mcp/toolKit.js";
 import { createTools } from "@table-craft/desktop/mcp/tools.js";
-import type { McpActiveConsole, McpServerState } from "@table-craft/desktop/settings/mcp.js";
+import type { McpServerState, McpUiAnswer } from "@table-craft/desktop/settings/mcp.js";
 
-/** How long `get_active_context` waits for the focused window to answer. */
-export const CONTEXT_TIMEOUT_MS = 5_000;
+/** How long a window tool waits for the window to answer (decision 161). */
+export const UI_TIMEOUT_MS = 5_000;
 
 export interface McpHostOptions {
   readonly send: (message: McpToMain) => void;
@@ -75,8 +76,10 @@ export function createMcpHost(options: McpHostOptions): McpHost {
   let nextRequest = 0;
   const requests = new Map<number, EngineRequest>();
   let windows = false;
-  let nextContext = 0;
-  const contexts = new Map<number, (context: McpActiveConsole | null) => void>();
+  let allowFocus = true;
+  let nextUiRequest = 0;
+  const uiRequests = new Map<number, (window: number | null, answer: McpUiAnswer | null) => void>();
+  const owners = createConsoleOwners();
 
   const agentLog = createAgentLog(options.log);
   const approvals = createApprovals({
@@ -103,35 +106,33 @@ export function createMcpHost(options: McpHostOptions): McpHost {
     (datasourceId, opened) =>
       options.send({ kind: MCP_SERVER_SEEN_MESSAGE, datasourceId, ...serverSeenOf(opened, now()) }),
   );
-  const context = {
+  const context: ToolContext = {
     datasources: () => datasources,
     engines,
     approvals,
     runs,
-    consoles: {
-      open(request: { readonly datasourceId: string; readonly sql: string }) {
-        if (!windows) return false;
-        options.send({ kind: MCP_OPEN_CONSOLE_MESSAGE, ...request });
-        return true;
-      },
-      active() {
-        if (!windows) return Promise.resolve(null);
-        nextContext += 1;
-        const requestId = nextContext;
-        return new Promise<McpActiveConsole | null>((resolve) => {
-          const timer = setTimeout(() => answer(null), CONTEXT_TIMEOUT_MS);
-          function answer(found: McpActiveConsole | null): void {
+    windows: {
+      ask(target, request) {
+        if (!windows) return Promise.resolve<UiReply>({ status: "gone" });
+        nextUiRequest += 1;
+        const requestId = nextUiRequest;
+        return new Promise<UiReply>((resolve) => {
+          const timer = setTimeout(() => {
+            uiRequests.delete(requestId);
+            resolve({ status: "silent" });
+          }, UI_TIMEOUT_MS);
+          uiRequests.set(requestId, (window, answer) => {
             clearTimeout(timer);
-            contexts.delete(requestId);
-            resolve(found);
-          }
-          contexts.set(requestId, answer);
-          options.send({ kind: MCP_CONTEXT_REQUEST_MESSAGE, requestId });
+            uiRequests.delete(requestId);
+            resolve(window === null || answer === null ? { status: "gone" } : { status: "answered", window, answer });
+          });
+          options.send({ kind: MCP_UI_REQUEST_MESSAGE, requestId, target, request });
         });
       },
     },
-    record: (entry: Parameters<Parameters<typeof createTools>[0]["record"]>[0]) =>
-      options.send({ kind: MCP_HISTORY_MESSAGE, entry }),
+    owners,
+    allowFocus: () => allowFocus,
+    record: (entry) => options.send({ kind: MCP_HISTORY_MESSAGE, entry }),
     rowCap: () => rowCap,
     timeoutSeconds: () => timeoutSeconds,
     now,
@@ -199,7 +200,17 @@ export function createMcpHost(options: McpHostOptions): McpHost {
         const call = activity.list().find((entry) => entry.id === message.callId);
         const sql = activity.fullTarget(message.callId);
         const datasourceId = call?.datasourceId ?? null;
-        if (datasourceId !== null && sql !== null) context.consoles.open({ datasourceId, sql });
+        if (datasourceId !== null && sql !== null)
+          void context.windows.ask("focused", {
+            kind: "open",
+            handle: null,
+            client: null,
+            datasourceId,
+            sql,
+            schema: null,
+            title: null,
+            focus: false,
+          });
         return;
       }
       case "windows":
@@ -213,6 +224,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
   async function boot(message: McpBoot): Promise<void> {
     rowCap = message.rowCap;
     timeoutSeconds = message.timeoutSeconds;
+    allowFocus = message.allowFocus;
     port = message.port;
     setDatasources(message.datasources);
     windows = message.windows;
@@ -238,6 +250,7 @@ export function createMcpHost(options: McpHostOptions): McpHost {
       onChange: () => publish(),
       onEnded: (session, by) => {
         approvals.forgetSession(session.id);
+        releaseConsoles(context, owners.endSession(session.id));
         agentLog.disconnected(session, by);
       },
     });
@@ -272,10 +285,11 @@ export function createMcpHost(options: McpHostOptions): McpHost {
         case MCP_CONFIG_MESSAGE:
           rowCap = message.rowCap;
           timeoutSeconds = message.timeoutSeconds;
+          allowFocus = message.allowFocus;
           gate.setKnown(message.clients);
           return;
-        case MCP_CONTEXT_ANSWER_MESSAGE:
-          contexts.get(message.requestId)?.(message.context);
+        case MCP_UI_ANSWER_MESSAGE:
+          uiRequests.get(message.requestId)?.(message.window, message.answer);
           return;
         case MCP_ENGINE_PORT_MESSAGE: {
           const request = requests.get(message.requestId);
@@ -299,7 +313,8 @@ export function createMcpHost(options: McpHostOptions): McpHost {
       await started;
       approvals.setWindows(false);
       gate.setWindows(false);
-      for (const answer of [...contexts.values()]) answer(null);
+      releaseConsoles(context, owners.clear());
+      for (const answer of [...uiRequests.values()]) answer(null, null);
       engines.closeAll();
       await listener?.close();
       listener = null;

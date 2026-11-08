@@ -18,6 +18,7 @@ export async function freePort(): Promise<number> {
 export interface ToolText {
   readonly text: string;
   readonly isError: boolean;
+  readonly structured: Readonly<Record<string, unknown>> | null;
 }
 
 /** A minimal Streamable HTTP client, as Claude Code or OpenCode would speak to the server. */
@@ -42,9 +43,13 @@ export class AgentClient {
   async tool(name: string, args: Record<string, unknown>): Promise<ToolText> {
     const response = await this.post({ method: "tools/call", params: { name, arguments: args } });
     const body = (await response.json()) as {
-      result: { content: { text: string }[]; isError?: boolean };
+      result: { content: { text: string }[]; isError?: boolean; structuredContent?: Record<string, unknown> };
     };
-    return { text: body.result.content.map((part) => part.text).join("\n"), isError: body.result.isError === true };
+    return {
+      text: body.result.content.map((part) => part.text).join("\n"),
+      isError: body.result.isError === true,
+      structured: body.result.structuredContent ?? null,
+    };
   }
 
   /** Ends the MCP session the way a client does when it quits. */

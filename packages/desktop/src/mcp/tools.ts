@@ -9,7 +9,16 @@ import {
 } from "@table-craft/desktop/mcp/catalogTools.js";
 import { createQueryTools } from "@table-craft/desktop/mcp/queryTools.js";
 import { getKey, scanKeys } from "@table-craft/desktop/mcp/keyTools.js";
-import { checkSql, getActiveContext, openInConsole } from "@table-craft/desktop/mcp/consoleTools.js";
+import {
+  checkSql,
+  editConsole,
+  getActiveContext,
+  listConsoles,
+  openInConsole,
+  readConsole,
+} from "@table-craft/desktop/mcp/consoleTools.js";
+import { openTableFor, revealInExplorer } from "@table-craft/desktop/mcp/windowTools.js";
+import type { AgentEdit } from "@table-craft/desktop/settings/mcp.js";
 import { KEY_TYPES } from "@table-craft/desktop/engine/protocol.js";
 import {
   ToolFailure,
@@ -25,6 +34,8 @@ const MAX_ROW_LIMIT = 1_000;
 const DEFAULT_SCAN_LIMIT = 100;
 const MAX_SCAN_LIMIT = 1_000;
 const MATCH_ALL = "*";
+const TITLE_CHARS = 64;
+const MAX_EDITS = 50;
 
 const datasource = z.string().min(1).describe("The datasource id from list_datasources.");
 const schema = z.string().min(1).describe("The schema as list_schemas names it, such as public or shop.");
@@ -36,6 +47,11 @@ const reason = z
   .max(REASON_CHARS)
   .optional()
   .describe("Why you need it; the user reads this when the call waits for approval.");
+const focus = z
+  .boolean()
+  .optional()
+  .describe("Bring TableCraft's window forward too; the user can turn this off. The tab is shown either way.");
+const consoleHandle = z.string().min(1).describe("The console handle open_in_console returned.");
 
 const TOOL_ARGUMENTS = {
   list_datasources: z.strictObject({}),
@@ -69,8 +85,65 @@ const TOOL_ARGUMENTS = {
   open_in_console: z.strictObject({
     datasource,
     sql: sql.describe("The text to put in a new console; the user decides whether to run it."),
+    schema: z.string().min(1).optional().describe("The schema the console works in, as list_schemas names it."),
+    title: z
+      .string()
+      .min(1)
+      .max(TITLE_CHARS)
+      .optional()
+      .describe("A name for the console's tab, such as add_orders_index."),
+    focus,
   }),
   get_active_context: z.strictObject({}),
+  edit_console: z
+    .strictObject({
+      console: consoleHandle,
+      edits: z
+        .array(
+          z.strictObject({
+            oldText: z.string().min(1).describe("Text that occurs exactly once in the console."),
+            newText: z.string().max(SQL_CHARS),
+          }),
+        )
+        .min(1)
+        .max(MAX_EDITS)
+        .optional()
+        .describe("Applied in order, each to the text the previous one left. Any miss changes nothing."),
+      text: sql.optional().describe("The whole new text, instead of edits; needs revision."),
+      revision: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("The revision the whole text replaces, from open_in_console, edit_console or read_console."),
+      select: z.string().min(1).optional().describe("Text that occurs once in the result, to select and scroll to."),
+      focus,
+    })
+    .refine((args) => (args.edits === undefined) !== (args.text === undefined), {
+      message: "Give either edits or text.",
+    })
+    .refine((args) => args.text === undefined || args.revision !== undefined, {
+      message: "Replacing the whole text needs revision.",
+    }),
+  read_console: z.strictObject({ console: consoleHandle }),
+  list_consoles: z.strictObject({}),
+  open_table: z.strictObject({
+    datasource,
+    schema,
+    table,
+    where: z.string().min(1).max(SQL_CHARS).optional().describe("A condition for the WHERE bar, without WHERE."),
+    orderBy: z.string().min(1).max(SQL_CHARS).optional().describe("A list for the ORDER BY bar, without ORDER BY."),
+    focus,
+  }),
+  reveal_in_explorer: z
+    .strictObject({
+      datasource,
+      schema,
+      table: table.optional(),
+      column: z.string().min(1).optional().describe("A column of table."),
+      focus,
+    })
+    .refine((args) => args.column === undefined || args.table !== undefined, { message: "A column needs its table." }),
 } as const;
 
 export type ToolName = keyof typeof TOOL_ARGUMENTS;
@@ -140,13 +213,43 @@ const TOOL_SPECS: Readonly<Record<ToolName, ToolSpec>> = {
   open_in_console: {
     title: "Open in console",
     description:
-      "Opens a new TableCraft console with the text for the user to review and run. Nothing runs; use it to hand over a statement the user should run themselves.",
+      "Opens a new TableCraft console with the text for the user to review and run, and answers its handle and revision. Nothing runs; use it to hand over a statement the user should run themselves. schema sets where the console works, title names its tab, and focus brings the window forward unless the user turned that off. Change the console later with edit_console instead of opening another.",
     readOnly: true,
   },
   get_active_context: {
     title: "Get active context",
     description:
       "The console the user has focused in TableCraft: its datasource, schema, text and selection. Refused when that datasource is not exposed to agents.",
+    readOnly: true,
+  },
+  edit_console: {
+    title: "Edit console",
+    description:
+      "Changes a console you opened with open_in_console, as one undo step for the user; nothing runs. Pass edits, each an oldText that occurs exactly once and its newText, or the whole text with the revision you last saw. A missing or repeated oldText, or a revision the user has moved past, changes nothing. select picks text to select in the result. Only your own consoles can be edited.",
+    readOnly: true,
+  },
+  read_console: {
+    title: "Read console",
+    description:
+      "The text, selection and revision of a console you opened, including what the user changed in it since.",
+    readOnly: true,
+  },
+  list_consoles: {
+    title: "List consoles",
+    description:
+      "The consoles you opened that are still open: handle, title, datasource, revision, and whether it is the user's active tab. The user's own consoles are not listed.",
+    readOnly: true,
+  },
+  open_table: {
+    title: "Open table",
+    description:
+      "Opens a table or view in the user's data editor, with where and orderBy in its filter bars. The rows are read in the user's session and are not returned; use run_query to read them yourself. The filter must form one read. On an ask-before-reads datasource the filter is only filled in, and the user applies it.",
+    readOnly: true,
+  },
+  reveal_in_explorer: {
+    title: "Reveal in explorer",
+    description:
+      "Selects a schema, table, view or column in the user's Database pane, to point the user at it. Answers found: false when there is no such object.",
     readOnly: true,
   },
 };
@@ -192,7 +295,7 @@ function datasourceOf(args: unknown): string | null {
 /** What Agent Activity names a call by: its statement, its key, or its table. */
 function targetOf(args: unknown): string | null {
   const given = (args ?? {}) as Readonly<Record<string, unknown>>;
-  for (const key of ["sql", "key", "handle"] as const) {
+  for (const key of ["sql", "key", "handle", "console"] as const) {
     const value = given[key];
     if (typeof value === "string") return value;
   }
@@ -266,13 +369,33 @@ export function createTools(context: ToolContext): Tools {
         const parsed = TOOL_ARGUMENTS.get_key.parse(args);
         return getKey(context, caller, parsed.datasource, parsed.key, parsed.database, parsed.reason ?? null);
       }
-      case "open_in_console": {
-        const parsed = TOOL_ARGUMENTS.open_in_console.parse(args);
-        return openInConsole(context, parsed.datasource, parsed.sql);
-      }
+      case "open_in_console":
+        return openInConsole(context, caller, TOOL_ARGUMENTS.open_in_console.parse(args));
       case "get_active_context":
         TOOL_ARGUMENTS.get_active_context.parse(args);
         return getActiveContext(context);
+      case "edit_console": {
+        const parsed = TOOL_ARGUMENTS.edit_console.parse(args);
+        const edit: AgentEdit =
+          parsed.text === undefined
+            ? { kind: "replace", edits: parsed.edits ?? [] }
+            : { kind: "whole", text: parsed.text, revision: parsed.revision ?? 0 };
+        return editConsole(context, caller, {
+          console: parsed.console,
+          edit,
+          select: parsed.select,
+          focus: parsed.focus,
+        });
+      }
+      case "read_console":
+        return readConsole(context, caller, TOOL_ARGUMENTS.read_console.parse(args).console);
+      case "list_consoles":
+        TOOL_ARGUMENTS.list_consoles.parse(args);
+        return listConsoles(context, caller);
+      case "open_table":
+        return openTableFor(context, TOOL_ARGUMENTS.open_table.parse(args));
+      case "reveal_in_explorer":
+        return revealInExplorer(context, TOOL_ARGUMENTS.reveal_in_explorer.parse(args));
     }
   }
 
