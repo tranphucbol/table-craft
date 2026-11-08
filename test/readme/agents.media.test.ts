@@ -36,10 +36,10 @@ const POLL_MS = 200;
 const FINISHED_POLL_MS = 1_000;
 /** Between the terminal and the app's window, which the GIF shows apart anyway. */
 const WINDOW_GAP = 4;
-/** Room for the Database pane, the console and the table beside it, however little the screen leaves. */
-const CONSOLES_APP_WIDTH = 1_100;
-/** Wider than the other Warp GIF, as its app window is. */
-const CONSOLES_GIF_WIDTH_PX = 1_600;
+/** Room for the Database pane, the console and the table beside the terminal, however little the screen leaves. */
+const WARP_APP_WIDTH = 1_100;
+/** Wider than the side-by-side default, as the app's window is. */
+const WARP_GIF_WIDTH_PX = 1_600;
 /** The write in the Services tree, where the app logs every call an agent made. */
 const WRITE_SHOWN = /^UPDATE (public\.)?products/;
 
@@ -257,9 +257,9 @@ mediaSuite("README agent media", () => {
       await connect(page, SHOP, PASSWORD);
       folder = new OpencodeFolder(await copiedConfig(app, page));
       terminal = await openWarp(folder.directory, PROMPT);
-      await placeBeside(app, terminal.bounds, WINDOW_GAP);
+      await placeBeside(app, terminal.bounds, WINDOW_GAP, WARP_APP_WIDTH);
     },
-    record: ({ app, page }) => recordBeside(app, page, terminal!),
+    record: ({ app, page }) => recordBeside(app, page, terminal!, WARP_GIF_WIDTH_PX),
     teardown: closeWarp,
     run: async ({ page }) => {
       terminal!.start();
@@ -281,9 +281,9 @@ mediaSuite("README agent media", () => {
       await connect(page, SHOP, PASSWORD);
       folder = new OpencodeFolder(await copiedConfig(app, page));
       terminal = await openWarp(folder.directory, CONSOLES_PROMPT);
-      await placeBeside(app, terminal.bounds, WINDOW_GAP, CONSOLES_APP_WIDTH);
+      await placeBeside(app, terminal.bounds, WINDOW_GAP, WARP_APP_WIDTH);
     },
-    record: ({ app, page }) => recordBeside(app, page, terminal!, CONSOLES_GIF_WIDTH_PX),
+    record: ({ app, page }) => recordBeside(app, page, terminal!, WARP_GIF_WIDTH_PX),
     teardown: closeWarp,
     run: async ({ page }) => {
       terminal!.start();
