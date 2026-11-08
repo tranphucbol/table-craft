@@ -13,7 +13,10 @@ the process model, the plugin contract, or where data lives.
 Run from the repository root. Load the `local-testing` skill (`.agents/skills/local-testing/`)
 before running `test:db`, any `test:smoke*` suite, a plan's Live test or the app against a test
 database: it holds the servers and their ports, parallel checkouts, the headless box, evidence and
-what to do when a run fails.
+what to do when a run fails. Once the live test or database run is done and its evidence checked,
+take this checkout's own servers down to release memory and disk:
+`docker compose -p <its COMPOSE_PROJECT_NAME> down -v --remove-orphans` (`table-craft-test-db` when
+unset). The next run recreates and reseeds them. Never take down another checkout's project.
 
 - `bun install`
 - `bun run test` - Vitest, unit tests plus the plugin contract suite against SQLite

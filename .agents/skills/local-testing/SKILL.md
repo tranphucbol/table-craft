@@ -101,6 +101,18 @@ Plans and evidence are git-ignored (decision 035); never commit them.
 | The frozen SQLite plugin fails the contract       | Fix the host or the contract; `bun scripts/frozen-plugin.ts` runs only when that plugin's API version changes      |
 | A headless capture differs from the host          | Expected: the box is Linux. Check macOS-only behaviour on the host                                                 |
 
+## 6. Release the servers
+
+When the run is over, its evidence checked and no bug left to rerun for, take this checkout's own
+compose project down so its containers, networks and volumes stop holding memory and disk:
+
+```sh
+docker compose -p "${COMPOSE_PROJECT_NAME:-table-craft-test-db}" down -v --remove-orphans
+```
+
+Use the same `COMPOSE_PROJECT_NAME` the run used. The next `test:db` or `test:smoke:db` run
+recreates and reseeds the servers. A project another checkout started stays up.
+
 ## Rules
 
 - The remote TiDB is shared. A run works only in its own `tc_run_*` database and drops it after;
