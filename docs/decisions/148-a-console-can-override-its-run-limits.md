@@ -1,6 +1,6 @@
 # 148: A console can override its run limits
 
-Status: Proposed. Amends 054.
+Status: Proposed. Amends 054. Amended by 162: the page size is written into a plain `SELECT`.
 
 ## Decision
 

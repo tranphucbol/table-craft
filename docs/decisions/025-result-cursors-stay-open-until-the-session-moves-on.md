@@ -1,6 +1,6 @@
 # 025: Result cursors stay open until the session moves on
 
-Status: Accepted
+Status: Accepted. Amended by 162: a plain `SELECT` carries its row cap in its SQL and fetches by running again.
 
 ## Decision
 
