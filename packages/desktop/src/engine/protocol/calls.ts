@@ -101,6 +101,11 @@ export interface EngineCalls extends KeyAdvancedCalls {
       readonly node?: string;
       /** The statement's `ClassifiedStatement.repeat`: the plugin runs it that many times. */
       readonly repeat?: number;
+      /**
+       * Read every row up to `fetchAllCap` at once. Only a statement whose row limit is written
+       * into its SQL honours it (decision 162); another reads a page, and Fetch All the rest.
+       */
+      readonly all?: boolean;
     } & ResultPaging &
       StatementLimit;
     result: ExecutedStatement;
@@ -582,6 +587,7 @@ export type EngineErrorCode =
   | "formatFailed"
   | "invalidRequest"
   | "editRejected"
+  | "resultChanged"
   | "timedOut"
   | "statementTimedOut"
   | "connectionLost"

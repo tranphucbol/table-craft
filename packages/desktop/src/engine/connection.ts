@@ -4,8 +4,11 @@ import {
   type BytesValue,
   type Capability,
   type Column,
+  type ExecuteOptions,
   type KeySource,
+  type ParameterValue,
   type Row,
+  type RowLimiter,
   type Session,
 } from "@table-craft/plugin-api";
 import { MS_PER_SECOND, connectDatasource, drained } from "@table-craft/desktop/engine/connect.js";
@@ -28,6 +31,7 @@ import type {
   ExportFormat,
   Reconnection,
   SessionsListing,
+  StatementLimit,
 } from "@table-craft/desktop/engine/protocol.js";
 import { isListedAs, learnInstance, repeatedIds } from "@table-craft/desktop/engine/serverInstances.js";
 import { hasService, inTransaction, serviceOf } from "@table-craft/desktop/engine/services.js";
@@ -146,6 +150,16 @@ async function* heldRows(held: readonly Row[]): AsyncGenerator<Row> {
   yield* held;
 }
 
+/** A statement that ran with a row limit written into its SQL (decision 162), as it runs again. */
+export interface LimitedRun {
+  /** The statement as bound, without the row limit. */
+  readonly sql: string;
+  readonly params: readonly ParameterValue[];
+  readonly limiter: RowLimiter;
+  readonly executeOptions: Pick<ExecuteOptions, "node" | "repeat">;
+  readonly limit: StatementLimit;
+}
+
 /** What the engine remembers about a `table.query` result so edits and conditions can be written. */
 export interface TableResult extends EditTable {
   /** Why the table cannot be edited, or null when it can (decision 026). */
@@ -185,6 +199,8 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
   const staged = new Map<string, { readonly handle: string; readonly bytes: BytesValue }>();
   /** The one key each console command result read, so `result.editable` can edit it as the key (decision 119). */
   const keySources = new Map<string, KeySource>();
+  /** The results a row limit in their SQL cut short, so Fetch and an export can run them again. */
+  const limitedRuns = new Map<string, LimitedRun>();
   const unsubscribe = tasks.subscribe(emit);
   const unsubscribeImports = imports.subscribe(emit);
   const unsubscribeScripts = scripts.subscribe(emit);
@@ -197,6 +213,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     edited.delete(handle);
     for (const [id, entry] of staged) if (entry.handle === handle) staged.delete(id);
     keySources.delete(handle);
+    limitedRuns.delete(handle);
   }
 
   async function releaseHandlesOf(sessionId: string): Promise<void> {
@@ -311,8 +328,9 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
 
   /**
    * Where a result's export reads from (decision 040): its statement again on a session of the
-   * export's own when it is a read that sees what any session sees; else the rows held when
-   * the cursor is done; else the console's own cursor, drained.
+   * export's own when it is a read that sees what any session sees; else, when a row limit cut it
+   * short, its statement again without the limit on the console's own session (decision 162); else
+   * the rows held when the cursor is done; else the console's own cursor, drained.
    */
   /** The rows a local filter shows, from memory: they are already decided (decision 050). */
   function shownJob(handle: string, projection: readonly number[], format: ExportFormat, path: string): ExportJob {
@@ -369,6 +387,18 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
         open: () => exportRowsOf(sql),
       };
     }
+    const limited = limitedRuns.get(handle);
+    const ownerId = handles.get(handle);
+    if (!state.complete && limited !== undefined && owner !== undefined && ownerId !== undefined) {
+      return {
+        ...base,
+        origin: "session",
+        estimate: null,
+        retryable: false,
+        drains: null,
+        open: () => unlimitedOn(ownerId, owner, limited),
+      };
+    }
     const held = results.rows(handle);
     if (!results.holdsCursor(handle)) {
       return {
@@ -390,6 +420,29 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
       drains: handle,
       open: () => drainCursor(sessionId, handle, held),
     };
+  }
+
+  /** A row-limited statement run again without its limit on its own session, for an export. */
+  async function unlimitedOn(sessionId: string, open: OpenSession, run: LimitedRun): Promise<ExportRows> {
+    if (mustSettle(sessionId, open)) await afterClose(sessionId, open);
+    open.exporting += 1;
+    try {
+      const result = await open.session.execute(run.sql, run.params, run.executeOptions);
+      const iterator = result.rows[Symbol.asyncIterator]();
+      return {
+        rows: { [Symbol.asyncIterator]: () => iterator },
+        close: async () => {
+          try {
+            await iterator.return?.();
+          } finally {
+            open.exporting -= 1;
+          }
+        },
+      };
+    } catch (cause) {
+      open.exporting -= 1;
+      throw cause;
+    }
   }
 
   /** The console's cursor, handed to the export until it closes its rows. */
@@ -678,6 +731,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     staged.clear();
     cursors.clear();
     keySources.clear();
+    limitedRuns.clear();
     await settledWithin(Promise.allSettled(held.map((handle) => results.release(handle))), RELEASE_GRACE_MS);
     const open = [...sessions.values()];
     sessions.clear();
@@ -696,6 +750,7 @@ function liveContext(context: EngineContext, emit: (event: EngineEvent) => void)
     edited,
     staged,
     keySources,
+    limitedRuns,
     unsubscribe,
     unsubscribeImports,
     unsubscribeScripts,

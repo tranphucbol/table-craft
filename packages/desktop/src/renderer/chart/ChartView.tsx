@@ -133,7 +133,7 @@ export function ChartView({
           data-testid="chart-status"
           className="h-row shrink-0 truncate border-t border-line bg-panel px-gap leading-(--spacing-row) text-ink-muted"
         >
-          {chartStatusParts(drawn.data, result.cursorOpen).join(STATUS_SEPARATOR)}
+          {chartStatusParts(drawn.data, result.cursorOpen || result.refetch === true).join(STATUS_SEPARATOR)}
         </div>
       )}
     </div>

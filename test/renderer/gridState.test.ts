@@ -236,6 +236,10 @@ describe("result grid text", () => {
     expect(resultStateText({ ...base, rowCount: 1, complete: true })).toBe("1 row");
   });
 
+  it("givenRefetchResult_whenLabelled_thenNoFetchingStopped", () => {
+    expect(resultStateText({ ...base, rowCount: 500, cursorOpen: false, refetch: true })).toBe("500+ rows");
+  });
+
   it("givenPageSizeFromRunSettings_whenLabelled_thenSaysWhereItCameFrom", () => {
     expect(resultStateText({ ...base, rowCount: 20, pagedByConsole: true })).toBe(
       "20+ rows · page size from Run Settings",

@@ -163,6 +163,7 @@ describe("tables store", () => {
         orderBy: "",
         pageRows: DEFAULT_SETTINGS.data.pageRows,
         fetchAllCap: DEFAULT_SETTINGS.data.fetchAllCap,
+        limitInSql: DEFAULT_SETTINGS.data.limitInSql,
       },
     ]);
     expect(session().status).toBe("ready");

@@ -41,6 +41,7 @@ service.
 | `coordination`     | Shows holders and queues under configured lock and election prefixes.                                                                                                                                                   | `session.services.coordination`                                           |
 | `bulkTransfer`     | Exports a range and imports chunk-atomically, resuming only confirmed boundaries.                                                                                                                                       | `session.services.bulkTransfer`                                           |
 | `savepoints`       | Writes the savepoint statements that let console edits inside an open transaction undo only themselves when one is refused; requires `sql` and `transactions`.                                                          | `language.services.savepoints`                                            |
+| `rowLimit`         | Writes a row limit into a plain `SELECT`, so the server stops after one page; Fetch Next Page and Fetch All run it again with a larger limit; requires `sql`.                                                           | `language.services.rowLimit`                                              |
 
 Write the default export with `definePlugin` and its capabilities `as const`: the types then
 require exactly the declared keys on the session and the language, and type `connect`'s
@@ -75,7 +76,7 @@ export default definePlugin({
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "2.1.0",
+  "apiVersion": "2.2.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -93,7 +94,8 @@ export default definePlugin({
     "sessions",
     "routineCall",
     "serverTimeout",
-    "savepoints"
+    "savepoints",
+    "rowLimit"
   ],
   "highlight": "postgresql",
   "brands": [{ "id": "postgresql", "name": "PostgreSQL" }],
@@ -179,7 +181,7 @@ registry, instead of npm:
     "version": "1.0.0",
     "type": "module",
     "main": "index.js",
-    "tableCraft": { "id": "example", "apiVersion": "2.1.0" }
+    "tableCraft": { "id": "example", "apiVersion": "2.2.0" }
   }
   ```
 

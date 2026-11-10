@@ -780,6 +780,7 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
         objects: ["sql", "schemaTree"],
         routineCall: ["sql", "schemaTree"],
         savepoints: ["sql", "transactions"],
+        rowLimit: ["sql"],
       };
       for (const [capability, needed] of Object.entries(needs)) {
         if (declared.has(capability as Capability))
@@ -1175,6 +1176,24 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
               await transactions.rollback();
               await transactions.setMode("auto");
             }
+          });
+        },
+      );
+
+      it.runIf(plugin.capabilities.includes("rowLimit"))(
+        "givenSelect_whenLimitedToOneRow_thenTheServerReturnsOneAndAnOwnLimitIsLeftAlone",
+        async () => {
+          await withSession(plugin, fixture, async (session) => {
+            const limiter = languageService(plugin, "rowLimit");
+            const select = `SELECT id FROM ${TYPE_PROBE_TABLE} ORDER BY id`;
+            const limited = limiter.limit(select, 1);
+            expect(limited).not.toBeNull();
+            const { offset, length } = limited?.inserted ?? { offset: 0, length: 0 };
+            expect(limited?.sql.slice(0, offset) + (limited?.sql.slice(offset + length) ?? "")).toBe(select);
+            const rows = await collect((await session.execute(limited?.sql ?? select)).rows);
+            expect(rows).toHaveLength(1);
+            expect(limiter.limit(limited?.sql ?? select, 1)).toBeNull();
+            expect(limiter.limit(`DELETE FROM ${TYPE_PROBE_TABLE}`, 1)).toBeNull();
           });
         },
       );

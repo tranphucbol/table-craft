@@ -357,6 +357,11 @@ export const pluginManifestSchema = z
       !manifest.capabilities.includes("savepoints") ||
       (manifest.capabilities.includes("sql") && manifest.capabilities.includes("transactions")),
     { message: "the savepoints capability requires sql and transactions", path: ["capabilities"] },
-  );
+  )
+  // The limit is written into SQL the console runs (decision 162).
+  .refine((manifest) => !manifest.capabilities.includes("rowLimit") || manifest.capabilities.includes("sql"), {
+    message: "the rowLimit capability requires sql",
+    path: ["capabilities"],
+  });
 
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;

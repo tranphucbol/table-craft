@@ -15,6 +15,7 @@ import {
   sqlInspector,
   sqlLiteral,
   sqlParameters,
+  sqlRowLimiter,
   sqlSplitter,
   sqlStatementStream,
   type CompleterOptions,
@@ -72,6 +73,7 @@ export const CAPABILITIES = [
   "sessions",
   "routineCall",
   "savepoints",
+  "rowLimit",
 ] as const;
 
 export type MssqlCapability = (typeof CAPABILITIES)[number];
@@ -143,6 +145,7 @@ export const language: PluginLanguage<MssqlCapability> = {
     objects: mssqlObjects({ name: writeName, quoteIdentifier }),
     routineCall: { call: mssqlRoutineCall(writeName) },
     savepoints: { savepoint },
+    rowLimit: sqlRowLimiter(DIALECT, "top"),
   },
 };
 

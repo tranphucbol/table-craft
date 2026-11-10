@@ -101,6 +101,7 @@ export function GridToolbar({
           rowCount: result.rowCount,
           complete: result.complete,
           cursorOpen: result.cursorOpen,
+          refetch: result.refetch === true,
           sorted: !serverSorted && result.sort.length > 0,
           fetchAllCap: result.paging.fetchAllCap,
           shown: result.view?.filtered === true ? result.view.shown : null,

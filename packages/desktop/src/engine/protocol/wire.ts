@@ -87,7 +87,8 @@ export type Capability =
   | "maintenance"
   | "coordination"
   | "bulkTransfer"
-  | "savepoints";
+  | "savepoints"
+  | "rowLimit";
 
 /** Mirrors `ServerTimeout` in plugin-api: what the server stops by itself at a statement limit (decision 129). */
 export interface ServerTimeout {
@@ -202,6 +203,11 @@ export interface ResultPaging {
   readonly pageRows: number;
   /** The most rows the result holds; Fetch All stops there and closes the cursor. */
   readonly fetchAllCap: number;
+  /**
+   * Whether a plain SELECT runs with the page size written into its SQL as a row limit, Fetch
+   * running it again with a larger one (decision 162); absent means yes.
+   */
+  readonly limitInSql?: boolean;
 }
 
 /**

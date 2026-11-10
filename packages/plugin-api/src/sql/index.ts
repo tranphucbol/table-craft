@@ -75,4 +75,5 @@ export {
   sqlExplainable,
   type ExplainableOptions,
 } from "./explain.js";
+export { sqlRowLimiter, type RowLimitStyle } from "./limit.js";
 export { routineSlots, type RoutineSlot, type RoutineSlots } from "./routines.js";

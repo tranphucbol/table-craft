@@ -9,6 +9,7 @@ import type {
   DatasourceConfig,
   EngineResponse,
   ExecutedStatement,
+  ResultState,
   TransactionState,
 } from "@table-craft/desktop/engine/protocol.js";
 import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/engine/protocol.js";
@@ -26,7 +27,10 @@ import { oracleRows, REPLICATE, tenThousandRows } from "../support/manyRows.js";
 
 /** Plan 027: a console that runs again while its previous result still has rows to send. */
 
-const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
+/** These tests are about the cursor left open, which a row limit in the SQL (decision 162) closes. */
+const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP, limitInSql: false };
+const ROW_LIMITED = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
+const MANY_ROWS = 10_000;
 const RUNS_IN_A_ROW = 3;
 
 interface Target {
@@ -171,6 +175,32 @@ for (const target of TARGETS) {
       });
 
       expect(response.type).toBe("statement.explain");
+    });
+
+    it("givenRowLimitedSelect_whenRunThenFetched_thenEachRunStopsAtItsLimit", async () => {
+      const connection = engine();
+      const sessionId = await open(connection);
+      const first = resultOf<ExecutedStatement>(
+        await connection.handle({ id: 8, type: "statement.execute", ...ROW_LIMITED, sessionId, sql: target.manyRows }),
+      );
+      const next = resultOf<ResultState>(
+        await connection.handle({ id: 9, type: "result.fetchMore", ...ROW_LIMITED, handle: first.handle, all: false }),
+      );
+      const all = resultOf<ResultState>(
+        await connection.handle({ id: 10, type: "result.fetchMore", ...ROW_LIMITED, handle: first.handle, all: true }),
+      );
+      const after = await connection.handle({
+        id: 11,
+        type: "statement.execute",
+        ...ROW_LIMITED,
+        sessionId,
+        sql: "SELECT 1",
+      });
+
+      expect(first).toMatchObject({ rowCount: RESULT_PAGE_ROWS, complete: false, cursorOpen: false, refetch: true });
+      expect(next).toMatchObject({ rowCount: RESULT_PAGE_ROWS * 2, complete: false, refetch: true });
+      expect(all).toMatchObject({ rowCount: MANY_ROWS, complete: true, cursorOpen: false });
+      expect(resultOf<ExecutedStatement>(after).firstWindow.rows).toHaveLength(1);
     });
   });
 }

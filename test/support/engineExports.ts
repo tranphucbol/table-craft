@@ -14,7 +14,8 @@ import { RESULT_FETCH_ALL_CAP, RESULT_PAGE_ROWS } from "@table-craft/desktop/eng
 
 /** Drives one engine's export and import tasks the way a renderer would (plans 018, 021). */
 
-const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
+/** These suites read through the open cursor; a row limit in the SQL has its own (decision 162). */
+const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP, limitInSql: false };
 const FINAL_EVENTS = new Set(["export.done", "export.failed", "export.cancelled"]);
 const FINAL_IMPORT_EVENTS = new Set(["import.done", "import.failed", "import.cancelled"]);
 export const STALL_SECONDS = 120;

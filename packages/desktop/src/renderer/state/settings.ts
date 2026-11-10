@@ -192,7 +192,8 @@ export function currentFormats(): CellFormats {
 
 /** What every call that reads rows carries (decision 032). */
 export function pagingOf(settings: Settings): ResultPaging {
-  return { pageRows: settings.data.pageRows, fetchAllCap: settings.data.fetchAllCap };
+  const { pageRows, fetchAllCap, limitInSql } = settings.data;
+  return { pageRows, fetchAllCap, limitInSql };
 }
 
 /** The paging to send now; a change applies to the next statement, not to open results. */

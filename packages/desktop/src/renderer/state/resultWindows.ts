@@ -73,9 +73,12 @@ export interface ResultOwner {
 /** The series a chart draws, or why the engine would not shape them. */
 export type ChartAnswer = { readonly data: ChartData } | { readonly error: EngineError };
 
-/** Whether Fetch Next Page and Fetch All can run on the tab. */
+/**
+ * Whether Fetch Next Page and Fetch All can run on the tab: through its open cursor, or by running
+ * its statement again with a larger row limit (decision 162).
+ */
 export function canFetch(result: ResultTab): boolean {
-  return result.cursorOpen && !result.stale && result.fetching === null;
+  return (result.cursorOpen || result.refetch === true) && !result.stale && result.fetching === null;
 }
 
 /**
@@ -110,13 +113,15 @@ export function createResultWindows(owner: ResultOwner) {
 
   /** `result` after the engine reported `state`; rows that moved are fetched again as they show. */
   function withState(result: ResultTab, state: ResultState): ResultTab {
-    if (state.rowCount === result.rowCount) return { ...result, ...state };
+    const { refetch, ...held } = result;
+    if (state.rowCount === result.rowCount && refetch !== true) return { ...held, ...state };
     invalidate(result.id);
+    // A run with a larger row limit replaced every row (decision 162), so no loaded window holds them.
     const windows =
-      result.sort.length > 0
+      refetch === true || result.sort.length > 0
         ? {}
         : Object.fromEntries(Object.entries(result.windows).filter(([, rows]) => rows.length === RESULT_WINDOW_ROWS));
-    return { ...result, ...state, windows };
+    return { ...held, ...state, windows };
   }
 
   function ensureWindow(ownerId: string, resultId: string, offset: number): void {
@@ -163,7 +168,10 @@ export function createResultWindows(owner: ResultOwner) {
       await refreshView(ownerId, resultId);
     } catch (cause) {
       owner.failed(ownerId, result, toError(cause), false);
-      owner.update(ownerId, resultId, (latest) => ({ ...latest, cursorOpen: false }));
+      owner.update(ownerId, resultId, (latest) => {
+        const { refetch: _dropped, ...held } = latest;
+        return { ...held, cursorOpen: false };
+      });
     } finally {
       owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: null }));
     }
@@ -310,6 +318,12 @@ export function createResultWindows(owner: ResultOwner) {
         format,
         path,
       });
+      if (task.origin === "session") {
+        owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: "export" }));
+        void owner.exports.finished(task.taskId).then(() => {
+          owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: null }));
+        });
+      }
       if (task.origin === "cursor") {
         owner.update(ownerId, resultId, (latest) => ({ ...latest, fetching: "export" }));
         void owner.exports.finished(task.taskId).then((ended) => {

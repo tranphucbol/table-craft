@@ -641,6 +641,7 @@ function DataEditorPage() {
   const stripeId = useId();
   const groupId = useId();
   const jsonId = useId();
+  const limitInSqlId = useId();
   const setData = (patch: Partial<Settings["data"]>) =>
     update((current) => ({ ...current, data: { ...current.data, ...patch } }));
   return (
@@ -706,7 +707,17 @@ function DataEditorPage() {
         check={(fetchAllCap) => fetchAllCapError(fetchAllCap, data.pageRows)}
         onValid={(fetchAllCap) => setData({ fetchAllCap })}
       />
-      <p className="col-start-2 text-ink-muted">Applies to the next statement; open results keep theirs.</p>
+      <FieldRow label="Row limit" htmlFor={limitInSqlId}>
+        <label className="flex items-center gap-cell">
+          <input
+            id={limitInSqlId}
+            type="checkbox"
+            checked={data.limitInSql}
+            onChange={(event) => setData({ limitInSql: event.target.checked })}
+          />
+          Write the page size into the SQL as a row limit
+        </label>
+      </FieldRow>
       <SectionTitle>Export and import</SectionTitle>
       <NumberField
         label="Transfer stall timeout (s)"

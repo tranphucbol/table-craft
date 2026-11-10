@@ -2,7 +2,7 @@
   "id": "oracle",
   "name": "Oracle",
   "version": "0.0.0",
-  "apiVersion": "2.0.0",
+  "apiVersion": "2.2.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -19,7 +19,8 @@
     "serverMessages",
     "sessions",
     "routineCall",
-    "savepoints"
+    "savepoints",
+    "rowLimit"
   ],
   "highlight": "plsql",
   "brands": [{ "id": "oracle", "name": "Oracle" }],

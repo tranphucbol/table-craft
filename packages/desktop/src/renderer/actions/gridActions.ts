@@ -5,6 +5,7 @@ import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/acti
 import { askExport } from "@table-craft/desktop/renderer/actions/exportActions.js";
 import { allShown, hiddenColumn, visibleColumns } from "@table-craft/desktop/renderer/model/columnLayout.js";
 import { formatCount } from "@table-craft/desktop/renderer/model/format.js";
+import { pendingCount } from "@table-craft/desktop/renderer/model/editBuffer.js";
 import { rowCountOf, selectAll, selectedRanges } from "@table-craft/desktop/renderer/model/gridSelection.js";
 import { cycledSort, sortedBy } from "@table-craft/desktop/renderer/model/sortKeys.js";
 import { formatCell } from "@table-craft/desktop/renderer/grid/format.js";
@@ -170,6 +171,17 @@ export function live(context: ActionContext): ShownResult | null {
   return target === null || target.result.stale ? null : target;
 }
 
+/**
+ * Whether Fetch Next Page and Fetch All can run. A result whose row limit is in its SQL fetches by
+ * running again and replacing its rows (decision 162), which pending edits point into by position.
+ */
+function fetchable(context: ActionContext, target: ShownResult): boolean {
+  if (!canFetch(target.result)) return false;
+  if (target.result.refetch !== true) return true;
+  const buffer = context.table?.buffer ?? context.console?.edits[target.result.id]?.buffer;
+  return buffer === undefined || pendingCount(buffer) === 0;
+}
+
 /** The column a header menu named, or from the palette the focused cell's column. */
 function columnOf(result: ResultTab, args: Partial<ColumnArgs> | undefined): number | null {
   const column = args?.column ?? visibleColumns(result.layout)[result.selection?.focus.column ?? -1];
@@ -255,7 +267,7 @@ export const GRID_ACTIONS: readonly AnyAction[] = [
     icon: "fetchNextPage",
     when: (context) => {
       const target = live(context);
-      return target !== null && canFetch(target.result);
+      return target !== null && fetchable(context, target);
     },
     run: async (context) => {
       const target = live(context);
@@ -269,7 +281,7 @@ export const GRID_ACTIONS: readonly AnyAction[] = [
     icon: "fetchAll",
     when: (context) => {
       const target = live(context);
-      return target !== null && canFetch(target.result);
+      return target !== null && fetchable(context, target);
     },
     run: async (context) => {
       const target = live(context);

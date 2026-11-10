@@ -38,6 +38,8 @@ import { seededSqliteFile } from "../support/sqliteFixture.js";
 const sqlite: DatasourcePlugin = sqlitePlugin;
 const SQLITE_DIRECTORY = "plugins/sqlite";
 const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
+/** Pages through the open cursor instead of writing the row limit into the SQL (decision 162). */
+const CURSOR_PAGING = { ...PAGING, limitInSql: false };
 const LOADED_SQLITE: PluginLoadResult = {
   status: "loaded",
   directory: SQLITE_DIRECTORY,
@@ -289,7 +291,17 @@ describe("engine", () => {
 
     expect(resultOf(response)).toMatchObject({
       pluginName: "SQLite",
-      capabilities: ["sql", "schemaTree", "transactions", "ddl", "explain", "bulkInsert", "objects", "savepoints"],
+      capabilities: [
+        "sql",
+        "schemaTree",
+        "transactions",
+        "ddl",
+        "explain",
+        "bulkInsert",
+        "objects",
+        "savepoints",
+        "rowLimit",
+      ],
     });
   });
 
@@ -489,6 +501,24 @@ describe("engine statement.execute sent text", () => {
     const sessionId = await openSession(connection);
 
     const executed = resultOf<ExecutedStatement>(
+      await connection.handle({
+        id: 2,
+        type: "statement.execute",
+        ...CURSOR_PAGING,
+        sessionId,
+        sql: "SELECT 1 AS one",
+      }),
+    );
+
+    expect(executed.sent).toBe(`SELECT ${HINT} 1 AS one`);
+    expect(executed.firstWindow.rows).toEqual([[1]]);
+  });
+
+  it("givenRowLimitWritten_whenPluginAddedAHint_thenTheSentTextLeavesTheLimitOut", async () => {
+    const connection = connectedToHinting();
+    const sessionId = await openSession(connection);
+
+    const executed = resultOf<ExecutedStatement>(
       await connection.handle({ id: 2, type: "statement.execute", ...PAGING, sessionId, sql: "SELECT 1 AS one" }),
     );
 
@@ -532,7 +562,7 @@ describe("engine statement.execute sent text", () => {
     const response = await connection.handle({
       id: 2,
       type: "statement.execute",
-      ...PAGING,
+      ...CURSOR_PAGING,
       sessionId,
       sql: "SELECT FAIL",
     });
@@ -1185,7 +1215,7 @@ describe("engine explain", () => {
     const connection = connected();
     const sessionId = await openSession(connection);
     const { handle, cursorOpen } = resultOf<ExecutedStatement>(
-      await connection.handle({ id: 2, type: "statement.execute", ...PAGING, sessionId, sql: ROWS_1200 }),
+      await connection.handle({ id: 2, type: "statement.execute", ...CURSOR_PAGING, sessionId, sql: ROWS_1200 }),
     );
 
     const response = await connection.handle({
@@ -1240,12 +1270,14 @@ describe("engine explain", () => {
 describe("engine results", () => {
   async function execute(connection: ReturnType<typeof connected>, sessionId: string, sql: string) {
     return resultOf<ExecutedStatement>(
-      await connection.handle({ id: 3, type: "statement.execute", ...PAGING, sessionId, sql }),
+      await connection.handle({ id: 3, type: "statement.execute", ...CURSOR_PAGING, sessionId, sql }),
     );
   }
 
   async function fetchMore(connection: ReturnType<typeof connected>, handle: string, all = false) {
-    return resultOf<ResultState>(await connection.handle({ id: 4, type: "result.fetchMore", ...PAGING, handle, all }));
+    return resultOf<ResultState>(
+      await connection.handle({ id: 4, type: "result.fetchMore", ...CURSOR_PAGING, handle, all }),
+    );
   }
 
   it("givenLargeResult_whenExecuted_thenFirstPageOnlyAndCursorOpen", async () => {

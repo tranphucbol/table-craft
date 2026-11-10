@@ -14,6 +14,7 @@ import {
   sqlInspector,
   sqlLiteral,
   sqlParameters,
+  sqlRowLimiter,
   sqlSplitter,
   sqlStatementStream,
   type CompleterOptions,
@@ -34,6 +35,7 @@ export const CAPABILITIES = [
   "explain",
   "explainAnalyze",
   "bulkInsert",
+  "rowLimit",
 ] as const;
 
 export type DuckdbCapability = (typeof CAPABILITIES)[number];
@@ -133,5 +135,6 @@ export const language: PluginLanguage<DuckdbCapability> = {
       types: IMPORT_TYPES,
       decimal: duckdbDecimal,
     }),
+    rowLimit: sqlRowLimiter(DIALECT, "limit"),
   },
 };

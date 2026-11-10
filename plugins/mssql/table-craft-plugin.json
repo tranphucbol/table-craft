@@ -2,7 +2,7 @@
   "id": "mssql",
   "name": "SQL Server",
   "version": "0.0.0",
-  "apiVersion": "2.0.0",
+  "apiVersion": "2.2.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -19,7 +19,8 @@
     "serverMessages",
     "sessions",
     "routineCall",
-    "savepoints"
+    "savepoints",
+    "rowLimit"
   ],
   "highlight": "mssql",
   "brands": [{ "id": "microsoftsqlserver", "name": "SQL Server" }],

@@ -37,6 +37,11 @@ export interface ResultState {
   readonly cursorOpen: boolean;
   /** What the server said running the statement (decision 066); present once complete, when it said anything. */
   readonly messages?: readonly ServerMessage[];
+  /**
+   * The statement ran with a row limit in its SQL and more rows lie past it: Fetch Next Page and
+   * Fetch All run it again with a larger one (decision 162). Present only when true.
+   */
+  readonly refetch?: true;
 }
 
 export interface ResultSummary extends ResultState {
@@ -78,9 +83,9 @@ const DEFAULT_LIMITS: ResultLimits = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: 
 interface StoredResult {
   readonly columns: readonly Column[];
   /** The plugin's own array, filled once its rows run out. */
-  readonly messages: readonly ServerMessage[];
+  messages: readonly ServerMessage[];
   classes: readonly TypeClass[];
-  readonly rows: Row[];
+  rows: Row[];
   /** Open until the rows run out or the session moves on. */
   iterator: AsyncIterator<Row> | null;
   /**
@@ -91,6 +96,8 @@ interface StoredResult {
   /** Read past the last held row, so `complete` is known without another round trip. */
   lookahead: { readonly row: Row } | null;
   complete: boolean;
+  /** Ran with a row limit in its SQL that cut it short; the rows past it need another run. */
+  truncated: boolean;
   keys: readonly SortKey[];
   /** Positions in `rows` in sorted order; null when unsorted or stale after a fetch. */
   order: number[] | null;
@@ -121,13 +128,50 @@ function unknownHandle(handle: ResultHandle): CoreError {
   );
 }
 
+function refetchable(stored: StoredResult): boolean {
+  return stored.truncated && !stored.capped;
+}
+
 function stateOf(stored: StoredResult): ResultState {
   const state = {
     rowCount: stored.rows.length,
     complete: stored.complete,
     cursorOpen: stored.iterator !== null && !stored.capped,
+    ...(refetchable(stored) ? { refetch: true as const } : {}),
   };
   return stored.complete && stored.messages.length > 0 ? { ...state, messages: stored.messages } : state;
+}
+
+function freshResult(result: ExecuteResult): StoredResult {
+  return {
+    columns: result.columns,
+    messages: result.messages ?? [],
+    classes: [],
+    rows: [],
+    iterator: result.rows[Symbol.asyncIterator](),
+    capped: false,
+    lookahead: null,
+    complete: false,
+    truncated: false,
+    keys: [],
+    order: null,
+    spec: null,
+    view: null,
+    fetching: Promise.resolve(),
+    stopRequested: false,
+  };
+}
+
+function sameColumns(left: readonly Column[], right: readonly Column[]): boolean {
+  return left.length === right.length && left.every((column, index) => column.name === right[index]?.name);
+}
+
+function resultChanged(): CoreError {
+  return new CoreError(
+    "resultChanged",
+    "The statement now returns other columns than this result shows, so its rows cannot be read further.",
+    "Run the statement again.",
+  );
 }
 
 /**
@@ -143,31 +187,21 @@ export class ResultStore {
     this.#limits = { ...DEFAULT_LIMITS, ...limits };
   }
 
-  /** Reads the first page from `result.rows` and keeps the iterator for the next. */
-  async put(result: ExecuteResult, limits: Partial<ResultLimits> = {}): Promise<ResultSummary> {
+  /**
+   * Reads the first page from `result.rows` and keeps the iterator for the next. A `rowLimited`
+   * result ran with `firstRead(limits) + 1` as the row limit in its SQL (decision 162): its
+   * iterator closes once the page is read, and `refetch` runs it again for more.
+   */
+  async put(result: ExecuteResult, limits: Partial<ResultLimits> = {}, rowLimited = false): Promise<ResultSummary> {
     const { pageRows, fetchAllCap } = { ...this.#limits, ...definedLimits(limits) };
-    const stored: StoredResult = {
-      columns: result.columns,
-      messages: result.messages ?? [],
-      classes: [],
-      rows: [],
-      iterator: result.rows[Symbol.asyncIterator](),
-      capped: false,
-      lookahead: null,
-      complete: false,
-      keys: [],
-      order: null,
-      spec: null,
-      view: null,
-      fetching: Promise.resolve(),
-      stopRequested: false,
-    };
+    const stored = freshResult(result);
     try {
       await this.#read(stored, Math.min(pageRows, fetchAllCap), fetchAllCap);
     } catch (cause) {
       await this.#close(stored);
       throw cause;
     }
+    if (rowLimited) await this.#endLimited(stored);
     stored.classes = result.columns.map((column, index) =>
       column.typeClass === undefined && column.type === null
         ? inferredTypeClass(stored.rows.map((row) => row[index] ?? null))
@@ -197,6 +231,49 @@ export class ResultStore {
         await this.#close(stored);
         throw cause;
       }
+      return stateOf(stored);
+    });
+    stored.fetching = fetch.catch(() => undefined);
+    return fetch;
+  }
+
+  /** Rows the first read of `put` holds with these limits. */
+  firstRead(limits: Partial<ResultLimits> = {}): number {
+    const { pageRows, fetchAllCap } = { ...this.#limits, ...definedLimits(limits) };
+    return Math.min(pageRows, fetchAllCap);
+  }
+
+  /**
+   * For a result whose row limit cut it short: runs the statement again through `run`, with the
+   * next page or everything to the cap as its limit, and replaces the held rows with the new ones
+   * (decision 162). The sort and view stay. Columns that changed reject with `resultChanged` and
+   * keep the rows held; so does a stop that leaves fewer rows than before.
+   */
+  refetch(
+    handle: ResultHandle,
+    options: FetchOptions,
+    run: (rowLimit: number) => Promise<ExecuteResult>,
+  ): Promise<ResultState> {
+    const stored = this.#stored(handle);
+    const fetch = stored.fetching.then(async () => {
+      if (!refetchable(stored) || stored.stopRequested) return stateOf(stored);
+      const { pageRows, fetchAllCap } = { ...this.#limits, ...definedLimits(options) };
+      const target = Math.min(options.all ? fetchAllCap : stored.rows.length + pageRows, fetchAllCap);
+      const next = freshResult(await run(target + 1));
+      try {
+        if (!sameColumns(stored.columns, next.columns)) throw resultChanged();
+        await this.#read(next, target, fetchAllCap, () => stored.stopRequested);
+      } finally {
+        await this.#endLimited(next);
+      }
+      if (!next.complete && next.rows.length <= stored.rows.length) return stateOf(stored);
+      stored.rows = next.rows;
+      stored.messages = next.messages;
+      stored.complete = next.complete;
+      stored.truncated = next.truncated;
+      stored.capped = next.capped;
+      stored.order = null;
+      stored.view = null;
       return stateOf(stored);
     });
     stored.fetching = fetch.catch(() => undefined);
@@ -406,9 +483,14 @@ export class ResultStore {
   }
 
   /** Reads until `target` rows are held, the rows run out, or a stop is requested. */
-  async #read(stored: StoredResult, target: number, fetchAllCap: number): Promise<void> {
+  async #read(
+    stored: StoredResult,
+    target: number,
+    fetchAllCap: number,
+    stopped: () => boolean = () => stored.stopRequested,
+  ): Promise<void> {
     const { rows } = stored;
-    while (rows.length < target && stored.iterator !== null && !stored.stopRequested) {
+    while (rows.length < target && stored.iterator !== null && !stopped()) {
       if (stored.lookahead !== null) {
         rows.push(stored.lookahead.row);
         stored.lookahead = null;
@@ -424,7 +506,7 @@ export class ResultStore {
     }
     stored.order = null;
     stored.view = null;
-    if (stored.iterator === null || stored.lookahead !== null || stored.stopRequested) return;
+    if (stored.iterator === null || stored.lookahead !== null || stopped()) return;
     const next = await stored.iterator.next();
     if (next.done === true) {
       stored.complete = true;
@@ -433,6 +515,13 @@ export class ResultStore {
     }
     stored.lookahead = { row: next.value };
     if (rows.length >= fetchAllCap) stored.capped = true;
+  }
+
+  /** A row-limited run has nothing past its limit worth reading: what is not held needs another run. */
+  async #endLimited(stored: StoredResult): Promise<void> {
+    if (stored.iterator === null) return;
+    stored.truncated = true;
+    await this.#close(stored);
   }
 
   async #close(stored: StoredResult): Promise<void> {

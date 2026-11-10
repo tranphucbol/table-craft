@@ -14,6 +14,8 @@ export interface ResultState {
   readonly cursorOpen: boolean;
   /** What the server said running the statement; present once the result is complete and it said anything. */
   readonly messages?: readonly ServerMessage[];
+  /** A row limit in the statement's SQL cut it short: Fetch runs it again with a larger one (decision 162). */
+  readonly refetch?: true;
 }
 
 /** Mirrors `SortDirection` in core. */

@@ -23,7 +23,7 @@
     {
       "key": "CAPABILITIES",
       "kind": "addition",
-      "reason": "Adds the opt-in revisions, watch, leases, access, members, maintenance, coordination and bulkTransfer capabilities after the existing set, including serverTimeout. Existing plugins never declare them; the host only calls the matching optional services when declared (decisions 129, 136)."
+      "reason": "Adds the opt-in revisions, watch, leases, access, members, maintenance, coordination and bulkTransfer capabilities after the existing set, including serverTimeout, and rowLimit after savepoints. Existing plugins never declare them; the host only calls the matching optional services when declared (decisions 129, 136, 162)."
     },
     {
       "key": "PLUGIN_ERROR_CODES",
@@ -43,7 +43,7 @@
     {
       "key": "pluginManifestSchema",
       "kind": "addition",
-      "reason": "Widens through CAPABILITIES, visibleWhen (and its list of values), hint and sets above; every manifest valid before still parses the same."
+      "reason": "Widens through CAPABILITIES (rowLimit, which requires sql), visibleWhen (and its list of values), hint and sets above; every manifest valid before still parses the same."
     },
     {
       "key": "NamespaceStatementForm",
@@ -104,6 +104,11 @@
       "key": "sqlCompleter",
       "kind": "addition",
       "reason": "The same four members; selectSource and signatureAt are now required on every SqlLanguage, so the Required wrapper says nothing more."
+    },
+    {
+      "key": "LanguageServices.rowLimit",
+      "kind": "addition",
+      "reason": "A language holds Partial<LanguageServices> and a plugin's PluginLanguage<C> picks only the declared keys, so rowLimit is required of a plugin only when it declares the new rowLimit capability; the host reads it only through that check (decision 162)."
     }
   ]
 }

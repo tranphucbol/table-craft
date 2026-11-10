@@ -145,6 +145,8 @@ export function resultStateText(result: {
   readonly rowCount: number;
   readonly complete: boolean;
   readonly cursorOpen: boolean;
+  /** Fetch runs the statement again with a larger row limit (decision 162), so fetching has not stopped. */
+  readonly refetch?: boolean;
   readonly sorted: boolean;
   readonly fetchAllCap: number;
   readonly shown?: number | null;
@@ -154,6 +156,7 @@ export function resultStateText(result: {
 }): string {
   const count = formatCount(result.rowCount);
   const shown = result.shown ?? null;
+  const fetchable = result.cursorOpen || result.refetch === true;
   const stopped =
     result.exportEnded == null
       ? result.rowCount >= result.fetchAllCap
@@ -162,14 +165,14 @@ export function resultStateText(result: {
       : DRAINED_TEXT[result.exportEnded];
   if (shown !== null) {
     const parts = [`${formatCount(shown)} of ${count}${result.complete ? "" : "+"} rows`, "filtered locally"];
-    if (!result.complete && !result.cursorOpen) parts.push(stopped);
+    if (!result.complete && !fetchable) parts.push(stopped);
     if (result.sorted) parts.push("sorted locally");
     return parts.join(" · ");
   }
   if (result.complete) return result.rowCount === 1 ? "1 row" : `${count} rows`;
   const parts = [`${count}+ rows`];
   if (result.pagedByConsole === true) parts.push(PAGED_BY_CONSOLE_TEXT);
-  if (!result.cursorOpen) parts.push(stopped);
+  if (!fetchable) parts.push(stopped);
   if (result.sorted) parts.push("sorted locally");
   return parts.join(" · ");
 }

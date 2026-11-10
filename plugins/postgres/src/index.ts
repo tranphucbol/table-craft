@@ -37,6 +37,7 @@ import {
   planText,
   namespaceSwitcher,
   quoteIdentifierWith,
+  sqlRowLimiter,
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
@@ -94,6 +95,7 @@ const CAPABILITIES = [
   "routineCall",
   "serverTimeout",
   "savepoints",
+  "rowLimit",
 ] as const;
 
 type PostgresCapability = (typeof CAPABILITIES)[number];
@@ -167,6 +169,7 @@ const language: PluginLanguage<PostgresCapability> = {
     }),
     routineCall: { call: postgresRoutineCall(writeName) },
     savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
+    rowLimit: sqlRowLimiter(DIALECT, "limit"),
   },
 };
 

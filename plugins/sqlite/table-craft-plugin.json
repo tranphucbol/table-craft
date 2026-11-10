@@ -2,9 +2,19 @@
   "id": "sqlite",
   "name": "SQLite",
   "version": "0.0.0",
-  "apiVersion": "2.1.0",
+  "apiVersion": "2.2.0",
   "entry": "index.js",
-  "capabilities": ["sql", "schemaTree", "transactions", "ddl", "explain", "bulkInsert", "objects", "savepoints"],
+  "capabilities": [
+    "sql",
+    "schemaTree",
+    "transactions",
+    "ddl",
+    "explain",
+    "bulkInsert",
+    "objects",
+    "savepoints",
+    "rowLimit"
+  ],
   "highlight": "sqlite",
   "brands": [{ "id": "sqlite", "name": "SQLite" }],
   "connection": {

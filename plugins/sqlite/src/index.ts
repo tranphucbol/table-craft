@@ -28,6 +28,7 @@ import {
   defaultValuesInsert,
   identifierWriter,
   quoteIdentifierWith,
+  sqlRowLimiter,
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
@@ -64,6 +65,7 @@ const CAPABILITIES = [
   "bulkInsert",
   "objects",
   "savepoints",
+  "rowLimit",
 ] as const;
 
 type SqliteCapability = (typeof CAPABILITIES)[number];
@@ -129,6 +131,7 @@ const language: PluginLanguage<SqliteCapability> = {
       name: identifierWriter({ quoteIdentifier, plainIdentifier: PLAIN_IDENTIFIER, keywords: KEYWORDS }),
     }),
     savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
+    rowLimit: sqlRowLimiter(DIALECT, "limit"),
   },
 };
 
