@@ -64,6 +64,11 @@ export interface DataSettings {
   readonly pageRows: number;
   /** Rows Fetch All reads at most. */
   readonly fetchAllCap: number;
+  /**
+   * Write the page size into a plain SELECT as a row limit, so the server stops there; Fetch runs it
+   * again with a larger one (decision 162). Off pages through an open cursor (decision 025).
+   */
+  readonly limitInSql: boolean;
   /** Seconds an export waits for the next row before it fails as stalled (decision 040). */
   readonly exportStallSeconds: number;
   /** Which selection aggregates the grid's status line shows, in `AGGREGATE_NAMES` order (plan 043). */
@@ -373,6 +378,7 @@ export const DEFAULT_SETTINGS: Settings = {
     detectJson: true,
     pageRows: 500,
     fetchAllCap: 100_000,
+    limitInSql: true,
     exportStallSeconds: 120,
     aggregates: AGGREGATE_NAMES,
     blobLimitMb: 16,
@@ -641,6 +647,7 @@ export function readSettings(input: unknown): Settings {
       detectJson: typeof data.detectJson === "boolean" ? data.detectJson : defaults.data.detectJson,
       pageRows,
       fetchAllCap,
+      limitInSql: typeof data.limitInSql === "boolean" ? data.limitInSql : defaults.data.limitInSql,
       exportStallSeconds: inRange(data.exportStallSeconds, EXPORT_STALL_SECONDS_RANGE)
         ? data.exportStallSeconds
         : defaults.data.exportStallSeconds,

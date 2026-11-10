@@ -6,6 +6,7 @@ import {
   offsetOfPosition,
   sentStatementOf,
   z,
+  type RowLimitRewrite,
 } from "@table-craft/plugin-api";
 import {
   STATEMENT_CANCELLED_MESSAGE,
@@ -71,15 +72,58 @@ export function positionIn(sent: string, cause: unknown): number | undefined {
 }
 
 /**
+ * Where an error the database located in `rewrite.sql` sits in the text before the row limit was
+ * written into it (decision 162); undefined inside the limit itself, which the user never wrote.
+ */
+export function positionBefore(rewrite: RowLimitRewrite, position: number | undefined): number | undefined {
+  if (position === undefined) return undefined;
+  const { offset, length } = rewrite.inserted;
+  if (position < offset) return position;
+  return position >= offset + length ? position - length : undefined;
+}
+
+/**
+ * Whether the database blamed the row limit the engine wrote rather than the user's text (decision
+ * 162): it located its error inside the limit, or names the limit in its message. A statement that
+ * failed there never ran, and runs again as the user wrote it to report its own error.
+ */
+export function failedInLimit(rewrite: RowLimitRewrite, cause: unknown): boolean {
+  const { offset, length } = rewrite.inserted;
+  const position = positionIn(rewrite.sql, cause);
+  if (position !== undefined) return position >= offset && position < offset + length;
+  const limit = rewrite.sql.slice(offset, offset + length).trim();
+  return cause instanceof Error && cause.message.includes(limit);
+}
+
+/**
  * `own` is the text the plugin was given, when it is also the request's own `sql`: only then does
  * the plugin's error position point into the user's text (decision 082), and only then is the text
- * the plugin says it sent instead reported, so bound values never reach the history as text.
+ * the plugin says it sent instead reported, so bound values never reach the history as text. With
+ * a `rewrite` the plugin was given `rewrite.sql`: positions map back past the row limit, and what
+ * the plugin sent is reported without it.
  */
-export function statementFailed(cause: unknown, readOnly: boolean, own?: string): EngineFailure {
-  const failure = failedStatement(cause, readOnly, own);
-  const sent = own === undefined ? undefined : sentInstead(sentStatementOf(cause), own);
+export function statementFailed(
+  cause: unknown,
+  readOnly: boolean,
+  own?: string,
+  rewrite?: RowLimitRewrite,
+): EngineFailure {
+  const failure = failedStatement(cause, readOnly, own, rewrite);
+  const sent = own === undefined ? undefined : sentInstead(sentWithoutLimit(sentStatementOf(cause), rewrite), own);
   if (sent === undefined || failure.error.sent !== undefined) return failure;
   return new EngineFailure({ ...failure.error, sent }, failure.cause);
+}
+
+/**
+ * What a plugin sent, less the row limit the engine wrote (decision 162), so the history keeps a
+ * statement that reads every row; undefined when the limit cannot be told apart in it.
+ */
+export function sentWithoutLimit(sent: unknown, rewrite: RowLimitRewrite | undefined): unknown {
+  if (rewrite === undefined || typeof sent !== "string") return sent;
+  const { offset, length } = rewrite.inserted;
+  const limit = rewrite.sql.slice(offset, offset + length);
+  const parts = sent.split(limit);
+  return parts.length === 2 ? parts.join("") : undefined;
 }
 
 /** What a plugin says it sent, when it is text other than what it was given. */
@@ -87,7 +131,12 @@ export function sentInstead(sent: unknown, given: string): string | undefined {
   return typeof sent === "string" && sent !== "" && sent !== given ? sent : undefined;
 }
 
-function failedStatement(cause: unknown, readOnly: boolean, own: string | undefined): EngineFailure {
+function failedStatement(
+  cause: unknown,
+  readOnly: boolean,
+  own: string | undefined,
+  rewrite: RowLimitRewrite | undefined,
+): EngineFailure {
   if (cause instanceof EngineFailure) return cause;
   if (isPluginError(cause) && cause.code === "connectionLost") {
     return new EngineFailure({ code: "connectionLost", message: cause.message, hint: RECONNECT_HINT }, cause);
@@ -102,7 +151,12 @@ function failedStatement(cause: unknown, readOnly: boolean, own: string | undefi
   if (cause instanceof TunnelError) {
     return new EngineFailure({ code: cause.code, message: cause.message, hint: cause.hint }, cause);
   }
-  const position = own === undefined ? undefined : positionIn(own, cause);
+  const position =
+    own === undefined
+      ? undefined
+      : rewrite === undefined
+        ? positionIn(own, cause)
+        : positionBefore(rewrite, positionIn(rewrite.sql, cause));
   return new EngineFailure(
     {
       code: "statementFailed",

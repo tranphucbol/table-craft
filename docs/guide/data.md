@@ -4,8 +4,10 @@ The result grid, the table data editor, and importing a file into a table.
 
 ## Result grid
 
-The grid shows the first page (500 rows by default) and keeps the cursor open: **Fetch Next Page**
-and **Fetch All** read more. Clicking a header sorts ascending, descending, then not at all; `⌥`-click
+The grid shows the first page (500 rows by default). A plain `SELECT` carries that page size as a
+row limit in its SQL, so the server stops there; **Fetch Next Page** and **Fetch All** run it again
+with a larger limit, and the rows may differ if the query has no `ORDER BY`. Other statements, and
+every one with **Row limit** off in Settings → Data Editor, keep the cursor open and read on from it. Clicking a header sorts ascending, descending, then not at all; `⌥`-click
 adds a second key. `⇧↩`, or double-clicking a cell, opens the value panel for long text and JSON; drag its left
 edge to widen it, and it keeps that width. **Copy** on one
 cell copies its bare value; on more it uses the chosen extractor: CSV, TSV, JSON, SQL Inserts or

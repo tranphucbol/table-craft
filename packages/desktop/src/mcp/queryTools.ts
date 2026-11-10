@@ -11,6 +11,7 @@ import { accessVerdict } from "@table-craft/desktop/mcp/access.js";
 import { EngineCallError, type AgentEngine, type SessionMode } from "@table-craft/desktop/mcp/engines.js";
 import type { AgentDatasource } from "@table-craft/desktop/mcp/messages.js";
 import { jsonRows, textTable } from "@table-craft/desktop/mcp/render.js";
+import { PAGE_ROWS_RANGE } from "@table-craft/desktop/settings/settings.js";
 import {
   engineWith,
   exposedDatasource,
@@ -259,10 +260,12 @@ export function createQueryTools(context: ToolContext): QueryTools {
       const count = Math.min(limit ?? cap, cap);
       const engine = await context.engines.engine(open.datasourceId);
       while (!open.complete && open.rowCount < offset + count) {
+        // One fetch for every row still missing: a result whose row limit is in its SQL runs again per fetch (decision 162).
+        const missing = offset + count - open.rowCount;
         const state = await engine.call("result.fetchMore", {
           handle: open.handle,
           all: false,
-          pageRows: RESULT_PAGE_ROWS,
+          pageRows: Math.min(PAGE_ROWS_RANGE.max, Math.max(RESULT_PAGE_ROWS, missing)),
           fetchAllCap: RESULT_FETCH_ALL_CAP,
         });
         if (state.rowCount === open.rowCount && !state.complete) break;

@@ -29,7 +29,8 @@ import { tenThousandRows } from "../support/manyRows.js";
  * server only, so the plugin must never send a kill (decision 058).
  */
 
-const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP };
+/** Cursor paging: these tests watch the cursor a row limit in the SQL (decision 162) would close. */
+const PAGING = { pageRows: RESULT_PAGE_ROWS, fetchAllCap: RESULT_FETCH_ALL_CAP, limitInSql: false };
 const RUNS_IN_A_ROW = 3;
 const SLEEP_SQL = "SELECT SLEEP(30)";
 /** Long enough for TiDB to start the sleep, well short of it. */

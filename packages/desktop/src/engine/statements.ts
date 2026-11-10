@@ -1,5 +1,6 @@
 import {
   CONSOLE_READ_ONLY_REASONS,
+  CoreError,
   consoleEditable,
   editableIdentity,
   generateEdits,
@@ -7,6 +8,8 @@ import {
   submitConsoleEdits,
   submitEdits,
   tableSelect,
+  type ResultLimits,
+  type ResultState,
   type RowEdit,
 } from "@table-craft/core";
 import {
@@ -21,6 +24,8 @@ import {
   type ExecuteResult,
   type KeyType,
   type Row,
+  type RowLimiter,
+  type RowLimitRewrite,
   type SavepointStatements,
   type TypeClass,
   type WireValue,
@@ -33,10 +38,13 @@ import {
   EngineFailure,
   STALE_CATALOG_REASON,
   explainFailed,
+  failedInLimit,
   messageOf,
   sentInstead,
+  sentWithoutLimit,
   sessionBusy,
   statementFailed,
+  toEngineError,
   transactionLost,
 } from "@table-craft/desktop/engine/failures.js";
 import type {
@@ -109,6 +117,15 @@ function reportedColumn(column: Column, index: number): ColumnMeta {
   };
 }
 
+/** Paging for a statement run: `all` reads to the cap in one run when the SQL carries the limit. */
+type StatementPaging = ResultPaging & { readonly all?: boolean };
+
+interface RowLimited {
+  readonly rewrite: RowLimitRewrite;
+  readonly limiter: RowLimiter;
+  readonly limits: ResultLimits;
+}
+
 function savepointsOf(language: SqlLanguage): ((name: string) => SavepointStatements) | undefined {
   if (!hasLanguageService(language, "savepoints")) return undefined;
   const writer = languageServiceOf(language, "savepoints");
@@ -136,6 +153,7 @@ export function statementRunners(live: LiveContext) {
     edited,
     staged,
     keySources,
+    limitedRuns,
     afterClose,
     mustSettle,
     busyRefused,
@@ -150,11 +168,26 @@ export function statementRunners(live: LiveContext) {
     onLiveSession,
   } = live;
 
+  /**
+   * The row limit written into a plain SELECT so the server stops after the first page (decision
+   * 162); null runs the statement as written and pages through its cursor (decision 025).
+   */
+  function rowLimitFor(sql: string, paging: StatementPaging): RowLimited | null {
+    if (paging.limitInSql === false || commandLanguage() !== null) return null;
+    const language = sqlLanguage();
+    if (!hasLanguageService(language, "rowLimit") || language.classify(sql).kind !== "read") return null;
+    const { fetchAllCap } = paging;
+    const limits = { pageRows: paging.all === true ? fetchAllCap : paging.pageRows, fetchAllCap };
+    const limiter = languageServiceOf(language, "rowLimit");
+    const rewrite = limiter.limit(sql, results.firstRead(limits) + 1);
+    return rewrite === null ? null : { rewrite, limiter, limits };
+  }
+
   async function runStatement(
     sessionId: string,
     sql: string,
     parameters: Readonly<Record<string, ParameterValue>> | undefined,
-    paging: ResultPaging,
+    paging: StatementPaging,
     limit: StatementLimit,
     executeOptions: Pick<ExecuteOptions, "node" | "repeat"> = {},
   ): Promise<ExecutedStatement> {
@@ -166,29 +199,42 @@ export function statementRunners(live: LiveContext) {
     } catch (cause) {
       throw statementFailed(cause, options.datasource.readOnly);
     }
+    let limited = rowLimitFor(bound.sql, paging);
     open.running += 1;
     try {
       const { value: summary, reconnected } = await onLiveSession(
         sessionId,
         open,
         limit.timeoutSeconds ?? 0,
-        (session) =>
-          session
-            .execute(bound.sql, bound.params, {
+        (session) => {
+          const execute = (text: string) =>
+            session.execute(text, bound.params, {
               ...executeOptions,
               ...serverTimeoutOptions(limit, session, open.capabilities),
-            })
-            .then(async (result) => {
-              const put = await results.put(heldOf(result), paging);
-              const sent = bound.sql === sql ? sentInstead(result.sent, sql) : undefined;
-              return {
-                ...put,
-                ...(result.reply === undefined ? {} : { reply: result.reply }),
-                ...(result.source === undefined ? {} : { source: result.source }),
-                ...(sent === undefined ? {} : { sent }),
-              };
-            }),
-        (cause) => statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined),
+            });
+          const capped = limited;
+          const started =
+            capped === null
+              ? execute(bound.sql)
+              : execute(capped.rewrite.sql).catch((cause: unknown) => {
+                  if (!failedInLimit(capped.rewrite, cause)) throw cause;
+                  limited = null;
+                  return execute(bound.sql);
+                });
+          return started.then(async (result) => {
+            const put = await results.put(heldOf(result), limited?.limits ?? paging, limited !== null);
+            const sent =
+              bound.sql === sql ? sentInstead(sentWithoutLimit(result.sent, limited?.rewrite), sql) : undefined;
+            return {
+              ...put,
+              ...(result.reply === undefined ? {} : { reply: result.reply }),
+              ...(result.source === undefined ? {} : { source: result.source }),
+              ...(sent === undefined ? {} : { sent }),
+            };
+          });
+        },
+        (cause) =>
+          statementFailed(cause, options.datasource.readOnly, bound.sql === sql ? sql : undefined, limited?.rewrite),
         (late) => void results.release(late.handle),
       );
       if (sessions.get(sessionId) !== open) {
@@ -200,6 +246,19 @@ export function statementRunners(live: LiveContext) {
       if (!open.moved) statements.set(summary.handle, sql);
       ran.set(summary.handle, sql);
       if (summary.source !== undefined) keySources.set(summary.handle, summary.source);
+      if (limited !== null && !summary.complete) {
+        const { timeoutSeconds, serverEnforced } = limit;
+        limitedRuns.set(summary.handle, {
+          sql: bound.sql,
+          params: bound.params,
+          limiter: limited.limiter,
+          executeOptions,
+          limit: {
+            ...(timeoutSeconds === undefined ? {} : { timeoutSeconds }),
+            ...(serverEnforced === undefined ? {} : { serverEnforced }),
+          },
+        });
+      }
       const holdsCursor = results.holdsCursor(summary.handle);
       if (holdsCursor) cursors.set(sessionId, summary.handle);
       // An open cursor keeps the session busy, and no statement that switches returns rows.
@@ -218,6 +277,53 @@ export function statementRunners(live: LiveContext) {
         ...(namespace === undefined ? {} : { namespace }),
         ...(reconnected === undefined ? {} : { reconnected }),
       };
+    } finally {
+      open.running -= 1;
+      open.lastUsed = now();
+    }
+  }
+
+  /**
+   * Fetch Next Page or Fetch All on a result a row limit cut short: its statement runs again on its
+   * session with a larger limit, and the new rows replace the held ones (decision 162). Like any
+   * statement it waits for, and closes, the session's open cursor first.
+   */
+  async function refetchStatement(handle: string, all: boolean, paging: ResultPaging): Promise<ResultState> {
+    const owned = ownedHandle(handle);
+    const run = limitedRuns.get(owned);
+    const sessionId = handles.get(owned);
+    if (run === undefined || sessionId === undefined) return results.state(owned);
+    const open = sessionFor(sessionId);
+    open.running += 1;
+    try {
+      const { value: state } = await onLiveSession(
+        sessionId,
+        open,
+        run.limit.timeoutSeconds ?? 0,
+        (session) =>
+          results.refetch(owned, { all, ...paging }, (rows) => {
+            const rewrite = run.limiter.limit(run.sql, rows);
+            if (rewrite === null) {
+              throw new EngineFailure({
+                code: "internal",
+                message: "The row limit could not be written into the statement again.",
+                hint: BUG_HINT,
+              });
+            }
+            return session.execute(rewrite.sql, run.params, {
+              ...run.executeOptions,
+              ...serverTimeoutOptions(run.limit, session, open.capabilities),
+            });
+          }),
+        (cause) =>
+          cause instanceof EngineFailure
+            ? cause
+            : cause instanceof CoreError
+              ? new EngineFailure(toEngineError(cause), cause)
+              : statementFailed(cause, options.datasource.readOnly),
+      );
+      if (state.complete) limitedRuns.delete(owned);
+      return state;
     } finally {
       open.running -= 1;
       open.lastUsed = now();
@@ -528,6 +634,7 @@ export function statementRunners(live: LiveContext) {
 
   return {
     runStatement,
+    refetchStatement,
     explainStatement,
     queryTable,
     openKey,

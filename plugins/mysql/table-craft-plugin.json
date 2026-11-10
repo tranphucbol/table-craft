@@ -2,7 +2,7 @@
   "id": "mysql",
   "name": "MySQL",
   "version": "0.0.0",
-  "apiVersion": "2.1.0",
+  "apiVersion": "2.2.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -20,7 +20,8 @@
     "sessions",
     "routineCall",
     "serverTimeout",
-    "savepoints"
+    "savepoints",
+    "rowLimit"
   ],
   "highlight": "mysql",
   "brands": [

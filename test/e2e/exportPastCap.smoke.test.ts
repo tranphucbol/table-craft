@@ -94,7 +94,12 @@ describe.runIf(SMOKE_ENABLED)("export past the Fetch All limit", () => {
   async function launch(datasource: Datasource): Promise<Page> {
     const userDataDir = newProfile();
     scratch.push(userDataDir);
-    seedSettings(userDataDir, { version: 1, appearance: { motion: "off", theme: "light" } });
+    // A row-limited result exports by running again (decision 162); this suite is the cursor's.
+    seedSettings(userDataDir, {
+      version: 1,
+      appearance: { motion: "off", theme: "light" },
+      data: { limitInSql: false },
+    });
     running = await launchApp(datasource, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);

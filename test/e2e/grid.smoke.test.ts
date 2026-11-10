@@ -27,6 +27,7 @@ import {
   pressChord,
   runAllButton,
   SCENARIO_TIMEOUT_MS,
+  seedSettings,
   setWindowSize,
   sqlEditor,
   treeNode,
@@ -39,6 +40,8 @@ import {
 const captureWindow = evidenceFor("007");
 const dropdownEvidence = evidenceFor("129");
 const VALUE_PANEL_DRAG_PX = 100;
+/** Only an open cursor stops when its session runs another statement (decision 162). */
+const CURSOR_PAGING = { version: 1, data: { limitInSql: false } };
 /**
  * Narrower than the evidence window, still wide enough that the dragged panel stays under 70 % of
  * the result area and the rows keep their 240 px.
@@ -206,8 +209,11 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
     for (const path of scratch.splice(0)) rmSync(path, { recursive: true, force: true });
   });
 
-  async function launch(datasource: Datasource): Promise<RunningApp> {
-    running = await launchApp(datasource);
+  async function launch(datasource: Datasource, settings?: object): Promise<RunningApp> {
+    const userDataDir = newProfile();
+    scratch.push(userDataDir);
+    if (settings !== undefined) seedSettings(userDataDir, settings);
+    running = await launchApp(datasource, { userDataDir });
     await setWindowSize(running.app, EVIDENCE_WINDOW);
     await waitUntilReady(running.page);
     return running;
@@ -240,7 +246,7 @@ describe.runIf(DATABASES_ENABLED)("result grid live test", () => {
   it.skipIf(WITHOUT_POSTGRES)(
     "givenOpenCursor_whenSameConsoleRunsAnotherStatement_thenFirstResultSaysFetchingStopped",
     async () => {
-      const { page } = await launch(POSTGRES);
+      const { page } = await launch(POSTGRES, CURSOR_PAGING);
       await query(page, POSTGRES_PAGING);
       await expect.poll(() => resultState(page).textContent()).toBe("500+ rows");
       await page.getByRole("button", { name: "Pin Result 1" }).click();

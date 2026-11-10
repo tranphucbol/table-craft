@@ -5,6 +5,7 @@ import {
   identifierWriter,
   namespaceSwitcher,
   quoteIdentifierWith,
+  sqlRowLimiter,
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
@@ -68,6 +69,7 @@ export const CAPABILITIES = [
   "sessions",
   "routineCall",
   "savepoints",
+  "rowLimit",
 ] as const;
 
 export type OracleCapability = (typeof CAPABILITIES)[number];
@@ -126,5 +128,6 @@ export const language: PluginLanguage<OracleCapability> = {
     objects: oracleObjects({ name: writeName, text: textLiteral }),
     routineCall: { call: oracleRoutineCall(writeName) },
     savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
+    rowLimit: sqlRowLimiter(DIALECT, "fetchFirst"),
   },
 };

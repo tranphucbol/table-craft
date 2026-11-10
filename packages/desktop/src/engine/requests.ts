@@ -215,6 +215,7 @@ const importErrors = z.discriminatedUnion("mode", [
 const paging = {
   pageRows: z.number().int().min(PAGE_ROWS_RANGE.min).max(PAGE_ROWS_RANGE.max),
   fetchAllCap: z.number().int().min(FETCH_ALL_CAP_RANGE.min).max(FETCH_ALL_CAP_RANGE.max),
+  limitInSql: z.boolean().optional(),
 };
 const timeoutSeconds = z
   .number()
@@ -481,6 +482,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     sql: z.string(),
     parameters: z.record(z.string(), z.string().nullable()).optional(),
     ...paging,
+    all: z.boolean().optional(),
     ...statementLimit,
     node: z.string().min(1).optional(),
     repeat: z.number().int().min(2).optional(),

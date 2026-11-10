@@ -843,6 +843,12 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
       return pagingWith(currentPaging(), get().consoles[id]?.runSettings.rows ?? DEFAULT_RUN_SETTINGS.rows);
     }
 
+    /** A console set to All rows asks the run itself for every row, which a row limit in the SQL honours (decision 162). */
+    function allOf(id: string): { all?: true } {
+      const runSettings = get().consoles[id]?.runSettings;
+      return runSettings !== undefined && fetchesAll(runSettings) ? { all: true } : {};
+    }
+
     /** Marks a tab whose page size the console chose, so its row count says so. */
     function pagedBy(tab: ResultTab): ResultTab {
       return tab.paging.pageRows === currentPaging().pageRows ? tab : { ...tab, pagedByConsole: true };
@@ -1296,6 +1302,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
             sql: statement.sql,
             ...(parameters === undefined ? {} : { parameters }),
             ...paging,
+            ...allOf(id),
             ...limitOf(id),
             ...nodeOf(id),
             ...(statement.repeat === undefined ? {} : { repeat: statement.repeat }),
@@ -2218,6 +2225,7 @@ export function createConsolesStore(dependencies: ConsolesDependencies) {
               sql: tab.sql,
               ...(parameters === undefined ? {} : { parameters }),
               ...paging,
+              ...allOf(id),
               ...limitOf(id),
               ...nodeOf(id),
             });

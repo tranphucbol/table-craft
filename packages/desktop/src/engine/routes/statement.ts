@@ -8,8 +8,14 @@ export function statementRoutes(connection: ConnectionContext): RoutesFor<"state
   return {
     "statement.execute": (request) => {
       assertExecutable(connection.commandLanguage(), request.sql);
-      const { sessionId, sql, parameters, pageRows, fetchAllCap, node, repeat } = request;
-      return runStatement(sessionId, sql, parameters, { pageRows, fetchAllCap }, request, {
+      const { sessionId, sql, parameters, pageRows, fetchAllCap, limitInSql, all, node, repeat } = request;
+      const paging = {
+        pageRows,
+        fetchAllCap,
+        ...(limitInSql === undefined ? {} : { limitInSql }),
+        ...(all === true ? { all } : {}),
+      };
+      return runStatement(sessionId, sql, parameters, paging, request, {
         ...(node === undefined ? {} : { node }),
         ...(repeat === undefined ? {} : { repeat }),
       });

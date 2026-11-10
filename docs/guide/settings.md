@@ -63,6 +63,7 @@ back to its default without affecting the others.
 | `data.detectJson`                      | `true`, `false`; open a text value holding a JSON object or array formatted in the value panel        | `true`                                         |
 | `data.pageRows`                        | 10–10,000                                                                                             | 500                                            |
 | `data.fetchAllCap`                     | 1,000–1,000,000, at least `pageRows`                                                                  | 100,000                                        |
+| `data.limitInSql`                      | `true`, `false`; write the page size into a plain `SELECT` as a row limit                             | `true`                                         |
 | `data.aggregates`                      | which of `count`, `distinct`, `sum`, `avg`, `min`, `max` the grid's selection line shows              | `["count","distinct","sum","avg","min","max"]` |
 | `data.blobLimitMb`                     | 1–128; the largest file, in MiB, Load from File puts into a binary cell, and Save to File reads       | 16                                             |
 | `log.level`                            | `info`, `debug`                                                                                       | `info`                                         |

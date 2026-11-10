@@ -50,10 +50,11 @@ export type ExportSource =
 /**
  * Where the rows come from: `rerun` runs the result's statement again on a session of the
  * export's own, `table` selects a whole table there, `memory` writes the rows the grid holds,
- * `cursor` drains the console's still-open cursor, `ddl` reads one definition per relation, each
- * counted as a row.
+ * `cursor` drains the console's still-open cursor, `session` runs the statement again without the
+ * row limit written into it on the console's own session (decision 162), `ddl` reads one
+ * definition per relation, each counted as a row.
  */
-export type ExportOrigin = "rerun" | "table" | "memory" | "cursor" | "ddl";
+export type ExportOrigin = "rerun" | "table" | "memory" | "cursor" | "session" | "ddl";
 export type ExportTaskState = "running" | "done" | "failed" | "cancelled";
 
 /** One background export, as every event carries it whole. */

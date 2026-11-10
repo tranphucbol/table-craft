@@ -36,6 +36,7 @@ import {
   planText,
   namespaceSwitcher,
   quoteIdentifierWith,
+  sqlRowLimiter,
   sqlSavepoints,
   SQL_KEYWORDS,
   sqlCompleter,
@@ -111,6 +112,7 @@ const CAPABILITIES = [
   "routineCall",
   "serverTimeout",
   "savepoints",
+  "rowLimit",
 ] as const;
 
 type MysqlCapability = (typeof CAPABILITIES)[number];
@@ -185,6 +187,7 @@ const language: PluginLanguage<MysqlCapability> = {
     }),
     routineCall: { call: mysqlRoutineCall(writeName) },
     savepoints: { savepoint: sqlSavepoints(quoteIdentifier) },
+    rowLimit: sqlRowLimiter(DIALECT, "limit"),
   },
 };
 

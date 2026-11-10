@@ -2,9 +2,19 @@
   "id": "duckdb",
   "name": "DuckDB",
   "version": "0.0.0",
-  "apiVersion": "2.0.0",
+  "apiVersion": "2.2.0",
   "entry": "index.js",
-  "capabilities": ["sql", "cancel", "schemaTree", "transactions", "ddl", "explain", "explainAnalyze", "bulkInsert"],
+  "capabilities": [
+    "sql",
+    "cancel",
+    "schemaTree",
+    "transactions",
+    "ddl",
+    "explain",
+    "explainAnalyze",
+    "bulkInsert",
+    "rowLimit"
+  ],
   "highlight": "postgresql",
   "brands": [{ "id": "duckdb", "name": "DuckDB" }],
   "connection": {

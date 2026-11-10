@@ -25,6 +25,7 @@ export function resultRoutes(connection: ConnectionContext): RoutesFor<"result">
     chosenColumns,
     ownedHandle,
     resultEditable,
+    refetchStatement,
     cellBytes,
     saveBytes,
     loadBytes,
@@ -44,6 +45,9 @@ export function resultRoutes(connection: ConnectionContext): RoutesFor<"result">
       return null;
     },
     "result.fetchMore": async ({ handle, all, pageRows, fetchAllCap }) => {
+      if (results.state(ownedHandle(handle)).refetch === true) {
+        return track(handle, await refetchStatement(handle, all, { pageRows, fetchAllCap }));
+      }
       const state = await results
         .fetchMore(ownedHandle(handle), { all, pageRows, fetchAllCap })
         .catch((cause: unknown) => {
