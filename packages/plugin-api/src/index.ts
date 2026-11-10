@@ -238,6 +238,8 @@ export {
   PLUGIN_LANGUAGES,
   type PluginSession,
   type RoutineCaller,
+  type RowLimiter,
+  type RowLimitRewrite,
   type ServerInfoReader,
   type ServerTimeoutLimit,
   SERVICE_PROBLEM_KINDS,

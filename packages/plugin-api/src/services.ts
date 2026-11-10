@@ -110,6 +110,23 @@ export interface SavepointWriter {
   savepoint(name: string): SavepointStatements;
 }
 
+/** Where a `RowLimiter` wrote its limit: the one span the host added to the statement. */
+export interface RowLimitRewrite {
+  readonly sql: string;
+  /** The added text starts at `offset` in `sql` and is `length` characters long; the rest is the statement as given. */
+  readonly inserted: { readonly offset: number; readonly length: number };
+}
+
+/** The `rowLimit` service of a language (decision 162): the host writes its page size into the SELECT it runs. */
+export interface RowLimiter {
+  /**
+   * `sql` reading at most `rows` rows, by one insertion and nothing else; null when the statement
+   * is not a plain read the host may limit, such as one already limited, locking or writing.
+   * `rows` is a positive integer. `sqlRowLimiter` implements it.
+   */
+  limit(sql: string, rows: number): RowLimitRewrite | null;
+}
+
 /** The `routineCall` service (decision 090). */
 export interface RoutineCaller {
   /**
@@ -180,6 +197,7 @@ export interface LanguageServices {
   readonly objects: ObjectEditor;
   readonly routineCall: RoutineCaller;
   readonly savepoints: SavepointWriter;
+  readonly rowLimit: RowLimiter;
 }
 
 export type SessionCapability = keyof SessionServices;
@@ -215,6 +233,7 @@ const LANGUAGE_KEYS: Readonly<Record<LanguageCapability, true>> = {
   objects: true,
   routineCall: true,
   savepoints: true,
+  rowLimit: true,
 };
 
 /** The capabilities with a session service: the keys of `SessionServices`. */

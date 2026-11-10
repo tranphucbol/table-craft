@@ -52,6 +52,7 @@ export const CAPABILITIES = [
   "coordination",
   "bulkTransfer",
   "savepoints",
+  "rowLimit",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];
