@@ -10,7 +10,7 @@ import {
 } from "@table-craft/desktop/renderer/actions/consoleCommands.js";
 import { defineAction, type AnyAction } from "@table-craft/desktop/renderer/actions/registry.js";
 import { useConsoles } from "@table-craft/desktop/renderer/state/consoles.js";
-import { pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { capabilitiesOf, pluginOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useExecutions, type Execution } from "@table-craft/desktop/renderer/state/executions.js";
 import { history } from "@table-craft/desktop/renderer/state/history.js";
 import {
@@ -20,6 +20,7 @@ import {
   useModal,
 } from "@table-craft/desktop/renderer/state/modal.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
+import { currentFormatOptions } from "@table-craft/desktop/renderer/state/settings.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 
 export const HISTORY_ACTION_IDS = {
@@ -43,6 +44,17 @@ export interface ServiceArgs {
 
 function highlightOf(view: DatasourceView): string | null | undefined {
   return pluginOf(useDatasources.getState().plugins, view.pluginId)?.highlight;
+}
+
+/** The plugin's formatter with the user's layout, as Reformat Code uses it (decision 149). */
+function formatterOf(view: DatasourceView): { readonly format?: (sql: string) => Promise<string> } {
+  if (!capabilitiesOf(useDatasources.getState().plugins, view.pluginId).includes("sql")) return {};
+  return {
+    format: async (sql) => {
+      const client = await useDatasources.getState().engine(view.id);
+      return client.call("sql.format", { text: sql, options: currentFormatOptions() });
+    },
+  };
 }
 
 async function notice(title: string, cause: unknown): Promise<void> {
@@ -88,6 +100,7 @@ async function showHistory(context: ActionContext): Promise<void> {
       title: `Query History: ${view.name}`,
       search: async (query) => (listed = await history.search(view.id, query)),
       highlight: highlightOf(view),
+      ...formatterOf(view),
       restore: into === undefined ? OPEN_IN_CONSOLE : INSERT,
       now: Date.now(),
     });

@@ -142,6 +142,15 @@ describe.runIf(SMOKE_ENABLED)("fetch_rows re-run approval live test", () => {
       await expect.poll(() => history.getByTestId("history-agent").count()).toBe(1);
       expect(await history.textContent()).toContain("×2");
       await captureWindow(page, "03-history-rerun");
+
+      const lines = history.getByTestId("history-preview").locator(".cm-line");
+      expect(await lines.count()).toBe(1);
+      await history.getByTestId("history-format").click();
+      await expect.poll(() => lines.count()).toBeGreaterThan(1);
+      expect(await history.getByTestId("history-format").getAttribute("aria-pressed")).toBe("true");
+      await captureWindow(page, "04-history-formatted");
+      await history.getByTestId("history-format").click();
+      await expect.poll(() => lines.count()).toBe(1);
       await page.keyboard.press("Escape");
       await agent.close();
     },
