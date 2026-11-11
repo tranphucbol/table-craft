@@ -155,3 +155,4 @@ started, not when it is merged.
 | 160 | [Charts draw with ECharts, and the engine shapes the series](160-charts-draw-with-echarts-and-the-engine-shapes-the-series.md)                                         |
 | 161 | [Agents own the consoles they open](161-agents-own-the-consoles-they-open.md)                                                                                          |
 | 162 | [The row cap is written into the SQL](162-the-row-cap-is-written-into-the-sql.md)                                                                                      |
+| 163 | [fetch_rows waits for approval when it runs the statement again](163-fetch-rows-waits-for-approval-when-it-runs-the-statement-again.md)                                |
