@@ -13,6 +13,8 @@ const SHOP: AgentDatasource = { id: "shop", name: "Shop", pluginId: "sqlite", co
 const READ_ONLY_SHOP: AgentDatasource = { ...SHOP, access: "read" };
 const ASK_READS_SHOP: AgentDatasource = { ...SHOP, access: "askReads" };
 const SELECT_NAMES = "SELECT name FROM customers ORDER BY id";
+/** More rows than the first page, from a plain SELECT whose row limit goes into its SQL (decision 162). */
+const COUNT_TO_1200 = "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 1200) SELECT i FROM n";
 
 function sessionModes(requests: readonly { readonly type: string }[]): boolean[] {
   return requests
@@ -335,6 +337,74 @@ describe("MCP tools", () => {
     const next = await harness.call("fetch_rows", { handle, offset: 2 });
 
     expect(next.structuredContent?.rows).toEqual([{ id: 3 }]);
+    expect(harness.approvals.pending()).toEqual([]);
+  });
+
+  it("givenRowLimitInSql_whenFetchRowsPastHeldRows_thenAsksRunsAgainOnceAndRecords", async () => {
+    const harness = agentHarness([READ_ONLY_SHOP]);
+    harness.setRowCap(2);
+
+    const first = await harness.call("run_query", { datasource: "shop", sql: COUNT_TO_1200 });
+    const handle = first.structuredContent?.handle as string;
+    const held = await harness.call("fetch_rows", { handle, offset: 498 });
+    expect(held.structuredContent?.rows).toEqual([{ i: 499 }, { i: 500 }]);
+    expect(harness.approvals.pending()).toEqual([]);
+
+    const running = harness.call("fetch_rows", { handle, offset: 1000, reason: "Page on" });
+    const approvalId = await waitingApproval(harness.approvals);
+    const [view] = harness.approvals.pending();
+    harness.approvals.answer(approvalId, "allowOnce");
+    const far = await running;
+
+    expect(view).toMatchObject({
+      kind: "read",
+      subject: "rerun",
+      sql: COUNT_TO_1200,
+      rerunRows: 1002,
+      reason: "Page on",
+      allowable: true,
+    });
+    expect(far.structuredContent?.rows).toEqual([{ i: 1001 }, { i: 1002 }]);
+    expect(harness.requests.filter((request) => request.type === "result.fetchMore")).toHaveLength(1);
+    expect(harness.history).toMatchObject([
+      { outcome: "success", rowCount: 500 },
+      { sql: COUNT_TO_1200, outcome: "success", rowCount: 1002, client: "Claude Code" },
+    ]);
+  });
+
+  it("givenRowLimitInSql_whenRerunDenied_thenRefusedAndHeldRowsStayReadable", async () => {
+    const harness = agentHarness([READ_ONLY_SHOP]);
+    harness.setRowCap(2);
+
+    const first = await harness.call("run_query", { datasource: "shop", sql: COUNT_TO_1200 });
+    const handle = first.structuredContent?.handle as string;
+    const running = harness.tools.call("fetch_rows", { handle, offset: 600 }, agentCaller());
+    harness.approvals.answer(await waitingApproval(harness.approvals), "deny");
+    const denied = await running;
+    const held = await harness.call("fetch_rows", { handle, offset: 0 });
+
+    expect(denied).toMatchObject({ outcome: "denied", datasourceId: "shop", target: COUNT_TO_1200 });
+    expect(textOf(denied.result)).toBe(APPROVAL_REFUSALS.denied);
+    expect(harness.requests.map((request) => request.type)).not.toContain("result.fetchMore");
+    expect(harness.history.at(-1)).toMatchObject({ sql: COUNT_TO_1200, outcome: "cancelled" });
+    expect(held.structuredContent?.rows).toEqual([{ i: 1 }, { i: 2 }]);
+  });
+
+  it("givenRerunsAllowedForTheSession_whenFetchRowsFurther_thenNotAskedButReadsStillAre", async () => {
+    const harness = agentHarness([ASK_READS_SHOP]);
+    harness.setRowCap(2);
+
+    const first = harness.call("run_query", { datasource: "shop", sql: COUNT_TO_1200 });
+    harness.approvals.answer(await waitingApproval(harness.approvals), "allowKind");
+    const handle = (await first).structuredContent?.handle as string;
+    const rerun = harness.call("fetch_rows", { handle, offset: 600 });
+    const [view] = await waitingApproval(harness.approvals).then(() => harness.approvals.pending());
+    harness.approvals.answer(view?.id ?? "", "allowKind");
+    await rerun;
+    const further = await harness.call("fetch_rows", { handle, offset: 1150 });
+
+    expect(view?.subject).toBe("rerun");
+    expect(further.structuredContent?.rows).toEqual([{ i: 1151 }, { i: 1152 }]);
     expect(harness.approvals.pending()).toEqual([]);
   });
 

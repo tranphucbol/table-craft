@@ -59,10 +59,15 @@ const FAR_OFFSET = 90_000;
 const SCENARIO_MS = 180_000;
 const MORE_ROWS = /fetch_rows with handle "(\w+)"/;
 const DIGITS = `(${Array.from({ length: 10 }, (_, digit) => `SELECT ${String(digit)} AS n`).join(" UNION ALL ")})`;
+/**
+ * Its own LIMIT keeps the row limit out of the SQL, so fetch_rows reads on from the open cursor
+ * instead of running the statement again (decision 162).
+ */
+const OWN_LIMIT = " LIMIT 1000000";
 /** A million wide rows the server makes only as they are read. */
 const MYSQL_BIG_READ =
   "SELECT a.n + 10 * b.n + 100 * c.n + 1000 * d.n + 10000 * e.n + 100000 * f.n AS id, REPEAT('x', 500) AS pad " +
-  `FROM ${["a", "b", "c", "d", "e", "f"].map((alias) => `${DIGITS} ${alias}`).join(", ")}`;
+  `FROM ${["a", "b", "c", "d", "e", "f"].map((alias) => `${DIGITS} ${alias}`).join(", ")}${OWN_LIMIT}`;
 const KNOWN_CLIENTS = [{ name: "Claude Code", allowed: true }] as const;
 
 interface Dialect {
@@ -144,7 +149,7 @@ const DIALECTS: readonly Dialect[] = [
     config: () => POSTGRES_CONFIG,
     readLimit: "SELECT 'limit=' || current_setting('statement_timeout') AS server_limit",
     limitText: (seconds) => (seconds === 0 ? "limit=0" : `limit=${String(seconds)}s`),
-    bigRead: "SELECT g AS id, repeat('x', 500) AS pad FROM generate_series(1, 1000000) AS g",
+    bigRead: `SELECT g AS id, repeat('x', 500) AS pad FROM generate_series(1, 1000000) AS g${OWN_LIMIT}`,
     sleep: "SELECT pg_sleep(60)",
     testResult: "limit: statement_timeout",
     hint: STATEMENT_HINT,

@@ -124,6 +124,23 @@ describe("MCP approvals", () => {
     expect(approvals.allowedAlready(key)).toBe(true);
     expect(approvals.allowedAlready(REQUEST)).toBe(false);
     expect(approvals.allowedAlready({ ...READ_REQUEST, datasourceId: "crm" })).toBe(false);
+    expect(approvals.allowedAlready({ ...READ_REQUEST, subject: "rerun" })).toBe(false);
+  });
+
+  it("givenRerunGrant_whenSameSessionReadsOrRerunsAgain_thenOnlyRerunsAreCovered", async () => {
+    const approvals = createApprovals({ onChange: () => undefined, ...manualTimers() });
+    approvals.setWindows(true);
+    const rerun: ApprovalRequest = { ...READ_REQUEST, subject: "rerun", rerunRows: 1002 };
+
+    const outcome = approvals.request(rerun);
+    const [view] = approvals.pending();
+    approvals.answer(view?.id ?? "", "allowKind");
+    await outcome;
+
+    expect(view).toMatchObject({ subject: "rerun", rerunRows: 1002 });
+    const further: ApprovalRequest = { ...rerun, sql: "SELECT 2", rerunRows: 2002 };
+    expect(approvals.allowedAlready(further)).toBe(true);
+    expect(approvals.allowedAlready(READ_REQUEST)).toBe(false);
   });
 
   it("givenUnallowableRequest_whenAnsweredAllowKind_thenOnlyThatOneRuns", async () => {

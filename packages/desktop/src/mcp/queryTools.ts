@@ -41,15 +41,36 @@ const FORMAT: FormatOptions = {
 interface OpenResult {
   readonly datasourceId: string;
   readonly handle: string;
+  readonly sql: string;
+  readonly mode: SessionMode;
   readonly columns: readonly Column[];
+  /** Its row limit is in its SQL, so more rows mean running the statement again (decision 162). */
+  readonly reruns: boolean;
   rowCount: number;
   complete: boolean;
 }
 
+type HistoryOutcome = "success" | "error" | "cancelled";
+
+/** A statement run_query ran, and the session it ran on. */
+interface Ran {
+  readonly datasource: AgentDatasource;
+  readonly sql: string;
+  readonly mode: SessionMode;
+}
+
 export interface QueryTools {
   runQuery(caller: Caller, named: string, sql: string, reason: string | null): Promise<ToolResult>;
-  fetchRows(handle: string, offset: number, limit: number | undefined): Promise<ToolResult>;
+  fetchRows(
+    caller: Caller,
+    handle: string,
+    offset: number,
+    limit: number | undefined,
+    reason: string | null,
+  ): Promise<ToolResult>;
   closeResult(handle: string): Promise<ToolResult>;
+  /** The datasource and statement of a result still open, or null. */
+  resultOf(handle: string): { readonly datasourceId: string; readonly sql: string } | null;
   explain(caller: Caller, named: string, sql: string): Promise<ToolResult>;
   formatSql(named: string, sql: string): Promise<ToolResult>;
 }
@@ -78,6 +99,34 @@ function rowsText(
 
 function totalText(rowCount: number, complete: boolean): string {
   return complete ? ` of ${String(rowCount)}` : ` of at least ${String(rowCount)}`;
+}
+
+/** Records one agent run in the query history; the time spent waiting for the user is left out. */
+function historyRecorder(
+  context: ToolContext,
+  caller: Caller,
+  datasourceId: string,
+  sql: string,
+): (outcome: HistoryOutcome, rowCount: number | null, message: string | null, text?: string) => void {
+  const startedAt = context.now();
+  return (outcome, rowCount, message, text = sql) =>
+    context.record({
+      datasourceId,
+      sql: text,
+      startedAt,
+      durationMs: Math.max(0, context.now() - startedAt - caller.waits.ms()),
+      outcome,
+      rowCount,
+      message,
+      client: caller.clientName,
+    });
+}
+
+function recordFailure(record: ReturnType<typeof historyRecorder>, cause: unknown, text: string): void {
+  if (cause instanceof ToolFailure)
+    record(cause.outcome === "error" ? "error" : "cancelled", null, cause.message, text);
+  else if (cause instanceof EngineCallError)
+    record(cause.code === "cancelled" ? "cancelled" : "error", null, cause.message, cause.sent ?? text);
 }
 
 function planLines(nodes: readonly PlanNode[], depth: number): string[] {
@@ -118,13 +167,16 @@ export function createQueryTools(context: ToolContext): QueryTools {
     await engine.call("result.release", { handle: open.handle }).catch(() => undefined);
   }
 
-  async function keep(datasourceId: string, executed: ExecutedStatement): Promise<string> {
+  async function keep(ran: Ran, executed: ExecutedStatement): Promise<string> {
     next += 1;
     const id = `r${String(next)}`;
     results.set(id, {
-      datasourceId,
+      datasourceId: ran.datasource.id,
       handle: executed.handle,
+      sql: ran.sql,
+      mode: ran.mode,
       columns: executed.columns,
+      reruns: executed.refetch === true,
       rowCount: executed.rowCount,
       complete: executed.complete,
     });
@@ -155,7 +207,8 @@ export function createQueryTools(context: ToolContext): QueryTools {
     return verdict.approval === "read" ? "read" : "write";
   }
 
-  async function answer(datasource: AgentDatasource, executed: ExecutedStatement): Promise<ToolResult> {
+  async function answer(ran: Ran, executed: ExecutedStatement): Promise<ToolResult> {
+    const { datasource } = ran;
     const messages = (executed.messages ?? []).map((message) => `${message.level}: ${message.text}`);
     if (executed.columns.length === 0) {
       await context.engines
@@ -171,7 +224,7 @@ export function createQueryTools(context: ToolContext): QueryTools {
     }
     const rows = executed.firstWindow.rows.slice(0, rowCapOf(context, datasource.id));
     const more = !executed.complete || executed.rowCount > rows.length;
-    const handle = more ? await keep(datasource.id, executed) : null;
+    const handle = more ? await keep(ran, executed) : null;
     if (!more)
       await context.engines
         .engine(datasource.id)
@@ -194,26 +247,69 @@ export function createQueryTools(context: ToolContext): QueryTools {
     });
   }
 
+  async function readOn(engine: AgentEngine, open: OpenResult, wanted: number): Promise<void> {
+    while (!open.complete && open.rowCount < wanted) {
+      // One fetch for every row still missing: a result whose row limit is in its SQL runs again per fetch (decision 162).
+      const missing = wanted - open.rowCount;
+      const state = await engine.call("result.fetchMore", {
+        handle: open.handle,
+        all: false,
+        pageRows: Math.min(PAGE_ROWS_RANGE.max, Math.max(RESULT_PAGE_ROWS, missing)),
+        fetchAllCap: RESULT_FETCH_ALL_CAP,
+      });
+      if (state.rowCount === open.rowCount && !state.complete) break;
+      open.rowCount = state.rowCount;
+      open.complete = state.complete;
+    }
+  }
+
+  /**
+   * Rows past the held ones of a result whose row limit is in its SQL: the database reads every row
+   * up to the last one asked for again, so the user approves it like a statement, and it shows in
+   * the history and the Services tree.
+   */
+  async function rerun(
+    caller: Caller,
+    engine: AgentEngine,
+    open: OpenResult,
+    wanted: number,
+    reason: string | null,
+  ): Promise<void> {
+    const datasource = exposedDatasource(context, open.datasourceId);
+    const record = historyRecorder(context, caller, datasource.id, open.sql);
+    try {
+      await waitForApproval(context, caller, datasource, {
+        sql: open.sql,
+        kind: "read",
+        subject: "rerun",
+        database: null,
+        rerunRows: Math.min(Math.max(wanted, open.rowCount + RESULT_PAGE_ROWS), RESULT_FETCH_ALL_CAP),
+        destructive: null,
+        reason,
+        allowable: true,
+      });
+      await context.runs.track(
+        {
+          clientId: caller.sessionId,
+          clientName: caller.clientName,
+          datasourceId: datasource.id,
+          tool: "fetch_rows",
+          sql: open.sql,
+        },
+        await cancelOf(engine, open.mode),
+        () => readOn(engine, open, wanted),
+      );
+      record("success", open.rowCount, null);
+    } catch (cause) {
+      recordFailure(record, cause, open.sql);
+      throw cause;
+    }
+  }
+
   return {
     async runQuery(caller, named, sql, reason) {
       const datasource = exposedDatasource(context, named);
-      const startedAt = context.now();
-      const record = (
-        outcome: "success" | "error" | "cancelled",
-        rowCount: number | null,
-        message: string | null,
-        text = sql,
-      ): void =>
-        context.record({
-          datasourceId: datasource.id,
-          sql: text,
-          startedAt,
-          durationMs: Math.max(0, context.now() - startedAt - caller.waits.ms()),
-          outcome,
-          rowCount,
-          message,
-          client: caller.clientName,
-        });
+      const record = historyRecorder(context, caller, datasource.id, sql);
       let statement: ClassifiedStatement | null = null;
       try {
         const engine = await engineWith(context, datasource, [], ["sql", "commands"]);
@@ -242,35 +338,23 @@ export function createQueryTools(context: ToolContext): QueryTools {
         );
         const rows = executed.columns.length === 0 ? executed.rowsAffected : executed.rowCount;
         record("success", rows, null, executed.sent ?? ran);
-        return await answer(datasource, executed);
+        return await answer({ datasource, sql: ran, mode }, executed);
       } catch (cause) {
-        const text = statement?.sql ?? sql;
-        if (cause instanceof ToolFailure)
-          record(cause.outcome === "error" ? "error" : "cancelled", null, cause.message, text);
-        else if (cause instanceof EngineCallError)
-          record(cause.code === "cancelled" ? "cancelled" : "error", null, cause.message, cause.sent ?? text);
+        recordFailure(record, cause, statement?.sql ?? sql);
         throw cause;
       }
     },
-    async fetchRows(handle, offset, limit) {
+    async fetchRows(caller, handle, offset, limit, reason) {
       const open = results.get(handle);
       if (open === undefined)
         throw new ToolFailure(`No open result "${handle}"; it was closed or replaced. Run the query again.`);
       const cap = rowCapOf(context, open.datasourceId);
       const count = Math.min(limit ?? cap, cap);
       const engine = await context.engines.engine(open.datasourceId);
-      while (!open.complete && open.rowCount < offset + count) {
-        // One fetch for every row still missing: a result whose row limit is in its SQL runs again per fetch (decision 162).
-        const missing = offset + count - open.rowCount;
-        const state = await engine.call("result.fetchMore", {
-          handle: open.handle,
-          all: false,
-          pageRows: Math.min(PAGE_ROWS_RANGE.max, Math.max(RESULT_PAGE_ROWS, missing)),
-          fetchAllCap: RESULT_FETCH_ALL_CAP,
-        });
-        if (state.rowCount === open.rowCount && !state.complete) break;
-        open.rowCount = state.rowCount;
-        open.complete = state.complete;
+      const wanted = offset + count;
+      if (!open.complete && open.rowCount < wanted) {
+        if (open.reruns) await rerun(caller, engine, open, wanted, reason);
+        else await readOn(engine, open, wanted);
       }
       const window = await engine.call("result.window", { handle: open.handle, offset, limit: count });
       const total = totalText(open.rowCount, open.complete);
@@ -280,6 +364,10 @@ export function createQueryTools(context: ToolContext): QueryTools {
         rowCount: open.rowCount,
         complete: open.complete,
       });
+    },
+    resultOf(handle) {
+      const open = results.get(handle);
+      return open === undefined ? null : { datasourceId: open.datasourceId, sql: open.sql };
     },
     async closeResult(handle) {
       if (!results.has(handle)) throw new ToolFailure(`No open result "${handle}".`);

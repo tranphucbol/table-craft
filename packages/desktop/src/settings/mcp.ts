@@ -154,8 +154,12 @@ export interface McpPendingClient {
  */
 export type ApprovalKind = "read" | "write" | "ddl" | "other";
 
-/** `key`: a `get_key` call, whose `sql` is the key's text rather than a statement. */
-export type ApprovalSubject = "statement" | "key";
+/**
+ * `key`: a `get_key` call, whose `sql` is the key's text rather than a statement. `rerun`: a
+ * `fetch_rows` call that must run its statement again to reach its rows (decision 162); its grant
+ * is its own, so allowing reads never allows re-runs.
+ */
+export type ApprovalSubject = "statement" | "key" | "rerun";
 
 export interface McpApprovalView {
   readonly id: string;
@@ -167,6 +171,8 @@ export interface McpApprovalView {
   readonly subject: ApprovalSubject;
   /** The key's database number, for a `key` subject; null for a statement. */
   readonly database: number | null;
+  /** For a `rerun` subject, how many rows the statement reads again. */
+  readonly rerunRows?: number;
   /** Why the console would ask before running it, such as `DELETE without WHERE`. */
   readonly destructive: string | null;
   /** What the agent said it is for; null when it said nothing. */
