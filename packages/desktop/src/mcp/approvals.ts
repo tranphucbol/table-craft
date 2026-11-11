@@ -29,10 +29,13 @@ export interface ApprovalRequest {
   readonly kind: ApprovalKind;
   readonly subject: ApprovalSubject;
   readonly database: number | null;
+  readonly rerunRows?: number;
   readonly destructive: string | null;
   readonly reason: string | null;
   readonly allowable: boolean;
 }
+
+type Granted = Pick<ApprovalRequest, "sessionId" | "datasourceId" | "kind" | "subject" | "allowable">;
 
 export interface Approvals {
   /** Resolves once the user answers, the wait runs out, or nobody can answer. */
@@ -41,7 +44,7 @@ export interface Approvals {
   answer(id: string, answer: ApprovalAnswer): boolean;
   pending(): readonly McpApprovalView[];
   /** Whether an earlier "allow this kind" answer covers the statement. */
-  allowedAlready(request: Pick<ApprovalRequest, "sessionId" | "datasourceId" | "kind" | "allowable">): boolean;
+  allowedAlready(request: Granted): boolean;
   setWindows(open: boolean): void;
   setPaused(paused: boolean): void;
   forgetSession(sessionId: string): void;
@@ -72,8 +75,9 @@ interface Waiting {
   readonly settle: (outcome: ApprovalOutcome) => void;
 }
 
-function grantKey(sessionId: string, datasourceId: string, kind: ApprovalKind): string {
-  return JSON.stringify([sessionId, datasourceId, kind]);
+function grantKey(request: Granted): string {
+  const scope: ApprovalKind | "rerun" = request.subject === "rerun" ? "rerun" : request.kind;
+  return JSON.stringify([request.sessionId, request.datasourceId, scope]);
 }
 
 export function createApprovals(options: ApprovalsOptions): Approvals {
@@ -123,6 +127,7 @@ export function createApprovals(options: ApprovalsOptions): Approvals {
           kind: request.kind,
           subject: request.subject,
           database: request.database,
+          ...(request.rerunRows === undefined ? {} : { rerunRows: request.rerunRows }),
           destructive: request.destructive,
           reason: request.reason,
           deadline: askedAt + timeoutMs,
@@ -138,14 +143,13 @@ export function createApprovals(options: ApprovalsOptions): Approvals {
       const entry = waiting.get(id);
       if (entry === undefined) return false;
       if (answer === "allowKind" && entry.request.allowable) {
-        granted.add(grantKey(entry.request.sessionId, entry.request.datasourceId, entry.request.kind));
+        granted.add(grantKey(entry.request));
       }
       settle(id, answer === "deny" ? "denied" : answer === "handOff" ? "handedOff" : "allowed");
       return true;
     },
     pending: () => [...waiting.values()].map((entry) => entry.view),
-    allowedAlready: (request) =>
-      request.allowable && granted.has(grantKey(request.sessionId, request.datasourceId, request.kind)),
+    allowedAlready: (request) => request.allowable && granted.has(grantKey(request)),
     setWindows(open) {
       windows = open;
       if (!open) settleAll("noWindow");

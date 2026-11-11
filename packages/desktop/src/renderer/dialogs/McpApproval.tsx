@@ -51,6 +51,21 @@ function badgeTone(approval: McpApprovalView): string {
   return approval.kind === "read" ? "border-accent text-accent" : "border-warning text-warning";
 }
 
+function titleOf(approval: McpApprovalView): string {
+  if (approval.subject === "rerun") return `${approval.clientName} wants to run a query again`;
+  return `${approval.clientName} wants to ${approval.kind === "read" ? "read" : "change"} data`;
+}
+
+function scopeOf(approval: McpApprovalView): string {
+  if (approval.subject === "key") return "1 key";
+  if (approval.subject === "rerun") {
+    return approval.rerunRows === undefined
+      ? "1 statement, run again"
+      : `1 statement, run again up to row ${approval.rerunRows.toLocaleString()}`;
+  }
+  return "1 statement";
+}
+
 function Request({ approval, of }: { readonly approval: McpApprovalView; readonly of: number }) {
   const now = useClock();
   const allowKindId = useId();
@@ -70,7 +85,7 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
   return (
     <div className="flex flex-col gap-gap p-gap">
       <Dialog.Title className="font-semibold">
-        {approval.clientName} wants to {reads ? "read" : "change"} data
+        {titleOf(approval)}
         {of > 1 ? <span className="font-normal text-ink-muted"> · 1 of {String(of)}</span> : null}
       </Dialog.Title>
       <div className={FIELD_GRID_CLASS}>
@@ -89,10 +104,16 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
           >
             {keyword}
           </span>
-          <span className="text-ink-muted">
-            {KIND_LABELS[approval.kind]} · {approval.subject === "key" ? "1 key" : "1 statement"}
+          <span data-testid="mcp-approval-scope" className="text-ink-muted">
+            {KIND_LABELS[approval.kind]} · {scopeOf(approval)}
           </span>
         </FieldRow>
+        {approval.subject === "rerun" ? (
+          <p className="col-start-2 text-ink-muted">
+            The agent asked for rows past the ones TableCraft holds; the database reads every row up to the last one
+            again.
+          </p>
+        ) : null}
         {approval.subject === "key" ? (
           <FieldRow label="Key">
             <span data-testid="mcp-approval-key" className="min-w-0 font-grid wrap-anywhere select-text">
@@ -148,7 +169,8 @@ function Request({ approval, of }: { readonly approval: McpApprovalView; readonl
             checked={allowKind}
             onChange={(event) => setAllowKind(event.target.checked)}
           />
-          Allow {reads ? "reads" : keyword} on {approval.datasourceName} for the rest of this agent session
+          Allow {approval.subject === "rerun" ? "re-runs" : reads ? "reads" : keyword} on {approval.datasourceName} for
+          the rest of this agent session
         </label>
       ) : null}
       <div className="flex items-center gap-gap">

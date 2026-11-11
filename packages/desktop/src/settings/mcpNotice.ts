@@ -79,6 +79,7 @@ export function noticeFor(status: McpStatus, now: number): McpNotice | null {
 
 function approvalTitle(approval: McpApprovalView): string {
   if (approval.subject === "key") return `${approval.clientName} wants to read a key`;
+  if (approval.subject === "rerun") return `${approval.clientName} wants to run a query again`;
   if (approval.kind === "read") return `${approval.clientName} wants to read data`;
   return `${approval.clientName} wants to change data`;
 }

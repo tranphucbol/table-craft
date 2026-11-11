@@ -108,6 +108,8 @@ export type ModalRequest =
       readonly title: string;
       readonly search: (query: string) => Promise<readonly HistoryStatement[]>;
       readonly highlight: string | null | undefined;
+      /** Lays a statement out for the preview's Format toggle; absent when the datasource speaks no SQL. */
+      readonly format?: (sql: string) => Promise<string>;
       /** `Insert` into the console it was opened from, or `Open in Console`. */
       readonly restore: string;
       /** Epoch milliseconds the dialog opened at; entries from that day show only their time. */

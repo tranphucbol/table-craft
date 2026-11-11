@@ -68,6 +68,7 @@ const TOOL_ARGUMENTS = {
     handle: z.string().min(1).describe("The handle run_query returned."),
     offset: z.number().int().min(0),
     limit: z.number().int().min(1).max(MAX_ROW_LIMIT).optional(),
+    reason,
   }),
   close_result: z.strictObject({ handle: z.string().min(1) }),
   explain: z.strictObject({ datasource, sql: sql.describe("One statement to explain; it is not run.") }),
@@ -182,7 +183,7 @@ const TOOL_SPECS: Readonly<Record<ToolName, ToolSpec>> = {
   fetch_rows: {
     title: "Fetch rows",
     description:
-      "More rows of a result run_query kept open. Integers beyond ±2^53 come back as strings holding the exact value, as in run_query.",
+      "More rows of a result run_query kept open. When the rows asked for are past the ones TableCraft holds and the statement's row limit is in its SQL, the statement runs again up to the last row asked for, and that waits until the user approves it in TableCraft; the user sees reason while deciding. Integers beyond ±2^53 come back as strings holding the exact value, as in run_query.",
     readOnly: true,
   },
   close_result: { title: "Close result", description: "Releases a result run_query kept open.", readOnly: true },
@@ -339,7 +340,7 @@ export function createTools(context: ToolContext): Tools {
       }
       case "fetch_rows": {
         const parsed = TOOL_ARGUMENTS.fetch_rows.parse(args);
-        return queries.fetchRows(parsed.handle, parsed.offset, parsed.limit);
+        return queries.fetchRows(caller, parsed.handle, parsed.offset, parsed.limit, parsed.reason ?? null);
       }
       case "close_result":
         return queries.closeResult(TOOL_ARGUMENTS.close_result.parse(args).handle);
@@ -402,9 +403,15 @@ export function createTools(context: ToolContext): Tools {
   return {
     async call(name, args, caller) {
       const named = datasourceOf(args);
+      const handle = (args as { handle?: unknown } | null)?.handle;
+      // A page of a kept result shows in Services under its datasource, named by its statement.
+      const paged = name === "fetch_rows" && typeof handle === "string" ? queries.resultOf(handle) : null;
       const datasourceId =
-        named === null ? null : (context.datasources().find((ds) => ds.id === named || ds.name === named)?.id ?? null);
-      const target = targetOf(args);
+        paged?.datasourceId ??
+        (named === null
+          ? null
+          : (context.datasources().find((ds) => ds.id === named || ds.name === named)?.id ?? null));
+      const target = paged?.sql ?? targetOf(args);
       const refused = (message: string, outcome: Exclude<ToolAnswer["outcome"], "ok" | "capped">): ToolAnswer => ({
         result: failed(message),
         outcome,

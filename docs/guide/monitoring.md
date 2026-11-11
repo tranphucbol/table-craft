@@ -5,7 +5,8 @@ What you ran, what is running on the server, and what TableCraft itself did.
 ## Query history and Services
 
 Every statement you run is kept per data source in a local history. **Query History…** (`⌥⌘E`)
-searches it, and `↩` puts the chosen statement at the caret. The Services tool window (`⌘8`, closed until you open it) shows
+searches it, and `↩` puts the chosen statement at the caret. **Format** lays the preview out with
+your [formatting settings](console.md) for reading; Copy and Insert keep the statement as it ran. The Services tool window (`⌘8`, closed until you open it) shows
 each connected data source, a session per tab, and its recent executions with outcome, rows,
 duration and start time. When a plugin changes a statement before sending it, such as adding a
 time-limit hint, both show the text that reached the server. The fold button in its header is **Collapse All** while anything is

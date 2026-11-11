@@ -20,7 +20,10 @@ the request shows how the database would run it, without running it, and marks s
 full table scan or, on TiDB, estimates made without statistics; the request keeps waiting until
 you answer. A data source marked read-only stays at Read only, and one coloured
 red can be raised past Read only only on its own page in the Data Sources dialog. Answers carry at
-most `mcp.rowCap` rows, and a statement running past `mcp.statementTimeoutSeconds` is stopped,
+most `mcp.rowCap` rows. An agent pages further with `fetch_rows`; when the statement carries its
+[row limit in its SQL](data.md#result-grid), rows past the ones TableCraft holds mean running it
+again up to the last row asked for, so that page waits for you at every access level, and
+**Allow re-runs** lasts the rest of the agent's session. A statement running past `mcp.statementTimeoutSeconds` is stopped,
 by the database too where it can, even if TableCraft cannot reach it; passwords never leave
 TableCraft, and every agent statement is kept in the query history, tagged with the client's name. The app must be running for agents to reach it.
 

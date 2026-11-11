@@ -47,6 +47,12 @@ describe("MCP notice text", () => {
     expect(noticeFor(waiting([{ ...WRITE, kind: "read" }]), NOW)?.title).toBe("OpenCode wants to read data");
   });
 
+  it("givenRerunApproval_whenNoticeFor_thenSaysRunAQueryAgain", () => {
+    const rerun = { ...WRITE, kind: "read", subject: "rerun", rerunRows: 1002 } as const;
+
+    expect(noticeFor(waiting([rerun]), NOW)?.title).toBe("OpenCode wants to run a query again");
+  });
+
   it("givenKeyApproval_whenNoticeFor_thenSaysReadAKeyWithDatabase", () => {
     const key = { ...WRITE, kind: "read", subject: "key", database: 3, datasourceName: "cache" } as const;
 
