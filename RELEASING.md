@@ -7,9 +7,10 @@ users: installed apps update from the published release, and the optional plugin
 to npm. Follow these steps in order every time, so every release is built, checked and described
 the same way.
 
-Only a maintainer who can approve the `release` and `plugins` environments cuts a release. Agents
-and contributors never create or push a tag, never publish a draft, and never run
-`bun run plugins:publish` without `--dry-run`.
+Only a maintainer who can approve the `release` and `plugins` environments decides a release. An
+agent may push the tag, write the notes and publish the draft when a maintainer asks for that
+version, and stops for the maintainer at each environment approval. Contributors never create or
+push a tag or publish a draft, and nobody runs `bun run plugins:publish` without `--dry-run`.
 
 ## What a release ships
 
