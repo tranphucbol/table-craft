@@ -68,7 +68,7 @@ unset). The next run recreates and reseeds them. Never take down another checkou
   build the optional plugins, pack them and `@tablecraft-app/plugin-api` into `dist/plugin-packages/`,
   load-check every tarball through the real loader, and rehearse the npm publish (decision 109).
   Only `.github/workflows/publish-plugins.yml` publishes, when a release is published; never run
-  `plugins:publish` without `--dry-run`, and never push a tag
+  `plugins:publish` without `--dry-run`, and push a tag only when a maintainer asks for that release
 - `bun scripts/frozen-plugin.ts` - rebuild the frozen SQLite plugin in `test/support/frozen-plugins/`
   only when its API version itself changes before release, never to make a failing run pass
 
@@ -82,8 +82,8 @@ Bun is the toolchain only. Electron runs Node, so nothing under `packages/*/src`
 `plugins/*/src` may use `Bun.*` APIs, and drivers must be Node-compatible (decision 001).
 
 Nothing in the tree names the version; the root `package.json` is `0.0.0`. A git tag cuts a
-release, following `RELEASING.md`; only a maintainer tags, publishes a draft or approves the
-`release` and `plugins` environments.
+release, following `RELEASING.md`. An agent tags and publishes a release only when a maintainer
+asks for that version; only a maintainer approves the `release` and `plugins` environments.
 
 ## Verify
 
