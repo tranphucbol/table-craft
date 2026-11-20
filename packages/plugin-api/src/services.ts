@@ -75,6 +75,12 @@ export interface NamespaceReader {
   current(): Promise<readonly string[] | null>;
 }
 
+/** Discovery of databases requiring separate connections. Never changes this session's database. */
+export interface DatabaseDiscovery {
+  /** Connectable, non-template database names, unique and in display order. Authentication can still fail when opened. */
+  list(): Promise<readonly string[]>;
+}
+
 /** The `keepAlive` service (decision 054). */
 export interface KeepAlive {
   /**
@@ -166,6 +172,7 @@ export interface SessionServices {
   readonly cancel: Canceller;
   /** A new session's introspector; calls queue on the session. */
   readonly schemaTree: Introspector;
+  readonly databases?: DatabaseDiscovery;
   readonly ddl: DefinitionReader;
   /** A new session starts in `auto`. */
   readonly transactions: Transactions;
@@ -206,6 +213,7 @@ export type LanguageCapability = keyof LanguageServices;
 const SESSION_KEYS: Readonly<Record<SessionCapability, true>> = {
   cancel: true,
   schemaTree: true,
+  databases: true,
   ddl: true,
   transactions: true,
   explain: true,

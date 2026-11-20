@@ -27,6 +27,7 @@ export const CAPABILITIES = [
   "sql",
   "cancel",
   "schemaTree",
+  "databases",
   "transactions",
   "ddl",
   "explain",

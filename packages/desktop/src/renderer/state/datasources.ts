@@ -109,6 +109,7 @@ export interface DatasourcesState {
    */
   readonly engine: (id: string) => Promise<EngineClient>;
   readonly disconnect: (id: string) => Promise<void>;
+  readonly discoverDatabases: (id: string) => Promise<void>;
   readonly engineExited: (exited: EngineExited) => void;
   readonly dismissWarning: () => void;
 }
@@ -129,6 +130,7 @@ export interface DatasourcesDependencies {
    * next connect, and Settings › MCP Server explains its timeout without connecting.
    */
   readonly rememberServer: (id: string, seen: ServerSeen) => Promise<void>;
+  readonly addDatabases?: (id: string, databases: readonly string[]) => Promise<void>;
   readonly now?: () => number;
 }
 
@@ -179,6 +181,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
   const clients = new Map<string, Promise<EngineClient>>();
   /** Clients `engine` started and no connect has verified: nothing the user sees depends on them. */
   const languageOnly = new Set<string>();
+  const discoveries = new Map<string, { client: EngineClient; promise: Promise<void> }>();
   /** Disconnects in flight, which a new connect waits out so it gets a fresh engine. */
   const stopping = new Map<string, Promise<void>>();
   const detachedListeners = new Set<DetachedListener>();
@@ -245,9 +248,39 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
 
     function remember(id: string, opened: OpenedSession): void {
       const view = get().datasources.find((datasource) => datasource.id === id);
-      if (view === undefined || view.ephemeral) return;
+      if (view === undefined || (view.ephemeral && view.databaseSourceId === undefined)) return;
       const seen = serverSeenOf(opened, (dependencies.now ?? Date.now)());
       void dependencies.rememberServer(id, seen).catch(() => undefined);
+    }
+
+    function discover(id: string, client: EngineClient): Promise<void> {
+      const source = get().datasources.find((item) => item.id === id);
+      if (
+        source === undefined ||
+        source.databaseSourceId !== undefined ||
+        !capabilitiesOf(get().plugins, source.pluginId).includes("databases") ||
+        dependencies.addDatabases === undefined
+      )
+        return Promise.resolve();
+      const existing = discoveries.get(id);
+      if (existing?.client === client) return existing.promise;
+      const generation = clients.get(id);
+      const pending = Promise.resolve().then(async () => {
+        try {
+          const databases = await client.call("catalog.databases", {});
+          if (clients.get(id) !== generation || get().connections[id]?.status !== "connected") return;
+          await dependencies.addDatabases?.(id, databases);
+        } catch (cause) {
+          if (clients.get(id) === generation)
+            set({
+              warning: `Could not discover databases for ${source.name}: ${toEngineError(cause).message} Use Discover Databases to retry.`,
+            });
+        } finally {
+          if (discoveries.get(id)?.client === client) discoveries.delete(id);
+        }
+      });
+      discoveries.set(id, { client, promise: pending });
+      return pending;
     }
 
     function stop(id: string): Promise<void> {
@@ -357,6 +390,7 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
               const { serverVersion, serverBrand } = opened;
               setConnection(id, { status: "connected", error: null, serverVersion, serverBrand });
               remember(id, opened);
+              void discover(id, client);
             }
             return client;
           } catch (cause) {
@@ -388,6 +422,12 @@ export function createDatasourcesStore(dependencies: DatasourcesDependencies) {
           languageOnly.delete(id);
         });
         return starting;
+      },
+
+      async discoverDatabases(id) {
+        const sourceId = find(id).databaseSourceId ?? id;
+        const client = await get().connect(sourceId);
+        await discover(sourceId, client);
       },
 
       async disconnect(id) {
@@ -450,6 +490,10 @@ export const useDatasources = createDatasourcesStore({
   authorizeEngine,
   async disconnectEngine(id) {
     await bridge().disconnectEngine(id);
+  },
+  async addDatabases(id, databases) {
+    const result = await bridge().addDatabases(id, databases);
+    if (!result.ok) throw new Error(result.error.message);
   },
   promptSecrets: (request) => useSecretPrompt.getState().ask(request),
   async rememberServer(id, seen) {

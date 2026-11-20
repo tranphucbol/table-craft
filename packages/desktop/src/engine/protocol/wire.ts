@@ -63,6 +63,7 @@ export type Capability =
   | "sql"
   | "cancel"
   | "schemaTree"
+  | "databases"
   | "transactions"
   | "ddl"
   | "explain"

@@ -9,6 +9,7 @@ import { serviceOf } from "@table-craft/desktop/engine/services.js";
 export function catalogRoutes(connection: ConnectionContext): RoutesFor<"catalog"> {
   const { introspect, definitionOf, scriptOf } = connection;
   return {
+    "catalog.databases": () => introspect(({ session }) => serviceOf(session, "databases")!.list()),
     "catalog.namespaces": ({ refresh }) => introspect(({ cache }) => cache.namespaces(refresh)),
     "catalog.describe": ({ path, refresh }) => introspect(({ cache }) => cache.describe(path, refresh)),
     "catalog.inferredKeys": ({ path }) =>

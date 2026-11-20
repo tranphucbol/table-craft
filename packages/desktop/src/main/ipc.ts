@@ -401,6 +401,11 @@ export function registerIpc<Sender>(ipc: InvokeRegistrar<Sender>, options: IpcOp
     return null;
   });
   handle(INVOKE_CHANNELS.moveDatasources, moveRequest, (request) => service.move(request));
+  handle(
+    INVOKE_CHANNELS.addDatabases,
+    z.strictObject({ id: z.string().min(1), databases: z.array(z.string().min(1)) }),
+    ({ id, databases }) => service.addDatabases(id, databases),
+  );
   handle(INVOKE_CHANNELS.createDatasourceFolder, folderRequest, ({ path }) => service.createFolder(path));
   handle(INVOKE_CHANNELS.testDatasource, saveRequest, (request) => service.test(request));
   handle(INVOKE_CHANNELS.parseDatasourceUrl, parseUrlRequest, ({ pluginId, url }) => service.parseUrl(pluginId, url));

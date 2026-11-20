@@ -87,6 +87,7 @@ function ListNote({ children, alert = false }: { readonly children: ReactNode; r
 function Editor({ view }: { readonly view: DatasourceView }) {
   const hide = useManageShownSchemasDialog((state) => state.hide);
   const catalog = useCatalog((state) => state.catalogs[view.id] ?? EMPTY_CATALOG);
+  const datasources = useDatasources((state) => state.datasources);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<ReadonlySet<string> | null>(
     view.shownNamespaces === undefined ? null : new Set(view.shownNamespaces),
@@ -99,13 +100,23 @@ function Editor({ view }: { readonly view: DatasourceView }) {
   useEffect(() => {
     const current = useCatalog.getState().catalogs[view.id] ?? EMPTY_CATALOG;
     if (current.namespaces === null && !current.loading) void useCatalog.getState().synchronize(view.id, null);
+    void useDatasources.getState().discoverDatabases(view.id);
   }, [view.id]);
 
-  const namespaces = useMemo(
-    () => (catalog.namespaces === null ? [] : topLevelNamespaces(catalog.namespaces)),
-    [catalog.namespaces],
-  );
+  const namespaces = useMemo(() => {
+    const current = catalog.namespaces === null ? [] : topLevelNamespaces(catalog.namespaces);
+    const additional: Namespace[] = datasources
+      .filter((item) => item.databaseSourceId === view.id)
+      .flatMap((item) => {
+        const name = item.config["database"];
+        return typeof name === "string" && !current.some((namespace) => namespace.name === name)
+          ? [{ path: [name], name, kind: "database", current: false, system: false }]
+          : [];
+      });
+    return [...current, ...additional];
+  }, [catalog.namespaces, datasources, view.id]);
   const noun = namespaceNoun(namespaces);
+  const plural = noun === "databases" ? "databases" : "schemas";
   const visible = matchingNamespaces(namespaces, query);
   const visibleNames = visible.map((namespace) => namespace.name);
   const filtered = query.trim() !== "";
@@ -168,14 +179,17 @@ function Editor({ view }: { readonly view: DatasourceView }) {
         if (!noneSelected && !saving) void save();
       }}
     >
-      <DialogHeader title={`Manage Shown Schemas — ${view.name}`} dialog="Manage Shown Schemas" />
+      <DialogHeader
+        title={`Manage Shown ${plural === "databases" ? "Databases" : "Schemas"} — ${view.name}`}
+        dialog="Manage Shown Schemas"
+      />
       <div className="flex min-h-0 flex-1 flex-col gap-cell p-gap">
         <div className="flex h-row items-center gap-cell rounded border border-line bg-canvas px-cell focus-within:border-accent">
           <SearchIcon aria-hidden className="size-icon shrink-0 text-ink-muted" />
           <input
             ref={search}
             id={SEARCH_FIELD_ID}
-            aria-label="Search schemas"
+            aria-label={`Search ${plural}`}
             placeholder={`Search ${noun}`}
             autoFocus
             spellCheck={false}
@@ -191,7 +205,7 @@ function Editor({ view }: { readonly view: DatasourceView }) {
         </div>
         <div className="flex items-center gap-cell">
           <div className="flex-1">
-            <Check label="All schemas" checked={all} onChange={setAll} />
+            <Check label={`All ${plural}`} checked={all} onChange={setAll} />
           </div>
           <Button
             disabled={all || visible.length === 0}
@@ -210,12 +224,12 @@ function Editor({ view }: { readonly view: DatasourceView }) {
         </div>
         <p className="text-ink-muted">
           {all
-            ? `The tree lists every one, including ${noun} created later. Untick All schemas to pick.`
+            ? `The tree lists every one, including ${noun} created later. Untick All ${plural} to pick.`
             : `The tree lists only the ticked ${noun}; ones created later stay hidden.`}
         </p>
         <ul
           ref={list}
-          aria-label="Schemas"
+          aria-label={plural === "databases" ? "Databases" : "Schemas"}
           aria-busy={loading}
           className="min-h-0 flex-1 overflow-y-auto rounded border border-line bg-canvas py-1"
         >
@@ -256,7 +270,7 @@ function Editor({ view }: { readonly view: DatasourceView }) {
       <div className="flex shrink-0 items-center gap-gap border-t border-line p-gap">
         <span aria-live="polite" className="flex-1">
           {noneSelected ? (
-            <span className="text-danger">Pick at least one, or turn on All schemas.</span>
+            <span className="text-danger">Pick at least one, or turn on All {plural}.</span>
           ) : (
             <span data-testid="shown-schemas-count" className="text-ink-muted tabular-nums">
               {all

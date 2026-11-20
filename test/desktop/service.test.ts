@@ -147,6 +147,149 @@ describe("listPlugins", () => {
 });
 
 describe("datasource service", () => {
+  describe("discovered databases", () => {
+    it("givenDatabaseNames_whenRegisteredTwice_thenIndependentEphemeralSourcesShareOnlyStoredCredentials", async () => {
+      const { service: app, dependencies, files } = await service();
+      const source = await app.save(saving(PG_DRAFT, SECRET));
+      const first = app.addDatabases(source.id, ["table_craft", 'other "database', 'other "database']);
+      const second = app.addDatabases(source.id, ['other "database']);
+      expect(second).toEqual(first);
+      expect(first).toHaveLength(1);
+      const sibling = app.list().datasources.find((item) => item.id === first[0]);
+      expect(sibling).toMatchObject({
+        ephemeral: true,
+        databaseSourceId: source.id,
+        config: { database: 'other "database' },
+      });
+      await app.connect(first[0]!, {}, WINDOW);
+      expect(bootedConfig(dependencies)).toMatchObject({
+        id: first[0],
+        config: { database: 'other "database', password: SECRET },
+      });
+      expect(JSON.stringify(app.list())).not.toContain(SECRET);
+      expect(await files.readText(join(DIRECTORY, DATASOURCES_FILE))).not.toContain("other");
+    });
+
+    it.each(["forever", "untilRestart"] as const)(
+      "givenStoredMode_%s_whenDatabaseOpened_thenInheritsTlsTunnelAndReadOnly",
+      async (mode) => {
+        const { service: app, dependencies } = await service();
+        const source = await app.save(
+          saving(
+            {
+              ...PG_DRAFT,
+              readOnly: true,
+              config: { ...PG_DRAFT.config, sslMode: "verify-full", sslRootCert: "/ca.pem" },
+              ssh: { enabled: true, host: "bastion", port: 22, user: "ssh-user", auth: "agent", keyPath: "" },
+              secretModes: { password: mode },
+              shownNamespaces: ["table_craft"],
+              agentAccess: "ask",
+            },
+            SECRET,
+          ),
+        );
+        const [id] = app.addDatabases(source.id, ["second"]);
+        const sibling = app.list().datasources.find((item) => item.id === id);
+        expect(sibling).toMatchObject({ storedSecrets: ["password"], folder: "Docker/Main/Local PG databases" });
+        expect(sibling?.shownNamespaces).toBeUndefined();
+        expect(sibling?.agentAccess).toBeUndefined();
+        await app.connect(id!, {}, WINDOW);
+        expect(bootedConfig(dependencies)).toMatchObject({
+          readOnly: true,
+          config: { database: "second", password: SECRET, sslMode: "verify-full", sslRootCert: "/ca.pem" },
+          ssh: { host: "bastion", auth: "agent" },
+        });
+      },
+    );
+
+    it("givenDisconnectedChildren_whenSourcePluginChanges_thenRemovesStaleChildren", async () => {
+      const { service: app } = await service();
+      const source = await app.save(saving(PG_DRAFT, SECRET));
+      const [id] = app.addDatabases(source.id, ["other"]);
+      await app.save(saving({ ...REDIS_DRAFT, id: source.id }));
+      expect(app.list().datasources.map((item) => item.id)).toEqual([source.id]);
+      await expect(app.connect(id!, {}, WINDOW)).rejects.toThrow("No data source");
+    });
+
+    it.each([
+      { change: "user", draft: { ...PG_DRAFT, config: { ...PG_DRAFT.config, user: "other-user" } } },
+      { change: "read-only", draft: { ...PG_DRAFT, readOnly: true } },
+    ])("givenDiscoveredDatabase_whenSource$changeChanges_thenRebuildsChild", async ({ draft }) => {
+      const { service: app } = await service();
+      const source = await app.save(saving(PG_DRAFT, SECRET));
+      const [before] = app.addDatabases(source.id, ["other"]);
+      await app.save(saving({ ...draft, id: source.id }, SECRET));
+      expect(app.list().datasources.map((item) => item.id)).toEqual([source.id]);
+      const [after] = app.addDatabases(source.id, ["other"]);
+      expect(after).not.toBe(before);
+      expect(app.list().datasources.find((item) => item.id === after)).toMatchObject({
+        databaseSourceId: source.id,
+        readOnly: draft.readOnly ?? false,
+        config: { user: draft.config.user },
+      });
+    });
+
+    it("givenRunningChild_whenShownDatabasesChange_thenKeepsItsConnection", async () => {
+      const { service: app } = await service();
+      const source = await app.save(saving(PG_DRAFT, SECRET));
+      const [id] = app.addDatabases(source.id, ["other"]);
+      await app.connect(id!, {}, WINDOW);
+      const updated = await app.save(saving({ ...PG_DRAFT, id: source.id, shownNamespaces: ["table_craft"] }));
+      expect(updated.shownNamespaces).toEqual(["table_craft"]);
+      expect(app.list().datasources.find((item) => item.id === id)).toMatchObject({ databaseSourceId: source.id });
+      expect(app.addDatabases(source.id, ["other"])).toEqual([id]);
+    });
+
+    it("givenRunningChild_whenSourceChangedOrDeleted_thenRefusesUntilDisconnected", async () => {
+      const { service: app, dependencies } = await service();
+      const source = await app.save(saving(PG_DRAFT, SECRET));
+      const [id] = app.addDatabases(source.id, ["other"]);
+      await app.connect(id!, {}, WINDOW);
+      await expect(
+        app.save(saving({ ...PG_DRAFT, id: source.id, config: { ...PG_DRAFT.config, host: "new-host" } })),
+      ).rejects.toThrow("still connected");
+      await expect(app.delete({ ids: [source.id], folders: ["Docker/Main"] })).rejects.toThrow("still connected");
+      await expect(app.delete({ ids: [], folders: ["Docker/Main"] })).rejects.toThrow("not empty");
+      await disconnected(dependencies, app.disconnect(id!));
+      await app.delete({ ids: [source.id], folders: ["Docker/Main"] });
+      expect(app.list().datasources).toEqual([]);
+    });
+
+    it("givenDroppedDatabases_whenRefreshed_thenRemovesOnlyDisconnectedChildren", async () => {
+      const { service: app, dependencies } = await service();
+      const source = await app.save(saving(PG_DRAFT, SECRET));
+      const [live, dormant] = app.addDatabases(source.id, ["live", "dormant"]);
+      await app.connect(live!, {}, WINDOW);
+      app.addDatabases(source.id, []);
+      expect(app.list().datasources.map((item) => item.id)).toContain(live);
+      expect(app.list().datasources.map((item) => item.id)).not.toContain(dormant);
+      await disconnected(dependencies, app.disconnect(live!));
+      app.addDatabases(source.id, []);
+      expect(app.list().datasources.map((item) => item.id)).toEqual([source.id]);
+    });
+
+    it("givenPromptedSiblingPassword_whenConfirmed_thenStoresOnlyUnderOriginalSource", async () => {
+      const { service: app } = await service();
+      const source = await app.save(saving({ ...PG_DRAFT, secretModes: { password: "untilRestart" } }));
+      const [id] = app.addDatabases(source.id, ["other"]);
+      await app.connect(id!, { password: SECRET }, WINDOW);
+      await app.rememberServer(id!, seenAt(SEEN_AT));
+      expect(app.list().datasources.find((item) => item.id === source.id)?.storedSecrets).toEqual(["password"]);
+      expect(JSON.stringify(app.list())).not.toContain(SECRET);
+    });
+
+    it("givenNeverPassword_whenSiblingConnects_thenPromptsAndDoesNotFallBackToSourceDatabase", async () => {
+      const { service: app, dependencies } = await service();
+      const source = await app.save(saving({ ...PG_DRAFT, secretModes: { password: "never" }, readOnly: true }));
+      const [id] = app.addDatabases(source.id, ["other"]);
+      expect(await app.connect(id!, {}, WINDOW)).toEqual({ status: "needsSecrets", keys: ["password"] });
+      await app.connect(id!, { password: SECRET }, WINDOW);
+      expect(bootedConfig(dependencies)).toMatchObject({
+        readOnly: true,
+        config: { database: "other", password: SECRET },
+      });
+    });
+  });
   describe("outdated plugin", () => {
     /** Postgres as main lists it once the profile holds the build for plugin API 1.x. */
     function outdatedPostgres(installed: readonly PluginInfo[]): readonly PluginInfo[] {

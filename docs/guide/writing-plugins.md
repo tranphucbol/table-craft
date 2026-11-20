@@ -16,6 +16,7 @@ service.
 | `sql`              | Runs one statement and returns rows or a row count; the plugin also supplies the SQL language (splitting, classifying, completion).                                                                                     | `plugin.language`                                                         |
 | `cancel`           | Stops a running statement, and says what the stop reaches.                                                                                                                                                              | `session.services.cancel`                                                 |
 | `schemaTree`       | Lists schemas and describes tables, views, columns, keys and indexes.                                                                                                                                                   | `session.services.schemaTree`                                             |
+| `databases`        | Lists connectable databases; requires `schemaTree` and a non-secret text field named by `url.parts.database`.                                                                                                           | `session.services.databases`                                              |
 | `transactions`     | Switches between auto-commit and manual transactions, commits and rolls back.                                                                                                                                           | `session.services.transactions`                                           |
 | `ddl`              | Returns the definition of a table or view; requires `schemaTree`.                                                                                                                                                       | `session.services.ddl`                                                    |
 | `explain`          | Returns the plan of a statement without running it; requires `sql`.                                                                                                                                                     | `session.services.explain`, `language.services.explain`                   |
@@ -76,7 +77,7 @@ export default definePlugin({
   "id": "postgres",
   "name": "PostgreSQL",
   "version": "0.0.0",
-  "apiVersion": "2.2.0",
+  "apiVersion": "2.3.0",
   "entry": "index.js",
   "capabilities": [
     "sql",
@@ -181,7 +182,7 @@ registry, instead of npm:
     "version": "1.0.0",
     "type": "module",
     "main": "index.js",
-    "tableCraft": { "id": "example", "apiVersion": "2.2.0" }
+    "tableCraft": { "id": "example", "apiVersion": "2.3.0" }
   }
   ```
 

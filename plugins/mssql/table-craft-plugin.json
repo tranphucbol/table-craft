@@ -2,7 +2,7 @@
   "id": "mssql",
   "name": "SQL Server",
   "version": "0.0.0",
-  "apiVersion": "2.2.0",
+  "apiVersion": "2.3.0",
   "entry": "index.js",
   "capabilities": [
     "sql",

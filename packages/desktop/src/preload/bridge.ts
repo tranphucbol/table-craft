@@ -75,6 +75,7 @@ export const INVOKE_CHANNELS = {
   deleteDatasources: "table-craft:datasources.delete",
   moveDatasources: "table-craft:datasources.move",
   createDatasourceFolder: "table-craft:datasources.create-folder",
+  addDatabases: "table-craft:datasources.add-databases",
   testDatasource: "table-craft:datasources.test",
   parseDatasourceUrl: "table-craft:datasources.parse-url",
   datasourceUrl: "table-craft:datasources.url",
@@ -575,6 +576,8 @@ export interface ImportSummary {
 
 /** What the renderer sees of a datasource: its record, and which secrets have a stored value. */
 export interface DatasourceView extends Datasource {
+  /** Session-only database sibling; connection settings and stored credentials belong to this source. */
+  readonly databaseSourceId?: string;
   /** Secret keys with a value main can use without asking; never the values themselves. */
   readonly storedSecrets: readonly string[];
   /** From `TABLE_CRAFT_DATASOURCE` (decision 018): never written to disk, and not editable. */
@@ -783,6 +786,7 @@ export interface TableCraftBridge {
   moveDatasources(request: MoveRequest): Promise<InvokeResult<readonly (readonly [string, string])[]>>;
   /** Adds an empty folder last at its level; a path that exists already is left as it is. */
   createDatasourceFolder(path: string): Promise<InvokeResult<string>>;
+  addDatabases(id: string, databases: readonly string[]): Promise<InvokeResult<readonly string[]>>;
   /** Test Connection: a throwaway engine connects once; stored secrets are merged in main. */
   testDatasource(request: SaveDatasourceRequest): Promise<InvokeResult<ProbeResult>>;
   /** Reads a pasted connection URL with the plugin's manifest (decision 055); fails with what it expected. */

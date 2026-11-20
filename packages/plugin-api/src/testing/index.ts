@@ -1736,6 +1736,22 @@ export function runPluginContract(plugin: DatasourcePlugin, fixture: ContractFix
       });
     });
 
+    describe.runIf(plugin.capabilities.includes("databases"))("databases", () => {
+      it("givenConnection_whenDiscovering_thenUniqueNamesAndOriginalNamespaceUnchanged", async () => {
+        await withSession(plugin, fixture, async (session) => {
+          const before = await session.services.currentNamespace?.current();
+          const names = await service(session, "databases")!.list();
+          expect(names.length).toBeGreaterThan(0);
+          expect(new Set(names).size).toBe(names.length);
+          expect(names.every((name) => name.length > 0)).toBe(true);
+          if (before !== undefined && before !== null) {
+            expect(names).toContain(before[0]);
+            expect(await session.services.currentNamespace?.current()).toEqual(before);
+          }
+        });
+      });
+    });
+
     describe.runIf(plugin.capabilities.includes("schemaTree"))("schemaTree", () => {
       function catalogFixture(): NonNullable<ContractFixture["catalog"]> {
         if (fixture.catalog === undefined) {

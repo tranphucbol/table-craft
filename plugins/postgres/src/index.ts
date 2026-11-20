@@ -78,10 +78,16 @@ import { connectFailure, SSL_MODES, tlsInfoOf, tlsOptions } from "./tls.js";
 
 const PLUGIN_ID = "postgres";
 const CANCEL_REACH: CancelReach = { method: "pg_cancel_backend", reaches: "statement" };
+const DATABASES_SQL = `SELECT datname AS name FROM pg_catalog.pg_database
+WHERE datallowconn AND NOT datistemplate
+AND pg_catalog.has_database_privilege(oid, 'CONNECT')
+ORDER BY datname`;
+
 const CAPABILITIES = [
   "sql",
   "cancel",
   "schemaTree",
+  "databases",
   "transactions",
   "ddl",
   "explain",
@@ -442,6 +448,16 @@ class PostgresSession implements PluginSession<PostgresCapability> {
     this.services = {
       cancel: { cancel: () => this.#cancel(), reach: CANCEL_REACH },
       schemaTree: introspector,
+      databases: {
+        list: async () => {
+          try {
+            const result = await client.query<{ name: string }>(DATABASES_SQL);
+            return result.rows.map(({ name }) => name);
+          } catch (cause) {
+            throw new PluginError("introspectionFailed", messageOf(cause), { cause });
+          }
+        },
+      },
       ddl: introspector,
       transactions,
       explain: { explain: (sql, options) => this.#explain(sql, options) },
