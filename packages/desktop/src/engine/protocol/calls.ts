@@ -327,6 +327,7 @@ export interface EngineCalls extends KeyAdvancedCalls, StreamCalls, IndexCalls {
    * The datasource's namespaces, from the engine's cache unless `refresh`; the first call opens the
    * engine's introspection session (decision 022). Needs `schemaTree`.
    */
+  "catalog.databases": { params: Record<never, never>; result: readonly string[] };
   "catalog.namespaces": { params: { readonly refresh?: boolean }; result: readonly Namespace[] };
   /**
    * The namespaces a console can switch to, in catalog order: `catalog.namespaces` narrowed to the

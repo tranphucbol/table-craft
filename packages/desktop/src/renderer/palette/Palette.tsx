@@ -30,7 +30,7 @@ const PROVIDERS: readonly SearchProvider[] = [
   actionsProvider(registry, shortcutOf),
   tablesProvider({
     catalogs: () => useCatalog.getState().catalogs,
-    datasources: () => useDatasources.getState().datasources,
+    datasources: () => useDatasources.getState().datasources.filter((datasource) => datasource.databaseSource === undefined),
     open: (args) => {
       const open: OpenTableArgs = { datasourceId: args.datasourceId, path: args.path, relation: args.name };
       invoke(TABLE_ACTION_IDS.openTable, open);

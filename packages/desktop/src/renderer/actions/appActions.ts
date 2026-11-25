@@ -87,6 +87,7 @@ export const ACTION_IDS = {
   copyDatasourceUrl: "datasource.copyUrl",
   deleteDatasource: "datasource.delete",
   connect: "datasource.connect",
+  discoverDatabases: "datasource.discoverDatabases",
   disconnect: "datasource.disconnect",
   newFolder: "datasource.newFolder",
   moveToFolder: "datasource.moveToFolder",
@@ -610,6 +611,20 @@ export const APP_ACTIONS: readonly AnyAction[] = [
           .connect(context.datasource.view.id)
           .catch(() => undefined);
       }
+    },
+  }),
+  defineAction({
+    id: ACTION_IDS.discoverDatabases,
+    title: "Discover Databases",
+    category: "Database",
+    icon: "synchronize",
+    when: (context) => context.datasource?.capabilities.includes("databases") === true,
+    run: async (context) => {
+      if (context.datasource === null) return;
+      await useDatasources
+        .getState()
+        .discoverDatabases(context.datasource.view.id)
+        .catch(() => undefined);
     },
   }),
   defineAction({

@@ -19,6 +19,7 @@ import {
 import type { DatasourceFileContent } from "@table-craft/desktop/main/datasourceFile.js";
 import { toDatasource, type DatasourceStore } from "@table-craft/desktop/main/datasources.js";
 import type { HostRegistry } from "@table-craft/desktop/main/hosts.js";
+import { DiscoveredDatabases } from "@table-craft/desktop/main/discoveredDatabases.js";
 import type { SecretStore } from "@table-craft/desktop/main/secrets.js";
 import { SSH_SECRET_KEYS, visibleWhenHolds } from "@table-craft/desktop/preload/bridge.js";
 import type {
@@ -100,6 +101,7 @@ export interface DatasourceServiceOptions<Target> {
 
 export interface DatasourceService<Target> {
   list(): DatasourceList;
+  addDatabases(id: string, databases: readonly string[]): Promise<readonly string[]>;
   plugins(): readonly PluginInfo[];
   save(request: SaveDatasourceRequest): Promise<DatasourceView>;
   /**
@@ -265,8 +267,17 @@ export async function createDatasourceService<Target>(
   let datasources: Datasource[] = [...loaded.datasources];
   let folders: string[] = normalizeFolders(loaded.folders, loaded.datasources);
   let warning = loaded.warning;
-  /** Secrets typed at the prompt for a connection not yet known to work, by datasource. */
   const unconfirmed = new Map<string, Readonly<Record<string, string>>>();
+  const databases = new DiscoveredDatabases(
+    async (id) => {
+      unconfirmed.delete(id);
+      await hosts.stop(id);
+    },
+    async (id) => {
+      await options.consoles.deleteAll(id);
+      options.history.clear(id);
+    },
+  );
   const pluginOf = (pluginId: string) => options.plugins().find((plugin) => plugin.id === pluginId);
   const ephemeral =
     options.ephemeral === null ? null : ephemeralRecord(options.ephemeral, pluginOf(options.ephemeral.pluginId));
@@ -276,17 +287,24 @@ export async function createDatasourceService<Target>(
   }
 
   function view(datasource: Datasource, isEphemeral: boolean): DatasourceView {
+    const secretOwner = databases.entries.get(datasource.id)?.sourceId ?? datasource.id;
     const storedSecrets = Object.entries(datasource.secretModes)
-      .filter(([key, mode]) => secrets.get(datasource.id, key, mode) !== undefined)
+      .filter(([key, mode]) => secrets.get(secretOwner, key, mode) !== undefined)
       .map(([key]) => key);
     return { ...datasource, storedSecrets, ephemeral: isEphemeral };
   }
 
   function list(): DatasourceList {
     const views = datasources.map((datasource) => view(datasource, false));
+    const listed = [
+      ...(ephemeral === null ? [] : [view(ephemeral, true)]),
+      ...views,
+    ];
     return {
-      datasources: ephemeral === null ? views : [view(ephemeral, true), ...views],
-      folders,
+      datasources: listed,
+      discoveredDatabases: [...databases.entries].map(([id]) => view(find(id), true)),
+      databaseNames: [...databases.names].map(([sourceId, names]) => ({ sourceId, names })),
+      folders: normalizeFolders(folders, [...(ephemeral === null ? [] : [ephemeral]), ...datasources]),
       warning,
       encryption: secrets.encryption(),
     };
@@ -299,6 +317,12 @@ export async function createDatasourceService<Target>(
   }
 
   function refuseEphemeral(id: string, action: "moved" | "deleted"): void {
+    if (databases.entries.has(id)) {
+      throw new DatasourceError(
+        "Discovered databases belong to their source connection.",
+        "Change the original data source instead.",
+      );
+    }
     if (ephemeral?.id !== id) return;
     throw new DatasourceError(
       `This data source comes from TABLE_CRAFT_DATASOURCE and cannot be ${action}.`,
@@ -312,7 +336,60 @@ export async function createDatasourceService<Target>(
     warning = null;
   }
 
+  function databaseField(source: Datasource): string {
+    const plugin = availablePlugin(source.pluginId);
+    const key = plugin.url?.parts.database;
+    if (
+      !plugin.capabilities.includes("databases") ||
+      key === undefined ||
+      !plugin.fields.some((field) => field.key === key && field.kind === "text" && !field.secret)
+    ) {
+      throw new DatasourceError(
+        "This data source does not support database discovery.",
+        "Use a connection that lists databases.",
+      );
+    }
+    return key;
+  }
+
+  async function addDatabases(id: string, names: readonly string[]): Promise<readonly string[]> {
+    const sourceId = databases.entries.get(id)?.sourceId ?? id;
+    const source = find(sourceId);
+    const field = databaseField(source);
+    const selected = new Set(source.shownDatabases ?? []);
+    const added = await databases.synchronize(sourceId, names, selected, field, () =>
+      new DatasourceError("Invalid database name.", "Refresh the database list."),
+    );
+    changed();
+    return added;
+  }
+
+  async function discardDiscoveredDatabases(sourceId: string): Promise<void> {
+    await databases.discardSource(sourceId);
+  }
+
   function find(id: string): Datasource {
+    const target = databases.entries.get(id);
+    if (target !== undefined) {
+      const source = find(target.sourceId);
+      const {
+        shownNamespaces: _shown,
+        shownDatabases: _shownDatabases,
+        agentAccess: _access,
+        agentSchemas: _schemas,
+        origin: _origin,
+        lastServer: _server,
+        ...inherited
+      } = source;
+      return {
+        ...inherited,
+        id,
+        name: `${source.name} / ${target.database}`,
+        folder: source.folder,
+        databaseSource: { sourceId: target.sourceId, database: target.database },
+        config: { ...source.config, [target.field]: target.database },
+      };
+    }
     const found = ephemeral?.id === id ? ephemeral : datasources.find((datasource) => datasource.id === id);
     if (found === undefined) {
       throw new DatasourceError(`No data source with id "${id}".`, "It may have been deleted; pick another one.");
@@ -395,6 +472,9 @@ export async function createDatasourceService<Target>(
 
   async function save(request: SaveDatasourceRequest): Promise<DatasourceView> {
     const draft = request.datasource;
+    if (draft.id !== undefined) {
+      if (databases.entries.has(draft.id)) refuseEphemeral(draft.id, "moved");
+    }
     if (ephemeral !== null && draft.id === ephemeral.id) {
       throw new DatasourceError(
         "This data source comes from TABLE_CRAFT_DATASOURCE and is not saved.",
@@ -413,6 +493,20 @@ export async function createDatasourceService<Target>(
       plugin.network !== null,
       previous,
     );
+    const connectionChanged =
+      previous !== undefined &&
+      (previous.pluginId !== next.pluginId ||
+        JSON.stringify(previous.config) !== JSON.stringify(next.config) ||
+        JSON.stringify(previous.ssh) !== JSON.stringify(next.ssh) ||
+        JSON.stringify(previous.secretModes) !== JSON.stringify(next.secretModes) ||
+        previous.readOnly !== next.readOnly ||
+        previous.keepAliveSeconds !== next.keepAliveSeconds ||
+        previous.statementTimeoutSeconds !== next.statementTimeoutSeconds ||
+        previous.enforceTimeoutOnServer !== next.enforceTimeoutOnServer ||
+        previous.loadKeysOnDemand !== next.loadKeysOnDemand);
+    const shownChanged =
+      JSON.stringify(previous?.shownNamespaces) !== JSON.stringify(next.shownNamespaces) ||
+      JSON.stringify(previous?.shownDatabases) !== JSON.stringify(next.shownDatabases);
     checkRequired(plugin, next.config);
     checkTunnel(next.ssh);
     if (Object.values(modes).includes("forever") && !secrets.encryption().available) {
@@ -431,12 +525,15 @@ export async function createDatasourceService<Target>(
     for (const key of Object.keys(previous?.secretModes ?? {})) {
       if (modes[key] === undefined) await secrets.clear(id, key);
     }
+    if (connectionChanged) await discardDiscoveredDatabases(id);
     // A new datasource, or one given another folder in the dialog, goes last in its folder.
     datasources =
       previous !== undefined && previous.folder === next.folder
         ? datasources.map((d) => (d.id === id ? next : d))
         : [...datasources.filter((d) => d.id !== id), next];
     await write();
+    if (connectionChanged) databases.names.delete(id);
+    else if (shownChanged && databases.names.has(id)) await addDatabases(id, databases.names.get(id) ?? []);
     changed();
     return view(next, false);
   }
@@ -509,6 +606,8 @@ export async function createDatasourceService<Target>(
     }
     for (const id of request.ids) {
       unconfirmed.delete(id);
+      await discardDiscoveredDatabases(id);
+      databases.names.delete(id);
       await hosts.stop(id);
       await secrets.clearAll(id);
     }
@@ -639,6 +738,20 @@ export async function createDatasourceService<Target>(
     datasource: Datasource,
     typed: Readonly<Record<string, string>>,
   ): Promise<Credentials | Extract<ConnectResult, { status: "failed" }>> {
+    const target = databases.entries.get(datasource.id);
+    if (target !== undefined) {
+      const source = find(target.sourceId);
+      const resolved = await credentialsOf(source, typed);
+      if (resolved.status === "failed") return resolved;
+      return {
+        ...resolved,
+        config: {
+          ...resolved.config,
+          id: datasource.id,
+          config: { ...(resolved.config.config as Record<string, unknown>), [databaseField(source)]: target.database },
+        },
+      };
+    }
     const outdated = pluginOf(datasource.pluginId);
     if (outdated?.needs === "pluginUpdate" && options.updateOutdated !== undefined) {
       try {
@@ -734,14 +847,15 @@ export async function createDatasourceService<Target>(
   async function keepConfirmed(datasourceId: string): Promise<void> {
     const typed = unconfirmed.get(datasourceId);
     unconfirmed.delete(datasourceId);
-    const datasource = datasources.find((candidate) => candidate.id === datasourceId);
+    const ownerId = databases.entries.get(datasourceId)?.sourceId ?? datasourceId;
+    const datasource = datasources.find((candidate) => candidate.id === ownerId);
     if (typed === undefined || datasource === undefined) return;
     let kept = false;
     for (const [key, value] of Object.entries(typed)) {
       const mode = datasource.secretModes[key] ?? "never";
       if (mode === "never") continue;
       try {
-        await secrets.set(datasourceId, key, mode, value);
+        await secrets.set(ownerId, key, mode, value);
         kept = true;
       } catch {
         // The connection works without it; the prompt simply comes back next time.
@@ -752,6 +866,7 @@ export async function createDatasourceService<Target>(
 
   async function disconnect(datasourceId: string): Promise<void> {
     unconfirmed.delete(datasourceId);
+    await databases.disconnectSource(datasourceId);
     await hosts.stop(datasourceId);
   }
 
@@ -812,6 +927,7 @@ export async function createDatasourceService<Target>(
 
   return {
     list,
+    addDatabases,
     plugins: () => options.plugins(),
     save,
     importMany,

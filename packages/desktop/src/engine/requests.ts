@@ -387,6 +387,7 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
   z.strictObject({ id: requestId, type: z.literal("script.answer"), taskId, answer: z.enum(ERROR_ANSWERS) }),
   z.strictObject({ id: requestId, type: z.literal("script.cancel"), taskId }),
   z.strictObject({ id: requestId, type: z.literal("script.list") }),
+  z.strictObject({ id: requestId, type: z.literal("catalog.databases") }),
   z.strictObject({ id: requestId, type: z.literal("catalog.namespaces"), refresh: z.boolean().optional() }),
   z.strictObject({ id: requestId, type: z.literal("namespace.targets"), refresh: z.boolean().optional() }),
   z.strictObject({ id: requestId, type: z.literal("namespace.switchStatement"), path: namespacePath }),

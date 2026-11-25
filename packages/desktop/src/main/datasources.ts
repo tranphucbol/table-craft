@@ -230,6 +230,7 @@ export function toDatasource(
     ...(draft.origin === undefined ? {} : { origin: { app: draft.origin.app, id: draft.origin.id } }),
     ...(ssh === undefined ? {} : { ssh: { ...ssh, host: ssh.host.trim(), user: ssh.user.trim() } }),
     ...(draft.shownNamespaces === undefined ? {} : { shownNamespaces: [...draft.shownNamespaces] }),
+    ...(draft.shownDatabases === undefined ? {} : { shownDatabases: [...draft.shownDatabases] }),
     ...(draft.shownTopics === undefined ? {} : { shownTopics: [...draft.shownTopics] }),
     ...(draft.shownIndices === undefined ? {} : { shownIndices: [...draft.shownIndices] }),
     ...(draft.agentAccess === undefined || draft.agentAccess === "off" ? {} : { agentAccess: draft.agentAccess }),

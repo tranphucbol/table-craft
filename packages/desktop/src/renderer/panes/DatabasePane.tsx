@@ -158,6 +158,7 @@ const DATASOURCE_MENU = [
   OBJECT_ACTION_IDS.newDatabase,
   KEY_ACTION_IDS.goTo,
   ACTION_IDS.manageShownSchemas,
+  ACTION_IDS.discoverDatabases,
   TOPIC_ACTION_IDS.manageShown,
   INDEX_ACTION_IDS.manageShown,
   null,
@@ -680,6 +681,7 @@ export function DatabasePane() {
     () =>
       explorerRows({
         tree,
+        discoveredDatabases: datasources,
         catalogs,
         expanded,
         collapsedFolders,
@@ -696,7 +698,7 @@ export function DatabasePane() {
         indices,
         browsesIndices: (datasource) => capabilitiesOf(plugins, datasource.pluginId).includes("searchIndices"),
       }),
-    [tree, catalogs, expanded, collapsedFolders, showSystem, plugins, keyspaces, showEmptyDatabases, streams, indices],
+    [tree, datasources, catalogs, expanded, collapsedFolders, showSystem, plugins, keyspaces, showEmptyDatabases, streams, indices],
   );
   const matches = useMemo(
     () =>
@@ -973,8 +975,6 @@ export function DatabasePane() {
     } else return;
     event.preventDefault();
   }
-
-  const noMatch = query !== null && matches.length === 0;
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -996,10 +996,10 @@ export function DatabasePane() {
             <div
               role="status"
               aria-label="Speed search"
-              data-state={noMatch ? "noMatch" : "match"}
+              data-state={query !== null && matches.length === 0 ? "noMatch" : "match"}
               className={cn(
                 "absolute top-1 right-gap z-10 max-w-[80%] truncate rounded-tooltip border bg-raised px-cell leading-(--spacing-row) shadow-popover",
-                noMatch ? "border-danger text-danger" : "border-line text-ink",
+                query !== null && matches.length === 0 ? "border-danger text-danger" : "border-line text-ink",
               )}
             >
               {query}

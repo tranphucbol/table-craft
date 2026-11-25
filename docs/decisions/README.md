@@ -169,3 +169,4 @@ started, not when it is merged.
 | 174 | [Search indices are a capability with their own tree](174-search-indices-are-a-capability-with-their-own-tree.md)                                                      |
 | 175 | [Search pages past the first come from a point in time](175-search-pages-past-the-first-come-from-a-point-in-time.md)                                                  |
 | 176 | [The guide is written as tasks](176-the-guide-is-written-as-tasks.md)                                                                                                  |
+| 177 | [Discovered databases are selected, session-only siblings](177-discovered-databases-are-selected-session-only-siblings.md)                                                |

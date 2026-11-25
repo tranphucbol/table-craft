@@ -17,9 +17,10 @@ Typing in the tree starts speed search, `F1` shows Quick Documentation for the s
 
 ### Choose the schemas the tree shows
 
-On a server with many databases, **Manage Shown Schemas…** on a data source picks which databases or
-schemas the tree lists, as DataGrip does. The data source then shows how many of them it lists, such
-as `3 of 40`. Ones created later stay hidden until you pick them, unless **All schemas** is on.
+On a server with many databases, **Manage Shown Schemas…** lists the connectable databases and
+schemas. Pick databases to add them under the same data source; they use its credentials and are
+not saved as separate connections. Newly created databases stay hidden until picked. Schema
+visibility has its own **All schemas** choice, so future databases stay hidden by default.
 Kafka and Elasticsearch data sources have **Manage Shown Topics…** and **Manage Shown Indices…**
 instead.
 

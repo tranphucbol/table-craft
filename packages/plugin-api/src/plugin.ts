@@ -27,6 +27,7 @@ export const CAPABILITIES = [
   "sql",
   "cancel",
   "schemaTree",
+  "databases",
   "transactions",
   "ddl",
   "explain",
@@ -57,6 +58,7 @@ export const CAPABILITIES = [
   "consumerGroups",
   "schemaRegistry",
   "searchIndices",
+  "databases",
 ] as const;
 
 export type Capability = (typeof CAPABILITIES)[number];

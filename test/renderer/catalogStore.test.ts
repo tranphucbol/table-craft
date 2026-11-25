@@ -77,6 +77,8 @@ function wired() {
   datasources.getState().setPlugins([POSTGRES_PLUGIN]);
   datasources.getState().applyList({
     datasources: [PG_VIEW],
+    discoveredDatabases: [],
+    databaseNames: [],
     warning: null,
     encryption: { available: true, reason: null },
     folders: [],

@@ -4,6 +4,7 @@ import type { DatasourceView } from "@table-craft/desktop/preload/bridge.js";
 import type { EngineError } from "@table-craft/desktop/engine/protocol.js";
 import {
   setShownIndices,
+  setShownNamespacesAndDatabases,
   setShownNamespaces,
   setShownTopics,
 } from "@table-craft/desktop/renderer/actions/datasourceCommands.js";
@@ -27,7 +28,7 @@ import {
 import { EMPTY_STREAMS } from "@table-craft/desktop/renderer/model/streamTree.js";
 import { Highlighted } from "@table-craft/desktop/renderer/panes/explorerLabels.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
-import { useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
+import { capabilitiesOf, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
 import { useIndices } from "@table-craft/desktop/renderer/state/indices.js";
 import { useManageShownSchemasDialog } from "@table-craft/desktop/renderer/state/manageShownSchemasDialog.js";
 import { useStreams } from "@table-craft/desktop/renderer/state/streams.js";
@@ -321,11 +322,21 @@ function Editor({ list: spec }: { readonly list: ShownList }) {
 
 function SchemasEditor({ view }: { readonly view: DatasourceView }) {
   const catalog = useCatalog((state) => state.catalogs[view.id] ?? EMPTY_CATALOG);
+  const hasDatabaseDiscovery = useDatasources((state) =>
+    capabilitiesOf(state.plugins, view.pluginId).includes("databases"),
+  );
+  const databaseNames = useDatasources(
+    (state) => state.databaseNames.find((item) => item.sourceId === view.id)?.names ?? [],
+  );
 
   useEffect(() => {
     const current = useCatalog.getState().catalogs[view.id] ?? EMPTY_CATALOG;
     if (current.namespaces === null && !current.loading) void useCatalog.getState().synchronize(view.id, null);
   }, [view.id]);
+
+  useEffect(() => {
+    if (hasDatabaseDiscovery) void useDatasources.getState().discoverDatabases(view.id);
+  }, [hasDatabaseDiscovery, view.id]);
 
   const namespaces = useMemo(
     () => (catalog.namespaces === null ? [] : topLevelNamespaces(catalog.namespaces)),
@@ -333,27 +344,44 @@ function SchemasEditor({ view }: { readonly view: DatasourceView }) {
   );
   const items = useMemo(
     () =>
-      namespaces.map((namespace): ShownItem => ({
-        name: namespace.name,
-        glyph: namespace.kind === "database" ? "database" : "schema",
-        badges: [...(namespace.current ? ["current"] : []), ...(namespace.system ? ["system"] : [])],
-      })),
-    [namespaces],
+      [
+        ...namespaces.map((namespace): ShownItem => ({
+          name: namespace.name,
+          glyph: namespace.kind === "database" ? "database" : "schema",
+          badges: [...(namespace.current ? ["current"] : []), ...(namespace.system ? ["system"] : [])],
+        })),
+        ...databaseNames
+          .filter((name) => !namespaces.some((namespace) => namespace.name === name))
+          .map((name): ShownItem => ({ name, glyph: "database", badges: [] })),
+      ],
+    [databaseNames, namespaces],
   );
+  const noun = hasDatabaseDiscovery ? "databases and schemas" : namespaceNoun(namespaces);
+  const allLabel = hasDatabaseDiscovery ? "All databases and schemas" : "All schemas";
+  const initial = hasDatabaseDiscovery
+    ? [...(view.shownNamespaces ?? namespaces.map((namespace) => namespace.name)), ...(view.shownDatabases ?? [])]
+    : view.shownNamespaces;
+  async function save(names: readonly string[] | undefined): Promise<boolean> {
+    if (!hasDatabaseDiscovery) return setShownNamespaces(view, names);
+    const databaseSet = new Set(databaseNames);
+    const shownSchemas = names?.filter((name) => !databaseSet.has(name));
+    const shownDatabases = names === undefined ? databaseNames : names.filter((name) => databaseSet.has(name));
+    return setShownNamespacesAndDatabases(view, shownSchemas, shownDatabases);
+  }
   return (
     <Editor
       list={{
         title: `Manage Shown Schemas — ${view.name}`,
         dialog: "Manage Shown Schemas",
-        noun: namespaceNoun(namespaces),
-        allLabel: "All schemas",
-        searchLabel: "Search schemas",
-        listLabel: "Schemas",
+        noun,
+        allLabel,
+        searchLabel: hasDatabaseDiscovery ? "Search databases and schemas" : "Search schemas",
+        listLabel: hasDatabaseDiscovery ? "Databases and schemas" : "Schemas",
         items,
         loading: catalog.namespaces === null && catalog.error === null,
         error: catalog.error,
-        initial: view.shownNamespaces,
-        save: (names) => setShownNamespaces(view, names),
+        initial,
+        save,
       }}
     />
   );

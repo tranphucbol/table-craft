@@ -191,6 +191,10 @@ export function createCatalogStore(dependencies: CatalogDependencies) {
 
       async expandNamespace(id, namespace) {
         expand([namespaceKey(id, namespace.path)]);
+        if (namespace.kind === "database" && catalogOf(id).namespaces === null) {
+          await listNamespaces(id, false);
+          return;
+        }
         if (namespace.kind !== "schema" || catalogOf(id).namespaceStates[pathKey(namespace.path)] !== undefined) return;
         await describe(id, namespace.path, false);
       },

@@ -56,6 +56,7 @@ const bridge: TableCraftBridge = {
   saveDatasource: (request) => invoke(INVOKE_CHANNELS.saveDatasource, request),
   deleteDatasources: (request) => invoke(INVOKE_CHANNELS.deleteDatasources, request),
   moveDatasources: (request) => invoke(INVOKE_CHANNELS.moveDatasources, request),
+  addDatabases: (id, databases) => invoke(INVOKE_CHANNELS.addDatabases, { id, databases }),
   createDatasourceFolder: (path) => invoke(INVOKE_CHANNELS.createDatasourceFolder, { path }),
   testDatasource: (request) => invoke(INVOKE_CHANNELS.testDatasource, request),
   parseDatasourceUrl: (pluginId, url) => invoke(INVOKE_CHANNELS.parseDatasourceUrl, { pluginId, url }),

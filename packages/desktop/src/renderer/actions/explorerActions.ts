@@ -41,7 +41,7 @@ export function synchronizeTarget(context: ActionContext): readonly string[] | n
   if (id === undefined) return null;
   const { selection } = context;
   if (selection?.kind === "catalog" && selection.id === id) return selection.path;
-  if (selection?.kind === "datasource" && selection.id === id && context.focus === "database") return null;
+  if (selection?.kind === "datasource" && selection.id === id) return null;
   const current = useCatalog.getState().catalogs[id]?.namespaces?.find((namespace) => namespace.current);
   return current?.path ?? null;
 }
@@ -147,7 +147,12 @@ export const EXPLORER_ACTIONS: readonly AnyAction[] = [
         await useKeys.getState().synchronize(context.datasource.view.id);
         return;
       }
-      await useCatalog.getState().synchronize(context.datasource.view.id, synchronizeTarget(context));
+      const datasourceId = context.datasource.view.id;
+      const target = synchronizeTarget(context);
+      await useCatalog.getState().synchronize(datasourceId, target);
+      if (target === null && context.datasource.capabilities.includes("databases")) {
+        await useDatasources.getState().discoverDatabases(datasourceId);
+      }
     },
   }),
   defineAction({

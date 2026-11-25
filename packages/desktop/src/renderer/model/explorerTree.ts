@@ -187,6 +187,7 @@ export interface ExplorerRow {
 
 export interface ExplorerInput {
   readonly tree: readonly TreeNode[];
+  readonly discoveredDatabases?: readonly DatasourceView[];
   readonly catalogs: Readonly<Record<string, DatasourceCatalog>>;
   /** Expanded datasource and catalog node keys; everything below a datasource starts collapsed. */
   readonly expanded: ReadonlySet<string>;
@@ -597,6 +598,32 @@ function datasourceRows(builder: Builder, node: DatasourceNode, depth: number): 
       "",
       false,
     );
+  }
+  for (const child of builder.input.discoveredDatabases ?? []) {
+    if (child.databaseSource?.sourceId !== datasource.id) continue;
+    const database = child.config["database"];
+    if (typeof database !== "string") continue;
+    if (datasource.shownNamespaces !== undefined && !datasource.shownNamespaces.includes(database)) continue;
+    const childCatalog = builder.input.catalogs[child.id] ?? EMPTY_CATALOG;
+    if (childCatalog.namespaces !== null) {
+      namespaceRows(builder, child.id, childCatalog, childCatalog.namespaces, null, depth + 1);
+    } else {
+      const namespace: Namespace = {
+        path: [database],
+        name: database,
+        kind: "database",
+        system: false,
+        current: false,
+      };
+      push(
+        builder,
+        { kind: "namespace", datasourceId: child.id, path: namespace.path, namespace, state: null },
+        depth + 1,
+        namespaceKey(child.id, namespace.path),
+        database,
+        true,
+      );
+    }
   }
 }
 

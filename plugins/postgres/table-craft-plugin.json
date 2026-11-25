@@ -21,7 +21,8 @@
     "routineCall",
     "serverTimeout",
     "savepoints",
-    "rowLimit"
+    "rowLimit",
+    "databases"
   ],
   "highlight": "postgresql",
   "brands": [{ "id": "postgresql", "name": "PostgreSQL" }],

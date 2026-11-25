@@ -229,6 +229,7 @@ export {
 export {
   type BulkInserter,
   type Canceller,
+  type DatabaseDiscovery,
   type ExplainCheck,
   type Explainer,
   FLAG_CAPABILITIES,

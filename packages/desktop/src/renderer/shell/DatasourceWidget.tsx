@@ -87,7 +87,9 @@ export function DatasourceWidget() {
   const datasourceId = useActiveDatasourceId();
   const active = useDatasources((state) => datasourceById(state, datasourceId));
   const status = useDatasources((state) => connectionOf(state, datasourceId ?? "").status);
-  const datasources = useDatasources((state) => state.datasources);
+  const datasources = useDatasources((state) =>
+    state.datasources.filter((datasource) => datasource.databaseSource === undefined),
+  );
   const close = () => setOpen(false);
   return (
     <Primitive.Root open={open} onOpenChange={setOpen}>

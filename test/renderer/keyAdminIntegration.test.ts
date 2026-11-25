@@ -48,6 +48,8 @@ function client(call: (method: string, params: unknown) => Promise<unknown>): En
 function list(): DatasourceList {
   return {
     datasources: [view({ id: "kv", name: "kv", pluginId: "redis" })],
+    discoveredDatabases: [],
+    databaseNames: [],
     warning: null,
     encryption: { available: true, reason: null },
     folders: [],

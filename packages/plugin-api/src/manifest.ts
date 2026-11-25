@@ -285,6 +285,17 @@ export const pluginManifestSchema = z
         path: ["url"],
       }),
   })
+  .refine(
+    (manifest) => {
+      if (!manifest.capabilities.includes("databases")) return true;
+      const key = manifest.connection.url?.parts.database;
+      return manifest.connection.fields.some((field) => field.key === key && field.kind === "text" && !field.secret);
+    },
+    {
+      message: "databases requires a non-secret text field named by connection.url.parts.database",
+      path: ["connection"],
+    },
+  )
   // A console speaks one language: SQL statements or a store's commands (decision 112).
   .refine((manifest) => !(manifest.capabilities.includes("commands") && manifest.capabilities.includes("sql")), {
     message: "the commands and sql capabilities exclude each other",

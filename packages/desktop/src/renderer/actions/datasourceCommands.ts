@@ -173,6 +173,34 @@ export async function setShownNamespaces(
   return saveShown(view, "shownNamespaces", shownNamespaces, "Could not save the shown schemas");
 }
 
+/** Saves which discovered databases the Database pane lists; absent keeps new databases hidden. */
+export async function setShownDatabases(
+  view: DatasourceView,
+  shownDatabases: readonly string[] | undefined,
+): Promise<boolean> {
+  return saveShown(view, "shownDatabases", shownDatabases, "Could not save the shown databases");
+}
+
+export async function setShownNamespacesAndDatabases(
+  view: DatasourceView,
+  shownNamespaces: readonly string[] | undefined,
+  shownDatabases: readonly string[] | undefined,
+): Promise<boolean> {
+  const { storedSecrets: _stored, ephemeral: _ephemeral, databaseSource: _source, ...datasource } = view;
+  const saved = await settle(
+    "Could not save the shown databases and schemas",
+    bridge().saveDatasource({
+      datasource: {
+        ...datasource,
+        ...(shownNamespaces === undefined ? {} : { shownNamespaces }),
+        ...(shownDatabases === undefined ? {} : { shownDatabases }),
+      },
+      secrets: {},
+    }),
+  );
+  return saved !== null;
+}
+
 /** Saves which topics a stream datasource's tree lists, as `setShownNamespaces` does namespaces. */
 export async function setShownTopics(
   view: DatasourceView,
@@ -191,7 +219,7 @@ export async function setShownIndices(
 
 async function saveShown(
   view: DatasourceView,
-  field: "shownNamespaces" | "shownTopics" | "shownIndices",
+  field: "shownNamespaces" | "shownDatabases" | "shownTopics" | "shownIndices",
   names: readonly string[] | undefined,
   failure: string,
 ): Promise<boolean> {

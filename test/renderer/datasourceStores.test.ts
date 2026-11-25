@@ -36,7 +36,14 @@ const SEEN_AT = 1_800_000_000_000;
 const REFUSED: EngineError = { code: "connectionFailed", message: "password authentication failed", hint: "Check it." };
 
 function list(datasources: readonly DatasourceView[]): DatasourceList {
-  return { datasources, folders: [], warning: null, encryption: { available: true, reason: null } };
+  return {
+    datasources,
+    discoveredDatabases: [],
+    databaseNames: [],
+    folders: [],
+    warning: null,
+    encryption: { available: true, reason: null },
+  };
 }
 
 interface FakeClient extends EngineClient {

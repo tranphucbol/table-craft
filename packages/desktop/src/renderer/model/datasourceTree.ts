@@ -63,6 +63,7 @@ export function buildTree(
   const root = folder("", "");
   for (const path of folders) ensure(root, path);
   for (const datasource of datasources) {
+    if (datasource.databaseSource !== undefined) continue;
     (datasource.folder === null ? root : ensure(root, datasource.folder)).datasources.push(datasource);
   }
   return freeze(root);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   datasourceKey,
+  explorerRows,
   namespaceKey,
   objectGroupKey,
   pathKey,
@@ -29,6 +30,26 @@ function row(rows: readonly ExplorerRow[], label: string): ExplorerRow | undefin
 }
 
 describe("explorer tree", () => {
+  it("shows selected PostgreSQL databases beneath one datasource", () => {
+    const sibling = view({
+      id: "other",
+      name: "pg / other",
+      databaseSource: { sourceId: "pg", database: "other" },
+      config: { database: "other" },
+    });
+    const source = view({ id: "pg", name: "pg", shownNamespaces: ["other"] });
+    const rows = explorerRows({
+      tree: buildTree([source, sibling]),
+      discoveredDatabases: [source, sibling],
+      catalogs: { pg: LOADED_PG },
+      expanded: expanded(),
+      collapsedFolders: new Set(),
+      showSystem: false,
+      canExpand: () => true,
+    });
+    expect(outline(rows)).toEqual(["0 pg", "1 other"]);
+    expect(rows[1]?.node).toMatchObject({ kind: "namespace", datasourceId: "other", path: ["other"] });
+  });
   it("givenSystemSchemasHidden_whenTreeBuilt_thenSystemNamespacesAreAbsent", () => {
     const hidden = outline(rowsOf({ expanded: expanded(DATABASE_KEY) }));
     const shown = outline(rowsOf({ expanded: expanded(DATABASE_KEY), showSystem: true }));
