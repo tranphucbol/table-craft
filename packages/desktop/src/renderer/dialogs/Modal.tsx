@@ -11,6 +11,8 @@ import { ImportData } from "@table-craft/desktop/renderer/dialogs/ImportData.js"
 import { ObjectChange } from "@table-craft/desktop/renderer/dialogs/ObjectChange.js";
 import { OpenClosedConsole } from "@table-craft/desktop/renderer/dialogs/OpenClosedConsole.js";
 import { Pick } from "@table-craft/desktop/renderer/dialogs/Pick.js";
+import { MultiPick } from "@table-craft/desktop/renderer/dialogs/MultiPick.js";
+import { CopyProgress } from "@table-craft/desktop/renderer/dialogs/CopyProgress.js";
 import { ParametersDialog } from "@table-craft/desktop/renderer/dialogs/ParametersDialog.js";
 import { QueryHistory } from "@table-craft/desktop/renderer/dialogs/QueryHistory.js";
 import { SqlGenerator } from "@table-craft/desktop/renderer/dialogs/SqlGenerator.js";
@@ -28,6 +30,7 @@ const MODAL_WIDTHS: Readonly<Record<ModalRequest["kind"], string>> = {
   history: "w-picker",
   closedConsoles: "w-picker",
   pick: "w-picker",
+  multiPick: "w-picker",
   parameters: "w-generator",
   export: "w-generator",
   import: "w-dialog",
@@ -42,6 +45,7 @@ type PickerKind =
   | "history"
   | "closedConsoles"
   | "pick"
+  | "multiPick"
   | "parameters"
   | "export"
   | "import"
@@ -177,46 +181,52 @@ function Body({ request }: { readonly request: Exclude<ModalRequest, { kind: Pic
 /** Confirmations, choices, one-line prompts and notices; actions ask through `useModal`. */
 export function Modal() {
   const pending = useModal((state) => state.pending);
+  const copyProgress = useModal((state) => state.copyProgress);
   return (
-    <Dialog.Root
-      open={pending !== null}
-      onOpenChange={(open) => {
-        if (!open) useModal.getState().answer(null);
-      }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className={OVERLAY_CLASS} />
-        <Dialog.Content
-          aria-describedby={undefined}
-          className={cn(CONTENT_CLASS, MODAL_WIDTHS[pending?.request.kind ?? "confirm"], "max-w-[95vw]")}
-        >
-          {pending === null ? null : pending.request.kind === "generator" ? (
-            <SqlGenerator request={pending.request} />
-          ) : pending.request.kind === "history" ? (
-            <QueryHistory request={pending.request} />
-          ) : pending.request.kind === "closedConsoles" ? (
-            <OpenClosedConsole request={pending.request} />
-          ) : pending.request.kind === "pick" ? (
-            <Pick request={pending.request} />
-          ) : pending.request.kind === "parameters" ? (
-            <ParametersDialog request={pending.request} />
-          ) : pending.request.kind === "export" ? (
-            <ExportData request={pending.request} />
-          ) : pending.request.kind === "import" ? (
-            <ImportData request={pending.request} />
-          ) : pending.request.kind === "tableDesign" ? (
-            <TableDesigner request={pending.request} />
-          ) : pending.request.kind === "objectChange" ? (
-            <ObjectChange request={pending.request} />
-          ) : pending.request.kind === "routine" ? (
-            <ExecuteRoutine request={pending.request} />
-          ) : pending.request.kind === "relationship" ? (
-            <RelationshipDialog request={pending.request} />
-          ) : (
-            <Body request={pending.request} />
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <>
+      <Dialog.Root
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (!open) useModal.getState().answer(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className={OVERLAY_CLASS} />
+          <Dialog.Content
+            aria-describedby={undefined}
+            className={cn(CONTENT_CLASS, MODAL_WIDTHS[pending?.request.kind ?? "confirm"], "max-w-[95vw]")}
+          >
+            {pending === null ? null : pending.request.kind === "generator" ? (
+              <SqlGenerator request={pending.request} />
+            ) : pending.request.kind === "history" ? (
+              <QueryHistory request={pending.request} />
+            ) : pending.request.kind === "closedConsoles" ? (
+              <OpenClosedConsole request={pending.request} />
+            ) : pending.request.kind === "pick" ? (
+              <Pick request={pending.request} />
+            ) : pending.request.kind === "multiPick" ? (
+              <MultiPick request={pending.request} />
+            ) : pending.request.kind === "parameters" ? (
+              <ParametersDialog request={pending.request} />
+            ) : pending.request.kind === "export" ? (
+              <ExportData request={pending.request} />
+            ) : pending.request.kind === "import" ? (
+              <ImportData request={pending.request} />
+            ) : pending.request.kind === "tableDesign" ? (
+              <TableDesigner request={pending.request} />
+            ) : pending.request.kind === "objectChange" ? (
+              <ObjectChange request={pending.request} />
+            ) : pending.request.kind === "routine" ? (
+              <ExecuteRoutine request={pending.request} />
+            ) : pending.request.kind === "relationship" ? (
+              <RelationshipDialog request={pending.request} />
+            ) : (
+              <Body request={pending.request} />
+            )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      <CopyProgress progress={copyProgress} />
+    </>
   );
 }

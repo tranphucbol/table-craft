@@ -42,6 +42,10 @@ Apart from the databases you connect to, TableCraft talks only to GitHub, to
 [download plugins](plugins.md#databases-in-the-box-and-on-demand). It sends nothing about you to
 either.
 
+PostgreSQL and MySQL copies stream rows between the two local TableCraft database connections.
+Verification reads and hashes rows locally. Neither operation sends database content to GitHub,
+npm, or another cloud or third-party service.
+
 ### Check for updates only when you ask
 
 Turn off **Check for updates automatically** in **Settings → Advanced**. TableCraft then asks only

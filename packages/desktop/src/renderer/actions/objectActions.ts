@@ -17,13 +17,30 @@ import { emptyDesign, scriptText } from "@table-craft/desktop/renderer/model/tab
 import { pathKey, relationKey, routineKey, sequenceKey } from "@table-craft/desktop/renderer/model/explorerTree.js";
 import { useCatalog } from "@table-craft/desktop/renderer/state/catalog.js";
 import { capabilitiesOf, datasourceById, useDatasources } from "@table-craft/desktop/renderer/state/datasources.js";
-import { OBJECT_CHOICES, parseObjectAnswer, useModal } from "@table-craft/desktop/renderer/state/modal.js";
+import {
+  OBJECT_CHOICES,
+  parseMultiPickAnswer,
+  parseObjectAnswer,
+  useModal,
+} from "@table-craft/desktop/renderer/state/modal.js";
 import { featuresOf } from "@table-craft/desktop/renderer/state/objects.js";
 import { toError } from "@table-craft/desktop/renderer/state/resultWindows.js";
 import { useTables } from "@table-craft/desktop/renderer/state/tables.js";
 import { useTabs } from "@table-craft/desktop/renderer/state/tabs.js";
 import { selectedKey } from "@table-craft/desktop/renderer/actions/keyActions.js";
 import { deleteKey, renameKey } from "@table-craft/desktop/renderer/actions/keyEditActions.js";
+import {
+  copyPostgresDatabase,
+  copyPostgresSchema,
+  type PostgresCopyMode,
+  verifyPostgresData,
+  verifyPostgresSchema,
+} from "@table-craft/desktop/renderer/actions/postgresCopy.js";
+import {
+  copyMysqlDatabaseAction,
+  verifyMysqlDatabaseAction,
+} from "@table-craft/desktop/renderer/actions/mysqlDatabaseActions.js";
+
 import type { OpenKeyArgs } from "@table-craft/desktop/renderer/palette/keysProvider.js";
 
 export const OBJECT_ACTION_IDS = {
@@ -34,6 +51,11 @@ export const OBJECT_ACTION_IDS = {
   rename: "explorer.renameObject",
   truncate: "explorer.truncateTable",
   drop: "explorer.dropObject",
+  copySchema: "explorer.copyPostgresSchema",
+  copyDatabase: "explorer.copyPostgresDatabase",
+  verifyPostgres: "explorer.verifyPostgresCopy",
+  copyMysqlDatabase: "explorer.copyMysqlDatabase",
+  verifyMysqlDatabase: "explorer.verifyMysqlDatabase",
 } as const;
 
 const OBJECTS = "objects";
@@ -72,6 +94,81 @@ function editable(datasourceId: string): Editable | null {
   return { datasourceId, features, highlight };
 }
 
+async function verifyPostgresSchemaAction(context: ActionContext): Promise<void> {
+  const target = selectedSchema(context);
+  if (target === null) return;
+  const state = useDatasources.getState();
+  const source = datasourceById(state, target.datasourceId);
+  if (source?.pluginId !== "postgres") return;
+  const destinations = state.datasources.filter(
+    (datasource) => datasource.id !== source.id && datasource.pluginId === "postgres",
+  );
+  const destinationId = await useModal.getState().ask({
+    kind: "pick",
+    title: "Verify against",
+    searchLabel: "PostgreSQL data sources",
+    items: destinations.map((datasource) => ({
+      id: datasource.id,
+      label: datasource.name,
+      detail: datasource.pluginId,
+    })),
+    empty: "No other PostgreSQL data sources are available.",
+    confirm: "Choose",
+  });
+  if (destinationId === null) return;
+  const destination = datasourceById(useDatasources.getState(), destinationId);
+  if (destination?.pluginId !== "postgres") return;
+  const choice = await useModal.getState().ask({
+    kind: "choice",
+    title: "Verification scope",
+    message: `Compare ${target.path.at(-1)} on ${source.name} with ${destination.name}.`,
+    choices: [
+      { id: "schema", label: "Verify schema", variant: "primary" },
+      { id: "data", label: "Verify data" },
+      { id: "both", label: "Verify schema and data" },
+    ],
+  });
+  if (choice === null) return;
+  try {
+    const [sourceClient, destinationClient] = await Promise.all([
+      useDatasources.getState().connect(source.id),
+      useDatasources.getState().connect(destination.id),
+    ]);
+    const schema =
+      choice === "schema" || choice === "both"
+        ? await verifyPostgresSchema(sourceClient, destinationClient, target.path, target.path)
+        : [];
+    const data =
+      choice === "data" || choice === "both"
+        ? await verifyPostgresData(sourceClient, destinationClient, target.path, target.path)
+        : [];
+    const findings = [...schema, ...data];
+    const failures = findings.filter(({ status }) => status !== "match");
+    const summary =
+      findings.length === 0
+        ? "No supported tables were found to compare."
+        : failures.length === 0
+          ? `${findings.length} checks matched.`
+          : `${failures.length} of ${findings.length} checks need attention.`;
+    await useModal.getState().ask({
+      kind: "notice",
+      title: failures.length === 0 ? "Verification passed" : "Verification found differences",
+      message: [summary, ...failures.map(({ object, status, detail }) => `${object}: ${status} — ${detail}`)].join(
+        "\n",
+      ),
+      hint: "",
+      tone: failures.length === 0 ? "info" : undefined,
+    });
+  } catch (cause) {
+    await useModal.getState().ask({
+      kind: "notice",
+      title: "Verification stopped",
+      message: toError(cause).message,
+      hint: toError(cause).hint,
+    });
+  }
+}
+
 function namespacesOf(datasourceId: string): readonly Namespace[] {
   return useCatalog.getState().catalogs[datasourceId]?.namespaces ?? [];
 }
@@ -92,6 +189,16 @@ function schemaTarget(context: ActionContext): (Editable & { readonly path: read
   if (namespaceAt(selection.id, selection.path)?.kind !== "schema") return null;
   const target = editable(selection.id);
   return target === null ? null : { ...target, path: selection.path };
+}
+
+/** A selected schema namespace for read operations, including copy and verification from read-only sources. */
+function selectedSchema(
+  context: ActionContext,
+): { readonly datasourceId: string; readonly path: readonly string[] } | null {
+  const selection = context.selection;
+  if (selection?.kind !== "catalog" || selection.name !== null) return null;
+  if (namespaceAt(selection.id, selection.path)?.kind !== "schema") return null;
+  return { datasourceId: selection.id, path: selection.path };
 }
 
 /**
@@ -394,6 +501,380 @@ async function newNamespace(
 }
 
 export const OBJECT_ACTIONS: readonly AnyAction[] = [
+  defineAction({
+    id: OBJECT_ACTION_IDS.verifyMysqlDatabase,
+    title: "Verify Schema or Data…",
+    category: "Database",
+    icon: "details",
+    when: (context) => {
+      const target = selectedSchema(context);
+      return (
+        target !== null &&
+        target.path.length === 1 &&
+        namespaceAt(target.datasourceId, target.path)?.system === false &&
+        datasourceById(useDatasources.getState(), target.datasourceId)?.pluginId === "mysql"
+      );
+    },
+    run: verifyMysqlDatabaseAction,
+  }),
+  defineAction({
+    id: OBJECT_ACTION_IDS.copyMysqlDatabase,
+    title: "Copy Database to…",
+    category: "Database",
+    icon: "copy",
+    when: (context) => {
+      const target = selectedSchema(context);
+      return (
+        target !== null &&
+        target.path.length === 1 &&
+        namespaceAt(target.datasourceId, target.path)?.system === false &&
+        datasourceById(useDatasources.getState(), target.datasourceId)?.pluginId === "mysql"
+      );
+    },
+    run: copyMysqlDatabaseAction,
+  }),
+  defineAction({
+    id: OBJECT_ACTION_IDS.verifyPostgres,
+    title: "Verify Schema or Data…",
+    category: "Database",
+    icon: "details",
+    when: (context) => {
+      const target = selectedSchema(context);
+      return target !== null && datasourceById(useDatasources.getState(), target.datasourceId)?.pluginId === "postgres";
+    },
+    run: verifyPostgresSchemaAction,
+  }),
+  defineAction({
+    id: OBJECT_ACTION_IDS.copyDatabase,
+    title: "Copy Database to…",
+    category: "Database",
+    icon: "copy",
+    when: (context) =>
+      context.selection?.kind === "datasource" &&
+      datasourceById(useDatasources.getState(), context.selection.id)?.pluginId === "postgres",
+    run: async (context) => {
+      const sourceId = context.selection?.kind === "datasource" ? context.selection.id : null;
+      const source = datasourceById(useDatasources.getState(), sourceId);
+      if (source?.pluginId !== "postgres") return;
+      const destinations = useDatasources
+        .getState()
+        .datasources.filter(
+          (datasource) => datasource.id !== source.id && datasource.pluginId === "postgres" && !datasource.readOnly,
+        );
+      if (destinations.length === 0) {
+        await useModal.getState().ask({
+          kind: "notice",
+          title: "No PostgreSQL destination",
+          message: "Add another writable PostgreSQL data source before copying this database.",
+          hint: "",
+        });
+        return;
+      }
+      const destinationId = await useModal.getState().ask({
+        kind: "pick",
+        title: "Copy database to",
+        searchLabel: "PostgreSQL data sources",
+        items: destinations.map((datasource) => ({
+          id: datasource.id,
+          label: datasource.name,
+          detail: datasource.pluginId,
+        })),
+        empty: "No writable PostgreSQL data sources are available.",
+        confirm: "Choose",
+      });
+      if (destinationId === null) return;
+      const destination = datasourceById(useDatasources.getState(), destinationId);
+      if (destination?.pluginId !== "postgres" || destination.readOnly) return;
+      const modeAnswer = await useModal.getState().ask({
+        kind: "choice",
+        title: "Copy options",
+        message: `Copy all non-system schemas from ${source.name} to ${destination.name}.`,
+        choices: [
+          { id: "schema-data", label: "Schema and data", variant: "primary" },
+          { id: "schema-only", label: "Schema only" },
+          { id: "data-only", label: "Data only" },
+        ],
+      });
+      if (modeAnswer === null) return;
+      const mode = modeAnswer as PostgresCopyMode;
+      let sourceClient: Awaited<ReturnType<ReturnType<typeof useDatasources.getState>["connect"]>>;
+      let destinationClient: Awaited<ReturnType<ReturnType<typeof useDatasources.getState>["connect"]>>;
+      let selectedTables: readonly string[] | undefined;
+      try {
+        [sourceClient, destinationClient] = await Promise.all([
+          useDatasources.getState().connect(source.id),
+          useDatasources.getState().connect(destination.id),
+        ]);
+        if (mode !== "schema-only") {
+          const namespaces = await sourceClient.call<"catalog.namespaces">("catalog.namespaces", { refresh: true });
+          const schemaPaths = namespaces
+            .filter(({ path }) => path.length === 2 && path[1] !== "information_schema" && !path[1]?.startsWith("pg_"))
+            .map(({ path }) => path);
+          const items = [] as { id: string; label: string; detail: string }[];
+          for (const schemaPath of schemaPaths) {
+            const schemaName = schemaPath[1];
+            if (schemaName === undefined) continue;
+            const catalog = await sourceClient.call<"catalog.describe">("catalog.describe", {
+              path: schemaPath,
+              refresh: true,
+            });
+            items.push(
+              ...catalog.catalog.relations
+                .filter(({ kind }) => kind === "table")
+                .map(({ name }) => ({
+                  id: JSON.stringify([schemaName, name]),
+                  label: `${schemaName}.${name}`,
+                  detail: "Table rows",
+                })),
+            );
+          }
+          const answer = await useModal.getState().ask({
+            kind: "multiPick",
+            title: "Choose tables to copy",
+            searchLabel: "Search tables",
+            items,
+            selected: items.map(({ id }) => id),
+            empty: "No tables match this search.",
+            confirm: "Continue",
+          });
+          if (answer === null) return;
+          selectedTables = parseMultiPickAnswer(answer);
+        }
+      } catch (cause) {
+        const error = toError(cause);
+        await useModal
+          .getState()
+          .ask({ kind: "notice", title: "Could not prepare database copy", message: error.message, hint: error.hint });
+        return;
+      }
+      const confirmed = await useModal.getState().ask({
+        kind: "confirm",
+        title: "Copy PostgreSQL database?",
+        message: `This writes supported table/view definitions${mode === "schema-only" ? "" : ` and rows from ${selectedTables?.length ?? 0} selected tables`} for all non-system schemas to ${destination.name}. Existing object names stop the copy; data-only requires matching layouts and empty selected destination tables. Routines, triggers, standalone sequences, and sequence counters are not copied. Circular or cross-schema foreign keys stop data copy. Database content stays on this computer.`,
+        items: [
+          { label: "Source", detail: source.name, tone: "info" },
+          { label: "Destination", detail: destination.name, tone: "info" },
+        ],
+        confirm: "Start copy",
+      });
+      if (confirmed === null) return;
+      useModal.getState().showCopyProgress({
+        title: "Copying PostgreSQL database",
+        phase: "Preparing",
+        current: "Opening source and destination",
+        completed: 0,
+        total: 0,
+      });
+      let failure: unknown = null;
+      let latestProgress = { completed: 0, total: 0, current: "Opening source and destination" };
+      try {
+        await copyPostgresDatabase({
+          source: sourceClient,
+          destination: destinationClient,
+          mode,
+          selectedTables,
+          onProgress: ({ completed, total, current }) => {
+            latestProgress = { completed, total, current };
+            const rowsCopied = /: (\d+) rows/.exec(current)?.[1];
+            useModal.getState().updateCopyProgress({
+              title: "Copying PostgreSQL database",
+              phase: current.startsWith("Preparing")
+                ? "Preparing"
+                : current.includes("statement") || current.startsWith("Create schema")
+                  ? "Creating schema"
+                  : current.includes("rows")
+                    ? "Copying table data"
+                    : "Working",
+              current,
+              completed,
+              total,
+              ...(rowsCopied === undefined ? {} : { rowsCopied: Number(rowsCopied) }),
+            });
+          },
+        });
+        await useCatalog.getState().synchronize(destination.id, null);
+      } catch (cause) {
+        failure = cause;
+      } finally {
+        useModal.getState().clearCopyProgress();
+      }
+      if (failure === null) {
+        await useModal.getState().ask({
+          kind: "notice",
+          title: "Database copy completed",
+          message: `The non-system schemas were copied to ${destination.name}.`,
+          hint: "",
+          tone: "info",
+        });
+      } else {
+        const error = toError(failure);
+        await useModal.getState().ask({
+          kind: "notice",
+          title: "Database copy stopped",
+          message: `${error.message}\nStopped after ${latestProgress.completed} of ${latestProgress.total} steps at ${latestProgress.current}.`,
+          hint: error.hint,
+        });
+      }
+    },
+  }),
+  defineAction({
+    id: OBJECT_ACTION_IDS.copySchema,
+    title: "Copy Schema to…",
+    category: "Database",
+    icon: "copy",
+    when: (context) => {
+      const target = selectedSchema(context);
+      return target !== null && datasourceById(useDatasources.getState(), target.datasourceId)?.pluginId === "postgres";
+    },
+    run: async (context) => {
+      const target = selectedSchema(context);
+      if (target === null) return;
+      const state = useDatasources.getState();
+      const source = datasourceById(state, target.datasourceId);
+      if (source?.pluginId !== "postgres") return;
+      const destinations = state.datasources.filter(
+        (datasource) => datasource.id !== source.id && datasource.pluginId === "postgres" && !datasource.readOnly,
+      );
+      if (destinations.length === 0) {
+        await useModal.getState().ask({
+          kind: "notice",
+          title: "No PostgreSQL destination",
+          message: "Add another writable PostgreSQL data source before copying this schema.",
+          hint: "",
+        });
+        return;
+      }
+      const destinationId = await useModal.getState().ask({
+        kind: "pick",
+        title: "Copy schema to",
+        searchLabel: "PostgreSQL data sources",
+        items: destinations.map((datasource) => ({
+          id: datasource.id,
+          label: datasource.name,
+          detail: datasource.pluginId,
+        })),
+        empty: "No writable PostgreSQL data sources are available.",
+        confirm: "Choose",
+      });
+      if (destinationId === null) return;
+      const destination = datasourceById(useDatasources.getState(), destinationId);
+      if (destination?.pluginId !== "postgres" || destination.readOnly) return;
+      const modeId = await useModal.getState().ask({
+        kind: "choice",
+        title: "Copy options",
+        message: `Copy schema ${target.path.at(-1)} from ${source.name} to ${destination.name}.`,
+        choices: [
+          { id: "schema-data", label: "Schema and data", variant: "primary" },
+          { id: "schema-only", label: "Schema only" },
+          { id: "data-only", label: "Data only" },
+        ],
+      });
+      if (modeId === null) return;
+      const mode = modeId as PostgresCopyMode;
+      let sourceClient: Awaited<ReturnType<ReturnType<typeof useDatasources.getState>["connect"]>>;
+      let destinationClient: Awaited<ReturnType<ReturnType<typeof useDatasources.getState>["connect"]>>;
+      let selectedTables: readonly string[] | undefined;
+      try {
+        [sourceClient, destinationClient] = await Promise.all([
+          useDatasources.getState().connect(source.id),
+          useDatasources.getState().connect(destination.id),
+        ]);
+        if (mode !== "schema-only") {
+          const catalog = await sourceClient.call<"catalog.describe">("catalog.describe", {
+            path: target.path,
+            refresh: true,
+          });
+          const tables = catalog.catalog.relations.filter(({ kind }) => kind === "table");
+          const answer = await useModal.getState().ask({
+            kind: "multiPick",
+            title: "Choose tables to copy",
+            searchLabel: "Search tables",
+            items: tables.map(({ name }) => ({ id: JSON.stringify([name]), label: name, detail: "Table rows" })),
+            selected: tables.map(({ name }) => JSON.stringify([name])),
+            empty: "No tables match this search.",
+            confirm: "Continue",
+          });
+          if (answer === null) return;
+          selectedTables = parseMultiPickAnswer(answer);
+        }
+      } catch (cause) {
+        const error = toError(cause);
+        await useModal
+          .getState()
+          .ask({ kind: "notice", title: "Could not prepare schema copy", message: error.message, hint: error.hint });
+        return;
+      }
+      const confirmed = await useModal.getState().ask({
+        kind: "confirm",
+        title: "Copy PostgreSQL schema?",
+        message: `This writes supported table/view definitions${mode === "schema-only" ? "" : ` and rows from ${selectedTables?.length ?? 0} selected tables`} to ${destination.name}. Existing object names stop the copy; data-only requires matching layouts and empty selected destination tables. Routines, triggers, standalone sequences, and sequence counters are not copied. Circular or cross-schema foreign keys stop data copy. Database content stays on this computer.`,
+        items: [
+          { label: "Source", detail: `${source.name} · ${target.path.join(" / ")}`, tone: "info" },
+          { label: "Destination", detail: `${destination.name} · ${target.path.join(" / ")}`, tone: "info" },
+        ],
+        confirm: "Start copy",
+      });
+      if (confirmed === null) return;
+      useModal.getState().showCopyProgress({
+        title: "Copying PostgreSQL schema",
+        phase: "Preparing",
+        current: "Opening source and destination",
+        completed: 0,
+        total: 0,
+      });
+      let failure: unknown = null;
+      let latestProgress = { completed: 0, total: 0, current: "Opening source and destination" };
+      try {
+        await copyPostgresSchema({
+          source: sourceClient,
+          destination: destinationClient,
+          sourcePath: target.path,
+          destinationPath: target.path,
+          mode,
+          selectedTables,
+          onProgress: ({ completed, total, current }) => {
+            latestProgress = { completed, total, current };
+            const rowsCopied = /: (\d+) rows/.exec(current)?.[1];
+            useModal.getState().updateCopyProgress({
+              title: "Copying PostgreSQL schema",
+              phase:
+                current.startsWith("Schema statement") || current.startsWith("Create schema")
+                  ? "Creating schema"
+                  : current.includes("rows")
+                    ? "Copying table data"
+                    : "Working",
+              current,
+              completed,
+              total,
+              ...(rowsCopied === undefined ? {} : { rowsCopied: Number(rowsCopied) }),
+            });
+          },
+        });
+        await useCatalog.getState().synchronize(destination.id, target.path);
+      } catch (cause) {
+        failure = cause;
+      } finally {
+        useModal.getState().clearCopyProgress();
+      }
+      if (failure === null) {
+        await useModal.getState().ask({
+          kind: "notice",
+          title: "Schema copy completed",
+          message: `The selected schema was copied to ${destination.name}.`,
+          hint: "",
+          tone: "info",
+        });
+      } else {
+        const error = toError(failure);
+        await useModal.getState().ask({
+          kind: "notice",
+          title: "Schema copy stopped",
+          message: `${error.message}\nStopped after ${latestProgress.completed} of ${latestProgress.total} steps at ${latestProgress.current}.`,
+          hint: error.hint,
+        });
+      }
+    },
+  }),
   defineAction({
     id: OBJECT_ACTION_IDS.newTable,
     title: "New Table…",

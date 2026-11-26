@@ -166,6 +166,16 @@ export type ModalRequest =
       readonly confirm: string;
     }
   | {
+      /** A searchable table checklist; resolves selected item IDs as a JSON array. */
+      readonly kind: "multiPick";
+      readonly title: string;
+      readonly searchLabel: string;
+      readonly items: readonly PickItem[];
+      readonly selected: readonly string[];
+      readonly empty: string;
+      readonly confirm: string;
+    }
+  | {
       /** Open Closed Console (plan 011 decision 14): resolves `pickerAnswer(choice, name)` for a `CLOSED_CONSOLE_CHOICES` choice. */
       readonly kind: "closedConsoles";
       readonly title: string;
@@ -285,6 +295,28 @@ export const CLOSED_CONSOLE_CHOICES = { open: "open", delete: "delete" } as cons
  */
 export type ModalAnswer = string | null;
 
+export interface CopyProgressState {
+  readonly title: string;
+  readonly phase: string;
+  readonly current: string;
+  readonly completed: number;
+  readonly total: number;
+  readonly rowsCopied?: number;
+}
+
+export function multiPickAnswer(ids: readonly string[]): string {
+  return JSON.stringify(ids);
+}
+
+export function parseMultiPickAnswer(answer: string): readonly string[] {
+  const value: unknown = JSON.parse(answer);
+  if (!Array.isArray(value)) throw new Error("Invalid table selection.");
+  return value.map((item: unknown) => {
+    if (typeof item !== "string") throw new Error("Invalid table selection.");
+    return item;
+  });
+}
+
 const GENERATOR_SEPARATOR = ":";
 
 /** A generator's answer: the button chosen and the statement showing when it was. */
@@ -375,12 +407,17 @@ interface Pending {
 
 export interface ModalState {
   readonly pending: Pending | null;
+  readonly copyProgress: CopyProgressState | null;
   readonly ask: (request: ModalRequest) => Promise<ModalAnswer>;
   readonly answer: (answer: ModalAnswer) => void;
+  readonly showCopyProgress: (progress: CopyProgressState) => void;
+  readonly updateCopyProgress: (progress: CopyProgressState) => void;
+  readonly clearCopyProgress: () => void;
 }
 
 export const useModal = create<ModalState>()((set, get) => ({
   pending: null,
+  copyProgress: null,
   ask(request) {
     get().pending?.resolve(null);
     return new Promise((resolve) => set({ pending: { request, resolve } }));
@@ -389,6 +426,15 @@ export const useModal = create<ModalState>()((set, get) => ({
     const pending = get().pending;
     set({ pending: null });
     pending?.resolve(answer);
+  },
+  showCopyProgress(progress) {
+    set({ copyProgress: progress });
+  },
+  updateCopyProgress(progress) {
+    set({ copyProgress: progress });
+  },
+  clearCopyProgress() {
+    set({ copyProgress: null });
   },
 }));
 

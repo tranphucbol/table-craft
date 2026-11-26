@@ -226,6 +226,8 @@ export const engineRequestSchema = z.discriminatedUnion("type", [
     sessionId,
     sql: z.string(),
     parameters: z.record(z.string(), z.string().nullable()).optional(),
+    /** Do not persist driver error text or cause chains that may echo parameter values. */
+    redactError: z.boolean().optional(),
     ...paging,
     all: z.boolean().optional(),
     ...statementLimit,

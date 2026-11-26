@@ -176,6 +176,60 @@ saved as typed, under a `Not valid JSON — saved as typed` warning.
 
 See [Table data editor](../design/specification.md#table-data-editor).
 
+## Copy PostgreSQL databases and schemas
+
+In the Database pane, select a PostgreSQL data source and choose **Copy Database to…** to copy all
+non-system schemas to another PostgreSQL data source. Select a schema and choose **Copy Schema
+to…** to copy only that schema. Both actions offer schema and data, schema only, or data only. For
+schema-and-data and data-only, choose which tables' rows to copy; all tables are selected initially.
+Schema-and-data still creates every supported schema object, while data-only checks and writes only
+selected tables. A live progress dialog shows the current schema statement or table, step count, and
+rows copied for the active table.
+
+The destination database must already exist. Schema and data copy creates missing schemas, tables,
+views and materialized views. It stops before writing if selected object names already exist. Data
+only requires selected destination tables to exist with matching layouts and be empty. Rows are sent in bounded batches,
+with each table's inserts committed or rolled back together. Database copy checks all selected
+schemas for conflicts before it starts.
+
+**Verify Schema or Data…** on a selected schema compares supported relation definitions, or row
+counts and type-tagged content digests. Verification reads both databases and does not write to
+them. Unsupported values are reported as unverifiable.
+
+Copy and verification run locally in TableCraft. Database rows are not uploaded to a cloud or
+third-party service. The current release does not copy routines, triggers, standalone sequences or
+sequence counters. Data copy stops for circular, self-referencing, or cross-schema foreign keys.
+Text, booleans and safe finite numbers are copied through bound SQL parameters. Binary and
+structured row values, generated columns, non-finite numbers, and integers outside JavaScript's safe
+range stop that table and roll back its inserts. Tables completed before a later failure remain
+copied.
+
+## Copy and verify MySQL databases
+
+Select a MySQL database in the Database pane and choose **Copy Database to…**. Choose the same MySQL
+connection or another one, then select an existing non-system database on it. The target database
+can have a different name from the source. Choose schema and data, schema only, or data only. For
+schema-and-data and data-only, choose which tables' rows to copy; all tables are selected initially.
+Schema-and-data still creates every supported schema object, while data-only checks and writes only
+selected tables. Schema-bearing modes stop when an object with the same name already exists;
+data-only requires matching table layouts and empty selected tables. Copy never creates the target database or overwrites its
+objects. A live progress dialog shows each schema object and table batch, including rows copied for
+the active table. Schema-bearing copies proceed without routines, triggers, or events and report how
+many of each were omitted. Data moves in bounded batches with bound parameters and per-table InnoDB
+transactions.
+
+Choose **Verify Schema or Data…** on a selected MySQL database to compare table and view definitions,
+or compare per-table row counts and local content digests. Verification is read-only. MySQL DDL
+implicitly commits, so a later schema error can leave earlier objects in place. Routine, trigger,
+and event definitions are not copied or verified. Generated columns, non-InnoDB tables, and
+circular, self-referencing, or cross-database foreign keys stop the copy. Binary row values cannot
+be copied or verified; other values that
+cannot be safely represented by bound SQL parameters stop the table copy or are reported as
+unverifiable. MySQL `AUTO_INCREMENT` counters are not preserved.
+
+MySQL copy and verification run locally in TableCraft. Database rows are not sent to a cloud or
+third-party service.
+
 ## Import
 
 An import reads a CSV or TSV file into a table, or into a new one.

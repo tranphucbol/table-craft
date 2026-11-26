@@ -213,7 +213,7 @@ const FAILURE_MESSAGES: Readonly<Record<string, string>> = {
 
 export type RequestOutcome =
   | { readonly result: unknown }
-  /** `cause` is what was thrown, logged as `err` so the driver's code and the cause chain survive. */
+  /** `cause` is thrown; parameterized copy failures can redact it to prevent row-value disclosure. */
   | { readonly error: EngineError; readonly cause: unknown };
 
 export function logResponse(request: LoggedRequest, outcome: RequestOutcome, context: RequestContext): void {
@@ -230,19 +230,20 @@ export function logResponse(request: LoggedRequest, outcome: RequestOutcome, con
     if (described !== null) scoped.info(...described);
     return;
   }
+  const redactError = request.type === "statement.execute" && request.redactError === true;
   const fields = {
     requestId: request.id,
     type: request.type,
     elapsedMs: context.elapsedMs,
     code: outcome.error.code,
-    error: outcome.error.message,
+    error: redactError ? "Statement failed; parameter values are redacted." : outcome.error.message,
     ...(context.statementKind === null ? {} : { kind: context.statementKind }),
     ...(request.type === "session.open" ? context.target : {}),
     ...(request.type === "objects.apply" ? changedObject(request.change) : {}),
     ...(request.type === "sessions.cancel" || request.type === "sessions.terminate"
       ? { ...serverSession(request.target), ...context.target }
       : {}),
-    err: outcome.cause,
+    ...(redactError ? {} : { err: outcome.cause }),
   };
   const message = FAILURE_MESSAGES[request.type] ?? "request failed";
   if (outcome.error.code === "cancelled") scoped.info(message, fields);

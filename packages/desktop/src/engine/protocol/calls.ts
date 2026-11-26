@@ -101,6 +101,8 @@ export interface EngineCalls extends KeyAdvancedCalls, StreamCalls, IndexCalls {
       readonly sessionId: string;
       readonly sql: string;
       readonly parameters?: Readonly<Record<string, ParameterValue>>;
+      /** Suppresses driver messages and causes that may echo bound values in failure logs. */
+      readonly redactError?: boolean;
       /** Where a command runs on a `nodes` datasource: `auto`, `allPrimaries` or a node id (decision 114). */
       readonly node?: string;
       /** The statement's `ClassifiedStatement.repeat`: the plugin runs it that many times. */
